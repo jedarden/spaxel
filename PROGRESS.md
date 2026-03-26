@@ -12,10 +12,79 @@ Goal: Bare-minimum loop from ESP32 to browser. Zero-config with passive radar an
 | Passive radar support | **Done** | BSSID filter in csi.c |
 | BLE scanning | **Done** | Core 0 concurrent with WiFi |
 | Mothership WebSocket ingestion | **Done** | See iteration 1 below |
-| Dashboard skeleton | Not started | |
+| Dashboard skeleton | **Done** | See iteration 3 below |
 | Docker packaging | Not started | |
 
 ### Iteration Log
+
+#### Iteration 3 — 2026-03-26
+
+**Completed:** Dashboard skeleton with 3D visualization
+
+Implemented the web dashboard in vanilla JS + Three.js with:
+
+- **Static file structure:** `dashboard/` directory with HTML/JS
+  - `index.html` — Dark theme UI with status bar, node/link panels, amplitude chart
+  - `js/app.js` — Main application (~350 lines)
+
+- **3D Scene (Three.js):**
+  - Ground grid (10×10m, 20 divisions)
+  - OrbitControls for pan/zoom/rotate with damping
+  - Axes helper for orientation
+  - Responsive canvas with devicePixelRatio support
+  - FPS counter in status bar
+
+- **WebSocket connection (`/ws/dashboard`):**
+  - Auto-reconnect with 3s backoff
+  - JSON message handling for state, node events, link events
+  - Binary CSI frame parsing (24-byte header + I/Q payload)
+  - Connection status indicator (green/red dot)
+
+- **Node/Link panels:**
+  - Live list of connected nodes with MAC, firmware, chip
+  - Active links with node:peer MAC pairs
+  - Click-to-select for amplitude chart display
+
+- **Amplitude chart (Canvas 2D):**
+  - 64-bar visualization of subcarrier amplitudes
+  - Real-time update from selected link's CSI frames
+  - Color gradient based on amplitude intensity
+  - Channel and RSSI display overlay
+
+- **Dashboard package (Go):**
+  - `internal/dashboard/hub.go` — Hub for client management and broadcasting
+  - `internal/dashboard/server.go` — WebSocket handler with ping/pong keepalive
+  - `internal/dashboard/hub_test.go` — 5 tests for hub operations
+  - IngestionState interface for querying node/link state
+  - CSIBroadcaster interface implementation
+
+- **Main.go updates:**
+  - Static file serving with SPA fallback
+  - Dashboard WebSocket endpoint at `/ws/dashboard`
+  - Auto-discovery of dashboard directory
+  - Wiring between ingestion and dashboard packages
+
+**Dependencies used (frontend):**
+- Three.js r128 (CDN)
+- OrbitControls (CDN)
+
+**Tests:** 5 new tests for dashboard hub. All 27 tests pass.
+
+**Files created:**
+```
+dashboard/
+├── index.html
+└── js/
+    └── app.js
+
+mothership/internal/dashboard/
+├── hub.go
+├── hub_test.go
+└── server.go
+```
+
+**Remaining for Phase 1:**
+- Docker packaging
 
 #### Iteration 2 — 2026-03-26
 

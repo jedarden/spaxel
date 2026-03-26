@@ -11,6 +11,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// CSIBroadcaster is a callback for broadcasting CSI frames to dashboard
+type CSIBroadcaster interface {
+	BroadcastCSI(nodeMAC, peerMAC string, data []byte)
+	BroadcastNodeConnected(mac, firmware, chip string)
+	BroadcastNodeDisconnected(mac string)
+	BroadcastLinkActive(linkID, nodeMAC, peerMAC string)
+}
+
 // Server manages WebSocket connections from ESP32 nodes
 type Server struct {
 	mu         sync.RWMutex
@@ -25,6 +33,9 @@ type Server struct {
 
 	// Shutdown state
 	shutdown bool
+
+	// Dashboard broadcaster (optional)
+	dashboardBroadcaster CSIBroadcaster
 }
 
 // NodeConnection tracks state for a connected node
@@ -73,6 +84,13 @@ func NewServer() *Server {
 			WriteBufferSize: 512,
 		},
 	}
+}
+
+// SetDashboardBroadcaster sets the callback for broadcasting CSI frames
+func (s *Server) SetDashboardBroadcaster(broadcaster CSIBroadcaster) {
+	s.mu.Lock()
+	s.dashboardBroadcaster = broadcaster
+	s.mu.Unlock()
 }
 
 // HandleNodeWS handles WebSocket connections at /ws/node
@@ -127,10 +145,16 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	s.connections[hello.MAC] = nc
 	s.malformedCounts[hello.MAC] = &malformedCounter{}
+	broadcaster := s.dashboardBroadcaster
 	s.mu.Unlock()
 
 	log.Printf("[INFO] Node connected: MAC=%s firmware=%s chip=%s",
 		hello.MAC, hello.FirmwareVersion, hello.Chip)
+
+	// Broadcast node connected to dashboard
+	if broadcaster != nil {
+		broadcaster.BroadcastNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)
+	}
 
 	// Send initial role and config
 	s.sendRole(nc, "rx", "")
@@ -150,8 +174,15 @@ func (s *Server) handleMessages(nc *NodeConnection) {
 		s.mu.Lock()
 		delete(s.connections, nc.MAC)
 		delete(s.malformedCounts, nc.MAC)
+		broadcaster := s.dashboardBroadcaster
 		s.mu.Unlock()
+
 		log.Printf("[INFO] Node disconnected: MAC=%s", nc.MAC)
+
+		// Broadcast node disconnected to dashboard
+		if broadcaster != nil {
+			broadcaster.BroadcastNodeDisconnected(nc.MAC)
+		}
 	}()
 
 	for {
@@ -189,14 +220,27 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 	linkID := frame.LinkID()
 	s.mu.Lock()
 	ring, exists := s.links[linkID]
+	isNewLink := !exists
 	if !exists {
 		ring = NewRingBuffer()
 		s.links[linkID] = ring
 	}
+	broadcaster := s.dashboardBroadcaster
 	s.mu.Unlock()
 
 	// Push frame to ring buffer
 	ring.Push(frame, time.Now())
+
+	// Broadcast to dashboard clients
+	if broadcaster != nil {
+		// Forward raw binary frame to dashboard
+		broadcaster.BroadcastCSI(frame.MACString(), frame.PeerMACString(), data)
+
+		// Notify of new link
+		if isNewLink {
+			broadcaster.BroadcastLinkActive(linkID, frame.MACString(), frame.PeerMACString())
+		}
+	}
 }
 
 // handleJSONMessage processes a JSON control message
@@ -347,6 +391,56 @@ func (s *Server) GetConnectedNodes() []string {
 		macs = append(macs, mac)
 	}
 	return macs
+}
+
+// NodeInfo represents a connected node's state for dashboard
+type NodeInfo struct {
+	MAC             string `json:"mac"`
+	FirmwareVersion string `json:"firmware_version,omitempty"`
+	Chip            string `json:"chip,omitempty"`
+}
+
+// GetConnectedNodesInfo returns detailed info about connected nodes
+func (s *Server) GetConnectedNodesInfo() []NodeInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	nodes := make([]NodeInfo, 0, len(s.connections))
+	for mac, nc := range s.connections {
+		info := NodeInfo{MAC: mac}
+		if nc.Hello != nil {
+			info.FirmwareVersion = nc.Hello.FirmwareVersion
+			info.Chip = nc.Hello.Chip
+		}
+		nodes = append(nodes, info)
+	}
+	return nodes
+}
+
+// LinkInfo represents a link with its endpoints
+type LinkInfo struct {
+	ID      string `json:"id"`
+	NodeMAC string `json:"node_mac"`
+	PeerMAC string `json:"peer_mac"`
+}
+
+// GetAllLinksInfo returns detailed info about all active links
+func (s *Server) GetAllLinksInfo() []LinkInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	links := make([]LinkInfo, 0, len(s.links))
+	for linkID := range s.links {
+		// Parse linkID format "nodeMAC:peerMAC" (17 chars + 1 colon + 17 chars)
+		if len(linkID) >= 35 {
+			links = append(links, LinkInfo{
+				ID:      linkID,
+				NodeMAC: linkID[:17],
+				PeerMAC: linkID[18:],
+			})
+		}
+	}
+	return links
 }
 
 // GetLinkBuffer returns the ring buffer for a specific link
