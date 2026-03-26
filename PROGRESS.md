@@ -4,7 +4,7 @@
 
 Goal: Bare-minimum loop from ESP32 to browser. Zero-config with passive radar and mDNS from day one.
 
-### Status
+### Status: COMPLETE
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -15,7 +15,85 @@ Goal: Bare-minimum loop from ESP32 to browser. Zero-config with passive radar an
 | Dashboard skeleton | **Done** | See iteration 3 below |
 | Docker packaging | **Done** | See iteration 4 below |
 
+## Phase 2 — Signal Processing & Detection
+
+Goal: Detect presence on a single link.
+
+### Status
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Phase sanitisation | **Done** | See iteration 5 below |
+| Baseline system | **Done** | EMA with motion-gated updates |
+| Motion detection | **Done** | deltaRMS, NBVI selection |
+| Dashboard presence indicator | **Pending** | |
+| CSI recording buffer | **Pending** | |
+| Adaptive sensing rate | **Pending** | |
+
 ### Iteration Log
+
+#### Iteration 5 — 2026-03-26
+
+**Completed:** Signal processing package (phase sanitisation, baseline, motion detection)
+
+Implemented the core signal processing pipeline in Go with:
+
+- **Phase sanitization (`signal/phase.go`):**
+  - Complex CSI computation: int8 I/Q → float64 complex → amplitude/phase
+  - RSSI normalization (AGC compensation): `norm = 10^((rssi_ref - rssi)/20)`
+  - Spatial phase unwrapping: correct 2π jumps between adjacent subcarriers
+  - Linear regression (OLS): fit `phase = a*k + b` over data subcarriers
+  - STO/CFO removal: residual phase = unwrapped - (slope × k + intercept)
+  - HT20 subcarrier map: 64 total, 46 data (excluding null, guard, pilot)
+
+- **Baseline system (`signal/baseline.go`):**
+  - EMA baseline per link per subcarrier: `baseline = α×amplitude + (1-α)×baseline`
+  - α = dt / (τ + dt) ≈ 0.0033 for dt=0.1s, τ=30s
+  - Motion-gated updates: only update when smoothDeltaRMS < 0.05
+  - Confidence scoring: 0.3 for stale baselines (>7 days), asymptotically → 1.0
+  - Snapshot/restore for SQLite persistence
+  - BaselineManager for multi-link coordination
+
+- **Motion detection (`signal/features.go`):**
+  - NBVI (Normalized Bandwidth Variance Index): `Var(amp) / Mean(amp)²`
+  - Welford's online algorithm for numerically stable variance
+  - Top-16 subcarrier selection by NBVI score
+  - deltaRMS: `sqrt(mean((amp - baseline)²))` over selected subcarriers
+  - Exponential smoothing: `smooth = 0.3×raw + 0.7×prev`
+  - Motion threshold: smoothDeltaRMS > 0.02
+
+- **Link processor (`signal/processor.go`):**
+  - LinkProcessor: ties together phase sanitization, baseline, motion detection
+  - ProcessorManager: manages per-link processors with thread-safe access
+  - GetAllMotionStates(): returns motion state for all links
+  - GetAllBaselines()/RestoreBaseline(): for SQLite persistence
+
+**Constants used (from plan):**
+- RSSIRefdBm = -30.0
+- DefaultMotionThreshold = 0.05
+- DefaultDeltaRMSThreshold = 0.02
+- NBVITopCount = 16
+- NBVIMinThreshold = 0.001
+- DeltaRMSSmoothingAlpha = 0.3
+
+**Tests:** 37 tests covering phase sanitization, baseline, NBVI, motion detection. All pass.
+
+**Files created:**
+```
+mothership/internal/signal/
+├── phase.go          — Phase sanitization algorithms
+├── phase_test.go     — 15 tests for phase processing
+├── baseline.go       — EMA baseline management
+├── baseline_test.go  — 9 tests for baseline
+├── features.go       — NBVI selection, deltaRMS, motion detection
+├── features_test.go  — 13 tests for features
+└── processor.go      — LinkProcessor, ProcessorManager
+```
+
+**Remaining for Phase 2:**
+- Dashboard presence indicator
+- CSI recording buffer
+- Adaptive sensing rate
 
 #### Iteration 4 — 2026-03-26
 
