@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Marathon logs
+.marathon/
+
+# Firmware build artifacts (use volume mount instead)
+firmware/build/
+firmware/managed_components/
+firmware/.cache/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+*.test
+*.out
+coverage.txt
+
+# Temporary files
+tmp/
+temp/
+*.tmp

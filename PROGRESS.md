@@ -13,9 +13,62 @@ Goal: Bare-minimum loop from ESP32 to browser. Zero-config with passive radar an
 | BLE scanning | **Done** | Core 0 concurrent with WiFi |
 | Mothership WebSocket ingestion | **Done** | See iteration 1 below |
 | Dashboard skeleton | **Done** | See iteration 3 below |
-| Docker packaging | Not started | |
+| Docker packaging | **Done** | See iteration 4 below |
 
 ### Iteration Log
+
+#### Iteration 4 — 2026-03-26
+
+**Completed:** Docker packaging
+
+Implemented container deployment with:
+
+- **Dockerfile:** Multi-stage build for minimal production image
+  - Stage 1: `golang:1.23-bookworm` builder with module caching
+  - Stage 2: `distroless/static-debian12:nonroot` runtime (no shell, runs as UID 65532)
+  - CGO_ENABLED=0 build (pure-Go SQLite compatible)
+  - Dashboard static files copied to `/dashboard/`
+  - Firmware directory as volume mount point (`/firmware/`)
+  - Built-in healthcheck via wget
+
+- **docker-compose.yml:** Production-ready orchestration
+  - `network_mode: host` for mDNS multicast discovery (required for ESP32 nodes)
+  - Volume mounts: `spaxel-data` for persistence, `./firmware` for OTA binaries
+  - Environment variables: TZ, mDNS config, optional MQTT
+  - Resource limits: 512m RAM, 2 CPUs (scalable to 1g for 16+ nodes)
+  - 35s stop_grace_period for graceful shutdown
+  - Ulimits: 4096/8192 file descriptors for node connections
+  - Traefik labels (disabled by default, enable for TLS/proxy)
+
+- **Supporting files:**
+  - `VERSION` — 0.1.0 for image tagging
+  - `.dockerignore` — Excludes docs, build artifacts, IDE files
+
+**Key design decisions:**
+- Host networking is REQUIRED for mDNS — Docker bridge blocks multicast 224.0.0.251
+- distroless image minimizes attack surface (no shell, no package manager)
+- Firmware binaries not bundled — users mount their own `/firmware` volume
+- Traefik labels included but disabled — enable for production TLS
+
+**Files created:**
+```
+Dockerfile
+docker-compose.yml
+VERSION
+.dockerignore
+```
+
+**Phase 1 Status:** COMPLETE
+
+All Phase 1 items implemented:
+- ✅ ESP32 firmware skeleton
+- ✅ Passive radar support
+- ✅ BLE scanning
+- ✅ Mothership WebSocket ingestion
+- ✅ Dashboard skeleton
+- ✅ Docker packaging
+
+**Next:** Phase 2 — Signal Processing (baseline, deltaRMS, Fresnel zones)
 
 #### Iteration 3 — 2026-03-26
 

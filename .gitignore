@@ -1,0 +1,28 @@
+# Marathon logs
+.marathon/logs/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Firmware build artifacts
+firmware/build/
+firmware/managed_components/
+firmware/.cache/
+
+# Test and coverage
+*.test
+*.out
+coverage.txt
+
+# Temporary files
+tmp/
+temp/
+*.tmp

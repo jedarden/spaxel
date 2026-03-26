@@ -1,0 +1,87 @@
+# Spaxel Docker Compose
+# Production deployment configuration
+#
+# IMPORTANT: network_mode: host is REQUIRED for mDNS to work.
+# mDNS uses multicast address 224.0.0.251 (link-local), which Docker
+# bridge networking blocks. With host networking, the container shares
+# the host's network interfaces and mDNS multicasts reach the LAN.
+#
+# Side effect: 'ports' mapping is ignored in host mode — port 8080 is
+# directly exposed on the host.
+
+services:
+  spaxel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    # Alternative: use pre-built image
+    # image: ghcr.io/spaxel/spaxel:latest
+
+    # Host networking required for mDNS discovery by ESP32 nodes
+    network_mode: host
+
+    # Alternative (if host mode is not desired): disable mDNS and require
+    # nodes to use cached ms_ip NVS key (manual IP entry during provisioning).
+    # Set SPAXEL_MDNS_ENABLED=false to skip the mDNS advertisement entirely.
+
+    volumes:
+      - spaxel-data:/data           # SQLite, baselines, floor plans, CSI buffer
+      - ./firmware:/firmware:ro     # Firmware binaries for OTA (read-only)
+
+    environment:
+      # Timezone - required for correct diurnal baseline hours
+      TZ: ${TZ:-UTC}
+      # mDNS service name (must match firmware ms_mdns NVS key)
+      SPAXEL_MDNS_NAME: ${SPAXEL_MDNS_NAME:-spaxel}
+      # Set to false if using bridge networking (nodes must use cached IP)
+      SPAXEL_MDNS_ENABLED: ${SPAXEL_MDNS_ENABLED:-true}
+      # Optional MQTT integration (uncomment to enable)
+      # SPAXEL_MQTT_BROKER: mqtt://homeassistant.local:1883
+      # SPAXEL_MQTT_USERNAME: mosquitto
+      # SPAXEL_MQTT_PASSWORD: secret
+      # Debug logging (uncomment for troubleshooting)
+      # SPAXEL_LOG_LEVEL: debug
+
+    restart: unless-stopped
+
+    # Allow full 30s graceful shutdown
+    stop_grace_period: 35s
+
+    ulimits:
+      nofile:
+        soft: 4096   # One fd per node connection + SQLite handles
+        hard: 8192
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          memory: 512m    # Increase to 1g for 16+ node fleets
+          cpus: "2.0"
+        reservations:
+          memory: 128m
+          cpus: "0.5"
+
+    # Traefik labels for reverse proxy with TLS
+    # Uncomment and customize for your Traefik setup
+    labels:
+      - "traefik.enable=${TRAEFIK_ENABLE:-false}"
+      # - "traefik.http.routers.spaxel.rule=Host(`spaxel.example.com`)"
+      # - "traefik.http.routers.spaxel.entrypoints=websecure"
+      # - "traefik.http.routers.spaxel.tls.certresolver=letsencrypt"
+      # - "traefik.http.services.spaxel.loadbalancer.server.port=8080"
+      # # Extend Traefik timeout for long-lived WebSocket connections
+      # - "traefik.http.routers.spaxel.middlewares=spaxel-ws-timeout"
+      # - "traefik.http.middlewares.spaxel-ws-timeout.headers.respondingTimeouts.readTimeout=3600s"
+
+volumes:
+  spaxel-data:
+    driver: local
