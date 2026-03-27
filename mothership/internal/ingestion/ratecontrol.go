@@ -12,7 +12,7 @@ const (
 	// RateActive is the CSI sampling rate (Hz) when motion is detected.
 	RateActive = 50
 	// idleTimeout is how long after the last motion event before dropping back to idle.
-	idleTimeout = 10 * time.Second
+	idleTimeout = 30 * time.Second
 
 	// DefaultVarianceThreshold is the on-device amplitude variance threshold sent to
 	// nodes in idle mode. When the device's local variance exceeds this value it sends
@@ -32,9 +32,10 @@ type nodeRateState struct {
 // been seen for idleTimeout, it drops back to RateIdle (2 Hz). The caller provides
 // a configSender callback that sends the rate and variance threshold to the node.
 type RateController struct {
-	mu           sync.Mutex
-	nodes        map[string]*nodeRateState // keyed by node MAC
-	configSender func(nodeMAC string, rateHz int, varianceThreshold float64)
+	mu            sync.Mutex
+	nodes         map[string]*nodeRateState // keyed by node MAC
+	configSender  func(nodeMAC string, rateHz int, varianceThreshold float64)
+	adjacentNodes func(nodeMAC string) []string // returns MACs of adjacent nodes; may be nil
 }
 
 // NewRateController creates a RateController. configSender is called whenever a
@@ -45,6 +46,16 @@ func NewRateController(configSender func(nodeMAC string, rateHz int, varianceThr
 		nodes:        make(map[string]*nodeRateState),
 		configSender: configSender,
 	}
+}
+
+// SetAdjacentNodesFn configures a callback that returns the MACs of nodes
+// adjacent to a given node. When set, OnMotionHint preemptively ramps adjacent
+// nodes to RateActive so they are already at full rate when the motion front
+// arrives.
+func (rc *RateController) SetAdjacentNodesFn(fn func(nodeMAC string) []string) {
+	rc.mu.Lock()
+	rc.adjacentNodes = fn
+	rc.mu.Unlock()
 }
 
 // OnMotionState is called after each CSI frame is processed. If the node was idle
@@ -67,9 +78,20 @@ func (rc *RateController) OnMotionState(nodeMAC string, motionDetected bool) {
 }
 
 // OnMotionHint is called when the ESP32 sends a motion_hint message (on-device
-// variance exceeded threshold). Treated identically to a detected motion event.
+// variance exceeded threshold). Ramps the hinting node and any adjacent nodes
+// so they are already at full rate when the motion front arrives.
 func (rc *RateController) OnMotionHint(nodeMAC string) {
 	rc.OnMotionState(nodeMAC, true)
+
+	rc.mu.Lock()
+	adjFn := rc.adjacentNodes
+	rc.mu.Unlock()
+
+	if adjFn != nil {
+		for _, adjMAC := range adjFn(nodeMAC) {
+			rc.OnMotionState(adjMAC, true)
+		}
+	}
 }
 
 // OnNodeDisconnected removes rate state for a disconnected node.

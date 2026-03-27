@@ -60,6 +60,19 @@ esp_err_t websocket_send_health(void);
 esp_err_t websocket_send_ble(const char *devices_json);
 
 /**
+ * Send motion hint to mothership.
+ *
+ * Called when on-device amplitude variance exceeds the configured threshold.
+ * The mothership uses this to ramp the node (and adjacent nodes) to RateActive
+ * before the next server-side detection frame arrives.
+ *
+ * Rate-limited to at most one message per second.
+ *
+ * @param variance The measured amplitude variance that triggered the hint
+ */
+esp_err_t websocket_send_motion_hint(float variance);
+
+/**
  * Send OTA status to mothership.
  *
  * @param state "downloading", "verifying", "writing", "rebooting", "failed"

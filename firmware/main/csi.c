@@ -134,11 +134,10 @@ static void csi_rx_task(void *arg) {
             float avg_amp = amp_sum / n_sub;
             float variance = compute_amplitude_variance(avg_amp);
 
-            // Check for motion hint (if variance exceeds threshold)
+            // Check for motion hint (if variance exceeds threshold at low rate)
             if (variance > g_variance_threshold && g_state.packet_rate < 20) {
-                // Burst to full rate - send motion hint to mothership
-                // (would send JSON message here)
-                ESP_LOGD(TAG, "Motion detected: variance=%.4f", variance);
+                ESP_LOGD(TAG, "On-device motion hint: variance=%.4f", variance);
+                websocket_send_motion_hint(variance);
             }
 
             // Send to mothership if connected
@@ -245,8 +244,8 @@ esp_err_t csi_set_rate(uint8_t rate_hz) {
         return ESP_ERR_INVALID_ARG;
     }
 
+    g_state.packet_rate = rate_hz;
     ESP_LOGI(TAG, "Setting rate: %d Hz", rate_hz);
-    // Rate is used by TX task for packet timing
     return ESP_OK;
 }
 

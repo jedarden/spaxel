@@ -343,6 +343,45 @@ esp_err_t websocket_send_ble(const char *devices_json) {
     return (sent > 0) ? ESP_OK : ESP_FAIL;
 }
 
+esp_err_t websocket_send_motion_hint(float variance) {
+    if (!s_connected || !s_ws) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // Rate-limit to at most 1 hint per second.
+    static int64_t s_last_hint_us = 0;
+    int64_t now_us = esp_timer_get_time();
+    if (now_us - s_last_hint_us < 1000000) {
+        return ESP_OK;
+    }
+    s_last_hint_us = now_us;
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "type", "motion_hint");
+
+    char mac_str[18];
+    mac_to_str(g_state.mac, mac_str, sizeof(mac_str));
+    cJSON_AddStringToObject(root, "mac", mac_str);
+
+    cJSON_AddNumberToObject(root, "timestamp_ms", now_us / 1000);
+    cJSON_AddNumberToObject(root, "variance", variance);
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!json) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
+    int sent = esp_websocket_client_send_text(s_ws, json, strlen(json),
+                                               portMAX_DELAY);
+    xSemaphoreGive(s_tx_mutex);
+
+    free(json);
+    return (sent > 0) ? ESP_OK : ESP_FAIL;
+}
+
 esp_err_t websocket_send_ota_status(const char *state, uint8_t progress_pct,
                                      const char *error) {
     if (!s_connected || !s_ws) {

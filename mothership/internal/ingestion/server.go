@@ -167,6 +167,35 @@ func (s *Server) SendConfigToMAC(mac string, rateHz int, varianceThreshold float
 	s.sendConfig(nc, rateHz, 0, varianceThreshold)
 }
 
+// SendRoleToMAC sends a role assignment to a connected node by MAC.
+// passiveBSSID is required only when role is "passive".
+func (s *Server) SendRoleToMAC(mac, role, passiveBSSID string) {
+	s.mu.RLock()
+	nc, ok := s.connections[mac]
+	s.mu.RUnlock()
+	if !ok {
+		return
+	}
+	s.sendRole(nc, role, passiveBSSID)
+	log.Printf("[INFO] Sent role=%s to node %s", role, mac)
+}
+
+// SendOTAToMAC triggers a firmware update on a connected node.
+func (s *Server) SendOTAToMAC(mac, url, sha256, version string) {
+	s.mu.RLock()
+	nc, ok := s.connections[mac]
+	s.mu.RUnlock()
+	if !ok {
+		return
+	}
+	msg := OTAMessage{Type: "ota", URL: url, SHA256: sha256, Version: version}
+	data, _ := json.Marshal(msg)
+	nc.writeMu.Lock()
+	nc.Conn.WriteMessage(websocket.TextMessage, data)
+	nc.writeMu.Unlock()
+	log.Printf("[INFO] Sent OTA trigger to node %s: version=%s url=%s", mac, version, url)
+}
+
 // HandleNodeWS handles WebSocket connections at /ws/node
 func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
@@ -372,7 +401,11 @@ func (s *Server) handleJSONMessage(nc *NodeConnection, data []byte) {
 		}
 
 	case *OTAStatusMessage:
-		// TODO: track OTA progress
+		log.Printf("[INFO] OTA %s from %s: state=%s progress=%d%%",
+			msg.Type, nc.MAC, msg.State, msg.ProgressPct)
+		if msg.Error != "" {
+			log.Printf("[WARN] OTA error from %s: %s", nc.MAC, msg.Error)
+		}
 	}
 }
 
