@@ -43,7 +43,7 @@
     // ============================================
     // Three.js Scene Setup
     // ============================================
-    let scene, camera, renderer, controls, gridHelper, axesHelper;
+    let scene, camera, renderer, controls, gridHelper, axesHelper, clock;
 
     function initScene() {
         const container = document.getElementById('scene-container');
@@ -106,6 +106,12 @@
         // Handle window resize
         window.addEventListener('resize', onWindowResize);
 
+        // Clock for animation mixer delta
+        clock = new THREE.Clock();
+
+        // Initialise 3-D spatial visualisation layer
+        Viz3D.init(scene, camera, controls);
+
         console.log('[Spaxel] Scene initialized');
     }
 
@@ -118,6 +124,7 @@
     function animate() {
         requestAnimationFrame(animate);
         controls.update();
+        Viz3D.update();
         renderer.render(scene, camera);
         updateFPS();
     }
@@ -240,6 +247,7 @@
                 }
                 updateNodeList();
                 updateLinkList();
+                Viz3D.applyLinks(msg.links || []);
                 break;
 
             case 'node_connected':
@@ -271,6 +279,13 @@
                     });
                     updateLinkList();
                 }
+                Viz3D.handleLinkActive(msg);
+                break;
+
+            case 'link_inactive':
+                state.links.delete(msg.id);
+                updateLinkList();
+                Viz3D.handleLinkInactive(msg);
                 break;
 
             case 'motion_state':
@@ -282,6 +297,14 @@
                     });
                     if (changed) updateLinkList();
                 }
+                break;
+
+            case 'registry_state':
+                Viz3D.handleRegistryState(msg);
+                break;
+
+            case 'loc_update':
+                Viz3D.handleLocUpdate(msg);
                 break;
 
             default:
