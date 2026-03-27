@@ -21,7 +21,9 @@
         cameraFar: 1000,
         cameraInitial: { x: 8, y: 8, z: 8 },
         chartBars: 64,       // number of subcarriers
-        chartUpdateMs: 100   // update chart at 10 Hz max
+        chartUpdateMs: 100,  // update chart at 10 Hz max
+        tsMaxPoints: 360,    // max time series samples per link (~60s at 6Hz)
+        tsMinIntervalMs: 100 // min ms between time series samples
     };
 
     // ============================================
@@ -31,7 +33,7 @@
         ws: null,
         wsConnected: false,
         nodes: new Map(),        // MAC -> { mac, firmware, chip, lastSeen }
-        links: new Map(),        // linkID -> { nodeMAC, peerMAC, lastFrame, lastCSI, motionDetected, deltaRMS }
+        links: new Map(),        // linkID -> { nodeMAC, peerMAC, lastFrame, lastCSI, motionDetected, deltaRMS, ampHistory, lastAmpSample }
         selectedLinkID: null,
         lastChartUpdate: 0,
         frameCount: 0,
@@ -227,7 +229,9 @@
                             lastFrame: Date.now(),
                             lastCSI: existing.lastCSI || null,
                             motionDetected: existing.motionDetected || false,
-                            deltaRMS: existing.deltaRMS || 0
+                            deltaRMS: existing.deltaRMS || 0,
+                            ampHistory: existing.ampHistory || [],
+                            lastAmpSample: existing.lastAmpSample || 0
                         });
                     });
                 }
@@ -261,7 +265,9 @@
                         lastFrame: Date.now(),
                         lastCSI: null,
                         motionDetected: false,
-                        deltaRMS: 0
+                        deltaRMS: 0,
+                        ampHistory: [],
+                        lastAmpSample: 0
                     });
                     updateLinkList();
                 }
@@ -308,22 +314,44 @@
                 lastFrame: Date.now(),
                 lastCSI: null,
                 motionDetected: false,
-                deltaRMS: 0
+                deltaRMS: 0,
+                ampHistory: [],
+                lastAmpSample: 0
             };
             state.links.set(linkID, link);
             updateLinkList();
         } else {
             link.lastFrame = Date.now();
+            // Ensure time-series fields exist on links pre-created from JSON events
+            if (!link.ampHistory) {
+                link.ampHistory = [];
+                link.lastAmpSample = 0;
+            }
         }
 
         // Store CSI for chart rendering
         link.lastCSI = frame;
 
-        // Update chart if this is the selected link
+        // Push amplitude sample to time series (rate-limited)
+        const now = performance.now();
+        if (now - link.lastAmpSample >= CONFIG.tsMinIntervalMs) {
+            link.lastAmpSample = now;
+            let sum = 0;
+            for (let i = 0; i < frame.subcarriers.length; i++) {
+                sum += frame.subcarriers[i].amplitude;
+            }
+            const meanAmp = frame.subcarriers.length > 0 ? sum / frame.subcarriers.length : 0;
+            link.ampHistory.push({ t: now, amp: meanAmp, motion: link.motionDetected });
+            if (link.ampHistory.length > CONFIG.tsMaxPoints) {
+                link.ampHistory.shift();
+            }
+        }
+
+        // Update charts if this is the selected link
         if (state.selectedLinkID === linkID) {
-            const now = performance.now();
             if (now - state.lastChartUpdate >= CONFIG.chartUpdateMs) {
                 drawAmplitudeChart(frame);
+                drawTimeSeries(link.ampHistory);
                 state.lastChartUpdate = now;
             }
         }
@@ -474,28 +502,38 @@
 
         // Draw current data immediately if available
         const link = state.links.get(linkID);
-        if (link && link.lastCSI) {
-            drawAmplitudeChart(link.lastCSI);
+        if (link) {
+            if (link.lastCSI) drawAmplitudeChart(link.lastCSI);
+            drawTimeSeries(link.ampHistory || []);
         }
     }
 
     // ============================================
-    // Amplitude Chart (Canvas 2D)
+    // Amplitude Chart (Canvas 2D) + Time Series
     // ============================================
     let chartCanvas, chartCtx;
+    let tsCanvas, tsCtx;
 
     function initChart() {
         chartCanvas = document.getElementById('amplitude-chart');
         chartCtx = chartCanvas.getContext('2d');
 
-        // Set canvas resolution
         const rect = chartCanvas.getBoundingClientRect();
         chartCanvas.width = rect.width * window.devicePixelRatio;
         chartCanvas.height = rect.height * window.devicePixelRatio;
         chartCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-        // Draw empty state
         drawEmptyChart();
+
+        tsCanvas = document.getElementById('timeseries-chart');
+        tsCtx = tsCanvas.getContext('2d');
+
+        const tsRect = tsCanvas.getBoundingClientRect();
+        tsCanvas.width = tsRect.width * window.devicePixelRatio;
+        tsCanvas.height = tsRect.height * window.devicePixelRatio;
+        tsCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+        drawTimeSeries([]);
     }
 
     function drawEmptyChart() {
@@ -555,6 +593,70 @@
         chartCtx.font = '10px monospace';
         chartCtx.textAlign = 'left';
         chartCtx.fillText(`CH${frame.channel} RSSI:${frame.rssi}dBm`, 4, height - 4);
+    }
+
+    function drawTimeSeries(history) {
+        if (!tsCanvas) return;
+        const width = tsCanvas.width / window.devicePixelRatio;
+        const height = tsCanvas.height / window.devicePixelRatio;
+
+        tsCtx.fillStyle = '#1a1a2e';
+        tsCtx.fillRect(0, 0, width, height);
+
+        if (history.length < 2) {
+            tsCtx.fillStyle = '#444';
+            tsCtx.font = '10px sans-serif';
+            tsCtx.textAlign = 'center';
+            tsCtx.fillText('Waiting for data…', width / 2, height / 2 + 4);
+            return;
+        }
+
+        // Find max amplitude for y-scale (with a minimum floor)
+        let maxAmp = 1;
+        for (let i = 0; i < history.length; i++) {
+            if (history[i].amp > maxAmp) maxAmp = history[i].amp;
+        }
+
+        const padTop = 4;
+        const padBottom = 14; // room for time label
+        const plotH = height - padTop - padBottom;
+        const xStep = width / (CONFIG.tsMaxPoints - 1);
+
+        // Draw zero line
+        tsCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+        tsCtx.lineWidth = 1;
+        tsCtx.beginPath();
+        tsCtx.moveTo(0, padTop + plotH);
+        tsCtx.lineTo(width, padTop + plotH);
+        tsCtx.stroke();
+
+        // Draw amplitude line, colored by motion state
+        const startIdx = Math.max(0, CONFIG.tsMaxPoints - history.length);
+        tsCtx.lineWidth = 1.5;
+
+        for (let i = 0; i < history.length - 1; i++) {
+            const x0 = (startIdx + i) * xStep;
+            const x1 = (startIdx + i + 1) * xStep;
+            const y0 = padTop + plotH - (history[i].amp / maxAmp) * plotH;
+            const y1 = padTop + plotH - (history[i + 1].amp / maxAmp) * plotH;
+
+            tsCtx.strokeStyle = history[i].motion ? 'rgba(239,83,80,0.8)' : 'rgba(102,187,106,0.7)';
+            tsCtx.beginPath();
+            tsCtx.moveTo(x0, y0);
+            tsCtx.lineTo(x1, y1);
+            tsCtx.stroke();
+        }
+
+        // Time label: oldest → newest
+        const oldest = history[0].t;
+        const newest = history[history.length - 1].t;
+        const spanS = ((newest - oldest) / 1000).toFixed(0);
+        tsCtx.fillStyle = '#555';
+        tsCtx.font = '9px monospace';
+        tsCtx.textAlign = 'left';
+        tsCtx.fillText(`−${spanS}s`, 2, height - 2);
+        tsCtx.textAlign = 'right';
+        tsCtx.fillText('now', width - 2, height - 2);
     }
 
     // ============================================

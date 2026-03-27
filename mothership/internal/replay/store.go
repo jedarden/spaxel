@@ -148,6 +148,74 @@ func (s *RecordingStore) Append(recvTimeNS int64, rawFrame []byte) error {
 	return s.syncHeader()
 }
 
+// Scan reads all stored records from oldest to newest, calling fn for each.
+// fn receives the receive timestamp (Unix nanoseconds) and the raw frame bytes.
+// Returning false from fn stops the scan early.
+// The store is held under lock for the entire scan — callers must not call
+// Append or other mutating methods from within fn.
+func (s *RecordingStore) Scan(fn func(recvTimeNS int64, frame []byte) bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.hasData() {
+		return nil
+	}
+
+	pos := s.oldestPos
+	for {
+		if pos == s.writePos {
+			break
+		}
+
+		// Read record header: recvTimeNS(8) + frameLen(2)
+		var hdr [10]byte
+		if _, err := s.f.ReadAt(hdr[:], pos); err != nil {
+			return err
+		}
+		recvTimeNS := int64(binary.LittleEndian.Uint64(hdr[0:8]))
+		frameLen := int64(binary.LittleEndian.Uint16(hdr[8:10]))
+		if frameLen > maxFrameBytes {
+			return errors.New("replay: corrupt record during scan")
+		}
+
+		frame := make([]byte, frameLen)
+		if _, err := s.f.ReadAt(frame, pos+recordOverhead); err != nil {
+			return err
+		}
+
+		if !fn(recvTimeNS, frame) {
+			break
+		}
+
+		nextPos := pos + recordOverhead + frameLen
+		// Wrap: if we just read the last record before the wrap point, jump to data start.
+		if s.wrapPos != 0 && nextPos >= s.wrapPos {
+			nextPos = headerSize
+		}
+		pos = nextPos
+	}
+	return nil
+}
+
+// Stats returns summary statistics about the recording store.
+type Stats struct {
+	HasData   bool
+	WritePos  int64
+	OldestPos int64
+	FileSize  int64
+}
+
+func (s *RecordingStore) Stats() Stats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return Stats{
+		HasData:   s.hasData(),
+		WritePos:  s.writePos,
+		OldestPos: s.oldestPos,
+		FileSize:  s.fileSize,
+	}
+}
+
 // WritePos returns the current write position (for diagnostics).
 func (s *RecordingStore) WritePos() int64 {
 	s.mu.Lock()

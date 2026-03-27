@@ -27,6 +27,10 @@ static char s_ota_url[256] = {0};
 static char s_ota_sha256[65] = {0};
 static char s_ota_version[32] = {0};
 
+// OTA rollback confirmation — set once we receive a role message after connecting.
+// Cancels the automatic rollback timer in the ESP-IDF OTA framework.
+static bool s_ota_confirmed = false;
+
 // Forward declarations
 static void ws_event_handler(void *args, esp_event_base_t base,
                               int32_t id, void *data);
@@ -415,6 +419,22 @@ static void handle_role_msg(cJSON *root) {
     cJSON *role = cJSON_GetObjectItem(root, "role");
     if (!role || !cJSON_IsString(role)) {
         return;
+    }
+
+    // Confirm OTA partition valid on first role message received after boot.
+    // This means we successfully connected and are running the new firmware.
+    if (!s_ota_confirmed) {
+        s_ota_confirmed = true;
+        const esp_partition_t *running = esp_ota_get_running_partition();
+        if (running && running->type == ESP_PARTITION_TYPE_APP &&
+            running->subtype != ESP_PARTITION_SUBTYPE_APP_FACTORY) {
+            esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
+            if (err == ESP_OK) {
+                ESP_LOGI(TAG, "OTA partition confirmed valid (rollback cancelled)");
+            } else {
+                ESP_LOGW(TAG, "OTA confirm failed: %s", esp_err_to_name(err));
+            }
+        }
     }
 
     const char *role_str = role->valuestring;

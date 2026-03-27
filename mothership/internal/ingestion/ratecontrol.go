@@ -10,9 +10,15 @@ const (
 	// RateIdle is the CSI sampling rate (Hz) when no motion is detected.
 	RateIdle = 2
 	// RateActive is the CSI sampling rate (Hz) when motion is detected.
-	RateActive = 20
+	RateActive = 50
 	// idleTimeout is how long after the last motion event before dropping back to idle.
 	idleTimeout = 10 * time.Second
+
+	// DefaultVarianceThreshold is the on-device amplitude variance threshold sent to
+	// nodes in idle mode. When the device's local variance exceeds this value it sends
+	// a motion_hint, allowing the mothership to ramp the rate before the next server-side
+	// detection frame arrives.
+	DefaultVarianceThreshold = 1.0
 )
 
 // nodeRateState tracks the adaptive rate state for a single node.
@@ -22,18 +28,19 @@ type nodeRateState struct {
 }
 
 // RateController manages per-node adaptive sensing rates. When motion is detected
-// on a node's link, it ramps that node to RateActive (20 Hz). When no motion has
+// on a node's link, it ramps that node to RateActive (50 Hz). When no motion has
 // been seen for idleTimeout, it drops back to RateIdle (2 Hz). The caller provides
-// a configSender callback that sends the rate command to the node over WebSocket.
+// a configSender callback that sends the rate and variance threshold to the node.
 type RateController struct {
 	mu           sync.Mutex
 	nodes        map[string]*nodeRateState // keyed by node MAC
-	configSender func(nodeMAC string, rateHz int)
+	configSender func(nodeMAC string, rateHz int, varianceThreshold float64)
 }
 
 // NewRateController creates a RateController. configSender is called whenever a
-// node's rate should change; it must be goroutine-safe.
-func NewRateController(configSender func(nodeMAC string, rateHz int)) *RateController {
+// node's rate should change; it must be goroutine-safe. varianceThreshold is sent
+// in idle-mode configs so the device can fast-path motion detection locally.
+func NewRateController(configSender func(nodeMAC string, rateHz int, varianceThreshold float64)) *RateController {
 	return &RateController{
 		nodes:        make(map[string]*nodeRateState),
 		configSender: configSender,
@@ -55,7 +62,7 @@ func (rc *RateController) OnMotionState(nodeMAC string, motionDetected bool) {
 
 	if !ns.active {
 		ns.active = true
-		rc.configSender(nodeMAC, RateActive)
+		rc.configSender(nodeMAC, RateActive, 0) // active: disable on-device hint, server handles it
 	}
 }
 
@@ -97,7 +104,7 @@ func (rc *RateController) checkIdleTimeouts() {
 	for mac, ns := range rc.nodes {
 		if ns.active && now.Sub(ns.lastMotionAt) >= idleTimeout {
 			ns.active = false
-			rc.configSender(mac, RateIdle)
+			rc.configSender(mac, RateIdle, DefaultVarianceThreshold) // idle: enable on-device hint
 		}
 	}
 }

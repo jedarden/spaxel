@@ -85,8 +85,8 @@ func main() {
 	}
 
 	// Adaptive rate controller
-	rateCtrl := ingestion.NewRateController(func(mac string, rateHz int) {
-		ingestSrv.SendConfigToMAC(mac, rateHz)
+	rateCtrl := ingestion.NewRateController(func(mac string, rateHz int, varianceThreshold float64) {
+		ingestSrv.SendConfigToMAC(mac, rateHz, varianceThreshold)
 	})
 	ingestSrv.SetRateController(rateCtrl)
 	go rateCtrl.Run(ctx)

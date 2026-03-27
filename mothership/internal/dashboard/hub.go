@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/tracking"
 )
 
 // Hub manages all dashboard client connections and broadcasts
@@ -170,6 +172,120 @@ func (h *Hub) BroadcastMotionState(states []ingestion.MotionStateItem) {
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
+}
+
+// ─── Phase 3 Broadcasts ─────────────────────────────────────────────────────
+
+// nodeJSON is the wire format for a fleet node sent to the dashboard.
+type nodeJSON struct {
+	MAC      string  `json:"mac"`
+	Name     string  `json:"name"`
+	Role     string  `json:"role"`
+	PosX     float64 `json:"pos_x"`
+	PosY     float64 `json:"pos_y"`
+	PosZ     float64 `json:"pos_z"`
+	Virtual  bool    `json:"virtual"`
+	LastSeen int64   `json:"last_seen_ms"`
+}
+
+// roomJSON is the wire format for room configuration.
+type roomJSON struct {
+	Width   float64 `json:"width"`
+	Depth   float64 `json:"depth"`
+	Height  float64 `json:"height"`
+	OriginX float64 `json:"origin_x"`
+	OriginZ float64 `json:"origin_z"`
+}
+
+// BroadcastRegistryState sends updated node registry and room config to all dashboard clients.
+func (h *Hub) BroadcastRegistryState(nodes []fleet.NodeRecord, room fleet.RoomConfig) {
+	wireNodes := make([]nodeJSON, len(nodes))
+	for i, n := range nodes {
+		wireNodes[i] = nodeJSON{
+			MAC:      n.MAC,
+			Name:     n.Name,
+			Role:     n.Role,
+			PosX:     n.PosX,
+			PosY:     n.PosY,
+			PosZ:     n.PosZ,
+			Virtual:  n.Virtual,
+			LastSeen: n.LastSeenAt.UnixMilli(),
+		}
+	}
+	msg := map[string]interface{}{
+		"type":  "registry_state",
+		"nodes": wireNodes,
+		"room": roomJSON{
+			Width:   room.Width,
+			Depth:   room.Depth,
+			Height:  room.Height,
+			OriginX: room.OriginX,
+			OriginZ: room.OriginZ,
+		},
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// trailPoint is a compact [x, z] pair for JSON serialisation.
+type trailPoint [2]float64
+
+// blobJSON is the wire format for a tracked person blob.
+type blobJSON struct {
+	ID     int          `json:"id"`
+	X      float64      `json:"x"`
+	Z      float64      `json:"z"`
+	VX     float64      `json:"vx"`
+	VZ     float64      `json:"vz"`
+	Weight float64      `json:"weight"`
+	Trail  []trailPoint `json:"trail"`
+}
+
+// BroadcastLocUpdate sends localisation results to all dashboard clients.
+func (h *Hub) BroadcastLocUpdate(blobs []tracking.Blob) {
+	wireBlobs := make([]blobJSON, len(blobs))
+	for i, b := range blobs {
+		trail := make([]trailPoint, len(b.Trail))
+		for j, pt := range b.Trail {
+			trail[j] = trailPoint{pt[0], pt[1]}
+		}
+		wireBlobs[i] = blobJSON{
+			ID:     b.ID,
+			X:      b.X,
+			Z:      b.Z,
+			VX:     b.VX,
+			VZ:     b.VZ,
+			Weight: b.Weight,
+			Trail:  trail,
+		}
+	}
+	msg := map[string]interface{}{
+		"type":  "loc_update",
+		"blobs": wireBlobs,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastCoverageMap sends the GDOP coverage map to all dashboard clients.
+// data is a row-major float32 array of GDOP values, cols × rows cells.
+func (h *Hub) BroadcastCoverageMap(data []float32, cols, rows int, cellSize float64, originX, originZ float64) {
+	// Encode as a compact flat array of float32 values (JSON).
+	vals := make([]float64, len(data))
+	for i, v := range data {
+		vals[i] = float64(v)
+	}
+	msg := map[string]interface{}{
+		"type":      "coverage_map",
+		"cols":      cols,
+		"rows":      rows,
+		"cell_size": cellSize,
+		"origin_x":  originX,
+		"origin_z":  originZ,
+		"data":      vals,
+	}
+	encoded, _ := json.Marshal(msg)
+	h.Broadcast(encoded)
 }
 
 func (h *Hub) sendInitialState(client *Client) {

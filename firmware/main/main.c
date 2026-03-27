@@ -3,6 +3,7 @@
 #include "websocket.h"
 #include "csi.h"
 #include "ble.h"
+#include "provision.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -392,6 +393,13 @@ void app_main(void) {
     g_state.events = xEventGroupCreate();
 
     // Load configuration from NVS
+    load_nvs_config();
+
+    // Open serial provisioning window (10 s) — active before normal boot.
+    // Host sends {"provision": {...}}\n via Web Serial; firmware replies and proceeds.
+    provision_listen_window();
+
+    // Reload NVS config in case provisioning changed it
     load_nvs_config();
 
     // Initialize WiFi

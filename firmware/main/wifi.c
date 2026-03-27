@@ -223,10 +223,79 @@ bool wifi_discover_mothership(char *ip_buf, size_t buf_len, uint16_t *port) {
     return false;
 }
 
-// Captive portal HTTP server
+// ─── Captive portal DNS + HTTP ────────────────────────────────────────────────
+
 #include "esp_http_server.h"
+#include "lwip/udp.h"
+#include "lwip/ip4_addr.h"
 
 static httpd_handle_t s_captive_server = NULL;
+static struct udp_pcb *s_dns_pcb = NULL;
+
+// Minimal DNS server: respond to all A queries with 192.168.4.1.
+// This makes iOS/Android/Windows captive portal detection work.
+static void captive_dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
+                              const ip_addr_t *addr, u16_t port) {
+    if (!p) return;
+
+    // DNS response: copy query, set QR=1, RCODE=0, add answer pointing to 192.168.4.1
+    // Minimal valid DNS response: header (12) + question (from request) + answer RR
+    if (p->len < 12) {
+        pbuf_free(p);
+        return;
+    }
+
+    // Build response in a fixed buffer (max 256 bytes is more than enough)
+    uint8_t resp[256];
+    uint16_t resp_len = 0;
+
+    // Copy DNS header from query
+    uint8_t *q = (uint8_t *)p->payload;
+    uint16_t q_len = p->len;
+
+    if (q_len > 200) {
+        pbuf_free(p);
+        return;
+    }
+
+    // Header (12 bytes): copy ID, set flags QR=1 AA=1 RCODE=0
+    memcpy(resp, q, 12);
+    resp[2] = 0x81; // QR=1, OPCODE=0, AA=1, TC=0, RD=1
+    resp[3] = 0x80; // RA=1, RCODE=0
+    // QDCOUNT stays same, ANCOUNT=1, NSCOUNT=0, ARCOUNT=0
+    resp[6] = 0x00; resp[7] = 0x01; // ANCOUNT=1
+    resp[8] = 0x00; resp[9] = 0x00;
+    resp[10] = 0x00; resp[11] = 0x00;
+    resp_len = 12;
+
+    // Copy question section from query
+    uint16_t q_section_len = q_len - 12;
+    if (resp_len + q_section_len > sizeof(resp) - 16) {
+        pbuf_free(p);
+        return;
+    }
+    memcpy(resp + resp_len, q + 12, q_section_len);
+    resp_len += q_section_len;
+
+    // Answer RR: pointer to question name (0xC00C), type A, class IN, TTL 60s, RDATA 4 bytes
+    resp[resp_len++] = 0xC0; resp[resp_len++] = 0x0C; // name ptr to offset 12
+    resp[resp_len++] = 0x00; resp[resp_len++] = 0x01; // type A
+    resp[resp_len++] = 0x00; resp[resp_len++] = 0x01; // class IN
+    resp[resp_len++] = 0x00; resp[resp_len++] = 0x00; // TTL high
+    resp[resp_len++] = 0x00; resp[resp_len++] = 0x3C; // TTL low (60s)
+    resp[resp_len++] = 0x00; resp[resp_len++] = 0x04; // RDLENGTH=4
+    // 192.168.4.1
+    resp[resp_len++] = 192; resp[resp_len++] = 168;
+    resp[resp_len++] = 4;   resp[resp_len++] = 1;
+
+    struct pbuf *r = pbuf_alloc(PBUF_TRANSPORT, resp_len, PBUF_RAM);
+    if (r) {
+        memcpy(r->payload, resp, resp_len);
+        udp_sendto(pcb, r, addr, port);
+        pbuf_free(r);
+    }
+    pbuf_free(p);
+}
 
 static esp_err_t captive_root_handler(httpd_req_t *req) {
     const char *html =
@@ -333,6 +402,19 @@ esp_err_t wifi_start_captive_portal(void) {
 
     ESP_LOGI(TAG, "Captive portal AP started: %s", ap_ssid);
 
+    // Start DNS server on UDP port 53 — redirects all queries to 192.168.4.1
+    s_dns_pcb = udp_new();
+    if (s_dns_pcb) {
+        if (udp_bind(s_dns_pcb, IP_ADDR_ANY, 53) == ERR_OK) {
+            udp_recv(s_dns_pcb, captive_dns_recv, NULL);
+            ESP_LOGI(TAG, "Captive portal DNS server started on port 53");
+        } else {
+            udp_remove(s_dns_pcb);
+            s_dns_pcb = NULL;
+            ESP_LOGW(TAG, "Failed to bind DNS server to port 53");
+        }
+    }
+
     // Start HTTP server
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
@@ -341,11 +423,8 @@ esp_err_t wifi_start_captive_portal(void) {
         for (int i = 0; i < sizeof(captive_uris) / sizeof(captive_uris[0]); i++) {
             httpd_register_uri_handler(s_captive_server, &captive_uris[i]);
         }
-        ESP_LOGI(TAG, "Captive portal server started on 192.168.4.1");
+        ESP_LOGI(TAG, "Captive portal HTTP server started on 192.168.4.1:80");
     }
-
-    // Set up DNS redirect (simplified - would need dnsserver)
-    // ESP-IDF provides esp_dns_server in components but needs manual setup
 
     return ESP_OK;
 }

@@ -20,6 +20,12 @@ type CSIBroadcaster interface {
 	BroadcastLinkActive(linkID, nodeMAC, peerMAC string)
 }
 
+// FleetNotifier receives node lifecycle events for fleet management.
+type FleetNotifier interface {
+	OnNodeConnected(mac, firmware, chip string)
+	OnNodeDisconnected(mac string)
+}
+
 // MotionBroadcaster broadcasts motion state changes to dashboard clients.
 type MotionBroadcaster interface {
 	BroadcastMotionState(states []MotionStateItem)
@@ -62,6 +68,7 @@ type Server struct {
 	processorMgr         *signal.ProcessorManager
 	replayStore          ReplayAppender
 	rateCtrl             *RateController
+	fleetNotifier        FleetNotifier
 }
 
 // NodeConnection tracks state for a connected node
@@ -149,14 +156,15 @@ func (s *Server) SetRateController(rc *RateController) {
 }
 
 // SendConfigToMAC sends a rate config command to a connected node by MAC.
-func (s *Server) SendConfigToMAC(mac string, rateHz int) {
+// varianceThreshold > 0 enables on-device amplitude variance monitoring.
+func (s *Server) SendConfigToMAC(mac string, rateHz int, varianceThreshold float64) {
 	s.mu.RLock()
 	nc, ok := s.connections[mac]
 	s.mu.RUnlock()
 	if !ok {
 		return
 	}
-	s.sendConfig(nc, rateHz, 0, 0)
+	s.sendConfig(nc, rateHz, 0, varianceThreshold)
 }
 
 // HandleNodeWS handles WebSocket connections at /ws/node
@@ -215,7 +223,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sendRole(nc, "rx", "")
-	s.sendConfig(nc, 20, 0, 0)
+	s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold)
 
 	go s.pingLoop(nc)
 	s.handleMessages(nc)
