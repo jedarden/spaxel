@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/replay"
+	sigproc "github.com/spaxel/mothership/internal/signal"
 )
 
 // Build-time version injection
@@ -31,6 +34,7 @@ type Config struct {
 	MDNSName    string
 	MDNSEnabled bool
 	LogLevel    string
+	ReplayMaxMB int
 }
 
 func main() {
@@ -38,20 +42,16 @@ func main() {
 	log.Printf("[INFO] Spaxel mothership v%s starting", version)
 	log.Printf("[DEBUG] Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
 
-	// Create context with cancellation for graceful shutdown
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 
-	// Create router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Health check endpoint
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -62,52 +62,75 @@ func main() {
 	ingestSrv := ingestion.NewServer()
 	r.HandleFunc("/ws/node", ingestSrv.HandleNodeWS)
 
-	// Create dashboard hub and server
+	// Signal processing pipeline
+	pm := sigproc.NewProcessorManager(sigproc.ProcessorManagerConfig{
+		NSub:       64,
+		FusionRate: 10.0,
+		Tau:        30.0,
+	})
+	ingestSrv.SetProcessorManager(pm)
+
+	// Replay recording store
+	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+		log.Printf("[WARN] Failed to create data dir %s: %v", cfg.DataDir, err)
+	} else {
+		store, err := replay.NewRecordingStore(filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB)
+		if err != nil {
+			log.Printf("[WARN] Failed to open replay store: %v (CSI recording disabled)", err)
+		} else {
+			ingestSrv.SetReplayStore(store)
+			defer store.Close()
+			log.Printf("[INFO] CSI replay store at %s (%d MB max)", filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB)
+		}
+	}
+
+	// Adaptive rate controller
+	rateCtrl := ingestion.NewRateController(func(mac string, rateHz int) {
+		ingestSrv.SendConfigToMAC(mac, rateHz)
+	})
+	ingestSrv.SetRateController(rateCtrl)
+	go rateCtrl.Run(ctx)
+
+	// Dashboard hub and server
 	dashboardHub := dashboard.NewHub()
 	dashboardSrv := dashboard.NewServer(dashboardHub)
 
-	// Connect ingestion to dashboard (for state queries)
 	dashboardHub.SetIngestionState(ingestSrv)
 
-	// Start dashboard hub in background
+	// Wire ingestion → dashboard for CSI and motion broadcasts
+	ingestSrv.SetDashboardBroadcaster(dashboardHub)
+	ingestSrv.SetMotionBroadcaster(dashboardHub)
+
 	go dashboardHub.Run()
 
-	// Dashboard WebSocket endpoint
 	r.HandleFunc("/ws/dashboard", dashboardSrv.HandleDashboardWS)
 
 	// Serve dashboard static files
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
-		// Default: look for dashboard directory relative to binary or cwd
 		staticDir = findDashboardDir()
 	}
 
 	if staticDir != "" {
-		// Check if directory exists
 		if _, err := os.Stat(staticDir); err == nil {
 			log.Printf("[INFO] Serving dashboard from %s", staticDir)
 			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-				// Try to serve static file, fall back to index.html for SPA routing
 				path := filepath.Join(staticDir, r.URL.Path)
 
-				// If path is a directory, serve index.html
 				if info, err := os.Stat(path); err == nil && info.IsDir() {
 					path = filepath.Join(path, "index.html")
 				}
 
-				// If file exists, serve it
 				if _, err := os.Stat(path); err == nil {
 					http.ServeFile(w, r, path)
 					return
 				}
 
-				// Fall back to index.html for SPA routing (except for /js/* paths)
 				if filepath.Ext(r.URL.Path) == "" {
 					http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
 					return
 				}
 
-				// File not found
 				http.NotFound(w, r)
 			})
 		} else {
@@ -117,7 +140,7 @@ func main() {
 		log.Printf("[WARN] No dashboard directory found, static files not served")
 	}
 
-	// Start mDNS advertisement
+	// mDNS advertisement
 	var mdnsServer *mdns.Server
 	if cfg.MDNSEnabled {
 		service, err := mdns.NewMDNSService(
@@ -141,15 +164,13 @@ func main() {
 		}
 	}
 
-	// Start HTTP server
 	srv := &http.Server{
 		Addr:         cfg.BindAddr,
 		Handler:      r,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second, // Longer for WebSocket
+		WriteTimeout: 30 * time.Second,
 	}
 
-	// Run server in goroutine
 	go func() {
 		log.Printf("[INFO] HTTP server listening on %s", cfg.BindAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -157,28 +178,24 @@ func main() {
 		}
 	}()
 
-	// Wait for shutdown signal
 	sig := <-sigChan
 	log.Printf("[INFO] Received signal %v, initiating graceful shutdown", sig)
 
-	// Shutdown sequence
+	cancel()
+
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	// Stop accepting new connections
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("[ERROR] HTTP server shutdown error: %v", err)
 	}
 
-	// Close ingestion server (drains connections)
 	ingestSrv.Shutdown(shutdownCtx)
 
-	// Stop mDNS
 	if mdnsServer != nil {
 		mdnsServer.Shutdown()
 	}
 
-	cancel()
 	log.Printf("[INFO] Shutdown complete")
 }
 
@@ -189,6 +206,7 @@ func parseConfig() Config {
 	mdnsName := getEnv("SPAXEL_MDNS_NAME", "spaxel")
 	mdnsEnabled := getEnvBool("SPAXEL_MDNS_ENABLED", true)
 	logLevel := getEnv("SPAXEL_LOG_LEVEL", "info")
+	replayMaxMB := getEnvInt("SPAXEL_REPLAY_MAX_MB", replay.DefaultMaxMB)
 
 	flag.StringVar(&bindAddr, "bind", bindAddr, "Listen address")
 	flag.StringVar(&dataDir, "data", dataDir, "Data directory")
@@ -196,6 +214,7 @@ func parseConfig() Config {
 	flag.StringVar(&mdnsName, "mdns-name", mdnsName, "mDNS service name")
 	flag.BoolVar(&mdnsEnabled, "mdns", mdnsEnabled, "Enable mDNS advertisement")
 	flag.StringVar(&logLevel, "log-level", logLevel, "Log level (debug, info, warn, error)")
+	flag.IntVar(&replayMaxMB, "replay-max-mb", replayMaxMB, "CSI replay buffer size in MB")
 	flag.Parse()
 
 	return Config{
@@ -205,6 +224,7 @@ func parseConfig() Config {
 		MDNSName:    mdnsName,
 		MDNSEnabled: mdnsEnabled,
 		LogLevel:    logLevel,
+		ReplayMaxMB: replayMaxMB,
 	}
 }
 
@@ -222,14 +242,21 @@ func getEnvBool(key string, defaultVal bool) bool {
 	return defaultVal
 }
 
-// findDashboardDir attempts to locate the dashboard directory
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if n, err := strconv.Atoi(val); err == nil {
+			return n
+		}
+	}
+	return defaultVal
+}
+
 func findDashboardDir() string {
-	// Try common locations
 	candidates := []string{
-		"dashboard",           // When running from repo root
-		"../dashboard",        // When running from mothership/
-		"../../dashboard",     // When running from mothership/cmd/mothership/
-		"/app/dashboard",      // Docker container location
+		"dashboard",
+		"../dashboard",
+		"../../dashboard",
+		"/app/dashboard",
 	}
 
 	for _, dir := range candidates {

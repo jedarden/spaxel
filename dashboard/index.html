@@ -186,6 +186,44 @@
         .link-item.selected {
             background: rgba(79, 195, 247, 0.2);
         }
+
+        /* Presence badge */
+        .presence-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+        }
+
+        .presence-badge.motion {
+            background: rgba(244, 67, 54, 0.25);
+            color: #ef5350;
+        }
+
+        .presence-badge.clear {
+            background: rgba(76, 175, 80, 0.2);
+            color: #66bb6a;
+        }
+
+        /* Overall presence indicator in status bar */
+        #presence-indicator {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        #presence-indicator.motion {
+            background: rgba(244, 67, 54, 0.3);
+            color: #ef5350;
+        }
+
+        #presence-indicator.clear {
+            background: rgba(76, 175, 80, 0.15);
+            color: #66bb6a;
+        }
     </style>
 </head>
 <body>
@@ -200,6 +238,9 @@
         </div>
         <div class="status-item">
             <span>Links: <strong id="link-count">0</strong></span>
+        </div>
+        <div class="status-item">
+            <span id="presence-indicator" class="clear">CLEAR</span>
         </div>
         <div class="status-item" style="margin-left:auto;">
             <span>FPS: <strong id="fps-counter">0</strong></span>

@@ -13,20 +13,21 @@ import (
 
 // Hub manages all dashboard client connections and broadcasts
 type Hub struct {
-	mu          sync.RWMutex
-	clients     map[*Client]struct{}
-	broadcast   chan []byte
-	register    chan *Client
-	unregister  chan *Client
+	mu         sync.RWMutex
+	clients    map[*Client]struct{}
+	broadcast  chan []byte
+	register   chan *Client
+	unregister chan *Client
 
 	// Reference to ingestion server for state queries
 	ingestionState IngestionState
 }
 
-// IngestionState is an interface to query node/link state from ingestion
+// IngestionState is an interface to query node/link/motion state from ingestion
 type IngestionState interface {
 	GetConnectedNodesInfo() []ingestion.NodeInfo
 	GetAllLinksInfo() []ingestion.LinkInfo
+	GetAllMotionStates() []ingestion.MotionStateItem
 }
 
 // Client represents a dashboard WebSocket client
@@ -64,8 +65,6 @@ func (h *Hub) Run() {
 			h.clients[client] = struct{}{}
 			h.mu.Unlock()
 			log.Printf("[INFO] Dashboard client connected (total: %d)", len(h.clients))
-
-			// Send initial state
 			h.sendInitialState(client)
 
 		case client := <-h.unregister:
@@ -89,7 +88,6 @@ func (h *Hub) Run() {
 			h.mu.RUnlock()
 
 		case <-ticker.C:
-			// Periodic state broadcast
 			h.broadcastState()
 		}
 	}
@@ -116,8 +114,6 @@ func (h *Hub) Broadcast(message []byte) {
 
 // BroadcastCSI broadcasts a CSI frame to all dashboard clients
 func (h *Hub) BroadcastCSI(nodeMAC, peerMAC string, data []byte) {
-	// For now, just forward the raw binary frame
-	// Dashboard clients will parse it
 	h.Broadcast(data)
 }
 
@@ -165,6 +161,17 @@ func (h *Hub) BroadcastLinkInactive(linkID string) {
 	h.Broadcast(data)
 }
 
+// BroadcastMotionState sends motion state for one or more links to all dashboard clients.
+// Called on state changes (idle↔motion) so the dashboard updates immediately.
+func (h *Hub) BroadcastMotionState(states []ingestion.MotionStateItem) {
+	msg := map[string]interface{}{
+		"type":  "motion_state",
+		"links": states,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
 func (h *Hub) sendInitialState(client *Client) {
 	h.mu.RLock()
 	state := h.ingestionState
@@ -174,27 +181,12 @@ func (h *Hub) sendInitialState(client *Client) {
 		return
 	}
 
-	// Build state message
-	msg := map[string]interface{}{
-		"type": "state",
-	}
-
-	nodes := state.GetConnectedNodesInfo()
-	if nodes != nil {
-		msg["nodes"] = nodes
-	}
-
-	links := state.GetAllLinksInfo()
-	if links != nil {
-		msg["links"] = links
-	}
-
+	msg := h.buildStateMsg(state)
 	data, _ := json.Marshal(msg)
 
 	select {
 	case client.send <- data:
 	default:
-		// Buffer full, skip
 	}
 }
 
@@ -208,23 +200,27 @@ func (h *Hub) broadcastState() {
 		return
 	}
 
-	// Build state message
+	msg := h.buildStateMsg(state)
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+func (h *Hub) buildStateMsg(state IngestionState) map[string]interface{} {
 	msg := map[string]interface{}{
 		"type": "state",
 	}
 
-	nodes := state.GetConnectedNodesInfo()
-	if nodes != nil {
+	if nodes := state.GetConnectedNodesInfo(); nodes != nil {
 		msg["nodes"] = nodes
 	}
-
-	links := state.GetAllLinksInfo()
-	if links != nil {
+	if links := state.GetAllLinksInfo(); links != nil {
 		msg["links"] = links
 	}
+	if motionStates := state.GetAllMotionStates(); len(motionStates) > 0 {
+		msg["motion_states"] = motionStates
+	}
 
-	data, _ := json.Marshal(msg)
-	h.Broadcast(data)
+	return msg
 }
 
 // ClientCount returns the number of connected dashboard clients

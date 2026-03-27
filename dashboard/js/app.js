@@ -31,7 +31,7 @@
         ws: null,
         wsConnected: false,
         nodes: new Map(),        // MAC -> { mac, firmware, chip, lastSeen }
-        links: new Map(),        // linkID -> { nodeMAC, peerMAC, lastFrame, lastCSI }
+        links: new Map(),        // linkID -> { nodeMAC, peerMAC, lastFrame, lastCSI, motionDetected, deltaRMS }
         selectedLinkID: null,
         lastChartUpdate: 0,
         frameCount: 0,
@@ -220,13 +220,19 @@
                 }
                 if (msg.links) {
                     msg.links.forEach(link => {
+                        const existing = state.links.get(link.id) || {};
                         state.links.set(link.id, {
                             nodeMAC: link.node_mac,
                             peerMAC: link.peer_mac,
                             lastFrame: Date.now(),
-                            lastCSI: null
+                            lastCSI: existing.lastCSI || null,
+                            motionDetected: existing.motionDetected || false,
+                            deltaRMS: existing.deltaRMS || 0
                         });
                     });
+                }
+                if (msg.motion_states) {
+                    msg.motion_states.forEach(ms => applyMotionState(ms));
                 }
                 updateNodeList();
                 updateLinkList();
@@ -253,15 +259,38 @@
                         nodeMAC: msg.node_mac,
                         peerMAC: msg.peer_mac,
                         lastFrame: Date.now(),
-                        lastCSI: null
+                        lastCSI: null,
+                        motionDetected: false,
+                        deltaRMS: 0
                     });
                     updateLinkList();
+                }
+                break;
+
+            case 'motion_state':
+                // Targeted broadcast on state change
+                if (msg.links) {
+                    let changed = false;
+                    msg.links.forEach(ms => {
+                        if (applyMotionState(ms)) changed = true;
+                    });
+                    if (changed) updateLinkList();
                 }
                 break;
 
             default:
                 // Ignore unknown types (forward-compatible)
         }
+    }
+
+    // applyMotionState updates a link's motion fields; returns true if it changed.
+    function applyMotionState(ms) {
+        const link = state.links.get(ms.link_id);
+        if (!link) return false;
+        const prev = link.motionDetected;
+        link.motionDetected = ms.motion_detected;
+        link.deltaRMS = ms.delta_rms || 0;
+        return prev !== ms.motion_detected;
     }
 
     function handleBinaryFrame(buffer) {
@@ -277,7 +306,9 @@
                 nodeMAC: frame.nodeMAC,
                 peerMAC: frame.peerMAC,
                 lastFrame: Date.now(),
-                lastCSI: null
+                lastCSI: null,
+                motionDetected: false,
+                deltaRMS: 0
             };
             state.links.set(linkID, link);
             updateLinkList();
@@ -387,6 +418,21 @@
         container.innerHTML = html;
     }
 
+    function updatePresenceIndicator() {
+        let anyMotion = false;
+        state.links.forEach(link => {
+            if (link.motionDetected) anyMotion = true;
+        });
+        const el = document.getElementById('presence-indicator');
+        if (anyMotion) {
+            el.className = 'motion';
+            el.textContent = 'MOTION';
+        } else {
+            el.className = 'clear';
+            el.textContent = 'CLEAR';
+        }
+    }
+
     function updateLinkList() {
         const container = document.getElementById('link-list');
         document.getElementById('link-count').textContent = state.links.size;
@@ -400,10 +446,12 @@
         state.links.forEach((link, id) => {
             const selected = state.selectedLinkID === id ? 'selected' : '';
             const shortID = id.split(':').map(p => p.split(':').slice(-1)[0]).join('→');
+            const motionClass = link.motionDetected ? 'motion' : 'clear';
+            const motionLabel = link.motionDetected ? 'MOTION' : 'CLEAR';
             html += `
                 <div class="link-item ${selected}" data-link-id="${id}">
                     <span>${shortID}</span>
-                    <span style="color:#666">${link.nSub || 64} sub</span>
+                    <span class="presence-badge ${motionClass}">${motionLabel}</span>
                 </div>
             `;
         });
@@ -413,6 +461,8 @@
         container.querySelectorAll('.link-item').forEach(el => {
             el.addEventListener('click', () => selectLink(el.dataset.linkId));
         });
+
+        updatePresenceIndicator();
     }
 
     function selectLink(linkID) {

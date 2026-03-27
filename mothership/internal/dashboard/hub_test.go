@@ -156,6 +156,10 @@ func (m *MockIngestionState) GetAllLinksInfo() []ingestion.LinkInfo {
 	return m.links
 }
 
+func (m *MockIngestionState) GetAllMotionStates() []ingestion.MotionStateItem {
+	return nil
+}
+
 func TestHub_InitialState(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()

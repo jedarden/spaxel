@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spaxel/mothership/internal/signal"
 )
 
 // CSIBroadcaster is a callback for broadcasting CSI frames to dashboard
@@ -19,11 +20,32 @@ type CSIBroadcaster interface {
 	BroadcastLinkActive(linkID, nodeMAC, peerMAC string)
 }
 
+// MotionBroadcaster broadcasts motion state changes to dashboard clients.
+type MotionBroadcaster interface {
+	BroadcastMotionState(states []MotionStateItem)
+}
+
+// MotionStateItem represents a single link's current motion state.
+type MotionStateItem struct {
+	LinkID         string  `json:"link_id"`
+	MotionDetected bool    `json:"motion_detected"`
+	DeltaRMS       float64 `json:"delta_rms"`
+}
+
+// ReplayAppender appends raw CSI frames to a persistent store.
+type ReplayAppender interface {
+	Append(recvTimeNS int64, rawFrame []byte) error
+}
+
 // Server manages WebSocket connections from ESP32 nodes
 type Server struct {
-	mu         sync.RWMutex
+	mu          sync.RWMutex
 	connections map[string]*NodeConnection // keyed by MAC
-	links      map[string]*RingBuffer     // keyed by "nodeMAC:peerMAC"
+	links       map[string]*RingBuffer     // keyed by "nodeMAC:peerMAC"
+
+	// Motion state per link (for change detection and state queries)
+	linkMotionState map[string]bool    // linkID -> motionDetected
+	linkDeltaRMS    map[string]float64 // linkID -> smoothDeltaRMS
 
 	// Malformed frame tracking per connection
 	malformedCounts map[string]*malformedCounter
@@ -34,19 +56,23 @@ type Server struct {
 	// Shutdown state
 	shutdown bool
 
-	// Dashboard broadcaster (optional)
+	// Optional pipeline components (set via setters)
 	dashboardBroadcaster CSIBroadcaster
+	motionBroadcaster    MotionBroadcaster
+	processorMgr         *signal.ProcessorManager
+	replayStore          ReplayAppender
+	rateCtrl             *RateController
 }
 
 // NodeConnection tracks state for a connected node
 type NodeConnection struct {
-	MAC             string
-	Conn            *websocket.Conn
-	Hello           *HelloMessage
-	LastHealth      *HealthMessage
-	LastHealthTime  time.Time
-	ConnectedAt     time.Time
-	LastFrameTime   time.Time
+	MAC            string
+	Conn           *websocket.Conn
+	Hello          *HelloMessage
+	LastHealth     *HealthMessage
+	LastHealthTime time.Time
+	ConnectedAt    time.Time
+	LastFrameTime  time.Time
 
 	// Write mutex for thread-safe sends
 	writeMu sync.Mutex
@@ -74,9 +100,10 @@ func NewServer() *Server {
 	return &Server{
 		connections:     make(map[string]*NodeConnection),
 		links:           make(map[string]*RingBuffer),
+		linkMotionState: make(map[string]bool),
+		linkDeltaRMS:    make(map[string]float64),
 		malformedCounts: make(map[string]*malformedCounter),
 		upgrader: websocket.Upgrader{
-			// Allow all origins for development (TODO: restrict in production)
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
@@ -93,25 +120,60 @@ func (s *Server) SetDashboardBroadcaster(broadcaster CSIBroadcaster) {
 	s.mu.Unlock()
 }
 
+// SetMotionBroadcaster sets the callback for broadcasting motion state changes.
+func (s *Server) SetMotionBroadcaster(mb MotionBroadcaster) {
+	s.mu.Lock()
+	s.motionBroadcaster = mb
+	s.mu.Unlock()
+}
+
+// SetProcessorManager sets the signal processing pipeline.
+func (s *Server) SetProcessorManager(pm *signal.ProcessorManager) {
+	s.mu.Lock()
+	s.processorMgr = pm
+	s.mu.Unlock()
+}
+
+// SetReplayStore sets the disk-backed recording store.
+func (s *Server) SetReplayStore(store ReplayAppender) {
+	s.mu.Lock()
+	s.replayStore = store
+	s.mu.Unlock()
+}
+
+// SetRateController sets the adaptive rate controller.
+func (s *Server) SetRateController(rc *RateController) {
+	s.mu.Lock()
+	s.rateCtrl = rc
+	s.mu.Unlock()
+}
+
+// SendConfigToMAC sends a rate config command to a connected node by MAC.
+func (s *Server) SendConfigToMAC(mac string, rateHz int) {
+	s.mu.RLock()
+	nc, ok := s.connections[mac]
+	s.mu.RUnlock()
+	if !ok {
+		return
+	}
+	s.sendConfig(nc, rateHz, 0, 0)
+}
+
 // HandleNodeWS handles WebSocket connections at /ws/node
 func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
-	// Upgrade HTTP connection to WebSocket
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[WARN] WebSocket upgrade failed: %v", err)
 		return
 	}
 
-	// Set initial read deadline
 	conn.SetReadDeadline(time.Now().Add(readDeadline))
 
-	// Create connection state
 	nc := &NodeConnection{
 		Conn:        conn,
 		ConnectedAt: time.Now(),
 	}
 
-	// Wait for hello message (must be first)
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		log.Printf("[WARN] Failed to read hello: %v", err)
@@ -119,7 +181,6 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse as JSON (hello must be JSON)
 	parsed, err := ParseJSONMessage(msg)
 	if err != nil {
 		s.sendReject(conn, "invalid hello format")
@@ -137,9 +198,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	nc.MAC = hello.MAC
 	nc.Hello = hello
 
-	// Register connection
 	s.mu.Lock()
-	// Close existing connection from same MAC if present
 	if existing, exists := s.connections[hello.MAC]; exists {
 		existing.Conn.Close()
 	}
@@ -151,19 +210,14 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[INFO] Node connected: MAC=%s firmware=%s chip=%s",
 		hello.MAC, hello.FirmwareVersion, hello.Chip)
 
-	// Broadcast node connected to dashboard
 	if broadcaster != nil {
 		broadcaster.BroadcastNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)
 	}
 
-	// Send initial role and config
 	s.sendRole(nc, "rx", "")
-	s.sendConfig(nc, 20, 0, 0) // 20 Hz default
+	s.sendConfig(nc, 20, 0, 0)
 
-	// Start ping goroutine
 	go s.pingLoop(nc)
-
-	// Message handling loop
 	s.handleMessages(nc)
 }
 
@@ -175,18 +229,20 @@ func (s *Server) handleMessages(nc *NodeConnection) {
 		delete(s.connections, nc.MAC)
 		delete(s.malformedCounts, nc.MAC)
 		broadcaster := s.dashboardBroadcaster
+		rateCtrl := s.rateCtrl
 		s.mu.Unlock()
 
 		log.Printf("[INFO] Node disconnected: MAC=%s", nc.MAC)
 
-		// Broadcast node disconnected to dashboard
 		if broadcaster != nil {
 			broadcaster.BroadcastNodeDisconnected(nc.MAC)
+		}
+		if rateCtrl != nil {
+			rateCtrl.OnNodeDisconnected(nc.MAC)
 		}
 	}()
 
 	for {
-		// Reset read deadline on each message
 		nc.Conn.SetReadDeadline(time.Now().Add(readDeadline))
 
 		messageType, data, err := nc.Conn.ReadMessage()
@@ -213,10 +269,22 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 		return
 	}
 
-	// Update last frame time
 	nc.LastFrameTime = time.Now()
+	recvTime := nc.LastFrameTime
 
-	// Get or create ring buffer for this link
+	s.mu.RLock()
+	replay := s.replayStore
+	pm := s.processorMgr
+	s.mu.RUnlock()
+
+	// 1. Record raw frame to disk before any processing.
+	if replay != nil {
+		if err := replay.Append(recvTime.UnixNano(), data); err != nil {
+			log.Printf("[WARN] Replay append error: %v", err)
+		}
+	}
+
+	// 2. Get or create ring buffer.
 	linkID := frame.LinkID()
 	s.mu.Lock()
 	ring, exists := s.links[linkID]
@@ -228,17 +296,46 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 	broadcaster := s.dashboardBroadcaster
 	s.mu.Unlock()
 
-	// Push frame to ring buffer
-	ring.Push(frame, time.Now())
+	ring.Push(frame, recvTime)
 
-	// Broadcast to dashboard clients
 	if broadcaster != nil {
-		// Forward raw binary frame to dashboard
 		broadcaster.BroadcastCSI(frame.MACString(), frame.PeerMACString(), data)
-
-		// Notify of new link
 		if isNewLink {
 			broadcaster.BroadcastLinkActive(linkID, frame.MACString(), frame.PeerMACString())
+		}
+	}
+
+	// 3. Signal processing pipeline.
+	if pm != nil && int(frame.NSub) > 0 {
+		result, err := pm.Process(linkID, frame.Payload, frame.RSSI, int(frame.NSub), recvTime)
+		if err != nil {
+			log.Printf("[DEBUG] Signal processing error for %s: %v", linkID, err)
+			return
+		}
+
+		motionDetected := result.Features.MotionDetected
+		deltaRMS := result.Features.SmoothDeltaRMS
+
+		// Check if motion state changed.
+		s.mu.Lock()
+		prev := s.linkMotionState[linkID]
+		stateChanged := prev != motionDetected
+		s.linkMotionState[linkID] = motionDetected
+		s.linkDeltaRMS[linkID] = deltaRMS
+		mb := s.motionBroadcaster
+		rateCtrl := s.rateCtrl
+		s.mu.Unlock()
+
+		if stateChanged && mb != nil {
+			mb.BroadcastMotionState([]MotionStateItem{{
+				LinkID:         linkID,
+				MotionDetected: motionDetected,
+				DeltaRMS:       deltaRMS,
+			}})
+		}
+
+		if rateCtrl != nil {
+			rateCtrl.OnMotionState(nc.MAC, motionDetected)
 		}
 	}
 }
@@ -247,7 +344,6 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 func (s *Server) handleJSONMessage(nc *NodeConnection, data []byte) {
 	parsed, err := ParseJSONMessage(data)
 	if err != nil {
-		// Unknown types are silently ignored per protocol
 		return
 	}
 
@@ -255,13 +351,17 @@ func (s *Server) handleJSONMessage(nc *NodeConnection, data []byte) {
 	case *HealthMessage:
 		nc.LastHealth = msg
 		nc.LastHealthTime = time.Now()
-		// TODO: expose health metrics
 
 	case *BLEMessage:
 		// TODO: forward BLE data to identity matcher
 
 	case *MotionHintMessage:
-		// TODO: trigger adaptive rate changes
+		s.mu.RLock()
+		rateCtrl := s.rateCtrl
+		s.mu.RUnlock()
+		if rateCtrl != nil {
+			rateCtrl.OnMotionHint(nc.MAC)
+		}
 
 	case *OTAStatusMessage:
 		// TODO: track OTA progress
@@ -278,7 +378,6 @@ func (s *Server) recordMalformed(mac string) {
 		return
 	}
 
-	// Reset counter if window has passed
 	if time.Since(counter.firstSeen) > malformedWindow {
 		counter.count = 0
 		counter.firstSeen = time.Now()
@@ -286,12 +385,10 @@ func (s *Server) recordMalformed(mac string) {
 
 	counter.count++
 
-	// Warn at 100
 	if counter.count == malformedWarnThreshold {
 		log.Printf("[WARN] Node %s sending malformed CSI frames (count=%d)", mac, counter.count)
 	}
 
-	// Close at 1000
 	if counter.count >= malformedCloseThreshold {
 		log.Printf("[ERROR] Node %s exceeded malformed frame threshold, closing connection", mac)
 		if nc, exists := s.connections[mac]; exists {
@@ -311,10 +408,9 @@ func (s *Server) pingLoop(nc *NodeConnection) {
 		nc.writeMu.Unlock()
 
 		if err != nil {
-			return // Connection closed
+			return
 		}
 
-		// Check for shutdown
 		s.mu.RLock()
 		shutdown := s.shutdown
 		s.mu.RUnlock()
@@ -365,7 +461,6 @@ func (s *Server) Shutdown(ctx context.Context) {
 	s.mu.Lock()
 	s.shutdown = true
 
-	// Send shutdown message to all connected nodes
 	shutdownMsg := ShutdownMessage{Type: "shutdown", ReconnectInMS: 30000}
 	data, _ := json.Marshal(shutdownMsg)
 
@@ -431,7 +526,6 @@ func (s *Server) GetAllLinksInfo() []LinkInfo {
 
 	links := make([]LinkInfo, 0, len(s.links))
 	for linkID := range s.links {
-		// Parse linkID format "nodeMAC:peerMAC" (17 chars + 1 colon + 17 chars)
 		if len(linkID) >= 35 {
 			links = append(links, LinkInfo{
 				ID:      linkID,
@@ -441,6 +535,22 @@ func (s *Server) GetAllLinksInfo() []LinkInfo {
 		}
 	}
 	return links
+}
+
+// GetAllMotionStates returns current motion state for all known links.
+func (s *Server) GetAllMotionStates() []MotionStateItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	states := make([]MotionStateItem, 0, len(s.linkMotionState))
+	for linkID, detected := range s.linkMotionState {
+		states = append(states, MotionStateItem{
+			LinkID:         linkID,
+			MotionDetected: detected,
+			DeltaRMS:       s.linkDeltaRMS[linkID],
+		})
+	}
+	return states
 }
 
 // GetLinkBuffer returns the ring buffer for a specific link
