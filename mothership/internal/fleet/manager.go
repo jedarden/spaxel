@@ -124,6 +124,22 @@ func (m *Manager) BroadcastRegistry() {
 	m.broadcastRegistry()
 }
 
+// OverrideRole manually sets a node's role, pushing the update to the node if online,
+// and broadcasting the updated registry state.
+func (m *Manager) OverrideRole(mac, role string) error {
+	if err := m.registry.SetNodeRole(mac, role); err != nil {
+		return err
+	}
+	m.mu.RLock()
+	notifier := m.notifier
+	m.mu.RUnlock()
+	if notifier != nil {
+		notifier.SendRoleToMAC(mac, role, "")
+	}
+	m.broadcastRegistry()
+	return nil
+}
+
 // ─── Role Assignment ────────────────────────────────────────────────────────
 
 // assignRole determines the role for the given MAC based on total connected count.

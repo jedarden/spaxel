@@ -3,9 +3,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +22,7 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/provisioning"
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
 	sigproc "github.com/spaxel/mothership/internal/signal"
@@ -134,6 +137,36 @@ func main() {
 	// Fleet REST API
 	fleetHandler := fleet.NewHandler(fleetMgr)
 	fleetHandler.RegisterRoutes(r)
+
+	// Provisioning API (used by onboarding wizard)
+	_, msPortStr, _ := net.SplitHostPort(cfg.BindAddr)
+	msPort, _ := strconv.Atoi(msPortStr)
+	if msPort == 0 {
+		msPort = 8080
+	}
+	provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort)
+	r.Post("/api/provision", provSrv.HandleProvision)
+
+	// Firmware manifest for esp-web-tools (onboarding wizard flashing)
+	r.Get("/api/firmware/manifest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"name":                   "Spaxel Node",
+			"version":                version,
+			"new_install_prompt_erase": true,
+			"builds": []map[string]interface{}{
+				{
+					"chipFamily": "ESP32-S3",
+					"parts": []map[string]interface{}{
+						{
+							"path":    "/firmware/latest",
+							"address": 0x0,
+						},
+					},
+				},
+			},
+		}) //nolint:errcheck
+	})
 
 	go dashboardHub.Run()
 
