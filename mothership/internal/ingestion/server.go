@@ -36,6 +36,7 @@ type MotionStateItem struct {
 	LinkID         string  `json:"link_id"`
 	MotionDetected bool    `json:"motion_detected"`
 	DeltaRMS       float64 `json:"delta_rms"`
+	Confidence     float64 `json:"confidence"`
 }
 
 // ReplayAppender appends raw CSI frames to a persistent store.
@@ -155,6 +156,18 @@ func (s *Server) SetRateController(rc *RateController) {
 	s.mu.Unlock()
 }
 
+// SetFleetNotifier sets the fleet manager for node lifecycle callbacks.
+func (s *Server) SetFleetNotifier(fn FleetNotifier) {
+	s.mu.Lock()
+	s.fleetNotifier = fn
+	s.mu.Unlock()
+}
+
+// GetConnectedMACs returns the MACs of currently-connected nodes.
+func (s *Server) GetConnectedMACs() []string {
+	return s.GetConnectedNodes()
+}
+
 // SendConfigToMAC sends a rate config command to a connected node by MAC.
 // varianceThreshold > 0 enables on-device amplitude variance monitoring.
 func (s *Server) SendConfigToMAC(mac string, rateHz int, varianceThreshold float64) {
@@ -242,6 +255,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	s.connections[hello.MAC] = nc
 	s.malformedCounts[hello.MAC] = &malformedCounter{}
 	broadcaster := s.dashboardBroadcaster
+	fleetFn := s.fleetNotifier
 	s.mu.Unlock()
 
 	log.Printf("[INFO] Node connected: MAC=%s firmware=%s chip=%s",
@@ -251,8 +265,12 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 		broadcaster.BroadcastNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)
 	}
 
-	s.sendRole(nc, "rx", "")
-	s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold)
+	if fleetFn != nil {
+		fleetFn.OnNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)
+	} else {
+		s.sendRole(nc, "rx", "")
+		s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold)
+	}
 
 	go s.pingLoop(nc)
 	s.handleMessages(nc)
@@ -267,6 +285,7 @@ func (s *Server) handleMessages(nc *NodeConnection) {
 		delete(s.malformedCounts, nc.MAC)
 		broadcaster := s.dashboardBroadcaster
 		rateCtrl := s.rateCtrl
+		fleetFn := s.fleetNotifier
 		s.mu.Unlock()
 
 		log.Printf("[INFO] Node disconnected: MAC=%s", nc.MAC)
@@ -276,6 +295,9 @@ func (s *Server) handleMessages(nc *NodeConnection) {
 		}
 		if rateCtrl != nil {
 			rateCtrl.OnNodeDisconnected(nc.MAC)
+		}
+		if fleetFn != nil {
+			fleetFn.OnNodeDisconnected(nc.MAC)
 		}
 	}()
 
@@ -581,15 +603,25 @@ func (s *Server) GetAllLinksInfo() []LinkInfo {
 // GetAllMotionStates returns current motion state for all known links.
 func (s *Server) GetAllMotionStates() []MotionStateItem {
 	s.mu.RLock()
+	pm := s.processorMgr
+	s.mu.RUnlock()
+
+	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	states := make([]MotionStateItem, 0, len(s.linkMotionState))
 	for linkID, detected := range s.linkMotionState {
-		states = append(states, MotionStateItem{
+		item := MotionStateItem{
 			LinkID:         linkID,
 			MotionDetected: detected,
 			DeltaRMS:       s.linkDeltaRMS[linkID],
-		})
+		}
+		if pm != nil {
+			if proc := pm.GetProcessor(linkID); proc != nil {
+				item.Confidence = proc.GetBaseline().GetConfidence()
+			}
+		}
+		states = append(states, item)
 	}
 	return states
 }

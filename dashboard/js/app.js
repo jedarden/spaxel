@@ -23,7 +23,10 @@
         chartBars: 64,       // number of subcarriers
         chartUpdateMs: 100,  // update chart at 10 Hz max
         tsMaxPoints: 360,    // max time series samples per link (~60s at 6Hz)
-        tsMinIntervalMs: 100 // min ms between time series samples
+        tsMinIntervalMs: 100, // min ms between time series samples
+        drTsWindowMs: 10000, // deltaRMS time series window: 10 seconds
+        drTsMaxPoints: 100,  // max deltaRMS samples per link
+        drThreshold: 0.02    // DefaultDeltaRMSThreshold
     };
 
     // ============================================
@@ -35,6 +38,8 @@
         nodes: new Map(),        // MAC -> { mac, firmware, chip, lastSeen }
         links: new Map(),        // linkID -> { nodeMAC, peerMAC, lastFrame, lastCSI, motionDetected, deltaRMS, ampHistory, lastAmpSample }
         selectedLinkID: null,
+        presenceSelectedLinkID: null,
+        drHistory: new Map(),    // linkID -> [{ t: number, rms: number }]
         lastChartUpdate: 0,
         frameCount: 0,
         lastFpsTime: performance.now()
@@ -299,6 +304,10 @@
                 }
                 break;
 
+            case 'presence_update':
+                handlePresenceUpdate(msg);
+                break;
+
             case 'registry_state':
                 Viz3D.handleRegistryState(msg);
                 break;
@@ -484,6 +493,116 @@
         }
     }
 
+    // ============================================
+    // Presence Panel
+    // ============================================
+    function handlePresenceUpdate(msg) {
+        if (!msg.links) return;
+
+        const now = performance.now();
+        let anyMotion = false;
+
+        for (const [linkID, info] of Object.entries(msg.links)) {
+            // Update link state if link exists
+            const link = state.links.get(linkID);
+            if (link) {
+                link.motionDetected = info.is_motion || info.motion_detected || false;
+                link.deltaRMS = info.delta_rms || 0;
+            }
+
+            if (info.is_motion || info.motion_detected) anyMotion = true;
+
+            // Append to deltaRMS history
+            let history = state.drHistory.get(linkID);
+            if (!history) {
+                history = [];
+                state.drHistory.set(linkID, history);
+            }
+            history.push({ t: now, rms: info.delta_rms || 0 });
+
+            // Trim to window
+            const cutoff = now - CONFIG.drTsWindowMs;
+            while (history.length > 0 && history[0].t < cutoff) {
+                history.shift();
+            }
+            if (history.length > CONFIG.drTsMaxPoints) {
+                history.splice(0, history.length - CONFIG.drTsMaxPoints);
+            }
+        }
+
+        updatePresencePanel(msg.links, anyMotion);
+        updateLinkList();
+        drawDeltaRMSTimeSeries();
+    }
+
+    function updatePresencePanel(links, anyMotion) {
+        const container = document.getElementById('presence-list');
+        const statusEl = document.getElementById('presence-status');
+
+        if (anyMotion) {
+            statusEl.className = 'motion';
+            statusEl.textContent = 'MOTION';
+        } else {
+            statusEl.className = 'clear';
+            statusEl.textContent = 'CLEAR';
+        }
+
+        const entries = Object.entries(links);
+        if (entries.length === 0) {
+            container.innerHTML = '<div class="empty-state">No links active</div>';
+            return;
+        }
+
+        let html = '';
+        for (const [linkID, info] of entries) {
+            const isMotion = info.is_motion || info.motion_detected || false;
+            const confidence = info.confidence || 0;
+            const rms = info.delta_rms || 0;
+            const shortID = abbreviateLinkID(linkID);
+            const selected = state.presenceSelectedLinkID === linkID ? 'selected' : '';
+
+            let dotClass = 'clear';
+            if (isMotion && confidence > 0.7) {
+                dotClass = 'high-confidence';
+            } else if (isMotion) {
+                dotClass = 'motion';
+            }
+
+            html += `
+                <div class="presence-row ${selected}" data-link-id="${linkID}">
+                    <span class="presence-dot ${dotClass}"></span>
+                    <span class="presence-link-id">${shortID}</span>
+                    <span class="presence-rms">${rms.toFixed(4)}</span>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+
+        container.querySelectorAll('.presence-row').forEach(el => {
+            el.addEventListener('click', () => {
+                state.presenceSelectedLinkID = el.dataset.linkId;
+                updatePresencePanel(links, anyMotion);
+            });
+        });
+    }
+
+    function abbreviateLinkID(linkID) {
+        const parts = linkID.split(':');
+        if (parts.length >= 12) {
+            // Full MAC:MAC format: AA:BB:CC:DD:EE:FF:AA:BB:CC:DD:EE:FF
+            const nodeShort = parts.slice(3, 6).join(':');
+            const peerShort = parts.slice(9, 12).join(':');
+            return nodeShort + '\u2192' + peerShort;
+        }
+        // Fallback: last segment of each side
+        const halves = linkID.split(':').reduce((acc, p, i, arr) => {
+            if (i < 6) acc[0].push(p);
+            else acc[1].push(p);
+            return acc;
+        }, [[], []]);
+        return halves[0].slice(-2).join(':') + '\u2192' + halves[1].slice(-2).join(':');
+    }
+
     function updateLinkList() {
         const container = document.getElementById('link-list');
         document.getElementById('link-count').textContent = state.links.size;
@@ -536,6 +655,7 @@
     // ============================================
     let chartCanvas, chartCtx;
     let tsCanvas, tsCtx;
+    let drCanvas, drCtx;
 
     function initChart() {
         chartCanvas = document.getElementById('amplitude-chart');
@@ -557,6 +677,16 @@
         tsCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
         drawTimeSeries([]);
+
+        drCanvas = document.getElementById('deltarms-chart');
+        drCtx = drCanvas.getContext('2d');
+
+        const drRect = drCanvas.getBoundingClientRect();
+        drCanvas.width = drRect.width * window.devicePixelRatio;
+        drCanvas.height = drRect.height * window.devicePixelRatio;
+        drCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+        drawDeltaRMSTimeSeries();
     }
 
     function drawEmptyChart() {
@@ -677,9 +807,99 @@
         tsCtx.fillStyle = '#555';
         tsCtx.font = '9px monospace';
         tsCtx.textAlign = 'left';
-        tsCtx.fillText(`−${spanS}s`, 2, height - 2);
+        tsCtx.fillText(`-${spanS}s`, 2, height - 2);
         tsCtx.textAlign = 'right';
         tsCtx.fillText('now', width - 2, height - 2);
+    }
+
+    function drawDeltaRMSTimeSeries() {
+        if (!drCanvas) return;
+        const width = drCanvas.width / window.devicePixelRatio;
+        const height = drCanvas.height / window.devicePixelRatio;
+
+        drCtx.fillStyle = '#1a1a2e';
+        drCtx.fillRect(0, 0, width, height);
+
+        const linkID = state.presenceSelectedLinkID;
+        const history = linkID ? state.drHistory.get(linkID) : null;
+
+        if (!history || history.length < 2) {
+            drCtx.fillStyle = '#444';
+            drCtx.font = '10px sans-serif';
+            drCtx.textAlign = 'center';
+            drCtx.fillText('Select a link', width / 2, height / 2 + 4);
+            return;
+        }
+
+        const padTop = 4;
+        const padBottom = 14;
+        const plotH = height - padTop - padBottom;
+
+        // Y-axis range: 0 to 0.1 (typical deltaRMS range)
+        const yMax = 0.1;
+
+        // Draw threshold line at 0.02
+        const threshY = padTop + plotH - (CONFIG.drThreshold / yMax) * plotH;
+        drCtx.strokeStyle = 'rgba(255, 167, 38, 0.5)';
+        drCtx.lineWidth = 1;
+        drCtx.setLineDash([4, 3]);
+        drCtx.beginPath();
+        drCtx.moveTo(0, threshY);
+        drCtx.lineTo(width, threshY);
+        drCtx.stroke();
+        drCtx.setLineDash([]);
+
+        // Threshold label
+        drCtx.fillStyle = 'rgba(255, 167, 38, 0.7)';
+        drCtx.font = '9px monospace';
+        drCtx.textAlign = 'left';
+        drCtx.fillText('0.02', 2, threshY - 2);
+
+        // Time range
+        const tEnd = history[history.length - 1].t;
+        const tStart = tEnd - CONFIG.drTsWindowMs;
+
+        // Draw deltaRMS line
+        drCtx.lineWidth = 1.5;
+        drCtx.strokeStyle = 'rgba(79, 195, 247, 0.8)';
+        drCtx.beginPath();
+        let started = false;
+
+        for (let i = 0; i < history.length; i++) {
+            const x = ((history[i].t - tStart) / CONFIG.drTsWindowMs) * width;
+            const y = padTop + plotH - (Math.min(history[i].rms, yMax) / yMax) * plotH;
+
+            if (!started) {
+                drCtx.moveTo(x, y);
+                started = true;
+            } else {
+                drCtx.lineTo(x, y);
+            }
+        }
+        drCtx.stroke();
+
+        // Fill area under curve
+        if (history.length >= 2) {
+            const lastX = ((history[history.length - 1].t - tStart) / CONFIG.drTsWindowMs) * width;
+            const firstX = ((history[0].t - tStart) / CONFIG.drTsWindowMs) * width;
+            drCtx.lineTo(lastX, padTop + plotH);
+            drCtx.lineTo(firstX, padTop + plotH);
+            drCtx.closePath();
+            drCtx.fillStyle = 'rgba(79, 195, 247, 0.08)';
+            drCtx.fill();
+        }
+
+        // Time labels
+        drCtx.fillStyle = '#555';
+        drCtx.font = '9px monospace';
+        drCtx.textAlign = 'left';
+        drCtx.fillText('-10s', 2, height - 2);
+        drCtx.textAlign = 'right';
+        drCtx.fillText('now', width - 2, height - 2);
+
+        // Y-axis labels
+        drCtx.textAlign = 'right';
+        drCtx.fillText('0.1', width - 2, padTop + 10);
     }
 
     // ============================================

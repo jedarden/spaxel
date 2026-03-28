@@ -57,8 +57,11 @@ func (h *Hub) SetIngestionState(state IngestionState) {
 
 // Run starts the hub's main loop
 func (h *Hub) Run() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	stateTicker := time.NewTicker(5 * time.Second)
+	defer stateTicker.Stop()
+
+	presenceTicker := time.NewTicker(500 * time.Millisecond)
+	defer presenceTicker.Stop()
 
 	for {
 		select {
@@ -89,8 +92,11 @@ func (h *Hub) Run() {
 			}
 			h.mu.RUnlock()
 
-		case <-ticker.C:
+		case <-stateTicker.C:
 			h.broadcastState()
+
+		case <-presenceTicker.C:
+			h.broadcastPresence()
 		}
 	}
 }
@@ -169,6 +175,36 @@ func (h *Hub) BroadcastMotionState(states []ingestion.MotionStateItem) {
 	msg := map[string]interface{}{
 		"type":  "motion_state",
 		"links": states,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastPresenceUpdate sends periodic presence state for all links.
+// Broadcasts every 500ms with {type: "presence_update", links: {linkID: {...}}}.
+func (h *Hub) broadcastPresence() {
+	h.mu.RLock()
+	state := h.ingestionState
+	clientCount := len(h.clients)
+	h.mu.RUnlock()
+
+	if state == nil || clientCount == 0 {
+		return
+	}
+
+	items := state.GetAllMotionStates()
+	if len(items) == 0 {
+		return
+	}
+
+	links := make(map[string]ingestion.MotionStateItem, len(items))
+	for _, item := range items {
+		links[item.LinkID] = item
+	}
+
+	msg := map[string]interface{}{
+		"type":  "presence_update",
+		"links": links,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
