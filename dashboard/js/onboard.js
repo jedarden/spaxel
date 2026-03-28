@@ -55,6 +55,7 @@
         calibratePhase: 'idle',
         ws: null,
         csiHistory: [],
+        calibrationLinks: [],  // unique link IDs seen during calibration
         container: null,
     };
 
@@ -101,8 +102,20 @@
         } catch (e) {
             if (e.name === 'NotFoundError') {
                 throw new UserError(
-                    'No device detected. Make sure the USB cable is connected ' +
-                    'and hold the BOOT button while plugging in.'
+                    'No device detected. Did you hold the BOOT button while plugging in? ' +
+                    'Try again: hold BOOT, then plug in the USB cable.'
+                );
+            }
+            if (e.name === 'NotAllowedError') {
+                throw new UserError(
+                    'Browser blocked USB access. Check your browser\'s site permissions ' +
+                    'for this address and try again.'
+                );
+            }
+            if (e.name === 'NetworkError') {
+                throw new UserError(
+                    'Another application is using this USB port. Close Arduino IDE, esptool, ' +
+                    'or any other serial monitor and try again.'
                 );
             }
             throw new UserError(
@@ -598,6 +611,7 @@
     function renderCalibrate(contentEl) {
         state.calibratePhase = 'walk';
         state.csiHistory = [];
+        state.calibrationLinks = [];
 
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
@@ -638,6 +652,11 @@
                     if (frame && (frame.nodeMAC === state.nodeMAC || frame.peerMAC === state.nodeMAC)) {
                         pushCSISample(frame);
                         drawCalibrateWaveform();
+                        // Track unique links for post-calibration card
+                        var linkKey = frame.nodeMAC + ':' + frame.peerMAC;
+                        if (state.calibrationLinks.indexOf(linkKey) === -1) {
+                            state.calibrationLinks.push(linkKey);
+                        }
                     }
                 }
             };
@@ -757,7 +776,8 @@
                     if (state.csiHistory.length < 5) {
                         statusEl.innerHTML =
                             '<span class="wizard-warn">Very little CSI data received. ' +
-                            'The node may not be oriented correctly. Continuing anyway...</span>';
+                            'The node connected but is not sensing yet. Check the antenna ' +
+                            'orientation \u2014 the PCB antenna should face away from walls.</span>';
                     }
                     startCalibratePhase('still');
                 });
@@ -791,9 +811,7 @@
                 statusEl.textContent = 'The sensor can see you!';
                 runCalibrateCountdown(CONFIG.calibrateWalkThroughDuration, function () {
                     if (state.calibratePhase !== 'walk_through') return;
-                    statusEl.innerHTML = '<span class="wizard-success">✓ Calibration complete!</span>';
-                    saveState();
-                    setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1500);
+                    showPostCalibrationCard();
                 });
                 break;
         }
@@ -814,6 +832,45 @@
             state.calibrateTimer = setTimeout(tick, 200);
         }
         tick();
+    }
+
+    // ============================================
+    // Post-Calibration Reinforcement Card
+    // ============================================
+    function showPostCalibrationCard() {
+        var instructions = document.getElementById('calibrate-instructions');
+        var statusEl = document.getElementById('calibrate-status');
+        if (!instructions || !statusEl) return;
+
+        var linkCount = state.calibrationLinks.length || 1;
+        var nodeLabel = state.nodeMAC || 'Node';
+
+        instructions.innerHTML =
+            '<div class="post-cal-card">' +
+            '<div class="wizard-icon-large wizard-success-icon">\u2713</div>' +
+            '<h3>You\'re All Set!</h3>' +
+            '<p class="post-cal-summary">' + escapeAttr(nodeLabel) + ' calibrated. ' +
+            linkCount + ' sensing link' + (linkCount !== 1 ? 's' : '') +
+            ' active. Motion detection: Ready.</p>' +
+            '<p class="post-cal-expect">You\'ll see the CSI waveform react when someone walks through the room. ' +
+            'The system learns your space over the next few hours and becomes more accurate.</p>' +
+            '<div class="post-cal-actions">' +
+            '<button class="wizard-btn wizard-btn-secondary" id="post-cal-add">Add another node</button>' +
+            '<button class="wizard-btn wizard-btn-primary" id="post-cal-done">I\'m done for now</button>' +
+            '</div>' +
+            '</div>';
+        statusEl.innerHTML = '';
+
+        document.getElementById('post-cal-add').addEventListener('click', function () {
+            clearState();
+            closeWizard();
+            // Let the user start a new wizard from the dashboard
+        });
+
+        document.getElementById('post-cal-done').addEventListener('click', function () {
+            saveState();
+            goToStep(state.currentStepIndex + 1);
+        });
     }
 
     function renderPlacement(contentEl) {
@@ -984,6 +1041,7 @@
     window.SpaxelOnboard._provisionAndSend = provisionAndSend;
     window.SpaxelOnboard._UserError = UserError;
     window.SpaxelOnboard._isUserError = isUserError;
+    window.SpaxelOnboard._showPostCalibrationCard = showPostCalibrationCard;
 
     // Auto-start if on /onboard path
     if (window.location.pathname === '/onboard') {

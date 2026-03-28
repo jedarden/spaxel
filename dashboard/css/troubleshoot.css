@@ -1,0 +1,345 @@
+/* ============================================
+   Troubleshooting UI Styles
+   ============================================ */
+
+/* Troubleshoot section inside node panel */
+#troubleshoot-section {
+    margin-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 12px;
+}
+
+/* Offline troubleshooting card */
+.troubleshoot-card {
+    background: rgba(255, 167, 38, 0.08);
+    border: 1px solid rgba(255, 167, 38, 0.25);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    animation: troubleshoot-fade-in 0.3s ease-out;
+}
+
+@keyframes troubleshoot-fade-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.troubleshoot-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    color: #ffa726;
+    font-weight: 600;
+}
+
+.troubleshoot-card-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.troubleshoot-dismiss {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.troubleshoot-dismiss:hover {
+    color: #eee;
+}
+
+/* Timeline steps */
+.troubleshoot-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.troubleshoot-step {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.troubleshoot-step-num {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255, 167, 38, 0.2);
+    color: #ffa726;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.troubleshoot-step-text {
+    color: #bbb;
+    line-height: 1.5;
+}
+
+.troubleshoot-step-text strong {
+    color: #eee;
+}
+
+/* More options expander */
+.troubleshoot-more {
+    margin-top: 4px;
+}
+
+.troubleshoot-more summary {
+    color: #888;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 0;
+}
+
+.troubleshoot-more summary:hover {
+    color: #bbb;
+}
+
+.troubleshoot-more[open] .troubleshoot-step {
+    animation: troubleshoot-fade-in 0.2s ease-out;
+}
+
+/* Reset button inside card */
+.troubleshoot-reset-btn {
+    background: rgba(244, 67, 54, 0.15);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    color: #ef5350;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.troubleshoot-reset-btn:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
+/* Quality banner (fixed at top, below status bar) */
+.troubleshoot-quality-banner {
+    position: fixed;
+    top: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 167, 38, 0.15);
+    border: 1px solid rgba(255, 167, 38, 0.3);
+    border-radius: 6px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #ffa726;
+    z-index: 150;
+    max-width: 600px;
+    animation: troubleshoot-slide-down 0.3s ease-out;
+    white-space: nowrap;
+}
+
+@keyframes troubleshoot-slide-down {
+    from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.troubleshoot-quality-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.troubleshoot-quality-banner .troubleshoot-dismiss {
+    color: #ffa726;
+}
+
+.troubleshoot-quality-banner .troubleshoot-dismiss:hover {
+    color: #eee;
+}
+
+/* Factory reset modal */
+.troubleshoot-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.troubleshoot-modal {
+    background: #1e1e3a;
+    border-radius: 12px;
+    padding: 24px 28px;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.troubleshoot-modal h3 {
+    font-size: 16px;
+    color: #eee;
+    margin-bottom: 16px;
+}
+
+.troubleshoot-list {
+    color: #bbb;
+    font-size: 13px;
+    line-height: 1.8;
+    padding-left: 20px;
+    margin-bottom: 16px;
+}
+
+.troubleshoot-list li {
+    margin-bottom: 4px;
+}
+
+.troubleshoot-modal-close {
+    margin-top: 8px;
+}
+
+/* ============================================
+   Tooltip Styles
+   ============================================ */
+
+.spaxel-tooltip {
+    position: fixed;
+    z-index: 2000;
+    background: rgba(30, 30, 58, 0.95);
+    border: 1px solid rgba(79, 195, 247, 0.4);
+    border-radius: 6px;
+    padding: 8px 12px;
+    max-width: 260px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    animation: spaxel-tooltip-appear 0.3s ease-out;
+    pointer-events: none;
+}
+
+@keyframes spaxel-tooltip-appear {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.spaxel-tooltip-text {
+    color: #eee;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Arrows */
+.spaxel-tooltip-arrow {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.spaxel-tooltip-arrow-top {
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid rgba(79, 195, 247, 0.4);
+}
+
+.spaxel-tooltip-arrow-bottom {
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 6px solid rgba(79, 195, 247, 0.4);
+}
+
+.spaxel-tooltip-arrow-left {
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 6px solid rgba(79, 195, 247, 0.4);
+}
+
+.spaxel-tooltip-arrow-right {
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 6px solid rgba(79, 195, 247, 0.4);
+}
+
+/* Dismiss all button */
+.spaxel-dismiss-all {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #aaa;
+    font-size: 12px;
+    padding: 6px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 2001;
+    transition: background 0.2s, color 0.2s;
+}
+
+.spaxel-dismiss-all:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #eee;
+}
+
+/* ============================================
+   Post-Calibration Card (inside wizard)
+   ============================================ */
+
+.post-cal-card {
+    text-align: center;
+    padding: 12px 0;
+}
+
+.post-cal-card .wizard-icon-large {
+    margin-bottom: 8px;
+}
+
+.post-cal-card h3 {
+    font-size: 18px;
+    color: #eee;
+    margin-bottom: 8px;
+}
+
+.post-cal-summary {
+    color: #66bb6a !important;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.post-cal-expect {
+    color: #bbb;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.post-cal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}

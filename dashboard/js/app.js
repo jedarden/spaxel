@@ -263,11 +263,21 @@
                     lastSeen: Date.now()
                 });
                 updateNodeList();
+                if (window.SpaxelTroubleshoot) {
+                    window.SpaxelTroubleshoot.handleEvent('node_connected', msg);
+                }
+                // Show first-time tooltips on first node connection
+                if (window.SpaxelTooltips && state.nodes.size === 1) {
+                    setTimeout(function () { window.SpaxelTooltips.showSequence(); }, 2000);
+                }
                 break;
 
             case 'node_disconnected':
                 state.nodes.delete(msg.mac);
                 updateNodeList();
+                if (window.SpaxelTroubleshoot) {
+                    window.SpaxelTroubleshoot.handleEvent('node_disconnected', msg);
+                }
                 break;
 
             case 'link_active':
@@ -922,4 +932,11 @@
     } else {
         init();
     }
+
+    // ============================================
+    // Public API
+    // ============================================
+    window.SpaxelApp = {
+        getLinks: function () { return state.links; },
+    };
 })();
