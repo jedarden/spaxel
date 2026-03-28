@@ -4,10 +4,24 @@
  */
 
 // Mock TextEncoderStream (not available in jsdom)
+// Must provide functional readable/writable for pipeTo to work
+var _lastEncodedData = '';
 global.TextEncoderStream = class TextEncoderStream {
-    readable = {};
-    writable = {};
+    constructor() {
+        this.readable = {
+            pipeTo: jest.fn().mockResolvedValue(undefined),
+        };
+        this.writable = {
+            getWriter: jest.fn().mockReturnValue({
+                write: jest.fn(function (data) { _lastEncodedData = data; }),
+                close: jest.fn().mockResolvedValue(undefined),
+                releaseLock: jest.fn(),
+            }),
+        };
+    }
 };
+global.__getLastEncodedData = function () { return _lastEncodedData; };
+global.__clearLastEncodedData = function () { _lastEncodedData = ''; };
 
 // Mock ReadableStream/WritableStream (not available in jsdom)
 global.ReadableStream = class ReadableStream {};
@@ -17,7 +31,9 @@ global.WritableStream = class WritableStream {};
 const mockPort = {
     open: jest.fn().mockResolvedValue(undefined),
     close: jest.fn().mockResolvedValue(undefined),
-    readable: {},
+    readable: {
+        pipeTo: jest.fn().mockResolvedValue(undefined),
+    },
     writable: {
         getWriter: jest.fn().mockReturnValue({
             write: jest.fn().mockResolvedValue(undefined),
@@ -42,16 +58,21 @@ global.fetch = jest.fn().mockResolvedValue({
     json: jest.fn().mockResolvedValue([]),
 });
 
-// Mock WebSocket
+// Mock WebSocket — use a factory so resetAllMocks doesn't break it
+function _makeWSMock() {
+    return {
+        binaryType: 'arraybuffer',
+        close: jest.fn(),
+        send: jest.fn(),
+        readyState: 1,
+        onopen: null,
+        onclose: null,
+        onerror: null,
+        onmessage: null,
+    };
+}
 global.WebSocket = jest.fn().mockImplementation(function () {
-    this.binaryType = 'arraybuffer';
-    this.close = jest.fn();
-    this.send = jest.fn();
-    this.readyState = 1;
-    this.onopen = null;
-    this.onclose = null;
-    this.onerror = null;
-    this.onmessage = null;
+    return _makeWSMock();
 });
 
 // Mock crypto.randomUUID

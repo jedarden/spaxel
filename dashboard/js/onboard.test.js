@@ -6,7 +6,7 @@
 require('./onboard.js');
 
 const { SpaxelOnboard } = global;
-const { _CONFIG, _STEPS, _parseCSIFrame, _state, _UserError, _isUserError } = SpaxelOnboard;
+const { _CONFIG, _STEPS, _parseCSIFrame, _state, _UserError, _isUserError, _provisionAndSend } = SpaxelOnboard;
 
 // Reset state between tests
 function resetWizardState() {
@@ -37,6 +37,23 @@ function resetWizardState() {
     navigator.serial.requestPort.mockResolvedValue(__mockPort);
     navigator.serial.getPorts.mockResolvedValue([__mockPort]);
     crypto.randomUUID.mockReturnValue('test-uuid-1234');
+    // Re-apply port mock implementations (resetAllMocks clears them)
+    __mockPort.open.mockResolvedValue(undefined);
+    __mockPort.close.mockResolvedValue(undefined);
+    __mockPort.readable.pipeTo.mockResolvedValue(undefined);
+    // Re-apply WebSocket mock (resetAllMocks clears mockImplementation)
+    WebSocket.mockImplementation(function () {
+        return {
+            binaryType: 'arraybuffer',
+            close: jest.fn(),
+            send: jest.fn(),
+            readyState: 1,
+            onopen: null,
+            onclose: null,
+            onerror: null,
+            onmessage: null,
+        };
+    });
 }
 
 // ============================================
@@ -536,5 +553,561 @@ describe('Error message mapping', () => {
         var techErr = new Error('ENOENT: no such file or directory');
         expect(_isUserError(techErr)).toBe(false);
         // The wizard should wrap this in a UserError before displaying
+    });
+});
+
+// ============================================
+// Browser Check — Missing Serial API
+// ============================================
+describe('Browser check without serial API', () => {
+    beforeEach(resetWizardState);
+
+    afterEach(() => {
+        // Restore serial API for other tests
+        Object.defineProperty(navigator, 'serial', {
+            value: {
+                requestPort: jest.fn().mockResolvedValue(__mockPort),
+                getPorts: jest.fn().mockResolvedValue([__mockPort]),
+            },
+            writable: true,
+            configurable: true,
+        });
+    });
+
+    test('shows error when navigator.serial is missing', () => {
+        // Remove serial API to simulate Firefox/Safari
+        Object.defineProperty(navigator, 'serial', {
+            value: undefined,
+            writable: true,
+            configurable: true,
+        });
+
+        SpaxelOnboard.start();
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Browser Not Supported');
+        expect(content.innerHTML).toContain('Google Chrome');
+        expect(content.innerHTML).toContain('Microsoft Edge');
+        expect(content.innerHTML).toContain('Firefox and Safari');
+
+        SpaxelOnboard.close();
+    });
+
+    test('shows no navigation buttons when serial API is missing', () => {
+        Object.defineProperty(navigator, 'serial', {
+            value: undefined,
+            writable: true,
+            configurable: true,
+        });
+
+        SpaxelOnboard.start();
+
+        var nav = document.getElementById('wizard-nav');
+        expect(nav.innerHTML).toBe('');
+
+        SpaxelOnboard.close();
+    });
+});
+
+// ============================================
+// Wizard State Transitions (without hardware)
+// ============================================
+describe('Wizard state transitions', () => {
+    beforeEach(resetWizardState);
+
+    afterEach(() => {
+        SpaxelOnboard.close();
+    });
+
+    test('auto-advances from browser_check to connect_device when serial is available', (done) => {
+        jest.useFakeTimers();
+
+        SpaxelOnboard.start();
+
+        // browser_check auto-advances after 400ms
+        jest.advanceTimersByTime(400);
+
+        // Should be on step 1 (connect_device)
+        expect(_state.currentStepIndex).toBe(1);
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Connect Your ESP32-S3');
+
+        jest.useRealTimers();
+        done();
+    });
+
+    test('connect_device step renders ESP32 illustration with BOOT button highlighted', () => {
+        jest.useFakeTimers();
+        SpaxelOnboard.start();
+        jest.advanceTimersByTime(400); // Skip browser_check
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('esp32-illustration');
+        expect(content.innerHTML).toContain('BOOT');
+
+        // "Select Device" button is in the nav area
+        var nextBtn = document.getElementById('wizard-next');
+        expect(nextBtn).not.toBeNull();
+        expect(nextBtn.textContent).toBe('Select Device');
+
+        jest.useRealTimers();
+    });
+
+    test('connect_device shows error when requestPort fails with NotFoundError', async () => {
+        jest.useFakeTimers();
+        navigator.serial.requestPort.mockRejectedValueOnce({ name: 'NotFoundError' });
+
+        SpaxelOnboard.start();
+        jest.advanceTimersByTime(400); // Skip browser_check
+
+        // Click "Select Device"
+        var nextBtn = document.getElementById('wizard-next');
+        expect(nextBtn).not.toBeNull();
+        nextBtn.click();
+
+        // Flush microtasks
+        await jest.advanceTimersByTimeAsync(0);
+
+        var errEl = document.getElementById('connect-error');
+        expect(errEl.style.display).toBe('block');
+        expect(errEl.textContent).toContain('USB cable');
+        expect(errEl.textContent).toContain('BOOT button');
+
+        // Button should be re-enabled
+        nextBtn = document.getElementById('wizard-next');
+        expect(nextBtn.disabled).toBe(false);
+
+        jest.useRealTimers();
+    });
+
+    test('connect_device shows generic error for non-NotFoundError', async () => {
+        jest.useFakeTimers();
+        navigator.serial.requestPort.mockRejectedValueOnce(new Error('some error'));
+
+        SpaxelOnboard.start();
+        jest.advanceTimersByTime(400);
+
+        var nextBtn = document.getElementById('wizard-next');
+        nextBtn.click();
+
+        await jest.advanceTimersByTimeAsync(0);
+
+        var errEl = document.getElementById('connect-error');
+        expect(errEl.style.display).toBe('block');
+        expect(errEl.textContent).toContain('Could not select a device');
+
+        jest.useRealTimers();
+    });
+
+    test('flash_firmware shows skip option when esp-web-tools is not loaded', () => {
+        jest.useFakeTimers();
+        // Make customElements.get return null to simulate missing esp-web-tools
+        customElements.get = jest.fn(() => null);
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 2,
+            nodeMAC: null,
+            knownMACs: [],
+            wifiSSID: '',
+            wifiPass: '',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Firmware flashing component failed to load');
+        // "Skip Flashing" is in the nav area, not the content area
+        var nav = document.getElementById('wizard-nav');
+        expect(nav.innerHTML).toContain('Skip Flashing');
+
+        jest.useRealTimers();
+    });
+
+    test('provision_wifi step renders form with WiFi fields', () => {
+        jest.useFakeTimers();
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 3,
+            nodeMAC: null,
+            knownMACs: [],
+            wifiSSID: 'MyWiFi',
+            wifiPass: 'password123',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Configure WiFi');
+        expect(content.innerHTML).toContain('wifi-ssid');
+        expect(content.innerHTML).toContain('wifi-pass');
+        expect(content.innerHTML).toContain('MyWiFi');
+
+        jest.useRealTimers();
+    });
+
+    test('provision_wifi shows error for empty SSID', () => {
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 3,
+            nodeMAC: null,
+            knownMACs: [],
+            wifiSSID: '',
+            wifiPass: '',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        // Submit form with empty SSID — validation is synchronous
+        var form = document.getElementById('wifi-form');
+        var ssidInput = document.getElementById('wifi-ssid');
+        ssidInput.value = '';
+
+        form.dispatchEvent(new Event('submit'));
+
+        var errEl = document.getElementById('provision-error');
+        expect(errEl.style.display).toBe('block');
+        expect(errEl.textContent).toContain('WiFi network name');
+    });
+
+    test('placement step renders placement guidance', () => {
+        jest.useFakeTimers();
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 6,
+            nodeMAC: 'AA:BB:CC:DD:EE:FF',
+            knownMACs: [],
+            wifiSSID: 'TestWiFi',
+            wifiPass: 'pass',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Node Placement');
+        expect(content.innerHTML).toContain('opposite corners');
+        expect(content.innerHTML).toContain('2 meters');
+        expect(content.innerHTML).toContain('chest height');
+
+        jest.useRealTimers();
+    });
+
+    test('complete step shows node MAC and dashboard button', () => {
+        jest.useFakeTimers();
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 7,
+            nodeMAC: 'AA:BB:CC:DD:EE:FF',
+            knownMACs: [],
+            wifiSSID: 'TestWiFi',
+            wifiPass: 'pass',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Setup Complete');
+        expect(content.innerHTML).toContain('AA:BB:CC:DD:EE:FF');
+        expect(content.innerHTML).toContain('Go to Dashboard');
+
+        var gotoBtn = document.getElementById('goto-dashboard');
+        expect(gotoBtn).not.toBeNull();
+
+        jest.useRealTimers();
+    });
+
+    test('complete step hides navigation buttons', () => {
+        jest.useFakeTimers();
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 7,
+            nodeMAC: 'AA:BB:CC:DD:EE:FF',
+            knownMACs: [],
+            wifiSSID: '',
+            wifiPass: '',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        var nav = document.getElementById('wizard-nav');
+        expect(nav.innerHTML).toBe('');
+
+        jest.useRealTimers();
+    });
+});
+
+// ============================================
+// Provisioning Payload Assembly and Serial Send
+// ============================================
+describe('Provisioning payload assembly and serial send', () => {
+    beforeEach(resetWizardState);
+    afterEach(() => { __clearLastEncodedData(); });
+
+    test('provisionAndSend calls POST /api/provision with correct body', async () => {
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            json: jest.fn().mockResolvedValue({
+                version: 1,
+                wifi_ssid: 'TestWiFi',
+                wifi_pass: 'secret123',
+                node_id: 'uuid-123',
+                node_token: 'token-abc',
+                ms_mdns: 'spaxel-mothership.local',
+                ms_port: 8080,
+                debug: false,
+            }),
+        });
+
+        await _provisionAndSend('TestWiFi', 'secret123', '', 8080);
+
+        expect(fetch).toHaveBeenCalledWith('/api/provision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wifi_ssid: 'TestWiFi', wifi_pass: 'secret123' }),
+        });
+
+        // Port should have been opened
+        expect(__mockPort.open).toHaveBeenCalledWith({ baudRate: 115200 });
+
+        // Verify data was sent over serial
+        var sent = __getLastEncodedData();
+        expect(sent).toContain('"wifi_ssid":"TestWiFi"');
+        expect(sent).toContain('"node_id":"uuid-123"');
+    });
+
+    test('provisionAndSend applies mothership host override', async () => {
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            json: jest.fn().mockResolvedValue({
+                version: 1,
+                wifi_ssid: 'TestWiFi',
+                wifi_pass: 'pass',
+                node_id: 'uuid',
+                node_token: 'tok',
+                ms_mdns: 'spaxel-mothership.local',
+                ms_port: 8080,
+                debug: false,
+            }),
+        });
+
+        await _provisionAndSend('TestWiFi', 'pass', '192.168.1.100', 9090);
+
+        var sent = __getLastEncodedData();
+        expect(sent).toContain('"ms_mdns":"192.168.1.100"');
+        expect(sent).toContain('"ms_port":9090');
+    });
+
+    test('provisionAndSend falls back to client-side payload when server fails', async () => {
+        fetch.mockRejectedValueOnce(new Error('server unavailable'));
+
+        await _provisionAndSend('TestWiFi', 'pass', '', 8080);
+
+        // Port should still be opened with client-side payload
+        expect(__mockPort.open).toHaveBeenCalledWith({ baudRate: 115200 });
+
+        // Writer should have been called with client-side assembled payload
+        var sent = __getLastEncodedData();
+        expect(sent).toContain('"wifi_ssid":"TestWiFi"');
+        expect(sent).toContain('"node_id":"test-uuid-1234"');
+    });
+
+    test('provisionAndSend throws UserError when no port is available', async () => {
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            json: jest.fn().mockResolvedValue({
+                version: 1,
+                wifi_ssid: 'W',
+                wifi_pass: 'p',
+                node_id: 'u',
+                node_token: 't',
+                ms_mdns: 'h',
+                ms_port: 8080,
+                debug: false,
+            }),
+        });
+
+        // No authorized ports — use mockResolvedValue (not Once) so fallback path also fails
+        navigator.serial.getPorts.mockResolvedValue([]);
+
+        await expect(_provisionAndSend('W', 'p', '', 8080)).rejects.toEqual(
+            expect.objectContaining({ name: 'UserError' })
+        );
+    });
+});
+
+// ============================================
+// Node Detection Polling — Full Wizard Transition
+// ============================================
+describe('Node detection wizard transition', () => {
+    beforeEach(resetWizardState);
+
+    afterEach(() => {
+        SpaxelOnboard.close();
+        jest.useRealTimers();
+    });
+
+    test('detect_node polls and transitions to calibrate when new node appears', async () => {
+        jest.useFakeTimers();
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 4,
+            nodeMAC: null,
+            knownMACs: ['AA:BB:CC:DD:EE:FF'],
+            wifiSSID: 'TestWiFi',
+            wifiPass: 'pass',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        // Verify we're on detect_node step
+        expect(_state.currentStepIndex).toBe(4);
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Detecting Your Node');
+
+        // Simulate a poll returning a new node
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            json: jest.fn().mockResolvedValue([
+                { mac: 'AA:BB:CC:DD:EE:FF', role: 'tx', online: true },
+                { mac: '11:22:33:44:55:66', role: 'rx', online: true },
+            ]),
+        });
+
+        // Advance time by the poll interval to trigger the first poll
+        await jest.advanceTimersByTimeAsync(3000);
+
+        // Node should be detected
+        expect(_state.nodeMAC).toBe('11:22:33:44:55:66');
+
+        // After 1s timeout, it should transition to calibrate
+        await jest.advanceTimersByTimeAsync(1000);
+        expect(_state.currentStepIndex).toBe(5);
+    });
+
+    test('detect_node shows troubleshooting after timeout', () => {
+        jest.useFakeTimers();
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 4,
+            nodeMAC: null,
+            knownMACs: [],
+            wifiSSID: 'TestWiFi',
+            wifiPass: 'pass',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        // Simulate no new nodes appearing — fetch returns empty
+        fetch.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue([]),
+        });
+
+        // Advance past timeout
+        jest.advanceTimersByTime(121000);
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Troubleshooting');
+        expect(content.innerHTML).toContain('2.4 GHz');
+        expect(content.innerHTML).toContain('AP isolation');
+
+        // Retry button should appear
+        var retryBtn = document.getElementById('wizard-next');
+        expect(retryBtn).not.toBeNull();
+        expect(retryBtn.textContent).toBe('Retry Detection');
+    });
+});
+
+// ============================================
+// Session Storage Restore at Each Step
+// ============================================
+describe('Session storage restore at each step', () => {
+    beforeEach(resetWizardState);
+
+    afterEach(() => {
+        SpaxelOnboard.close();
+        jest.useRealTimers();
+    });
+
+    function testRestoreAtStep(stepIndex, stepLabel, expectedContent) {
+        test('restores state at step ' + stepIndex + ' (' + stepLabel + ')', () => {
+            jest.useFakeTimers();
+
+            sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+                currentStepIndex: stepIndex,
+                nodeMAC: stepIndex >= 4 ? 'AA:BB:CC:DD:EE:FF' : null,
+                knownMACs: stepIndex >= 4 ? ['11:22:33:44:55:66'] : [],
+                wifiSSID: 'TestWiFi',
+                wifiPass: 'secret',
+                mothershipHost: 'custom-host',
+                mothershipPort: 9090,
+            }));
+
+            SpaxelOnboard.start();
+
+            expect(_state.currentStepIndex).toBe(stepIndex);
+            expect(_state.wifiSSID).toBe('TestWiFi');
+            expect(_state.mothershipHost).toBe('custom-host');
+            expect(_state.mothershipPort).toBe(9090);
+
+            if (stepIndex >= 4) {
+                expect(_state.nodeMAC).toBe('AA:BB:CC:DD:EE:FF');
+            }
+        });
+    }
+
+    testRestoreAtStep(1, 'connect_device');
+    testRestoreAtStep(2, 'flash_firmware');
+    testRestoreAtStep(3, 'provision_wifi');
+    testRestoreAtStep(4, 'detect_node');
+    testRestoreAtStep(6, 'placement');
+    testRestoreAtStep(7, 'complete');
+
+    test('restores state at calibrate step and connects WebSocket', () => {
+        jest.useFakeTimers();
+
+        sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
+            currentStepIndex: 5,
+            nodeMAC: 'AA:BB:CC:DD:EE:FF',
+            knownMACs: ['11:22:33:44:55:66'],
+            wifiSSID: 'TestWiFi',
+            wifiPass: 'secret',
+            mothershipHost: '',
+            mothershipPort: 8080,
+        }));
+
+        SpaxelOnboard.start();
+
+        expect(_state.currentStepIndex).toBe(5);
+        expect(_state.nodeMAC).toBe('AA:BB:CC:DD:EE:FF');
+        expect(_state.calibratePhase).toBe('walk');
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Guided Calibration');
+        expect(content.innerHTML).toContain('Walk Around Your Space');
+    });
+
+    test('fresh start (no saved state) begins at step 0', () => {
+        jest.useFakeTimers();
+
+        SpaxelOnboard.start();
+
+        // browser_check auto-advances to step 1
+        jest.advanceTimersByTime(400);
+        expect(_state.currentStepIndex).toBe(1);
     });
 });
