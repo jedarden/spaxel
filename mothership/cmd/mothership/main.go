@@ -18,7 +18,9 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/dashboard"
+	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 )
@@ -84,6 +86,29 @@ func main() {
 		}
 	}
 
+	// Per-link CSI recorder
+	recorderDir := filepath.Join(cfg.DataDir, "csi")
+	recMgr, err := recorder.NewManager(recorder.DefaultConfig(recorderDir))
+	if err != nil {
+		log.Printf("[WARN] Failed to create recorder: %v (per-link recording disabled)", err)
+	} else {
+		ingestSrv.SetRecorder(recMgr)
+		defer recMgr.Close()
+		log.Printf("[INFO] Per-link CSI recorder at %s (retention=%dh, max=%dMB/link)",
+			recorderDir, recorder.DefaultConfig(recorderDir).RetentionHours,
+			recorder.DefaultConfig(recorderDir).MaxBytesPerLink/1<<20)
+	}
+
+	// Fleet node registry and manager
+	fleetReg, err := fleet.NewRegistry(filepath.Join(cfg.DataDir, "fleet.db"))
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to open fleet registry: %v", err)
+	}
+	defer fleetReg.Close()
+	fleetMgr := fleet.NewManager(fleetReg)
+	ingestSrv.SetFleetNotifier(fleetMgr)
+	log.Printf("[INFO] Fleet registry at %s", filepath.Join(cfg.DataDir, "fleet.db"))
+
 	// Adaptive rate controller
 	rateCtrl := ingestion.NewRateController(func(mac string, rateHz int, varianceThreshold float64) {
 		ingestSrv.SendConfigToMAC(mac, rateHz, varianceThreshold)
@@ -100,6 +125,15 @@ func main() {
 	// Wire ingestion → dashboard for CSI and motion broadcasts
 	ingestSrv.SetDashboardBroadcaster(dashboardHub)
 	ingestSrv.SetMotionBroadcaster(dashboardHub)
+
+	// Wire fleet notifier/broadcaster and start self-healing loop
+	fleetMgr.SetNotifier(ingestSrv)
+	fleetMgr.SetBroadcaster(dashboardHub)
+	go fleetMgr.Run(ctx)
+
+	// Fleet REST API
+	fleetHandler := fleet.NewHandler(fleetMgr)
+	fleetHandler.RegisterRoutes(r)
 
 	go dashboardHub.Run()
 

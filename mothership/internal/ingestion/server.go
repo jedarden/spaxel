@@ -44,6 +44,11 @@ type ReplayAppender interface {
 	Append(recvTimeNS int64, rawFrame []byte) error
 }
 
+// Recorder records raw CSI frames to per-link segment files.
+type Recorder interface {
+	Write(linkID string, frame []byte)
+}
+
 // Server manages WebSocket connections from ESP32 nodes
 type Server struct {
 	mu          sync.RWMutex
@@ -68,6 +73,7 @@ type Server struct {
 	motionBroadcaster    MotionBroadcaster
 	processorMgr         *signal.ProcessorManager
 	replayStore          ReplayAppender
+	recorder             Recorder
 	rateCtrl             *RateController
 	fleetNotifier        FleetNotifier
 }
@@ -146,6 +152,13 @@ func (s *Server) SetProcessorManager(pm *signal.ProcessorManager) {
 func (s *Server) SetReplayStore(store ReplayAppender) {
 	s.mu.Lock()
 	s.replayStore = store
+	s.mu.Unlock()
+}
+
+// SetRecorder sets the per-link CSI frame recorder.
+func (s *Server) SetRecorder(r Recorder) {
+	s.mu.Lock()
+	s.recorder = r
 	s.mu.Unlock()
 }
 
@@ -333,6 +346,7 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 
 	s.mu.RLock()
 	replay := s.replayStore
+	rec := s.recorder
 	pm := s.processorMgr
 	s.mu.RUnlock()
 
@@ -341,6 +355,9 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 		if err := replay.Append(recvTime.UnixNano(), data); err != nil {
 			log.Printf("[WARN] Replay append error: %v", err)
 		}
+	}
+	if rec != nil {
+		rec.Write(frame.LinkID(), data)
 	}
 
 	// 2. Get or create ring buffer.
