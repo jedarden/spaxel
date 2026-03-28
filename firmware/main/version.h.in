@@ -1,0 +1,4 @@
+// Auto-generated at build time - do not edit
+#pragma once
+
+#define SPAXEL_FIRMWARE_VERSION "@PROJECT_VERSION@"

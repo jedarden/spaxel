@@ -10,6 +10,8 @@
 #include "lwip/sockets.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <string.h>
+#include <ctype.h>
 
 static const char *TAG = "wifi";
 
@@ -297,6 +299,26 @@ static void captive_dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     pbuf_free(p);
 }
 
+// URL decode helper for captive portal form parsing
+static void url_decode(char *dst, const char *src, size_t dst_size) {
+    size_t i = 0;
+    size_t j = 0;
+
+    while (src[i] && j < dst_size - 1) {
+        if (src[i] == '+') {
+            dst[j++] = ' ';
+            i++;
+        } else if (src[i] == '%' && isxdigit(src[i+1]) && isxdigit(src[i+2])) {
+            char hex[3] = {src[i+1], src[i+2], 0};
+            dst[j++] = (char)strtol(hex, NULL, 16);
+            i += 3;
+        } else {
+            dst[j++] = src[i++];
+        }
+    }
+    dst[j] = '\0';
+}
+
 static esp_err_t captive_root_handler(httpd_req_t *req) {
     const char *html =
         "<!DOCTYPE html>"
@@ -338,17 +360,20 @@ static esp_err_t captive_save_handler(httpd_req_t *req) {
     char ssid[33] = {0};
     char password[65] = {0};
     char ms_ip[47] = {0};
+    char decoded[128];
 
-    // Simple parsing (url-encoded)
+    // Parse URL-encoded form data
     char *p = strtok(buf, "&");
     while (p) {
         if (strncmp(p, "ssid=", 5) == 0) {
-            // URL decode would go here, simplified for now
-            strncpy(ssid, p + 5, sizeof(ssid) - 1);
+            url_decode(decoded, p + 5, sizeof(decoded));
+            strncpy(ssid, decoded, sizeof(ssid) - 1);
         } else if (strncmp(p, "password=", 9) == 0) {
-            strncpy(password, p + 9, sizeof(password) - 1);
+            url_decode(decoded, p + 9, sizeof(decoded));
+            strncpy(password, decoded, sizeof(password) - 1);
         } else if (strncmp(p, "ms_ip=", 6) == 0) {
-            strncpy(ms_ip, p + 6, sizeof(ms_ip) - 1);
+            url_decode(decoded, p + 6, sizeof(decoded));
+            strncpy(ms_ip, decoded, sizeof(ms_ip) - 1);
         }
         p = strtok(NULL, "&");
     }

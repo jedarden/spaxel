@@ -7,11 +7,13 @@
 #include "esp_system.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
+#include "mbedtls/sha256.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semaphore.h"
 #include "cJSON.h"
 #include <string.h>
+#include <strings.h>
 
 // ESP-IDF WebSocket client
 #include "esp_websocket_client.h"
@@ -633,15 +635,29 @@ static void ota_task(void *arg) {
         return;
     }
 
+    // Initialize SHA-256 for verification
+    mbedtls_sha256_context sha_ctx;
+    bool do_sha_verify = (strlen(s_ota_sha256) == 64);
+    if (do_sha_verify) {
+        mbedtls_sha256_init(&sha_ctx);
+        mbedtls_sha256_starts(&sha_ctx, 0);  // 0 = SHA-256
+    }
+
     // Download and write
     char *buf = malloc(4096);
     int total_read = 0;
     int read;
 
     while ((read = esp_http_client_read(http, buf, 4096)) > 0) {
+        // Update SHA-256 hash if verifying
+        if (do_sha_verify) {
+            mbedtls_sha256_update(&sha_ctx, (unsigned char *)buf, read);
+        }
+
         err = esp_ota_write(ota_handle, buf, read);
         if (err != ESP_OK) {
             free(buf);
+            if (do_sha_verify) mbedtls_sha256_free(&sha_ctx);
             esp_ota_abort(ota_handle);
             esp_http_client_cleanup(http);
             websocket_send_ota_status("failed", 0, "write_failed");
@@ -660,7 +676,29 @@ static void ota_task(void *arg) {
     // Verify and complete
     websocket_send_ota_status("verifying", 100, NULL);
 
-    // SHA256 verification would go here if s_ota_sha256 is set
+    // SHA-256 verification
+    if (do_sha_verify) {
+        unsigned char hash[32];
+        mbedtls_sha256_finish(&sha_ctx, hash);
+        mbedtls_sha256_free(&sha_ctx);
+
+        // Convert binary hash to hex string
+        char hash_hex[65];
+        for (int i = 0; i < 32; i++) {
+            sprintf(hash_hex + (i * 2), "%02x", hash[i]);
+        }
+        hash_hex[64] = '\0';
+
+        // Compare with expected hash (case-insensitive)
+        if (strcasecmp(hash_hex, s_ota_sha256) != 0) {
+            ESP_LOGE(TAG, "SHA-256 mismatch: expected %s, got %s", s_ota_sha256, hash_hex);
+            esp_ota_abort(ota_handle);
+            websocket_send_ota_status("failed", 0, "sha256_mismatch");
+            vTaskDelete(NULL);
+            return;
+        }
+        ESP_LOGI(TAG, "SHA-256 verified: %s", hash_hex);
+    }
 
     err = esp_ota_end(ota_handle);
     if (err != ESP_OK) {
