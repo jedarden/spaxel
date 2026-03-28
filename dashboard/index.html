@@ -752,6 +752,168 @@
             background: rgba(79, 195, 247, 0.25);
         }
 
+        /* Room editor button */
+        #room-editor-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #888;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #room-editor-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
+        #room-editor-btn.active { background: rgba(79,195,247,0.2); color: #4fc3f7; border-color: #4fc3f7; }
+
+        /* GDOP toggle */
+        #gdop-toggle-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #888;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #gdop-toggle-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
+        #gdop-toggle-btn.active { background: rgba(76,175,80,0.25); color: #66bb6a; border-color: #66bb6a; }
+
+        /* Virtual node status badge */
+        .node-status.virtual {
+            background: rgba(128, 203, 196, 0.25);
+            color: #80cbc4;
+        }
+
+        /* Delete node button */
+        #delete-node-btn {
+            background: rgba(244, 67, 54, 0.15);
+            border: 1px solid rgba(244, 67, 54, 0.4);
+            color: #e57373;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: none;
+        }
+        #delete-node-btn:hover {
+            background: rgba(244, 67, 54, 0.3);
+        }
+
+        /* Room editor panel */
+        #room-editor-panel {
+            position: fixed;
+            top: 60px;
+            left: 320px;
+            width: 240px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 8px;
+            padding: 16px;
+            z-index: 100;
+            display: none;
+        }
+
+        #room-editor-panel h3 {
+            font-size: 14px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .room-field {
+            margin-bottom: 10px;
+        }
+
+        .room-field label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 3px;
+        }
+
+        .room-field input {
+            width: 100%;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            color: #eee;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .room-field input:focus {
+            outline: none;
+            border-color: #4fc3f7;
+            box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+        }
+
+        .room-field .unit {
+            font-size: 11px;
+            color: #666;
+            margin-left: 4px;
+        }
+
+        #room-apply-btn {
+            width: 100%;
+            padding: 8px;
+            background: #4fc3f7;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 4px;
+            transition: background 0.2s;
+        }
+
+        #room-apply-btn:hover {
+            background: #29b6f6;
+        }
+
+        /* GDOP legend */
+        #gdop-legend {
+            position: fixed;
+            bottom: 20px;
+            left: 320px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 6px;
+            padding: 10px 14px;
+            z-index: 100;
+            display: none;
+            font-size: 11px;
+        }
+
+        #gdop-legend.visible {
+            display: block;
+        }
+
+        #gdop-legend h4 {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        #gdop-gradient {
+            width: 140px;
+            height: 12px;
+            border-radius: 3px;
+            margin-bottom: 4px;
+        }
+
+        #gdop-labels {
+            display: flex;
+            justify-content: space-between;
+            color: #888;
+            font-size: 10px;
+        }
+
         /* esp-web-install-button overrides */
         esp-web-install-button {
             display: block;
@@ -787,9 +949,12 @@
         </div>
         <div class="status-item" style="margin-left:auto; gap:6px;">
             <button id="add-node-btn" onclick="SpaxelOnboard && SpaxelOnboard.start()">+ Add Node</button>
+            <button id="add-virtual-btn" onclick="Placement && Placement.addVirtualNode()">+ Virtual</button>
             <button class="view-btn active" id="view-perspective" onclick="Viz3D.setViewPreset('perspective')">3D</button>
             <button class="view-btn" id="view-topdown"     onclick="Viz3D.setViewPreset('topdown')">Top</button>
             <button class="view-btn" id="view-follow"      onclick="Viz3D.setViewPreset('follow')">Follow</button>
+            <button id="gdop-toggle-btn" onclick="Placement && Placement.toggleGDOP()">GDOP</button>
+            <button id="room-editor-btn" onclick="Placement && Placement.toggleRoomEditor()">Room</button>
             <button id="floorplan-btn" onclick="document.getElementById('floorplan-input').click()">Floor plan</button>
             <input id="floorplan-input" type="file" accept="image/*" style="display:none"
                    onchange="Viz3D.uploadFloorPlan(this.files[0]); this.value=''">
@@ -804,7 +969,7 @@
 
     <!-- Node panel -->
     <div id="node-panel">
-        <h3>Nodes</h3>
+        <h3>Nodes <button id="delete-node-btn" onclick="Placement && Placement.deleteSelectedNode()">Delete</button></h3>
         <div id="node-list">
             <div class="empty-state">No nodes connected</div>
         </div>
@@ -842,9 +1007,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- OrbitControls from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- TransformControls from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 
     <!-- 3-D spatial visualisation layer -->
     <script src="js/viz3d.js"></script>
+    <!-- Node placement, GDOP coverage, room editor -->
+    <script src="js/placement.js"></script>
     <!-- Troubleshooting manager (must load before app.js) -->
     <script src="js/troubleshoot.js"></script>
     <!-- First-time feature tooltips (must load before app.js) -->
@@ -855,6 +1024,36 @@
     <script type="module" src="https://espressif.github.io/esp-web-tools/dist/web/install-button.js"></script>
     <!-- Onboarding wizard -->
     <script src="js/onboard.js"></script>
+
+    <!-- Room editor panel -->
+    <div id="room-editor-panel">
+        <h3>Room Dimensions</h3>
+        <div class="room-field">
+            <label>Width <span class="unit">(m)</span></label>
+            <input type="number" id="room-width" value="6" min="1" max="100" step="0.5">
+        </div>
+        <div class="room-field">
+            <label>Depth <span class="unit">(m)</span></label>
+            <input type="number" id="room-depth" value="5" min="1" max="100" step="0.5">
+        </div>
+        <div class="room-field">
+            <label>Height <span class="unit">(m)</span></label>
+            <input type="number" id="room-height" value="2.5" min="1" max="50" step="0.1">
+        </div>
+        <button id="room-apply-btn" onclick="Placement && Placement.applyRoomFromEditor()">Apply</button>
+    </div>
+
+    <!-- GDOP legend -->
+    <div id="gdop-legend">
+        <h4>GDOP Coverage</h4>
+        <canvas id="gdop-gradient" width="140" height="12"></canvas>
+        <div id="gdop-labels">
+            <span>Excellent</span>
+            <span>Good</span>
+            <span>Fair</span>
+            <span>Poor</span>
+        </div>
+    </div>
     <script>
         // Keep view-preset buttons in sync with active state
         ['perspective','topdown','follow'].forEach(function(p) {
@@ -863,6 +1062,23 @@
                 this.classList.add('active');
             });
         });
+
+        // Draw GDOP legend gradient
+        (function() {
+            var c = document.getElementById('gdop-gradient');
+            if (!c) return;
+            var ctx = c.getContext('2d');
+            var grad = ctx.createLinearGradient(0, 0, 140, 0);
+            grad.addColorStop(0.00, 'rgb(30,200,80)');
+            grad.addColorStop(0.25, 'rgb(140,220,50)');
+            grad.addColorStop(0.50, 'rgb(240,210,40)');
+            grad.addColorStop(0.75, 'rgb(240,130,30)');
+            grad.addColorStop(1.00, 'rgb(210,40,30)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, 140, 12, 3);
+            ctx.fill();
+        })();
     </script>
 </body>
 </html>

@@ -26,6 +26,12 @@ type FleetNotifier interface {
 	OnNodeDisconnected(mac string)
 }
 
+// OTAStatusHandler receives OTA status updates from nodes.
+type OTAStatusHandler interface {
+	OnOTAStatus(mac, state string, progressPct uint8, errMsg string)
+	OnNodeReconnected(mac, firmwareVersion string)
+}
+
 // MotionBroadcaster broadcasts motion state changes to dashboard clients.
 type MotionBroadcaster interface {
 	BroadcastMotionState(states []MotionStateItem)
@@ -76,6 +82,7 @@ type Server struct {
 	recorder             Recorder
 	rateCtrl             *RateController
 	fleetNotifier        FleetNotifier
+	otaHandler           OTAStatusHandler
 }
 
 // NodeConnection tracks state for a connected node
@@ -173,6 +180,13 @@ func (s *Server) SetRateController(rc *RateController) {
 func (s *Server) SetFleetNotifier(fn FleetNotifier) {
 	s.mu.Lock()
 	s.fleetNotifier = fn
+	s.mu.Unlock()
+}
+
+// SetOTAManager sets the OTA manager for status callbacks.
+func (s *Server) SetOTAManager(h OTAStatusHandler) {
+	s.mu.Lock()
+	s.otaHandler = h
 	s.mu.Unlock()
 }
 
@@ -283,6 +297,14 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.sendRole(nc, "rx", "")
 		s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold)
+	}
+
+	// Notify OTA manager of reconnection (for rollback detection)
+	s.mu.RLock()
+	otaH := s.otaHandler
+	s.mu.RUnlock()
+	if otaH != nil {
+		otaH.OnNodeReconnected(hello.MAC, hello.FirmwareVersion)
 	}
 
 	go s.pingLoop(nc)
@@ -444,6 +466,12 @@ func (s *Server) handleJSONMessage(nc *NodeConnection, data []byte) {
 			msg.Type, nc.MAC, msg.State, msg.ProgressPct)
 		if msg.Error != "" {
 			log.Printf("[WARN] OTA error from %s: %s", nc.MAC, msg.Error)
+		}
+		s.mu.RLock()
+		otaH := s.otaHandler
+		s.mu.RUnlock()
+		if otaH != nil {
+			otaH.OnOTAStatus(nc.MAC, msg.State, uint8(msg.ProgressPct), msg.Error)
 		}
 	}
 }

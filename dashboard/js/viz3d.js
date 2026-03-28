@@ -562,5 +562,7 @@ const Viz3D = (function () {
         applyLinks,
         uploadFloorPlan,
         setViewPreset,
+        getNodeMesh: function (mac) { return _nodeMeshes.get(mac); },
+        rebuildLinkLines: _rebuildLinkLines,
     };
 })();

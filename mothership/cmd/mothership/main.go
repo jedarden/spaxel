@@ -22,6 +22,7 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/ota"
 	"github.com/spaxel/mothership/internal/provisioning"
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
@@ -138,6 +139,36 @@ func main() {
 	fleetHandler := fleet.NewHandler(fleetMgr)
 	fleetHandler.RegisterRoutes(r)
 
+	// OTA firmware server and manager
+	firmwareDir := filepath.Join(cfg.DataDir, "firmware")
+	otaSrv := ota.NewServer(firmwareDir)
+	otaMgr := ota.NewManager(otaSrv, "http://"+cfg.BindAddr)
+	otaMgr.SetSender(ingestSrv)
+	ingestSrv.SetOTAManager(otaMgr)
+	log.Printf("[INFO] OTA firmware server at %s", firmwareDir)
+
+	// OTA REST API
+	r.Get("/api/firmware", otaSrv.HandleList)
+	r.Post("/api/firmware/upload", otaSrv.HandleUpload)
+	r.Get("/firmware/{filename}", otaSrv.HandleServe)
+	r.Get("/api/firmware/progress", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(otaMgr.GetProgress())
+	})
+	r.Post("/api/firmware/ota-all", func(w http.ResponseWriter, r *http.Request) {
+		// Rolling update of all connected nodes
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			if err := otaMgr.SendOTAAll(ctx, 60*time.Second); err != nil {
+				log.Printf("[ERROR] Rolling OTA failed: %v", err)
+			}
+		}()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+	})
+
 	// Provisioning API (used by onboarding wizard)
 	_, msPortStr, _ := net.SplitHostPort(cfg.BindAddr)
 	msPort, _ := strconv.Atoi(msPortStr)
@@ -149,23 +180,30 @@ func main() {
 
 	// Firmware manifest for esp-web-tools (onboarding wizard flashing)
 	r.Get("/api/firmware/manifest", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"name":                   "Spaxel Node",
-			"version":                version,
+		latest := otaSrv.GetLatest()
+		manifest := map[string]interface{}{
+			"name":                    "Spaxel Node",
+			"version":                 version,
 			"new_install_prompt_erase": true,
-			"builds": []map[string]interface{}{
+			"builds": []map[string]interface{}{},
+		}
+
+		if latest != nil {
+			manifest["builds"] = []map[string]interface{}{
 				{
 					"chipFamily": "ESP32-S3",
 					"parts": []map[string]interface{}{
 						{
-							"path":    "/firmware/latest",
+							"path":    "/firmware/" + latest.Filename,
 							"address": 0x0,
 						},
 					},
 				},
-			},
-		}) //nolint:errcheck
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(manifest) //nolint:errcheck
 	})
 
 	go dashboardHub.Run()

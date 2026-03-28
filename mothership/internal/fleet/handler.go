@@ -21,13 +21,21 @@ func NewHandler(mgr *Manager) *Handler {
 
 // RegisterRoutes mounts fleet endpoints on r.
 //
-//	GET  /api/nodes            — list all nodes
-//	GET  /api/nodes/{mac}      — get single node
-//	POST /api/nodes/{mac}/role — override node role
+//	GET    /api/nodes                — list all nodes
+//	GET    /api/nodes/{mac}          — get single node
+//	POST   /api/nodes/{mac}/role     — override node role
+//	PUT    /api/nodes/{mac}/position — update node 3D position
+//	DELETE /api/nodes/{mac}          — delete a node
+//	POST   /api/nodes/virtual        — add a virtual planning node
+//	PUT    /api/room                 — update room dimensions
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/nodes", h.listNodes)
 	r.Get("/api/nodes/{mac}", h.getNode)
 	r.Post("/api/nodes/{mac}/role", h.setNodeRole)
+	r.Put("/api/nodes/{mac}/position", h.updateNodePosition)
+	r.Delete("/api/nodes/{mac}", h.deleteNode)
+	r.Post("/api/nodes/virtual", h.addVirtualNode)
+	r.Put("/api/room", h.updateRoom)
 }
 
 func (h *Handler) listNodes(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +105,96 @@ func (h *Handler) setNodeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, node)
+}
+
+// ── position / virtual / room endpoints ──────────────────────────────────────
+
+type updatePositionRequest struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+}
+
+func (h *Handler) updateNodePosition(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+	var req updatePositionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := h.mgr.GetRegistry().SetNodePosition(mac, req.X, req.Y, req.Z); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.mgr.BroadcastRegistry()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type addVirtualNodeRequest struct {
+	MAC  string  `json:"mac"`
+	Name string  `json:"name"`
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+	Z    float64 `json:"z"`
+}
+
+func (h *Handler) addVirtualNode(w http.ResponseWriter, r *http.Request) {
+	var req addVirtualNodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MAC == "" {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := h.mgr.GetRegistry().AddVirtualNode(req.MAC, req.Name, req.X, req.Y, req.Z); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.mgr.BroadcastRegistry()
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *Handler) deleteNode(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+	if err := h.mgr.GetRegistry().DeleteNode(mac); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.mgr.BroadcastRegistry()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateRoomRequest struct {
+	Width   float64 `json:"width"`
+	Depth   float64 `json:"depth"`
+	Height  float64 `json:"height"`
+	OriginX float64 `json:"origin_x"`
+	OriginZ float64 `json:"origin_z"`
+}
+
+func (h *Handler) updateRoom(w http.ResponseWriter, r *http.Request) {
+	var req updateRoomRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Width <= 0 || req.Depth <= 0 || req.Height <= 0 {
+		http.Error(w, "dimensions must be positive", http.StatusBadRequest)
+		return
+	}
+	room := RoomConfig{
+		ID:      "main",
+		Name:    "Main",
+		Width:   req.Width,
+		Depth:   req.Depth,
+		Height:  req.Height,
+		OriginX: req.OriginX,
+		OriginZ: req.OriginZ,
+	}
+	if err := h.mgr.GetRegistry().SetRoom(room); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.mgr.BroadcastRegistry()
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

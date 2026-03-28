@@ -117,6 +117,11 @@
         // Initialise 3-D spatial visualisation layer
         Viz3D.init(scene, camera, controls);
 
+        // Initialise placement (TransformControls, GDOP, room editor)
+        if (window.Placement) {
+            Placement.init(scene, camera, renderer, controls);
+        }
+
         console.log('[Spaxel] Scene initialized');
     }
 
@@ -130,6 +135,7 @@
         requestAnimationFrame(animate);
         controls.update();
         Viz3D.update();
+        if (window.Placement) Placement.update();
         renderer.render(scene, camera);
         updateFPS();
     }
@@ -320,6 +326,32 @@
 
             case 'registry_state':
                 Viz3D.handleRegistryState(msg);
+                if (window.Placement) Placement.handleRegistryState(msg);
+                // Merge virtual nodes into local state and refresh node list
+                if (msg.nodes) {
+                    var registryMACs = new Set(msg.nodes.map(function (n) { return n.mac; }));
+                    msg.nodes.forEach(function (node) {
+                        if (!state.nodes.has(node.mac)) {
+                            state.nodes.set(node.mac, {
+                                mac: node.mac,
+                                firmware: '',
+                                chip: '',
+                                lastSeen: 0,
+                                virtual: !!node.virtual
+                            });
+                        } else {
+                            var existing = state.nodes.get(node.mac);
+                            if (node.virtual) existing.virtual = true;
+                        }
+                    });
+                    // Remove virtual nodes no longer in registry
+                    state.nodes.forEach(function (node, mac) {
+                        if (!registryMACs.has(mac) && node.virtual) {
+                            state.nodes.delete(mac);
+                        }
+                    });
+                    updateNodeList();
+                }
                 break;
 
             case 'loc_update':
@@ -475,17 +507,27 @@
 
         let html = '';
         state.nodes.forEach((node, mac) => {
-            const isOnline = Date.now() - node.lastSeen < 30000;
+            const isVirtual = !!node.virtual;
+            const isOnline = isVirtual || Date.now() - node.lastSeen < 30000;
+            const statusClass = isVirtual ? 'virtual' : (isOnline ? 'online' : 'offline');
+            const statusLabel = isVirtual ? 'Virtual' : (isOnline ? 'Online' : 'Offline');
             html += `
                 <div class="node-item" data-mac="${mac}">
                     <span class="node-mac">${mac}</span>
-                    <span class="node-status ${isOnline ? 'online' : 'offline'}">
-                        ${isOnline ? 'Online' : 'Offline'}
+                    <span class="node-status ${statusClass}">
+                        ${statusLabel}
                     </span>
                 </div>
             `;
         });
         container.innerHTML = html;
+
+        // Click-to-select for placement
+        container.querySelectorAll('.node-item').forEach(function (el) {
+            el.addEventListener('click', function () {
+                if (window.Placement) Placement.selectNode(el.dataset.mac);
+            });
+        });
     }
 
     function updatePresenceIndicator() {
