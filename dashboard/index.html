@@ -802,6 +802,79 @@
             background: rgba(244, 67, 54, 0.3);
         }
 
+        /* Node firmware display */
+        .node-fw {
+            font-size: 10px;
+            color: #666;
+            margin-left: 6px;
+            font-family: monospace;
+        }
+
+        /* OTA rollback badge */
+        .node-rollback-badge {
+            background: rgba(244, 67, 54, 0.35);
+            color: #ef5350;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 6px;
+            animation: rollback-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes rollback-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* OTA in-progress badge */
+        .node-ota-badge {
+            background: rgba(255, 167, 38, 0.35);
+            color: #ffa726;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 6px;
+        }
+
+        /* OTA verified badge */
+        .node-verified-badge {
+            background: rgba(76, 175, 80, 0.35);
+            color: #66bb6a;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 6px;
+        }
+
+        /* OTA panel button in status bar */
+        #ota-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #888;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #ota-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ccc;
+        }
+        #ota-btn.has-update {
+            background: rgba(76, 175, 80, 0.2);
+            border-color: rgba(76, 175, 80, 0.4);
+            color: #66bb6a;
+        }
+        #ota-btn.in-progress {
+            background: rgba(255, 167, 38, 0.2);
+            border-color: rgba(255, 167, 38, 0.4);
+            color: #ffa726;
+        }
+
         /* Room editor panel */
         #room-editor-panel {
             position: fixed;
@@ -1024,6 +1097,8 @@
     <script type="module" src="https://espressif.github.io/esp-web-tools/dist/web/install-button.js"></script>
     <!-- Onboarding wizard -->
     <script src="js/onboard.js"></script>
+    <!-- OTA firmware management -->
+    <script src="js/ota.js"></script>
 
     <!-- Room editor panel -->
     <div id="room-editor-panel">

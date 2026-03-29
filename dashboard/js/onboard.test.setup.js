@@ -23,6 +23,24 @@ global.TextEncoderStream = class TextEncoderStream {
 global.__getLastEncodedData = function () { return _lastEncodedData; };
 global.__clearLastEncodedData = function () { _lastEncodedData = ''; };
 
+// Mock TextDecoderStream (not available in jsdom)
+var _lastDecodedChunk = '{"ok":true,"mac":"AA:BB:CC:DD:EE:FF"}\n';
+global.TextDecoderStream = class TextDecoderStream {
+    constructor() {
+        this.readable = {
+            getReader: jest.fn().mockReturnValue({
+                read: jest.fn().mockResolvedValue({ done: false, value: _lastDecodedChunk }),
+                cancel: jest.fn().mockResolvedValue(undefined),
+            }),
+        };
+        this.writable = {
+            pipeTo: jest.fn().mockResolvedValue(undefined),
+        };
+    }
+};
+global.__setLastDecodedChunk = function (chunk) { _lastDecodedChunk = chunk; };
+global.__getLastDecodedChunk = function () { return _lastDecodedChunk; };
+
 // Mock ReadableStream/WritableStream (not available in jsdom)
 global.ReadableStream = class ReadableStream {};
 global.WritableStream = class WritableStream {};

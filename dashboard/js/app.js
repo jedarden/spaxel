@@ -511,9 +511,33 @@
             const isOnline = isVirtual || Date.now() - node.lastSeen < 30000;
             const statusClass = isVirtual ? 'virtual' : (isOnline ? 'online' : 'offline');
             const statusLabel = isVirtual ? 'Virtual' : (isOnline ? 'Online' : 'Offline');
+
+            // Check for OTA rollback state
+            let rollbackBadge = '';
+            let otaBadge = '';
+            if (window.SpaxelOTA) {
+                const otaProgress = SpaxelOTA.getProgress();
+                if (otaProgress && otaProgress[mac]) {
+                    const p = otaProgress[mac];
+                    if (p.state === 'rollback') {
+                        rollbackBadge = '<span class="node-rollback-badge">ROLLBACK</span>';
+                    } else if (p.state === 'downloading' || p.state === 'rebooting') {
+                        otaBadge = '<span class="node-ota-badge">OTA ' + (p.progress_pct || 0) + '%</span>';
+                    } else if (p.state === 'verified') {
+                        otaBadge = '<span class="node-verified-badge">UPDATED</span>';
+                    }
+                }
+            }
+
+            // Firmware version display (shortened)
+            const fwDisplay = node.firmware ? '<span class="node-fw">' + escapeHtml(node.firmware) + '</span>' : '';
+
             html += `
                 <div class="node-item" data-mac="${mac}">
                     <span class="node-mac">${mac}</span>
+                    ${fwDisplay}
+                    ${rollbackBadge}
+                    ${otaBadge}
                     <span class="node-status ${statusClass}">
                         ${statusLabel}
                     </span>
@@ -528,6 +552,11 @@
                 if (window.Placement) Placement.selectNode(el.dataset.mac);
             });
         });
+    }
+
+    function escapeHtml(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     function updatePresenceIndicator() {
@@ -980,5 +1009,8 @@
     // ============================================
     window.SpaxelApp = {
         getLinks: function () { return state.links; },
+        getNodes: function () { return state.nodes; },
+        refreshNodeList: updateNodeList,
+        refreshLinkList: updateLinkList
     };
 })();

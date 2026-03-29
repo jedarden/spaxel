@@ -133,6 +133,65 @@
         await writableClosed;
     }
 
+    async function sendSerialJSONAndWaitForResponse(port, data, timeoutMs) {
+        timeoutMs = timeoutMs || 15000;
+
+        // Set up reader first
+        var decoder = new TextDecoderStream();
+        var readableClosed = port.readable.pipeTo(decoder.writable);
+        var reader = decoder.readable.getReader();
+
+        // Send the data
+        var encoder = new TextEncoderStream();
+        var writableClosed = encoder.readable.pipeTo(port.writable);
+        var writer = encoder.writable.getWriter();
+        await writer.write(JSON.stringify(data) + '\n');
+        writer.close();
+        await writableClosed;
+
+        // Wait for response with timeout
+        var buffer = '';
+        var startTime = Date.now();
+        var response = null;
+
+        try {
+            while (Date.now() - startTime < timeoutMs) {
+                var result = await Promise.race([
+                    reader.read(),
+                    new Promise(function (_, reject) {
+                        setTimeout(function () {
+                            reject(new Error('Timeout waiting for device response'));
+                        }, timeoutMs - (Date.now() - startTime));
+                    })
+                ]);
+
+                if (result.done) {
+                    break;
+                }
+
+                buffer += result.value;
+                var newlineIndex = buffer.indexOf('\n');
+                if (newlineIndex !== -1) {
+                    var line = buffer.substring(0, newlineIndex).trim();
+                    if (line.length > 0) {
+                        try {
+                            response = JSON.parse(line);
+                            break;
+                        } catch (e) {
+                            // Not valid JSON, continue reading
+                        }
+                    }
+                    buffer = buffer.substring(newlineIndex + 1);
+                }
+            }
+        } finally {
+            reader.cancel();
+            try { await readableClosed; } catch (e) { /* ignore */ }
+        }
+
+        return response;
+    }
+
     async function closePort(port) {
         try { await port.close(); } catch (e) { /* ignore */ }
     }
@@ -489,6 +548,8 @@
     }
 
     function sendPayloadOverSerial(payload) {
+        // Firmware expects {"provision": {...}} format
+        var wrappedPayload = { provision: payload };
         return getAuthorizedPort()
             .then(function (port) {
                 if (!port) throw new UserError(
@@ -505,10 +566,26 @@
                     });
             })
             .then(function (port) {
-                return sendSerialJSON(port, payload).then(function () { return port; });
-            })
-            .then(function (port) {
-                return closePort(port);
+                return sendSerialJSONAndWaitForResponse(port, wrappedPayload, 15000)
+                    .then(function (response) {
+                        if (!response) {
+                            throw new UserError(
+                                'No response from device. Please ensure the ESP32-S3 is connected and try again.'
+                            );
+                        }
+                        if (response.ok === false) {
+                            var errorMsg = response.error || 'Unknown error';
+                            if (errorMsg === 'missing_provision_key') {
+                                throw new UserError('Firmware communication error. Please try again.');
+                            }
+                            if (errorMsg === 'nvs_write_failed') {
+                                throw new UserError('Failed to save configuration to device. Please try again.');
+                            }
+                            throw new UserError('Provisioning failed: ' + errorMsg);
+                        }
+                        // Success - return the MAC address
+                        return response.mac;
+                    });
             });
     }
 
