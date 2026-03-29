@@ -31,6 +31,7 @@ import (
 	"github.com/spaxel/mothership/internal/mqtt"
 	"github.com/spaxel/mothership/internal/notify"
 	"github.com/spaxel/mothership/internal/ota"
+	"github.com/spaxel/mothership/internal/prediction"
 	"github.com/spaxel/mothership/internal/provisioning"
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
@@ -181,6 +182,31 @@ func main() {
     // Phase 6: Fall detector
     fallDetector := falldetect.NewDetector()
     log.Printf("[INFO] Fall detector initialized")
+
+    // Phase 6: Prediction module for presence prediction
+    var predictionStore *prediction.ModelStore
+    var predictionHistory *prediction.HistoryUpdater
+    var predictionPredictor *prediction.Predictor
+    predictionStore, err = prediction.NewModelStore(filepath.Join(cfg.DataDir, "prediction.db"))
+    if err != nil {
+        log.Printf("[WARN] Failed to open prediction store: %v", err)
+    } else {
+        defer predictionStore.Close()
+        log.Printf("[INFO] Prediction store at %s", filepath.Join(cfg.DataDir, "prediction.db"))
+
+        // Create history updater
+        predictionHistory = prediction.NewHistoryUpdater(predictionStore)
+
+        // Load stored person zone positions
+        if err := predictionHistory.LoadStoredPositions(); err != nil {
+            log.Printf("[WARN] Failed to load stored prediction positions: %v", err)
+        }
+
+        // Create predictor
+        predictionPredictor = prediction.NewPredictor(predictionStore)
+
+        log.Printf("[INFO] Presence prediction initialized")
+    }
 
     // Phase 6: Notification service
     notifyService, err := notify.NewService(filepath.Join(cfg.DataDir, "notify.db"))
@@ -670,6 +696,11 @@ func main() {
                     automationEngine.UpdateZoneDwellTracking(event.BlobID, event.ToZone, time.Now())
                 }
             }
+
+            // Record zone transition for presence prediction
+            if predictionHistory != nil && personID != "" {
+                predictionHistory.PersonZoneChange(personID, event.FromZone, event.ToZone, event.BlobID, time.Now())
+            }
         })
     }
 
@@ -800,6 +831,74 @@ func main() {
             }
         }()
         log.Printf("[INFO] Flow analytics background tasks started (prune: 24h, corridors: 7d)")
+    }
+
+    // Phase 6: Prediction provider wiring and update loop
+    if predictionPredictor != nil && predictionHistory != nil {
+        // Wire zone provider
+        if zonesMgr != nil {
+            predictionPredictor.SetZoneProvider(&predictionZoneAdapter{mgr: zonesMgr})
+        }
+
+        // Wire person provider
+        if bleRegistry != nil {
+            predictionPredictor.SetPersonProvider(&predictionPersonAdapter{registry: bleRegistry})
+        }
+
+        // Wire position provider
+        predictionPredictor.SetPositionProvider(prediction.NewPositionAdapter(predictionHistory))
+
+        // Wire MQTT client for prediction publishing
+        if mqttClient != nil && mqttClient.IsConnected() {
+            predictionPredictor.SetMQTTClient(&predictionMQTTAdapter{client: mqttClient}, "")
+        }
+
+        // Start periodic prediction update loop (every 60 seconds)
+        go func() {
+            ticker := time.NewTicker(60 * time.Second)
+            defer ticker.Stop()
+
+            // Run initial prediction after 5 seconds
+            time.Sleep(5 * time.Second)
+            predictionPredictor.UpdatePredictions()
+            log.Printf("[INFO] Prediction: initial predictions computed")
+
+            // Publish prediction sensors for each person
+            if mqttClient != nil && mqttClient.IsConnected() && bleRegistry != nil {
+                people, _ := bleRegistry.GetPeople()
+                for _, person := range people {
+                    mqttClient.PublishPredictionSensors(person.ID, person.Name)
+                }
+            }
+
+            for {
+                select {
+                case <-ctx.Done():
+                    return
+                case <-ticker.C:
+                    predictionPredictor.UpdatePredictions()
+
+                    // Publish predictions to MQTT
+                    if mqttClient != nil && mqttClient.IsConnected() {
+                        predictions := predictionPredictor.GetPredictions()
+                        for _, pred := range predictions {
+                            zoneName := pred.PredictedNextZoneName
+                            if zoneName == "" {
+                                zoneName = pred.PredictedNextZoneID
+                            }
+                            mqttClient.UpdatePredictionState(
+                                pred.PersonID,
+                                zoneName,
+                                pred.DataConfidence,
+                                pred.PredictionConfidence,
+                                pred.EstimatedTransitionMinutes,
+                            )
+                        }
+                    }
+                }
+            }
+        }()
+        log.Printf("[INFO] Prediction update loop started (interval: 60s)")
     }
 
     // Fleet REST API
@@ -1327,6 +1426,44 @@ func main() {
         analyticsHandler.RegisterRoutes(r)
     }
 
+    // Phase 6: Prediction REST API
+    if predictionPredictor != nil {
+        r.Get("/api/predictions", func(w http.ResponseWriter, r *http.Request) {
+            predictions := predictionPredictor.GetPredictions()
+            writeJSON(w, predictions)
+        })
+
+        r.Get("/api/predictions/stats", func(w http.ResponseWriter, r *http.Request) {
+            if predictionHistory == nil {
+                http.Error(w, "prediction history not available", http.StatusServiceUnavailable)
+                return
+            }
+            count, dataAge, err := predictionHistory.GetTransitionStats()
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            writeJSON(w, map[string]interface{}{
+                "transition_count": count,
+                "data_age_days":    dataAge.Hours() / 24,
+                "minimum_data_age": prediction.MinimumDataAge.Hours() / 24,
+                "has_minimum_data": dataAge >= prediction.MinimumDataAge,
+            })
+        })
+
+        r.Post("/api/predictions/recompute", func(w http.ResponseWriter, r *http.Request) {
+            if predictionHistory == nil {
+                http.Error(w, "prediction history not available", http.StatusServiceUnavailable)
+                return
+            }
+            if err := predictionHistory.ForceRecompute(); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            writeJSON(w, map[string]string{"status": "recompute_started"})
+        })
+    }
+
     // Phase 6: Learning feedback REST API
     if feedbackStore != nil {
         learningHandler := learning.NewHandler(feedbackStore, feedbackProcessor, accuracyComputer)
@@ -1566,5 +1703,134 @@ func (n *notifySenderAdapter) SendViaChannel(channelType string, title, body str
         Timestamp: time.Now(),
     }
     return n.service.Send(notif)
+}
+
+// Prediction provider adapters
+
+type predictionZoneAdapter struct {
+    mgr *zones.Manager
+}
+
+func (z *predictionZoneAdapter) GetZone(id string) (string, bool) {
+    zone := z.mgr.GetZone(id)
+    if zone == nil {
+        return "", false
+    }
+    return zone.Name, true
+}
+
+type predictionPersonAdapter struct {
+    registry *ble.Registry
+}
+
+func (p *predictionPersonAdapter) GetPerson(id string) (string, string, bool) {
+    person, err := p.registry.GetPerson(id)
+    if err != nil {
+        return "", "", false
+    }
+    return person.Name, person.Color, true
+}
+
+func (p *predictionPersonAdapter) GetAllPeople() ([]struct {
+    ID    string
+    Name  string
+    Color string
+}, error) {
+    people, err := p.registry.GetPeople()
+    if err != nil {
+        return nil, err
+    }
+    result := make([]struct {
+        ID    string
+        Name  string
+        Color string
+    }, len(people))
+    for i, person := range people {
+        result[i] = struct {
+            ID    string
+            Name  string
+            Color string
+        }{ID: person.ID, Name: person.Name, Color: person.Color}
+    }
+    return result, nil
+}
+
+type predictionMQTTAdapter struct {
+    client *mqtt.Client
+}
+
+func (m *predictionMQTTAdapter) Publish(topic string, payload []byte) error {
+    return m.client.Publish(topic, payload)
+}
+
+func (m *predictionMQTTAdapter) IsConnected() bool {
+    return m.client.IsConnected()
+}
+
+// Prediction provider adapters
+
+type predictionZoneAdapter struct {
+    mgr *zones.Manager
+}
+
+func (z *predictionZoneAdapter) GetZone(id string) (string, bool) {
+    zone := z.mgr.GetZone(id)
+    if zone == nil {
+        return "", false
+    }
+    return zone.Name, true
+}
+
+type predictionPersonAdapter struct {
+    registry *ble.Registry
+}
+
+func (p *predictionPersonAdapter) GetPerson(id string) (string, string, bool) {
+    person, err := p.registry.GetPerson(id)
+    if err != nil {
+        return "", "", false
+    }
+    return person.Name, person.Color, true
+}
+
+func (p *predictionPersonAdapter) GetAllPeople() ([]struct {
+    ID    string
+    Name  string
+    Color string
+}, error) {
+    people, err := p.registry.GetPeople()
+    if err != nil {
+        return nil, err
+    }
+
+    result := make([]struct {
+        ID    string
+        Name  string
+        Color string
+    }, len(people))
+    for i, person := range people {
+        result[i] = struct {
+            ID    string
+            Name  string
+            Color string
+        }{
+            ID:    person.ID,
+            Name:  person.Name,
+            Color: person.Color,
+        }
+    }
+    return result, nil
+}
+
+type predictionMQTTAdapter struct {
+    client *mqtt.Client
+}
+
+func (m *predictionMQTTAdapter) Publish(topic string, payload []byte) error {
+    return m.client.Publish(topic, payload)
+}
+
+func (m *predictionMQTTAdapter) IsConnected() bool {
+    return m.client.IsConnected()
 }
 

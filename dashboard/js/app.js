@@ -1237,4 +1237,24 @@
         refreshNodeList: updateNodeList,
         refreshLinkList: updateLinkList
     };
+
+    // ============================================
+    // Crowd Flow Visualization Controls
+    // Global wrappers for HTML onchange handlers -> Viz3D module
+    // ============================================
+    window.toggleFlowLayer = function(visible) {
+        Viz3D.setFlowLayerVisible(visible);
+    };
+
+    window.toggleDwellLayer = function(visible) {
+        Viz3D.setDwellLayerVisible(visible);
+    };
+
+    window.toggleCorridorLayer = function(visible) {
+        Viz3D.setCorridorLayerVisible(visible);
+    };
+
+    window.setFlowTimeFilter = function(value) {
+        Viz3D.setFlowTimeFilter(value);
+    };
 })();

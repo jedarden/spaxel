@@ -188,6 +188,65 @@
             padding-top: 12px;
         }
 
+        .link-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 8px;
+        }
+
+        /* Pattern visualization controls */
+        .pattern-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            cursor: pointer;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .pattern-checkbox:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .pattern-checkbox input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            accent-color: #4fc3f7;
+            cursor: pointer;
+        }
+
+        .pattern-filter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 11px;
+        }
+
+        .pattern-filter label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .pattern-filter select {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            color: #e0e0e0;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .pattern-filter select:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+
         .link-item {
             padding: 6px 8px;
             margin-bottom: 4px;
@@ -1567,6 +1626,31 @@
             <h3>Links</h3>
             <div id="link-list">
                 <div class="empty-state">No links active</div>
+            </div>
+        </div>
+        <div class="link-section">
+            <h3>Patterns</h3>
+            <div id="patterns-controls">
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="flow-toggle" onchange="toggleFlowLayer(this.checked)">
+                    <span>Movement flows</span>
+                </label>
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="dwell-toggle" onchange="toggleDwellLayer(this.checked)">
+                    <span>Dwell hotspots</span>
+                </label>
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="corridor-toggle" onchange="toggleCorridorLayer(this.checked)">
+                    <span>Corridors</span>
+                </label>
+                <div class="pattern-filter">
+                    <label>Time:</label>
+                    <select id="flow-time-filter" onchange="setFlowTimeFilter(this.value)">
+                        <option value="7d">Last 7 days</option>
+                        <option value="30d" selected>Last 30 days</option>
+                        <option value="all">All time</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
