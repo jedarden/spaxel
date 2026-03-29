@@ -481,8 +481,6 @@ func TestWeeklyTrendAggregation(t *testing.T) {
 
 // TestRepositioningTargetBounds tests that repositioning targets are within room bounds
 func TestRepositioningTargetBounds(t *testing.T) {
-	rc := NewRepositioningComputer()
-
 	// Test the bounds checking function
 	tests := []struct {
 		name     string

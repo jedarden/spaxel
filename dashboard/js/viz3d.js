@@ -15,11 +15,17 @@ const Viz3D = (function () {
     let _roomObjs = { floor: null, ceiling: null, walls: [], edges: null };
     let _nodeMeshes  = new Map();  // mac   → THREE.Mesh
     let _linkLines   = new Map();  // id    → THREE.Line
-    let _activeLinks = new Map();  // id    → { node_mac, peer_mac }
+    let _activeLinks = new Map();  // id    → { node_mac, peer_mac, health_score }
     let _blobs3D     = new Map();  // blobId → blobObj
+    let _linkHealth  = new Map();  // id    → { score, details, last_updated }
     let _mixers      = [];
     let _floorTex    = null;
     let _followId    = null;
+
+    // Ghost node for repositioning advice
+    let _ghostNode     = null;  // THREE.Mesh (translucent)
+    let _ghostLine     = null;  // THREE.Line (dashed, from original to ghost)
+    let _ghostNodeMAC  = null;  // MAC of the node being moved
 
     const BLOB_COLORS  = [0xef5350, 0x66bb6a, 0x42a5f5, 0xffa726, 0xab47bc, 0x26c6da];
     const TRAIL_COLORS = [0xff8a80, 0xa5d6a7, 0x90caf9, 0xffcc80, 0xce93d8, 0x80deea];
@@ -46,6 +52,9 @@ const Viz3D = (function () {
                 _controls.update();
             }
         }
+
+        // Update ghost line if node moved
+        _updateGhostLine();
     }
 
     // ── room bounds ───────────────────────────────────────────────────────────
@@ -164,6 +173,43 @@ const Viz3D = (function () {
         _rebuildLinkLines();
     }
 
+    /**
+     * Get health color for a link based on health score.
+     * Green (#22c55e at health=1.0) → Yellow (#eab308 at health=0.5) → Red (#ef4444 at health=0)
+     * @param {number} health - Health score in [0, 1]
+     * @returns {number} Three.js color hex value
+     */
+    function _getHealthColor(health) {
+        // Interpolate from red (0) through yellow (0.5) to green (1)
+        var r, g, b;
+        if (health < 0.5) {
+            // Red to yellow
+            var t = health * 2; // 0-0.5 maps to 0-1
+            r = 0.94; // 0xef/255
+            g = 0.31 + t * 0.61; // 0x4f → 0xeab3 (approx)
+            b = 0.14 + t * 0.06;
+        } else {
+            // Yellow to green
+            var t = (health - 0.5) * 2; // 0.5-1 maps to 0-1
+            r = 0.92 - t * 0.78; // 0xeab3 → 0x22
+            g = 0.69 + t * 0.09; // stays mostly yellow-green
+            b = 0.08 + t * 0.28; // 0x08 → 0x5e
+        }
+        return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
+    }
+
+    /**
+     * Get link line thickness based on health score.
+     * health > 0.7 → 2px, health 0.4-0.7 → 1px, health < 0.4 → 0.5px
+     * @param {number} health - Health score in [0, 1]
+     * @returns {number} Line thickness
+     */
+    function _getHealthThickness(health) {
+        if (health > 0.7) return 2;
+        if (health >= 0.4) return 1;
+        return 0.5;
+    }
+
     function _rebuildLinkLines() {
         _linkLines.forEach(l => _scene.remove(l));
         _linkLines.clear();
@@ -171,11 +217,66 @@ const Viz3D = (function () {
             const a = _nodeMeshes.get(link.node_mac);
             const b = _nodeMeshes.get(link.peer_mac);
             if (!a || !b) return;
+
+            // Get health score from stored health data or link object
+            var healthData = _linkHealth.get(id);
+            var healthScore = healthData ? healthData.score : (link.health_score !== undefined ? link.health_score : 0.5);
+            var healthColor = _getHealthColor(healthScore);
+            var thickness = _getHealthThickness(healthScore);
+
+            // Scale opacity by health for lower health links
+            var opacity = 0.3 + healthScore * 0.5;
+
             const geo = new THREE.BufferGeometry().setFromPoints([a.position.clone(), b.position.clone()]);
-            const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x2a5a7a, transparent: true, opacity: 0.6 }));
+            const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+                color: healthColor,
+                transparent: true,
+                opacity: opacity,
+                linewidth: thickness // Note: linewidth > 1 only works on some platforms
+            }));
             _scene.add(line);
             _linkLines.set(id, line);
         });
+    }
+
+    /**
+     * Update link health scores from API response.
+     * @param {Array} links - Array of link objects with health_score and health_details
+     */
+    function updateLinkHealth(links) {
+        if (!links) return;
+        links.forEach(function(link) {
+            var id = link.link_id || (link.node_mac + ':' + link.peer_mac);
+            _linkHealth.set(id, {
+                score: link.health_score !== undefined ? link.health_score : 0.5,
+                details: link.health_details || {},
+                last_updated: link.last_updated
+            });
+            // Also update _activeLinks with health score
+            if (_activeLinks.has(id)) {
+                var existing = _activeLinks.get(id);
+                existing.health_score = link.health_score;
+                existing.health_details = link.health_details;
+            }
+        });
+        _rebuildLinkLines();
+    }
+
+    /**
+     * Get health data for a specific link.
+     * @param {string} linkID - Link identifier
+     * @returns {Object|null} Health data object or null
+     */
+    function getLinkHealth(linkID) {
+        return _linkHealth.get(linkID) || null;
+    }
+
+    /**
+     * Get all current health scores.
+     * @returns {Map} Map of linkID → health data
+     */
+    function getAllLinkHealth() {
+        return new Map(_linkHealth);
     }
 
     // ── humanoid SkinnedMesh factory ──────────────────────────────────────────
@@ -515,11 +616,20 @@ const Viz3D = (function () {
     function handleLinkActive(msg) {
         const id = msg.id || `${msg.node_mac}:${msg.peer_mac}`;
         _activeLinks.set(id, msg);
+        // Also store health if provided
+        if (msg.health_score !== undefined) {
+            _linkHealth.set(id, {
+                score: msg.health_score,
+                details: msg.health_details || {},
+                last_updated: msg.last_updated
+            });
+        }
         _rebuildLinkLines();
     }
 
     function handleLinkInactive(msg) {
         _activeLinks.delete(msg.id);
+        _linkHealth.delete(msg.id);
         const line = _linkLines.get(msg.id);
         if (line) { _scene.remove(line); _linkLines.delete(msg.id); }
     }
@@ -551,6 +661,97 @@ const Viz3D = (function () {
         }
     }
 
+    // ── ghost node for repositioning advice ───────────────────────────────────
+
+    /**
+     * Set a ghost node at the target position, connected by a dashed line
+     * to the original node's current position.
+     * @param {string} nodeMAC - The MAC address of the node to move
+     * @param {number} x - Target X position in meters
+     * @param {number} y - Target Y position (height) in meters
+     * @param {number} z - Target Z position in meters
+     */
+    function setGhostNode(nodeMAC, x, y, z) {
+        // Clear any existing ghost
+        clearGhostNode();
+
+        var originalMesh = _nodeMeshes.get(nodeMAC);
+        if (!originalMesh) {
+            console.warn('[Viz3D] Cannot set ghost node: original node not found:', nodeMAC);
+            return;
+        }
+
+        _ghostNodeMAC = nodeMAC;
+
+        // Create translucent ghost node mesh
+        var ghostGeo = new THREE.OctahedronGeometry(0.14, 0); // Slightly larger
+        var ghostMat = new THREE.MeshPhongMaterial({
+            color: 0x66bb6a,           // Green for "go here"
+            emissive: 0x66bb6a,
+            emissiveIntensity: 0.4,
+            transparent: true,
+            opacity: 0.5,
+            shininess: 40
+        });
+        _ghostNode = new THREE.Mesh(ghostGeo, ghostMat);
+        _ghostNode.position.set(x, y !== undefined ? y : 1.5, z);
+        _scene.add(_ghostNode);
+
+        // Create dashed line from original to ghost
+        var origPos = originalMesh.position;
+        var ghostPos = new THREE.Vector3(x, y !== undefined ? y : 1.5, z);
+
+        var lineGeo = new THREE.BufferGeometry().setFromPoints([origPos.clone(), ghostPos]);
+        var lineMat = new THREE.LineDashedMaterial({
+            color: 0x66bb6a,
+            dashSize: 0.1,
+            gapSize: 0.05,
+            transparent: true,
+            opacity: 0.7
+        });
+        _ghostLine = new THREE.Line(lineGeo, lineMat);
+        _ghostLine.computeLineDistances();
+        _scene.add(_ghostLine);
+
+        console.log('[Viz3D] Ghost node set at', x, y, z, 'for', nodeMAC);
+    }
+
+    /**
+     * Clear the ghost node and dashed line.
+     */
+    function clearGhostNode() {
+        if (_ghostNode) {
+            _scene.remove(_ghostNode);
+            _ghostNode.geometry.dispose();
+            _ghostNode.material.dispose();
+            _ghostNode = null;
+        }
+        if (_ghostLine) {
+            _scene.remove(_ghostLine);
+            _ghostLine.geometry.dispose();
+            _ghostLine.material.dispose();
+            _ghostLine = null;
+        }
+        _ghostNodeMAC = null;
+    }
+
+    /**
+     * Update the ghost line if the original node has moved.
+     * Called from the main update loop.
+     */
+    function _updateGhostLine() {
+        if (!_ghostLine || !_ghostNodeMAC) return;
+
+        var originalMesh = _nodeMeshes.get(_ghostNodeMAC);
+        if (!originalMesh) return;
+
+        var origPos = originalMesh.position;
+        var ghostPos = _ghostNode.position;
+
+        _ghostLine.geometry.setFromPoints([origPos.clone(), ghostPos]);
+        _ghostLine.computeLineDistances();
+    }
+
     // ── public API ────────────────────────────────────────────────────────────
     return {
         init,
@@ -564,5 +765,12 @@ const Viz3D = (function () {
         setViewPreset,
         getNodeMesh: function (mac) { return _nodeMeshes.get(mac); },
         rebuildLinkLines: _rebuildLinkLines,
+        // Ghost node API
+        setGhostNode: setGhostNode,
+        clearGhostNode: clearGhostNode,
+        // Link health API
+        updateLinkHealth: updateLinkHealth,
+        getLinkHealth: getLinkHealth,
+        getAllLinkHealth: getAllLinkHealth,
     };
 })();

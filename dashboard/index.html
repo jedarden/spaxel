@@ -668,6 +668,494 @@
             gap: 12px;
         }
 
+        /* ===== Link Health Panel ===== */
+        .link-health-panel {
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .link-health-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .link-health-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+        }
+
+        .link-health-header h3 {
+            font-size: 14px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+
+        .link-health-id {
+            font-family: monospace;
+            font-size: 11px;
+            color: #4fc3f7;
+        }
+
+        .link-health-empty {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Composite score gauge */
+        .link-health-composite {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+        }
+
+        .composite-gauge {
+            flex: 1;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            transition: width 0.3s, background 0.3s;
+            border-radius: 4px;
+        }
+
+        .gauge-fill.score-good { background: linear-gradient(90deg, #66bb6a, #22c55e); }
+        .gauge-fill.score-fair { background: linear-gradient(90deg, #ffa726, #eab308); }
+        .gauge-fill.score-poor { background: linear-gradient(90deg, #ef5350, #dc2626); }
+
+        .composite-score {
+            font-size: 18px;
+            font-weight: 600;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .composite-label {
+            font-size: 11px;
+            color: #888;
+            min-width: 80px;
+        }
+
+        /* Per-metric gauges */
+        .link-health-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .metric-gauge {
+            padding: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+        }
+
+        .metric-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        .metric-fill {
+            height: 100%;
+            transition: width 0.3s, background 0.3s;
+            border-radius: 2px;
+        }
+
+        .metric-fill.metric-excellent { background: #22c55e; }
+        .metric-fill.metric-good { background: #66bb6a; }
+        .metric-fill.metric-fair { background: #eab308; }
+        .metric-fill.metric-poor { background: #f97316; }
+        .metric-fill.metric-critical { background: #ef4444; }
+
+        .metric-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+        }
+
+        .metric-name {
+            color: #888;
+        }
+
+        .metric-value {
+            color: #ccc;
+            font-weight: 500;
+        }
+
+        /* "Why is this low?" hint */
+        .link-health-hint {
+            background: rgba(255, 167, 38, 0.1);
+            border: 1px solid rgba(255, 167, 38, 0.3);
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+
+        .hint-header {
+            color: #ffa726;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .hint-metric {
+            color: #ccc;
+            margin-bottom: 4px;
+        }
+
+        .hint-text {
+            color: #888;
+            line-height: 1.4;
+        }
+
+        /* Sparkline sections */
+        .link-health-sparkline-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .sparkline-label {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sparkline-canvas {
+            border-radius: 2px;
+        }
+
+        .sparkline-annotations {
+            display: flex;
+            gap: 12px;
+            font-size: 10px;
+        }
+
+        .sparkline-best { color: #66bb6a; }
+        .sparkline-worst { color: #ef5350; }
+        .sparkline-empty { color: #555; }
+
+        /* Diagnoses cards */
+        .link-health-diagnoses {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .diagnosis-card {
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .diagnosis-card.severity-info {
+            background: rgba(79, 195, 247, 0.1);
+            border-left: 3px solid #4fc3f7;
+        }
+
+        .diagnosis-card.severity-warning {
+            background: rgba(255, 167, 38, 0.1);
+            border-left: 3px solid #ffa726;
+        }
+
+        .diagnosis-card.severity-actionable {
+            background: rgba(239, 83, 80, 0.1);
+            border-left: 3px solid #ef5350;
+        }
+
+        .diagnosis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .diagnosis-icon {
+            margin-right: 6px;
+        }
+
+        .diagnosis-title {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .diagnosis-confidence {
+            font-size: 10px;
+            color: #888;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .diagnosis-detail {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+
+        .diagnosis-advice {
+            color: #aaa;
+            font-size: 11px;
+        }
+
+        .diagnosis-reposition {
+            margin-top: 6px;
+            padding: 6px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reposition-target {
+            font-size: 11px;
+        }
+
+        .gdop-improvement {
+            color: #66bb6a;
+            font-size: 10px;
+            margin-top: 2px;
+        }
+
+        .reposition-apply-btn {
+            background: rgba(76, 175, 80, 0.3);
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            color: #66bb6a;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .reposition-apply-btn:hover {
+            background: rgba(76, 175, 80, 0.4);
+        }
+
+        .link-health-no-issues {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #66bb6a;
+            padding: 8px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 4px;
+        }
+
+        .no-issues-icon {
+            font-size: 16px;
+        }
+
+        /* ===== System-wide Detection Quality Gauge ===== */
+        #detection-quality {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 2px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #detection-quality:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #quality-gauge-container {
+            position: relative;
+            width: 32px;
+            height: 32px;
+        }
+
+        #quality-gauge {
+            width: 32px;
+            height: 32px;
+            transform: rotate(-90deg);
+        }
+
+        #quality-gauge-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 3;
+        }
+
+        #quality-gauge-fill {
+            fill: none;
+            stroke: #66bb6a;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-dasharray: 0 100;
+            transition: stroke-dasharray 0.5s, stroke 0.3s;
+        }
+
+        #quality-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 9px;
+            font-weight: 600;
+            color: #ccc;
+        }
+
+        #quality-label {
+            font-size: 11px;
+            color: #888;
+        }
+
+        #quality-tooltip {
+            position: absolute;
+            top: 45px;
+            right: 0;
+            background: rgba(0, 0, 0, 0.95);
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 200;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        #detection-quality:hover #quality-tooltip {
+            display: block;
+        }
+
+        #quality-tooltip .tooltip-title {
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        #quality-tooltip .tooltip-worst {
+            color: #ef5350;
+        }
+
+        /* ===== Diurnal Learning Banner ===== */
+        #diurnal-banner {
+            position: fixed;
+            top: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 150;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+        }
+
+        #diurnal-banner.visible {
+            display: flex;
+        }
+
+        #diurnal-banner .progress-bar {
+            width: 60px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #diurnal-banner .progress-fill {
+            height: 100%;
+            background: #fff;
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+
+        #diurnal-banner .dismiss-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 2px 6px;
+            opacity: 0.7;
+            font-size: 16px;
+        }
+
+        #diurnal-banner .dismiss-btn:hover {
+            opacity: 1;
+        }
+
+        /* ===== Toast Notifications ===== */
+        #toast-container {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: toast-slide-in 0.3s ease-out;
+            pointer-events: auto;
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(102, 187, 106, 0.95));
+        }
+
+        .toast.info {
+            background: linear-gradient(135deg, rgba(33, 150, 243, 0.95), rgba(100, 181, 246, 0.95));
+        }
+
+        .toast.warning {
+            background: linear-gradient(135deg, rgba(255, 152, 0, 0.95), rgba(255, 183, 77, 0.95));
+        }
+
+        @keyframes toast-slide-in {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes toast-fade-out {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+
         /* Form */
         .wizard-form {
             text-align: left;
@@ -1005,6 +1493,20 @@
     </style>
 </head>
 <body>
+    <!-- Diurnal learning banner -->
+    <div id="diurnal-banner">
+        <span>&#x1F4C5;</span>
+        <span id="diurnal-message">Learning your home's daily patterns...</span>
+        <div class="progress-bar">
+            <div class="progress-fill" id="diurnal-progress" style="width: 0%"></div>
+        </div>
+        <span id="diurnal-days-left">7 days left</span>
+        <button class="dismiss-btn" onclick="this.parentElement.classList.remove('visible')">&times;</button>
+    </div>
+
+    <!-- Toast notification container -->
+    <div id="toast-container"></div>
+
     <!-- Status bar -->
     <div id="status-bar">
         <div class="status-item">
@@ -1019,6 +1521,21 @@
         </div>
         <div class="status-item">
             <span id="presence-indicator" class="clear">CLEAR</span>
+        </div>
+        <div class="status-item" id="detection-quality">
+            <div id="quality-gauge-container">
+                <svg id="quality-gauge" viewBox="0 0 32 32">
+                    <circle id="quality-gauge-bg" cx="16" cy="16" r="13"/>
+                    <circle id="quality-gauge-fill" cx="16" cy="16" r="13"/>
+                </svg>
+                <span id="quality-value">--</span>
+            </div>
+            <span id="quality-label">Quality</span>
+            <div id="quality-tooltip">
+                <div class="tooltip-title">Detection Quality</div>
+                <div>Based on <span id="quality-link-count">0</span> active links</div>
+                <div>Weakest: <span id="quality-worst-link" class="tooltip-worst">--</span> at <span id="quality-worst-score">--%</span></div>
+            </div>
         </div>
         <div class="status-item" style="margin-left:auto; gap:6px;">
             <button id="add-node-btn" onclick="SpaxelOnboard && SpaxelOnboard.start()">+ Add Node</button>
@@ -1099,6 +1616,8 @@
     <script src="js/onboard.js"></script>
     <!-- OTA firmware management -->
     <script src="js/ota.js"></script>
+    <!-- Link health panel -->
+    <script src="js/linkhealth.js"></script>
 
     <!-- Room editor panel -->
     <div id="room-editor-panel">

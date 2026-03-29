@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/dashboard"
+	"github.com/spaxel/mothership/internal/diagnostics"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/ota"
@@ -27,6 +29,13 @@ import (
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
 	sigproc "github.com/spaxel/mothership/internal/signal"
+)
+
+// Phase 5: Configuration constants
+const (
+	baselineSaveInterval = 30 * time.Second
+	healthComputeInterval = 5 * time.Second
+	weatherRecordInterval = 60 * time.Second
 )
 
 // Build-time version injection
@@ -103,15 +112,30 @@ func main() {
 			recorder.DefaultConfig(recorderDir).MaxBytesPerLink/1<<20)
 	}
 
-	// Fleet node registry and manager
+	// Fleet node registry
 	fleetReg, err := fleet.NewRegistry(filepath.Join(cfg.DataDir, "fleet.db"))
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to open fleet registry: %v", err)
 	}
 	defer fleetReg.Close()
-	fleetMgr := fleet.NewManager(fleetReg)
-	ingestSrv.SetFleetNotifier(fleetMgr)
 	log.Printf("[INFO] Fleet registry at %s", filepath.Join(cfg.DataDir, "fleet.db"))
+
+	// Phase 5: Self-healing fleet manager with GDOP optimization
+	fleetHealer := fleet.NewFleetHealer(fleetReg, fleet.FleetHealerConfig{
+		HealInterval:   60 * time.Second,
+		MinOnlineNodes: 2,
+		MaxHistorySize: 100,
+	})
+
+	// Phase 5: Link weather diagnostics
+	weatherDiagnostics := fleet.NewLinkWeatherDiagnostics()
+
+	// Legacy fleet manager (kept for basic operations)
+	fleetMgr := fleet.NewManager(fleetReg)
+
+	// Phase 5: Multi-notifier broadcasts node events to both legacy manager and healer
+	multiNotify := newMultiNotifier(fleetMgr, fleetHealer)
+	ingestSrv.SetFleetNotifier(multiNotify)
 
 	// Adaptive rate controller
 	rateCtrl := ingestion.NewRateController(func(mac string, rateHz int, varianceThreshold float64) {
@@ -135,9 +159,363 @@ func main() {
 	fleetMgr.SetBroadcaster(dashboardHub)
 	go fleetMgr.Run(ctx)
 
+	// Phase 5: Wire advanced fleet healer
+	fleetHealer.SetNotifier(ingestSrv)
+	fleetHealer.SetBroadcaster(dashboardHub)
+	go fleetHealer.Run(ctx)
+
+	// Phase 5: Wire weather diagnostics with node position accessor
+	weatherDiagnostics.SetNodePositionAccessor(func(mac string) (x, z float64, ok bool) {
+		node, err := fleetReg.GetNode(mac)
+		if err != nil {
+			return 0, 0, false
+		}
+		return node.PosX, node.PosZ, true
+	})
+	weatherDiagnostics.SetPositionSuggester(func() (x, z, improvement float64) {
+		return fleetHealer.SuggestNodePosition()
+	})
+
+	// Phase 5: Advanced diagnostic engine with root-cause analysis
+	diagnosticEngine := diagnostics.NewDiagnosticEngine(diagnostics.DiagnosticConfig{
+		DiagnosticInterval: 15 * time.Minute,
+		HistoryWindow:      1 * time.Hour,
+		MinSamples:         10,
+	})
+
+	// Wire health history accessor for diagnostic engine
+	diagnosticEngine.SetHealthHistoryAccessor(func(linkID string, window time.Duration) []diagnostics.LinkHealthSnapshot {
+		// Get history from weather diagnostics
+		snapshots := weatherDiagnostics.GetHistory(linkID, window)
+		result := make([]diagnostics.LinkHealthSnapshot, len(snapshots))
+		for i, s := range snapshots {
+			result[i] = diagnostics.LinkHealthSnapshot{
+				Timestamp:       s.Timestamp,
+				SNR:             s.SNR,
+				PhaseStability:  s.PhaseStability,
+				PacketRate:      s.PacketRate,
+				DriftRate:       s.DriftRate,
+				CompositeScore:  s.CompositeScore,
+				DeltaRMSVariance: s.DeltaRMSVariance,
+				IsQuietPeriod:   s.IsQuietPeriod,
+			}
+		}
+		return result
+	})
+
+	// Wire link ID accessor
+	diagnosticEngine.SetAllLinkIDsAccessor(func() []string {
+		return pm.GetAllLinkIDs()
+	})
+
+	// Wire node position accessor for diagnostics
+	diagnosticEngine.SetNodePositionAccessor(func(mac string) (diagnostics.Vec3, bool) {
+		node, err := fleetReg.GetNode(mac)
+		if err != nil {
+			return diagnostics.Vec3{}, false
+		}
+		return diagnostics.Vec3{X: node.PosX, Y: node.PosY, Z: node.PosZ}, true
+	})
+
+	// Wire GDOP improvement accessor
+	diagnosticEngine.SetGDOPImprovementAccessor(func(nodeMAC string, targetPos diagnostics.Vec3) float64 {
+		// Calculate current worst GDOP vs new worst GDOP with node at target position
+		currentWorstX, currentWorstZ, currentWorstGDOP := fleetHealer.GetWorstCoverageZone()
+		_ = currentWorstX
+		_ = currentWorstZ
+		// Estimate improvement - this is a simplified calculation
+		return currentWorstGDOP * 0.2 // Assume 20% improvement as placeholder
+	})
+
+	// Wire repositioning computer for Rule 4
+	diagnosticEngine.SetRepositioningComputer(func(linkID string, blockedZone diagnostics.Vec3) (diagnostics.Vec3, float64, error) {
+		// Use fleet healer's position suggestion
+		sugX, sugZ, improvement := fleetHealer.SuggestNodePosition()
+		return diagnostics.Vec3{X: sugX, Z: sugZ}, improvement, nil
+	})
+
+	// Wire occupancy accessor for quiet period detection
+	diagnosticEngine.SetOccupancyAccessor(func() int {
+		return pm.GetStationaryPersonCount()
+	})
+
+	// Start diagnostic engine
+	go diagnosticEngine.Run(ctx)
+	log.Printf("[INFO] Phase 5 diagnostic engine started (interval: 15m)")
+
+	// Phase 5: Baseline persistence store
+	baselineStore, err := sigproc.NewBaselineStore(filepath.Join(cfg.DataDir, "baselines.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to open baseline store: %v (persistence disabled)", err)
+	} else {
+		defer baselineStore.Close()
+		// Restore saved baselines
+		if err := baselineStore.RestoreAll(pm, 64); err != nil {
+			log.Printf("[WARN] Failed to restore baselines: %v", err)
+		}
+		// Start periodic saves
+		baselineStore.StartPeriodicSave(ctx, pm, baselineSaveInterval)
+		log.Printf("[INFO] Baseline persistence enabled (save interval: %v)", baselineSaveInterval)
+	}
+
+	// Phase 6: Health persistence store for diagnostics and weekly trends
+	healthStore, err := sigproc.NewHealthStore(filepath.Join(cfg.DataDir, "health.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to open health store: %v (health persistence disabled)", err)
+	} else {
+		defer healthStore.Close()
+		healthStore.StartPeriodicTasks(ctx)
+		log.Printf("[INFO] Health persistence enabled at %s", filepath.Join(cfg.DataDir, "health.db"))
+
+		// Wire feedback accessor for diagnostic engine Rule 4 (Fresnel blockage)
+		diagnosticEngine.SetFeedbackAccessor(func(linkID string, window time.Duration) []diagnostics.FeedbackEvent {
+			events, err := healthStore.GetFeedbackEvents(linkID, window)
+			if err != nil {
+				return nil
+			}
+			result := make([]diagnostics.FeedbackEvent, len(events))
+			for i, e := range events {
+				result[i] = diagnostics.FeedbackEvent{
+					LinkID:    e.LinkID,
+					EventType: e.EventType,
+					Position:  diagnostics.Vec3{X: e.PosX, Y: e.PosY, Z: e.PosZ},
+					Timestamp: e.Timestamp,
+				}
+			}
+			return result
+		})
+	}
+
+	// Phase 5: Periodic health computation for all links
+	go func() {
+		ticker := time.NewTicker(healthComputeInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				pm.ComputeAllHealth()
+			}
+		}
+	}()
+
+	// Phase 6: Diurnal patterns learned notification
+	// Track which links have already broadcast their "patterns learned" notification
+	diurnalNotified := make(map[string]bool)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				statuses := pm.GetDiurnalLearningStatus()
+				for _, status := range statuses {
+					// If link is ready and we haven't notified yet
+					if status.IsReady && !diurnalNotified[status.LinkID] {
+						diurnalNotified[status.LinkID] = true
+						log.Printf("[INFO] Diurnal patterns learned for link %s after 7 days", status.LinkID)
+						// Broadcast notification to dashboard
+						msg := map[string]interface{}{
+							"type":    "diurnal_ready",
+							"link_id": status.LinkID,
+							"message": "Your system has learned your daily patterns. Accuracy should improve this week.",
+						}
+						data, _ := json.Marshal(msg)
+						dashboardHub.Broadcast(data)
+					}
+				}
+			}
+		}
+	}()
+
+	// Phase 5: Periodic weather snapshot recording
+	go func() {
+		ticker := time.NewTicker(weatherRecordInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// Record health snapshots for all active links
+				states := pm.GetAllMotionStates()
+				var healthEntries []sigproc.HealthLogEntry
+				for _, state := range states {
+					processor := pm.GetProcessor(state.LinkID)
+					if processor == nil {
+						continue
+					}
+					health := processor.GetHealth()
+					if health == nil {
+						continue
+					}
+					snr, phaseStability, packetRate, driftRate, deltaRMSVar := health.GetHealthMetrics()
+					isQuiet := !state.MotionDetected
+					weatherDiagnostics.RecordSnapshot(state.LinkID, snr, phaseStability, packetRate, driftRate)
+
+					// Also persist to HealthStore for long-term diagnostics
+					if healthStore != nil {
+						composite := 0.3*snr + 0.25*(1-phaseStability) + 0.25*math.Min(packetRate/20.0, 1.0) + 0.2*(1-driftRate)
+						if composite < 0 {
+							composite = 0
+						}
+						if composite > 1 {
+							composite = 1
+						}
+						healthEntries = append(healthEntries, sigproc.HealthLogEntry{
+							LinkID:           state.LinkID,
+							Timestamp:        time.Now(),
+							SNR:              snr,
+							PhaseStability:   phaseStability,
+							PacketRate:       packetRate,
+							DriftRate:        driftRate,
+							CompositeScore:   composite,
+							DeltaRMSVariance: deltaRMSVar,
+							IsQuietPeriod:    isQuiet,
+						})
+					}
+				}
+				// Batch persist to health store
+				if healthStore != nil && len(healthEntries) > 0 {
+					if err := healthStore.LogHealthBatch(healthEntries); err != nil {
+						log.Printf("[WARN] Failed to persist health entries: %v", err)
+					}
+				}
+			}
+		}
+	}()
+	log.Printf("[INFO] Phase 5 health monitoring enabled (health: %v, weather: %v)", healthComputeInterval, weatherRecordInterval)
+
 	// Fleet REST API
 	fleetHandler := fleet.NewHandler(fleetMgr)
 	fleetHandler.RegisterRoutes(r)
+
+	// Phase 5: Weather diagnostics REST API
+	r.Get("/api/weather", func(w http.ResponseWriter, r *http.Request) {
+		reports := weatherDiagnostics.GetAllLinkReports()
+		writeJSON(w, reports)
+	})
+	r.Get("/api/weather/{linkID}", func(w http.ResponseWriter, r *http.Request) {
+		linkID := chi.URLParam(r, "linkID")
+		report := weatherDiagnostics.GetReport(linkID)
+		writeJSON(w, report)
+	})
+	r.Get("/api/weather/summary", func(w http.ResponseWriter, r *http.Request) {
+		condition, avgConfidence, issueCount := weatherDiagnostics.GetSystemWeatherSummary()
+		writeJSON(w, map[string]interface{}{
+			"condition":     condition,
+			"avg_confidence": avgConfidence,
+			"issue_count":   issueCount,
+		})
+	})
+	r.Get("/api/weather/{linkID}/weekly", func(w http.ResponseWriter, r *http.Request) {
+		linkID := chi.URLParam(r, "linkID")
+		trend := weatherDiagnostics.GetWeeklyTrend(linkID)
+		writeJSON(w, trend)
+	})
+
+	// Phase 5: Coverage and healing status API
+	r.Get("/api/coverage", func(w http.ResponseWriter, r *http.Request) {
+		coverage := fleetHealer.GetCoverage()
+		writeJSON(w, coverage)
+	})
+	r.Get("/api/coverage/history", func(w http.ResponseWriter, r *http.Request) {
+		limitStr := r.URL.Query().Get("limit")
+		limit := 10
+		if limitStr != "" {
+			if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+				limit = n
+			}
+		}
+		history := fleetHealer.GetCoverageHistory(limit)
+		writeJSON(w, history)
+	})
+	r.Get("/api/healing/status", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]interface{}{
+			"degraded":      fleetHealer.IsDegraded(),
+			"online_nodes":  fleetHealer.GetOnlineNodes(),
+			"optimal_roles": fleetHealer.GetOptimalRoles(),
+		})
+	})
+	r.Get("/api/healing/suggest", func(w http.ResponseWriter, r *http.Request) {
+		x, z, improvement := fleetHealer.SuggestNodePosition()
+		worstX, worstZ, worstGDOP := fleetHealer.GetWorstCoverageZone()
+		writeJSON(w, map[string]interface{}{
+			"suggested_position":     map[string]float64{"x": x, "z": z},
+			"expected_improvement":   improvement,
+			"worst_coverage_zone":    map[string]float64{"x": worstX, "z": worstZ, "gdop": worstGDOP},
+		})
+	})
+
+	// Phase 5: System health API
+	r.Get("/api/health/system", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]interface{}{
+			"system_health":     pm.GetSystemHealth(),
+			"link_count":        pm.LinkCount(),
+			"active_links":      pm.ActiveLinks(),
+			"stationary_count":  pm.GetStationaryPersonCount(),
+			"worst_link":        func() string { id, _ := pm.GetWorstLink(); return id }(),
+		})
+	})
+
+	// Phase 6: Diurnal learning status API
+	r.Get("/api/diurnal/status", func(w http.ResponseWriter, r *http.Request) {
+		statuses := pm.GetDiurnalLearningStatus()
+		writeJSON(w, statuses)
+	})
+	r.Get("/api/diurnal/status/{linkID}", func(w http.ResponseWriter, r *http.Request) {
+		linkID := chi.URLParam(r, "linkID")
+		allStatuses := pm.GetDiurnalLearningStatus()
+		for _, status := range allStatuses {
+			if status.LinkID == linkID {
+				writeJSON(w, status)
+				return
+			}
+		}
+		http.Error(w, "link not found", http.StatusNotFound)
+	})
+
+	// Link health API - returns all links with health scores and details
+	r.Get("/api/links", func(w http.ResponseWriter, r *http.Request) {
+		links := ingestSrv.GetAllLinksWithHealth()
+		writeJSON(w, links)
+	})
+
+	// Phase 6: Link diagnostics API
+	r.Get("/api/links/{linkID}/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		linkID := chi.URLParam(r, "linkID")
+		diagnoses := diagnosticEngine.GetDiagnoses(linkID)
+		writeJSON(w, diagnoses)
+	})
+
+	r.Get("/api/links/{linkID}/health-history", func(w http.ResponseWriter, r *http.Request) {
+		linkID := chi.URLParam(r, "linkID")
+		windowStr := r.URL.Query().Get("window")
+		window := 24 * time.Hour // default 24h
+		if windowStr != "" {
+			if hours, err := strconv.Atoi(windowStr); err == nil && hours > 0 {
+				window = time.Duration(hours) * time.Hour
+			}
+		}
+		if healthStore == nil {
+			http.Error(w, "health store not available", http.StatusServiceUnavailable)
+			return
+		}
+		history, err := healthStore.GetHealthHistory(linkID, window)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, history)
+	})
+
+	r.Get("/api/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		allDiagnoses := diagnosticEngine.GetAllDiagnoses()
+		writeJSON(w, allDiagnoses)
+	})
 
 	// OTA firmware server and manager
 	firmwareDir := filepath.Join(cfg.DataDir, "firmware")
@@ -375,4 +753,31 @@ func findDashboardDir() string {
 	}
 
 	return ""
+}
+
+// writeJSON is a helper for JSON responses
+func writeJSON(w http.ResponseWriter, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v) //nolint:errcheck
+}
+
+// multiNotifier broadcasts node events to multiple FleetNotifier targets
+type multiNotifier struct {
+	notifiers []ingestion.FleetNotifier
+}
+
+func newMultiNotifier(notifiers ...ingestion.FleetNotifier) *multiNotifier {
+	return &multiNotifier{notifiers: notifiers}
+}
+
+func (m *multiNotifier) OnNodeConnected(mac, firmware, chip string) {
+	for _, n := range m.notifiers {
+		n.OnNodeConnected(mac, firmware, chip)
+	}
+}
+
+func (m *multiNotifier) OnNodeDisconnected(mac string) {
+	for _, n := range m.notifiers {
+		n.OnNodeDisconnected(mac)
+	}
 }
