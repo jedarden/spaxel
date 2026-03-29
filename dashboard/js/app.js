@@ -592,6 +592,9 @@
         const prev = link.motionDetected;
         link.motionDetected = ms.motion_detected;
         link.deltaRMS = ms.delta_rms || 0;
+        // Phase 6: Breathing/dwell state
+        link.breathingState = ms.breathing_state || 'CLEAR';
+        link.breathingBPM = ms.breathing_bpm || 0;
         return prev !== ms.motion_detected;
     }
 
@@ -804,6 +807,7 @@
 
         const now = performance.now();
         let anyMotion = false;
+        let anyStationary = false;
 
         for (const [linkID, info] of Object.entries(msg.links)) {
             // Update link state if link exists
@@ -811,9 +815,13 @@
             if (link) {
                 link.motionDetected = info.is_motion || info.motion_detected || false;
                 link.deltaRMS = info.delta_rms || 0;
+                // Phase 6: Breathing/dwell state
+                link.breathingState = info.breathing_state || 'CLEAR';
+                link.breathingBPM = info.breathing_bpm || 0;
             }
 
             if (info.is_motion || info.motion_detected) anyMotion = true;
+            if (info.breathing_state === 'STATIONARY_DETECTED') anyStationary = true;
 
             // Append to deltaRMS history
             let history = state.drHistory.get(linkID);
@@ -833,18 +841,22 @@
             }
         }
 
-        updatePresencePanel(msg.links, anyMotion);
+        updatePresencePanel(msg.links, anyMotion, anyStationary);
         updateLinkList();
         drawDeltaRMSTimeSeries();
     }
 
-    function updatePresencePanel(links, anyMotion) {
+    function updatePresencePanel(links, anyMotion, anyStationary) {
         const container = document.getElementById('presence-list');
         const statusEl = document.getElementById('presence-status');
 
+        // Update status indicator with priority: motion > stationary > clear
         if (anyMotion) {
             statusEl.className = 'motion';
             statusEl.textContent = 'MOTION';
+        } else if (anyStationary) {
+            statusEl.className = 'stationary';
+            statusEl.textContent = 'STATIONARY';
         } else {
             statusEl.className = 'clear';
             statusEl.textContent = 'CLEAR';
@@ -861,21 +873,41 @@
             const isMotion = info.is_motion || info.motion_detected || false;
             const confidence = info.confidence || 0;
             const rms = info.delta_rms || 0;
+            const breathingState = info.breathing_state || 'CLEAR';
+            const breathingBPM = info.breathing_bpm || 0;
+            const isStationary = breathingState === 'STATIONARY_DETECTED';
             const shortID = abbreviateLinkID(linkID);
             const selected = state.presenceSelectedLinkID === linkID ? 'selected' : '';
 
+            // Determine dot class based on state priority
             let dotClass = 'clear';
-            if (isMotion && confidence > 0.7) {
+            let dotTitle = 'No motion detected';
+            if (isStationary) {
+                dotClass = 'stationary';
+                dotTitle = 'Stationary person detected - breathing at ' + breathingBPM.toFixed(1) + ' BPM';
+            } else if (isMotion && confidence > 0.7) {
                 dotClass = 'high-confidence';
+                dotTitle = 'High confidence motion detected';
             } else if (isMotion) {
                 dotClass = 'motion';
+                dotTitle = 'Motion detected';
+            } else if (breathingState === 'POSSIBLY_PRESENT') {
+                dotClass = 'possibly';
+                dotTitle = 'Possibly present (waiting for confirmation)';
+            }
+
+            // Breathing info for tooltip/status
+            let breathingInfo = '';
+            if (isStationary) {
+                breathingInfo = '<span class="breathing-bpm">' + breathingBPM.toFixed(1) + ' BPM</span>';
             }
 
             html += `
-                <div class="presence-row ${selected}" data-link-id="${linkID}">
+                <div class="presence-row ${selected}" data-link-id="${linkID}" title="${dotTitle}">
                     <span class="presence-dot ${dotClass}"></span>
                     <span class="presence-link-id">${shortID}</span>
                     <span class="presence-rms">${rms.toFixed(4)}</span>
+                    ${breathingInfo}
                 </div>
             `;
         }
@@ -884,7 +916,7 @@
         container.querySelectorAll('.presence-row').forEach(el => {
             el.addEventListener('click', () => {
                 state.presenceSelectedLinkID = el.dataset.linkId;
-                updatePresencePanel(links, anyMotion);
+                updatePresencePanel(links, anyMotion, anyStationary);
             });
         });
     }
@@ -1235,7 +1267,8 @@
         getLinks: function () { return state.links; },
         getNodes: function () { return state.nodes; },
         refreshNodeList: updateNodeList,
-        refreshLinkList: updateLinkList
+        refreshLinkList: updateLinkList,
+        showToast: showToast
     };
 
     // ============================================
