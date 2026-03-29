@@ -24,10 +24,12 @@ import (
 	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/diagnostics"
+	"github.com/spaxel/mothership/internal/events"
 	"github.com/spaxel/mothership/internal/falldetect"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/learning"
+	"github.com/spaxel/mothership/internal/localization"
 	"github.com/spaxel/mothership/internal/mqtt"
 	"github.com/spaxel/mothership/internal/notify"
 	"github.com/spaxel/mothership/internal/ota"
@@ -35,6 +37,7 @@ import (
 	"github.com/spaxel/mothership/internal/provisioning"
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
+	"github.com/spaxel/mothership/internal/sleep"
 	"github.com/spaxel/mothership/internal/zones"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 )
@@ -170,6 +173,23 @@ func main() {
         log.Printf("[INFO] Flow analytics at %s", filepath.Join(cfg.DataDir, "analytics.db"))
     }
 
+    // Phase 6: Anomaly detector for security mode
+    var anomalyDetector *analytics.Detector
+    anomalyDetector, err = analytics.NewDetector(
+        filepath.Join(cfg.DataDir, "anomaly.db"),
+        analytics.DefaultAnomalyScoreConfig(),
+    )
+    if err != nil {
+        log.Printf("[WARN] Failed to open anomaly detector: %v", err)
+    } else {
+        defer anomalyDetector.Close()
+        log.Printf("[INFO] Anomaly detector at %s (learning period: 7 days)", filepath.Join(cfg.DataDir, "anomaly.db"))
+
+        // Start periodic model updates (every 6 hours)
+        anomalyDetector.RunPeriodicUpdate(ctx, 6*time.Hour)
+        // Note: Providers will be wired after dashboardHub and notifyService are created
+    }
+
     // Phase 6: Automation engine
     automationEngine, err := automation.NewEngine(filepath.Join(cfg.DataDir, "automation.db"))
     if err != nil {
@@ -183,10 +203,51 @@ func main() {
     fallDetector := falldetect.NewDetector()
     log.Printf("[INFO] Fall detector initialized")
 
+    // Phase 6: Sleep quality monitor
+    sleepMonitor := sleep.NewMonitor(sleep.MonitorConfig{
+        SampleInterval:   30 * time.Second,
+        ReportHour:       7,  // Generate reports at 7 AM
+        SleepStartHour:   22, // 10 PM
+        SleepEndHour:     7,  // 7 AM
+    })
+    sleepMonitor.SetProcessorManager(pm)
+    sleepMonitor.SetReportCallback(func(linkID string, report *sleep.SleepReport) {
+        // Broadcast sleep report to dashboard
+        msg := map[string]interface{}{
+            "type":           "sleep_report",
+            "link_id":        linkID,
+            "session_date":   report.SessionDate.Format("2006-01-02"),
+            "overall_score":  report.Metrics.OverallScore,
+            "quality_rating": report.Metrics.QualityRating,
+            "generated_at":   report.GeneratedAt.Unix(),
+        }
+        data, _ := json.Marshal(msg)
+        dashboardHub.Broadcast(data)
+
+        // Send notification for morning report
+        if notifyService != nil {
+            notif := notify.Notification{
+                Title:    "Sleep Report",
+                Body:     fmt.Sprintf("Sleep quality: %s (%.0f/100)", report.Metrics.QualityRating, report.Metrics.OverallScore),
+                Priority: 2,
+                Tags:     []string{"sleep", "morning"},
+                Data:     report.ToJSONMap(),
+            }
+            notifyService.Send(notif)
+        }
+
+        log.Printf("[INFO] Sleep report for %s: score=%.1f rating=%s", linkID, report.Metrics.OverallScore, report.Metrics.QualityRating)
+    })
+    sleepMonitor.Start()
+    defer sleepMonitor.Stop()
+    log.Printf("[INFO] Sleep quality monitor started (window: 22:00-07:00, report at 07:00)")
+
     // Phase 6: Prediction module for presence prediction
     var predictionStore *prediction.ModelStore
     var predictionHistory *prediction.HistoryUpdater
     var predictionPredictor *prediction.Predictor
+    var predictionAccuracy *prediction.AccuracyTracker
+    var predictionHorizon *prediction.HorizonPredictor
     predictionStore, err = prediction.NewModelStore(filepath.Join(cfg.DataDir, "prediction.db"))
     if err != nil {
         log.Printf("[WARN] Failed to open prediction store: %v", err)
@@ -202,8 +263,25 @@ func main() {
             log.Printf("[WARN] Failed to load stored prediction positions: %v", err)
         }
 
+        // Create accuracy tracker
+        predictionAccuracy, err = prediction.NewAccuracyTracker(filepath.Join(cfg.DataDir, "prediction_accuracy.db"))
+        if err != nil {
+            log.Printf("[WARN] Failed to open accuracy tracker: %v", err)
+        } else {
+            defer predictionAccuracy.Close()
+            log.Printf("[INFO] Prediction accuracy tracker at %s", filepath.Join(cfg.DataDir, "prediction_accuracy.db"))
+        }
+
         // Create predictor
         predictionPredictor = prediction.NewPredictor(predictionStore)
+
+        // Create horizon predictor with Monte Carlo simulation
+        if predictionAccuracy != nil {
+            predictionHorizon = prediction.NewHorizonPredictor(predictionStore, predictionAccuracy)
+            predictionHorizon.SetHorizon(prediction.PredictionHorizon)
+            log.Printf("[INFO] Horizon predictor initialized (%dm horizon, 1000 Monte Carlo runs)",
+                int(prediction.PredictionHorizon.Minutes()))
+        }
 
         log.Printf("[INFO] Presence prediction initialized")
     }
@@ -219,6 +297,62 @@ func main() {
         // Set room config provider for floor plan thumbnails
         notifyService.SetRoomConfig(fleetReg)
     }
+
+    // Phase 6: Self-improving localization system
+    var selfImprovingLocalizer *localization.SelfImprovingLocalizer
+    var weightStore *localization.WeightStore
+
+    // Get room configuration from fleet registry
+    roomWidth := 10.0
+    roomDepth := 10.0
+    originX := 0.0
+    originZ := 0.0
+    if fleetReg != nil {
+        if w, d, ox, oz, ok := fleetReg.GetRoomConfig(); ok {
+            roomWidth = w
+            roomDepth = d
+            originX = ox
+            originZ = oz
+        }
+    }
+
+    silConfig := localization.DefaultSelfImprovingConfig()
+    silConfig.RoomWidth = roomWidth
+    silConfig.RoomDepth = roomDepth
+    silConfig.OriginX = originX
+    silConfig.OriginZ = originZ
+    silConfig.AdjustmentInterval = 10 * time.Second
+
+    selfImprovingLocalizer = localization.NewSelfImprovingLocalizer(silConfig)
+
+    // Load persisted weights
+    weightStore, err = localization.NewWeightStore(filepath.Join(cfg.DataDir, "weights.db"))
+    if err != nil {
+        log.Printf("[WARN] Failed to open weight store: %v (learning persistence disabled)", err)
+    } else {
+        defer weightStore.Close()
+        savedWeights, loadErr := weightStore.LoadWeights()
+        if loadErr != nil {
+            log.Printf("[WARN] Failed to load saved weights: %v", loadErr)
+        } else if savedWeights != nil {
+            selfImprovingLocalizer.GetEngine().SetLearnedWeights(savedWeights)
+            stats := savedWeights.GetAllStats()
+            log.Printf("[INFO] Loaded %d saved link weights from weight store", len(stats))
+        }
+    }
+
+    // Set node positions from fleet registry
+    if fleetReg != nil {
+        nodes, _ := fleetReg.GetAllNodes()
+        for mac, node := range nodes {
+            selfImprovingLocalizer.SetNodePosition(mac, node.PosX, node.PosZ)
+        }
+    }
+
+    // Start the self-improving localization system
+    selfImprovingLocalizer.Start()
+    log.Printf("[INFO] Self-improving localization started (room: %.1fx%.1fm, interval: %v)",
+        roomWidth, roomDepth, silConfig.AdjustmentInterval)
 
     // Phase 6: Learning feedback store for detection accuracy
     var feedbackStore *learning.FeedbackStore
@@ -280,11 +414,17 @@ func main() {
     // Phase 5: Link weather diagnostics
     weatherDiagnostics := fleet.NewLinkWeatherDiagnostics()
 
+    // Phase 6: Role optimiser with GDOP-based coverage optimization
+    roleOptimiser := fleet.NewRoleOptimiser(fleet.DefaultOptimisationConfig())
+
+    // Phase 6: Self-healing manager with 5-minute reconnect grace period
+    selfHealManager := fleet.NewSelfHealManager(fleetReg, roleOptimiser, fleet.DefaultSelfHealConfig())
+
     // Legacy fleet manager (kept for basic operations)
     fleetMgr := fleet.NewManager(fleetReg)
 
-    // Phase 5: Multi-notifier broadcasts node events to both legacy manager and healer
-    multiNotify := newMultiNotifier(fleetMgr, fleetHealer)
+    // Phase 5: Multi-notifier broadcasts node events to legacy manager, healer, and self-heal manager
+    multiNotify := newMultiNotifier(fleetMgr, fleetHealer, selfHealManager)
     ingestSrv.SetFleetNotifier(multiNotify)
 
     // Adaptive rate controller
@@ -306,6 +446,12 @@ func main() {
 
     // Phase 6: Wire BLE messages to registry and identity matcher
     ingestSrv.SetBLEHandler(func(nodeMAC string, devices []ingestion.BLEDevice) {
+        // Get current security mode
+        isSecurityMode := false
+        if automationEngine != nil {
+            isSecurityMode = automationEngine.GetSystemMode() == automation.ModeAway
+        }
+
         // Convert ingestion.BLEDevice to ble.BLEObservation and process
         observations := make([]ble.BLEObservation, len(devices))
         for i, dev := range devices {
@@ -318,6 +464,16 @@ func main() {
             }
             // Update RSSI cache for real-time triangulation
             rssiCache.AddWithTime(dev.Addr, nodeMAC, dev.RSSIdBm, time.Now())
+
+            // Feed to self-improving localizer for ground truth
+            if selfImprovingLocalizer != nil {
+                selfImprovingLocalizer.AddBLEObservation(dev.Addr, nodeMAC, float64(dev.RSSIdBm))
+            }
+
+            // Process BLE device for anomaly detection (security mode)
+            if anomalyDetector != nil && isSecurityMode {
+                anomalyDetector.ProcessBLEDevice(dev.Addr, dev.RSSIdBm, isSecurityMode)
+            }
         }
         // Store in persistent registry
         if bleRegistry != nil {
@@ -339,6 +495,54 @@ func main() {
         }
     }()
 
+    // Phase 6: Wire anomaly detector providers (after dashboardHub and notifyService are ready)
+    if anomalyDetector != nil {
+        // Wire providers for anomaly detector
+        if zonesMgr != nil {
+            anomalyDetector.SetZoneProvider(&anomalyZoneAdapter{mgr: zonesMgr})
+        }
+        if bleRegistry != nil {
+            anomalyDetector.SetPersonProvider(&anomalyPersonAdapter{registry: bleRegistry})
+            anomalyDetector.SetDeviceProvider(&anomalyDeviceAdapter{registry: bleRegistry})
+        }
+        anomalyDetector.SetPositionProvider(&anomalyPositionAdapter{pm: pm})
+        if notifyService != nil {
+            anomalyDetector.SetAlertHandler(&anomalyAlertAdapter{hub: dashboardHub, notifyService: notifyService})
+        }
+        // Wire feedback store for accuracy tracking
+        if feedbackStore != nil {
+            anomalyDetector.SetFeedbackStore(feedbackStore)
+        }
+
+        // Set callback to broadcast anomalies to dashboard
+        anomalyDetector.SetOnAnomaly(func(event events.AnomalyEvent) {
+            msg := map[string]interface{}{
+                "type":         "anomaly",
+                "id":           event.ID,
+                "anomaly_type": event.Type,
+                "score":        event.Score,
+                "description":  event.Description,
+                "zone_id":      event.ZoneID,
+                "zone_name":    event.ZoneName,
+                "timestamp":    event.Timestamp.Unix(),
+            }
+            data, _ := json.Marshal(msg)
+            dashboardHub.Broadcast(data)
+        })
+
+        // Load registered devices from BLE registry
+        if bleRegistry != nil {
+            devices, err := bleRegistry.GetAllRegisteredDevices()
+            if err == nil {
+                var macs []string
+                for mac := range devices {
+                    macs = append(macs, mac)
+                }
+                anomalyDetector.SetRegisteredDevices(macs)
+            }
+        }
+    }
+
     // Wire fleet notifier/broadcaster and start self-healing loop
     fleetMgr.SetNotifier(ingestSrv)
     fleetMgr.SetBroadcaster(dashboardHub)
@@ -348,6 +552,15 @@ func main() {
     fleetHealer.SetNotifier(ingestSrv)
     fleetHealer.SetBroadcaster(dashboardHub)
     go fleetHealer.Run(ctx)
+
+    // Phase 6: Wire self-healing manager with grace period for fleet_change events
+    selfHealManager.SetNotifier(ingestSrv)
+    selfHealManager.SetBroadcaster(dashboardHub)
+    if selfImprovingLocalizer != nil {
+        selfHealManager.SetGDOPCalculator(selfImprovingLocalizer.GetEngine())
+        roleOptimiser.SetGDOPCalculator(selfImprovingLocalizer.GetEngine())
+    }
+    go selfHealManager.Run(ctx)
 
     // Phase 5: Wire weather diagnostics with node position accessor
     weatherDiagnostics.SetNodePositionAccessor(func(mac string) (x, z float64, ok bool) {
@@ -554,6 +767,63 @@ func main() {
                         return ""
                     })
                 }
+
+                // Process anomaly detection
+                if anomalyDetector != nil && zonesMgr != nil {
+                    // Get current system mode for security mode checks
+                    isSecurityMode := false
+                    if automationEngine != nil {
+                        isSecurityMode = automationEngine.GetSystemMode() == automation.ModeAway
+                    }
+
+                    // Process occupancy for each zone
+                    zones := zonesMgr.GetAllZones()
+                    for _, zone := range zones {
+                        occ := zonesMgr.GetZoneOccupancy(zone.ID)
+                        if occ == nil {
+                            continue
+                        }
+
+                        // Get BLE devices in this zone
+                        var bleDevices []string
+                        if identityMatcher != nil {
+                            for _, blobID := range occ.BlobIDs {
+                                if match := identityMatcher.GetMatch(blobID); match != nil && match.DeviceMAC != "" {
+                                    bleDevices = append(bleDevices, match.DeviceMAC)
+                                }
+                            }
+                        }
+
+                        // Process occupancy for unusual hour detection
+                        anomalyDetector.ProcessOccupancy(zone.ID, occ.Count, bleDevices, isSecurityMode)
+
+                        // Process motion during away
+                        if isSecurityMode && occ.Count > 0 {
+                            for _, blobID := range occ.BlobIDs {
+                                anomalyDetector.ProcessMotionDuringAway(zone.ID, blobID, true)
+                            }
+                        }
+
+                        // Process dwell duration for each person in the zone
+                        for _, blobID := range occ.BlobIDs {
+                            // Get dwell duration from zones manager
+                            if dwellTime, ok := zonesMgr.GetBlobDwellTime(blobID, zone.ID); ok && dwellTime > 5*time.Minute {
+                                // Get person ID for this blob
+                                var personID string
+                                if identityMatcher != nil {
+                                    if match := identityMatcher.GetMatch(blobID); match != nil {
+                                        personID = match.PersonID
+                                    }
+                                }
+                                if personID != "" {
+                                    // Check for unusual dwell (fall detection takes priority)
+                                    fallDetected := fallDetector.IsFallDetected(blobID)
+                                    anomalyDetector.ProcessDwellDuration(zone.ID, personID, dwellTime, isSecurityMode, fallDetected)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }()
@@ -619,7 +889,7 @@ func main() {
 
     // Set identity function for fall detector
     fallDetector.SetIdentityFunc(func(blobID int) string {
-        if identityMatcher == nil {
+        if identityMatcher != nil {
             if match := identityMatcher.GetMatch(blobID); match != nil {
                 return match.DeviceName
             }
@@ -833,6 +1103,86 @@ func main() {
         log.Printf("[INFO] Flow analytics background tasks started (prune: 24h, corridors: 7d)")
     }
 
+    // Phase 6: Self-improving localization fusion loop
+    go func() {
+        ticker := time.NewTicker(100 * time.Millisecond) // 10 Hz, same as main tracking
+        defer ticker.Stop()
+
+        weightSaveTicker := time.NewTicker(30 * time.Second)
+        defer weightSaveTicker.Stop()
+
+        for {
+            select {
+            case <-ctx.Done():
+                // Final weight save on shutdown
+                if weightStore != nil && selfImprovingLocalizer != nil {
+                    weights := selfImprovingLocalizer.GetEngine().GetLearnedWeights()
+                    if weights != nil {
+                        if err := weightStore.SaveWeights(weights); err != nil {
+                            log.Printf("[WARN] Failed to save weights on shutdown: %v", err)
+                        } else {
+                            log.Printf("[INFO] Saved learned weights on shutdown")
+                        }
+                    }
+                }
+                return
+
+            case <-ticker.C:
+                if selfImprovingLocalizer == nil {
+                    continue
+                }
+
+                // Get motion states from signal processor
+                states := pm.GetAllMotionStates()
+                if len(states) == 0 {
+                    continue
+                }
+
+                // Convert to localization.LinkMotion format
+                links := make([]localization.LinkMotion, 0, len(states))
+                for _, state := range states {
+                    // Parse linkID format "nodeMAC-peerMAC"
+                    parts := splitLinkID(state.LinkID)
+                    if len(parts) != 2 {
+                        continue
+                    }
+
+                    link := localization.LinkMotion{
+                        NodeMAC:     parts[0],
+                        PeerMAC:     parts[1],
+                        DeltaRMS:    state.SmoothDeltaRMS,
+                        Motion:      state.MotionDetected,
+                        HealthScore: state.BaselineConf,
+                    }
+
+                    // Use health score if available
+                    if state.AmbientConfidence > 0 {
+                        link.HealthScore = state.AmbientConfidence
+                    }
+
+                    links = append(links, link)
+                }
+
+                // Run fusion with learned weights
+                if len(links) > 0 {
+                    selfImprovingLocalizer.Fuse(links)
+                }
+
+            case <-weightSaveTicker.C:
+                // Periodic weight persistence
+                if weightStore != nil && selfImprovingLocalizer != nil {
+                    weights := selfImprovingLocalizer.GetEngine().GetLearnedWeights()
+                    if weights != nil {
+                        if err := weightStore.SaveWeights(weights); err != nil {
+                            log.Printf("[WARN] Failed to save weights: %v", err)
+                        }
+                    }
+                }
+            }
+        }
+    }()
+    log.Printf("[INFO] Self-improving localization fusion started (rate: 10Hz, save interval: 30s)")
+
     // Phase 6: Prediction provider wiring and update loop
     if predictionPredictor != nil && predictionHistory != nil {
         // Wire zone provider
@@ -899,6 +1249,67 @@ func main() {
             }
         }()
         log.Printf("[INFO] Prediction update loop started (interval: 60s)")
+
+        // Start periodic prediction evaluation loop (every 30 seconds)
+        // This evaluates pending predictions against actual positions
+        if predictionAccuracy != nil {
+            go func() {
+                evalTicker := time.NewTicker(30 * time.Second)
+                defer evalTicker.Stop()
+
+                // Cleanup ticker (hourly)
+                cleanupTicker := time.NewTicker(1 * time.Hour)
+                defer cleanupTicker.Stop()
+
+                // Zone pattern computation ticker (daily)
+                patternTicker := time.NewTicker(24 * time.Hour)
+                defer patternTicker.Stop()
+
+                for {
+                    select {
+                    case <-ctx.Done():
+                        return
+                    case <-evalTicker.C:
+                        // Get current actual positions from history updater
+                        actualPositions := make(map[string]string)
+                        if predictionHistory != nil {
+                            zones := predictionHistory.GetAllPersonZones()
+                            for personID, info := range zones {
+                                actualPositions[personID] = info.ZoneID
+                            }
+                        }
+
+                        // Evaluate pending predictions
+                        if len(actualPositions) > 0 {
+                            evaluated, correct, err := predictionAccuracy.EvaluatePending(actualPositions)
+                            if err != nil {
+                                log.Printf("[WARN] Prediction evaluation failed: %v", err)
+                            } else if evaluated > 0 {
+                                accuracy := float64(0)
+                                if evaluated > 0 {
+                                    accuracy = float64(correct) / float64(evaluated) * 100
+                                }
+                                log.Printf("[INFO] Prediction evaluation: %d evaluated, %d correct (%.1f%% accuracy)",
+                                    evaluated, correct, accuracy)
+                            }
+                        }
+
+                    case <-cleanupTicker.C:
+                        // Cleanup old predictions
+                        if err := predictionAccuracy.CleanupOldPredictions(); err != nil {
+                            log.Printf("[WARN] Prediction cleanup failed: %v", err)
+                        }
+
+                    case <-patternTicker.C:
+                        // Compute zone occupancy patterns
+                        if err := predictionAccuracy.ComputeZoneOccupancyPatterns(); err != nil {
+                            log.Printf("[WARN] Zone pattern computation failed: %v", err)
+                        }
+                    }
+                }
+            }()
+            log.Printf("[INFO] Prediction evaluation loop started (interval: 30s)")
+        }
     }
 
     // Fleet REST API
@@ -1470,6 +1881,138 @@ func main() {
         learningHandler.RegisterRoutes(r)
     }
 
+    // Phase 6: Self-improving localization REST API
+    if selfImprovingLocalizer != nil {
+        r.Get("/api/localization/progress", func(w http.ResponseWriter, r *http.Request) {
+            progress := selfImprovingLocalizer.GetLearningProgress()
+            writeJSON(w, progress)
+        })
+
+        r.Get("/api/localization/weights", func(w http.ResponseWriter, r *http.Request) {
+            weights := selfImprovingLocalizer.GetLearnedWeights()
+            writeJSON(w, weights)
+        })
+
+        r.Get("/api/localization/ground-truth", func(w http.ResponseWriter, r *http.Request) {
+            allGT := selfImprovingLocalizer.GetAllGroundTruth()
+            writeJSON(w, allGT)
+        })
+
+        r.Get("/api/localization/sigmas", func(w http.ResponseWriter, r *http.Request) {
+            engine := selfImprovingLocalizer.GetEngine()
+            if engine == nil || engine.GetLearnedWeights() == nil {
+                writeJSON(w, map[string]float64{})
+                return
+            }
+            sigmas := engine.GetLearnedWeights().GetAllSigmas()
+            writeJSON(w, sigmas)
+        })
+
+        r.Get("/api/localization/stats", func(w http.ResponseWriter, r *http.Request) {
+            engine := selfImprovingLocalizer.GetEngine()
+            if engine == nil || engine.GetLearnedWeights() == nil {
+                writeJSON(w, map[string]interface{}{
+                    "links": 0,
+                    "error": "engine not available",
+                })
+                return
+            }
+            stats := engine.GetLearnedWeights().GetAllStats()
+            result := make(map[string]interface{})
+            totalObs := int64(0)
+            totalCorrect := int64(0)
+            for linkID, s := range stats {
+                result[linkID] = map[string]interface{}{
+                    "observation_count":  s.ObservationCount,
+                    "correct_count":      s.CorrectCount,
+                    "avg_error_m":        s.ErrorSum / math.Max(1, float64(s.ObservationCount)),
+                    "last_error_m":       s.LastError,
+                    "weight_adjustments": s.WeightAdjustments,
+                }
+                totalObs += s.ObservationCount
+                totalCorrect += s.CorrectCount
+            }
+            result["_summary"] = map[string]interface{}{
+                "total_links":        len(stats),
+                "total_observations": totalObs,
+                "total_correct":      totalCorrect,
+                "accuracy":           float64(totalCorrect) / math.Max(1, float64(totalObs)),
+            }
+            writeJSON(w, result)
+        })
+
+        r.Post("/api/localization/reset", func(w http.ResponseWriter, r *http.Request) {
+            // Reset all learned weights to defaults
+            engine := selfImprovingLocalizer.GetEngine()
+            if engine != nil {
+                engine.SetLearnedWeights(localization.NewLearnedWeights())
+                if weightStore != nil {
+                    weightStore.SaveWeights(localization.NewLearnedWeights())
+                }
+            }
+            writeJSON(w, map[string]string{"status": "reset"})
+        })
+
+        // Improvement tracking endpoint - shows how localization accuracy improves over time
+        r.Get("/api/localization/improvement", func(w http.ResponseWriter, r *http.Request) {
+            stats := selfImprovingLocalizer.GetImprovementStats()
+            history := selfImprovingLocalizer.GetImprovementHistory()
+
+            result := map[string]interface{}{
+                "stats":   stats,
+                "history": history,
+            }
+            writeJSON(w, result)
+        })
+
+        log.Printf("[INFO] Self-improving localization API registered at /api/localization/*")
+    }
+
+    // Phase 6: Anomaly detection REST API
+    if anomalyDetector != nil {
+        anomalyHandler := analytics.NewAnomalyHandler(anomalyDetector)
+        anomalyHandler.RegisterRoutes(r)
+
+        // Additional security mode endpoint
+        r.Get("/api/security/status", func(w http.ResponseWriter, r *http.Request) {
+            isSecurityMode := false
+            if automationEngine != nil {
+                isSecurityMode = automationEngine.GetSystemMode() == automation.ModeAway
+            }
+            writeJSON(w, map[string]interface{}{
+                "security_mode":     isSecurityMode,
+                "model_ready":       anomalyDetector.IsModelReady(),
+                "learning_progress": anomalyDetector.GetLearningProgress(),
+                "active_anomalies":  len(anomalyDetector.GetActiveAnomalies()),
+            })
+        })
+
+        r.Post("/api/security/acknowledge-all", func(w http.ResponseWriter, r *http.Request) {
+            var req struct {
+                Feedback string `json:"feedback"`
+                By       string `json:"acknowledged_by"`
+            }
+            if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+
+            anomalies := anomalyDetector.GetActiveAnomalies()
+            acknowledged := 0
+            for _, a := range anomalies {
+                if err := anomalyDetector.AcknowledgeAnomaly(a.ID, req.Feedback, req.By); err == nil {
+                    acknowledged++
+                }
+            }
+            writeJSON(w, map[string]int{"acknowledged": acknowledged, "total": len(anomalies)})
+        })
+    }
+
+    // Phase 6: Sleep quality REST API
+    sleepHandler := sleep.NewHandler(sleepMonitor)
+    sleepHandler.RegisterRoutes(r)
+    log.Printf("[INFO] Sleep quality API registered at /api/sleep/*")
+
     // OTA firmware server and manager
     firmwareDir := filepath.Join(cfg.DataDir, "firmware")
     otaSrv := ota.NewServer(firmwareDir)
@@ -1713,124 +2256,180 @@ type predictionZoneAdapter struct {
 
 func (z *predictionZoneAdapter) GetZone(id string) (string, bool) {
     zone := z.mgr.GetZone(id)
-    if zone == nil {
-        return "", false
-    }
-    return zone.Name, true
+
+// Anomaly detector provider adapters
+
+type anomalyZoneAdapter struct {
+	mgr *zones.Manager
 }
 
-type predictionPersonAdapter struct {
-    registry *ble.Registry
+func (a *anomalyZoneAdapter) GetZoneName(zoneID string) string {
+	zone := a.mgr.GetZone(zoneID)
+	if zone == nil {
+		return zoneID
+	}
+	return zone.Name
 }
 
-func (p *predictionPersonAdapter) GetPerson(id string) (string, string, bool) {
-    person, err := p.registry.GetPerson(id)
-    if err != nil {
-        return "", "", false
-    }
-    return person.Name, person.Color, true
+func (a *anomalyZoneAdapter) GetZoneOccupancy(zoneID string) (int, []int) {
+	occ := a.mgr.GetZoneOccupancy(zoneID)
+	if occ == nil {
+		return 0, nil
+	}
+	return occ.Count, occ.BlobIDs
 }
 
-func (p *predictionPersonAdapter) GetAllPeople() ([]struct {
-    ID    string
-    Name  string
-    Color string
-}, error) {
-    people, err := p.registry.GetPeople()
-    if err != nil {
-        return nil, err
-    }
-    result := make([]struct {
-        ID    string
-        Name  string
-        Color string
-    }, len(people))
-    for i, person := range people {
-        result[i] = struct {
-            ID    string
-            Name  string
-            Color string
-        }{ID: person.ID, Name: person.Name, Color: person.Color}
-    }
-    return result, nil
+type anomalyPersonAdapter struct {
+	registry *ble.Registry
 }
 
-type predictionMQTTAdapter struct {
-    client *mqtt.Client
+func (a *anomalyPersonAdapter) GetPersonDevices(personID string) ([]string, error) {
+	devices, err := a.registry.GetPersonDevices(personID)
+	if err != nil {
+		return nil, err
+	}
+	macs := make([]string, len(devices))
+	for i, d := range devices {
+		macs[i] = d.Addr
+	}
+	return macs, nil
 }
 
-func (m *predictionMQTTAdapter) Publish(topic string, payload []byte) error {
-    return m.client.Publish(topic, payload)
+func (a *anomalyPersonAdapter) GetAllRegisteredDevices() (map[string]string, error) {
+	devices, err := a.registry.GetAllPersonDevices()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]string)
+	for _, d := range devices {
+		if d.PersonID != "" {
+			result[d.Addr] = d.PersonID
+		}
+	}
+	return result, nil
 }
 
-func (m *predictionMQTTAdapter) IsConnected() bool {
-    return m.client.IsConnected()
+func (a *anomalyPersonAdapter) GetPersonName(personID string) string {
+	person, err := a.registry.GetPerson(personID)
+	if err != nil {
+		return personID
+	}
+	return person.Name
 }
 
-// Prediction provider adapters
-
-type predictionZoneAdapter struct {
-    mgr *zones.Manager
+type anomalyDeviceAdapter struct {
+	registry *ble.Registry
 }
 
-func (z *predictionZoneAdapter) GetZone(id string) (string, bool) {
-    zone := z.mgr.GetZone(id)
-    if zone == nil {
-        return "", false
-    }
-    return zone.Name, true
+func (a *anomalyDeviceAdapter) IsDeviceRegistered(mac string) bool {
+	device, err := a.registry.GetDevice(mac)
+	if err != nil {
+		return false
+	}
+	return device.PersonID != "" && device.Enabled
 }
 
-type predictionPersonAdapter struct {
-    registry *ble.Registry
+func (a *anomalyDeviceAdapter) IsDeviceSeenBefore(mac string) bool {
+	device, err := a.registry.GetDevice(mac)
+	if err != nil {
+		return false
+	}
+	// Consider "seen before" if first seen more than 24 hours ago
+	return device.FirstSeenAt.Before(time.Now().Add(-24 * time.Hour))
 }
 
-func (p *predictionPersonAdapter) GetPerson(id string) (string, string, bool) {
-    person, err := p.registry.GetPerson(id)
-    if err != nil {
-        return "", "", false
-    }
-    return person.Name, person.Color, true
+func (a *anomalyDeviceAdapter) GetDeviceName(mac string) string {
+	device, err := a.registry.GetDevice(mac)
+	if err != nil {
+		return mac
+	}
+	if device.Label != "" {
+		return device.Label
+	}
+	if device.Name != "" {
+		return device.Name
+	}
+	if device.DeviceName != "" {
+		return device.DeviceName
+	}
+	return mac
 }
 
-func (p *predictionPersonAdapter) GetAllPeople() ([]struct {
-    ID    string
-    Name  string
-    Color string
-}, error) {
-    people, err := p.registry.GetPeople()
-    if err != nil {
-        return nil, err
-    }
-
-    result := make([]struct {
-        ID    string
-        Name  string
-        Color string
-    }, len(people))
-    for i, person := range people {
-        result[i] = struct {
-            ID    string
-            Name  string
-            Color string
-        }{
-            ID:    person.ID,
-            Name:  person.Name,
-            Color: person.Color,
-        }
-    }
-    return result, nil
+type anomalyPositionAdapter struct {
+	pm *sigproc.ProcessorManager
 }
 
-type predictionMQTTAdapter struct {
-    client *mqtt.Client
+func (a *anomalyPositionAdapter) GetBlobPosition(blobID int) (x, y, z float64, ok bool) {
+	blobs := a.pm.GetTrackedBlobs()
+	for _, blob := range blobs {
+		if blob.ID == blobID {
+			return blob.X, blob.Y, blob.Z, true
+		}
+	}
+	return 0, 0, 0, false
 }
 
-func (m *predictionMQTTAdapter) Publish(topic string, payload []byte) error {
-    return m.client.Publish(topic, payload)
+type anomalyAlertAdapter struct {
+	hub           *dashboard.Hub
+	notifyService *notify.Service
 }
 
-func (m *predictionMQTTAdapter) IsConnected() bool {
-    return m.client.IsConnected()
+func (a *anomalyAlertAdapter) SendAlert(event events.AnomalyEvent, immediate bool) error {
+	if a.notifyService != nil {
+		priority := 3
+		if immediate {
+			priority = 5
+		}
+		notif := notify.Notification{
+			Title:    "Security Alert",
+			Body:     event.Description,
+			Priority: priority,
+			Tags:     []string{"warning", "security", string(event.Type)},
+			Data: map[string]interface{}{
+				"anomaly_id":   event.ID,
+				"anomaly_type": event.Type,
+				"score":        event.Score,
+				"zone_id":      event.ZoneID,
+				"zone_name":    event.ZoneName,
+			},
+			Timestamp: time.Now(),
+		}
+		a.notifyService.Send(notif)
+	}
+	return nil
 }
 
+func (a *anomalyAlertAdapter) SendWebhook(event events.AnomalyEvent, immediate bool) error {
+	// Webhooks are handled by the notification service channels
+	return nil
+}
+
+func (a *anomalyAlertAdapter) SendEscalation(event events.AnomalyEvent) error {
+	if a.notifyService != nil {
+		notif := notify.Notification{
+			Title:    "SECURITY ESCALATION",
+			Body:     fmt.Sprintf("UNACKNOWLEDGED: %s", event.Description),
+			Priority: 5,
+			Tags:     []string{"urgent", "security", "escalation"},
+			Data: map[string]interface{}{
+				"anomaly_id":   event.ID,
+				"anomaly_type": event.Type,
+				"escalation":   true,
+			},
+			Timestamp: time.Now(),
+		}
+		a.notifyService.Send(notif)
+	}
+	return nil
+}
+
+// splitLinkID parses a link ID in format "nodeMAC-peerMAC" into its components
+func splitLinkID(linkID string) []string {
+	// Link ID format is "aa:bb:cc:dd:ee:ff-11:22:33:44:55:66"
+	for i := len(linkID) - 1; i >= 0; i-- {
+		if linkID[i] == '-' {
+			return []string{linkID[:i], linkID[i+1:]}
+		}
+	}
+	return nil
+}

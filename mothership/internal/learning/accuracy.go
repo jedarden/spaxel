@@ -176,20 +176,7 @@ func (a *AccuracyComputer) getCounts(scopeType, scopeID, week string) (tp, fp, f
 
 // getFeedbackInTimeRange retrieves all feedback in a time range
 func (a *AccuracyComputer) getFeedbackInTimeRange(start, end time.Time) ([]FeedbackRecord, error) {
-	// This is a simplified implementation - in production you'd have a more efficient query
-	stats, err := a.store.GetFeedbackStats()
-	if err != nil {
-		return nil, err
-	}
-
-	// For now, use the stats to get counts
-	// A full implementation would query feedback by timestamp
-	_ = stats
-	_ = start
-	_ = end
-
-	// Return empty for now - actual implementation would query the database
-	return nil, nil
+	return a.store.GetFeedbackInTimeRange(start, end)
 }
 
 // matchesScope checks if a feedback record matches the given scope
@@ -249,9 +236,12 @@ func (a *AccuracyComputer) computePerZone(week string) error {
 
 // getUniqueScopeIDs extracts unique scope IDs from feedback
 func (a *AccuracyComputer) getUniqueScopeIDs(scopeType string) []string {
-	// This would query distinct scope IDs from feedback
-	// Simplified implementation for now
-	return nil
+	ids, err := a.store.GetUniqueScopeIDs(scopeType)
+	if err != nil {
+		log.Printf("[WARN] Failed to get unique scope IDs for %s: %v", scopeType, err)
+		return nil
+	}
+	return ids
 }
 
 // parseWeekString parses a week string (e.g., "2026-W13") into a time

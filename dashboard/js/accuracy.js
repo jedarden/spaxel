@@ -172,6 +172,7 @@
             this.fetchHistory();
             this.fetchImprovement();
             this.fetchStats();
+            this.fetchZoneBreakdown();
         },
 
         /**
@@ -235,6 +236,85 @@
                 .catch(function(err) {
                     console.error('[Accuracy] Failed to fetch stats:', err);
                 });
+        },
+
+        /**
+         * Fetch per-zone accuracy breakdown
+         */
+        fetchZoneBreakdown: function() {
+            var self = this;
+            var week = this.getCurrentWeek();
+
+            fetch('/api/learning/accuracy/history?scope_type=zone&weeks=1')
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    self.renderZoneBreakdown(data);
+                })
+                .catch(function(err) {
+                    console.error('[Accuracy] Failed to fetch zone breakdown:', err);
+                    self.renderZoneBreakdown([]);
+                });
+        },
+
+        /**
+         * Get current week string
+         */
+        getCurrentWeek: function() {
+            var now = new Date();
+            var start = new Date(now.getFullYear(), 0, 1);
+            var diff = now - start;
+            var oneWeek = 604800000; // ms in a week
+            var weekNum = Math.ceil((diff + start.getDay() * 86400000) / oneWeek);
+            return now.getFullYear() + '-W' + (weekNum < 10 ? '0' : '') + weekNum;
+        },
+
+        /**
+         * Render zone breakdown
+         */
+        renderZoneBreakdown: function(zones) {
+            var container = document.getElementById('zone-breakdown');
+            if (!container) return;
+
+            if (!zones || zones.length === 0) {
+                container.innerHTML = '<div class="no-data-text">No zone data yet</div>';
+                return;
+            }
+
+            var self = this;
+            var html = '';
+            zones.sort(function(a, b) { return (b.f1 || 0) - (a.f1 || 0); });
+
+            zones.forEach(function(zone) {
+                var f1 = zone.f1 !== null ? (zone.f1 * 100).toFixed(0) + '%' : '--';
+                var color = zone.f1 >= 0.8 ? '#66bb6a' : (zone.f1 >= 0.6 ? '#ffa726' : '#ef5350');
+
+                html += '<div class="zone-item" data-zone-id="' + zone.scope_id + '">' +
+                    '<span class="zone-name">' + self.formatZoneName(zone.scope_id) + '</span>' +
+                    '<span class="zone-score" style="color:' + color + '">' + f1 + '</span>' +
+                    '</div>';
+            });
+
+            container.innerHTML = html;
+
+            // Add click handlers to focus on zone
+            container.querySelectorAll('.zone-item').forEach(function(item) {
+                item.onclick = function() {
+                    var zoneId = this.getAttribute('data-zone-id');
+                    if (window.Viz3D && window.Viz3D.focusOnZone) {
+                        window.Viz3D.focusOnZone(zoneId);
+                    }
+                };
+            });
+        },
+
+        /**
+         * Format zone name for display
+         */
+        formatZoneName: function(zoneId) {
+            if (!zoneId) return 'Unknown';
+            // Convert zone-xxx to Xxx
+            return zoneId.replace(/^zone-/, '').replace(/-/g, ' ')
+                .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
         },
 
         /**
@@ -569,12 +649,23 @@
                     padding: 4px 8px;\
                     background: rgba(255, 255, 255, 0.03);\
                     border-radius: 3px;\
+                    cursor: pointer;\
+                    transition: background 0.2s;\
+                }\
+                .zone-item:hover {\
+                    background: rgba(255, 255, 255, 0.08);\
                 }\
                 .zone-name {\
                     color: #bbb;\
                 }\
                 .zone-score {\
                     font-weight: 500;\
+                }\
+                .no-data-text {\
+                    color: #666;\
+                    font-size: 11px;\
+                    text-align: center;\
+                    padding: 8px;\
                 }\
                 .accuracy-stats {\
                     font-size: 11px;\

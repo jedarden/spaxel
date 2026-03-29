@@ -585,6 +585,93 @@ func (s *FeedbackStore) GetFeedbackByEvent(eventID string) ([]FeedbackRecord, er
 	return records, nil
 }
 
+// GetFeedbackInTimeRange returns all feedback within a time range
+func (s *FeedbackStore) GetFeedbackInTimeRange(start, end time.Time) ([]FeedbackRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(`
+		SELECT id, event_id, event_type, feedback_type, details_json, timestamp, applied, processed_at
+		FROM detection_feedback
+		WHERE timestamp >= ? AND timestamp < ?
+		ORDER BY timestamp ASC
+	`, start.Unix(), end.Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []FeedbackRecord
+	for rows.Next() {
+		var r FeedbackRecord
+		var timestamp int64
+		var processedAt sql.NullInt64
+		var detailsJSON string
+
+		if err := rows.Scan(&r.ID, &r.EventID, &r.EventType, &r.FeedbackType,
+			&detailsJSON, &timestamp, &r.Applied, &processedAt); err != nil {
+			continue
+		}
+
+		r.Timestamp = time.Unix(timestamp, 0)
+		if processedAt.Valid {
+			t := time.Unix(processedAt.Int64, 0)
+			r.ProcessedAt = &t
+		}
+
+		if err := json.Unmarshal([]byte(detailsJSON), &r.Details); err != nil {
+			r.Details = make(map[string]interface{})
+		}
+
+		records = append(records, r)
+	}
+
+	return records, nil
+}
+
+// GetUniqueScopeIDs returns unique scope IDs for a given scope type from feedback
+func (s *FeedbackStore) GetUniqueScopeIDs(scopeType string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var fieldName string
+	switch scopeType {
+	case ScopeTypeLink:
+		fieldName = "$.link_id"
+	case ScopeTypeZone:
+		fieldName = "$.zone_id"
+	case ScopeTypePerson:
+		fieldName = "$.person_id"
+	default:
+		return nil, nil
+	}
+
+	// Use JSON extraction to get unique scope IDs
+	rows, err := s.db.Query(`
+		SELECT DISTINCT json_extract(details_json, ?)
+		FROM detection_feedback
+		WHERE json_extract(details_json, ?) IS NOT NULL
+		  AND json_extract(details_json, ?) != ''
+	`, fieldName, fieldName, fieldName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+
+	return ids, nil
+}
+
 // GetFeedbackCount returns the total number of feedback entries
 func (s *FeedbackStore) GetFeedbackCount() (int, error) {
 	s.mu.RLock()

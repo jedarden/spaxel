@@ -10,7 +10,7 @@ const Viz3D = (function () {
     'use strict';
 
     // ── module state ──────────────────────────────────────────────────────────
-    let _scene, _camera, _controls, _clock;
+    let _scene, _camera, _controls, _clock, _renderer;
     let _room    = null;
     let _roomObjs = { floor: null, ceiling: null, walls: [], edges: null };
     let _nodeMeshes  = new Map();  // mac   → THREE.Mesh
@@ -22,6 +22,13 @@ const Viz3D = (function () {
     let _floorTex    = null;
     let _followId    = null;
 
+    // ── blob interaction state ────────────────────────────────────────────────
+    let _raycaster   = new THREE.Raycaster();
+    let _mouse       = new THREE.Vector2();
+    let _hoveredBlob = null;
+    let _feedbackTooltip = null;
+    let _renderer    = null;
+
     // Ghost node for repositioning advice
     let _ghostNode     = null;  // THREE.Mesh (translucent)
     let _ghostLine     = null;  // THREE.Line (dashed, from original to ghost)
@@ -32,11 +39,17 @@ const Viz3D = (function () {
 
     // ── init / tick ───────────────────────────────────────────────────────────
 
-    function init(scene, camera, controls) {
+    function init(scene, camera, controls, renderer) {
         _scene    = scene;
         _camera   = camera;
         _controls = controls;
         _clock    = new THREE.Clock();
+
+        // Initialize blob interaction if renderer provided
+        if (renderer) {
+            initBlobInteraction(renderer);
+            _addBlobFeedbackStyles();
+        }
     }
 
     function update() {
@@ -55,6 +68,9 @@ const Viz3D = (function () {
 
         // Update ghost line if node moved
         _updateGhostLine();
+
+        // Update flow arrow animation
+        updateFlowAnimation(dt);
     }
 
     // ── room bounds ───────────────────────────────────────────────────────────
@@ -517,6 +533,7 @@ const Viz3D = (function () {
         const color = BLOB_COLORS[ci];
 
         const group = new THREE.Group();
+        group.userData.blobId = id;  // Store blob ID for interaction
         _scene.add(group);
 
         const humanoid = _buildHumanoid(color);
@@ -544,7 +561,7 @@ const Viz3D = (function () {
         );
         _scene.add(pillar);
 
-        return { group, humanoid, trail, pillar };
+        return { group, humanoid, trail, pillar, blobId: id };
     }
 
     function _removeBlobObj(id, obj) {
@@ -579,12 +596,18 @@ const Viz3D = (function () {
 
     function applyLocUpdate(blobs) {
         const seen = new Set();
+        const now = Date.now();
         blobs.forEach(b => {
             seen.add(b.id);
             let obj = _blobs3D.get(b.id);
-            if (!obj) { obj = _createBlobObj(b.id); _blobs3D.set(b.id, obj); }
+            if (!obj) {
+                obj = _createBlobObj(b.id);
+                obj.createdAt = now;
+                _blobs3D.set(b.id, obj);
+            }
 
             obj.group.position.set(b.x, 0, b.z);
+            obj.lastPosition = { x: b.x, z: b.z };
 
             const speed = Math.sqrt(b.vx*b.vx + b.vz*b.vz);
             _setPosture(obj.humanoid, speed > 0.25 ? 'walking' : 'standing');
@@ -600,6 +623,265 @@ const Viz3D = (function () {
         _blobs3D.forEach((obj, id) => {
             if (!seen.has(id)) _removeBlobObj(id, obj);
         });
+    }
+
+    // ── blob interaction (feedback buttons) ────────────────────────────────────
+
+    /**
+     * Initialize blob interaction system.
+     * @param {THREE.WebGLRenderer} renderer - The Three.js renderer
+     */
+    function initBlobInteraction(renderer) {
+        _renderer = renderer;
+
+        // Create feedback tooltip element
+        _feedbackTooltip = document.createElement('div');
+        _feedbackTooltip.className = 'blob-feedback-tooltip';
+        _feedbackTooltip.style.display = 'none';
+        document.body.appendChild(_feedbackTooltip);
+
+        // Add mouse move listener
+        var canvas = renderer.domElement;
+        canvas.addEventListener('mousemove', _onBlobMouseMove);
+        canvas.addEventListener('mouseleave', _hideBlobFeedbackTooltip);
+    }
+
+    /**
+     * Handle mouse move for blob hover detection.
+     */
+    function _onBlobMouseMove(event) {
+        if (!_camera || !_scene || _blobs3D.size === 0) return;
+
+        // Calculate mouse position in normalized device coordinates
+        var rect = event.target.getBoundingClientRect();
+        _mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        _mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Raycast to find hovered blob
+        _raycaster.setFromCamera(_mouse, _camera);
+
+        var blobMeshes = [];
+        _blobs3D.forEach(function(obj) {
+            if (obj.group) {
+                blobMeshes.push(obj.group);
+            }
+        });
+
+        var intersects = _raycaster.intersectObjects(blobMeshes, true);
+
+        if (intersects.length > 0) {
+            // Find the blob object from the intersected mesh
+            var intersected = intersects[0].object;
+            var blobObj = null;
+
+            // Walk up the parent chain to find the group
+            var current = intersected;
+            while (current) {
+                _blobs3D.forEach(function(obj, id) {
+                    if (obj.group === current) {
+                        blobObj = obj;
+                    }
+                });
+                if (blobObj) break;
+                current = current.parent;
+            }
+
+            if (blobObj && blobObj !== _hoveredBlob) {
+                _hoveredBlob = blobObj;
+                _showBlobFeedbackTooltip(event, blobObj);
+            } else if (blobObj) {
+                // Update tooltip position
+                _updateTooltipPosition(event);
+            }
+        } else {
+            if (_hoveredBlob) {
+                _hideBlobFeedbackTooltip();
+            }
+        }
+    }
+
+    /**
+     * Show feedback tooltip for a blob.
+     */
+    function _showBlobFeedbackTooltip(event, blobObj) {
+        if (!_feedbackTooltip) return;
+
+        var blobId = blobObj.blobId;
+        var eventType = 'blob_detection';
+        var eventTime = blobObj.createdAt || Date.now();
+        var position = blobObj.lastPosition || { x: 0, z: 0 };
+
+        _feedbackTooltip.innerHTML =
+            '<div class="feedback-tooltip-content">' +
+            '  <div class="feedback-tooltip-label">Track #' + blobId + '</div>' +
+            '  <div class="feedback-tooltip-actions">' +
+            '    <button class="feedback-btn-icon feedback-thumbs-up" title="Correct detection" ' +
+            '            onclick="Viz3D.submitBlobFeedback(' + blobId + ', \'TRUE_POSITIVE\')">&#x1F44D;</button>' +
+            '    <button class="feedback-btn-icon feedback-thumbs-down" title="Incorrect detection" ' +
+            '            onclick="Viz3D.showBlobFeedbackForm(' + blobId + ')">&#x1F44E;</button>' +
+            '  </div>' +
+            '</div>';
+
+        _feedbackTooltip.style.display = 'block';
+        _updateTooltipPosition(event);
+
+        // Store blob data for feedback submission
+        _feedbackTooltip.dataset.blobId = blobId;
+        _feedbackTooltip.dataset.eventType = eventType;
+        _feedbackTooltip.dataset.eventTime = eventTime;
+        _feedbackTooltip.dataset.posX = position.x;
+        _feedbackTooltip.dataset.posZ = position.z;
+    }
+
+    /**
+     * Update tooltip position to follow cursor.
+     */
+    function _updateTooltipPosition(event) {
+        if (!_feedbackTooltip) return;
+
+        var offsetX = 15;
+        var offsetY = 15;
+
+        _feedbackTooltip.style.left = (event.clientX + offsetX) + 'px';
+        _feedbackTooltip.style.top = (event.clientY + offsetY) + 'px';
+    }
+
+    /**
+     * Hide the blob feedback tooltip.
+     */
+    function _hideBlobFeedbackTooltip() {
+        if (_feedbackTooltip) {
+            _feedbackTooltip.style.display = 'none';
+        }
+        _hoveredBlob = null;
+    }
+
+    /**
+     * Submit feedback for a blob detection.
+     * @param {number} blobId - The blob ID
+     * @param {string} feedbackType - Feedback type (TRUE_POSITIVE, FALSE_POSITIVE, etc.)
+     */
+    function submitBlobFeedback(blobId, feedbackType) {
+        var blobObj = _blobs3D.get(blobId);
+        if (!blobObj) return;
+
+        var details = {
+            position_x: blobObj.lastPosition ? blobObj.lastPosition.x : 0,
+            position_z: blobObj.lastPosition ? blobObj.lastPosition.z : 0
+        };
+
+        // Use Feedback module if available
+        if (window.Feedback) {
+            window.Feedback.sendFeedback(
+                'blob-' + blobId + '-' + (blobObj.createdAt || Date.now()),
+                window.Feedback.EventTypes.BLOB_DETECTION,
+                feedbackType,
+                details
+            );
+        } else {
+            // Direct API call
+            fetch('/api/learning/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    event_id: 'blob-' + blobId + '-' + (blobObj.createdAt || Date.now()),
+                    event_type: 'blob_detection',
+                    feedback_type: feedbackType,
+                    details: details
+                })
+            }).then(function(res) { return res.json(); })
+              .then(function(result) {
+                  console.log('[Viz3D] Feedback submitted:', feedbackType);
+              })
+              .catch(function(err) {
+                  console.error('[Viz3D] Failed to submit feedback:', err);
+              });
+        }
+
+        _hideBlobFeedbackTooltip();
+    }
+
+    /**
+     * Show the feedback form for a blob (thumbs-down flow).
+     * @param {number} blobId - The blob ID
+     */
+    function showBlobFeedbackForm(blobId) {
+        var blobObj = _blobs3D.get(blobId);
+        if (!blobObj) return;
+
+        var details = {
+            position_x: blobObj.lastPosition ? blobObj.lastPosition.x : 0,
+            position_z: blobObj.lastPosition ? blobObj.lastPosition.z : 0
+        };
+
+        if (window.Feedback) {
+            window.Feedback.showFeedbackPanel(
+                'blob-' + blobId + '-' + (blobObj.createdAt || Date.now()),
+                window.Feedback.EventTypes.BLOB_DETECTION,
+                blobObj.createdAt || Date.now(),
+                details
+            );
+        }
+
+        _hideBlobFeedbackTooltip();
+    }
+
+    /**
+     * Add blob feedback tooltip styles.
+     */
+    function _addBlobFeedbackStyles() {
+        if (document.getElementById('blob-feedback-styles')) return;
+
+        var style = document.createElement('style');
+        style.id = 'blob-feedback-styles';
+        style.textContent =
+            '.blob-feedback-tooltip {' +
+            '  position: fixed;' +
+            '  background: rgba(0, 0, 0, 0.9);' +
+            '  border-radius: 6px;' +
+            '  padding: 8px 12px;' +
+            '  z-index: 1000;' +
+            '  pointer-events: auto;' +
+            '  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);' +
+            '}' +
+            '.feedback-tooltip-content {' +
+            '  display: flex;' +
+            '  flex-direction: column;' +
+            '  gap: 6px;' +
+            '}' +
+            '.feedback-tooltip-label {' +
+            '  font-size: 11px;' +
+            '  color: #888;' +
+            '  text-align: center;' +
+            '}' +
+            '.feedback-tooltip-actions {' +
+            '  display: flex;' +
+            '  gap: 6px;' +
+            '  justify-content: center;' +
+            '}' +
+            '.feedback-btn-icon {' +
+            '  background: rgba(255, 255, 255, 0.1);' +
+            '  border: none;' +
+            '  width: 32px;' +
+            '  height: 32px;' +
+            '  border-radius: 50%;' +
+            '  cursor: pointer;' +
+            '  font-size: 16px;' +
+            '  display: flex;' +
+            '  align-items: center;' +
+            '  justify-content: center;' +
+            '  transition: background 0.2s;' +
+            '}' +
+            '.feedback-btn-icon:hover {' +
+            '  background: rgba(255, 255, 255, 0.2);' +
+            '}' +
+            '.feedback-thumbs-up:hover {' +
+            '  background: rgba(76, 175, 80, 0.4);' +
+            '}' +
+            '.feedback-thumbs-down:hover {' +
+            '  background: rgba(244, 67, 54, 0.4);' +
+            '}';
+        document.head.appendChild(style);
     }
 
     // ── message handlers ──────────────────────────────────────────────────────
@@ -752,6 +1034,348 @@ const Viz3D = (function () {
         _ghostLine.computeLineDistances();
     }
 
+    // ── Flow Analytics Layers ────────────────────────────────────────────────────
+
+    // State for analytics layers
+    let _flowLayerVisible = false;
+    let _dwellLayerVisible = false;
+    let _corridorLayerVisible = false;
+    let _flowArrows = [];          // Array of THREE.ArrowHelper
+    let _dwellPlanes = [];         // Array of THREE.Mesh (heatmap cells)
+    let _corridorMeshes = [];      // Array of THREE.Mesh (corridor regions)
+    let _flowAnimTime = 0;
+    let _flowData = null;
+    let _dwellData = null;
+    let _corridorData = null;
+    let _flowPersonFilter = '';
+    let _flowTimeFilter = '30d';  // '7d', '30d', 'all'
+
+    /**
+     * Set visibility of flow arrows layer.
+     * @param {boolean} visible
+     */
+    function setFlowLayerVisible(visible) {
+        _flowLayerVisible = visible;
+        _flowArrows.forEach(function(arrow) {
+            arrow.visible = visible;
+        });
+        if (visible && !_flowData) {
+            fetchFlowData();
+        }
+    }
+
+    /**
+     * Set visibility of dwell heatmap layer.
+     * @param {boolean} visible
+     */
+    function setDwellLayerVisible(visible) {
+        _dwellLayerVisible = visible;
+        _dwellPlanes.forEach(function(plane) {
+            plane.visible = visible;
+        });
+        if (visible && !_dwellData) {
+            fetchDwellData();
+        }
+    }
+
+    /**
+     * Set visibility of corridor overlay layer.
+     * @param {boolean} visible
+     */
+    function setCorridorLayerVisible(visible) {
+        _corridorLayerVisible = visible;
+        _corridorMeshes.forEach(function(mesh) {
+            mesh.visible = visible;
+        });
+        if (visible && !_corridorData) {
+            fetchCorridorData();
+        }
+    }
+
+    /**
+     * Set person filter for flow/dwell data.
+     * @param {string} personId - Empty string for all people
+     */
+    function setFlowPersonFilter(personId) {
+        if (_flowPersonFilter !== personId) {
+            _flowPersonFilter = personId;
+            _flowData = null;
+            _dwellData = null;
+            if (_flowLayerVisible) fetchFlowData();
+            if (_dwellLayerVisible) fetchDwellData();
+        }
+    }
+
+    /**
+     * Set time filter for flow data.
+     * @param {string} timeFilter - '7d', '30d', or 'all'
+     */
+    function setFlowTimeFilter(timeFilter) {
+        if (_flowTimeFilter !== timeFilter) {
+            _flowTimeFilter = timeFilter;
+            _flowData = null;
+            if (_flowLayerVisible) fetchFlowData();
+        }
+    }
+
+    /**
+     * Fetch flow data from API and update visualization.
+     */
+    function fetchFlowData() {
+        var since = 0;
+        var now = Date.now() / 1000;
+        if (_flowTimeFilter === '7d') {
+            since = now - 7 * 24 * 3600;
+        } else if (_flowTimeFilter === '30d') {
+            since = now - 30 * 24 * 3600;
+        }
+
+        var url = '/api/analytics/flow?since=' + since + '&until=' + now;
+        if (_flowPersonFilter) {
+            url += '&person_id=' + encodeURIComponent(_flowPersonFilter);
+        }
+
+        fetch(url)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                _flowData = data;
+                rebuildFlowArrows();
+            })
+            .catch(function(err) {
+                console.error('[Viz3D] Failed to fetch flow data:', err);
+            });
+    }
+
+    /**
+     * Fetch dwell heatmap data from API and update visualization.
+     */
+    function fetchDwellData() {
+        var url = '/api/analytics/dwell';
+        if (_flowPersonFilter) {
+            url += '?person_id=' + encodeURIComponent(_flowPersonFilter);
+        }
+
+        fetch(url)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                _dwellData = data;
+                rebuildDwellPlanes();
+            })
+            .catch(function(err) {
+                console.error('[Viz3D] Failed to fetch dwell data:', err);
+            });
+    }
+
+    /**
+     * Fetch corridor data from API and update visualization.
+     */
+    function fetchCorridorData() {
+        fetch('/api/analytics/corridors')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                _corridorData = data;
+                rebuildCorridorMeshes();
+            })
+            .catch(function(err) {
+                console.error('[Viz3D] Failed to fetch corridor data:', err);
+            });
+    }
+
+    /**
+     * Rebuild flow arrow meshes from _flowData.
+     */
+    function rebuildFlowArrows() {
+        // Clear existing arrows
+        _flowArrows.forEach(function(arrow) {
+            _scene.remove(arrow);
+        });
+        _flowArrows = [];
+
+        if (!_flowData || !_flowData.cells) return;
+
+        var gridSize = _flowData.grid_size || 0.25;
+
+        _flowData.cells.forEach(function(cell) {
+            var cx = (cell.grid_x + 0.5) * gridSize;
+            var cz = (cell.grid_z + 0.5) * gridSize;
+
+            // Direction vector
+            var dir = new THREE.Vector3(cell.vector_x, 0, cell.vector_z).normalize();
+            var length = Math.min(Math.sqrt(cell.vector_x * cell.vector_x + cell.vector_z * cell.vector_z) * 0.5 + 0.1, 0.4);
+
+            // Color based on segment count (blue to red)
+            var intensity = Math.min(cell.segment_count / 50, 1);
+            var color = new THREE.Color();
+            color.setHSL(0.6 - intensity * 0.6, 0.8, 0.5); // Blue (0.6) to Red (0)
+
+            var arrow = new THREE.ArrowHelper(
+                dir,
+                new THREE.Vector3(cx, 0.02, cz),
+                length,
+                color.getHex(),
+                length * 0.3,  // headLength
+                length * 0.15  // headWidth
+            );
+            arrow.visible = _flowLayerVisible;
+            arrow.userData = { segmentCount: cell.segment_count, baseOpacity: 0.7 };
+
+            _scene.add(arrow);
+            _flowArrows.push(arrow);
+        });
+
+        console.log('[Viz3D] Built', _flowArrows.length, 'flow arrows');
+    }
+
+    /**
+     * Rebuild dwell heatmap planes from _dwellData.
+     */
+    function rebuildDwellPlanes() {
+        // Clear existing planes
+        _dwellPlanes.forEach(function(plane) {
+            _scene.remove(plane);
+            plane.geometry.dispose();
+            plane.material.dispose();
+        });
+        _dwellPlanes = [];
+
+        if (!_dwellData || !_dwellData.cells) return;
+
+        var gridSize = 0.25; // GridCellSize
+
+        _dwellData.cells.forEach(function(cell) {
+            var cx = (cell.grid_x + 0.5) * gridSize;
+            var cz = (cell.grid_z + 0.5) * gridSize;
+
+            // Color: blue (low) -> green (mid) -> red (high)
+            var normalized = cell.normalized;
+            var color = new THREE.Color();
+            if (normalized < 0.5) {
+                // Blue to green
+                color.setHSL(0.55 + normalized * 0.1, 0.8, 0.4);
+            } else {
+                // Green to red
+                color.setHSL(0.35 - (normalized - 0.5) * 0.7, 0.8, 0.45);
+            }
+
+            var geo = new THREE.PlaneGeometry(gridSize * 0.95, gridSize * 0.95);
+            var mat = new THREE.MeshBasicMaterial({
+                color: color.getHex(),
+                transparent: true,
+                opacity: 0.4,
+                side: THREE.DoubleSide
+            });
+
+            var plane = new THREE.Mesh(geo, mat);
+            plane.rotation.x = -Math.PI / 2;
+            plane.position.set(cx, 0.015, cz);
+            plane.visible = _dwellLayerVisible;
+            plane.userData = { count: cell.count, normalized: normalized };
+
+            _scene.add(plane);
+            _dwellPlanes.push(plane);
+        });
+
+        console.log('[Viz3D] Built', _dwellPlanes.length, 'dwell heatmap cells');
+    }
+
+    /**
+     * Rebuild corridor region meshes from _corridorData.
+     */
+    function rebuildCorridorMeshes() {
+        // Clear existing meshes
+        _corridorMeshes.forEach(function(mesh) {
+            _scene.remove(mesh);
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        });
+        _corridorMeshes = [];
+
+        if (!_corridorData || !Array.isArray(_corridorData)) return;
+
+        _corridorData.forEach(function(corridor) {
+            // Create an extruded rectangle for the corridor region
+            var length = corridor.length_m;
+            var width = corridor.width_m;
+            var cx = corridor.centroid_x;
+            var cz = corridor.centroid_z;
+
+            // Compute rotation from dominant direction
+            var angle = Math.atan2(corridor.dominant_dir_x, corridor.dominant_dir_z);
+
+            var geo = new THREE.PlaneGeometry(length, width);
+            var mat = new THREE.MeshBasicMaterial({
+                color: 0x8899aa,  // Warm grey
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
+
+            var mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.rotation.z = angle;
+            mesh.position.set(cx, 0.025, cz);  // Slightly raised
+            mesh.visible = _corridorLayerVisible;
+            mesh.userData = { corridor: corridor };
+
+            _scene.add(mesh);
+            _corridorMeshes.push(mesh);
+        });
+
+        console.log('[Viz3D] Built', _corridorMeshes.length, 'corridor regions');
+    }
+
+    /**
+     * Update flow arrow animation (called from main update loop).
+     * @param {number} dt - Delta time in seconds
+     */
+    function updateFlowAnimation(dt) {
+        if (!_flowLayerVisible) return;
+
+        _flowAnimTime += dt;
+        // 2-second loop for flowing effect
+        var phase = (_flowAnimTime % 2.0) / 2.0;
+
+        _flowArrows.forEach(function(arrow, index) {
+            // Stagger animation based on arrow position
+            var stagger = (arrow.position.x * 0.5 + arrow.position.z * 0.3) % 1.0;
+            var localPhase = (phase + stagger) % 1.0;
+
+            // Animate opacity: 0.3 -> 1.0 -> 0.3
+            var opacity = 0.3 + 0.7 * (1 - Math.abs(localPhase - 0.5) * 2);
+
+            if (arrow.line && arrow.line.material) {
+                arrow.line.material.opacity = opacity;
+                arrow.line.material.transparent = true;
+            }
+            if (arrow.cone && arrow.cone.material) {
+                arrow.cone.material.opacity = opacity;
+                arrow.cone.material.transparent = true;
+            }
+        });
+    }
+
+    /**
+     * Refresh all analytics data.
+     */
+    function refreshAnalyticsData() {
+        if (_flowLayerVisible) fetchFlowData();
+        if (_dwellLayerVisible) fetchDwellData();
+        if (_corridorLayerVisible) fetchCorridorData();
+    }
+
+    /**
+     * Get current analytics layer visibility state.
+     */
+    function getAnalyticsLayerState() {
+        return {
+            flow: _flowLayerVisible,
+            dwell: _dwellLayerVisible,
+            corridor: _corridorLayerVisible,
+            personFilter: _flowPersonFilter,
+            timeFilter: _flowTimeFilter
+        };
+    }
+
     // ── public API ────────────────────────────────────────────────────────────
     return {
         init,
@@ -772,5 +1396,17 @@ const Viz3D = (function () {
         updateLinkHealth: updateLinkHealth,
         getLinkHealth: getLinkHealth,
         getAllLinkHealth: getAllLinkHealth,
+        // Analytics layers API
+        setFlowLayerVisible: setFlowLayerVisible,
+        setDwellLayerVisible: setDwellLayerVisible,
+        setCorridorLayerVisible: setCorridorLayerVisible,
+        setFlowPersonFilter: setFlowPersonFilter,
+        setFlowTimeFilter: setFlowTimeFilter,
+        refreshAnalyticsData: refreshAnalyticsData,
+        getAnalyticsLayerState: getAnalyticsLayerState,
+        // Blob feedback API
+        initBlobInteraction: initBlobInteraction,
+        submitBlobFeedback: submitBlobFeedback,
+        showBlobFeedbackForm: showBlobFeedbackForm,
     };
 })();
