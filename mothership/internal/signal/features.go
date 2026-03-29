@@ -183,6 +183,7 @@ type MotionFeatures struct {
 	MotionDetected  bool    // True if motion above threshold
 	PhaseVariance   float64 // Phase variance over selected subcarriers
 	SelectedCount   int     // Number of selected subcarriers
+	PhaseStd        float64 // Phase standard deviation
 }
 
 // Process processes a new CSI frame and extracts motion features

@@ -26,7 +26,9 @@
         tsMinIntervalMs: 100, // min ms between time series samples
         drTsWindowMs: 10000, // deltaRMS time series window: 10 seconds
         drTsMaxPoints: 100,  // max deltaRMS samples per link
-        drThreshold: 0.02    // DefaultDeltaRMSThreshold
+        drThreshold: 0.02,   // DefaultDeltaRMSThreshold
+        healthPollIntervalMs: 10000,  // poll /api/links every 10 seconds
+        diurnalPollIntervalMs: 30000  // poll /api/diurnal/status every 30 seconds
     };
 
     // ============================================
@@ -42,7 +44,15 @@
         drHistory: new Map(),    // linkID -> [{ t: number, rms: number }]
         lastChartUpdate: 0,
         frameCount: 0,
-        lastFpsTime: performance.now()
+        lastFpsTime: performance.now(),
+        // System health tracking
+        systemHealth: 0,
+        worstLinkID: null,
+        worstLinkScore: 1.0,
+        // Diurnal learning tracking
+        diurnalStatus: new Map(),  // linkID -> { is_learning, progress, is_ready, days_remaining }
+        diurnalPollTimer: null,
+        healthPollTimer: null
     };
 
     // ============================================
@@ -138,6 +148,204 @@
         if (window.Placement) Placement.update();
         renderer.render(scene, camera);
         updateFPS();
+    }
+
+    // ============================================
+    // System Quality Gauge
+    // ============================================
+    function updateQualityGauge(score, linkCount, worstLinkID, worstScore) {
+        const valueEl = document.getElementById('quality-value');
+        const fillEl = document.getElementById('quality-gauge-fill');
+        const linkCountEl = document.getElementById('quality-link-count');
+        const worstLinkEl = document.getElementById('quality-worst-link');
+        const worstScoreEl = document.getElementById('quality-worst-score');
+
+        if (!valueEl || !fillEl) return;
+
+        // Update percentage display
+        const pct = Math.round(score * 100);
+        valueEl.textContent = pct + '%';
+
+        // Update circular gauge (stroke-dasharray: circumference = 2 * PI * r = ~81.7 for r=13)
+        const circumference = 2 * Math.PI * 13;
+        const dashLength = (score * circumference).toFixed(1);
+        fillEl.setAttribute('stroke-dasharray', dashLength + ' ' + circumference);
+
+        // Update color based on score
+        let color;
+        if (score >= 0.7) {
+            color = '#66bb6a'; // green
+        } else if (score >= 0.4) {
+            color = '#eab308'; // yellow
+        } else {
+            color = '#ef4444'; // red
+        }
+        fillEl.setAttribute('stroke', color);
+
+        // Update tooltip
+        if (linkCountEl) linkCountEl.textContent = linkCount;
+        if (worstLinkEl) worstLinkEl.textContent = worstLinkID ? abbreviateLinkID(worstLinkID) : '--';
+        if (worstScoreEl) worstScoreEl.textContent = worstScore !== null ? Math.round(worstScore * 100) + '%' : '--';
+    }
+
+    function startHealthPolling() {
+        if (state.healthPollTimer) {
+            clearInterval(state.healthPollTimer);
+        }
+
+        fetchLinkHealth();
+
+        state.healthPollTimer = setInterval(fetchLinkHealth, CONFIG.healthPollIntervalMs);
+    }
+
+    function fetchLinkHealth() {
+        fetch('/api/links')
+            .then(function(res) { return res.json(); })
+            .then(function(links) {
+                handleLinkHealthUpdate(links);
+            })
+            .catch(function(err) {
+                console.error('[Spaxel] Failed to fetch link health:', err);
+            });
+    }
+
+    function handleLinkHealthUpdate(links) {
+        if (!links || links.length === 0) {
+            state.systemHealth = 0;
+            state.worstLinkID = null;
+            state.worstLinkScore = 1.0;
+            updateQualityGauge(0, 0, null, null);
+            return;
+        }
+
+        // Calculate system health (weighted average of all links)
+        var totalScore = 0;
+        var worstScore = 1.0;
+        var worstID = null;
+
+        links.forEach(function(link) {
+            var score = link.health_score !== undefined ? link.health_score : 0.5;
+            totalScore += score;
+
+            if (score < worstScore) {
+                worstScore = score;
+                worstID = link.link_id;
+            }
+        });
+
+        state.systemHealth = totalScore / links.length;
+        state.worstLinkID = worstID;
+        state.worstLinkScore = worstScore;
+
+        updateQualityGauge(state.systemHealth, links.length, worstID, worstScore);
+
+        // Also update 3D visualization
+        if (window.Viz3D && window.Viz3D.updateLinkHealth) {
+            Viz3D.updateLinkHealth(links);
+        }
+
+        // Also update LinkHealth panel
+        if (window.LinkHealth && window.LinkHealth.updateLinkHealth) {
+            LinkHealth.updateLinkHealth(links);
+        }
+    }
+
+    // ============================================
+    // Diurnal Learning Status
+    // ============================================
+    function startDiurnalPolling() {
+        if (state.diurnalPollTimer) {
+            clearInterval(state.diurnalPollTimer);
+        }
+
+        fetchDiurnalStatus();
+
+        state.diurnalPollTimer = setInterval(fetchDiurnalStatus, CONFIG.diurnalPollIntervalMs);
+    }
+
+    function fetchDiurnalStatus() {
+        fetch('/api/diurnal/status')
+            .then(function(res) { return res.json(); })
+            .then(function(statuses) {
+                handleDiurnalStatusUpdate(statuses);
+            })
+            .catch(function(err) {
+                console.error('[Spaxel] Failed to fetch diurnal status:', err);
+            });
+    }
+
+    function handleDiurnalStatusUpdate(statuses) {
+        if (!statuses || statuses.length === 0) {
+            updateDiurnalBanner(null);
+            return;
+        }
+
+        // Find the link with the longest remaining learning time
+        var worstStatus = null;
+        statuses.forEach(function(status) {
+            state.diurnalStatus.set(status.link_id, status);
+            if (!worstStatus || status.days_remaining > worstStatus.days_remaining) {
+                if (status.is_learning) {
+                    worstStatus = status;
+                }
+            }
+        });
+
+        updateDiurnalBanner(worstStatus);
+    }
+
+    function updateDiurnalBanner(status) {
+        var banner = document.getElementById('diurnal-banner');
+        var message = document.getElementById('diurnal-message');
+        var progress = document.getElementById('diurnal-progress');
+        var daysLeft = document.getElementById('diurnal-days-left');
+
+        if (!banner) return;
+
+        if (!status || !status.is_learning) {
+            banner.classList.remove('visible');
+            return;
+        }
+
+        banner.classList.add('visible');
+
+        if (message) {
+            message.textContent = 'Learning your home\'s daily patterns...';
+        }
+
+        if (progress) {
+            var pct = Math.min(100, Math.max(0, status.progress || 0));
+            progress.style.width = pct + '%';
+        }
+
+        if (daysLeft) {
+            var days = Math.ceil(status.days_remaining || 0);
+            if (days > 0) {
+                daysLeft.textContent = days + (days === 1 ? ' day left' : ' days left');
+            } else {
+                daysLeft.textContent = 'Almost ready...';
+            }
+        }
+    }
+
+    function showToast(message, type) {
+        var container = document.getElementById('toast-container');
+        if (!container) return;
+
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + (type || 'info');
+        toast.textContent = message;
+
+        container.appendChild(toast);
+
+        setTimeout(function() {
+            toast.classList.add('fade-out');
+            setTimeout(function() {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, 5000);
     }
 
     function updateFPS() {
@@ -356,6 +564,20 @@
 
             case 'loc_update':
                 Viz3D.handleLocUpdate(msg);
+                break;
+
+            case 'link_health':
+                // Health score update from server
+                if (msg.links) {
+                    handleLinkHealthUpdate(msg.links);
+                }
+                break;
+
+            case 'diurnal_ready':
+                // Diurnal patterns learned notification
+                showToast(msg.message || 'Daily patterns learned! Detection accuracy improved.', 'success');
+                // Refresh diurnal status
+                fetchDiurnalStatus();
                 break;
 
             default:
@@ -992,6 +1214,8 @@
         initScene();
         initChart();
         connectWebSocket();
+        startHealthPolling();
+        startDiurnalPolling();
         animate();
 
         console.log('[Spaxel] Dashboard ready');

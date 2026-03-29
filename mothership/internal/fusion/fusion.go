@@ -16,6 +16,10 @@ type LinkMotion struct {
 	DeltaRMS float64
 	// Motion is true when the link reports motion above threshold.
 	Motion bool
+	// HealthScore is the link's ambient confidence score [0-1].
+	// Links with lower health contribute less to the fusion grid.
+	// If zero, defaults to 1.0 (full contribution).
+	HealthScore float64
 }
 
 // NodePosition holds a node's 3D position in world coordinates (metres).
@@ -118,6 +122,8 @@ func (e *Engine) RemoveNode(mac string) {
 
 // Fuse performs a single fusion step over the provided link motion states.
 // It returns a Result containing detected blob positions and confidence scores.
+// Each link's contribution is weighted by its HealthScore (0-1). A link with
+// HealthScore=0.3 contributes only 30% as much as a link with HealthScore=1.0.
 func (e *Engine) Fuse(links []LinkMotion) *Result {
 	// Snapshot node positions under read lock.
 	e.mu.RLock()
@@ -140,10 +146,17 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 		if !okA || !okB {
 			continue
 		}
+		// Apply health score weighting: default to 1.0 if not set
+		healthWeight := lm.HealthScore
+		if healthWeight <= 0 {
+			healthWeight = 1.0
+		}
+		// Weight activation by health score
+		weightedActivation := lm.DeltaRMS * healthWeight
 		e.grid.AddLinkInfluence(
 			posA.X, posA.Y, posA.Z,
 			posB.X, posB.Y, posB.Z,
-			lm.DeltaRMS,
+			weightedActivation,
 		)
 		activeLinks++
 	}

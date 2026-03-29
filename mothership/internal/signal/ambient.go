@@ -524,6 +524,19 @@ func (lh *LinkHealth) Reset() {
 	lh.baselineWriteIdx = 0
 	lh.baselineCount = 0
 
+	// Clear deltaRMS histories
+	for i := range lh.deltaRMSHistory {
+		lh.deltaRMSHistory[i] = 0
+	}
+	lh.deltaRMSWriteIdx = 0
+	lh.deltaRMSCount = 0
+
+	for i := range lh.quietDeltaRMSHistory {
+		lh.quietDeltaRMSHistory[i] = 0
+	}
+	lh.quietDeltaRMSWriteIdx = 0
+	lh.quietDeltaRMSCount = 0
+
 	lh.SNR = 0.5
 	lh.PhaseStability = 1.0
 	lh.PacketRate = 0

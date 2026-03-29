@@ -314,6 +314,56 @@ func TestEngine_RemoveNode(t *testing.T) {
 	}
 }
 
+// TestEngine_HealthWeight verifies that links with lower health scores contribute less to fusion.
+// Per spec: "each link's contribution to the 3D occupancy grid is multiplied by its health_score"
+func TestEngine_HealthWeight(t *testing.T) {
+	e := NewEngine(&Config{
+		Width: 10, Height: 3, Depth: 10,
+		CellSize: 0.2, MinDeltaRMS: 0.01, MaxBlobs: 6, BlobThreshold: 0.1,
+	})
+
+	e.SetNodePosition("A", 0, 1, 5)
+	e.SetNodePosition("B", 10, 1, 5)
+
+	// First, fuse with full health link
+	linksFull := []LinkMotion{
+		{NodeMAC: "A", PeerMAC: "B", DeltaRMS: 1.0, Motion: true, HealthScore: 1.0},
+	}
+	r1 := e.Fuse(linksFull)
+
+	// Then fuse with 30% health link
+	linksLow := []LinkMotion{
+		{NodeMAC: "A", PeerMAC: "B", DeltaRMS: 1.0, Motion: true, HealthScore: 0.3},
+	}
+	r2 := e.Fuse(linksLow)
+
+	if len(r1.Blobs) == 0 || len(r2.Blobs) == 0 {
+		t.Fatal("expected blobs from both fusions")
+	}
+
+	// The peak with 30% health should have ~30% the confidence of full health
+	// (approximately, since normalization affects final values)
+	// At minimum, verify that low health produces lower-weighted blobs
+	// The exact ratio depends on normalization, We check that r2's top blob
+	// has lower confidence than r1's.
+	if r2.Blobs[0].Confidence > r1.Blobs[0].Confidence {
+		t.Errorf("low health link (%.2f) should produce lower confidence blob than full health", r2.Blobs[0].Confidence)
+	}
+
+	// Also test that default HealthScore (0) is treated as 1.0
+	linksDefault := []LinkMotion{
+		{NodeMAC: "A", PeerMAC: "B", DeltaRMS: 1.0, Motion: true, HealthScore: 0}, // 0 means default to 1.0
+	}
+	r3 := e.Fuse(linksDefault)
+	if len(r3.Blobs) == 0 {
+		t.Fatal("expected blob from link with default health")
+	}
+	// r3 should have similar confidence to r1 (both have effective health of 1.0)
+	if math.Abs(r3.Blobs[0].Confidence-r1.Blobs[0].Confidence) > 0.05 {
+		t.Errorf("default health (0) should be treated as 1.0: r1=%.3f, r3=%.3f", r1.Blobs[0].Confidence, r3.Blobs[0].Confidence)
+	}
+}
+
 // TestEngine_PerformanceTwentyLinks checks that fusion over 20 links completes
 // within the 50 ms acceptance criterion.
 func TestEngine_PerformanceTwentyLinks(t *testing.T) {

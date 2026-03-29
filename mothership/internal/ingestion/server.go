@@ -39,10 +39,12 @@ type MotionBroadcaster interface {
 
 // MotionStateItem represents a single link's current motion state.
 type MotionStateItem struct {
-	LinkID         string  `json:"link_id"`
-	MotionDetected bool    `json:"motion_detected"`
-	DeltaRMS       float64 `json:"delta_rms"`
-	Confidence     float64 `json:"confidence"`
+	LinkID            string  `json:"link_id"`
+	MotionDetected    bool    `json:"motion_detected"`
+	DeltaRMS          float64 `json:"delta_rms"`
+	Confidence        float64 `json:"confidence"`
+	DiurnalConfidence float64 `json:"diurnal_confidence"`
+	DiurnalReady      bool    `json:"diurnal_ready"`
 }
 
 // ReplayAppender appends raw CSI frames to a persistent store.
@@ -627,6 +629,16 @@ type LinkInfo struct {
 	PeerMAC string `json:"peer_mac"`
 }
 
+// LinkHealthInfo represents a link with health metrics for the API response
+type LinkHealthInfo struct {
+	LinkID        string               `json:"link_id"`
+	TXMAC         string               `json:"tx_mac"`
+	RXMAC         string               `json:"rx_mac"`
+	HealthScore   float64              `json:"health_score"`
+	HealthDetails signal.HealthDetails `json:"health_details"`
+	LastUpdated   time.Time            `json:"last_updated"`
+}
+
 // GetAllLinksInfo returns detailed info about all active links
 func (s *Server) GetAllLinksInfo() []LinkInfo {
 	s.mu.RLock()
@@ -664,6 +676,8 @@ func (s *Server) GetAllMotionStates() []MotionStateItem {
 		if pm != nil {
 			if proc := pm.GetProcessor(linkID); proc != nil {
 				item.Confidence = proc.GetBaseline().GetConfidence()
+				item.DiurnalConfidence = proc.GetDiurnal().GetOverallConfidence()
+				item.DiurnalReady = proc.GetDiurnal().IsReady()
 			}
 		}
 		states = append(states, item)
@@ -677,6 +691,55 @@ func (s *Server) GetLinkBuffer(nodeMAC, peerMAC string) *RingBuffer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.links[linkID]
+}
+
+// GetAllLinksWithHealth returns all links with their health metrics
+func (s *Server) GetAllLinksWithHealth() []LinkHealthInfo {
+	s.mu.RLock()
+	pm := s.processorMgr
+	links := make([]string, 0, len(s.links))
+	for linkID := range s.links {
+		links = append(links, linkID)
+	}
+	s.mu.RUnlock()
+
+	result := make([]LinkHealthInfo, 0, len(links))
+	for _, linkID := range links {
+		if len(linkID) < 35 {
+			continue
+		}
+
+		info := LinkHealthInfo{
+			LinkID: linkID,
+			TXMAC:  linkID[:17],
+			RXMAC:  linkID[18:],
+		}
+
+		if pm != nil {
+			if proc := pm.GetProcessor(linkID); proc != nil {
+				health := proc.GetHealth()
+				if health != nil {
+					info.HealthScore = health.GetAmbientConfidence()
+					info.HealthDetails = health.GetHealthDetails()
+					info.LastUpdated = time.Now()
+				}
+			}
+		}
+
+		// Default health if not available
+		if info.HealthScore == 0 && info.HealthDetails == (signal.HealthDetails{}) {
+			info.HealthScore = 0.5
+			info.HealthDetails = signal.HealthDetails{
+				SNR:           0.5,
+				PhaseStability: 0.5,
+				PacketRate:    0.5,
+				BaselineDrift: 0.5,
+			}
+		}
+
+		result = append(result, info)
+	}
+	return result
 }
 
 // GetAllLinks returns all link IDs that have data
