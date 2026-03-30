@@ -32,6 +32,20 @@ type OTAStatusHandler interface {
 	OnNodeReconnected(mac, firmwareVersion string)
 }
 
+// BLERelayHandler receives BLE relay messages from nodes.
+type BLERelayHandler interface {
+	ProcessRelayMessage(nodeMAC string, devices []BLEObservation) error
+}
+
+// BLEObservation represents a single BLE device observation.
+type BLEObservation struct {
+	Addr       string
+	Name       string
+	MfrID      int
+	MfrDataHex string
+	RSSIdBm    int
+}
+
 // MotionBroadcaster broadcasts motion state changes to dashboard clients.
 type MotionBroadcaster interface {
 	BroadcastMotionState(states []MotionStateItem)
@@ -45,6 +59,10 @@ type MotionStateItem struct {
 	Confidence        float64 `json:"confidence"`
 	DiurnalConfidence float64 `json:"diurnal_confidence"`
 	DiurnalReady      bool    `json:"diurnal_ready"`
+	// Breathing detection fields (Phase 6)
+	BreathingState  string   `json:"breathing_state"`            // CLEAR, POSSIBLY_PRESENT, MOTION_DETECTED, STATIONARY_DETECTED
+	BreathingFreqHz *float64 `json:"breathing_freq_hz,omitempty"` // Breathing frequency in Hz, null if not detected
+	BreathingBPM    float64  `json:"breathing_bpm"`              // Breathing rate in breaths per minute
 }
 
 // ReplayAppender appends raw CSI frames to a persistent store.
@@ -56,6 +74,9 @@ type ReplayAppender interface {
 type Recorder interface {
 	Write(linkID string, frame []byte)
 }
+
+// BLEHandler handles incoming BLE scan data from nodes.
+type BLEHandler func(nodeMAC string, devices []BLEDevice)
 
 // Server manages WebSocket connections from ESP32 nodes
 type Server struct {
@@ -85,6 +106,7 @@ type Server struct {
 	rateCtrl             *RateController
 	fleetNotifier        FleetNotifier
 	otaHandler           OTAStatusHandler
+	bleHandler           BLEHandler
 }
 
 // NodeConnection tracks state for a connected node
@@ -147,6 +169,13 @@ func (s *Server) SetDashboardBroadcaster(broadcaster CSIBroadcaster) {
 func (s *Server) SetMotionBroadcaster(mb MotionBroadcaster) {
 	s.mu.Lock()
 	s.motionBroadcaster = mb
+	s.mu.Unlock()
+}
+
+// SetBLEHandler sets the callback for handling BLE scan data.
+func (s *Server) SetBLEHandler(handler BLEHandler) {
+	s.mu.Lock()
+	s.bleHandler = handler
 	s.mu.Unlock()
 }
 
@@ -678,6 +707,16 @@ func (s *Server) GetAllMotionStates() []MotionStateItem {
 				item.Confidence = proc.GetBaseline().GetConfidence()
 				item.DiurnalConfidence = proc.GetDiurnal().GetOverallConfidence()
 				item.DiurnalReady = proc.GetDiurnal().IsReady()
+				// Phase 6: Add breathing/dwell state
+				dwellState := proc.GetDwellState()
+				item.BreathingState = dwellState.String()
+				bpm := proc.GetDwellBreathingRate()
+				if bpm > 0 {
+					item.BreathingBPM = bpm
+					// Breathing frequency in Hz (for compatibility)
+					freqHz := bpm / 60.0
+					item.BreathingFreqHz = &freqHz
+				}
 			}
 		}
 		states = append(states, item)

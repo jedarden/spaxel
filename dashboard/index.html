@@ -375,6 +375,17 @@
             color: #66bb6a;
         }
 
+        #presence-status.stationary {
+            background: rgba(66, 165, 245, 0.25);
+            color: #42a5f5;
+            animation: stationary-badge-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes stationary-badge-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
         #presence-list {
             max-height: 200px;
             overflow-y: auto;
@@ -424,6 +435,28 @@
             box-shadow: 0 0 6px rgba(239, 83, 80, 0.5);
         }
 
+        .presence-dot.stationary {
+            background: #42a5f5;
+            box-shadow: 0 0 8px rgba(66, 165, 245, 0.7);
+            animation: stationary-pulse 2s ease-in-out infinite;
+        }
+
+        .presence-dot.possibly {
+            background: #ab47bc;
+            box-shadow: 0 0 6px rgba(171, 71, 188, 0.5);
+        }
+
+        @keyframes stationary-pulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 8px rgba(66, 165, 245, 0.7);
+            }
+            50% {
+                opacity: 0.6;
+                box-shadow: 0 0 16px rgba(66, 165, 245, 0.9);
+            }
+        }
+
         .presence-link-id {
             font-family: monospace;
             color: #aaa;
@@ -434,6 +467,16 @@
             font-family: monospace;
             color: #888;
             font-size: 11px;
+        }
+
+        .breathing-bpm {
+            font-family: monospace;
+            color: #42a5f5;
+            font-size: 10px;
+            padding: 1px 4px;
+            background: rgba(66, 165, 245, 0.15);
+            border-radius: 3px;
+            margin-left: 4px;
         }
 
         #deltarms-label {
@@ -1549,6 +1592,342 @@
             font-weight: 500;
             cursor: pointer;
         }
+
+        /* ===== Anomaly Overlay ===== */
+        .anomaly-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(239, 68, 68, 0.15);
+            z-index: 9999;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 80px;
+            animation: anomaly-flash 1.5s ease-in-out infinite;
+        }
+
+        .anomaly-overlay.hidden {
+            display: none;
+        }
+
+        @keyframes anomaly-flash {
+            0%, 100% { background: rgba(239, 68, 68, 0.15); }
+            50% { background: rgba(239, 68, 68, 0.25); }
+        }
+
+        .anomaly-banner {
+            background: linear-gradient(135deg, rgba(185, 28, 28, 0.98), rgba(239, 68, 68, 0.95));
+            border-radius: 12px;
+            padding: 20px 24px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(185, 28, 28, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .anomaly-icon {
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .anomaly-content {
+            flex: 1;
+        }
+
+        .anomaly-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .anomaly-description {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 4px;
+        }
+
+        .anomaly-meta {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .anomaly-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .anomaly-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .anomaly-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .anomaly-btn.ack {
+            background: #fff;
+            color: #b91c1c;
+        }
+
+        .anomaly-btn.ack:hover {
+            background: #fef2f2;
+        }
+
+        .anomaly-btn.view {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .anomaly-btn.view:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .anomaly-btn.dismiss {
+            background: transparent;
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .anomaly-btn.dismiss:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        /* ===== Anomaly Feedback Modal ===== */
+        .anomaly-feedback-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .anomaly-feedback-modal.hidden {
+            display: none;
+        }
+
+        .modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-content {
+            position: relative;
+            background: #1e1e3a;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #eee;
+        }
+
+        .feedback-anomaly-desc {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 20px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+        }
+
+        .feedback-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .feedback-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .feedback-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .feedback-btn.selected {
+            background: rgba(79, 195, 247, 0.2);
+            border-color: #4fc3f7;
+        }
+
+        .feedback-btn .icon {
+            font-size: 20px;
+            width: 28px;
+            text-align: center;
+        }
+
+        .feedback-btn .label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #eee;
+        }
+
+        .feedback-btn .desc {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .feedback-notes {
+            margin-bottom: 16px;
+        }
+
+        .feedback-notes textarea {
+            width: 100%;
+            height: 60px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #eee;
+            font-size: 13px;
+            resize: none;
+            font-family: inherit;
+        }
+
+        .feedback-notes textarea:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+        }
+
+        .modal-btn.cancel:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .modal-btn.submit {
+            background: #4fc3f7;
+            color: #1a1a2e;
+        }
+
+        .modal-btn.submit:hover:not(:disabled) {
+            background: #29b6f6;
+        }
+
+        .modal-btn.submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* ===== Security Mode Indicator ===== */
+        #security-mode-indicator {
+            position: fixed;
+            top: 45px;
+            right: 20px;
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            z-index: 150;
+            display: none;
+            animation: security-pulse 2s ease-in-out infinite;
+        }
+
+        #security-mode-indicator.active {
+            display: block;
+        }
+
+        @keyframes security-pulse {
+            0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.8); }
+        }
+
+        /* ===== Anomaly Learning Banner ===== */
+        #anomaly-learning-banner {
+            position: fixed;
+            top: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 150;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+        }
+
+        #anomaly-learning-banner.visible {
+            display: flex;
+        }
+
+        #anomaly-learning-banner .progress-bar {
+            width: 80px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #anomaly-learning-banner .learning-progress {
+            height: 100%;
+            background: #fff;
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
     </style>
 </head>
 <body>
@@ -1561,6 +1940,19 @@
         </div>
         <span id="diurnal-days-left">7 days left</span>
         <button class="dismiss-btn" onclick="this.parentElement.classList.remove('visible')">&times;</button>
+    </div>
+
+    <!-- Security mode indicator -->
+    <div id="security-mode-indicator"></div>
+
+    <!-- Anomaly learning banner -->
+    <div id="anomaly-learning-banner">
+        <span>&#x1F6E1;</span>
+        <span>Learning normal patterns...</span>
+        <div class="progress-bar">
+            <div class="learning-progress" style="width: 0%"></div>
+        </div>
+        <span class="days-remaining">7 days remaining</span>
     </div>
 
     <!-- Toast notification container -->
@@ -1706,6 +2098,10 @@
     <script src="js/feedback.js"></script>
     <!-- Accuracy panel for metrics -->
     <script src="js/accuracy.js"></script>
+    <!-- Fleet health panel -->
+    <script src="js/fleet.js"></script>
+    <!-- Anomaly detection UI -->
+    <script src="js/anomaly.js"></script>
 
     <!-- Room editor panel -->
     <div id="room-editor-panel">

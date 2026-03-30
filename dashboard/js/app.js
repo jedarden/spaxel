@@ -812,6 +812,7 @@
         for (const [linkID, info] of Object.entries(msg.links)) {
             // Update link state if link exists
             const link = state.links.get(linkID);
+            const prevBreathingState = link ? link.breathingState : 'CLEAR';
             if (link) {
                 link.motionDetected = info.is_motion || info.motion_detected || false;
                 link.deltaRMS = info.delta_rms || 0;
@@ -822,6 +823,15 @@
 
             if (info.is_motion || info.motion_detected) anyMotion = true;
             if (info.breathing_state === 'STATIONARY_DETECTED') anyStationary = true;
+
+            // Log timeline event on transition to STATIONARY_DETECTED
+            const newBreathingState = info.breathing_state || 'CLEAR';
+            if (prevBreathingState !== 'STATIONARY_DETECTED' && newBreathingState === 'STATIONARY_DETECTED') {
+                const bpm = info.breathing_bpm || 0;
+                const shortID = abbreviateLinkID(linkID);
+                const timeStr = new Date().toLocaleTimeString();
+                logTimelineEvent('stationary_detected', linkID, 'Stationary person detected on ' + shortID + ' at ' + timeStr + ' - breathing at ' + bpm.toFixed(1) + ' BPM');
+            }
 
             // Append to deltaRMS history
             let history = state.drHistory.get(linkID);
@@ -844,6 +854,31 @@
         updatePresencePanel(msg.links, anyMotion, anyStationary);
         updateLinkList();
         drawDeltaRMSTimeSeries();
+    }
+
+    // Timeline event logging
+    function logTimelineEvent(eventType, linkID, message) {
+        // Log to console for debugging
+        console.log('[Timeline]', eventType, linkID, message);
+
+        // Show toast notification for stationary detection
+        if (eventType === 'stationary_detected') {
+            showToast(message, 'info');
+        }
+
+        // Could also append to a timeline panel in the UI if one exists
+        const timelineEl = document.getElementById('timeline-events');
+        if (timelineEl) {
+            const entry = document.createElement('div');
+            entry.className = 'timeline-entry timeline-' + eventType;
+            entry.innerHTML = '<span class="timeline-time">' + new Date().toLocaleTimeString() + '</span> ' + message;
+            timelineEl.insertBefore(entry, timelineEl.firstChild);
+
+            // Keep only last 50 entries
+            while (timelineEl.children.length > 50) {
+                timelineEl.removeChild(timelineEl.lastChild);
+            }
+        }
     }
 
     function updatePresencePanel(links, anyMotion, anyStationary) {
@@ -1263,12 +1298,23 @@
     // ============================================
     // Public API
     // ============================================
+
+    // Message handlers registered by other modules (e.g., FleetPanel)
+    const messageHandlers = [];
+
+    function registerMessageHandler(handler) {
+        if (typeof handler === 'function') {
+            messageHandlers.push(handler);
+        }
+    }
+
     window.SpaxelApp = {
         getLinks: function () { return state.links; },
         getNodes: function () { return state.nodes; },
         refreshNodeList: updateNodeList,
         refreshLinkList: updateLinkList,
-        showToast: showToast
+        showToast: showToast,
+        registerMessageHandler: registerMessageHandler
     };
 
     // ============================================

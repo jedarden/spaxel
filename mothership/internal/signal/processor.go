@@ -12,6 +12,7 @@ type LinkProcessor struct {
 	diurnal        *DiurnalBaseline
 	motionDetector *MotionDetector
 	breathing      *BreathingDetector
+	dwellTracker   *DwellTracker // Phase 6: Long-dwell presence tracking
 	health         *LinkHealth
 	nSub           int
 	alpha          float64 // EMA alpha for baseline updates
@@ -25,6 +26,7 @@ func NewLinkProcessor(linkID string, nSub int, alpha float64) *LinkProcessor {
 		diurnal:        NewDiurnalBaseline(linkID, nSub),
 		motionDetector: NewMotionDetector(nSub),
 		breathing:      NewBreathingDetector(nSub),
+		dwellTracker:   NewDwellTracker(),
 		health:         NewLinkHealth(linkID, nSub),
 		nSub:           nSub,
 		alpha:          alpha,
@@ -43,6 +45,9 @@ type ProcessResult struct {
 	ActiveBaseline    []float64 // The baseline used (may be diurnal-blended)
 	DiurnalWeight     float64   // Weight of diurnal in baseline (0-1)
 	DiurnalReady      bool      // True if diurnal slot has enough samples
+	// Phase 6: Dwell state for stationary person detection
+	DwellState        DwellState // Current dwell state (CLEAR, MOTION_DETECTED, etc.)
+	BreathingBPM      float64    // Estimated breathing rate in BPM
 }
 
 // Process processes a raw CSI frame and returns processed data with features
@@ -103,6 +108,9 @@ func (lp *LinkProcessor) Process(payload []int8, rssiDBm int8, nSub int, recvTim
 		breathingFeatures = &BreathingFeatures{Computed: false}
 	}
 
+	// Update dwell tracker for long-dwell presence detection (Phase 6)
+	dwellUpdate := lp.dwellTracker.Update(isMotion, features.DeltaRMS, healthScore, recvTime)
+
 	return &ProcessResult{
 		Processed:         processed,
 		Features:          features,
@@ -113,6 +121,8 @@ func (lp *LinkProcessor) Process(payload []int8, rssiDBm int8, nSub int, recvTim
 		ActiveBaseline:    activeBaseline,
 		DiurnalWeight:     diurnalWeight,
 		DiurnalReady:      diurnalReady,
+		DwellState:        dwellUpdate.State,
+		BreathingBPM:      dwellUpdate.BreathingRate,
 	}, nil
 }
 
@@ -141,6 +151,11 @@ func (lp *LinkProcessor) GetHealth() *LinkHealth {
 	return lp.health
 }
 
+// GetDwellTracker returns the dwell tracker
+func (lp *LinkProcessor) GetDwellTracker() *DwellTracker {
+	return lp.dwellTracker
+}
+
 // IsMotionDetected returns whether motion is currently detected
 func (lp *LinkProcessor) IsMotionDetected() bool {
 	lp.mu.RLock()
@@ -162,6 +177,27 @@ func (lp *LinkProcessor) IsBreathingDetected() bool {
 	return lp.breathing.IsDetected()
 }
 
+// GetDwellState returns the current dwell state
+func (lp *LinkProcessor) GetDwellState() DwellState {
+	lp.mu.RLock()
+	defer lp.mu.RUnlock()
+	return lp.dwellTracker.GetState()
+}
+
+// IsStationaryDetected returns whether a stationary person is detected (STATIONARY_DETECTED state)
+func (lp *LinkProcessor) IsStationaryDetected() bool {
+	lp.mu.RLock()
+	defer lp.mu.RUnlock()
+	return lp.dwellTracker.GetState() == DwellStationaryDetected
+}
+
+// GetDwellBreathingRate returns the current breathing rate estimate in BPM
+func (lp *LinkProcessor) GetDwellBreathingRate() float64 {
+	lp.mu.RLock()
+	defer lp.mu.RUnlock()
+	return lp.dwellTracker.GetBreathingRate()
+}
+
 // GetAmbientConfidence returns the link's health confidence score
 func (lp *LinkProcessor) GetAmbientConfidence() float64 {
 	lp.mu.RLock()
@@ -177,6 +213,7 @@ func (lp *LinkProcessor) Reset() {
 	lp.diurnal.Reset()
 	lp.motionDetector.Reset()
 	lp.breathing.Reset()
+	lp.dwellTracker.Reset()
 	lp.health.Reset()
 }
 
@@ -261,6 +298,10 @@ type LinkMotionState struct {
 	BreathingRate     float64
 	AmbientConfidence float64
 	DiurnalConfidence float64
+	// Phase 6: Dwell state for stationary person detection
+	DwellState     DwellState // CLEAR, MOTION_DETECTED, POSSIBLY_PRESENT, STATIONARY_DETECTED
+	BreathingBPM   float64    // Estimated breathing rate from dwell tracker
+	StationaryDetected bool    // True if in STATIONARY_DETECTED state
 }
 
 // GetAllMotionStates returns motion states for all links
@@ -271,6 +312,7 @@ func (pm *ProcessorManager) GetAllMotionStates() []LinkMotionState {
 	states := make([]LinkMotionState, 0, len(pm.processors))
 	for linkID, processor := range pm.processors {
 		processor.mu.RLock()
+		dwellState := processor.dwellTracker.GetState()
 		state := LinkMotionState{
 			LinkID:            linkID,
 			MotionDetected:    processor.motionDetector.IsMotionDetected(),
@@ -280,6 +322,9 @@ func (pm *ProcessorManager) GetAllMotionStates() []LinkMotionState {
 			BreathingRate:     processor.breathing.GetBreathingRate(),
 			AmbientConfidence: processor.health.GetAmbientConfidence(),
 			DiurnalConfidence: processor.diurnal.GetOverallConfidence(),
+			DwellState:        dwellState,
+			BreathingBPM:      processor.dwellTracker.GetBreathingRate(),
+			StationaryDetected: dwellState == DwellStationaryDetected,
 		}
 		processor.mu.RUnlock()
 		states = append(states, state)
