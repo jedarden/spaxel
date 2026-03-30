@@ -11,6 +11,8 @@
         currentData: null,
         historyData: null,
         improvementData: null,
+        positionData: null,
+        positionHistory: null,
 
         // Config
         config: {
@@ -79,6 +81,28 @@
                             <span>F1 Score Trend (8 weeks)</span>\
                         </div>\
                         <canvas id="accuracy-sparkline" width="240" height="60"></canvas>\
+                    </div>\
+                    <div class="position-accuracy-section">\
+                        <div class="position-header">\
+                            <span>Position Accuracy</span>\
+                            <span class="position-badge" id="position-badge" style="display:none">Improving</span>\
+                        </div>\
+                        <div class="position-metrics">\
+                            <div class="position-metric">\
+                                <span class="position-label">Median error</span>\
+                                <span class="position-value" id="position-median">-- m</span>\
+                            </div>\
+                            <div class="position-metric">\
+                                <span class="position-label">Trend</span>\
+                                <span class="position-trend" id="position-trend">--</span>\
+                            </div>\
+                        </div>\
+                        <div class="position-sparkline-container">\
+                            <canvas id="position-sparkline" width="240" height="40"></canvas>\
+                        </div>\
+                        <div class="position-samples">\
+                            <span id="position-sample-text">No position samples yet</span>\
+                        </div>\
                     </div>\
                     <div class="accuracy-breakdown">\
                         <div class="breakdown-header">Per-Zone Breakdown</div>\
@@ -173,6 +197,8 @@
             this.fetchImprovement();
             this.fetchStats();
             this.fetchZoneBreakdown();
+            this.fetchPositionAccuracy();
+            this.fetchPositionHistory();
         },
 
         /**
@@ -462,6 +488,182 @@
         },
 
         /**
+         * Fetch position accuracy from ground truth samples
+         */
+        fetchPositionAccuracy: function() {
+            var self = this;
+            fetch('/api/accuracy/position')
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    self.positionData = data;
+                    self.updatePositionDisplay();
+                })
+                .catch(function(err) {
+                    console.error('[Accuracy] Failed to fetch position accuracy:', err);
+                });
+        },
+
+        /**
+         * Fetch position accuracy history for sparkline
+         */
+        fetchPositionHistory: function() {
+            var self = this;
+            fetch('/api/accuracy/position/history?weeks=' + this.config.historyWeeks)
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    self.positionHistory = data;
+                    self.drawPositionSparkline();
+                })
+                .catch(function(err) {
+                    console.error('[Accuracy] Failed to fetch position history:', err);
+                });
+        },
+
+        /**
+         * Update position accuracy display
+         */
+        updatePositionDisplay: function() {
+            if (!this.positionData) return;
+
+            var data = this.positionData;
+
+            // Update median error
+            var medianEl = document.getElementById('position-median');
+            if (medianEl) {
+                if (data.current_median_m !== undefined) {
+                    medianEl.textContent = data.current_median_m.toFixed(2) + ' m';
+                } else {
+                    medianEl.textContent = '-- m';
+                }
+            }
+
+            // Update trend indicator
+            var trendEl = document.getElementById('position-trend');
+            var badgeEl = document.getElementById('position-badge');
+            if (trendEl && data.trend) {
+                var improvement = data.improvement_pct || 0;
+                if (data.trend === 'improving') {
+                    trendEl.innerHTML = '<span style="color:#66bb6a">↓ ' + Math.abs(improvement).toFixed(0) + '%</span>';
+                    if (badgeEl) {
+                        badgeEl.style.display = 'inline';
+                        badgeEl.textContent = 'Improving';
+                        badgeEl.className = 'position-badge improving';
+                    }
+                } else if (data.trend === 'degrading') {
+                    trendEl.innerHTML = '<span style="color:#ef5350">↑ ' + Math.abs(improvement).toFixed(0) + '%</span>';
+                    if (badgeEl) {
+                        badgeEl.style.display = 'none';
+                    }
+                } else {
+                    trendEl.innerHTML = '<span style="color:#888">stable</span>';
+                    if (badgeEl) {
+                        badgeEl.style.display = 'none';
+                    }
+                }
+            }
+
+            // Update sample count text
+            var sampleTextEl = document.getElementById('position-sample-text');
+            if (sampleTextEl) {
+                var totalSamples = data.total_samples || 0;
+                var todaySamples = data.today_samples || 0;
+                var personCount = data.current_persons || Object.keys(data.samples_by_person || {}).length;
+
+                if (totalSamples > 0) {
+                    sampleTextEl.textContent = 'Based on ' + totalSamples + ' position measurements' +
+                        (personCount > 0 ? ' from ' + personCount + ' people' : '') +
+                        ' (' + todaySamples + ' today)';
+                } else {
+                    sampleTextEl.textContent = 'No position samples yet. Walk around with your phone to collect ground truth.';
+                }
+            }
+        },
+
+        /**
+         * Draw position accuracy sparkline (lower is better)
+         */
+        drawPositionSparkline: function() {
+            var canvas = document.getElementById('position-sparkline');
+            if (!canvas || !this.positionHistory || this.positionHistory.length === 0) return;
+
+            var ctx = canvas.getContext('2d');
+            var width = canvas.width;
+            var height = canvas.height;
+            var padding = 4;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Sort by week
+            var data = this.positionHistory.slice().sort(function(a, b) {
+                return a.week.localeCompare(b.week);
+            });
+
+            if (data.length < 2) {
+                ctx.fillStyle = '#666';
+                ctx.font = '11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Need more data...', width / 2, height / 2);
+                return;
+            }
+
+            // Get median error values (lower is better)
+            var values = data.map(function(d) { return d.median_error || 0; });
+            var min = Math.min.apply(null, values);
+            var max = Math.max.apply(null, values);
+            if (max === min) max = min + 0.1;
+
+            // Draw line (inverted Y since lower is better)
+            ctx.beginPath();
+            ctx.strokeStyle = '#66bb6a'; // Green since lower error is good
+            ctx.lineWidth = 2;
+
+            var stepX = (width - padding * 2) / (data.length - 1);
+
+            for (var i = 0; i < data.length; i++) {
+                var x = padding + i * stepX;
+                // Invert: higher values go lower on the chart
+                var y = padding + ((values[i] - min) / (max - min)) * (height - padding * 2);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+
+            ctx.stroke();
+
+            // Draw points
+            ctx.fillStyle = '#66bb6a';
+            for (var i = 0; i < data.length; i++) {
+                var x = padding + i * stepX;
+                var y = padding + ((values[i] - min) / (max - min)) * (height - padding * 2);
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw arrow indicator for trend
+            if (data.length >= 2) {
+                var lastTwo = values.slice(-2);
+                var trend = lastTwo[1] - lastTwo[0];
+                var arrowX = width - 15;
+                var arrowY = 10;
+
+                ctx.font = 'bold 12px sans-serif';
+                if (trend < 0) {
+                    // Error decreased (improving)
+                    ctx.fillStyle = '#66bb6a';
+                    ctx.fillText('↓', arrowX, arrowY + 4);
+                } else if (trend > 0) {
+                    // Error increased (degrading)
+                    ctx.fillStyle = '#ef5350';
+                    ctx.fillText('↑', arrowX, arrowY + 4);
+                }
+            }
+        },
+
+        /**
          * Format a decimal as percentage
          */
         formatPercent: function(value) {
@@ -678,6 +880,67 @@
                 }\
                 .stats-row span:last-child {\
                     color: #ccc;\
+                }\
+                .position-accuracy-section {\
+                    background: rgba(102, 187, 106, 0.1);\
+                    border-radius: 6px;\
+                    padding: 10px 12px;\
+                    margin-bottom: 12px;\
+                }\
+                .position-header {\
+                    display: flex;\
+                    justify-content: space-between;\
+                    align-items: center;\
+                    font-size: 11px;\
+                    color: #888;\
+                    margin-bottom: 8px;\
+                }\
+                .position-badge {\
+                    font-size: 9px;\
+                    padding: 2px 6px;\
+                    border-radius: 3px;\
+                    text-transform: uppercase;\
+                    font-weight: 600;\
+                }\
+                .position-badge.improving {\
+                    background: rgba(102, 187, 106, 0.3);\
+                    color: #66bb6a;\
+                }\
+                .position-metrics {\
+                    display: flex;\
+                    justify-content: space-around;\
+                    margin-bottom: 8px;\
+                }\
+                .position-metric {\
+                    text-align: center;\
+                }\
+                .position-label {\
+                    display: block;\
+                    font-size: 10px;\
+                    color: #888;\
+                    margin-bottom: 2px;\
+                }\
+                .position-value {\
+                    font-size: 16px;\
+                    font-weight: 600;\
+                    color: #eee;\
+                }\
+                .position-trend {\
+                    font-size: 14px;\
+                    font-weight: 500;\
+                }\
+                .position-sparkline-container {\
+                    margin-bottom: 8px;\
+                }\
+                #position-sparkline {\
+                    width: 100%;\
+                    background: rgba(255, 255, 255, 0.03);\
+                    border-radius: 4px;\
+                }\
+                .position-samples {\
+                    font-size: 10px;\
+                    color: #888;\
+                    text-align: center;\
                 }\
                 .accuracy-toggle {\
                     padding: 2px 10px;\

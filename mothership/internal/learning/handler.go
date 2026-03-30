@@ -11,11 +11,28 @@ import (
 	"github.com/google/uuid"
 )
 
+// SpatialWeightProvider provides access to spatial weight learner stats
+type SpatialWeightProvider interface {
+	GetAllWeights() []interface{}
+	GetWeightStats() map[string]interface{}
+}
+
+// PositionAccuracyProvider provides access to position accuracy data
+type PositionAccuracyProvider interface {
+	GetPositionAccuracyHistory(weeks int) ([]interface{}, error)
+	GetPositionImprovementStats() (map[string]interface{}, error)
+	GetTotalSampleCount() (int, error)
+	GetSampleCountByPerson() (map[string]int, error)
+	GetSamplesTodayCount() (int, error)
+}
+
 // Handler provides REST API handlers for the learning package
 type Handler struct {
-	store          *FeedbackStore
-	processor      *Processor
-	accuracyComp   *AccuracyComputer
+	store               *FeedbackStore
+	processor           *Processor
+	accuracyComp        *AccuracyComputer
+	spatialWeightProv   SpatialWeightProvider
+	positionAccuracyProv PositionAccuracyProvider
 }
 
 // NewHandler creates a new learning handler
@@ -25,6 +42,16 @@ func NewHandler(store *FeedbackStore, processor *Processor, accuracyComp *Accura
 		processor:    processor,
 		accuracyComp: accuracyComp,
 	}
+}
+
+// SetSpatialWeightProvider sets the spatial weight provider for weight debug endpoints
+func (h *Handler) SetSpatialWeightProvider(p SpatialWeightProvider) {
+	h.spatialWeightProv = p
+}
+
+// SetPositionAccuracyProvider sets the position accuracy provider
+func (h *Handler) SetPositionAccuracyProvider(p PositionAccuracyProvider) {
+	h.positionAccuracyProv = p
 }
 
 // RegisterRoutes registers learning API routes on the given router
@@ -39,6 +66,13 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/learning/accuracy", h.handleGetAccuracy)
 	r.Get("/api/learning/accuracy/history", h.handleGetAccuracyHistory)
 	r.Get("/api/learning/accuracy/improvement", h.handleGetImprovement)
+
+	// Position accuracy (from ground truth samples)
+	r.Get("/api/accuracy/position", h.handleGetPositionAccuracy)
+	r.Get("/api/accuracy/position/history", h.handleGetPositionAccuracyHistory)
+
+	// Weight debug endpoint
+	r.Get("/api/accuracy/weights", h.handleGetWeights)
 
 	// Manual processing trigger (for testing/admin)
 	r.Post("/api/learning/process", h.handleTriggerProcess)
@@ -300,6 +334,84 @@ func (h *Handler) handleTriggerProcess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{
 		"status": "processed",
 	})
+}
+
+// handleGetWeights handles GET /api/accuracy/weights
+// Returns the current learned weight map for debugging
+func (h *Handler) handleGetWeights(w http.ResponseWriter, r *http.Request) {
+	if h.spatialWeightProv == nil {
+		writeJSON(w, map[string]interface{}{
+			"weights":   []interface{}{},
+			"stats":     nil,
+			"available": false,
+			"message":   "spatial weight learner not available",
+		})
+		return
+	}
+
+	weights := h.spatialWeightProv.GetAllWeights()
+	stats := h.spatialWeightProv.GetWeightStats()
+
+	writeJSON(w, map[string]interface{}{
+		"weights":   weights,
+		"stats":     stats,
+		"available": true,
+	})
+}
+
+// handleGetPositionAccuracy handles GET /api/accuracy/position
+// Returns current position accuracy from ground truth samples
+func (h *Handler) handleGetPositionAccuracy(w http.ResponseWriter, r *http.Request) {
+	if h.positionAccuracyProv == nil {
+		writeJSON(w, map[string]interface{}{
+			"available": false,
+			"message":   "position accuracy tracking not available",
+		})
+		return
+	}
+
+	stats, err := h.positionAccuracyProv.GetPositionImprovementStats()
+	if err != nil {
+		http.Error(w, "failed to get position accuracy", http.StatusInternalServerError)
+		return
+	}
+
+	// Get sample counts
+	totalSamples, _ := h.positionAccuracyProv.GetTotalSampleCount()
+	todaySamples, _ := h.positionAccuracyProv.GetSamplesTodayCount()
+	byPerson, _ := h.positionAccuracyProv.GetSampleCountByPerson()
+
+	stats["total_samples"] = totalSamples
+	stats["today_samples"] = todaySamples
+	stats["samples_by_person"] = byPerson
+	stats["available"] = true
+
+	writeJSON(w, stats)
+}
+
+// handleGetPositionAccuracyHistory handles GET /api/accuracy/position/history
+// Returns weekly position accuracy history for sparkline chart
+func (h *Handler) handleGetPositionAccuracyHistory(w http.ResponseWriter, r *http.Request) {
+	weeksStr := r.URL.Query().Get("weeks")
+	weeks := 8
+	if weeksStr != "" {
+		if n, err := strconv.Atoi(weeksStr); err == nil && n > 0 && n <= 52 {
+			weeks = n
+		}
+	}
+
+	if h.positionAccuracyProv == nil {
+		writeJSON(w, []interface{}{})
+		return
+	}
+
+	records, err := h.positionAccuracyProv.GetPositionAccuracyHistory(weeks)
+	if err != nil {
+		http.Error(w, "failed to get position accuracy history", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, records)
 }
 
 // writeJSON writes a JSON response
