@@ -8,7 +8,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/mdns v1.0.5
-	github.com/mattn/go-sqlite3 v1.14.37
 	gonum.org/v1/gonum v0.17.0
 	modernc.org/sqlite v1.47.0
 )
