@@ -2,7 +2,7 @@
 # Multi-stage build for minimal production image
 
 # Stage 1: Build the Go binary
-FROM golang:1.23-bookworm AS builder
+FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
 
