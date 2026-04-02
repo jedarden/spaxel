@@ -36,9 +36,8 @@ VOLUME ["/data", "/firmware"]
 # Expose HTTP/WebSocket port
 EXPOSE 8080
 
-# Health check (distroless has wget)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    ["wget", "-q", "-O-", "http://localhost:8080/healthz"]
+# Health check — distroless has no shell or wget, so remove container-level check.
+# K8s liveness/readiness probes handle health checking instead.
 
 # Run as non-root (distroless default is UID 65532)
 ENTRYPOINT ["/spaxel"]
