@@ -268,13 +268,19 @@ type trailPoint [2]float64
 
 // blobJSON is the wire format for a tracked person blob.
 type blobJSON struct {
-	ID     int          `json:"id"`
-	X      float64      `json:"x"`
-	Z      float64      `json:"z"`
-	VX     float64      `json:"vx"`
-	VZ     float64      `json:"vz"`
-	Weight float64      `json:"weight"`
-	Trail  []trailPoint `json:"trail"`
+	ID                 int          `json:"id"`
+	X                  float64      `json:"x"`
+	Z                  float64      `json:"z"`
+	VX                 float64      `json:"vx"`
+	VZ                 float64      `json:"vz"`
+	Weight             float64      `json:"weight"`
+	Trail              []trailPoint `json:"trail"`
+	Posture            string       `json:"posture,omitempty"`
+	PersonID           string       `json:"person_id,omitempty"`
+	PersonLabel        string       `json:"person_label,omitempty"`
+	PersonColor        string       `json:"person_color,omitempty"`
+	IdentityConfidence float64      `json:"identity_confidence,omitempty"`
+	IdentitySource     string       `json:"identity_source,omitempty"`
 }
 
 // BroadcastLocUpdate sends localisation results to all dashboard clients.
@@ -293,6 +299,8 @@ func (h *Hub) BroadcastLocUpdate(blobs []tracking.Blob) {
 			VZ:     b.VZ,
 			Weight: b.Weight,
 			Trail:  trail,
+			// Phase 6 identity fields (Posture, PersonID, etc.) omitted until
+			// tracking.Blob struct is extended.
 		}
 	}
 	msg := map[string]interface{}{
@@ -380,4 +388,137 @@ func (h *Hub) ClientCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.clients)
+}
+
+// BroadcastFleetChange broadcasts a fleet change event to all dashboard clients.
+// This implements the fleet.FleetChangeBroadcaster interface.
+func (h *Hub) BroadcastFleetChange(event fleet.FleetChangeEvent) {
+	msg := map[string]interface{}{
+		"type":              "fleet_change",
+		"timestamp":         event.Timestamp.UnixMilli(),
+		"trigger_reason":    event.TriggerReason,
+		"mean_gdop_before":  event.MeanGDOPBefore,
+		"mean_gdop_after":   event.MeanGDOPAfter,
+		"coverage_before":   event.CoverageBefore,
+		"coverage_after":    event.CoverageAfter,
+		"coverage_delta":    event.CoverageDelta,
+		"is_degradation":    event.IsDegradation,
+		"role_assignments":  event.RoleAssignments,
+	}
+
+	if event.OfflineMAC != "" {
+		msg["offline_mac"] = event.OfflineMAC
+	}
+	if event.RecoveredMAC != "" {
+		msg["recovered_mac"] = event.RecoveredMAC
+	}
+	if event.WarningMessage != "" {
+		msg["warning_message"] = event.WarningMessage
+	}
+	if len(event.GDOPBefore) > 0 {
+		msg["gdop_before"] = floatsToSlice(event.GDOPBefore)
+		msg["gdop_after"] = floatsToSlice(event.GDOPAfter)
+		msg["gdop_cols"] = event.GDOPCols
+		msg["gdop_rows"] = event.GDOPRows
+	}
+
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// floatsToSlice converts []float32 to []float64 for JSON marshalling
+func floatsToSlice(f []float32) []float64 {
+	result := make([]float64, len(f))
+	for i, v := range f {
+		result[i] = float64(v)
+	}
+	return result
+}
+
+// BroadcastFleetHealth broadcasts current fleet health status.
+func (h *Hub) BroadcastFleetHealth(nodes []fleet.NodeRecord, roles map[string]string, coverageScore float64) {
+	type nodeHealth struct {
+		MAC         string  `json:"mac"`
+		Name        string  `json:"name"`
+		Role        string  `json:"role"`
+		HealthScore float64 `json:"health_score"`
+		Online      bool    `json:"online"`
+	}
+
+	wireNodes := make([]nodeHealth, len(nodes))
+	for i, n := range nodes {
+		role := n.Role
+		if r, ok := roles[n.MAC]; ok {
+			role = r
+		}
+		wireNodes[i] = nodeHealth{
+			MAC:         n.MAC,
+			Name:        n.Name,
+			Role:        role,
+			HealthScore: n.HealthScore,
+			Online:      n.LastSeenAt.After(time.Now().Add(-5 * time.Minute)),
+		}
+	}
+
+	msg := map[string]interface{}{
+		"type":           "fleet_health",
+		"nodes":          wireNodes,
+		"coverage_score": coverageScore,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastFleetHistory broadcasts optimisation history to dashboard.
+func (h *Hub) BroadcastFleetHistory(history []fleet.OptimisationHistoryRecord) {
+	type historyEntry struct {
+		ID              int64   `json:"id"`
+		Timestamp       int64   `json:"timestamp_ms"`
+		TriggerReason   string  `json:"trigger_reason"`
+		MeanGDOPBefore  float64 `json:"mean_gdop_before"`
+		MeanGDOPAfter   float64 `json:"mean_gdop_after"`
+		CoverageDelta   float64 `json:"coverage_delta"`
+	}
+
+	wireHistory := make([]historyEntry, len(history))
+	for i, rec := range history {
+		wireHistory[i] = historyEntry{
+			ID:             rec.ID,
+			Timestamp:      rec.Timestamp.UnixMilli(),
+			TriggerReason:  rec.TriggerReason,
+			MeanGDOPBefore: rec.MeanGDOPBefore,
+			MeanGDOPAfter:  rec.MeanGDOPAfter,
+			CoverageDelta:  rec.CoverageDelta,
+		}
+	}
+
+	msg := map[string]interface{}{
+		"type":    "fleet_history",
+		"history": wireHistory,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// FleetChangeEvent is re-exported for compatibility
+type FleetChangeEvent = fleet.FleetChangeEvent
+
+// BroadcastSystemModeChange broadcasts a system mode change event to all dashboard clients.
+func (h *Hub) BroadcastSystemModeChange(event interface{}) {
+	msg := map[string]interface{}{
+		"type": "system_mode_change",
+		"data": event,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastAnomaly broadcasts an anomaly detection event to all dashboard clients.
+func (h *Hub) BroadcastAnomaly(anomaly interface{}) {
+	msg := map[string]interface{}{
+		"type": "anomaly_detected",
+		"data": anomaly,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
 }

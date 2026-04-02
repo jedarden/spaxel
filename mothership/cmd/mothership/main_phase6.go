@@ -1,4 +1,8 @@
-// Package main provides the mothership entry point
+//go:build phase6
+
+// Package main provides the mothership entry point — phase 6 (advanced features).
+// Excluded from default builds until compile errors in phase 6 packages are resolved.
+// Build with: go build -tags phase6 ./cmd/mothership
 package main
 
 import (
@@ -353,6 +357,50 @@ func main() {
     selfImprovingLocalizer.Start()
     log.Printf("[INFO] Self-improving localization started (room: %.1fx%.1fm, interval: %v)",
         roomWidth, roomDepth, silConfig.AdjustmentInterval)
+
+    // Phase 6: Ground truth store for self-improving localization weights
+    var groundTruthStore *localization.GroundTruthStore
+    var spatialWeightLearner *localization.SpatialWeightLearner
+    var groundTruthCollector *localization.GroundTruthCollector
+
+    groundTruthStore, err = localization.NewGroundTruthStore(
+        filepath.Join(cfg.DataDir, "groundtruth.db"),
+        localization.DefaultGroundTruthStoreConfig(),
+    )
+    if err != nil {
+        log.Printf("[WARN] Failed to open ground truth store: %v", err)
+    } else {
+        defer groundTruthStore.Close()
+        log.Printf("[INFO] Ground truth store at %s", filepath.Join(cfg.DataDir, "groundtruth.db"))
+
+        // Create spatial weight learner
+        spatialWeightLearner, err = localization.NewSpatialWeightLearner(
+            filepath.Join(cfg.DataDir, "spatial_weights.db"),
+            localization.DefaultSpatialWeightLearnerConfig(),
+        )
+        if err != nil {
+            log.Printf("[WARN] Failed to create spatial weight learner: %v", err)
+        } else {
+            defer spatialWeightLearner.Close()
+            log.Printf("[INFO] Spatial weight learner initialized (min samples: %d, improvement threshold: %.0f%%)",
+                localization.DefaultSpatialWeightLearnerConfig().MinZoneSamples,
+                localization.DefaultSpatialWeightLearnerConfig().ImprovementThreshold*100)
+
+            // Start periodic weight persistence
+            spatialWeightLearner.StartPeriodicSave(ctx, 30*time.Second)
+        }
+
+        // Create ground truth collector
+        groundTruthCollector = localization.NewGroundTruthCollector(groundTruthStore, spatialWeightLearner)
+        log.Printf("[INFO] Ground truth collector initialized (min BLE confidence: %.1f, max distance: %.1fm)",
+            localization.MinBLEConfidence, localization.MaxBLEBlobDistance)
+
+        // Connect spatial weight learner to fusion engine for per-zone weight application
+        if selfImprovingLocalizer != nil {
+            selfImprovingLocalizer.GetEngine().SetSpatialWeightLearner(spatialWeightLearner)
+            log.Printf("[INFO] Spatial weight learner connected to fusion engine")
+        }
+    }
 
     // Phase 6: Learning feedback store for detection accuracy
     var feedbackStore *learning.FeedbackStore
@@ -716,6 +764,45 @@ func main() {
                 // Update identity matcher
                 if identityMatcher != nil {
                     identityMatcher.UpdateBlobs(blobs)
+
+                    // Collect ground truth samples for self-improving localization
+                    if groundTruthCollector != nil {
+                        // Build per-link delta and health maps from motion states
+                        motionStates := pm.GetAllMotionStates()
+                        perLinkDeltas := make(map[string]float64)
+                        perLinkHealth := make(map[string]float64)
+                        for _, state := range motionStates {
+                            perLinkDeltas[state.LinkID] = state.SmoothDeltaRMS
+                            if processor := pm.GetProcessor(state.LinkID); processor != nil {
+                                if health := processor.GetHealth(); health != nil {
+                                    perLinkHealth[state.LinkID] = health.GetAmbientConfidence()
+                                }
+                            }
+                        }
+
+                        // Collect samples for matched blobs
+                        for _, blob := range blobs {
+                            match := identityMatcher.GetMatch(blob.ID)
+                            if match == nil || match.PersonID == "" || match.IsBLEOnly {
+                                continue
+                            }
+
+                            // Only collect if triangulation confidence is sufficient
+                            if match.TriangulationConf < localization.MinBLEConfidence {
+                                continue
+                            }
+
+                            // Collect ground truth sample
+                            groundTruthCollector.CollectSample(
+                                match.PersonID,
+                                localization.Vec3{X: match.TriangulationPos.X, Y: match.TriangulationPos.Y, Z: match.TriangulationPos.Z},
+                                match.TriangulationConf,
+                                localization.Vec3{X: blob.X, Y: blob.Y, Z: blob.Z},
+                                perLinkDeltas,
+                                perLinkHealth,
+                            )
+                        }
+                    }
                 }
 
                 // Update zones occupancy
@@ -1203,6 +1290,18 @@ func main() {
             predictionPredictor.SetMQTTClient(&predictionMQTTAdapter{client: mqttClient}, "")
         }
 
+        // Wire horizon predictor providers
+        if predictionHorizon != nil {
+            if zonesMgr != nil {
+                predictionHorizon.SetZoneProvider(&predictionZoneAdapter{mgr: zonesMgr})
+            }
+            if bleRegistry != nil {
+                predictionHorizon.SetPersonProvider(&predictionPersonAdapter{registry: bleRegistry})
+            }
+            predictionHorizon.SetPositionProvider(prediction.NewPositionAdapter(predictionHistory))
+            log.Printf("[INFO] Horizon predictor providers wired")
+        }
+
         // Start periodic prediction update loop (every 60 seconds)
         go func() {
             ticker := time.NewTicker(60 * time.Second)
@@ -1243,6 +1342,27 @@ func main() {
                                 pred.PredictionConfidence,
                                 pred.EstimatedTransitionMinutes,
                             )
+                        }
+
+                        // Also publish horizon predictions (15-minute Monte Carlo)
+                        if predictionHorizon != nil {
+                            horizonPreds := predictionHorizon.UpdateAllPredictions()
+                            for _, hpred := range horizonPreds {
+                                // Publish horizon prediction to separate topic
+                                topic := "spaxel/person/" + hpred.PersonID + "/horizon_prediction"
+                                payload := map[string]interface{}{
+                                    "current_zone":        hpred.CurrentZoneID,
+                                    "predicted_zone":      hpred.PredictedZoneID,
+                                    "confidence":          hpred.Confidence,
+                                    "horizon_minutes":     hpred.HorizonMinutes,
+                                    "data_confidence":     hpred.DataConfidence,
+                                    "model_ready":         hpred.ModelReady,
+                                    "zone_probabilities":  hpred.ZoneProbabilities,
+                                }
+                                if data, err := json.Marshal(payload); err == nil {
+                                    mqttClient.Publish(topic, data)
+                                }
+                            }
                         }
                     }
                 }
@@ -1316,6 +1436,10 @@ func main() {
     fleetHandler := fleet.NewHandler(fleetMgr)
     fleetHandler.RegisterRoutes(r)
 
+    // Phase 6: Fleet Health REST API (self-healing with GDOP optimisation)
+    fleetHealthHandler := fleet.NewFleetHandler(selfHealManager, fleetReg)
+    fleetHealthHandler.RegisterRoutes(r)
+
     // Phase 6: BLE REST API
     if bleRegistry != nil {
         r.Get("/api/ble/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -1371,11 +1495,11 @@ func main() {
         })
         r.Get("/api/ble/matches", func(w http.ResponseWriter, r *http.Request) {
             if identityMatcher == nil {
-                matches := identityMatcher.GetMatches()
-                writeJSON(w, matches)
+                writeJSON(w, []*ble.IdentityMatch{})
                 return
             }
-            writeJSON(w, map[int]*ble.IdentityMatch{})
+            matches := identityMatcher.GetAllMatches()
+            writeJSON(w, matches)
         })
     }
 
@@ -1873,6 +1997,329 @@ func main() {
             }
             writeJSON(w, map[string]string{"status": "recompute_started"})
         })
+
+        // Prediction accuracy endpoints
+        if predictionAccuracy != nil {
+            r.Get("/api/predictions/accuracy", func(w http.ResponseWriter, r *http.Request) {
+                stats, err := predictionAccuracy.GetAllAccuracyStats()
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                writeJSON(w, stats)
+            })
+
+            r.Get("/api/predictions/accuracy/overall", func(w http.ResponseWriter, r *http.Request) {
+                accuracy, total, err := predictionAccuracy.GetOverallAccuracy()
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                pending := predictionAccuracy.GetPendingCount()
+                writeJSON(w, map[string]interface{}{
+                    "accuracy_percent":    accuracy * 100,
+                    "total_predictions":   total,
+                    "pending_predictions": pending,
+                    "target_accuracy":     75.0,
+                    "meets_target":        accuracy >= 0.75 && total >= prediction.MinPredictionsForAccuracy,
+                    "horizon_minutes":     int(prediction.PredictionHorizon.Minutes()),
+                })
+            })
+
+            r.Get("/api/predictions/accuracy/{personID}", func(w http.ResponseWriter, r *http.Request) {
+                personID := chi.URLParam(r, "personID")
+                stats, err := predictionAccuracy.GetAccuracyStats(personID, int(prediction.PredictionHorizon.Minutes()))
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                if stats == nil {
+                    http.Error(w, "no accuracy data for person", http.StatusNotFound)
+                    return
+                }
+                writeJSON(w, stats)
+            })
+
+            r.Get("/api/predictions/pending", func(w http.ResponseWriter, r *http.Request) {
+                pending := predictionAccuracy.GetPendingCount()
+                writeJSON(w, map[string]int{"pending_predictions": pending})
+            })
+
+            // Zone occupancy patterns endpoints
+            r.Get("/api/predictions/patterns/zones", func(w http.ResponseWriter, r *http.Request) {
+                // Get all zone occupancy patterns
+                if zonesMgr == nil {
+                    http.Error(w, "zones manager not available", http.StatusServiceUnavailable)
+                    return
+                }
+                zones := zonesMgr.GetAllZones()
+                patterns := make([]map[string]interface{}, 0)
+                now := time.Now()
+                hourOfWeek := prediction.HourOfWeek(now)
+                for _, zone := range zones {
+                    pattern, err := predictionAccuracy.GetZoneOccupancyPattern(zone.ID, hourOfWeek)
+                    if err != nil {
+                        continue
+                    }
+                    if pattern != nil {
+                        patterns = append(patterns, map[string]interface{}{
+                            "zone_id":            zone.ID,
+                            "zone_name":          zone.Name,
+                            "hour_of_week":       pattern.HourOfWeek,
+                            "occupancy_prob":     pattern.OccupancyProb,
+                            "mean_dwell_minutes": pattern.MeanDwellMinutes,
+                            "stddev_dwell":       pattern.StddevDwell,
+                            "sample_count":       pattern.SampleCount,
+                        })
+                    }
+                }
+                writeJSON(w, patterns)
+            })
+
+            r.Get("/api/predictions/patterns/zone/{zoneID}", func(w http.ResponseWriter, r *http.Request) {
+                zoneID := chi.URLParam(r, "zoneID")
+                // Get patterns for all hours of the week
+                var patterns []map[string]interface{}
+                for hour := 0; hour < 168; hour++ {
+                    pattern, err := predictionAccuracy.GetZoneOccupancyPattern(zoneID, hour)
+                    if err != nil || pattern == nil {
+                        continue
+                    }
+                    patterns = append(patterns, map[string]interface{}{
+                        "hour_of_week":       pattern.HourOfWeek,
+                        "day_name":           prediction.DayNameFromHourOfWeek(pattern.HourOfWeek),
+                        "hour_of_day":        pattern.HourOfWeek % 24,
+                        "occupancy_prob":     pattern.OccupancyProb,
+                        "mean_dwell_minutes": pattern.MeanDwellMinutes,
+                        "stddev_dwell":       pattern.StddevDwell,
+                        "sample_count":       pattern.SampleCount,
+                    })
+                }
+                writeJSON(w, map[string]interface{}{
+                    "zone_id":  zoneID,
+                    "patterns": patterns,
+                })
+            })
+
+            r.Get("/api/predictions/patterns/zone/{zoneID}/current", func(w http.ResponseWriter, r *http.Request) {
+                zoneID := chi.URLParam(r, "zoneID")
+                hourOfWeek := prediction.HourOfWeek(time.Now())
+                pattern, err := predictionAccuracy.GetZoneOccupancyPattern(zoneID, hourOfWeek)
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                if pattern == nil {
+                    writeJSON(w, map[string]interface{}{
+                        "zone_id":       zoneID,
+                        "hour_of_week":  hourOfWeek,
+                        "available":     false,
+                        "message":       "no pattern data available for this hour",
+                    })
+                    return
+                }
+                writeJSON(w, map[string]interface{}{
+                    "zone_id":            zoneID,
+                    "hour_of_week":       pattern.HourOfWeek,
+                    "day_name":           prediction.DayNameFromHourOfWeek(pattern.HourOfWeek),
+                    "hour_of_day":        pattern.HourOfWeek % 24,
+                    "occupancy_prob":     pattern.OccupancyProb,
+                    "mean_dwell_minutes": pattern.MeanDwellMinutes,
+                    "stddev_dwell":       pattern.StddevDwell,
+                    "sample_count":       pattern.SampleCount,
+                    "available":          true,
+                })
+            })
+        }
+
+        // Transition probabilities endpoints (require predictionStore)
+        if predictionStore != nil {
+            r.Get("/api/predictions/probabilities/{personID}", func(w http.ResponseWriter, r *http.Request) {
+                personID := chi.URLParam(r, "personID")
+                hourOfWeek := prediction.HourOfWeek(time.Now())
+
+                // Get current zone if available
+                var currentZoneID string
+                if predictionHistory != nil {
+                    zoneID, _, _, ok := predictionHistory.GetPersonZone(personID)
+                    if ok {
+                        currentZoneID = zoneID
+                    }
+                }
+
+                result := map[string]interface{}{
+                    "person_id":     personID,
+                    "hour_of_week":  hourOfWeek,
+                    "current_zone":  currentZoneID,
+                    "transitions":   []map[string]interface{}{},
+                }
+
+                // If we know current zone, get probabilities from there
+                if currentZoneID != "" && zonesMgr != nil {
+                    probs, err := predictionStore.GetTransitionProbabilitiesForFromZone(personID, currentZoneID, hourOfWeek)
+                    if err == nil {
+                        transitions := make([]map[string]interface{}, len(probs))
+                        for i, p := range probs {
+                            zoneName, _ := zonesMgr.GetZoneName(p.ToZoneID)
+                            transitions[i] = map[string]interface{}{
+                                "from_zone_id":   p.FromZoneID,
+                                "to_zone_id":     p.ToZoneID,
+                                "to_zone_name":   zoneName,
+                                "probability":    p.Probability,
+                                "sample_count":   p.Count,
+                                "last_computed":  p.LastComputed,
+                            }
+                        }
+                        result["transitions"] = transitions
+                    }
+
+                    // Also get dwell time stats
+                    dwellStats, err := predictionStore.GetDwellTimeStats(personID, currentZoneID, hourOfWeek)
+                    if err == nil && dwellStats != nil {
+                        result["dwell_time"] = map[string]interface{}{
+                            "mean_minutes":   dwellStats.MeanMinutes,
+                            "stddev_minutes": dwellStats.StddevMinutes,
+                            "sample_count":   dwellStats.Count,
+                        }
+                    }
+                }
+
+                writeJSON(w, result)
+            })
+
+            r.Get("/api/predictions/probabilities/{personID}/zone/{zoneID}", func(w http.ResponseWriter, r *http.Request) {
+                personID := chi.URLParam(r, "personID")
+                zoneID := chi.URLParam(r, "zoneID")
+                hourOfWeek := prediction.HourOfWeek(time.Now())
+
+                probs, err := predictionStore.GetTransitionProbabilitiesForFromZone(personID, zoneID, hourOfWeek)
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+
+                transitions := make([]map[string]interface{}, len(probs))
+                for i, p := range probs {
+                    zoneName := p.ToZoneID
+                    if zonesMgr != nil {
+                        zoneName, _ = zonesMgr.GetZoneName(p.ToZoneID)
+                    }
+                    transitions[i] = map[string]interface{}{
+                        "from_zone_id":  p.FromZoneID,
+                        "to_zone_id":    p.ToZoneID,
+                        "to_zone_name":  zoneName,
+                        "probability":   p.Probability,
+                        "sample_count":  p.Count,
+                        "last_computed": p.LastComputed,
+                    }
+                }
+
+                // Get dwell time stats
+                var dwellStats *prediction.DwellTimeStats
+                dwellStats, _ = predictionStore.GetDwellTimeStats(personID, zoneID, hourOfWeek)
+
+                writeJSON(w, map[string]interface{}{
+                    "person_id":     personID,
+                    "from_zone_id":  zoneID,
+                    "hour_of_week":  hourOfWeek,
+                    "transitions":   transitions,
+                    "dwell_time":    dwellStats,
+                })
+            })
+
+            r.Get("/api/predictions/probabilities/{personID}/zone/{zoneID}/hour/{hour}", func(w http.ResponseWriter, r *http.Request) {
+                personID := chi.URLParam(r, "personID")
+                zoneID := chi.URLParam(r, "zoneID")
+                hourStr := chi.URLParam(r, "hour")
+                hourOfWeek := 0
+                fmt.Sscanf(hourStr, "%d", &hourOfWeek)
+                if hourOfWeek < 0 || hourOfWeek > 167 {
+                    http.Error(w, "hour must be 0-167", http.StatusBadRequest)
+                    return
+                }
+
+                probs, err := predictionStore.GetTransitionProbabilitiesForFromZone(personID, zoneID, hourOfWeek)
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+
+                transitions := make([]map[string]interface{}, len(probs))
+                for i, p := range probs {
+                    zoneName := p.ToZoneID
+                    if zonesMgr != nil {
+                        zoneName, _ = zonesMgr.GetZoneName(p.ToZoneID)
+                    }
+                    transitions[i] = map[string]interface{}{
+                        "from_zone_id":  p.FromZoneID,
+                        "to_zone_id":    p.ToZoneID,
+                        "to_zone_name":  zoneName,
+                        "probability":   p.Probability,
+                        "sample_count":  p.Count,
+                        "last_computed": p.LastComputed,
+                    }
+                }
+
+                writeJSON(w, map[string]interface{}{
+                    "person_id":     personID,
+                    "from_zone_id":  zoneID,
+                    "hour_of_week":  hourOfWeek,
+                    "day_name":      prediction.DayNameFromHourOfWeek(hourOfWeek),
+                    "hour_of_day":   hourOfWeek % 24,
+                    "transitions":   transitions,
+                })
+            })
+
+            // Get sample count for a slot
+            r.Get("/api/predictions/samples/{personID}/zone/{zoneID}", func(w http.ResponseWriter, r *http.Request) {
+                personID := chi.URLParam(r, "personID")
+                zoneID := chi.URLParam(r, "zoneID")
+                hourOfWeek := prediction.HourOfWeek(time.Now())
+
+                count, err := predictionStore.GetTransitionCountForSlot(personID, zoneID, hourOfWeek)
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+
+                dataAge := predictionStore.GetDataAge()
+
+                writeJSON(w, map[string]interface{}{
+                    "person_id":           personID,
+                    "zone_id":             zoneID,
+                    "hour_of_week":        hourOfWeek,
+                    "sample_count":        count,
+                    "minimum_samples":     prediction.MinimumSamplesPerSlot,
+                    "has_sufficient_data": count >= prediction.MinimumSamplesPerSlot,
+                    "data_age_days":       dataAge.Hours() / 24,
+                    "model_ready":         dataAge >= prediction.MinimumDataAge,
+                })
+            })
+        }
+
+        // Horizon prediction endpoint
+        if predictionHorizon != nil {
+            r.Get("/api/predictions/horizon", func(w http.ResponseWriter, r *http.Request) {
+                predictions := predictionHorizon.UpdateAllPredictions()
+                writeJSON(w, predictions)
+            })
+
+            r.Get("/api/predictions/horizon/{personID}", func(w http.ResponseWriter, r *http.Request) {
+                personID := chi.URLParam(r, "personID")
+                // Get current zone from history
+                if predictionHistory == nil {
+                    http.Error(w, "prediction history not available", http.StatusServiceUnavailable)
+                    return
+                }
+                zoneID, _, _, ok := predictionHistory.GetPersonZone(personID)
+                if !ok || zoneID == "" {
+                    http.Error(w, "person not currently tracked", http.StatusNotFound)
+                    return
+                }
+                pred := predictionHorizon.PredictAtHorizon(personID, zoneID, prediction.PredictionHorizon)
+                writeJSON(w, pred)
+            })
+        }
     }
 
     // Phase 6: Learning feedback REST API
@@ -1965,8 +2412,113 @@ func main() {
             writeJSON(w, result)
         })
 
+        // Spatial weights endpoints
+        if spatialWeightLearner != nil {
+            r.Get("/api/accuracy/weights", func(w http.ResponseWriter, r *http.Request) {
+                weights := spatialWeightLearner.GetAllWeights()
+                stats := spatialWeightLearner.GetWeightStats()
+                result := map[string]interface{}{
+                    "weights": weights,
+                    "stats":   stats,
+                }
+                writeJSON(w, result)
+            })
+
+            r.Get("/api/accuracy/weights/{zoneX}/{zoneY}", func(w http.ResponseWriter, r *http.Request) {
+                zoneX, _ := strconv.Atoi(chi.URLParam(r, "zoneX"))
+                zoneY, _ := strconv.Atoi(chi.URLParam(r, "zoneY"))
+                weights := spatialWeightLearner.GetWeightsForZone(zoneX, zoneY)
+                writeJSON(w, weights)
+            })
+        }
+
+        // Position accuracy endpoints
+        if groundTruthStore != nil {
+            r.Get("/api/accuracy/position", func(w http.ResponseWriter, r *http.Request) {
+                stats, err := groundTruthStore.GetPositionImprovementStats()
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                writeJSON(w, stats)
+            })
+
+            r.Get("/api/accuracy/position/history", func(w http.ResponseWriter, r *http.Request) {
+                weeksStr := r.URL.Query().Get("weeks")
+                weeks := 8
+                if weeksStr != "" {
+                    if n, err := strconv.Atoi(weeksStr); err == nil && n > 0 {
+                        weeks = n
+                    }
+                }
+                history, err := groundTruthStore.GetPositionAccuracyHistory(weeks)
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                writeJSON(w, history)
+            })
+
+            r.Get("/api/accuracy/samples", func(w http.ResponseWriter, r *http.Request) {
+                zoneCounts, err := groundTruthStore.GetZoneSampleCounts()
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                personCounts, err := groundTruthStore.GetSampleCountByPerson()
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                total, err := groundTruthStore.GetTotalSampleCount()
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                today, err := groundTruthStore.GetSamplesTodayCount()
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+
+                writeJSON(w, map[string]interface{}{
+                    "total_samples":     total,
+                    "samples_today":     today,
+                    "zone_counts":       zoneCounts,
+                    "person_counts":     personCounts,
+                    "zones_with_data":   len(zoneCounts),
+                    "persons_with_data": len(personCounts),
+                })
+            })
+
+            r.Get("/api/accuracy/samples/recent", func(w http.ResponseWriter, r *http.Request) {
+                limitStr := r.URL.Query().Get("limit")
+                limit := 100
+                if limitStr != "" {
+                    if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+                        limit = n
+                    }
+                }
+                samples, err := groundTruthStore.GetRecentSamples(limit)
+                if err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                writeJSON(w, samples)
+            })
+
+            // Trigger weekly accuracy computation
+            r.Post("/api/accuracy/position/compute", func(w http.ResponseWriter, r *http.Request) {
+                week := localization.GetWeekString(time.Now())
+                if err := groundTruthStore.ComputeWeeklyAccuracy(week); err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                writeJSON(w, map[string]string{"status": "computed", "week": week})
+            })
+        }
+
         log.Printf("[INFO] Self-improving localization API registered at /api/localization/*")
-    }
 
     // Phase 6: Anomaly detection REST API
     if anomalyDetector != nil {
@@ -2251,11 +2803,68 @@ func (n *notifySenderAdapter) SendViaChannel(channelType string, title, body str
 // Prediction provider adapters
 
 type predictionZoneAdapter struct {
-    mgr *zones.Manager
+	mgr *zones.Manager
 }
 
 func (z *predictionZoneAdapter) GetZone(id string) (string, bool) {
-    zone := z.mgr.GetZone(id)
+	zone := z.mgr.GetZone(id)
+	if zone == nil {
+		return "", false
+	}
+	return zone.Name, true
+}
+
+type predictionPersonAdapter struct {
+	registry *ble.Registry
+}
+
+func (p *predictionPersonAdapter) GetPerson(id string) (string, string, bool) {
+	person, err := p.registry.GetPerson(id)
+	if err != nil {
+		return "", "", false
+	}
+	return person.Name, person.Color, true
+}
+
+func (p *predictionPersonAdapter) GetAllPeople() ([]struct {
+	ID    string
+	Name  string
+	Color string
+}, error) {
+	people, err := p.registry.GetPeople()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]struct {
+		ID    string
+		Name  string
+		Color string
+	}, len(people))
+	for i, person := range people {
+		result[i] = struct {
+			ID    string
+			Name  string
+			Color string
+		}{
+			ID:    person.ID,
+			Name:  person.Name,
+			Color: person.Color,
+		}
+	}
+	return result, nil
+}
+
+type predictionMQTTAdapter struct {
+	client *mqtt.Client
+}
+
+func (m *predictionMQTTAdapter) Publish(topic string, payload []byte) error {
+	return m.client.Publish(topic, payload)
+}
+
+func (m *predictionMQTTAdapter) IsConnected() bool {
+	return m.client.IsConnected()
+}
 
 // Anomaly detector provider adapters
 
