@@ -6,6 +6,7 @@
     <title>Spaxel Dashboard</title>
     <link rel="stylesheet" href="css/troubleshoot.css">
     <link rel="stylesheet" href="css/panels.css">
+    <link rel="stylesheet" href="css/timeline.css">
     <style>
         * {
             margin: 0;
@@ -2129,6 +2130,8 @@
     <script src="js/fleet.js"></script>
     <!-- Anomaly detection UI -->
     <script src="js/anomaly.js"></script>
+    <!-- Activity Timeline -->
+    <script src="js/timeline.js"></script>
 
     <!-- Room editor panel -->
     <div id="room-editor-panel">
@@ -2159,6 +2162,55 @@
             <span>Poor</span>
         </div>
     </div>
+
+    <!-- Timeline View Container -->
+    <div id="timeline-view" style="display: none;">
+        <div class="timeline-header">
+            <h2 class="timeline-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                Timeline
+                <span id="timeline-count" class="timeline-count"></span>
+            </h2>
+            <div class="timeline-filters">
+                <select id="timeline-filter-type" class="timeline-filter-select">
+                    <option value="">All Types</option>
+                </select>
+                <select id="timeline-filter-zone" class="timeline-filter-select">
+                    <option value="">All Zones</option>
+                </select>
+                <select id="timeline-filter-person" class="timeline-filter-select">
+                    <option value="">All People</option>
+                </select>
+                <select id="timeline-filter-time" class="timeline-filter-select">
+                    <option value="">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                </select>
+                <input type="text" id="timeline-filter-search" class="timeline-search" placeholder="Search events...">
+            </div>
+        </div>
+        <div id="timeline-loading" class="timeline-loading" style="display: none;">
+            <div class="timeline-loading-spinner"></div>
+            <span>Loading events...</span>
+        </div>
+        <div id="timeline-empty" class="timeline-empty" style="display: none;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <h3>No events yet</h3>
+            <p>Events will appear here as Spaxel detects activity.</p>
+        </div>
+        <div id="timeline-error" class="timeline-loading" style="display: none; color: #ef5350;"></div>
+        <div id="timeline-events" class="timeline-events"></div>
+        <div id="timeline-load-more" class="timeline-load-more" style="display: none;">
+            <button id="timeline-load-more-btn" class="timeline-load-more-btn">Load More</button>
+        </div>
+    </div>
     <script>
         // Keep view-preset buttons in sync with active state
         ['perspective','topdown','follow'].forEach(function(p) {
@@ -2167,6 +2219,38 @@
                 this.classList.add('active');
             });
         });
+
+        // Handle timeline view visibility
+        function updateViewVisibility(mode) {
+            var sceneContainer = document.getElementById('scene-container');
+            var timelineView = document.getElementById('timeline-view');
+            var nodePanel = document.getElementById('node-panel');
+            var chartPanel = document.getElementById('chart-panel');
+            var presencePanel = document.getElementById('presence-panel');
+
+            if (mode === 'timeline') {
+                // Show timeline, hide 3D scene
+                if (sceneContainer) sceneContainer.style.display = 'none';
+                if (timelineView) timelineView.style.display = 'flex';
+                if (nodePanel) nodePanel.style.display = 'none';
+                if (chartPanel) chartPanel.style.display = 'none';
+                if (presencePanel) presencePanel.style.display = 'none';
+            } else {
+                // Show 3D scene, hide timeline
+                if (sceneContainer) sceneContainer.style.display = 'block';
+                if (timelineView) timelineView.style.display = 'none';
+                if (nodePanel) nodePanel.style.display = 'block';
+                if (chartPanel) chartPanel.style.display = 'block';
+                if (presencePanel) presencePanel.style.display = 'block';
+            }
+        }
+
+        // Register with router if available
+        if (window.SpaxelRouter) {
+            SpaxelRouter.onModeChange(updateViewVisibility);
+            // Initial visibility set
+            updateViewVisibility(SpaxelRouter.getMode());
+        }
 
         // Draw GDOP legend gradient
         (function() {

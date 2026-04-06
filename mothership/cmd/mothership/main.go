@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/api"
+	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/diagnostics"
 	"github.com/spaxel/mothership/internal/fleet"
@@ -434,6 +435,18 @@ func main() {
 		log.Printf("[INFO] Notifications API enabled")
 	}
 
+	// Events API (timeline)
+	eventsHandler, err := api.NewEventsHandler(filepath.Join(cfg.DataDir, "events.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to create events handler: %v (events API disabled)", err)
+	} else {
+		defer eventsHandler.Close()
+		eventsHandler.RegisterRoutes(r)
+		// Wire events handler to dashboard hub for live event broadcasts
+		eventsHandler.SetHub(dashboardHub)
+		log.Printf("[INFO] Events API enabled")
+	}
+
 	// Replay API
 	if replayStore != nil {
 		replayHandler, err := api.NewReplayHandler(filepath.Join(cfg.DataDir, "csi_replay.bin"), replayStore)
@@ -444,6 +457,17 @@ func main() {
 			replayHandler.RegisterRoutes(r)
 			log.Printf("[INFO] Replay API enabled")
 		}
+	}
+
+	// BLE Devices API
+	bleRegistry, err := ble.NewRegistry(filepath.Join(cfg.DataDir, "ble.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to create BLE registry: %v (BLE API disabled)", err)
+	} else {
+		defer bleRegistry.Close()
+		bleHandler := ble.NewHandler(bleRegistry)
+		bleHandler.RegisterRoutes(r)
+		log.Printf("[INFO] BLE Devices API enabled")
 	}
 
 	// Phase 5: Weather diagnostics REST API
