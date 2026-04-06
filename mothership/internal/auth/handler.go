@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
+	"os"
 	"strings"
 	"time"
 
@@ -63,6 +63,7 @@ func NewHandler(cfg Config) (*Handler, error) {
 }
 
 // initializeAuth ensures the auth table has a singleton row and generates an install secret.
+// On first run, prints the secret to stdout exactly once.
 func (h *Handler) initializeAuth() error {
 	// Check if auth table exists and has a row
 	var count int
@@ -103,30 +104,59 @@ func (h *Handler) initializeAuth() error {
 		return fmt.Errorf("create sessions index: %w", err)
 	}
 
-	// Check if we have an auth row
+	// Step 1: Check SPAXEL_INSTALL_SECRET env var — if set, use it directly
+	if envSecret := os.Getenv("SPAXEL_INSTALL_SECRET"); envSecret != "" {
+		secretBytes, err := hex.DecodeString(envSecret)
+		if err != nil {
+			return fmt.Errorf("decode SPAXEL_INSTALL_SECRET: %w", err)
+		}
+		if len(secretBytes) != 32 {
+			return fmt.Errorf("SPAXEL_INSTALL_SECRET must be 64 hex chars (32 bytes), got %d bytes", len(secretBytes))
+		}
+
+		// Upsert into auth table
+		_, err = h.db.Exec(`
+			INSERT OR REPLACE INTO auth (id, install_secret, pin_bcrypt, updated_at)
+			VALUES (1, ?, COALESCE((SELECT pin_bcrypt FROM auth WHERE id = 1), NULL), strftime('%s', 'now') * 1000)
+		`, secretBytes)
+		if err != nil {
+			return fmt.Errorf("store env install secret: %w", err)
+		}
+
+		log.Printf("[INFO] Using provided SPAXEL_INSTALL_SECRET")
+		return nil
+	}
+
+	// Step 2: Check if we already have an auth row with install_secret
 	err = h.db.QueryRow("SELECT COUNT(*) FROM auth WHERE id = 1").Scan(&count)
 	if err != nil {
 		return fmt.Errorf("check auth row: %w", err)
 	}
 
-	if count == 0 {
-		// Generate install secret
-		installSecret := make([]byte, 32)
-		if _, err := rand.Read(installSecret); err != nil {
-			return fmt.Errorf("generate install secret: %w", err)
-		}
-
-		// Insert auth row
-		_, err = h.db.Exec(`
-			INSERT INTO auth (id, install_secret, pin_bcrypt)
-			VALUES (1, ?, NULL)
-		`, installSecret)
-		if err != nil {
-			return fmt.Errorf("insert auth row: %w", err)
-		}
-
-		log.Printf("[INFO] Generated new install secret")
+	if count > 0 {
+		// Secret already exists in SQLite — load silently
+		log.Printf("[DEBUG] Install secret loaded from database")
+		return nil
 	}
+
+	// Step 3: No env var, no existing secret — generate a new one
+	installSecret := make([]byte, 32)
+	if _, err := rand.Read(installSecret); err != nil {
+		return fmt.Errorf("generate install secret: %w", err)
+	}
+
+	// Insert auth row
+	_, err = h.db.Exec(`
+		INSERT INTO auth (id, install_secret, pin_bcrypt)
+		VALUES (1, ?, NULL)
+	`, installSecret)
+	if err != nil {
+		return fmt.Errorf("insert auth row: %w", err)
+	}
+
+	// Print ONCE to stdout
+	secretHex := hex.EncodeToString(installSecret)
+	fmt.Fprintf(os.Stdout, "[SPAXEL] Installation secret: %s. Shown once — save to a safe place.\n", secretHex)
 
 	return nil
 }
@@ -134,6 +164,7 @@ func (h *Handler) initializeAuth() error {
 // RegisterRoutes registers auth routes with the given router.
 func (h *Handler) RegisterRoutes(mux interface{ HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) }) {
 	mux.HandleFunc("GET /api/auth/status", h.handleStatus)
+	mux.HandleFunc("GET /api/auth/install-secret", h.handleInstallSecret)
 	mux.HandleFunc("POST /api/auth/setup", h.handleSetup)
 	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
@@ -153,6 +184,36 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{
 		"pin_configured": pinBcrypt.Valid,
+	})
+}
+
+// handleInstallSecret returns the installation secret hex.
+// Requires admin session (authenticated) OR first-run state (no PIN configured).
+func (h *Handler) handleInstallSecret(w http.ResponseWriter, r *http.Request) {
+	// Allow access on first-run (no PIN configured) OR with valid session
+	var pinBcrypt sql.NullString
+	err := h.db.QueryRow("SELECT pin_bcrypt FROM auth WHERE id = 1").Scan(&pinBcrypt)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if pinBcrypt.Valid && !h.IsAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var secret []byte
+	err = h.db.QueryRow("SELECT install_secret FROM auth WHERE id = 1").Scan(&secret)
+	if err != nil {
+		http.Error(w, "Failed to retrieve install secret", http.StatusInternalServerError)
+		log.Printf("[ERROR] Failed to retrieve install secret: %v", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"install_secret": hex.EncodeToString(secret),
 	})
 }
 
@@ -493,9 +554,9 @@ func (h *Handler) DeriveNodeToken(mac string) (string, error) {
 	mac = strings.ToUpper(strings.ReplaceAll(mac, ":", ""))
 
 	// Compute HMAC-SHA256(install_secret, mac)
-	h := hmac.New(sha256.New, secret)
-	h.Write([]byte(mac))
-	return hex.EncodeToString(h.Sum(nil)), nil
+	macHash := hmac.New(sha256.New, secret)
+	macHash.Write([]byte(mac))
+	return hex.EncodeToString(macHash.Sum(nil)), nil
 }
 
 // ValidateNodeToken checks if a node token is valid.
@@ -511,9 +572,9 @@ func (h *Handler) ValidateNodeToken(mac, token string) bool {
 	mac = strings.ToUpper(strings.ReplaceAll(mac, ":", ""))
 
 	// Compute expected token
-	h := hmac.New(sha256.New, secret)
-	h.Write([]byte(mac))
-	expectedToken := hex.EncodeToString(h.Sum(nil))
+	macHash := hmac.New(sha256.New, secret)
+	macHash.Write([]byte(mac))
+	expectedToken := hex.EncodeToString(macHash.Sum(nil))
 
 	// Use constant-time comparison to prevent timing attacks
 	return subtle.ConstantTimeCompare([]byte(expectedToken), []byte(token)) == 1
