@@ -130,7 +130,7 @@ func TestMigrateFromV1(t *testing.T) {
 			updated_at INTEGER NOT NULL
 		);
 
-		INSERT INTO auth (id, install_secret) VALUES (1, X'0000000000000000000000000000000000000000000000000000000000000000');
+		INSERT INTO auth (id, install_secret, updated_at) VALUES (1, X'0000000000000000000000000000000000000000000000000000000000000000', strftime('%s', 'now') * 1000);
 
 		INSERT INTO schema_migrations (version, applied_at, description)
 		VALUES (1, strftime('%s', 'now') * 1000, 'initial schema');

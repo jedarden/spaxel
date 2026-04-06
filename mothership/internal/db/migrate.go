@@ -83,7 +83,12 @@ func (m *Migrator) Register(migrations ...Migration) {
 func (m *Migrator) CurrentVersion(ctx context.Context) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.currentVersionLocked(ctx)
+}
 
+// currentVersionLocked returns the current schema version without acquiring the lock.
+// The caller must hold m.mu.
+func (m *Migrator) currentVersionLocked(ctx context.Context) (int, error) {
 	// Check if schema_migrations table exists
 	var tableName string
 	err := m.db.QueryRowContext(ctx,
@@ -114,7 +119,7 @@ func (m *Migrator) Pending(ctx context.Context) ([]Migration, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	current, err := m.CurrentVersion(ctx)
+	current, err := m.currentVersionLocked(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +140,7 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	current, err := m.CurrentVersion(ctx)
+	current, err := m.currentVersionLocked(ctx)
 	if err != nil {
 		return fmt.Errorf("get current version: %w", err)
 	}

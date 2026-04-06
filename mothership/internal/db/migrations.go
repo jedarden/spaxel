@@ -3,8 +3,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
-	"time"
 )
 
 // AllMigrations returns the complete list of schema migrations in order.
