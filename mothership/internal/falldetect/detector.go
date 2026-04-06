@@ -6,7 +6,6 @@ package falldetect
 import (
 	"fmt"
 	"log"
-	"math"
 	"sync"
 	"time"
 )
@@ -61,7 +60,9 @@ type FallEvent struct {
 
 // Position represents a 3D position.
 type Position struct {
-	X, Y, Z float64 `json:"x,y,z"`
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
 }
 
 // BlobSnapshot captures blob state at a point in time.
@@ -357,16 +358,13 @@ func (d *Detector) checkForDescent(blob struct {
 
 	// Calculate Z velocity over rolling window
 	windowStart := now.Add(-time.Duration(d.config.DescentWindow * float64(time.Second)))
-	var startZ, endZ float64
 	var startFound, endFound bool
 
 	for i := len(history) - 1; i >= 0; i-- {
 		if history[i].Timestamp.After(windowStart) || history[i].Timestamp.Equal(windowStart) {
 			if !endFound {
-				endZ = history[i].Z
 				endFound = true
 			}
-			startZ = history[i].Z
 			startFound = true
 		} else {
 			break
