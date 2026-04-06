@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jedarden/spaxel/mothership/internal/oui"
+	"github.com/spaxel/mothership/internal/oui"
 )
 
 const (
