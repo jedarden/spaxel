@@ -592,6 +592,28 @@ func main() {
 		log.Printf("[WARN] Failed to create BLE registry: %v (BLE API disabled)", err)
 	} else {
 		defer bleRegistry.Close()
+
+		// Wire BLE registry to dashboard hub for WebSocket broadcasts
+		dashboardHub.SetBLEState(bleRegistry)
+
+		// Wire ingestion server BLE handler to BLE registry
+		ingestSrv.SetBLEHandler(func(nodeMAC string, devices []ingestion.BLEDevice) {
+			// Convert ingestion.BLEDevice to ble.BLEObservation
+			observations := make([]ble.BLEObservation, len(devices))
+			for i, d := range devices {
+				observations[i] = ble.BLEObservation{
+					Addr:       d.Addr,
+					Name:       d.Name,
+					MfrID:      d.MfrID,
+					MfrDataHex: d.MfrDataHex,
+					RSSIdBm:    d.RSSIdBm,
+				}
+			}
+			if err := bleRegistry.ProcessRelayMessage(nodeMAC, observations); err != nil {
+				log.Printf("[WARN] Failed to process BLE relay from %s: %v", nodeMAC, err)
+			}
+		})
+
 		bleHandler := ble.NewHandler(bleRegistry)
 		if authHandler != nil {
 			bleRouter := chi.NewRouter()

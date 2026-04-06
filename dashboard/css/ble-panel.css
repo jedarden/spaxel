@@ -1,0 +1,423 @@
+/**
+ * Spaxel Dashboard - BLE Panel Styles
+ *
+ * People & Devices panel specific styles.
+ */
+
+/* ============================================
+   BLE Panel Layout
+   ============================================ */
+
+.ble-panel {
+    background: #1e1e3a;
+}
+
+/* Loading State */
+.ble-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: #888;
+    font-size: 14px;
+}
+
+/* Error State */
+.ble-error {
+    background: rgba(239, 83, 80, 0.1);
+    border: 1px solid rgba(239, 83, 80, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    color: #ef5350;
+    font-size: 13px;
+    text-align: center;
+}
+
+.ble-error button {
+    margin-top: 12px;
+    padding: 6px 12px;
+    background: rgba(239, 83, 80, 0.2);
+    border: 1px solid rgba(239, 83, 80, 0.4);
+    border-radius: 4px;
+    color: #ef5350;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.ble-error button:hover {
+    background: rgba(239, 83, 80, 0.3);
+}
+
+/* Empty State */
+.ble-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Section Header */
+.ble-section-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin: 20px 0 12px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ble-section-header:first-child {
+    margin-top: 0;
+}
+
+/* ============================================
+   Device List
+   ============================================ */
+
+.ble-device-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ble-device {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.ble-device:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.ble-device-person {
+    border-left: 3px solid #ab47bc;
+}
+
+.ble-device-unregistered {
+    border-left: 3px solid #666;
+}
+
+/* Device Icon */
+.ble-device-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+}
+
+/* Device Name */
+.ble-device-name {
+    flex: 1;
+    font-size: 13px;
+    color: #eee;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Device RSSI */
+.ble-device-rssi {
+    font-size: 11px;
+    color: #888;
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
+/* Device Buttons */
+.ble-device-add,
+.ble-device-expand {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ble-device-add {
+    background: rgba(76, 175, 80, 0.2);
+    color: #66bb6a;
+}
+
+.ble-device-add:hover {
+    background: rgba(76, 175, 80, 0.3);
+    transform: scale(1.1);
+}
+
+.ble-device-expand {
+    background: rgba(255, 255, 255, 0.1);
+    color: #888;
+}
+
+.ble-device-expand:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ============================================
+   Edit/Register Modal
+   ============================================ */
+
+.ble-edit-form {
+    padding: 8px 0;
+}
+
+.ble-edit-form h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+    color: #eee;
+}
+
+.ble-hint {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: #aaa;
+    line-height: 1.4;
+}
+
+.ble-form-group {
+    margin-bottom: 12px;
+}
+
+.ble-form-group label {
+    display: block;
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+.ble-form-group input[type="text"],
+.ble-form-group input[type="color"],
+.ble-form-group select {
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: #eee;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.ble-form-group input[type="color"] {
+    height: 36px;
+    padding: 2px;
+    cursor: pointer;
+}
+
+.ble-form-group input:focus,
+.ble-form-group select:focus {
+    outline: none;
+    border-color: #ab47bc;
+    box-shadow: 0 0 0 2px rgba(171, 71, 188, 0.15);
+}
+
+.ble-form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.btn-cancel {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 4px;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-primary {
+    padding: 8px 16px;
+    background: #ab47bc;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background: #9c4cb3;
+}
+
+.btn-secondary {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #eee;
+}
+
+.btn-danger {
+    padding: 8px 16px;
+    background: rgba(244, 67, 54, 0.2);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    border-radius: 4px;
+    color: #ef5350;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 0.3);
+}
+
+/* ============================================
+   Device Details Modal
+   ============================================ */
+
+.ble-device-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.ble-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ble-detail-label {
+    font-size: 12px;
+    color: #888;
+}
+
+.ble-detail-value {
+    font-size: 13px;
+    color: #eee;
+    font-family: monospace;
+}
+
+.ble-details-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ble-details-actions button {
+    flex: 1;
+    min-width: 80px;
+}
+
+/* ============================================
+   History View (Future Enhancement)
+   ============================================ */
+
+.ble-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.ble-history-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.ble-history-time {
+    color: #888;
+    font-family: monospace;
+}
+
+.ble-history-rssi {
+    color: #4fc3f7;
+    font-family: monospace;
+}
+
+.ble-history-node {
+    color: #aaa;
+    font-size: 10px;
+}
+
+/* ============================================
+   Privacy Notice
+   ============================================ */
+
+.ble-privacy-notice {
+    background: rgba(171, 71, 188, 0.1);
+    border: 1px solid rgba(171, 71, 188, 0.2);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    font-size: 11px;
+    color: #ba68c8;
+    line-height: 1.4;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+
+@keyframes ble-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.ble-device.unseen .ble-device-icon {
+    animation: ble-pulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+
+@media (max-width: 480px) {
+    .ble-device {
+        padding: 8px 10px;
+    }
+
+    .ble-device-name {
+        font-size: 12px;
+    }
+
+    .ble-details-actions {
+        flex-direction: column;
+    }
+
+    .ble-details-actions button {
+        width: 100%;
+    }
+}

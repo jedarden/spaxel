@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/panels.css">
     <link rel="stylesheet" href="css/timeline.css">
     <link rel="stylesheet" href="css/apdetection.css">
+    <link rel="stylesheet" href="css/ble-panel.css">
     <style>
         * {
             margin: 0;
@@ -1362,6 +1363,43 @@
             color: #ccc;
         }
 
+        /* BLE button in status bar */
+        #ble-btn {
+            background: rgba(171, 71, 188, 0.15);
+            border: 1px solid rgba(171, 71, 188, 0.4);
+            color: #ba68c8;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            position: relative;
+        }
+
+        #ble-btn:hover {
+            background: rgba(171, 71, 188, 0.25);
+            color: #ce93d8;
+        }
+
+        #ble-btn .badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ef5350;
+            color: white;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 4px;
+            border-radius: 8px;
+            min-width: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        #ble-btn.has-unregistered .badge {
+            display: block;
+        }
+
         /* Room editor button */
         #room-editor-btn {
             background: rgba(255,255,255,0.06);
@@ -2009,6 +2047,7 @@
             </div>
         </div>
         <div class="status-item" style="margin-left:auto; gap:6px;">
+            <button id="ble-btn" onclick="BLEPanel && BLEPanel.open()">People & Devices<span id="ble-unregistered-badge" class="badge"></span></button>
             <button id="settings-btn" onclick="openSettingsPanel && openSettingsPanel()">Settings</button>
             <button id="add-node-btn" onclick="SpaxelOnboard && SpaxelOnboard.start()">+ Add Node</button>
             <button id="add-virtual-btn" onclick="Placement && Placement.addVirtualNode()">+ Virtual</button>
@@ -2111,6 +2150,8 @@
     <script src="js/router.js"></script>
     <!-- Settings Panel -->
     <script src="js/settings-panel.js"></script>
+    <!-- BLE People & Devices Panel -->
+    <script src="js/ble-panel.js"></script>
     <!-- Troubleshooting manager (must load before app.js) -->
     <script src="js/troubleshoot.js"></script>
     <!-- First-time feature tooltips (must load before app.js) -->

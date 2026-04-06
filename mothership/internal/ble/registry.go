@@ -299,6 +299,20 @@ func (r *Registry) migrate() error {
 		return fmt.Errorf("create ble_device_aliases table: %w", err)
 	}
 
+	// Create ble_device_sightings table for sighting history timeline
+	if _, err := r.db.Exec(`
+		CREATE TABLE IF NOT EXISTS ble_device_sightings (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			mac        TEXT    NOT NULL REFERENCES ble_devices(mac) ON DELETE CASCADE,
+			node_mac   TEXT    NOT NULL,
+			rssi_dbm   INTEGER NOT NULL,
+			timestamp  INTEGER NOT NULL,
+			FOREIGN KEY (mac) REFERENCES ble_devices(mac) ON DELETE CASCADE
+		)
+	`); err != nil {
+		return fmt.Errorf("create ble_device_sightings table: %w", err)
+	}
+
 	// Create indexes
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_ble_devices_person_id ON ble_devices(person_id)`,
@@ -307,6 +321,8 @@ func (r *Registry) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_ble_devices_last_seen ON ble_devices(last_seen_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_ble_device_aliases_canonical ON ble_device_aliases(canonical_addr)`,
 		`CREATE INDEX IF NOT EXISTS idx_ble_device_aliases_last_seen ON ble_device_aliases(last_seen)`,
+		`CREATE INDEX IF NOT EXISTS idx_ble_sightings_mac_timestamp ON ble_device_sightings(mac, timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_ble_sightings_timestamp ON ble_device_sightings(timestamp DESC)`,
 	}
 	for _, idx := range indexes {
 		if _, err := r.db.Exec(idx); err != nil {
@@ -375,6 +391,15 @@ func (r *Registry) ProcessRelayMessage(nodeMAC string, devices []BLEObservation)
 
 		if err != nil {
 			log.Printf("[WARN] ble: failed to upsert device %s: %v", dev.Addr, err)
+		} else {
+			// Record this sighting to the sightings table for history
+			_, err2 := r.db.Exec(`
+				INSERT INTO ble_device_sightings (mac, node_mac, rssi_dbm, timestamp)
+				VALUES (?, ?, ?, ?)
+			`, dev.Addr, nodeMAC, dev.RSSIdBm, now)
+			if err2 != nil {
+				log.Printf("[WARN] ble: failed to record sighting for %s: %v", dev.Addr, err2)
+			}
 		}
 	}
 
@@ -540,6 +565,116 @@ func (r *Registry) GetDevice(mac string) (*DeviceRecord, error) {
 	return scanDeviceRow(row)
 }
 
+// GetRegisteredDevices returns devices that have been assigned to a person.
+func (r *Registry) GetRegisteredDevices(includeArchived bool) ([]DeviceRecord, error) {
+	query := `
+		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
+		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       d.rssi_min, d.rssi_max, d.rssi_avg,
+		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
+		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
+		FROM ble_devices d
+		LEFT JOIN people p ON d.person_id = p.id
+		WHERE d.person_id IS NOT NULL AND d.person_id != ''
+	`
+	if !includeArchived {
+		query += " AND d.is_archived = 0"
+	}
+	query += " ORDER BY d.last_seen_at DESC"
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []DeviceRecord
+	for rows.Next() {
+		d, err := scanDeviceRow(rows)
+		if err != nil {
+			log.Printf("[WARN] ble: scan device: %v", err)
+			continue
+		}
+		devices = append(devices, *d)
+	}
+	return devices, rows.Err()
+}
+
+// GetDiscoveredDevices returns devices that have NOT been assigned to a person.
+func (r *Registry) GetDiscoveredDevices(includeArchived bool) ([]DeviceRecord, error) {
+	query := `
+		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
+		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       d.rssi_min, d.rssi_max, d.rssi_avg,
+		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
+		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
+		FROM ble_devices d
+		LEFT JOIN people p ON d.person_id = p.id
+		WHERE (d.person_id IS NULL OR d.person_id = '')
+	`
+	if !includeArchived {
+		query += " AND d.is_archived = 0"
+	}
+	query += " ORDER BY d.rssi_count DESC, d.last_seen_at DESC"
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []DeviceRecord
+	for rows.Next() {
+		d, err := scanDeviceRow(rows)
+		if err != nil {
+			log.Printf("[WARN] ble: scan device: %v", err)
+			continue
+		}
+		devices = append(devices, *d)
+	}
+	return devices, rows.Err()
+}
+
+// GetDeviceSightingHistory returns the sighting history for a device.
+func (r *Registry) GetDeviceSightingHistory(mac string, limit int) ([]SightingHistoryEntry, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	// Query sightings from the sightings table
+	rows, err := r.db.Query(`
+		SELECT node_mac, rssi_dbm, timestamp
+		FROM ble_device_sightings
+		WHERE mac = ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`, mac, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []SightingHistoryEntry
+	for rows.Next() {
+		var entry SightingHistoryEntry
+		var timestampNS int64
+		if err := rows.Scan(&entry.NodeMAC, &entry.RSSIdBm, &timestampNS); err != nil {
+			log.Printf("[WARN] ble: scan sighting: %v", err)
+			continue
+		}
+		entry.Timestamp = time.Unix(0, timestampNS)
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+// SightingHistoryEntry represents a single sighting event in the device history.
+type SightingHistoryEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	RSSIdBm    int       `json:"rssi_dbm"`
+	NodeMAC    string    `json:"node_mac"`
+}
+
 // UpdateLabel updates the user-assigned label for a device.
 func (r *Registry) UpdateLabel(mac, label string) error {
 	_, err := r.db.Exec(`UPDATE ble_devices SET name = ? WHERE mac = ?`, label, mac)
@@ -600,6 +735,65 @@ func (r *Registry) UnarchiveDevice(mac string) error {
 func (r *Registry) DeleteDevice(mac string) error {
 	_, err := r.db.Exec(`DELETE FROM ble_devices WHERE mac = ?`, mac)
 	return err
+}
+
+// GetDevicesSeenInHours returns devices seen within the last N hours.
+func (r *Registry) GetDevicesSeenInHours(hours int, includeArchived bool) ([]DeviceRecord, error) {
+	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour).UnixNano()
+
+	query := `
+		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
+		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       d.rssi_min, d.rssi_max, d.rssi_avg,
+		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
+		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
+		FROM ble_devices d
+		LEFT JOIN people p ON d.person_id = p.id
+		WHERE d.last_seen_at >= ?
+	`
+	if !includeArchived {
+		query += " AND d.is_archived = 0"
+	}
+	query += " ORDER BY d.last_seen_at DESC"
+
+	rows, err := r.db.Query(query, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []DeviceRecord
+	for rows.Next() {
+		d, err := scanDeviceRow(rows)
+		if err != nil {
+			log.Printf("[WARN] ble: scan device: %v", err)
+			continue
+		}
+		devices = append(devices, *d)
+	}
+	return devices, rows.Err()
+}
+
+// PreregisterDevice manually creates a device entry for a known MAC address.
+// This is useful for pre-registering tracker tags that haven't been seen yet.
+func (r *Registry) PreregisterDevice(mac, label string) (*DeviceRecord, error) {
+	now := time.Now().UnixNano()
+
+	// Insert the device with minimal info
+	_, err := r.db.Exec(`
+		INSERT INTO ble_devices (
+			mac, name, label, device_type, first_seen_at, last_seen_at,
+			last_seen_node, rssi_avg, rssi_count, enabled
+		) VALUES (?, ?, ?, 'unknown', ?, ?, '', 0, 0, 1)
+		ON CONFLICT(mac) DO UPDATE SET
+			name = CASE WHEN excluded.name != '' THEN excluded.name ELSE name END,
+			label = CASE WHEN excluded.label != '' THEN excluded.label ELSE label END
+	`, mac, label, label, now, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.GetDevice(mac)
 }
 
 // ArchiveStale marks devices not seen for longer than olderThan as archived.
@@ -866,6 +1060,19 @@ func (r *Registry) UpdateLocation(addr string, loc Location) error {
 // GetRSSICache returns the RSSI observation cache.
 func (r *Registry) GetRSSICache() *RSSICache {
 	return r.rssiCache
+}
+
+// GetDeviceRSSICount returns the number of RSSI observations for a device.
+func (r *Registry) GetDeviceRSSICount(mac string) int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var count int
+	err := r.db.QueryRow(`SELECT rssi_count FROM ble_devices WHERE mac = ?`, mac).Scan(&count)
+	if err != nil {
+		return 0
+	}
+	return count
 }
 
 // GetAllPersonDevices returns all devices assigned to any person.
@@ -1153,4 +1360,38 @@ func (r *Registry) GetCanonicalDevice(addr string) (*DeviceRecord, error) {
 	// First check if this is an alias
 	canonicalAddr := r.ResolveAlias(addr)
 	return r.GetDevice(canonicalAddr)
+}
+
+// GetCurrentDevices returns all BLE devices as a slice of maps for dashboard broadcast.
+// This implements the BLEState interface for the dashboard hub.
+func (r *Registry) GetCurrentDevices() []map[string]interface{} {
+	devices, err := r.GetDevices(false) // exclude archived
+	if err != nil {
+		return nil
+	}
+
+	result := make([]map[string]interface{}, len(devices))
+	for i, d := range devices {
+		result[i] = map[string]interface{}{
+			"mac":           d.Addr,
+			"name":          d.Name,
+			"label":         d.Label,
+			"manufacturer":  d.Manufacturer,
+			"device_type":   d.DeviceType,
+			"device_name":   d.DeviceName,
+			"mfr_id":        d.MfrID,
+			"person_id":     d.PersonID,
+			"person_name":   d.PersonName,
+			"rssi_min":      d.RSSIMin,
+			"rssi_max":      d.RSSIMax,
+			"rssi_avg":      d.RSSIAvg,
+			"rssi_count":    d.RSSICount(d.Addr),
+			"first_seen_at": d.FirstSeenAt.UnixMilli(),
+			"last_seen_at":  d.LastSeenAt.UnixMilli(),
+			"last_seen_node": d.LastSeenNode,
+			"is_wearable":   d.IsWearable,
+			"enabled":       d.Enabled,
+		}
+	}
+	return result
 }

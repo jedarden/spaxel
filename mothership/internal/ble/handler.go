@@ -28,6 +28,7 @@ func NewHandler(registry *Registry) *Handler {
 //	GET    /api/ble/devices/{mac}/aliases — get alias history for device
 //	PUT    /api/ble/devices/{mac}        — update device (label, device_type, person_id)
 //	DELETE /api/ble/devices/{mac}        — archive device (soft delete)
+//	POST   /api/ble/devices/preregister  — manually register a device by MAC address
 //	GET    /api/ble/duplicates           — list possible duplicate devices
 //	POST   /api/ble/merge                — merge two devices (MAC rotation)
 //	POST   /api/ble/split                — split alias from canonical device
@@ -40,9 +41,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Device endpoints
 	r.Get("/api/ble/devices", h.listDevices)
 	r.Get("/api/ble/devices/{mac}", h.getDevice)
+	r.Get("/api/ble/devices/{mac}/history", h.getDeviceHistory)
 	r.Get("/api/ble/devices/{mac}/aliases", h.getDeviceAliases)
 	r.Put("/api/ble/devices/{mac}", h.updateDevice)
 	r.Delete("/api/ble/devices/{mac}", h.archiveDevice)
+	r.Post("/api/ble/devices/preregister", h.preregisterDevice)
 
 	// Duplicate detection
 	r.Get("/api/ble/duplicates", h.listDuplicates)
@@ -61,8 +64,47 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 func (h *Handler) listDevices(w http.ResponseWriter, r *http.Request) {
 	includeArchived := r.URL.Query().Get("archived") == "true"
+	registered := r.URL.Query().Get("registered")
+	discovered := r.URL.Query().Get("discovered")
 
-	devices, err := h.registry.GetDevices(includeArchived)
+	// Parse hours parameter (default: 24 hours)
+	hoursStr := r.URL.Query().Get("hours")
+	hours := 24 // Default to last 24 hours
+	if hoursStr != "" {
+		if n, err := strconv.Atoi(hoursStr); err == nil && n > 0 {
+			hours = n
+		}
+	}
+
+	var devices []DeviceRecord
+	var err error
+
+	// Filter by registration status and time window
+	if registered == "true" {
+		devices, err = h.registry.GetDevicesSeenInHours(hours, includeArchived)
+		// Filter to only registered devices (has person_id)
+		var registeredDevices []DeviceRecord
+		for _, d := range devices {
+			if d.PersonID != "" {
+				registeredDevices = append(registeredDevices, d)
+			}
+		}
+		devices = registeredDevices
+	} else if discovered == "true" {
+		devices, err = h.registry.GetDevicesSeenInHours(hours, includeArchived)
+		// Filter to only unregistered devices (no person_id)
+		var unregisteredDevices []DeviceRecord
+		for _, d := range devices {
+			if d.PersonID == "" {
+				unregisteredDevices = append(unregisteredDevices, d)
+			}
+		}
+		devices = unregisteredDevices
+	} else {
+		// Get all devices seen in the time window
+		devices, err = h.registry.GetDevicesSeenInHours(hours, includeArchived)
+	}
+
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -92,6 +134,35 @@ func (h *Handler) getDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, device)
+}
+
+func (h *Handler) getDeviceHistory(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// Parse limit parameter
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	history, err := h.registry.GetDeviceSightingHistory(mac, limit)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "device not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"mac":     mac,
+		"history": history,
+		"limit":   limit,
+	})
 }
 
 type updateDeviceRequest struct {
@@ -366,6 +437,37 @@ func (h *Handler) deletePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ── Pre-registration endpoint ───────────────────────────────────────────────────────
+
+type preregisterDeviceRequest struct {
+	MAC   string `json:"mac"`
+	Label string `json:"label"`
+}
+
+// preregisterDevice manually creates a device entry for a known MAC address.
+// This is useful for pre-registering tracker tags that haven't been seen yet.
+func (h *Handler) preregisterDevice(w http.ResponseWriter, r *http.Request) {
+	var req preregisterDeviceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MAC == "" {
+		http.Error(w, "invalid request body: mac is required", http.StatusBadRequest)
+		return
+	}
+
+	// Default label to MAC if not provided
+	if req.Label == "" {
+		req.Label = req.MAC
+	}
+
+	device, err := h.registry.PreregisterDevice(req.MAC, req.Label)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, device)
 }
 
 // ── Alias endpoints ─────────────────────────────────────────────────────────────
