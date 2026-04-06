@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -347,10 +348,13 @@ func (de *DiagnosticEngine) checkWiFiCongestion(linkID string, history []LinkHea
 		return nil
 	}
 
-	// Find the earliest timestamp in the history
+	// Find the time span of history (handles both ascending and descending order)
 	startTime := history[0].Timestamp
 	endTime := history[len(history)-1].Timestamp
 	duration := endTime.Sub(startTime)
+	if duration < 0 {
+		duration = -duration
+	}
 
 	if duration < minDuration {
 		return nil
@@ -418,10 +422,13 @@ func (de *DiagnosticEngine) checkMetalInterference(linkID string, history []Link
 		return nil
 	}
 
-	// Check if we've had enough time
+	// Check if we've had enough time (handles both ascending and descending order)
 	startTime := history[0].Timestamp
 	endTime := history[len(history)-1].Timestamp
 	duration := endTime.Sub(startTime)
+	if duration < 0 {
+		duration = -duration
+	}
 
 	if duration < minDuration {
 		return nil
@@ -611,8 +618,14 @@ func (de *DiagnosticEngine) checkPeriodicInterference(linkID string, history []L
 		return nil
 	}
 
-	// Calculate events per hour
-	historyDuration := history[len(history)-1].Timestamp.Sub(history[0].Timestamp)
+	// Calculate events per hour (handles both ascending and descending order)
+	startTime := history[0].Timestamp
+	endTime := history[len(history)-1].Timestamp
+	historyDuration := endTime.Sub(startTime)
+	if historyDuration < 0 {
+		historyDuration = -historyDuration
+	}
+
 	if historyDuration < time.Hour {
 		return nil // Need at least an hour of data
 	}
@@ -747,14 +760,45 @@ func findVarianceSpikes(history []LinkHealthSnapshot, threshold float64) []time.
 		baseline = 1 // Avoid division by zero
 	}
 
-	var spikes []time.Time
+	// First, identify all high-variance samples with their timestamps
+	type spikeSample struct {
+		ts       time.Time
+		variance float64
+	}
+	var allSpikes []spikeSample
 	for _, h := range history {
 		if h.DeltaRMSVariance > baseline*threshold {
-			spikes = append(spikes, h.Timestamp)
+			allSpikes = append(allSpikes, spikeSample{ts: h.Timestamp, variance: h.DeltaRMSVariance})
 		}
 	}
 
-	return spikes
+	if len(allSpikes) == 0 {
+		return nil
+	}
+
+	// Sort spikes by timestamp
+	sort.Slice(allSpikes, func(i, j int) bool {
+		return allSpikes[i].ts.Before(allSpikes[j].ts)
+	})
+
+	// Cluster consecutive spikes (within 2 minutes) into events
+	// Return the start time of each event
+	var events []time.Time
+	eventStart := allSpikes[0].ts
+	lastSpikeTime := allSpikes[0].ts
+
+	for i := 1; i < len(allSpikes); i++ {
+		// If this spike is more than 2 minutes after the last, it's a new event
+		if allSpikes[i].ts.Sub(lastSpikeTime) > 2*time.Minute {
+			events = append(events, eventStart)
+			eventStart = allSpikes[i].ts
+		}
+		lastSpikeTime = allSpikes[i].ts
+	}
+	// Add the last event
+	events = append(events, eventStart)
+
+	return events
 }
 
 func isPeriodic(spikes []time.Time, minInterval, maxInterval time.Duration) bool {
@@ -762,10 +806,17 @@ func isPeriodic(spikes []time.Time, minInterval, maxInterval time.Duration) bool
 		return false
 	}
 
+	// Sort spikes by timestamp to handle any order
+	sortedSpikes := make([]time.Time, len(spikes))
+	copy(sortedSpikes, spikes)
+	sort.Slice(sortedSpikes, func(i, j int) bool {
+		return sortedSpikes[i].Before(sortedSpikes[j])
+	})
+
 	// Calculate intervals between spikes
-	intervals := make([]time.Duration, len(spikes)-1)
-	for i := 0; i < len(spikes)-1; i++ {
-		intervals[i] = spikes[i+1].Sub(spikes[i])
+	intervals := make([]time.Duration, len(sortedSpikes)-1)
+	for i := 0; i < len(sortedSpikes)-1; i++ {
+		intervals[i] = sortedSpikes[i+1].Sub(sortedSpikes[i])
 	}
 
 	// Check if intervals are relatively consistent (within 50% of each other)

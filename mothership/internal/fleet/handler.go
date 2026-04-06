@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/spaxel/mothership/internal/events"
 )
 
 // Handler serves the fleet REST API.
@@ -36,6 +37,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Delete("/api/nodes/{mac}", h.deleteNode)
 	r.Post("/api/nodes/virtual", h.addVirtualNode)
 	r.Put("/api/room", h.updateRoom)
+	// System mode endpoints
+	r.Get("/api/mode", h.getSystemMode)
+	r.Post("/api/mode", h.setSystemMode)
 }
 
 func (h *Handler) listNodes(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +201,73 @@ func (h *Handler) updateRoom(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func writeJSON(w http.ResponseWriter, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v) //nolint:errcheck
+// ── System Mode endpoints ───────────────────────────────────────────────────────
+
+type systemModeResponse struct {
+	Mode           string `json:"mode"`
+	Reason         string `json:"reason,omitempty"`
+	AutoAwayConfig autoAwayConfigResponse `json:"auto_away_config"`
+}
+
+type autoAwayConfigResponse struct {
+	Enabled         bool `json:"enabled"`
+	AbsenceDurationSec int `json:"absence_duration_sec"`
+}
+
+// getSystemMode returns the current system mode.
+func (h *Handler) getSystemMode(w http.ResponseWriter, r *http.Request) {
+	mode := h.mgr.GetSystemMode()
+	cfg := h.mgr.GetAutoAwayConfig()
+
+	resp := systemModeResponse{
+		Mode:   string(mode),
+		AutoAwayConfig: autoAwayConfigResponse{
+			Enabled:           cfg.Enabled,
+			AbsenceDurationSec: int(cfg.AbsenceDuration.Seconds()),
+		},
+	}
+	writeJSON(w, resp)
+}
+
+type setSystemModeRequest struct {
+	Mode   string `json:"mode"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// setSystemMode sets the system mode manually.
+func (h *Handler) setSystemMode(w http.ResponseWriter, r *http.Request) {
+	var req setSystemModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	var mode events.SystemMode
+	switch req.Mode {
+	case "home":
+		mode = events.ModeHome
+	case "away":
+		mode = events.ModeAway
+	case "sleep":
+		mode = events.ModeSleep
+	default:
+		http.Error(w, "invalid mode: must be home, away, or sleep", http.StatusBadRequest)
+		return
+	}
+
+	reason := req.Reason
+	if reason == "" {
+		reason = "manual"
+	}
+
+	if err := h.mgr.SetSystemMode(mode, reason); err != nil {
+		http.Error(w, "failed to set mode", http.StatusInternalServerError)
+		return
+	}
+
+	resp := systemModeResponse{
+		Mode:   string(mode),
+		Reason: reason,
+	}
+	writeJSON(w, resp)
 }

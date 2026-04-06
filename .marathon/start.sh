@@ -38,7 +38,7 @@ echo "╔═══════════════════════�
 echo "║         Spaxel Marathon — GLM-5 via ZAI Proxy               ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
-echo "  Model:       GLM-5 (via zai-proxy-apexalgo)"
+echo "  Model:       GLM-5 (via zai-proxy-hub)"
 echo "  Subagents:   GLM-5-Turbo"
 echo "  Instruction: $INSTRUCTION_FILE"
 echo "  Session:     $SESSION_NAME"
@@ -47,8 +47,9 @@ echo ""
 
 # Create tmux session with GLM-5 env vars and run the marathon launcher
 tmux new-session -d -s "$SESSION_NAME" -c "/home/coding/spaxel" \
-    "export ANTHROPIC_BASE_URL='http://zai-proxy-apexalgo.tail1b1987.ts.net:8080' && \
+    "export ANTHROPIC_BASE_URL='https://zai-proxy-mcp-ardenone-hub-ts.ardenone.com:8444' && \
      export ANTHROPIC_AUTH_TOKEN='proxy-handles-auth' && \
+     export NODE_TLS_REJECT_UNAUTHORIZED=0 && \
      export ANTHROPIC_MODEL='glm-5' && \
      export ANTHROPIC_DEFAULT_OPUS_MODEL='glm-5' && \
      export ANTHROPIC_DEFAULT_SONNET_MODEL='glm-5-turbo' && \

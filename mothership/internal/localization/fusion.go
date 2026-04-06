@@ -7,16 +7,18 @@ import (
 
 // LinkMotion describes one link's current motion state for fusion.
 type LinkMotion struct {
-	NodeMAC  string
-	PeerMAC  string
-	DeltaRMS float64
-	Motion   bool
+	NodeMAC     string
+	PeerMAC     string
+	DeltaRMS    float64
+	Motion      bool
+	HealthScore float64 // Link health score from signal processing (0-1)
 }
 
-// NodePosition holds a node's (x, z) position in room coordinates.
+// NodePosition holds a node's (x, y, z) position in room coordinates.
 type NodePosition struct {
 	MAC string
-	X   float64 // metres
+	X   float64 // metres (width)
+	Y   float64 // metres (height)
 	Z   float64 // metres (depth)
 }
 
@@ -39,6 +41,12 @@ type Engine struct {
 	peakThresh  float64
 	lastResult  *FusionResult
 	subscribers []chan FusionResult
+
+	// Learned weights (can be set externally)
+	learnedWeights *LearnedWeights
+
+	// Spatial weight learner for per-zone weights
+	spatialWeightLearner *SpatialWeightLearner
 }
 
 // NewEngine creates a fusion engine for the given room dimensions.
@@ -66,6 +74,34 @@ func (e *Engine) RemoveNode(mac string) {
 	e.mu.Unlock()
 }
 
+// SetLearnedWeights sets the learned weights for self-improving localization
+func (e *Engine) SetLearnedWeights(weights *LearnedWeights) {
+	e.mu.Lock()
+	e.learnedWeights = weights
+	e.mu.Unlock()
+}
+
+// GetLearnedWeights returns the current learned weights
+func (e *Engine) GetLearnedWeights() *LearnedWeights {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.learnedWeights
+}
+
+// SetSpatialWeightLearner sets the spatial weight learner for per-zone weights
+func (e *Engine) SetSpatialWeightLearner(learner *SpatialWeightLearner) {
+	e.mu.Lock()
+	e.spatialWeightLearner = learner
+	e.mu.Unlock()
+}
+
+// GetSpatialWeightLearner returns the current spatial weight learner
+func (e *Engine) GetSpatialWeightLearner() *SpatialWeightLearner {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.spatialWeightLearner
+}
+
 // ResizeRoom rebuilds the grid for updated room dimensions.
 func (e *Engine) ResizeRoom(width, depth, originX, originZ float64) {
 	e.mu.Lock()
@@ -75,12 +111,14 @@ func (e *Engine) ResizeRoom(width, depth, originX, originZ float64) {
 
 // Fuse performs a single fusion step with the provided motion states.
 // It returns a FusionResult containing the normalised grid snapshot and peak positions.
+// If learned weights are available, they are applied to improve accuracy.
 func (e *Engine) Fuse(links []LinkMotion) *FusionResult {
 	e.mu.RLock()
 	nodePos := make(map[string]NodePosition, len(e.nodePos))
 	for k, v := range e.nodePos {
 		nodePos[k] = v
 	}
+	learnedWeights := e.learnedWeights
 	e.mu.RUnlock()
 
 	e.grid.Reset()
@@ -95,7 +133,24 @@ func (e *Engine) Fuse(links []LinkMotion) *FusionResult {
 		if !okA || !okB {
 			continue
 		}
-		e.grid.AddLinkInfluence(posA.X, posA.Z, posB.X, posB.Z, lm.DeltaRMS)
+
+		// Apply learned weight multiplier if available
+		weight := lm.DeltaRMS
+		sigmaMultiplier := 0.0
+
+		if learnedWeights != nil {
+			linkID := lm.NodeMAC + "-" + lm.PeerMAC
+			weightMultiplier := learnedWeights.GetLinkWeight(linkID)
+			weight *= weightMultiplier
+			sigmaMultiplier = learnedWeights.GetLinkSigma(linkID)
+		}
+
+		// Use the sigma-aware version if we have learned sigma
+		if sigmaMultiplier != 0 {
+			e.grid.AddLinkInfluenceWithSigma(posA.X, posA.Z, posB.X, posB.Z, weight, sigmaMultiplier)
+		} else {
+			e.grid.AddLinkInfluence(posA.X, posA.Z, posB.X, posB.Z, weight)
+		}
 		activeLinks++
 	}
 

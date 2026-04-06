@@ -111,3 +111,142 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
+
+// AnomalyHandler provides REST API handlers for anomaly detection.
+type AnomalyHandler struct {
+	detector *Detector
+}
+
+// NewAnomalyHandler creates a new anomaly handler.
+func NewAnomalyHandler(detector *Detector) *AnomalyHandler {
+	return &AnomalyHandler{detector: detector}
+}
+
+// RegisterRoutes registers anomaly API routes on the given router.
+func (h *AnomalyHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/anomalies", h.handleGetAnomalies)
+	r.Get("/api/anomalies/active", h.handleGetActiveAnomalies)
+	r.Get("/api/anomalies/history", h.handleGetHistory)
+	r.Post("/api/anomalies/{id}/acknowledge", h.handleAcknowledge)
+	r.Get("/api/anomalies/summary", h.handleGetSummary)
+	r.Get("/api/anomalies/learning", h.handleGetLearningProgress)
+	r.Post("/api/anomalies/model/update", h.handleUpdateModel)
+}
+
+// handleGetAnomalies returns all anomalies (active + recent history).
+func (h *AnomalyHandler) handleGetAnomalies(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	active := h.detector.GetActiveAnomalies()
+	history := h.detector.GetAnomalyHistory(50)
+
+	response := map[string]interface{}{
+		"active":  active,
+		"history": history,
+	}
+	writeJSON(w, response)
+}
+
+// handleGetActiveAnomalies returns only active (unacknowledged) anomalies.
+func (h *AnomalyHandler) handleGetActiveAnomalies(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	active := h.detector.GetActiveAnomalies()
+	writeJSON(w, active)
+}
+
+// handleGetHistory returns anomaly history.
+func (h *AnomalyHandler) handleGetHistory(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	history := h.detector.GetAnomalyHistory(limit)
+	writeJSON(w, history)
+}
+
+// handleAcknowledge acknowledges an anomaly.
+func (h *AnomalyHandler) handleAcknowledge(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	anomalyID := chi.URLParam(r, "id")
+
+	var req struct {
+		Feedback string `json:"feedback"`
+		By       string `json:"acknowledged_by"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.detector.AcknowledgeAnomaly(anomalyID, req.Feedback, req.By); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "acknowledged"})
+}
+
+// handleGetSummary returns the weekly anomaly summary.
+func (h *AnomalyHandler) handleGetSummary(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	summary := h.detector.GetWeeklySummary()
+	writeJSON(w, summary)
+}
+
+// handleGetLearningProgress returns the learning progress.
+func (h *AnomalyHandler) handleGetLearningProgress(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	progress := h.detector.GetLearningProgress()
+	ready := h.detector.IsModelReady()
+
+	response := map[string]interface{}{
+		"progress":    progress,
+		"model_ready": ready,
+		"days_learned": int(progress * 7),
+		"days_remaining": int((1 - progress) * 7),
+	}
+	writeJSON(w, response)
+}
+
+// handleUpdateModel triggers a behaviour model update.
+func (h *AnomalyHandler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := h.detector.UpdateBehaviourModel(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "updated"})
+}

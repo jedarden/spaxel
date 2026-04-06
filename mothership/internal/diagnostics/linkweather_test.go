@@ -106,10 +106,11 @@ func TestRule2_WiFiCongestion(t *testing.T) {
 	})
 
 	// Create 15 minutes of history with low packet rate (14 Hz = 70% health)
+	// Samples must be in chronological order (oldest first) for duration calculation
 	samples := make([]LinkHealthSnapshot, 16)
 	for i := 0; i < 16; i++ {
 		samples[i] = LinkHealthSnapshot{
-			Timestamp:      now.Add(-time.Duration(i) * time.Minute),
+			Timestamp:      now.Add(-15 * time.Minute).Add(time.Duration(i) * time.Minute),
 			SNR:            0.7,
 			PhaseStability: 0.3,
 			PacketRate:     14.0, // 14 Hz out of 20 Hz = 70% health (< 80%)

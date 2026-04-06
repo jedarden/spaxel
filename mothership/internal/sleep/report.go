@@ -191,9 +191,6 @@ func (r *SleepReport) ToJSONMap() map[string]interface{} {
 		"interruptions":          r.Metrics.Interruptions,
 		"longest_deep_period_mins": r.Metrics.LongestDeepPeriod.Minutes(),
 		"continuity_score":       r.Metrics.ContinuityScore,
-		"breathing_score":        r.Metrics.BreathingScore,
-		"motion_score":           r.Metrics.MotionScore,
-		"continuity_score":       r.Metrics.ContinuityScore,
 	}
 
 	// Add timing

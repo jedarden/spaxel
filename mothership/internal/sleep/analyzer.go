@@ -2,6 +2,7 @@
 package sleep
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -13,6 +14,10 @@ const (
 	DefaultSleepStartHour = 22 // 10 PM
 	DefaultSleepEndHour   = 7  // 7 AM
 
+	// Session confirmation thresholds
+	SessionConfirmDuration = 15 * time.Minute // Must be stationary for 15 min to confirm sleep onset
+	WakeConfirmDuration    = 2 * time.Minute  // Must be moving for 2 min to confirm wake
+
 	// Scoring weights
 	BreathingWeight = 0.4
 	MotionWeight    = 0.3
@@ -23,9 +28,18 @@ const (
 	BreathingRateHigh = 25.0 // BPM - above this is concerning
 	BreathingRateOptimal = 14.0 // BPM - optimal breathing rate
 
+	// Breathing anomaly thresholds (per task spec: <8 or >25 bpm)
+	BreathingAnomalyLow  = 8.0  // BPM - apnea indicator
+	BreathingAnomalyHigh = 25.0 // BPM - hyperventilation indicator
+	BreathingAnomalyDurationThreshold = 3 * time.Minute
+
 	// Motion thresholds (deltaRMS)
 	QuietMotionThreshold = 0.015 // Below this is considered quiet
 	RestlessThreshold    = 0.04  // Above this is restless
+	WakeMotionThreshold  = 0.03  // Above this indicates potential wake episode
+
+	// Wake episode thresholds
+	WakeEpisodeMinDuration = 3 * time.Second // Minimum duration to count as wake episode
 
 	// Sample collection
 	SampleInterval = 30 * time.Second
@@ -98,8 +112,15 @@ type SleepMetrics struct {
 	// Timing
 	SleepStartTime  time.Time `json:"sleep_start_time"`
 	SleepEndTime    time.Time `json:"sleep_end_time,omitempty"`
+	SleepOnsetTime  time.Time `json:"sleep_onset_time,omitempty"` // When sleep was confirmed (15 min stationary)
 	TotalDuration   time.Duration `json:"total_duration"`
 	TimeInBed       time.Duration `json:"time_in_bed"`
+
+	// Sleep efficiency (per task spec: (time_in_bed - waso) / time_in_bed * 100)
+	SleepEfficiency     float64 `json:"sleep_efficiency"`      // 0-100%
+	SleepLatencyMinutes float64 `json:"sleep_latency_minutes"` // Time from entering bedroom to sleep onset
+	WASOMinutes         float64 `json:"waso_minutes"`          // Wake After Sleep Onset
+	WakeEpisodeCount    int     `json:"wake_episode_count"`
 
 	// Breathing metrics
 	AvgBreathingRate    float64 `json:"avg_breathing_rate"`
@@ -107,6 +128,7 @@ type SleepMetrics struct {
 	MaxBreathingRate    float64 `json:"max_breathing_rate"`
 	BreathingRateStdDev float64 `json:"breathing_rate_std_dev"`
 	BreathingScore      float64 `json:"breathing_score"` // 0-100
+	BreathingAnomalyCount int   `json:"breathing_anomaly_count"` // Anomalies < 8 or > 25 bpm
 
 	// Motion metrics
 	MotionEvents      int     `json:"motion_events"`
@@ -124,6 +146,28 @@ type SleepMetrics struct {
 	QualityRating     string  `json:"quality_rating"` // poor/fair/good/excellent
 }
 
+// Breathing anomaly thresholds are defined above (lines 32-34)
+
+// WakeEpisode represents a period of wakefulness during sleep
+type WakeEpisode struct {
+	ID              string        `json:"id"`
+	SessionID       string        `json:"session_id,omitempty"`
+	EpisodeStart    time.Time     `json:"episode_start"`
+	EpisodeEnd      time.Time     `json:"episode_end,omitempty"`
+	Duration        time.Duration `json:"duration"`
+	DurationSeconds float64       `json:"duration_seconds"`
+}
+
+// BreathingAnomaly represents a detected breathing anomaly
+type BreathingAnomaly struct {
+	ID          string    `json:"id"`
+	StartTime   time.Time `json:"start_time"`
+	EndTime     time.Time `json:"end_time,omitempty"`
+	RateBPM     float64   `json:"rate_bpm"`
+	AnomalyType string    `json:"anomaly_type"` // "low" or "high"
+	Duration    time.Duration `json:"duration"`
+}
+
 // SleepSession represents a complete sleep session
 type SleepSession struct {
 	mu sync.RWMutex
@@ -137,6 +181,11 @@ type SleepSession struct {
 	sessionDate    time.Time // Date of sleep session (midnight of the night)
 	isActive       bool
 
+	// Session timing
+	sessionStart   time.Time // When person entered bedroom/started tracking
+	sleepOnset     time.Time // When sleep was confirmed (15 min after stationary detection)
+	wakeTime       time.Time // When session ended
+
 	// Sample buffers
 	breathingSamples []BreathingSample
 	motionSamples    []MotionSample
@@ -144,6 +193,21 @@ type SleepSession struct {
 	// Period tracking
 	sleepPeriods []SleepPeriod
 	currentPeriod *SleepPeriod
+
+	// Wake episode tracking
+	wakeEpisodes     []WakeEpisode
+	currentWakeEpisode *WakeEpisode
+	wakeEpisodeStart time.Time // Track when current wake period started
+
+	// Breathing anomaly tracking
+	breathingAnomalies []BreathingAnomaly
+	currentAnomaly     *BreathingAnomaly
+	anomalyStartTime   time.Time
+	anomalyType        string
+
+	// Zone and identity
+	zoneID   string
+	personID string
 
 	// Aggregated metrics (computed on demand)
 	metrics *SleepMetrics
@@ -280,6 +344,8 @@ func NewSleepSession(linkID string, sleepStartHour, sleepEndHour int) *SleepSess
 		breathingSamples: make([]BreathingSample, 0, 1440), // ~12 hours at 30s intervals
 		motionSamples:    make([]MotionSample, 0, 1440),
 		sleepPeriods:     make([]SleepPeriod, 0, 100),
+		wakeEpisodes:     make([]WakeEpisode, 0, 50),
+		breathingAnomalies: make([]BreathingAnomaly, 0, 20),
 	}
 }
 
@@ -297,10 +363,68 @@ func (ss *SleepSession) processBreathing(sample BreathingSample) {
 	if !ss.isActive {
 		ss.isActive = true
 		ss.sessionDate = ss.getSleepDate(sample.Timestamp)
+		ss.sessionStart = sample.Timestamp
 		ss.metrics = nil // Reset metrics for new session
 	}
 
 	ss.breathingSamples = append(ss.breathingSamples, sample)
+
+	// Detect breathing anomalies (apnea/hyperventilation indicators)
+	if sample.IsDetected && sample.RateBPM > 0 {
+		ss.detectBreathingAnomaly(sample)
+	}
+}
+
+// detectBreathingAnomaly checks for breathing rates outside normal range
+func (ss *SleepSession) detectBreathingAnomaly(sample BreathingSample) {
+	isAnomalous := false
+	anomalyType := ""
+
+	if sample.RateBPM < BreathingAnomalyLow && sample.RateBPM > 0 {
+		isAnomalous = true
+		anomalyType = "low" // Potential apnea
+	} else if sample.RateBPM > BreathingAnomalyHigh {
+		isAnomalous = true
+		anomalyType = "high" // Potential hyperventilation
+	}
+
+	if isAnomalous {
+		if ss.anomalyStartTime.IsZero() {
+			// Start tracking potential anomaly
+			ss.anomalyStartTime = sample.Timestamp
+			ss.anomalyType = anomalyType
+		} else if ss.anomalyType == anomalyType {
+			// Continue tracking same type of anomaly
+			duration := sample.Timestamp.Sub(ss.anomalyStartTime)
+			if duration >= BreathingAnomalyDurationThreshold && ss.currentAnomaly == nil {
+				// Anomaly persisted for 3+ minutes - record it
+				ss.currentAnomaly = &BreathingAnomaly{
+					ID:          fmt.Sprintf("%s-%d", ss.linkID, ss.anomalyStartTime.Unix()),
+					StartTime:   ss.anomalyStartTime,
+					RateBPM:     sample.RateBPM,
+					AnomalyType: anomalyType,
+				}
+				ss.breathingAnomalies = append(ss.breathingAnomalies, *ss.currentAnomaly)
+			}
+		} else {
+			// Different anomaly type - reset tracking
+			ss.anomalyStartTime = sample.Timestamp
+			ss.anomalyType = anomalyType
+		}
+	} else {
+		// Breathing returned to normal - close any ongoing anomaly
+		if ss.currentAnomaly != nil {
+			ss.currentAnomaly.EndTime = sample.Timestamp
+			ss.currentAnomaly.Duration = sample.Timestamp.Sub(ss.currentAnomaly.StartTime)
+			// Update the last anomaly in the slice
+			if len(ss.breathingAnomalies) > 0 {
+				ss.breathingAnomalies[len(ss.breathingAnomalies)-1] = *ss.currentAnomaly
+			}
+			ss.currentAnomaly = nil
+		}
+		ss.anomalyStartTime = time.Time{}
+		ss.anomalyType = ""
+	}
 }
 
 // processMotion processes a motion sample
@@ -317,13 +441,54 @@ func (ss *SleepSession) processMotion(sample MotionSample) {
 	if !ss.isActive {
 		ss.isActive = true
 		ss.sessionDate = ss.getSleepDate(sample.Timestamp)
+		ss.sessionStart = sample.Timestamp
 		ss.metrics = nil
 	}
 
 	// Track motion state changes
 	ss.updateSleepState(sample)
 
+	// Track wake episodes during confirmed sleep
+	if ss.sleepOnsetConfirmed() {
+		ss.trackWakeEpisode(sample)
+	}
+
 	ss.motionSamples = append(ss.motionSamples, sample)
+}
+
+// sleepOnsetConfirmed returns true if sleep onset has been confirmed (15 min of stationary)
+func (ss *SleepSession) sleepOnsetConfirmed() bool {
+	return !ss.sleepOnset.IsZero()
+}
+
+// trackWakeEpisode tracks wake episodes during sleep
+func (ss *SleepSession) trackWakeEpisode(sample MotionSample) {
+	// Wake episode starts when motion > threshold for sustained period
+	if sample.DeltaRMS > RestlessThreshold || sample.MotionDetected {
+		if ss.wakeEpisodeStart.IsZero() {
+			// Start tracking potential wake episode
+			ss.wakeEpisodeStart = sample.Timestamp
+		} else {
+			// Check if this has been sustained long enough
+			duration := sample.Timestamp.Sub(ss.wakeEpisodeStart)
+			if duration >= WakeEpisodeMinDuration && ss.currentWakeEpisode == nil {
+				// Create new wake episode
+				ss.currentWakeEpisode = &WakeEpisode{
+					ID:           fmt.Sprintf("%s-wake-%d", ss.linkID, ss.wakeEpisodeStart.Unix()),
+					EpisodeStart: ss.wakeEpisodeStart,
+				}
+			}
+		}
+	} else {
+		// Motion returned to quiet - close any ongoing wake episode
+		if ss.currentWakeEpisode != nil {
+			ss.currentWakeEpisode.EpisodeEnd = sample.Timestamp
+			ss.currentWakeEpisode.Duration = sample.Timestamp.Sub(ss.currentWakeEpisode.EpisodeStart)
+			ss.wakeEpisodes = append(ss.wakeEpisodes, *ss.currentWakeEpisode)
+			ss.currentWakeEpisode = nil
+		}
+		ss.wakeEpisodeStart = time.Time{}
+	}
 }
 
 // updateSleepState updates the sleep state based on motion
@@ -458,8 +623,19 @@ func (ss *SleepSession) calculateTiming(m *SleepMetrics) {
 	m.SleepStartTime = ss.motionSamples[0].Timestamp
 	m.SleepEndTime = ss.motionSamples[len(ss.motionSamples)-1].Timestamp
 
+	// Set sleep onset if confirmed
+	if !ss.sleepOnset.IsZero() {
+		m.SleepOnsetTime = ss.sleepOnset
+	}
+
+	// Calculate time in bed
 	if !m.SleepEndTime.IsZero() {
 		m.TimeInBed = m.SleepEndTime.Sub(m.SleepStartTime)
+	}
+
+	// Calculate sleep latency (time from entering bed to sleep onset)
+	if !ss.sleepOnset.IsZero() && !ss.sessionStart.IsZero() {
+		m.SleepLatencyMinutes = ss.sleepOnset.Sub(ss.sessionStart).Minutes()
 	}
 
 	// Count actual sleep time (excluding awake periods)
@@ -472,6 +648,28 @@ func (ss *SleepSession) calculateTiming(m *SleepMetrics) {
 	// Include current period if sleeping
 	if ss.currentPeriod != nil && ss.currentPeriod.State != SleepStateAwake {
 		m.TotalDuration += time.Since(ss.currentPeriod.StartTime)
+	}
+
+	// Calculate WASO (Wake After Sleep Onset) from wake episodes
+	m.WakeEpisodeCount = len(ss.wakeEpisodes)
+	var wasoDuration time.Duration
+	for _, episode := range ss.wakeEpisodes {
+		// Only count episodes after sleep onset
+		if episode.EpisodeStart.After(ss.sleepOnset) {
+			wasoDuration += episode.Duration
+		}
+	}
+	m.WASOMinutes = wasoDuration.Minutes()
+
+	// Calculate sleep efficiency: (time_in_bed - waso) / time_in_bed * 100
+	// Per task spec: a value above 85% is considered good sleep efficiency
+	if m.TimeInBed > 0 {
+		effectiveSleep := m.TimeInBed - wasoDuration
+		m.SleepEfficiency = (float64(effectiveSleep) / float64(m.TimeInBed)) * 100
+		// Cap at 100%
+		if m.SleepEfficiency > 100 {
+			m.SleepEfficiency = 100
+		}
 	}
 }
 
@@ -509,6 +707,9 @@ func (ss *SleepSession) calculateBreathingMetrics(m *SleepMetrics) {
 		variance := sumSq/float64(count) - m.AvgBreathingRate*m.AvgBreathingRate
 		m.BreathingRateStdDev = math.Sqrt(math.Max(0, variance))
 	}
+
+	// Count breathing anomalies (per task spec: < 8 or > 25 bpm for > 3 minutes)
+	m.BreathingAnomalyCount = len(ss.breathingAnomalies)
 
 	// Calculate breathing score (0-100)
 	m.BreathingScore = ss.calculateBreathingScore(m.AvgBreathingRate, m.BreathingRateStdDev, m.MinBreathingRate, m.MaxBreathingRate)

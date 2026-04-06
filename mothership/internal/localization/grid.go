@@ -62,6 +62,12 @@ func (g *Grid) Reset() {
 // zone width parameter).  We scale by the link weight so strongly-active links
 // dominate weakly-active ones.
 func (g *Grid) AddLinkInfluence(ax, az, bx, bz, weight float64) {
+	g.AddLinkInfluenceWithSigma(ax, az, bx, bz, weight, 0)
+}
+
+// AddLinkInfluenceWithSigma paints the Fresnel-zone influence with a learned sigma multiplier.
+// sigmaMultiplier adjusts the base sigma: 1.0 = default, <1.0 = narrower zone, >1.0 = wider zone
+func (g *Grid) AddLinkInfluenceWithSigma(ax, az, bx, bz, weight, sigmaMultiplier float64) {
 	if weight <= 0 {
 		return
 	}
@@ -74,7 +80,21 @@ func (g *Grid) AddLinkInfluence(ax, az, bx, bz, weight float64) {
 	// σ is chosen so the first Fresnel zone (excess = λ/2 ≈ 0.062m at 2.4GHz)
 	// maps to ~1σ, giving comfortable spatial spread.  In practice a wider
 	// sigma (0.5m) gives better localisation for indoor multipath.
-	sigma := math.Max(ab*0.25, 0.5)
+	baseSigma := math.Max(ab*0.25, 0.5)
+
+	// Apply learned sigma multiplier
+	sigma := baseSigma
+	if sigmaMultiplier > 0 {
+		sigma = baseSigma * sigmaMultiplier
+		// Clamp to reasonable range
+		if sigma < 0.2 {
+			sigma = 0.2
+		}
+		if sigma > 2.0 {
+			sigma = 2.0
+		}
+	}
+
 	twoSigSq := 2 * sigma * sigma
 
 	g.mu.Lock()

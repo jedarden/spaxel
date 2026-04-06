@@ -43,6 +43,14 @@ type Blob struct {
 	// Trail holds the last TrailMaxLen positions (newest last).
 	Trail [][3]float64
 
+	// Identity fields (populated by BLE-to-blob matching)
+	PersonID           string    `json:"person_id,omitempty"`            // UUID from BLE registry
+	PersonLabel        string    `json:"person_label,omitempty"`         // Display name
+	PersonColor        string    `json:"person_color,omitempty"`         // Hex color for dashboard
+	IdentityConfidence float64   `json:"identity_confidence,omitempty"`  // Match confidence [0..1]
+	IdentitySource     string    `json:"identity_source,omitempty"`      // "ble_triangulation", "ble_only", or ""
+	IdentityLastSeen   time.Time `json:"-"`                              // Last time identity was confirmed
+
 	ukf *UKF // internal — nil in copies returned to callers
 }
 

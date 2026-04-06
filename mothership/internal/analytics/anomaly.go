@@ -2,7 +2,9 @@
 package analytics
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spaxel/mothership/internal/events"
+	"github.com/spaxel/mothership/internal/learning"
 
 	_ "modernc.org/sqlite"
 )
@@ -88,11 +91,63 @@ func DefaultAnomalyScoreConfig() AnomalyScoreConfig {
 	}
 }
 
+// SecurityMode represents the current security mode state.
+type SecurityMode string
+
+const (
+	SecurityModeDisarmed SecurityMode = "disarmed"
+	SecurityModeArmed    SecurityMode = "armed"
+	SecurityModeArmedStay SecurityMode = "armed_stay" // Armed but people are home
+)
+
+// AutoAwayState tracks state for auto-away functionality.
+type AutoAwayState struct {
+	LastMotionTime   time.Time `json:"last_motion_time"`
+	LastPersonCount  int       `json:"last_person_count"`
+	AutoAwayTriggered bool     `json:"auto_away_triggered"`
+}
+
+// AutoDisarmState tracks state for auto-disarm functionality.
+type AutoDisarmState struct {
+	RegisteredDeviceSeen bool      `json:"registered_device_seen"`
+	SeenDeviceMAC       string    `json:"seen_device_mac"`
+	SeenDeviceRSSI      int       `json:"seen_device_rssi"`
+	LastSeenTime        time.Time `json:"last_seen_time"`
+}
+
+// AnomalyCooldownConfig holds configuration for anomaly deduplication.
+type AnomalyCooldownConfig struct {
+	// Cooldown duration per anomaly type+zone combination
+	UnusualHourCooldown    time.Duration `json:"unusual_hour_cooldown"`    // Default: 30 minutes
+	UnknownBLECooldown     time.Duration `json:"unknown_ble_cooldown"`     // Default: 10 minutes
+	MotionDuringAwayCooldown time.Duration `json:"motion_during_away_cooldown"` // Default: 5 minutes
+	UnusualDwellCooldown   time.Duration `json:"unusual_dwell_cooldown"`   // Default: 1 hour
+}
+
+// DefaultAnomalyCooldownConfig returns default cooldown configuration.
+func DefaultAnomalyCooldownConfig() AnomalyCooldownConfig {
+	return AnomalyCooldownConfig{
+		UnusualHourCooldown:      30 * time.Minute,
+		UnknownBLECooldown:       10 * time.Minute,
+		MotionDuringAwayCooldown: 5 * time.Minute,
+		UnusualDwellCooldown:     1 * time.Hour,
+	}
+}
+
+// cooldownKey tracks the last time an anomaly was raised for deduplication.
+type cooldownKey struct {
+	anomalyType events.AnomalyType
+	zoneID      string
+	personID    string
+	deviceMAC   string
+}
+
 // Detector detects anomalies based on learned normal behaviour.
 type Detector struct {
 	mu      sync.RWMutex
 	db      *sql.DB
 	config  AnomalyScoreConfig
+	cooldownConfig AnomalyCooldownConfig
 
 	// Normal behaviour model (loaded from DB)
 	behaviourSlots   map[string]*NormalBehaviourSlot   // key: "hour-zone"
@@ -105,6 +160,9 @@ type Detector struct {
 	// Pending alert timers
 	pendingAlerts    map[string]*alertTimerState
 
+	// Anomaly cooldown tracking for deduplication
+	anomalyCooldowns map[cooldownKey]time.Time // key -> last triggered time
+
 	// Model state
 	learningStartTime time.Time
 	modelReady        bool
@@ -115,6 +173,12 @@ type Detector struct {
 	registeredPeople  map[string]string // person_id -> name
 	deviceFirstSeen   map[string]time.Time // MAC -> first seen time
 
+	// Security mode state
+	securityMode      SecurityMode
+	autoAwayState     AutoAwayState
+	autoDisarmState   AutoDisarmState
+	manualOverrideUntil time.Time // Manual mode override expiry
+
 	// Providers
 	zoneProvider      ZoneProvider
 	personProvider    PersonProvider
@@ -122,9 +186,13 @@ type Detector struct {
 	positionProvider  PositionProvider
 	alertHandler      AlertHandler
 
+	// Feedback store for accuracy tracking
+	feedbackStore     *learning.FeedbackStore
+
 	// Callbacks
 	onAnomaly         func(event events.AnomalyEvent)
 	onModeChange      func(event events.SystemModeChangeEvent)
+	onSecurityModeChange func(oldMode, newMode SecurityMode, reason string)
 }
 
 // ZoneProvider provides zone information.
@@ -181,13 +249,16 @@ func NewDetector(dbPath string, config AnomalyScoreConfig) (*Detector, error) {
 	d := &Detector{
 		db:               db,
 		config:           config,
+		cooldownConfig:   DefaultAnomalyCooldownConfig(),
 		behaviourSlots:   make(map[string]*NormalBehaviourSlot),
 		dwellSlots:       make(map[string]*DwellBehaviourSlot),
 		activeAnomalies:  make(map[string]*events.AnomalyEvent),
 		pendingAlerts:    make(map[string]*alertTimerState),
+		anomalyCooldowns: make(map[cooldownKey]time.Time),
 		registeredDevices: make(map[string]bool),
 		registeredPeople:  make(map[string]string),
 		deviceFirstSeen:   make(map[string]time.Time),
+		securityMode:      SecurityModeDisarmed,
 	}
 
 	if err := d.migrate(); err != nil {
@@ -430,6 +501,13 @@ func (d *Detector) SetAlertHandler(h AlertHandler) {
 	d.mu.Unlock()
 }
 
+// SetFeedbackStore sets the feedback store for accuracy tracking.
+func (d *Detector) SetFeedbackStore(store *learning.FeedbackStore) {
+	d.mu.Lock()
+	d.feedbackStore = store
+	d.mu.Unlock()
+}
+
 // SetOnAnomaly sets callback for anomaly events.
 func (d *Detector) SetOnAnomaly(cb func(event events.AnomalyEvent)) {
 	d.mu.Lock()
@@ -442,6 +520,78 @@ func (d *Detector) SetOnModeChange(cb func(event events.SystemModeChangeEvent)) 
 	d.mu.Lock()
 	d.onModeChange = cb
 	d.mu.Unlock()
+}
+
+// SetOnSecurityModeChange sets callback for security mode changes.
+func (d *Detector) SetOnSecurityModeChange(cb func(oldMode, newMode SecurityMode, reason string)) {
+	d.mu.Lock()
+	d.onSecurityModeChange = cb
+	d.mu.Unlock()
+}
+
+// GetSecurityMode returns the current security mode.
+func (d *Detector) GetSecurityMode() SecurityMode {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.securityMode
+}
+
+// SetSecurityMode sets the security mode.
+func (d *Detector) SetSecurityMode(mode SecurityMode, reason string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.securityMode == mode {
+		return // No change
+	}
+
+	oldMode := d.securityMode
+	d.securityMode = mode
+
+	log.Printf("[INFO] Security mode changed: %s -> %s (reason: %s)", oldMode, mode, reason)
+
+	// Fire callback
+	if d.onSecurityModeChange != nil {
+		go d.onSecurityModeChange(oldMode, mode, reason)
+	}
+
+	// Persist to database
+	d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode', ?)`, string(mode))
+
+	// Clear manual override if switching to armed mode
+	if mode == SecurityModeArmed || mode == SecurityModeArmedStay {
+		d.manualOverrideUntil = time.Time{}
+	}
+}
+
+// IsSecurityModeActive returns true if security mode is armed or armed_stay.
+func (d *Detector) IsSecurityModeActive() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.securityMode == SecurityModeArmed || d.securityMode == SecurityModeArmedStay
+}
+
+// SetManualOverride sets a temporary override for security mode.
+func (d *Detector) SetManualOverride(duration time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.manualOverrideUntil = time.Now().Add(duration)
+	log.Printf("[INFO] Manual security override set for %v", duration)
+}
+
+// ClearManualOverride clears the manual override.
+func (d *Detector) ClearManualOverride() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.manualOverrideUntil = time.Time{}
+	log.Printf("[INFO] Manual security override cleared")
+}
+
+// IsManualOverrideActive returns true if manual override is active.
+func (d *Detector) IsManualOverrideActive() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return !d.manualOverrideUntil.IsZero() && time.Now().Before(d.manualOverrideUntil)
 }
 
 // SetRegisteredDevices sets the list of registered BLE devices.
@@ -506,6 +656,15 @@ func (d *Detector) ProcessOccupancy(zoneID string, personCount int, bleDevices [
 
 	// Check if this is an unusual hour (low expected occupancy but we see people)
 	if personCount > 0 && slot.ExpectedOccupancy < 0.1 {
+		// Check cooldown for this anomaly type+zone
+		cooldownKey := cooldownKey{
+			anomalyType: events.AnomalyUnusualHour,
+			zoneID:      zoneID,
+		}
+		if d.isInCooldown(cooldownKey, d.cooldownConfig.UnusualHourCooldown) {
+			return nil
+		}
+
 		score := d.config.UnusualHourScore
 		if isSecurityMode {
 			score = d.config.UnusualHourScoreSecurity
@@ -539,6 +698,9 @@ func (d *Detector) ProcessOccupancy(zoneID string, personCount int, bleDevices [
 			ExpectedOccupancy: slot.ExpectedOccupancy,
 		}
 
+		// Mark cooldown
+		d.anomalyCooldowns[cooldownKey] = now
+
 		return d.createAnomaly(&event, isSecurityMode)
 	}
 
@@ -567,6 +729,15 @@ func (d *Detector) ProcessBLEDevice(mac string, rssi int, isSecurityMode bool) *
 	// Check if close range
 	if rssi < d.config.CloseRangeRSSIThreshold {
 		return nil // Not close enough to be concerning
+	}
+
+	// Check cooldown for this device
+	cooldownKey := cooldownKey{
+		anomalyType: events.AnomalyUnknownBLE,
+		deviceMAC:   mac,
+	}
+	if d.isInCooldown(cooldownKey, d.cooldownConfig.UnknownBLECooldown) {
+		return nil
 	}
 
 	// Check if device was seen before
@@ -610,6 +781,9 @@ func (d *Detector) ProcessBLEDevice(mac string, rssi int, isSecurityMode bool) *
 		SeenBefore:  seenBefore,
 	}
 
+	// Mark cooldown
+	d.anomalyCooldowns[cooldownKey] = now
+
 	return d.createAnomaly(&event, isSecurityMode)
 }
 
@@ -619,6 +793,15 @@ func (d *Detector) ProcessMotionDuringAway(zoneID string, blobID int, isSecurity
 	defer d.mu.Unlock()
 
 	now := time.Now()
+
+	// Check cooldown for this anomaly type+zone
+	cooldownKey := cooldownKey{
+		anomalyType: events.AnomalyMotionDuringAway,
+		zoneID:      zoneID,
+	}
+	if d.isInCooldown(cooldownKey, d.cooldownConfig.MotionDuringAwayCooldown) {
+		return nil
+	}
 
 	// This anomaly always fires regardless of model training status
 	score := d.config.MotionDuringAwayScore
@@ -649,6 +832,9 @@ func (d *Detector) ProcessMotionDuringAway(zoneID string, blobID int, isSecurity
 		BlobID:      blobID,
 		Position:    pos,
 	}
+
+	// Mark cooldown
+	d.anomalyCooldowns[cooldownKey] = now
 
 	return d.createAnomaly(&event, isSecurityMode)
 }
@@ -683,6 +869,16 @@ func (d *Detector) ProcessDwellDuration(zoneID, personID string, dwellDuration t
 
 	// Check if dwelling for > 5x mean
 	if dwellDuration > time.Duration(float64(slot.MeanDwellDuration)*d.config.DwellMultiplierThreshold) {
+		// Check cooldown for this anomaly type+zone+person
+		cooldownKey := cooldownKey{
+			anomalyType: events.AnomalyUnusualDwell,
+			zoneID:      zoneID,
+			personID:    personID,
+		}
+		if d.isInCooldown(cooldownKey, d.cooldownConfig.UnusualDwellCooldown) {
+			return nil
+		}
+
 		score := d.config.UnusualDwellScore
 
 		// Get names
@@ -708,6 +904,9 @@ func (d *Detector) ProcessDwellDuration(zoneID, personID string, dwellDuration t
 			DwellDuration:  dwellDuration,
 			ExpectedDwell:  slot.MeanDwellDuration,
 		}
+
+		// Mark cooldown
+		d.anomalyCooldowns[cooldownKey] = now
 
 		return d.createAnomaly(&event, isSecurityMode)
 	}
@@ -745,6 +944,25 @@ func (d *Detector) getAlertThreshold(isSecurityMode bool) float64 {
 		return d.config.AlertThresholdSecurity
 	}
 	return d.config.AlertThresholdNormal
+}
+
+// isInCooldown checks if an anomaly key is in cooldown period.
+func (d *Detector) isInCooldown(key cooldownKey, duration time.Duration) bool {
+	if lastTime, exists := d.anomalyCooldowns[key]; exists {
+		return time.Since(lastTime) < duration
+	}
+	return false
+}
+
+// cleanupStaleCooldowns removes expired cooldown entries.
+func (d *Detector) cleanupStaleCooldowns() {
+	now := time.Now()
+	maxCooldown := d.cooldownConfig.UnusualDwellCooldown // Use the longest cooldown
+	for key, lastTime := range d.anomalyCooldowns {
+		if now.Sub(lastTime) > maxCooldown {
+			delete(d.anomalyCooldowns, key)
+		}
+	}
 }
 
 func (d *Detector) recordOccupancySample(hourOfWeek int, zoneID string, personCount int, bleDevices []string, timestamp time.Time) {
@@ -919,9 +1137,58 @@ func (d *Detector) AcknowledgeAnomaly(anomalyID, feedback, acknowledgedBy string
 		return err
 	}
 
+	// Record feedback to learning store for accuracy tracking
+	if d.feedbackStore != nil && feedback != "" {
+		feedbackType := mapFeedbackToLearningType(feedback)
+		details := map[string]interface{}{
+			"anomaly_type":    string(event.Type),
+			"score":           event.Score,
+			"zone_id":         event.ZoneID,
+			"person_id":       event.PersonID,
+			"device_mac":      event.DeviceMAC,
+			"hour_of_week":    event.HourOfWeek,
+			"acknowledged_by": acknowledgedBy,
+		}
+		if event.Position.X != 0 || event.Position.Y != 0 || event.Position.Z != 0 {
+			details["position_x"] = event.Position.X
+			details["position_y"] = event.Position.Y
+			details["position_z"] = event.Position.Z
+		}
+
+		learningFeedback := learning.FeedbackRecord{
+			ID:           uuid.New().String(),
+			EventID:      anomalyID,
+			EventType:    learning.Anomaly,
+			FeedbackType: feedbackType,
+			Details:      details,
+			Timestamp:    time.Now(),
+			Applied:      false,
+		}
+
+		if err := d.feedbackStore.RecordFeedback(learningFeedback); err != nil {
+			log.Printf("[WARN] Failed to record anomaly feedback to learning store: %v", err)
+		} else {
+			log.Printf("[INFO] Recorded anomaly feedback: %s -> %s", anomalyID, feedbackType)
+		}
+	}
+
 	log.Printf("[INFO] Anomaly acknowledged: %s (feedback: %s)", anomalyID, feedback)
 
 	return nil
+}
+
+// mapFeedbackToLearningType maps anomaly feedback to learning feedback types.
+func mapFeedbackToLearningType(feedback string) learning.FeedbackType {
+	switch feedback {
+	case "expected":
+		return learning.FalsePositive // User says it was expected, so detection was wrong
+	case "intrusion":
+		return learning.TruePositive // User confirms it was real
+	case "false_alarm":
+		return learning.FalsePositive
+	default:
+		return learning.FalsePositive
+	}
 }
 
 // UpdateBehaviourModel updates the behaviour model from collected samples.
@@ -1010,7 +1277,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 	dwellRows, err := d.db.Query(`
 		SELECT hour_of_week, zone_id, person_id,
 		       AVG(dwell_ns) as mean_dwell_ns,
-		       0 as std_dwell_ns,
+		       SQRT(MAX(0, AVG(dwell_ns * dwell_ns) - AVG(dwell_ns) * AVG(dwell_ns))) as std_dwell_ns,
 		       COUNT(*) as sample_count
 		FROM dwell_samples
 		GROUP BY hour_of_week, zone_id, person_id
@@ -1185,64 +1452,13 @@ func nullTime(t time.Time) interface{} {
 	return t.UnixNano()
 }
 
-// JSON helpers (avoid import cycle)
-var jsonMarshal = func(v interface{}) ([]byte, error) {
-	// Simple inline implementation to avoid import
-	switch val := v.(type) {
-	case []string:
-		if len(val) == 0 {
-			return []byte("[]"), nil
-		}
-		result := "["
-		for i, s := range val {
-			if i > 0 {
-				result += ","
-			}
-			result += `"` + s + `"`
-		}
-		result += "]"
-		return []byte(result), nil
-	case map[string]float64:
-		if len(val) == 0 {
-			return []byte("{}"), nil
-		}
-		result := "{"
-		first := true
-		for k, v := range val {
-			if !first {
-				result += ","
-			}
-			result += fmt.Sprintf(`"%s":%f`, k, v)
-			first = false
-		}
-		result += "}"
-		return []byte(result), nil
-	default:
-		return nil, fmt.Errorf("unsupported type")
-	}
+// JSON helpers using standard library
+func jsonMarshal(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
 }
 
-var jsonUnmarshal = func(data string, v interface{}) error {
-	// Simple inline implementation
-	switch ptr := v.(type) {
-	case *[]string:
-		if data == "[]" || data == "" {
-			*ptr = nil
-			return nil
-		}
-		// Very simple parsing for string arrays
-		*ptr = []string{} // Simplified - would need proper JSON parsing
-		return nil
-	case *map[string]float64:
-		if data == "{}" || data == "" {
-			*ptr = make(map[string]float64)
-			return nil
-		}
-		*ptr = make(map[string]float64) // Simplified
-		return nil
-	default:
-		return fmt.Errorf("unsupported type")
-	}
+func jsonUnmarshal(data string, v interface{}) error {
+	return json.Unmarshal([]byte(data), v)
 }
 
 // Math helper

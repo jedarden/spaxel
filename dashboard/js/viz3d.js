@@ -71,6 +71,9 @@ const Viz3D = (function () {
 
         // Update flow arrow animation
         updateFlowAnimation(dt);
+
+        // Update anomaly zone pulse
+        updateAnomalyPulse(dt);
     }
 
     // ── room bounds ───────────────────────────────────────────────────────────
@@ -622,6 +625,231 @@ const Viz3D = (function () {
 
         _blobs3D.forEach((obj, id) => {
             if (!seen.has(id)) _removeBlobObj(id, obj);
+        });
+    }
+
+    // ── identity label rendering ────────────────────────────────────────────────
+
+    let _identityLabels = new Map();  // blobId → THREE.Sprite (text label)
+    let _bleOnlyTracks  = new Map();  // personID → { group, pillar, circle }
+
+    /**
+     * Create a text sprite with the given text and color.
+     * @param {string} text - Label text
+     * @param {string} color - CSS color string (e.g., '#3b82f6')
+     * @returns {THREE.Sprite}
+     */
+    function _createTextSprite(text, color) {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+
+        // Draw background with rounded corners
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.beginPath();
+        ctx.roundRect(4, 4, canvas.width - 8, canvas.height - 8, 8);
+        ctx.fill();
+
+        // Draw border in person color
+        ctx.strokeStyle = color || '#4fc3f7';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(4, 4, canvas.width - 8, canvas.height - 8, 8);
+        ctx.stroke();
+
+        // Draw text
+        ctx.fillStyle = color || '#ffffff';
+        ctx.font = 'bold 28px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+        var texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+
+        var material = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            depthTest: false
+        });
+
+        var sprite = new THREE.Sprite(material);
+        sprite.scale.set(1.2, 0.3, 1);
+        sprite.position.set(0, 2.0, 0);  // Above humanoid head
+
+        return sprite;
+    }
+
+    /**
+     * Create a BLE-only placeholder track visualization.
+     * These are shown when a BLE device is heard but no CSI blob is nearby.
+     * @param {Object} match - IdentityMatch with triangulation position
+     * @returns {Object} Three.js objects { group, pillar, circle }
+     */
+    function _createBLEOnlyTrack(match) {
+        var group = new THREE.Group();
+        group.userData.personId = match.person_id;
+        group.userData.isBLEOnly = true;
+
+        // Dashed circle on floor to indicate BLE-only position
+        var circleGeo = new THREE.RingGeometry(0.25, 0.35, 32);
+        var circleMat = new THREE.MeshBasicMaterial({
+            color: match.person_color ? parseInt(match.person_color.replace('#', '0x')) : 0x4fc3f7,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide
+        });
+        var circle = new THREE.Mesh(circleGeo, circleMat);
+        circle.rotation.x = -Math.PI / 2;
+        circle.position.y = 0.02;
+        group.add(circle);
+
+        // Vertical dashed pillar
+        var pillarGeo = new THREE.BufferGeometry();
+        pillarGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 0, 2.0, 0]), 3));
+        var pillarMat = new THREE.LineDashedMaterial({
+            color: 0x888888,
+            dashSize: 0.1,
+            gapSize: 0.05,
+            transparent: true,
+            opacity: 0.4
+        });
+        var pillar = new THREE.Line(pillarGeo, pillarMat);
+        pillar.computeLineDistances();
+        group.add(pillar);
+
+        // Position from triangulation
+        var pos = match.triangulation_pos || { x: 0, y: 0, z: 0 };
+        group.position.set(pos.x, 0, pos.z);
+
+        // Add identity label
+        if (match.person_name) {
+            var label = _createTextSprite(match.person_name, match.person_color);
+            label.position.set(0, 1.2, 0);
+            group.add(label);
+            group.userData.label = label;
+        }
+
+        _scene.add(group);
+
+        return { group: group, pillar: pillar, circle: circle };
+    }
+
+    /**
+     * Update identity labels on tracked blobs.
+     * Called from BLEPanel when matches are updated.
+     * @param {Array} matches - Array of IdentityMatch objects
+     */
+    function updateIdentities(matches) {
+        if (!matches) matches = [];
+
+        var matchesByBlobId = new Map();
+        matches.forEach(function(m) {
+            if (m.blob_id > 0) {
+                matchesByBlobId.set(m.blob_id, m);
+            }
+        });
+
+        // Update or create identity labels on existing blobs
+        _blobs3D.forEach(function(obj, blobId) {
+            var match = matchesByBlobId.get(blobId);
+
+            // Remove existing label if any
+            if (obj.identityLabel) {
+                obj.group.remove(obj.identityLabel);
+                obj.identityLabel = null;
+            }
+
+            if (match && match.person_name && match.confidence >= 0.6) {
+                // Create new label
+                var label = _createTextSprite(match.person_name, match.person_color);
+                label.position.set(0, 2.0, 0);
+                obj.group.add(label);
+                obj.identityLabel = label;
+
+                // Update humanoid color if available
+                if (match.person_color && obj.humanoid && obj.humanoid.mesh) {
+                    var color = parseInt(match.person_color.replace('#', '0x'));
+                    obj.humanoid.mesh.material.color.setHex(color);
+                    obj.humanoid.mesh.material.emissive.setHex(color);
+                    obj.humanoid.mesh.material.emissiveIntensity = 0.15;
+                }
+
+                // Store identity info
+                obj.identity = match;
+            } else {
+                // Reset to default color
+                var ci = blobId % BLOB_COLORS.length;
+                if (obj.humanoid && obj.humanoid.mesh) {
+                    obj.humanoid.mesh.material.color.setHex(BLOB_COLORS[ci]);
+                    obj.humanoid.mesh.material.emissive = new THREE.Color(BLOB_COLORS[ci]);
+                    obj.humanoid.mesh.material.emissiveIntensity = 0;
+                }
+                obj.identity = null;
+            }
+        });
+
+        // Handle BLE-only tracks (devices heard but no CSI blob nearby)
+        var seenBLEOnly = new Set();
+
+        matches.forEach(function(match) {
+            if (match.is_ble_only && match.person_id) {
+                seenBLEOnly.add(match.person_id);
+
+                var existing = _bleOnlyTracks.get(match.person_id);
+                var pos = match.triangulation_pos || { x: 0, y: 0, z: 0 };
+
+                if (existing) {
+                    // Update position
+                    existing.group.position.set(pos.x, 0, pos.z);
+                    existing.group.visible = true;
+                } else {
+                    // Create new BLE-only track
+                    var track = _createBLEOnlyTrack(match);
+                    _bleOnlyTracks.set(match.person_id, track);
+                }
+            }
+        });
+
+        // Hide BLE-only tracks not in current matches
+        _bleOnlyTracks.forEach(function(track, personId) {
+            if (!seenBLEOnly.has(personId)) {
+                track.group.visible = false;
+            }
+        });
+    }
+
+    /**
+     * Get identity info for a blob.
+     * @param {number} blobId
+     * @returns {Object|null} Identity match or null
+     */
+    function getBlobIdentity(blobId) {
+        var obj = _blobs3D.get(blobId);
+        return obj ? obj.identity : null;
+    }
+
+    /**
+     * Clear all identity labels.
+     */
+    function clearIdentities() {
+        _identityLabels.forEach(function(label) {
+            if (label.parent) label.parent.remove(label);
+        });
+        _identityLabels.clear();
+
+        _bleOnlyTracks.forEach(function(track) {
+            _scene.remove(track.group);
+        });
+        _bleOnlyTracks.clear();
+
+        _blobs3D.forEach(function(obj) {
+            if (obj.identityLabel) {
+                obj.group.remove(obj.identityLabel);
+                obj.identityLabel = null;
+            }
+            obj.identity = null;
         });
     }
 
@@ -1376,6 +1604,131 @@ const Viz3D = (function () {
         };
     }
 
+    // ── Anomaly Zone Pulsing ─────────────────────────────────────────────────────
+
+    let _anomalyZones = [];          // Array of zone IDs with active anomalies
+    let _anomalyMeshes = new Map();  // zoneID -> THREE.Mesh (pulsing overlay)
+    let _anomalyPulseTime = 0;
+
+    /**
+     * Set which zones have active anomalies (will pulse red).
+     * @param {Array} zoneIDs - Array of zone ID strings
+     */
+    function setAnomalyZones(zoneIDs) {
+        _anomalyZones = zoneIDs || [];
+
+        // Remove meshes for zones no longer anomalous
+        _anomalyMeshes.forEach(function(mesh, zoneID) {
+            if (_anomalyZones.indexOf(zoneID) === -1) {
+                _scene.remove(mesh);
+                mesh.geometry.dispose();
+                mesh.material.dispose();
+                _anomalyMeshes.delete(zoneID);
+            }
+        });
+
+        // Add meshes for new anomalous zones
+        _anomalyZones.forEach(function(zoneID) {
+            if (!_anomalyMeshes.has(zoneID)) {
+                // Create a pulsing red overlay for this zone
+                // Default to center of room if zone position unknown
+                var cx = _room ? (_room.origin_x || 0) + _room.width / 2 : 3;
+                var cz = _room ? (_room.origin_z || 0) + _room.depth / 2 : 2.5;
+
+                // Try to get zone-specific position from zone provider
+                // For now, use a 1x1m red overlay at the zone center
+                var geo = new THREE.PlaneGeometry(1.5, 1.5);
+                var mat = new THREE.MeshBasicMaterial({
+                    color: 0xef4444,
+                    transparent: true,
+                    opacity: 0.4,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                });
+
+                var mesh = new THREE.Mesh(geo, mat);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(cx, 0.03, cz);
+                mesh.userData.zoneID = zoneID;
+
+                _scene.add(mesh);
+                _anomalyMeshes.set(zoneID, mesh);
+            }
+        });
+
+        console.log('[Viz3D] Anomaly zones updated:', _anomalyZones);
+    }
+
+    /**
+     * Update anomaly pulse animation (called from main update loop).
+     * @param {number} dt - Delta time in seconds
+     */
+    function updateAnomalyPulse(dt) {
+        if (_anomalyMeshes.size === 0) return;
+
+        _anomalyPulseTime += dt;
+        // 1.5 second pulse cycle
+        var phase = (_anomalyPulseTime % 1.5) / 1.5;
+        // Opacity oscillates: 0.2 -> 0.6 -> 0.2
+        var opacity = 0.2 + 0.4 * (1 - Math.abs(phase - 0.5) * 2);
+
+        _anomalyMeshes.forEach(function(mesh) {
+            mesh.material.opacity = opacity;
+        });
+    }
+
+    /**
+     * Focus the camera on a specific zone.
+     * @param {string} zoneID - The zone ID to focus on
+     */
+    function focusOnZone(zoneID) {
+        if (!_camera || !_controls) return;
+
+        // Get zone position from anomaly mesh if available
+        var mesh = _anomalyMeshes.get(zoneID);
+        if (mesh) {
+            var pos = mesh.position;
+            _camera.position.set(pos.x + 2, 2.0, pos.z + 3);
+            _controls.target.set(pos.x, 0.5, pos.z);
+            _controls.update();
+            return;
+        }
+
+        // Fallback: focus on room center
+        var cx = _room ? (_room.origin_x || 0) + _room.width / 2 : 3;
+        var cz = _room ? (_room.origin_z || 0) + _room.depth / 2 : 2.5;
+        _camera.position.set(cx + 2, 2.0, cz + 3);
+        _controls.target.set(cx, 0.5, cz);
+        _controls.update();
+    }
+
+    /**
+     * Focus the camera on a specific position.
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate (height)
+     * @param {number} z - Z coordinate
+     */
+    function focusOnPosition(x, y, z) {
+        if (!_camera || !_controls) return;
+
+        _camera.position.set(x + 2, Math.max(y + 1, 2.0), z + 3);
+        _controls.target.set(x, y, z);
+        _controls.update();
+    }
+
+    /**
+     * Clear all anomaly zone overlays.
+     */
+    function clearAnomalyZones() {
+        _anomalyMeshes.forEach(function(mesh) {
+            _scene.remove(mesh);
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        });
+        _anomalyMeshes.clear();
+        _anomalyZones = [];
+    }
+
     // ── public API ────────────────────────────────────────────────────────────
     return {
         init,
@@ -1408,5 +1761,14 @@ const Viz3D = (function () {
         initBlobInteraction: initBlobInteraction,
         submitBlobFeedback: submitBlobFeedback,
         showBlobFeedbackForm: showBlobFeedbackForm,
+        // Identity API
+        updateIdentities: updateIdentities,
+        getBlobIdentity: getBlobIdentity,
+        clearIdentities: clearIdentities,
+        // Anomaly zone API
+        setAnomalyZones: setAnomalyZones,
+        focusOnZone: focusOnZone,
+        focusOnPosition: focusOnPosition,
+        clearAnomalyZones: clearAnomalyZones,
     };
 })();
