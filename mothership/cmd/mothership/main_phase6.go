@@ -29,6 +29,7 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/diagnostics"
 	"github.com/spaxel/mothership/internal/events"
+	"github.com/spaxel/mothership/internal/explainability"
 	"github.com/spaxel/mothership/internal/falldetect"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
@@ -802,6 +803,84 @@ func main() {
                                 perLinkHealth,
                             )
                         }
+                    }
+
+                    // Update detection explainability data
+                    if explainabilityHandler != nil {
+                        motionStates := pm.GetAllMotionStates()
+                        linkStates := make([]explainability.LinkState, 0, len(motionStates))
+                        for _, state := range motionStates {
+                            // Parse link ID to get node and peer MAC addresses
+                            // LinkID format is typically "node_mac:peer_mac"
+                            parts := parseLinkID(state.LinkID)
+                            if len(parts) != 2 {
+                                continue
+                            }
+                            nodeMAC, peerMAC := parts[0], parts[1]
+
+                            // Get node positions from fleet registry
+                            var nodePos, peerPos [3]float64
+                            if node, err := fleetReg.GetNode(nodeMAC); err == nil {
+                                nodePos = [3]float64{node.PosX, node.PosY, node.PosZ}
+                            }
+                            if peer, err := fleetReg.GetNode(peerMAC); err == nil {
+                                peerPos = [3]float64{peer.PosX, peer.PosY, peer.PosZ}
+                            }
+
+                            // Get learned weight from self-improving localizer
+                            var weight float64 = 1.0
+                            if selfImprovingLocalizer != nil {
+                                weights := selfImprovingLocalizer.GetLearnedWeights()
+                                if w, ok := weights[state.LinkID]; ok {
+                                    weight = w
+                                }
+                            }
+
+                            linkState := explainability.LinkState{
+                                NodeMAC:      nodeMAC,
+                                PeerMAC:      peerMAC,
+                                NodePos:      nodePos,
+                                PeerPos:      peerPos,
+                                DeltaRMS:     state.SmoothDeltaRMS,
+                                Motion:       state.MotionDetected,
+                                Weight:       weight,
+                                HealthScore:  state.AmbientConfidence,
+                            }
+                            linkStates = append(linkStates, linkState)
+                        }
+
+                        // Build blob snapshots
+                        blobSnapshots := make([]explainability.BlobSnapshot, 0, len(blobs))
+                        for _, blob := range blobs {
+                            blobSnapshots = append(blobSnapshots, explainability.BlobSnapshot{
+                                ID:         blob.ID,
+                                X:          blob.X,
+                                Y:          blob.Y,
+                                Z:          blob.Z,
+                                Confidence: blob.Weight,
+                            })
+                        }
+
+                        // Build identity map from BLE matches
+                        identityMap := make(map[int]*explainability.BLEMatch)
+                        for _, blob := range blobs {
+                            match := identityMatcher.GetMatch(blob.ID)
+                            if match != nil && match.PersonID != "" {
+                                identityMap[blob.ID] = &explainability.BLEMatch{
+                                    PersonID:          match.PersonID,
+                                    PersonLabel:       match.PersonLabel,
+                                    PersonColor:       match.PersonColor,
+                                    DeviceAddr:        match.DeviceAddr,
+                                    Confidence:        match.Confidence,
+                                    MatchMethod:       match.MatchMethod,
+                                    ReportedByNodes:   match.ReportedByNodes,
+                                    TriangulationPos:  &[3]float64{&match.TriangulationPos.X, &match.TriangulationPos.Y, &match.TriangulationPos.Z},
+                                }
+                            }
+                        }
+
+                        // Update explainability handler (pass nil grid for now)
+                        explainabilityHandler.UpdateBlobs(blobSnapshots, linkStates, nil, identityMap)
                     }
                 }
 
@@ -2327,6 +2406,11 @@ func main() {
         learningHandler := learning.NewHandler(feedbackStore, feedbackProcessor, accuracyComputer)
         learningHandler.RegisterRoutes(r)
     }
+
+    // Phase 6: Detection explainability API
+    explainabilityHandler := explainability.NewHandler()
+    explainabilityHandler.RegisterRoutes(r)
+    log.Printf("[INFO] Detection explainability API enabled")
 
     // Phase 6: Self-improving localization REST API
     if selfImprovingLocalizer != nil {

@@ -107,6 +107,10 @@ type Server struct {
 	fleetNotifier        FleetNotifier
 	otaHandler           OTAStatusHandler
 	bleHandler           BLEHandler
+
+	// Token validator for node authentication
+	// Function that takes (mac, token) and returns true if valid
+	tokenValidator func(mac, token string) bool
 }
 
 // NodeConnection tracks state for a connected node

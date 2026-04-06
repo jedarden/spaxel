@@ -872,6 +872,10 @@ const Viz3D = (function () {
         var canvas = renderer.domElement;
         canvas.addEventListener('mousemove', _onBlobMouseMove);
         canvas.addEventListener('mouseleave', _hideBlobFeedbackTooltip);
+        canvas.addEventListener('contextmenu', _onBlobContextMenu);
+
+        // Close context menu on click elsewhere
+        document.addEventListener('click', _hideBlobContextMenu);
     }
 
     /**
@@ -1052,6 +1056,126 @@ const Viz3D = (function () {
         }
 
         _hideBlobFeedbackTooltip();
+    }
+
+    // ── Blob Context Menu ───────────────────────────────────────────────────────
+
+    let _blobContextMenu = null;
+
+    /**
+     * Handle context menu (right-click) on blobs.
+     */
+    function _onBlobContextMenu(event) {
+        event.preventDefault();
+
+        if (!_camera || !_scene || _blobs3D.size === 0) return;
+
+        // Calculate mouse position in normalized device coordinates
+        var rect = event.target.getBoundingClientRect();
+        _mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        _mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Raycast to find clicked blob
+        _raycaster.setFromCamera(_mouse, _camera);
+
+        var blobMeshes = [];
+        _blobs3D.forEach(function(obj) {
+            if (obj.group) {
+                blobMeshes.push(obj.group);
+            }
+        });
+
+        var intersects = _raycaster.intersectObjects(blobMeshes, true);
+
+        if (intersects.length > 0) {
+            // Find the blob object from the intersected mesh
+            var intersected = intersects[0].object;
+            var blobObj = null;
+
+            // Walk up the parent chain to find the group
+            var current = intersected;
+            while (current) {
+                _blobs3D.forEach(function(obj, id) {
+                    if (obj.group === current) {
+                        blobObj = obj;
+                    }
+                });
+                if (blobObj) break;
+                current = current.parent;
+            }
+
+            if (blobObj) {
+                _showBlobContextMenu(event, blobObj);
+            }
+        }
+    }
+
+    /**
+     * Show context menu for a blob.
+     */
+    function _showBlobContextMenu(event, blobObj) {
+        // Remove existing context menu
+        _hideBlobContextMenu();
+
+        var blobId = blobObj.blobId;
+
+        // Create context menu element
+        var menu = document.createElement('div');
+        menu.className = 'blob-context-menu';
+        menu.innerHTML =
+            '<div class="blob-context-menu-item" onclick="Viz3D.explainBlob(' + blobId + ')">' +
+            '  <span class="blob-context-menu-icon">&#128526;</span>' +
+            '  Why is this here?' +
+            '</div>' +
+            '<div class="blob-context-menu-divider"></div>' +
+            '<div class="blob-context-menu-item" onclick="Viz3D.submitBlobFeedback(' + blobId + ', \'TRUE_POSITIVE\')">' +
+            '  <span class="blob-context-menu-icon">&#x1F44D;</span>' +
+            '  Correct detection' +
+            '</div>' +
+            '<div class="blob-context-menu-item" onclick="Viz3D.showBlobFeedbackForm(' + blobId + ')">' +
+            '  <span class="blob-context-menu-icon">&#x1F44E;</span>' +
+            '  Incorrect detection' +
+            '</div>';
+
+        // Position menu at cursor
+        menu.style.left = event.clientX + 'px';
+        menu.style.top = event.clientY + 'px';
+
+        document.body.appendChild(menu);
+        _blobContextMenu = menu;
+
+        // Prevent menu from going off screen
+        var rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            menu.style.left = (event.clientX - rect.width) + 'px';
+        }
+        if (rect.bottom > window.innerHeight) {
+            menu.style.top = (event.clientY - rect.height) + 'px';
+        }
+    }
+
+    /**
+     * Hide the blob context menu.
+     */
+    function _hideBlobContextMenu() {
+        if (_blobContextMenu) {
+            document.body.removeChild(_blobContextMenu);
+            _blobContextMenu = null;
+        }
+    }
+
+    /**
+     * Open explainability view for a blob.
+     * @param {number} blobId - The blob ID to explain
+     */
+    function explainBlob(blobId) {
+        _hideBlobContextMenu();
+
+        if (window.Explainability) {
+            window.Explainability.explain(blobId);
+        } else {
+            console.error('[Viz3D] Explainability module not loaded');
+        }
     }
 
     /**
@@ -1729,7 +1853,83 @@ const Viz3D = (function () {
         _anomalyZones = [];
     }
 
-    // ── public API ────────────────────────────────────────────────────────────
+    // ── Fresnel zone ellipsoid rendering for explainability ───────────────────────
+
+    // Configuration for Fresnel zone visualization
+    const FRESNEL_CONFIG = {
+        color: 0x4FC3F7,      // Blue for Fresnel zones
+        opacity: 0.25,        // Opacity for Fresnel zones
+    };
+
+    let _fresnelZones = [];  // Array of THREE.Mesh for explainability Fresnel zones
+
+    /**
+     * Add a Fresnel zone ellipsoid to the scene.
+     * Used by the explainability module to visualize contributing links.
+     * @param {number} cx, cy, cz - Center position
+     * @param {number} sx, sy, sz - Semi-axes
+     * @param {number} color - Color hex value
+     * @param {number} opacity - Material opacity
+     * @returns {THREE.Mesh|null} The created mesh
+     */
+    function addFresnelZone(cx, cy, cz, sx, sy, sz, color, opacity) {
+        if (!_scene) return null;
+
+        // Create ellipsoid using SphereGeometry scaled to semi-axes
+        // THREE.SphereGeometry(radius, widthSegments, heightSegments)
+        var geometry = new THREE.SphereGeometry(1, 32, 32);
+        geometry.scale(sx, sy, sz);
+
+        var material = new THREE.MeshBasicMaterial({
+            color: color || FRESNEL_CONFIG.color,
+            transparent: true,
+            opacity: opacity || FRESNEL_CONFIG.opacity,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            wireframe: false
+        });
+
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(cx, cy, cz);
+
+        _scene.add(mesh);
+        _fresnelZones.push(mesh);
+
+        return mesh;
+    }
+
+    /**
+     * Remove a Fresnel zone mesh from the scene.
+     * @param {THREE.Mesh} mesh - The mesh to remove
+     */
+    function removeFresnelZone(mesh) {
+        if (!mesh || !_scene) return;
+
+        _scene.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+
+        var idx = _fresnelZones.indexOf(mesh);
+        if (idx !== -1) {
+            _fresnelZones.splice(idx, 1);
+        }
+    }
+
+    /**
+     * Clear all Fresnel zone meshes.
+     */
+    function clearFresnelZones() {
+        _fresnelZones.forEach(function(mesh) {
+            if (_scene) {
+                _scene.remove(mesh);
+            }
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        });
+        _fresnelZones = [];
+    }
+
+    // ── Public API ────────────────────────────────────────────────────────────
     return {
         init,
         update,
@@ -1770,5 +1970,98 @@ const Viz3D = (function () {
         focusOnZone: focusOnZone,
         focusOnPosition: focusOnPosition,
         clearAnomalyZones: clearAnomalyZones,
+        // Explainability support API
+        forEachRoomObject: function(callback) {
+            if (!_roomObjs) return;
+            var room = _roomObjs;
+            if (room.floor) callback(room.floor);
+            if (room.ceiling) callback(room.ceiling);
+            room.walls.forEach(function(w) { callback(w); });
+            if (room.edges) callback(room.edges);
+        },
+        forEachLink: function(callback) {
+            _linkLines.forEach(function(line, linkID) {
+                callback(line, linkID);
+            });
+        },
+        forEachBlob: function(callback) {
+            _blobs3D.forEach(function(obj, blobID) {
+                callback(obj, blobID);
+            });
+        },
+        highlightLink: function(linkID, color, emissiveColor, emissiveIntensity) {
+            var line = _linkLines.get(linkID);
+            if (!line) return;
+            line.material.opacity = 1.0;
+            line.material.transparent = false;
+            if (line.material.color) {
+                line.material.color.setHex(color);
+            }
+            if (line.material.emissive) {
+                line.material.emissive.setHex(emissiveColor);
+                line.material.emissiveIntensity = emissiveIntensity;
+            }
+            line.material.needsUpdate = true;
+        },
+        restoreObjectMaterial: function(uuid, state) {
+            // Search for object by UUID in room, links, and blobs
+            var found = false;
+            if (_roomObjs) {
+                [_roomObjs.floor, _roomObjs.ceiling, _roomObjs.edges].concat(_roomObjs.walls).forEach(function(obj) {
+                    if (obj && obj.uuid === uuid) {
+                        if (state.opacity !== undefined) obj.material.opacity = state.opacity;
+                        if (state.transparent !== undefined) obj.material.transparent = state.transparent;
+                        if (obj.material.emissive && state.emissiveIntensity !== undefined) {
+                            obj.material.emissiveIntensity = state.emissiveIntensity;
+                        }
+                        if (obj.material.emissive && state.emissiveColor) {
+                            obj.material.emissive.setHex(state.emissiveColor);
+                        }
+                        if (obj.material.color && state.color) {
+                            obj.material.color.setHex(state.color);
+                        }
+                        obj.material.needsUpdate = true;
+                        found = true;
+                    }
+                });
+            }
+            _linkLines.forEach(function(line) {
+                if (line.uuid === uuid) {
+                    if (state.opacity !== undefined) line.material.opacity = state.opacity;
+                    if (state.transparent !== undefined) line.material.transparent = state.transparent;
+                    if (line.material.emissive && state.emissiveIntensity !== undefined) {
+                        line.material.emissiveIntensity = state.emissiveIntensity;
+                    }
+                    if (line.material.emissive && state.emissiveColor) {
+                        line.material.emissive.setHex(state.emissiveColor);
+                    }
+                    if (line.material.color && state.color) {
+                        line.material.color.setHex(state.color);
+                    }
+                    line.material.needsUpdate = true;
+                    found = true;
+                }
+            });
+            _blobs3D.forEach(function(obj) {
+                if (obj.group && obj.group.uuid === uuid) {
+                    if (state.opacity !== undefined) obj.group.material.opacity = state.opacity;
+                    if (state.transparent !== undefined) obj.group.material.transparent = state.transparent;
+                    if (obj.group.material.emissive && state.emissiveIntensity !== undefined) {
+                        obj.group.material.emissiveIntensity = state.emissiveIntensity;
+                    }
+                    if (obj.group.material.emissive && state.emissiveColor) {
+                        obj.group.material.emissive.setHex(state.emissiveColor);
+                    }
+                    if (obj.group.material.color && state.color) {
+                        obj.group.material.color.setHex(state.color);
+                    }
+                    obj.group.material.needsUpdate = true;
+                    found = true;
+                }
+            });
+        },
+        addFresnelZone: addFresnelZone,
+        removeFresnelZone: removeFresnelZone,
+        clearFresnelZones: clearFresnelZones,
     };
 })();
