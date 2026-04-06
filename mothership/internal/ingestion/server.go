@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spaxel/mothership/internal/apdetector"
 	"github.com/spaxel/mothership/internal/signal"
 )
 
@@ -107,6 +108,8 @@ type Server struct {
 	fleetNotifier        FleetNotifier
 	otaHandler           OTAStatusHandler
 	bleHandler           BLEHandler
+	apDetector           *apdetector.Detector
+
 
 	// Token validator for node authentication
 	// Function that takes (mac, token) and returns true if valid
@@ -225,6 +228,13 @@ func (s *Server) SetOTAManager(h OTAStatusHandler) {
 	s.mu.Unlock()
 }
 
+// SetAPDetector sets the AP detector for passive radar auto-detection.
+func (s *Server) SetAPDetector(detector interface{}) {
+	s.mu.Lock()
+	s.apDetector = detector
+	s.mu.Unlock()
+}
+
 // GetConnectedMACs returns the MACs of currently-connected nodes.
 func (s *Server) GetConnectedMACs() []string {
 	return s.GetConnectedNodes()
@@ -318,10 +328,24 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	s.malformedCounts[hello.MAC] = &malformedCounter{}
 	broadcaster := s.dashboardBroadcaster
 	fleetFn := s.fleetNotifier
+	apDet := s.apDetector
 	s.mu.Unlock()
 
 	log.Printf("[INFO] Node connected: MAC=%s firmware=%s chip=%s",
 		hello.MAC, hello.FirmwareVersion, hello.Chip)
+
+	// Process AP BSSID for passive radar auto-detection
+	if apDet != nil {
+		// The AP detector has a ProcessHello method we can call via reflection
+		// or we can type assert if we know the concrete type
+		if detector, ok := apDet.(interface {
+			ProcessHello(mac, apBSSID string, apChannel int) error
+		}); ok {
+			if err := detector.ProcessHello(hello.MAC, hello.APBSSID, hello.APChannel); err != nil {
+				log.Printf("[WARN] AP detector process hello failed: %v", err)
+			}
+		}
+	}
 
 	if broadcaster != nil {
 		broadcaster.BroadcastNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)

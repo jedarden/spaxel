@@ -170,17 +170,76 @@ const Viz3D = (function () {
         nodes.forEach(n => {
             let m = _nodeMeshes.get(n.mac);
             if (!m) {
-                const col = n.virtual ? 0x80cbc4 : 0x4fc3f7;
-                m = new THREE.Mesh(
-                    new THREE.OctahedronGeometry(0.12, 0),
-                    new THREE.MeshPhongMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, shininess: 60 })
-                );
+                // Check if this is a virtual router AP node
+                const isRouterAP = n.virtual && n.node_type === 'ap';
+
+                if (isRouterAP) {
+                    // Create a router icon: box with 4 antennas
+                    m = _createRouterMesh();
+                } else {
+                    // Standard node: Octahedron
+                    const col = n.virtual ? 0x80cbc4 : 0x4fc3f7;
+                    m = new THREE.Mesh(
+                        new THREE.OctahedronGeometry(0.12, 0),
+                        new THREE.MeshPhongMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, shininess: 60 })
+                    );
+                }
                 _scene.add(m);
                 _nodeMeshes.set(n.mac, m);
             }
             m.position.set(n.pos_x, n.pos_y, n.pos_z);
         });
         _rebuildLinkLines();
+    }
+
+    /**
+     * Creates a router icon mesh (box with antennas)
+     * @returns {THREE.Group} Group containing router geometry
+     */
+    function _createRouterMesh() {
+        const routerGroup = new THREE.Group();
+
+        // Router body (horizontal box)
+        const bodyGeo = new THREE.BoxGeometry(0.16, 0.04, 0.1);
+        const routerMat = new THREE.MeshPhongMaterial({
+            color: 0x80cbc4,  // Teal for virtual AP
+            emissive: 0x80cbc4,
+            emissiveIntensity: 0.3,
+            shininess: 80
+        });
+        const body = new THREE.Mesh(bodyGeo, routerMat);
+        routerGroup.add(body);
+
+        // 4 antennas (vertical cylinders at corners)
+        const antennaGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.12, 8);
+        const antennaMat = new THREE.MeshPhongMaterial({
+            color: 0x4dd0e1,
+            emissive: 0x4dd0e1,
+            emissiveIntensity: 0.2
+        });
+
+        // Antenna positions (relative to body center)
+        const antennaPositions = [
+            [-0.06, 0.06, 0.03],
+            [0.06, 0.06, 0.03],
+            [-0.06, 0.06, -0.03],
+            [0.06, 0.06, -0.03]
+        ];
+
+        antennaPositions.forEach(pos => {
+            const antenna = new THREE.Mesh(antennaGeo, antennaMat);
+            antenna.position.set(pos[0], pos[1], pos[2]);
+            routerGroup.add(antenna);
+        });
+
+        // Add LED indicator (small glowing sphere on top)
+        const ledGeo = new THREE.SphereGeometry(0.012, 8, 8);
+        const ledMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green LED
+        const led = new THREE.Mesh(ledGeo, ledMat);
+        led.position.set(0, 0.03, 0);
+        routerGroup.add(led);
+
+        return routerGroup;
     }
 
     function applyLinks(links) {

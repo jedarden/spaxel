@@ -46,3 +46,10 @@ uint8_t wifi_get_channel(void);
  * Check if WiFi is connected.
  */
 bool wifi_is_connected(void);
+
+/**
+ * Get AP BSSID (router MAC address).
+ * @param bssid Buffer to store 6-byte BSSID
+ * @return true if connected and BSSID retrieved, false otherwise
+ */
+bool wifi_get_ap_bssid(uint8_t *bssid);

@@ -33,6 +33,11 @@ func AllMigrations() []Migration {
 			Description: "add ble_device_aliases table",
 			Up:          migration_005_add_ble_device_aliases,
 		},
+		{
+			Version:     6,
+			Description: "add virtual node columns for passive radar AP",
+			Up:          migration_006_add_virtual_node_columns,
+		},
 	}
 }
 
@@ -388,6 +393,19 @@ func migration_005_add_ble_device_aliases(tx *sql.Tx) error {
 		PRIMARY KEY (addr)
 	);
 	CREATE INDEX IF NOT EXISTS idx_ble_aliases_canonical ON ble_device_aliases(canonical_addr);
+	`
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// migration_006_add_virtual_node_columns adds columns for virtual AP nodes.
+func migration_006_add_virtual_node_columns(tx *sql.Tx) error {
+	schema := `
+	ALTER TABLE nodes ADD COLUMN virtual INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE nodes ADD COLUMN node_type TEXT NOT NULL DEFAULT 'esp32'
+		CHECK (node_type IN ('esp32','ap'));
+	ALTER TABLE nodes ADD COLUMN ap_bssid TEXT;
+	ALTER TABLE nodes ADD COLUMN ap_channel INTEGER;
 	`
 	_, err := tx.Exec(schema)
 	return err

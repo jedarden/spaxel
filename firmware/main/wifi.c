@@ -471,3 +471,16 @@ uint8_t wifi_get_channel(void) {
 bool wifi_is_connected(void) {
     return s_connected;
 }
+
+bool wifi_get_ap_bssid(uint8_t *bssid) {
+    if (!bssid || !s_connected) {
+        return false;
+    }
+
+    wifi_ap_record_t ap_info;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        memcpy(bssid, ap_info.bssid, 6);
+        return true;
+    }
+    return false;
+}

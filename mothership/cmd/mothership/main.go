@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/mdns"
 	_ "modernc.org/sqlite"
 	"github.com/spaxel/mothership/internal/api"
+	"github.com/spaxel/mothership/internal/apdetector"
 	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/dashboard"
@@ -132,6 +133,14 @@ func main() {
 	// Create ingestion server
 	ingestSrv := ingestion.NewServer()
 	r.HandleFunc("/ws/node", ingestSrv.HandleNodeWS)
+
+	// Passive radar: AP detector for auto-detecting router as virtual TX node
+	// Uses the main database for virtual node storage
+	if authDB != nil {
+		apDet := apdetector.NewDetector(authDB)
+		ingestSrv.SetAPDetector(apDet)
+		log.Printf("[INFO] AP detector enabled for passive radar auto-detection")
+	}
 
 	// Signal processing pipeline
 	pm := sigproc.NewProcessorManager(sigproc.ProcessorManagerConfig{

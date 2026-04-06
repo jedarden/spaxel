@@ -237,6 +237,15 @@ esp_err_t websocket_send_hello(void) {
     cJSON_AddNumberToObject(root, "flash_mb", 16);
     cJSON_AddNumberToObject(root, "uptime_ms", esp_timer_get_time() / 1000);
 
+    // AP BSSID and channel (for passive radar auto-detection)
+    uint8_t ap_bssid[6];
+    if (wifi_get_ap_bssid(ap_bssid)) {
+        char bssid_str[18];
+        mac_to_str(ap_bssid, bssid_str, sizeof(bssid_str));
+        cJSON_AddStringToObject(root, "ap_bssid", bssid_str);
+        cJSON_AddNumberToObject(root, "ap_channel", wifi_get_channel());
+    }
+
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
