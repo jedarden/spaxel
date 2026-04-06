@@ -649,18 +649,18 @@ func (s *Service) GenerateFloorPlanThumbnail(width, height int, blobs []struct {
 		}
 
 		// Color based on state
-		color := color.RGBA{100, 181, 246, 255} // Blue - normal
+		clr := color.RGBA{100, 181, 246, 255} // Blue - normal
 		if blob.IsFall {
-			color = color.RGBA{239, 83, 80, 255} // Red - fall detected
+			clr = color.RGBA{239, 83, 80, 255} // Red - fall detected
 		} else if blob.Identity != "" {
-			color = color.RGBA{129, 199, 132, 255} // Green - identified
+			clr = color.RGBA{129, 199, 132, 255} // Green - identified
 		}
 
 		// Draw circle
 		for dy := -4; dy <= 4; dy++ {
 			for dx := -4; dx <= 4; dx++ {
 				if dx*dx+dy*dy <= 16 {
-					img.Set(px+dx, pz+dy, color)
+					img.Set(px+dx, pz+dy, clr)
 				}
 			}
 		}
