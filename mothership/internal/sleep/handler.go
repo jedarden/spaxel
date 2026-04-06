@@ -225,11 +225,13 @@ func (h *Handler) handleGetSession(w http.ResponseWriter, r *http.Request) {
 			"quality_rating":           metrics.QualityRating,
 		}
 
-		if !metrics.SleepStartTime.IsZero() {
-			result["metrics"]["sleep_start_time"] = metrics.SleepStartTime.Format("15:04")
-		}
-		if !metrics.SleepEndTime.IsZero() {
-			result["metrics"]["sleep_end_time"] = metrics.SleepEndTime.Format("15:04")
+		if metricsMap, ok := result["metrics"].(map[string]interface{}); ok {
+			if !metrics.SleepStartTime.IsZero() {
+				metricsMap["sleep_start_time"] = metrics.SleepStartTime.Format("15:04")
+			}
+			if !metrics.SleepEndTime.IsZero() {
+				metricsMap["sleep_end_time"] = metrics.SleepEndTime.Format("15:04")
+			}
 		}
 	}
 
