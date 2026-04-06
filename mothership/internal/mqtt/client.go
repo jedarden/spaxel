@@ -117,7 +117,7 @@ func NewClient(cfg Config) (*Client, error) {
 	opts.SetClientID(cfg.ClientID)
 	opts.SetKeepAlive(cfg.KeepAlive)
 	opts.SetAutoReconnect(cfg.AutoReconnect)
-	opts.SetCleanOnConnect(true)
+	opts.SetCleanSession(true)
 
 	if cfg.Username != "" {
 		opts.SetUsername(cfg.Username)
@@ -144,7 +144,7 @@ func NewClient(cfg Config) (*Client, error) {
 		}
 	}
 
-	opts.OnDisconnect = func(client mqtt.Client, err error) {
+	opts.SetConnectionLostHandler(func(client mqtt.Client, err error) {
 		c.mu.Lock()
 		c.connected = false
 		cb := c.onDisconnect
@@ -159,11 +159,7 @@ func NewClient(cfg Config) (*Client, error) {
 		if cb != nil {
 			go cb()
 		}
-	}
-
-	opts.OnConnectionLost = func(client mqtt.Client, err error) {
-		log.Printf("[WARN] MQTT connection lost: %v", err)
-	}
+	})
 
 	c.client = mqtt.NewClient(opts)
 	return c, nil
@@ -399,9 +395,9 @@ func (c *Client) UpdateSensorState(sensorID string, value interface{}) error {
 	var data []byte
 	switch v := value.(type) {
 	case string:
-		data = []byte(v.(string))
+		data = []byte(v)
 	case []byte:
-		data = v.([]byte)
+		data = v
 	default:
 		data, _ = json.Marshal(map[string]interface{}{"value": value})
 	}
