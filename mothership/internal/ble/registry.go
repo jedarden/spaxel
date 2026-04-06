@@ -287,12 +287,26 @@ func (r *Registry) migrate() error {
 		return fmt.Errorf("create ble_devices table: %w", err)
 	}
 
+	// Create ble_device_aliases table for MAC rotation tracking
+	if _, err := r.db.Exec(`
+		CREATE TABLE IF NOT EXISTS ble_device_aliases (
+			addr           TEXT    NOT NULL PRIMARY KEY,
+			canonical_addr TEXT    NOT NULL REFERENCES ble_devices(mac) ON DELETE CASCADE,
+			first_seen     INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000000000),
+			last_seen      INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000000000)
+		)
+	`); err != nil {
+		return fmt.Errorf("create ble_device_aliases table: %w", err)
+	}
+
 	// Create indexes
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_ble_devices_person_id ON ble_devices(person_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_ble_devices_device_type ON ble_devices(device_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_ble_devices_archived ON ble_devices(is_archived)`,
 		`CREATE INDEX IF NOT EXISTS idx_ble_devices_last_seen ON ble_devices(last_seen_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ble_device_aliases_canonical ON ble_device_aliases(canonical_addr)`,
+		`CREATE INDEX IF NOT EXISTS idx_ble_device_aliases_last_seen ON ble_device_aliases(last_seen)`,
 	}
 	for _, idx := range indexes {
 		if _, err := r.db.Exec(idx); err != nil {
@@ -955,4 +969,188 @@ func generateUUID() string {
 	b[8] = (b[8] & 0x3f) | 0x80
 
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// BLEDeviceAlias represents an address alias for a device.
+type BLEDeviceAlias struct {
+	Addr           string    `json:"addr"`            // The rotated address
+	CanonicalAddr  string    `json:"canonical_addr"`  // The primary/canonical address
+	FirstSeen      time.Time `json:"first_seen"`
+	LastSeen       time.Time `json:"last_seen"`
+}
+
+// AddAlias adds a new address alias for a canonical device address.
+func (r *Registry) AddAlias(canonicalAddr, aliasAddr string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now().UnixNano()
+	_, err := r.db.Exec(`
+		INSERT INTO ble_device_aliases (addr, canonical_addr, first_seen, last_seen)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(addr) DO UPDATE SET
+			canonical_addr = excluded.canonical_addr,
+			last_seen = excluded.last_seen
+	`, aliasAddr, canonicalAddr, now, now)
+	return err
+}
+
+// GetAliases returns all aliases for a canonical address.
+func (r *Registry) GetAliases(canonicalAddr string) ([]BLEDeviceAlias, error) {
+	rows, err := r.db.Query(`
+		SELECT addr, canonical_addr, first_seen, last_seen
+		FROM ble_device_aliases
+		WHERE canonical_addr = ?
+		ORDER BY first_seen DESC
+	`, canonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var aliases []BLEDeviceAlias
+	for rows.Next() {
+		var a BLEDeviceAlias
+		var firstNS, lastNS int64
+		if err := rows.Scan(&a.Addr, &a.CanonicalAddr, &firstNS, &lastNS); err != nil {
+			continue
+		}
+		a.FirstSeen = time.Unix(0, firstNS)
+		a.LastSeen = time.Unix(0, lastNS)
+		aliases = append(aliases, a)
+	}
+	return aliases, rows.Err()
+}
+
+// GetAllAliases returns all device aliases.
+func (r *Registry) GetAllAliases() (map[string][]BLEDeviceAlias, error) {
+	rows, err := r.db.Query(`
+		SELECT addr, canonical_addr, first_seen, last_seen
+		FROM ble_device_aliases
+		ORDER BY canonical_addr, first_seen DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]BLEDeviceAlias)
+	for rows.Next() {
+		var a BLEDeviceAlias
+		var firstNS, lastNS int64
+		if err := rows.Scan(&a.Addr, &a.CanonicalAddr, &firstNS, &lastNS); err != nil {
+			continue
+		}
+		a.FirstSeen = time.Unix(0, firstNS)
+		a.LastSeen = time.Unix(0, lastNS)
+		result[a.CanonicalAddr] = append(result[a.CanonicalAddr], a)
+	}
+	return result, rows.Err()
+}
+
+// ResolveAlias returns the canonical address for a given address (which may be an alias).
+// If the address is not an alias, it returns the address itself.
+func (r *Registry) ResolveAlias(addr string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var canonicalAddr sql.NullString
+	err := r.db.QueryRow(`
+		SELECT canonical_addr FROM ble_device_aliases WHERE addr = ?
+	`, addr).Scan(&canonicalAddr)
+
+	if err == nil && canonicalAddr.Valid {
+		return canonicalAddr.String
+	}
+	return addr
+}
+
+// RemoveAlias removes an alias relationship.
+func (r *Registry) RemoveAlias(aliasAddr string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	_, err := r.db.Exec(`DELETE FROM ble_device_aliases WHERE addr = ?`, aliasAddr)
+	return err
+}
+
+// UpdateAliasLastSeen updates the last_seen timestamp for an alias.
+func (r *Registry) UpdateAliasLastSeen(aliasAddr string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now().UnixNano()
+	_, err := r.db.Exec(`
+		UPDATE ble_device_aliases SET last_seen = ? WHERE addr = ?
+	`, now, aliasAddr)
+	return err
+}
+
+// CleanStaleAliases removes aliases that haven't been seen in the specified duration.
+func (r *Registry) CleanStaleAliases(olderThan time.Duration) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	cutoff := time.Now().Add(-olderThan).UnixNano()
+	result, err := r.db.Exec(`
+		DELETE FROM ble_device_aliases WHERE last_seen < ?
+	`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+// GetDeviceLastSeen returns the last_seen timestamp for a device.
+func (r *Registry) GetDeviceLastSeen(addr string) (time.Time, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var lastNS int64
+	err := r.db.QueryRow(`SELECT last_seen FROM ble_devices WHERE mac = ?`, addr).Scan(&lastNS)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(0, lastNS), nil
+}
+
+// GetAllPersonDevicesWithAliases returns all devices assigned to any person,
+// including alias addresses for each device.
+// The result is a map where the key is any address (canonical or alias)
+// and the value is the canonical device record.
+func (r *Registry) GetAllPersonDevicesWithAliases() (map[string]*DeviceRecord, error) {
+	devices, err := r.GetAllPersonDevices()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all aliases
+	aliases, err := r.GetAllAliases()
+	if err != nil {
+		return nil, err
+	}
+
+	// Build result map with all addresses pointing to canonical devices
+	result := make(map[string]*DeviceRecord)
+	for i := range devices {
+		dev := &devices[i]
+		result[dev.Addr] = dev
+		// Also add all aliases pointing to this device
+		for _, alias := range aliases[dev.Addr] {
+			// Create a copy of the device with the alias address
+			aliasDev := *dev
+			aliasDev.Addr = alias.Addr
+			result[alias.Addr] = &aliasDev
+		}
+	}
+
+	return result, nil
+}
+
+// GetCanonicalDevice returns the canonical device record for any address
+// (which may be a canonical address or an alias).
+func (r *Registry) GetCanonicalDevice(addr string) (*DeviceRecord, error) {
+	// First check if this is an alias
+	canonicalAddr := r.ResolveAlias(addr)
+	return r.GetDevice(canonicalAddr)
 }

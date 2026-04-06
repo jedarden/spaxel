@@ -301,6 +301,12 @@
                     <div class="panel-info-card-value">${nodesOnline} / ${nodesTotal}</div>
                     <div class="panel-info-card-subtitle">Online / Total</div>
                 </div>
+
+                <hr class="panel-divider">
+
+                <button class="panel-btn panel-btn-danger panel-btn-full" id="logout-btn">
+                    Logout
+                </button>
             </div>
         `;
     }
@@ -382,6 +388,12 @@
         const testNotificationBtn = document.getElementById('test-notification-btn');
         if (testNotificationBtn) {
             testNotificationBtn.addEventListener('click', sendTestNotification);
+        }
+
+        // Logout
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', handleLogout);
         }
     }
 
@@ -474,6 +486,24 @@
         .catch(function(err) {
             console.error('[SettingsPanel] Error sending test notification:', err);
             SpaxelPanels.showError('Failed to send test notification');
+        });
+    }
+
+    /**
+     * Handle logout
+     */
+    function handleLogout() {
+        if (!window.SpaxelAuth) {
+            console.error('[SettingsPanel] SpaxelAuth not available');
+            return;
+        }
+
+        window.SpaxelAuth.logout().then(function() {
+            // Logout successful - page will reload
+            SpaxelPanels.showSuccess('Logged out successfully');
+        }).catch(function(err) {
+            console.error('[SettingsPanel] Error logging out:', err);
+            SpaxelPanels.showError('Failed to logout');
         });
     }
 

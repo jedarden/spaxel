@@ -11,6 +11,8 @@
     const state = {
         devices: new Map(), // addr -> device record
         matches: new Map(), // blobID -> identity match
+        aliases: new Map(), // addr -> list of aliases
+        duplicates: [],     // possible duplicate devices
         expanded: false,
         selectedDevice: null,
         editingDevice: null,
@@ -61,6 +63,13 @@
                         <span class="section-info" id="ble-discovered-count">0</span>
                     </div>
                     <div id="ble-devices-list" class="device-list"></div>
+                </div>
+                <div class="panel-section" id="duplicates-section" style="display: none;">
+                    <div class="section-header">
+                        <span>Possible Rotations</span>
+                        <span class="section-info">🔄</span>
+                    </div>
+                    <div id="ble-duplicates-list" class="duplicates-list"></div>
                 </div>
                 <div class="panel-section">
                     <div class="section-header">
@@ -114,6 +123,36 @@
                     </div>
                 </div>
             </div>
+            <div class="device-modal" id="ble-merge-modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <span id="merge-modal-title">Merge Devices</span>
+                        <button class="modal-close" id="merge-modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="merge-info">
+                            <p>These two devices appear to be the same device with a rotated MAC address:</p>
+                            <div class="merge-devices">
+                                <div class="merge-device" id="merge-device-1">
+                                    <span class="merge-mac"></span>
+                                    <span class="merge-name"></span>
+                                </div>
+                                <div class="merge-arrow">↓</div>
+                                <div class="merge-device" id="merge-device-2">
+                                    <span class="merge-mac"></span>
+                                    <span class="merge-name"></span>
+                                </div>
+                            </div>
+                            <p class="merge-explanation">Merging will keep the first device and remove the second. All identity associations will be preserved.</p>
+                            <p class="merge-confirmation">Are these the same device? Only merge if you're certain.</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" id="merge-modal-cancel">Cancel</button>
+                        <button class="btn-primary btn-danger" id="merge-modal-confirm">Yes, Merge</button>
+                    </div>
+                </div>
+            </div>
         `;
 
         panelEl = container;
@@ -127,6 +166,11 @@
         document.getElementById('modal-close').addEventListener('click', hideModal);
         document.getElementById('modal-cancel').addEventListener('click', hideModal);
         document.getElementById('modal-save').addEventListener('click', saveDevice);
+
+        // Merge modal event listeners
+        document.getElementById('merge-modal-close').addEventListener('click', hideMergeModal);
+        document.getElementById('merge-modal-cancel').addEventListener('click', hideMergeModal);
+        document.getElementById('merge-modal-confirm').addEventListener('click', confirmMerge);
     }
 
     // Toggle panel expansion
@@ -141,10 +185,12 @@
         fetchDevices();
         fetchMatches();
         fetchCrossings();
+        fetchDuplicates();
 
         setInterval(fetchDevices, 10000);
         setInterval(fetchMatches, 5000);
         setInterval(fetchCrossings, 15000);
+        setInterval(fetchDuplicates, 30000);
     }
 
     // Fetch BLE devices
@@ -180,6 +226,33 @@
             })
             .catch(function(err) {
                 // Silently ignore - zones may not be configured
+            });
+    }
+
+    // Fetch possible duplicate devices (for MAC rotation)
+    function fetchDuplicates() {
+        fetch('/api/ble/duplicates')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                state.duplicates = data.duplicates || [];
+                updateDuplicatesList();
+            })
+            .catch(function(err) {
+                console.error('[BLE Panel] Failed to fetch duplicates:', err);
+            });
+    }
+
+    // Fetch device aliases
+    function fetchDeviceAliases(addr) {
+        fetch('/api/ble/devices/' + encodeURIComponent(addr) + '/aliases')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                state.aliases.set(addr, data);
+                updateDeviceList(); // Refresh to show rotation icon
+            })
+            .catch(function(err) {
+                // Endpoint may not exist yet
+                console.error('[BLE Panel] Failed to fetch aliases:', err);
             });
     }
 
@@ -229,6 +302,63 @@
         list.innerHTML = html;
     }
 
+    // Update duplicates list
+    function updateDuplicatesList() {
+        var section = document.getElementById('duplicates-section');
+        var list = document.getElementById('ble-duplicates-list');
+
+        if (!state.duplicates || state.duplicates.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        var html = '';
+        state.duplicates.forEach(function(dup) {
+            html += '<div class="duplicate-item" data-mac1="' + dup.mac1 + '" data-mac2="' + dup.mac2 + '">' +
+                '<div class="duplicate-header">' +
+                    '<span class="duplicate-reason">' + dup.reason + '</span>' +
+                    '<span class="duplicate-confidence">' + Math.round(dup.confidence * 100) + '% match</span>' +
+                '</div>' +
+                '<div class="duplicate-devices">' +
+                    '<span class="dup-mac">' + dup.mac1.substr(-8) + '</span>' +
+                    '<span class="dup-arrow">↔</span>' +
+                    '<span class="dup-mac">' + dup.mac2.substr(-8) + '</span>' +
+                '</div>' +
+                '<div class="duplicate-actions">' +
+                    '<button class="btn-small btn-merge" data-mac1="' + dup.mac1 + '" data-mac2="' + dup.mac2 + '">Merge</button>' +
+                    '<button class="btn-small btn-dismiss" data-mac1="' + dup.mac1 + '" data-mac2="' + dup.mac2 + '">Dismiss</button>' +
+                '</div>' +
+            '</div>';
+        });
+        list.innerHTML = html;
+
+        // Add event listeners
+        list.querySelectorAll('.btn-merge').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var mac1 = this.getAttribute('data-mac1');
+                var mac2 = this.getAttribute('data-mac2');
+                showMergeConfirm(mac1, mac2);
+            });
+        });
+
+        list.querySelectorAll('.btn-dismiss').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var item = this.closest('.duplicate-item');
+                item.style.display = 'none';
+                // Remove from state
+                state.duplicates = state.duplicates.filter(function(d) {
+                    return d.mac1 !== item.getAttribute('data-mac1') || d.mac2 !== item.getAttribute('data-mac2');
+                });
+                if (state.duplicates.length === 0) {
+                    section.style.display = 'none';
+                }
+            });
+        });
+    }
+
     // Update device list UI
     function updateDeviceList() {
         var peopleList = document.getElementById('ble-people-list');
@@ -261,12 +391,33 @@
                 if (loc.confidence > 0) {
                     locStr = '<span class="device-loc">📍</span>';
                 }
+                var aliasData = state.aliases.get(p.addr);
+                var hasAliases = aliasData && aliasData.alias_count > 0;
+                var rotationIcon = hasAliases ? '<span class="rotation-icon" title="Has address rotation history">🔄</span>' : '';
+
                 html += '<div class="device-item person" data-addr="' + p.addr + '">' +
                     '<span class="device-color" style="background:' + color + '"></span>' +
                     '<span class="device-name">' + (p.name || p.label || 'Unknown') + '</span>' +
+                    rotationIcon +
                     locStr +
+                    '<button class="device-expand" data-addr="' + p.addr + '">▼</button>' +
                     '<button class="device-edit" data-addr="' + p.addr + '">✏️</button>' +
                     '</div>';
+
+                // Add aliases section if expanded
+                if (hasAliases && p.expanded) {
+                    html += '<div class="device-aliases" data-parent="' + p.addr + '">';
+                    html += '<div class="aliases-header">Address History</div>';
+                    aliasData.aliases.forEach(function(alias) {
+                        var age = formatTime(new Date(alias.last_seen));
+                        html += '<div class="alias-item">' +
+                            '<span class="alias-addr">' + alias.addr + '</span>' +
+                            '<span class="alias-age">' + age + '</span>' +
+                        '</div>';
+                    });
+                    html += '<div class="aliases-note">Phones rotate addresses every 15-30 min. All entries above are the same device.</div>';
+                    html += '</div>';
+                }
             });
             peopleList.innerHTML = html;
 
@@ -276,6 +427,28 @@
                     e.stopPropagation();
                     var addr = this.getAttribute('data-addr');
                     showEditModal(addr);
+                });
+            });
+
+            peopleList.querySelectorAll('.device-expand').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var addr = this.getAttribute('data-addr');
+                    toggleDeviceExpanded(addr);
+                });
+            });
+
+            // Make device items clickable to expand
+            peopleList.querySelectorAll('.device-item.person').forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    if (!e.target.classList.contains('device-edit') && !e.target.classList.contains('device-expand')) {
+                        var addr = this.getAttribute('data-addr');
+                        toggleDeviceExpanded(addr);
+                        // Fetch aliases when expanding
+                        if (!state.aliases.has(addr)) {
+                            fetchDeviceAliases(addr);
+                        }
+                    }
                 });
             });
         }
@@ -309,6 +482,15 @@
                     showEditModal(addr);
                 });
             });
+        }
+    }
+
+    // Toggle device expanded state
+    function toggleDeviceExpanded(addr) {
+        var device = state.devices.get(addr);
+        if (device) {
+            device.expanded = !device.expanded;
+            updateDeviceList();
         }
     }
 
@@ -377,6 +559,66 @@
         })
         .catch(function(err) {
             alert('Failed to save device: ' + err.message);
+        });
+    }
+
+    // Show merge confirmation modal
+    function showMergeConfirm(mac1, mac2) {
+        state.pendingMerge = { mac1: mac1, mac2: mac2 };
+
+        var device1 = state.devices.get(mac1);
+        var device2 = state.devices.get(mac2);
+
+        document.getElementById('merge-device-1').querySelector('.merge-mac').textContent = mac1;
+        document.getElementById('merge-device-1').querySelector('.merge-name').textContent =
+            device1 ? (device1.name || device1.device_name || 'Unknown') : 'Unknown';
+        document.getElementById('merge-device-2').querySelector('.merge-mac').textContent = mac2;
+        document.getElementById('merge-device-2').querySelector('.merge-name').textContent =
+            device2 ? (device2.name || device2.device_name || 'Unknown') : 'Unknown';
+
+        document.getElementById('ble-merge-modal').style.display = 'flex';
+    }
+
+    // Hide merge modal
+    function hideMergeModal() {
+        document.getElementById('ble-merge-modal').style.display = 'none';
+        state.pendingMerge = null;
+    }
+
+    // Confirm and execute merge
+    function confirmMerge() {
+        if (!state.pendingMerge) {
+            return;
+        }
+
+        var mac1 = state.pendingMerge.mac1;
+        var mac2 = state.pendingMerge.mac2;
+
+        fetch('/api/ble/merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mac1: mac1, mac2: mac2 })
+        })
+        .then(function(res) {
+            if (res.ok) {
+                return res.json();
+            } else {
+                return res.json().then(function(err) {
+                    throw new Error(err.error || 'Failed to merge');
+                });
+            }
+        })
+        .then(function(data) {
+            hideMergeModal();
+            // Remove from duplicates list
+            state.duplicates = state.duplicates.filter(function(d) {
+                return d.mac1 !== mac1 || d.mac2 !== mac2;
+            });
+            updateDuplicatesList();
+            fetchDevices();
+        })
+        .catch(function(err) {
+            alert('Failed to merge devices: ' + err.message);
         });
     }
 

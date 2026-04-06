@@ -64,6 +64,7 @@ type IdentityMatcher struct {
 	registry  *Registry
 	rssiCache *RSSICache
 	nodePos   NodePositionAccessor
+	rotationDetector *RotationDetector // For address rotation detection
 
 	mu              sync.RWMutex
 	matches         map[int]*IdentityMatch // blobID -> match
@@ -74,6 +75,13 @@ type IdentityMatcher struct {
 
 	matchTimeout    time.Duration
 	persistenceTime time.Duration
+}
+
+// SetRotationDetector sets the rotation detector for alias resolution.
+func (m *IdentityMatcher) SetRotationDetector(detector *RotationDetector) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.rotationDetector = detector
 }
 
 // NewIdentityMatcher creates a new identity matcher.
@@ -139,29 +147,47 @@ func (m *IdentityMatcher) getTriangulatedDevices(now time.Time) []*TriangulatedD
 	return m.cachedDevices
 }
 
-// triangulateAllDevices triangulates all person-assigned BLE devices.
+// triangulateAllDevices triangulates all person-assigned BLE devices,
+// including any rotated address aliases.
 func (m *IdentityMatcher) triangulateAllDevices(now time.Time) []*TriangulatedDevice {
-	devices, err := m.registry.GetAllPersonDevices()
+	// Get devices including aliases - map of all addresses (canonical + aliases) to canonical device
+	devicesMap, err := m.registry.GetAllPersonDevicesWithAliases()
 	if err != nil {
-		log.Printf("[WARN] ble: failed to get person devices: %v", err)
+		log.Printf("[WARN] ble: failed to get person devices with aliases: %v", err)
 		return nil
 	}
 
+	// Track which canonical devices we've already processed
+	processed := make(map[string]bool)
+
 	var result []*TriangulatedDevice
-	for i := range devices {
-		dev := &devices[i]
+	for addr, dev := range devicesMap {
 		if !dev.Enabled {
 			continue
 		}
 
-		// Get recent RSSI readings
-		readings := m.rssiCache.GetRecent(dev.Addr, ObservationWindow)
+		// Skip if we already processed this canonical device
+		if processed[dev.Addr] {
+			// Update alias last_seen timestamp if this is an alias
+			if addr != dev.Addr {
+				m.registry.UpdateAliasLastSeen(addr)
+			}
+			continue
+		}
+
+		// Get recent RSSI readings for this address (could be canonical or alias)
+		readings := m.rssiCache.GetRecent(addr, ObservationWindow)
 		if len(readings) == 0 {
 			// Check older window for persistence
-			readings = m.rssiCache.GetRecent(dev.Addr, ObservationWindowLong)
+			readings = m.rssiCache.GetRecent(addr, ObservationWindowLong)
 			if len(readings) == 0 {
 				continue
 			}
+		}
+
+		// Update alias last_seen timestamp
+		if addr != dev.Addr {
+			m.registry.UpdateAliasLastSeen(addr)
 		}
 
 		// Find most recent observation age
@@ -187,6 +213,8 @@ func (m *IdentityMatcher) triangulateAllDevices(now time.Time) []*TriangulatedDe
 			NodeCount:   len(readings),
 			LastSeenAge: lastSeenAge,
 		})
+
+		processed[dev.Addr] = true
 	}
 
 	return result
@@ -686,4 +714,51 @@ func (m *IdentityMatcher) ClearMatch(blobID int) {
 
 	delete(m.matches, blobID)
 	delete(m.persistentIdent, blobID)
+}
+
+// ProcessBLEObservations processes new BLE scan results through the rotation detector.
+// Should be called whenever new BLE scan results arrive from nodes.
+func (m *IdentityMatcher) ProcessBLEObservations(observations map[string][]*RSSIObservation) {
+	if m.rotationDetector == nil {
+		return // Rotation detector not set
+	}
+
+	m.rotationDetector.ProcessObservations(observations)
+}
+
+// GetRotationCandidates returns active rotation candidates.
+func (m *IdentityMatcher) GetRotationCandidates() []*RotationCandidate {
+	if m.rotationDetector == nil {
+		return nil
+	}
+
+	return m.rotationDetector.GetCandidates()
+}
+
+// GetRotationHistory returns the rotation history for a canonical address.
+func (m *IdentityMatcher) GetRotationHistory(canonicalAddr string) []string {
+	if m.rotationDetector == nil {
+		return nil
+	}
+
+	return m.rotationDetector.GetRotationHistory(canonicalAddr)
+}
+
+// ExtendGracePeriod extends the grace period for a device's identity.
+// Use this when a device that was thought to have rotated is seen again.
+func (m *IdentityMatcher) ExtendGracePeriod(canonicalAddr string) {
+	if m.rotationDetector == nil {
+		return
+	}
+
+	m.rotationDetector.ExtendGracePeriod(canonicalAddr)
+}
+
+// IsWithinGracePeriod returns true if the device's identity is within the grace period.
+func (m *IdentityMatcher) IsWithinGracePeriod(canonicalAddr string) bool {
+	if m.rotationDetector == nil {
+		return false
+	}
+
+	return m.rotationDetector.IsWithinGracePeriod(canonicalAddr)
 }

@@ -23,27 +23,31 @@ func NewHandler(registry *Registry) *Handler {
 
 // RegisterRoutes mounts BLE endpoints on r.
 //
-//	GET    /api/ble/devices           — list all BLE devices
-//	GET    /api/ble/devices/{mac}     — get single device
-//	PUT    /api/ble/devices/{mac}     — update device (label, device_type, person_id)
-//	DELETE /api/ble/devices/{mac}     — archive device (soft delete)
-//	GET    /api/ble/duplicates        — list possible duplicate devices
-//	POST   /api/ble/merge             — merge two devices (MAC rotation)
-//	GET    /api/people                — list all people with device counts
-//	POST   /api/people                — create new person
-//	GET    /api/people/{id}           — get single person with devices
-//	PUT    /api/people/{id}           — update person name/color
-//	DELETE /api/people/{id}           — delete person
+//	GET    /api/ble/devices              — list all BLE devices
+//	GET    /api/ble/devices/{mac}        — get single device
+//	GET    /api/ble/devices/{mac}/aliases — get alias history for device
+//	PUT    /api/ble/devices/{mac}        — update device (label, device_type, person_id)
+//	DELETE /api/ble/devices/{mac}        — archive device (soft delete)
+//	GET    /api/ble/duplicates           — list possible duplicate devices
+//	POST   /api/ble/merge                — merge two devices (MAC rotation)
+//	POST   /api/ble/split                — split alias from canonical device
+//	GET    /api/people                   — list all people with device counts
+//	POST   /api/people                   — create new person
+//	GET    /api/people/{id}              — get single person with devices
+//	PUT    /api/people/{id}              — update person name/color
+//	DELETE /api/people/{id}              — delete person
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Device endpoints
 	r.Get("/api/ble/devices", h.listDevices)
 	r.Get("/api/ble/devices/{mac}", h.getDevice)
+	r.Get("/api/ble/devices/{mac}/aliases", h.getDeviceAliases)
 	r.Put("/api/ble/devices/{mac}", h.updateDevice)
 	r.Delete("/api/ble/devices/{mac}", h.archiveDevice)
 
 	// Duplicate detection
 	r.Get("/api/ble/duplicates", h.listDuplicates)
 	r.Post("/api/ble/merge", h.mergeDevices)
+	r.Post("/api/ble/split", h.splitDevice)
 
 	// People endpoints
 	r.Get("/api/people", h.listPeople)
@@ -362,6 +366,106 @@ func (h *Handler) deletePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ── Alias endpoints ─────────────────────────────────────────────────────────────
+
+// getDeviceAliases returns the alias history for a device.
+// This includes all rotated addresses that have been merged to this canonical device.
+func (h *Handler) getDeviceAliases(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// First check if this is an alias - resolve to canonical if so
+	canonicalAddr := h.registry.ResolveAlias(mac)
+
+	// Get aliases for the canonical address
+	aliases, err := h.registry.GetAliases(canonicalAddr)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build response with device info
+	device, _ := h.registry.GetDevice(canonicalAddr)
+
+	writeJSON(w, map[string]interface{}{
+		"canonical_addr": canonicalAddr,
+		"device":         device,
+		"aliases":        aliases,
+		"alias_count":    len(aliases),
+		"note":           "Devices with auto-rotating addresses (phones) may have multiple historical addresses. Trackers typically have stable addresses.",
+	})
+}
+
+type splitDeviceRequest struct {
+	CanonicalAddr string `json:"canonical_addr"` // The canonical device address
+	AliasAddr     string `json:"alias_addr"`      // The alias to split off
+	NewPersonID   string `json:"new_person_id"`   // Optional: assign to different person
+}
+
+// splitDevice splits an alias from its canonical device, creating a separate device entry.
+// Use this when a rotation merge was incorrect.
+func (h *Handler) splitDevice(w http.ResponseWriter, r *http.Request) {
+	var req splitDeviceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CanonicalAddr == "" || req.AliasAddr == "" {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.CanonicalAddr == req.AliasAddr {
+		http.Error(w, "cannot split device from itself", http.StatusBadRequest)
+		return
+	}
+
+	// Verify canonical device exists
+	if _, err := h.registry.GetDevice(req.CanonicalAddr); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "canonical device not found", http.StatusNotFound)
+		return
+	}
+
+	// Remove the alias relationship
+	if err := h.registry.RemoveAlias(req.AliasAddr); err != nil {
+		http.Error(w, "internal error removing alias", http.StatusInternalServerError)
+		return
+	}
+
+	// If the alias has observations in ble_devices, update it
+	// Create a proper device entry from the alias
+	now := time.Now().UnixNano()
+	_, err := h.registry.db.Exec(`
+		UPDATE ble_devices SET
+			person_id = ?,
+			last_seen_at = ?
+		WHERE mac = ?
+	`, req.NewPersonID, now, req.AliasAddr)
+	if err != nil {
+		// Alias might not exist in ble_devices yet, which is fine
+		// Create a new device entry
+		_, err2 := h.registry.db.Exec(`
+			INSERT INTO ble_devices (mac, person_id, last_seen_at, first_seen_at, enabled)
+			VALUES (?, ?, ?, ?, 1)
+		`, req.AliasAddr, req.NewPersonID, now, now)
+		if err2 != nil {
+			http.Error(w, "internal error creating device", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Get the updated canonical device
+	device, err := h.registry.GetDevice(req.CanonicalAddr)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the split device
+	splitDevice, _ := h.registry.GetDevice(req.AliasAddr)
+
+	writeJSON(w, map[string]interface{}{
+		"canonical_device": device,
+		"split_device":     splitDevice,
+		"message":          "Successfully split " + req.AliasAddr + " from " + req.CanonicalAddr,
+	})
 }
 
 // ── Utility endpoints ─────────────────────────────────────────────────────────
