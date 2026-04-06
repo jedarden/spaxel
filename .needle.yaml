@@ -1,0 +1,102 @@
+# NEEDLE workspace configuration
+# Workspace: /home/coding/spaxel
+
+agent:
+  default: claude-code-glm-5
+  timeout: 900
+
+strands:
+  pluck:
+    enabled: true
+    exclude_labels:
+      - deferred
+      - human
+      - blocked
+  explore:
+    enabled: true
+    workspaces:
+      - /home/coding/AgentScribe
+      - /home/coding/ai-code-battle
+      - /home/coding/mta-my-way
+      - /home/coding/domain-check
+  weave:
+    enabled: true
+    max_beads_per_run: 3
+    cooldown_hours: 24
+    doc_patterns:
+      - "README*"
+      - "docs/**/*"
+      - "PROGRESS.md"
+  unravel:
+    enabled: true
+    max_beads_per_run: 3
+    cooldown_hours: 168
+  pulse:
+    enabled: true
+    cooldown_hours: 48
+    severity_threshold: 3
+    scanners:
+      - name: vet
+        command: "cd mothership && go vet ./... 2>&1"
+      - name: test
+        command: "cd mothership && go test ./... 2>&1"
+
+verification:
+  - /home/coding/.needle/hooks/verify-changes.sh
+
+prompt:
+  context_files:
+    - docs/plan/plan.md
+  instructions: |
+    You are working on Spaxel, a WiFi CSI-based indoor positioning system for self-hosted homes.
+    A Docker container mothership (Go) manages a fleet of ESP32-S3 devices that stream CSI data.
+
+    IMPORTANT: You must ONLY work within /home/coding/spaxel/. Do not read, write, or
+    explore files outside this directory.
+
+    Architecture:
+    - Mothership: Go backend in mothership/ (cmd/mothership/ entrypoint, internal/ packages)
+    - Firmware: ESP-IDF C in firmware/ (ESP32-S3)
+    - Dashboard: Vanilla JS + Three.js in dashboard/
+    - Persistence: SQLite (modernc.org/sqlite, pure Go)
+    - Transport: WebSocket (gorilla/websocket), mDNS (hashicorp/mdns)
+
+    Rules:
+    - Read docs/plan/plan.md for full architecture before starting any bead
+    - Check PROGRESS.md for what's already implemented
+    - Run `cd mothership && go test ./...` before closing a bead
+    - Run `cd mothership && go vet ./...` before closing a bead
+    - Follow existing code patterns in mothership/internal/
+    - Write table-driven tests alongside implementation
+    - No CGO — use pure Go libraries only (modernc.org/sqlite, not mattn/go-sqlite3)
+  templates:
+    pluck: |
+      ## Workflow
+
+      You are a coding agent. Complete the task below, then close the bead.
+
+      Steps:
+      1. Read the task description and context below
+      2. Implement the required changes in {workspace_path}
+      3. Commit your work: `git commit -am "brief description of what was done"`
+      4. Push: `git push`
+      5. Close the bead: `br close {bead_id} --body "brief summary of what was implemented"`
+
+      If you cannot complete the task — do NOT close the bead. It will be retried automatically.
+
+      ---
+
+      ## Task: {bead_title}
+
+      {bead_body}
+
+      ## Rules
+
+      {workspace_instructions}
+
+      ## Context
+
+      {context_file_contents}
+
+      Bead ID: {bead_id}
+
