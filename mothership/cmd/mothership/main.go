@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -20,10 +21,13 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/hashicorp/mdns"
+	_ "modernc.org/sqlite"
 	"github.com/spaxel/mothership/internal/api"
+	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/diagnostics"
+	"github.com/spaxel/mothership/internal/explainability"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/ota"
@@ -68,6 +72,56 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	// Create auth handler for PIN-based authentication
+	dataDir := cfg.DataDir
+	if dataDir == "" {
+		dataDir = "/data"
+	}
+	var authHandler *auth.Handler
+	// Open a SQLite connection for auth
+	authDBPath := filepath.Join(dataDir, "spaxel.db")
+	authDB, err := sql.Open("sqlite", authDBPath)
+	if err != nil {
+		log.Printf("[WARN] Failed to open auth database: %v", err)
+	} else {
+		authDB.SetMaxOpenConns(1) // SQLite is single-writer
+		defer authDB.Close()
+
+		// Initialize auth handler
+		authHandler, err = auth.NewHandler(auth.Config{DB: authDB})
+		if err != nil {
+			log.Printf("[WARN] Failed to initialize auth handler: %v", err)
+			authHandler = nil // Disable auth on error
+		} else {
+			defer authHandler.Close()
+			// Register auth routes (public endpoints)
+			authHandler.RegisterRoutes(r)
+			log.Printf("[INFO] Authentication enabled")
+		}
+	}
+
+	// Set up node token validator for ingestion server
+	// Note: authHandler will be nil if auth is disabled, which is fine for development
+	if authHandler != nil {
+		ingestSrv.SetTokenValidator(authHandler.ValidateNodeToken)
+		log.Printf("[INFO] Node token validation enabled")
+	}
+
+	// Helper function to wrap handlers with auth middleware
+	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
+		if authHandler == nil {
+			return next // No auth if handler not initialized
+		}
+		return authHandler.RequireAuth(next)
+	}
+
+	requireAuthHandler := func(next http.Handler) http.Handler {
+		if authHandler == nil {
+			return next // No auth if handler not initialized
+		}
+		return authHandler.RequireAuthHandler(next)
+	}
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -393,7 +447,17 @@ func main() {
 
 	// Fleet REST API
 	fleetHandler := fleet.NewHandler(fleetMgr)
-	fleetHandler.RegisterRoutes(r)
+	if authHandler != nil {
+		// Create an authenticated sub-router for fleet API
+		fleetRouter := chi.NewRouter()
+		fleetRouter.Use(func(next http.Handler) http.Handler {
+			return authHandler.RequireAuthHandler(next)
+		})
+		fleetHandler.RegisterRoutes(fleetRouter)
+		r.Mount("/", fleetRouter)
+	} else {
+		fleetHandler.RegisterRoutes(r)
+	}
 
 	// Settings API
 	settingsHandler, err := api.NewSettingsHandler(filepath.Join(cfg.DataDir, "settings.db"))
@@ -401,7 +465,16 @@ func main() {
 		log.Printf("[WARN] Failed to create settings handler: %v (settings API disabled)", err)
 	} else {
 		defer settingsHandler.Close()
-		settingsHandler.RegisterRoutes(r)
+		if authHandler != nil {
+			settingsRouter := chi.NewRouter()
+			settingsRouter.Use(func(next http.Handler) http.Handler {
+				return authHandler.RequireAuthHandler(next)
+			})
+			settingsHandler.RegisterRoutes(settingsRouter)
+			r.Mount("/", settingsRouter)
+		} else {
+			settingsHandler.RegisterRoutes(r)
+		}
 		log.Printf("[INFO] Settings API enabled")
 	}
 
@@ -411,7 +484,16 @@ func main() {
 		log.Printf("[WARN] Failed to create zones handler: %v (zones/portals API disabled)", err)
 	} else {
 		defer zonesHandler.Close()
-		zonesHandler.RegisterRoutes(r)
+		if authHandler != nil {
+			zonesRouter := chi.NewRouter()
+			zonesRouter.Use(func(next http.Handler) http.Handler {
+				return authHandler.RequireAuthHandler(next)
+			})
+			zonesHandler.RegisterRoutes(zonesRouter)
+			r.Mount("/", zonesRouter)
+		} else {
+			zonesHandler.RegisterRoutes(r)
+		}
 		log.Printf("[INFO] Zones/Portals API enabled")
 	}
 
@@ -421,7 +503,16 @@ func main() {
 		log.Printf("[WARN] Failed to create triggers handler: %v (triggers API disabled)", err)
 	} else {
 		defer triggersHandler.Close()
-		triggersHandler.RegisterRoutes(r)
+		if authHandler != nil {
+			triggersRouter := chi.NewRouter()
+			triggersRouter.Use(func(next http.Handler) http.Handler {
+				return authHandler.RequireAuthHandler(next)
+			})
+			triggersHandler.RegisterRoutes(triggersRouter)
+			r.Mount("/", triggersRouter)
+		} else {
+			triggersHandler.RegisterRoutes(r)
+		}
 		log.Printf("[INFO] Triggers API enabled")
 	}
 
@@ -431,7 +522,16 @@ func main() {
 		log.Printf("[WARN] Failed to create notifications handler: %v (notifications API disabled)", err)
 	} else {
 		defer notificationsHandler.Close()
-		notificationsHandler.RegisterRoutes(r)
+		if authHandler != nil {
+			notificationsRouter := chi.NewRouter()
+			notificationsRouter.Use(func(next http.Handler) http.Handler {
+				return authHandler.RequireAuthHandler(next)
+			})
+			notificationsHandler.RegisterRoutes(notificationsRouter)
+			r.Mount("/", notificationsRouter)
+		} else {
+			notificationsHandler.RegisterRoutes(r)
+		}
 		log.Printf("[INFO] Notifications API enabled")
 	}
 
@@ -441,7 +541,16 @@ func main() {
 		log.Printf("[WARN] Failed to create events handler: %v (events API disabled)", err)
 	} else {
 		defer eventsHandler.Close()
-		eventsHandler.RegisterRoutes(r)
+		if authHandler != nil {
+			eventsRouter := chi.NewRouter()
+			eventsRouter.Use(func(next http.Handler) http.Handler {
+				return authHandler.RequireAuthHandler(next)
+			})
+			eventsHandler.RegisterRoutes(eventsRouter)
+			r.Mount("/", eventsRouter)
+		} else {
+			eventsHandler.RegisterRoutes(r)
+		}
 		// Wire events handler to dashboard hub for live event broadcasts
 		eventsHandler.SetHub(dashboardHub)
 		log.Printf("[INFO] Events API enabled")
@@ -454,7 +563,16 @@ func main() {
 			log.Printf("[WARN] Failed to create replay handler: %v (replay API disabled)", err)
 		} else {
 			defer replayHandler.Close()
-			replayHandler.RegisterRoutes(r)
+			if authHandler != nil {
+				replayRouter := chi.NewRouter()
+				replayRouter.Use(func(next http.Handler) http.Handler {
+					return authHandler.RequireAuthHandler(next)
+				})
+				replayHandler.RegisterRoutes(replayRouter)
+				r.Mount("/", replayRouter)
+			} else {
+				replayHandler.RegisterRoutes(r)
+			}
 			log.Printf("[INFO] Replay API enabled")
 		}
 	}
@@ -466,21 +584,56 @@ func main() {
 	} else {
 		defer bleRegistry.Close()
 		bleHandler := ble.NewHandler(bleRegistry)
-		bleHandler.RegisterRoutes(r)
+		if authHandler != nil {
+			bleRouter := chi.NewRouter()
+			bleRouter.Use(func(next http.Handler) http.Handler {
+				return authHandler.RequireAuthHandler(next)
+			})
+			bleHandler.RegisterRoutes(bleRouter)
+			r.Mount("/", bleRouter)
+		} else {
+			bleHandler.RegisterRoutes(r)
+		}
 		log.Printf("[INFO] BLE Devices API enabled")
 	}
 
+	// Detection explainability API
+	explainabilityHandler := explainability.NewHandler()
+	if authHandler != nil {
+		explainabilityRouter := chi.NewRouter()
+		explainabilityRouter.Use(func(next http.Handler) http.Handler {
+			return authHandler.RequireAuthHandler(next)
+		})
+		explainabilityHandler.RegisterRoutes(explainabilityRouter)
+		r.Mount("/", explainabilityRouter)
+	} else {
+		explainabilityHandler.RegisterRoutes(r)
+	}
+	log.Printf("[INFO] Detection explainability API enabled")
+
 	// Phase 5: Weather diagnostics REST API
 	r.Get("/api/weather", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		reports := weatherDiagnostics.GetAllLinkReports()
 		writeJSON(w, reports)
 	})
 	r.Get("/api/weather/{linkID}", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		linkID := chi.URLParam(r, "linkID")
 		report := weatherDiagnostics.GetReport(linkID)
 		writeJSON(w, report)
 	})
 	r.Get("/api/weather/summary", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		condition, avgConfidence, issueCount := weatherDiagnostics.GetSystemWeatherSummary()
 		writeJSON(w, map[string]interface{}{
 			"condition":     condition,
@@ -489,6 +642,10 @@ func main() {
 		})
 	})
 	r.Get("/api/weather/{linkID}/weekly", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		linkID := chi.URLParam(r, "linkID")
 		trend := weatherDiagnostics.GetWeeklyTrend(linkID)
 		writeJSON(w, trend)
@@ -496,10 +653,18 @@ func main() {
 
 	// Phase 5: Coverage and healing status API
 	r.Get("/api/coverage", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		coverage := fleetHealer.GetCoverage()
 		writeJSON(w, coverage)
 	})
 	r.Get("/api/coverage/history", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		limitStr := r.URL.Query().Get("limit")
 		limit := 10
 		if limitStr != "" {
@@ -511,6 +676,10 @@ func main() {
 		writeJSON(w, history)
 	})
 	r.Get("/api/healing/status", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		writeJSON(w, map[string]interface{}{
 			"degraded":      fleetHealer.IsDegraded(),
 			"online_nodes":  fleetHealer.GetOnlineNodes(),
@@ -518,6 +687,10 @@ func main() {
 		})
 	})
 	r.Get("/api/healing/suggest", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		x, z, improvement := fleetHealer.SuggestNodePosition()
 		worstX, worstZ, worstGDOP := fleetHealer.GetWorstCoverageZone()
 		writeJSON(w, map[string]interface{}{
@@ -529,6 +702,10 @@ func main() {
 
 	// Phase 5: System health API
 	r.Get("/api/health/system", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		writeJSON(w, map[string]interface{}{
 			"system_health":     pm.GetSystemHealth(),
 			"link_count":        pm.LinkCount(),
@@ -540,10 +717,18 @@ func main() {
 
 	// Phase 6: Diurnal learning status API
 	r.Get("/api/diurnal/status", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		statuses := pm.GetDiurnalLearningStatus()
 		writeJSON(w, statuses)
 	})
 	r.Get("/api/diurnal/status/{linkID}", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		linkID := chi.URLParam(r, "linkID")
 		allStatuses := pm.GetDiurnalLearningStatus()
 		for _, status := range allStatuses {
@@ -557,18 +742,30 @@ func main() {
 
 	// Link health API - returns all links with health scores and details
 	r.Get("/api/links", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		links := ingestSrv.GetAllLinksWithHealth()
 		writeJSON(w, links)
 	})
 
 	// Phase 6: Link diagnostics API
 	r.Get("/api/links/{linkID}/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		linkID := chi.URLParam(r, "linkID")
 		diagnoses := diagnosticEngine.GetDiagnoses(linkID)
 		writeJSON(w, diagnoses)
 	})
 
 	r.Get("/api/links/{linkID}/health-history", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		linkID := chi.URLParam(r, "linkID")
 		windowStr := r.URL.Query().Get("window")
 		window := 24 * time.Hour // default 24h
@@ -590,6 +787,10 @@ func main() {
 	})
 
 	r.Get("/api/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		allDiagnoses := diagnosticEngine.GetAllDiagnoses()
 		writeJSON(w, allDiagnoses)
 	})
@@ -603,14 +804,34 @@ func main() {
 	log.Printf("[INFO] OTA firmware server at %s", firmwareDir)
 
 	// OTA REST API
-	r.Get("/api/firmware", otaSrv.HandleList)
-	r.Post("/api/firmware/upload", otaSrv.HandleUpload)
-	r.Get("/firmware/{filename}", otaSrv.HandleServe)
+	r.Get("/api/firmware", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		otaSrv.HandleList(w, r)
+	})
+	r.Post("/api/firmware/upload", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		otaSrv.HandleUpload(w, r)
+	})
+	r.Get("/firmware/{filename}", otaSrv.HandleServe) // Public - URL contains SHA256
 	r.Get("/api/firmware/progress", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(otaMgr.GetProgress())
 	})
 	r.Post("/api/firmware/ota-all", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		// Rolling update of all connected nodes
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -633,7 +854,7 @@ func main() {
 	provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort)
 	r.Post("/api/provision", provSrv.HandleProvision)
 
-	// Firmware manifest for esp-web-tools (onboarding wizard flashing)
+	// Firmware manifest for esp-web-tools (onboarding wizard flashing) - public
 	r.Get("/api/firmware/manifest", func(w http.ResponseWriter, r *http.Request) {
 		latest := otaSrv.GetLatest()
 		manifest := map[string]interface{}{
@@ -663,7 +884,14 @@ func main() {
 
 	go dashboardHub.Run()
 
-	r.HandleFunc("/ws/dashboard", dashboardSrv.HandleDashboardWS)
+	// Protect dashboard WebSocket with auth
+	r.HandleFunc("/ws/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		if authHandler != nil && !authHandler.IsAuthenticated(r) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		dashboardSrv.HandleDashboardWS(w, r)
+	})
 
 	// Serve dashboard static files
 	staticDir := cfg.StaticDir
