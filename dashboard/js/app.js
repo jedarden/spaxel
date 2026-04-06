@@ -52,7 +52,9 @@
         // Diurnal learning tracking
         diurnalStatus: new Map(),  // linkID -> { is_learning, progress, is_ready, days_remaining }
         diurnalPollTimer: null,
-        healthPollTimer: null
+        healthPollTimer: null,
+        // BLE device tracking
+        bleDevices: new Map()      // MAC -> { mac, name, rssi, last_seen, label, blob_id }
     };
 
     // ============================================
@@ -417,6 +419,126 @@
     // ============================================
     // Message Handling
     // ============================================
+
+    // Event handlers for new message types
+
+    function handleEventMessage(msg) {
+        if (!msg.event) return;
+
+        const event = msg.event;
+        console.log('[Spaxel] Event:', event.kind, 'in', event.zone, 'by', event.person_name || 'blob #' + event.blob_id);
+
+        // Log to timeline
+        const timeStr = new Date(event.ts).toLocaleTimeString();
+        let description = '';
+
+        if (event.kind === 'zone_entry') {
+            description = (event.person_name || 'Someone') + ' entered ' + event.zone;
+        } else if (event.kind === 'zone_exit') {
+            description = (event.person_name || 'Someone') + ' left ' + event.zone;
+        } else if (event.kind === 'portal_crossing') {
+            description = (event.person_name || 'Someone') + ' crossed portal in ' + event.zone;
+        } else if (event.kind === 'presence_transition') {
+            description = (event.person_name || 'Someone') + ' presence detected in ' + event.zone;
+        } else {
+            description = event.kind + ' in ' + event.zone;
+        }
+
+        logTimelineEvent(event.kind, null, description + ' (' + timeStr + ')');
+
+        // Show toast for security-relevant events
+        if (event.kind === 'zone_entry' || event.kind === 'portal_crossing') {
+            showToast(description, 'info');
+        }
+    }
+
+    function handleAlertMessage(msg) {
+        if (!msg.alert) return;
+
+        const alert = msg.alert;
+        console.log('[Spaxel] Alert:', alert.severity, alert.description);
+
+        // Show toast notification
+        const toastType = alert.severity === 'critical' ? 'error' : 'warning';
+        showToast(alert.description, toastType);
+
+        // Log to timeline
+        const timeStr = new Date(alert.ts).toLocaleTimeString();
+        logTimelineEvent('alert', null, '[' + alert.severity.toUpperCase() + '] ' + alert.description + ' (' + timeStr + ')');
+
+        // Could trigger UI alert state here (e.g., show alert banner)
+        if (window.showAlertBanner) {
+            window.showAlertBanner(alert);
+        }
+    }
+
+    function handleBLEScanMessage(msg) {
+        if (!msg.devices || !Array.isArray(msg.devices)) return;
+
+        console.log('[Spaxel] BLE scan: ' + msg.devices.length + ' devices');
+
+        // Update BLE device list state
+        if (!state.bleDevices) {
+            state.bleDevices = new Map();
+        }
+
+        // Clear previous entries and add current devices
+        state.bleDevices.clear();
+        msg.devices.forEach(function (device) {
+            state.bleDevices.set(device.mac || device.addr, {
+                mac: device.mac || device.addr,
+                name: device.name || device.device_name || 'Unknown',
+                rssi: device.rssi || device.rssi_dbm || 0,
+                last_seen: device.last_seen || Date.now(),
+                label: device.label || '',
+                blob_id: device.blob_id || null
+            });
+        });
+
+        // Update UI if BLE panel exists
+        if (window.BLEPanel && window.BLEPanel.updateDevices) {
+            window.BLEPanel.updateDevices(msg.devices);
+        }
+    }
+
+    function handleTriggerStateMessage(msg) {
+        if (!msg.trigger) return;
+
+        const trigger = msg.trigger;
+        console.log('[Spaxel] Trigger state:', trigger.name, 'enabled=' + trigger.enabled);
+
+        // Update trigger state in UI if automation panel exists
+        if (window.Automations && window.Automations.updateTriggerState) {
+            window.Automations.updateTriggerState(trigger);
+        }
+    }
+
+    function handleSystemHealthMessage(msg) {
+        if (!msg.health) return;
+
+        const health = msg.health;
+        console.log('[Spaxel] System health:', health);
+
+        // Update system health display in UI
+        const healthEl = document.getElementById('system-uptime');
+        if (healthEl) {
+            const uptimeSec = health.uptime_s || 0;
+            const hours = Math.floor(uptimeSec / 3600);
+            const mins = Math.floor((uptimeSec % 3600) / 60);
+            healthEl.textContent = hours + 'h ' + mins + 'm';
+        }
+
+        const memEl = document.getElementById('system-memory');
+        if (memEl) {
+            memEl.textContent = (health.mem_mb || 0).toFixed(1) + ' MB';
+        }
+
+        const goroutinesEl = document.getElementById('system-goroutines');
+        if (goroutinesEl) {
+            goroutinesEl.textContent = health.go_routines || 0;
+        }
+    }
+
     function handleMessage(data) {
         if (typeof data === 'string') {
             // JSON message
@@ -580,8 +702,34 @@
                 fetchDiurnalStatus();
                 break;
 
+            case 'event':
+                // Event: presence transition, zone entry/exit, portal crossing
+                handleEventMessage(msg);
+                break;
+
+            case 'alert':
+                // Alert: anomaly detection, security mode trigger
+                handleAlertMessage(msg);
+                break;
+
+            case 'ble_scan':
+                // BLE device list update (5s interval)
+                handleBLEScanMessage(msg);
+                break;
+
+            case 'trigger_state':
+                // Automation trigger state change
+                handleTriggerStateMessage(msg);
+                break;
+
+            case 'system_health':
+                // System health stats (60s interval)
+                handleSystemHealthMessage(msg);
+                break;
+
             default:
-                // Ignore unknown types (forward-compatible)
+                // Log unhandled types for future debugging
+                console.log('[Spaxel] Unknown message type:', msg.type, msg);
         }
     }
 

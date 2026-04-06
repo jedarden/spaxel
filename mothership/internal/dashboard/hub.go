@@ -23,6 +23,11 @@ type Hub struct {
 
 	// Reference to ingestion server for state queries
 	ingestionState IngestionState
+
+	// Additional state providers
+	bleState        BLEState
+	triggerState    TriggerState
+	systemHealth    SystemHealthProvider
 }
 
 // IngestionState is an interface to query node/link/motion state from ingestion
@@ -30,6 +35,25 @@ type IngestionState interface {
 	GetConnectedNodesInfo() []ingestion.NodeInfo
 	GetAllLinksInfo() []ingestion.LinkInfo
 	GetAllMotionStates() []ingestion.MotionStateItem
+}
+
+// BLEState is an interface to query current BLE devices for dashboard broadcast
+type BLEState interface {
+	GetCurrentDevices() []map[string]interface{}
+}
+
+// TriggerState is an interface to query automation trigger states for dashboard broadcast
+type TriggerState interface {
+	GetTriggerStates() []map[string]interface{}
+}
+
+// SystemHealthProvider is an interface to query system health metrics
+type SystemHealthProvider interface {
+	GetUptimeSeconds() int64
+	GetNodeCount() int
+	GetBeadCount() int
+	GetGoRoutineCount() int
+	GetMemoryMB() float64
 }
 
 // Client represents a dashboard WebSocket client
@@ -55,6 +79,27 @@ func (h *Hub) SetIngestionState(state IngestionState) {
 	h.mu.Unlock()
 }
 
+// SetBLEState sets the BLE state provider
+func (h *Hub) SetBLEState(state BLEState) {
+	h.mu.Lock()
+	h.bleState = state
+	h.mu.Unlock()
+}
+
+// SetTriggerState sets the automation trigger state provider
+func (h *Hub) SetTriggerState(state TriggerState) {
+	h.mu.Lock()
+	h.triggerState = state
+	h.mu.Unlock()
+}
+
+// SetSystemHealth sets the system health provider
+func (h *Hub) SetSystemHealth(provider SystemHealthProvider) {
+	h.mu.Lock()
+	h.systemHealth = provider
+	h.mu.Unlock()
+}
+
 // Run starts the hub's main loop
 func (h *Hub) Run() {
 	stateTicker := time.NewTicker(5 * time.Second)
@@ -62,6 +107,14 @@ func (h *Hub) Run() {
 
 	presenceTicker := time.NewTicker(500 * time.Millisecond)
 	defer presenceTicker.Stop()
+
+	// BLE scan broadcast ticker (5 seconds)
+	bleScanTicker := time.NewTicker(5 * time.Second)
+	defer bleScanTicker.Stop()
+
+	// System health broadcast ticker (60 seconds)
+	healthTicker := time.NewTicker(60 * time.Second)
+	defer healthTicker.Stop()
 
 	for {
 		select {
@@ -97,6 +150,12 @@ func (h *Hub) Run() {
 
 		case <-presenceTicker.C:
 			h.broadcastPresence()
+
+		case <-bleScanTicker.C:
+			h.broadcastBLEScan()
+
+		case <-healthTicker.C:
+			h.broadcastSystemHealth()
 		}
 	}
 }
@@ -390,6 +449,45 @@ func (h *Hub) ClientCount() int {
 	return len(h.clients)
 }
 
+// broadcastBLEScan broadcasts the current BLE device list to all dashboard clients.
+func (h *Hub) broadcastBLEScan() {
+	h.mu.RLock()
+	state := h.bleState
+	clientCount := len(h.clients)
+	h.mu.RUnlock()
+
+	if state == nil || clientCount == 0 {
+		return
+	}
+
+	devices := state.GetCurrentDevices()
+	if len(devices) == 0 {
+		return
+	}
+
+	h.BroadcastBLEScan(devices)
+}
+
+// broadcastSystemHealth broadcasts system health stats to all dashboard clients.
+func (h *Hub) broadcastSystemHealth() {
+	h.mu.RLock()
+	provider := h.systemHealth
+	clientCount := len(h.clients)
+	h.mu.RUnlock()
+
+	if provider == nil || clientCount == 0 {
+		return
+	}
+
+	h.BroadcastSystemHealth(
+		provider.GetUptimeSeconds(),
+		provider.GetNodeCount(),
+		provider.GetBeadCount(),
+		provider.GetGoRoutineCount(),
+		provider.GetMemoryMB(),
+	)
+}
+
 // BroadcastFleetChange broadcasts a fleet change event to all dashboard clients.
 // This implements the fleet.FleetChangeBroadcaster interface.
 func (h *Hub) BroadcastFleetChange(event fleet.FleetChangeEvent) {
@@ -518,6 +616,80 @@ func (h *Hub) BroadcastAnomaly(anomaly interface{}) {
 	msg := map[string]interface{}{
 		"type": "anomaly_detected",
 		"data": anomaly,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastEvent broadcasts an event (presence transition, zone entry/exit, portal crossing) to all dashboard clients.
+func (h *Hub) BroadcastEvent(eventID string, timestamp time.Time, kind, zone string, blobID int, personName string) {
+	msg := map[string]interface{}{
+		"type": "event",
+		"event": map[string]interface{}{
+			"id":         eventID,
+			"ts":         timestamp.UnixMilli(),
+			"kind":       kind,
+			"zone":       zone,
+			"blob_id":    blobID,
+			"person_name": personName,
+		},
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastAlert broadcasts an alert (anomaly detection, security mode trigger) to all dashboard clients.
+func (h *Hub) BroadcastAlert(alertID string, timestamp time.Time, severity, description string, acknowledged bool) {
+	msg := map[string]interface{}{
+		"type": "alert",
+		"alert": map[string]interface{}{
+			"id":           alertID,
+			"ts":           timestamp.UnixMilli(),
+			"severity":     severity,
+			"description":  description,
+			"acknowledged": acknowledged,
+		},
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastBLEScan broadcasts BLE device list updates to all dashboard clients (5s interval).
+func (h *Hub) BroadcastBLEScan(devices []map[string]interface{}) {
+	msg := map[string]interface{}{
+		"type":    "ble_scan",
+		"devices": devices,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastTriggerState broadcasts automation trigger state changes to all dashboard clients.
+func (h *Hub) BroadcastTriggerState(triggerID, name string, lastFired time.Time, enabled bool) {
+	msg := map[string]interface{}{
+		"type": "trigger_state",
+		"trigger": map[string]interface{}{
+			"id":         triggerID,
+			"name":       name,
+			"last_fired": lastFired.UnixMilli(),
+			"enabled":    enabled,
+		},
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastSystemHealth broadcasts periodic system health stats to all dashboard clients (60s interval).
+func (h *Hub) BroadcastSystemHealth(uptimeS int64, nodeCount, beadCount, goRoutines int, memMB float64) {
+	msg := map[string]interface{}{
+		"type": "system_health",
+		"health": map[string]interface{}{
+			"uptime_s":     uptimeS,
+			"node_count":   nodeCount,
+			"bead_count":   beadCount,
+			"go_routines":  goRoutines,
+			"mem_mb":       memMB,
+		},
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
