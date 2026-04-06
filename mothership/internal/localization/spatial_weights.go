@@ -598,7 +598,7 @@ func (l *SpatialWeightLearner) GetWeightStats() map[string]interface{} {
 	maxWeight := 0.0
 	zoneCounts := make(map[[2]int]int)
 
-	for linkID, zones := range l.weightCache {
+	for _, zones := range l.weightCache {
 		linkHasWeights := false
 		for zoneX, rows := range zones {
 			for zoneY, weight := range rows {
