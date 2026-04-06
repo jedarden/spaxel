@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/hashicorp/mdns"
+	"github.com/spaxel/mothership/internal/api"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/diagnostics"
 	"github.com/spaxel/mothership/internal/fleet"
@@ -392,6 +393,58 @@ func main() {
 	// Fleet REST API
 	fleetHandler := fleet.NewHandler(fleetMgr)
 	fleetHandler.RegisterRoutes(r)
+
+	// Settings API
+	settingsHandler, err := api.NewSettingsHandler(filepath.Join(cfg.DataDir, "settings.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to create settings handler: %v (settings API disabled)", err)
+	} else {
+		defer settingsHandler.Close()
+		settingsHandler.RegisterRoutes(r)
+		log.Printf("[INFO] Settings API enabled")
+	}
+
+	// Zones and Portals API
+	zonesHandler, err := api.NewZonesHandler(filepath.Join(cfg.DataDir, "zones.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to create zones handler: %v (zones/portals API disabled)", err)
+	} else {
+		defer zonesHandler.Close()
+		zonesHandler.RegisterRoutes(r)
+		log.Printf("[INFO] Zones/Portals API enabled")
+	}
+
+	// Triggers API
+	triggersHandler, err := api.NewTriggersHandler(filepath.Join(cfg.DataDir, "triggers.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to create triggers handler: %v (triggers API disabled)", err)
+	} else {
+		defer triggersHandler.Close()
+		triggersHandler.RegisterRoutes(r)
+		log.Printf("[INFO] Triggers API enabled")
+	}
+
+	// Notifications API
+	notificationsHandler, err := api.NewNotificationsHandler(filepath.Join(cfg.DataDir, "notifications.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to create notifications handler: %v (notifications API disabled)", err)
+	} else {
+		defer notificationsHandler.Close()
+		notificationsHandler.RegisterRoutes(r)
+		log.Printf("[INFO] Notifications API enabled")
+	}
+
+	// Replay API
+	if replayStore != nil {
+		replayHandler, err := api.NewReplayHandler(filepath.Join(cfg.DataDir, "csi_replay.bin"), replayStore)
+		if err != nil {
+			log.Printf("[WARN] Failed to create replay handler: %v (replay API disabled)", err)
+		} else {
+			defer replayHandler.Close()
+			replayHandler.RegisterRoutes(r)
+			log.Printf("[INFO] Replay API enabled")
+		}
+	}
 
 	// Phase 5: Weather diagnostics REST API
 	r.Get("/api/weather", func(w http.ResponseWriter, r *http.Request) {
