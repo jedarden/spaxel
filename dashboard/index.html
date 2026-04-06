@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spaxel Dashboard</title>
     <link rel="stylesheet" href="css/troubleshoot.css">
+    <link rel="stylesheet" href="css/panels.css">
     <style>
         * {
             margin: 0;
@@ -1342,6 +1343,23 @@
             background: rgba(79, 195, 247, 0.25);
         }
 
+        /* Settings button in status bar */
+        #settings-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #888;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #settings-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ccc;
+        }
+
         /* Room editor button */
         #room-editor-btn {
             background: rgba(255,255,255,0.06);
@@ -1989,6 +2007,7 @@
             </div>
         </div>
         <div class="status-item" style="margin-left:auto; gap:6px;">
+            <button id="settings-btn" onclick="openSettingsPanel && openSettingsPanel()">Settings</button>
             <button id="add-node-btn" onclick="SpaxelOnboard && SpaxelOnboard.start()">+ Add Node</button>
             <button id="add-virtual-btn" onclick="Placement && Placement.addVirtualNode()">+ Virtual</button>
             <button class="view-btn active" id="view-perspective" onclick="Viz3D.setViewPreset('perspective')">3D</button>
@@ -2080,6 +2099,14 @@
     <script src="js/viz3d.js"></script>
     <!-- Node placement, GDOP coverage, room editor -->
     <script src="js/placement.js"></script>
+    <!-- Panel Framework (must load before modules that use it) -->
+    <script src="js/panels.js"></script>
+    <!-- State Management -->
+    <script src="js/state.js"></script>
+    <!-- Router -->
+    <script src="js/router.js"></script>
+    <!-- Settings Panel -->
+    <script src="js/settings-panel.js"></script>
     <!-- Troubleshooting manager (must load before app.js) -->
     <script src="js/troubleshoot.js"></script>
     <!-- First-time feature tooltips (must load before app.js) -->
