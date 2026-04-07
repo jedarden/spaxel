@@ -3,24 +3,24 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/spaxel/mothership/internal/replay"
 )
 
 // mockRecordingStore is a mock implementation of RecordingStore for testing.
 type mockRecordingStore struct {
-	stats     replay.Stats
+	stats     Stats
 	scanFunc  func(fn func(recvTimeNS int64, frame []byte) bool) bool
 	closed    bool
 	closeErr  error
 }
 
-func (m *mockRecordingStore) Stats() replay.Stats {
+func (m *mockRecordingStore) Stats() Stats {
 	return m.stats
 }
 
@@ -44,7 +44,7 @@ func newTestReplayHandler(t *testing.T) *ReplayHandler {
 	t.Helper()
 
 	store := &mockRecordingStore{
-		stats: replay.Stats{
+		stats: Stats{
 			HasData:   true,
 			WritePos:  5000,
 			OldestPos: 32,
@@ -163,7 +163,6 @@ func TestListSessions(t *testing.T) {
 
 // TestStartSession tests POST /api/replay/start.
 func TestStartSession(t *testing.T) {
-	now := time.Now().UnixNano() / 1e6
 	pastTime := time.Now().Add(-1 * time.Hour).Format(time.RFC3339Nano)
 
 	tests := []struct {

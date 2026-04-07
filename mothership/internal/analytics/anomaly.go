@@ -569,9 +569,13 @@ func (d *Detector) SetSecurityMode(mode SecurityMode, reason string) {
 	// Persist to database
 	d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode', ?)`, string(mode))
 
-	// Clear manual override if switching to armed mode
 	if mode == SecurityModeArmed || mode == SecurityModeArmedStay {
+		// Record armed timestamp for persistence across restarts
+		d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode_armed_at', ?)`, time.Now().UnixNano())
 		d.manualOverrideUntil = time.Time{}
+	} else {
+		// Clear armed timestamp on disarm
+		d.db.Exec(`DELETE FROM learning_state WHERE key = 'security_mode_armed_at'`)
 	}
 }
 
@@ -580,6 +584,28 @@ func (d *Detector) IsSecurityModeActive() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.securityMode == SecurityModeArmed || d.securityMode == SecurityModeArmedStay
+}
+
+// GetArmedAt returns the timestamp when security mode was last armed, or nil if disarmed.
+// The timestamp is loaded from the persisted learning_state table on startup.
+func (d *Detector) GetArmedAt() *time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	if d.securityMode != SecurityModeArmed && d.securityMode != SecurityModeArmedStay {
+		return nil
+	}
+
+	var armedAtNS int64
+	err := d.db.QueryRow(
+		`SELECT value FROM learning_state WHERE key = 'security_mode_armed_at'`,
+	).Scan(&armedAtNS)
+	if err != nil {
+		return nil
+	}
+
+	t := time.Unix(0, armedAtNS)
+	return &t
 }
 
 // SetManualOverride sets a temporary override for security mode.

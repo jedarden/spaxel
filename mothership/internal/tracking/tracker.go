@@ -28,12 +28,21 @@ const maxAssocDist = 2.0 // metres
 // staleTimeout is how long without measurement before removing a track.
 const staleTimeout = 5 * time.Second
 
+// BlobEvent represents a blob lifecycle event (appear or disappear).
+type BlobEvent struct {
+	BlobID    int
+	X, Z      float64
+	Timestamp time.Time
+}
+
 // Tracker manages a set of active blob tracks.
 type Tracker struct {
-	mu      sync.Mutex
-	blobs   []*Blob
-	nextID  int
-	lastRun time.Time
+	mu              sync.Mutex
+	blobs           []*Blob
+	nextID          int
+	lastRun         time.Time
+	onBlobAppear    func(BlobEvent)
+	onBlobDisappear func(BlobEvent)
 }
 
 // NewTracker creates an empty tracker.
@@ -41,6 +50,20 @@ func NewTracker() *Tracker {
 	return &Tracker{
 		lastRun: time.Now(),
 	}
+}
+
+// SetOnBlobAppear sets a callback fired when a new blob is first detected.
+func (t *Tracker) SetOnBlobAppear(cb func(BlobEvent)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.onBlobAppear = cb
+}
+
+// SetOnBlobDisappear sets a callback fired when a blob is removed after staleness.
+func (t *Tracker) SetOnBlobDisappear(cb func(BlobEvent)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.onBlobDisappear = cb
 }
 
 // Update runs a single tracking step given a set of (x, z, weight) measurements.
@@ -125,6 +148,15 @@ func (t *Tracker) Update(measurements [][3]float64) []Blob {
 		}
 		t.nextID++
 		t.blobs = append(t.blobs, b)
+
+		if t.onBlobAppear != nil {
+			t.onBlobAppear(BlobEvent{
+				BlobID:    b.ID,
+				X:         b.X,
+				Z:         b.Z,
+				Timestamp: now,
+			})
+		}
 	}
 
 	// Remove stale tracks.
@@ -132,6 +164,13 @@ func (t *Tracker) Update(measurements [][3]float64) []Blob {
 	for _, b := range t.blobs {
 		if now.Sub(b.LastSeen) < staleTimeout {
 			live = append(live, b)
+		} else if t.onBlobDisappear != nil {
+			t.onBlobDisappear(BlobEvent{
+				BlobID:    b.ID,
+				X:         b.X,
+				Z:         b.Z,
+				Timestamp: now,
+			})
 		}
 	}
 	t.blobs = live

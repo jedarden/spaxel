@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/spaxel/mothership/internal/ble"
@@ -44,7 +43,6 @@ func TestListBLEDevices(t *testing.T) {
 	defer cleanup()
 
 	// Seed some test devices via ProcessRelayMessage
-	now := time.Now().UnixNano()
 	registry.ProcessRelayMessage("AA:BB:CC:DD:EE:01", []ble.BLEObservation{
 		{Addr: "AA:BB:CC:DD:EE:01", Name: "iPhone", MfrID: 0x004C, MfrDataHex: "0215", RSSIdBm: -45},
 	})

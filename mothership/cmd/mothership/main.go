@@ -2949,17 +2949,20 @@ func main() {
         anomalyHandler := analytics.NewAnomalyHandler(anomalyDetector)
         anomalyHandler.RegisterRoutes(r)
 
-        // Additional security mode endpoint
-        r.Get("/api/security/status", func(w http.ResponseWriter, r *http.Request) {
-            isSecurityMode := false
-            if automationEngine != nil {
-                isSecurityMode = automationEngine.GetSystemMode() == automation.ModeAway
+        // Security mode API (arm, disarm, status)
+        securityHandler := api.NewSecurityHandler(anomalyDetector)
+        securityHandler.RegisterRoutes(r)
+
+        // GET /api/security — per plan spec returns {security_mode, armed_at}
+        r.Get("/api/security", func(w http.ResponseWriter, r *http.Request) {
+            armed := anomalyDetector.IsSecurityModeActive()
+            var armedAt interface{}
+            if t := anomalyDetector.GetArmedAt(); t != nil {
+                armedAt = t.Format(time.RFC3339)
             }
             writeJSON(w, map[string]interface{}{
-                "security_mode":     isSecurityMode,
-                "model_ready":       anomalyDetector.IsModelReady(),
-                "learning_progress": anomalyDetector.GetLearningProgress(),
-                "active_anomalies":  len(anomalyDetector.GetActiveAnomalies()),
+                "security_mode": armed,
+                "armed_at":      armedAt,
             })
         })
 

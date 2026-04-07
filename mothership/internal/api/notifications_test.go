@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-chi/chi"
 	_ "modernc.org/sqlite"
 )
 
@@ -26,7 +27,7 @@ func TestNotificationsHandler(t *testing.T) {
 	defer handler.Close()
 
 	// Create a test router
-	router := http.NewServeMux()
+	router := chi.NewRouter()
 	handler.RegisterRoutes(router)
 
 	t.Run("GET /api/notifications/config - initial empty state", func(t *testing.T) {

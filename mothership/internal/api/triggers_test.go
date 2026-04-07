@@ -45,10 +45,14 @@ func seedTrigger(t *testing.T, h *TriggersHandler, tr Trigger) {
 	if len(conditionParams) == 0 {
 		conditionParams = json.RawMessage("{}")
 	}
+	timeConstraint := tr.TimeConstraint
+	if len(timeConstraint) == 0 {
+		timeConstraint = json.RawMessage("{}")
+	}
 	_, err := h.db.Exec(`
-		INSERT INTO triggers (id, name, enabled, condition, condition_params, actions, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, tr.ID, tr.Name, enabled, tr.Condition, string(conditionParams), string(actions), now)
+		INSERT INTO triggers (id, name, enabled, condition, condition_params, time_constraint, actions, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, tr.ID, tr.Name, enabled, tr.Condition, string(conditionParams), string(timeConstraint), string(actions), now)
 	if err != nil {
 		t.Fatalf("seedTrigger: %v", err)
 	}
@@ -59,6 +63,7 @@ func seedTrigger(t *testing.T, h *TriggersHandler, tr Trigger) {
 		Enabled:         tr.Enabled,
 		Condition:       tr.Condition,
 		ConditionParams: conditionParams,
+		TimeConstraint:  timeConstraint,
 		Actions:         actions,
 		CreatedAt:       time.Unix(0, now),
 	}
