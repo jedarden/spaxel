@@ -230,6 +230,7 @@ type ProcessorManager struct {
 	iterCount     int              // how many values filled (0-5)
 	shedLevel     int              // current load shedding level (0-3)
 	steadyCount   int              // consecutive iters below recovery threshold
+	OnShedLevelChange func(prevLevel, newLevel int) // called when shed level changes (optional)
 }
 
 // ProcessorManagerConfig holds configuration for ProcessorManager
@@ -286,12 +287,15 @@ func (pm *ProcessorManager) updateShedding(elapsed time.Duration) {
 
 	// level up
 	if avg >= 95*time.Millisecond && pm.shedLevel < 3 {
+		pm.notifyShedLevelChange(pm.shedLevel, 3)
 		pm.shedLevel = 3
 		pm.steadyCount = 0
 	} else if avg >= 90*time.Millisecond && pm.shedLevel < 2 {
+		pm.notifyShedLevelChange(pm.shedLevel, 2)
 		pm.shedLevel = 2
 		pm.steadyCount = 0
 	} else if avg >= 80*time.Millisecond && pm.shedLevel < 1 {
+		pm.notifyShedLevelChange(pm.shedLevel, 1)
 		pm.shedLevel = 1
 		pm.steadyCount = 0
 	}
@@ -300,6 +304,7 @@ func (pm *ProcessorManager) updateShedding(elapsed time.Duration) {
 	if avg < 60*time.Millisecond {
 		pm.steadyCount++
 		if pm.steadyCount >= 10 && pm.shedLevel > 0 {
+			pm.notifyShedLevelChange(pm.shedLevel, pm.shedLevel-1)
 			pm.shedLevel--
 			pm.steadyCount = 0
 		}
@@ -313,6 +318,17 @@ func (pm *ProcessorManager) GetShedLevel() int {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return pm.shedLevel
+}
+
+// notifyShedLevelChange fires the OnShedLevelChange callback if set.
+// Caller must hold pm.mu (write lock).
+func (pm *ProcessorManager) notifyShedLevelChange(prevLevel, newLevel int) {
+	if prevLevel == newLevel {
+		return
+	}
+	if pm.OnShedLevelChange != nil {
+		pm.OnShedLevelChange(prevLevel, newLevel)
+	}
 }
 
 // GetProcessor returns the processor for a link, or nil if not exists

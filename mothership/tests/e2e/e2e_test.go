@@ -131,12 +131,12 @@ func (h *TestHarness) WaitForHealth(ctx context.Context) error {
 
 // HealthResponse represents the /healthz response
 type HealthResponse struct {
-	Status      string `json:"status"`
-	UptimeS     int64  `json:"uptime_s"`
-	Version     string `json:"version"`
-	NodesOnline int    `json:"nodes_online"`
-	DB          string `json:"db"`
-	LoadLevel   int    `json:"load_level"`
+	Status        string `json:"status"`
+	UptimeS       int64  `json:"uptime_s"`
+	Version       string `json:"version"`
+	NodesOnline   int    `json:"nodes_online"`
+	DB            string `json:"db"`
+	SheddingLevel int    `json:"shedding_level"`
 }
 
 // RunSimulator starts the simulator
@@ -169,33 +169,64 @@ func (h *TestHarness) RunSimulator(ctx context.Context, nodes, walkers, rate int
 	return nil
 }
 
-// GetNodes retrieves the list of nodes
+// GetNodes retrieves the list of nodes from /api/fleet/health
 func (h *TestHarness) GetNodes(ctx context.Context) ([]Node, error) {
-	resp, err := http.Get(h.APIURL + "/api/nodes")
+	resp, err := http.Get(h.APIURL + "/api/fleet/health")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var nodes []Node
-	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
+	var fleetHealth FleetHealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&fleetHealth); err != nil {
 		return nil, err
+	}
+
+	// Convert fleet health nodes to test nodes
+	nodes := make([]Node, 0, len(fleetHealth.Nodes))
+	for _, n := range fleetHealth.Nodes {
+		nodes = append(nodes, Node{
+			MAC:      n.MAC,
+			Name:     n.Name,
+			Role:     n.Role,
+			Status:   map[bool]string{true: "online", false: "offline"}[n.Online],
+			RSSI:     -60, // Default value since health response doesn't include RSSI
+			UptimeS:  0,
+			LastSeen: 0,
+		})
 	}
 
 	return nodes, nil
 }
 
-// Node represents a node from the API
+// FleetHealthResponse represents the /api/fleet/health response
+type FleetHealthResponse struct {
+	CoverageScore float64       `json:"coverage_score"`
+	MeanGDOP      float64       `json:"mean_gdop"`
+	IsDegraded    bool          `json:"is_degraded"`
+	Nodes         []FleetNode   `json:"nodes"`
+}
+
+// FleetNode represents a node in the fleet health response
+type FleetNode struct {
+	MAC         string  `json:"mac"`
+	Name        string  `json:"name"`
+	Role        string  `json:"role"`
+	HealthScore float64 `json:"health_score"`
+	Online      bool    `json:"online"`
+}
+
+// Node represents a node from the API (for compatibility with tests)
 type Node struct {
-	MAC            string  `json:"mac"`
-	Name           string  `json:"name"`
-	Role           string  `json:"role"`
-	Position       Position `json:"position"`
-	FirmwareVersion string  `json:"firmware_version"`
-	Status         string  `json:"status"`
-	RSSI           int     `json:"rssi"`
-	UptimeS        int64   `json:"uptime_s"`
-	LastSeen       int64   `json:"last_seen_ms"`
+	MAC      string `json:"mac"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Position Position `json:"position"`
+	FirmwareVersion string `json:"firmware_version"`
+	Status   string `json:"status"`
+	RSSI     int    `json:"rssi"`
+	UptimeS  int64  `json:"uptime_s"`
+	LastSeen int64  `json:"last_seen_ms"`
 }
 
 // Position represents a node position

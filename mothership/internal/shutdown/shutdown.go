@@ -196,7 +196,7 @@ func (m *Manager) Shutdown(ctx context.Context, cancelContext context.CancelFunc
 				log.Printf("[INFO] Flushing %d EMA baselines and %d diurnal baselines to SQLite",
 					len(baselines), len(diurnals))
 
-				flushCtx, flushCancel := context.WithTimeout(ctx, 5*time.Second)
+				_, flushCancel := context.WithTimeout(ctx, 5*time.Second)
 				defer flushCancel()
 
 				if len(baselines) > 0 {

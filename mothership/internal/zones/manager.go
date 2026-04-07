@@ -431,7 +431,7 @@ func (m *Manager) CreatePortal(portal *Portal) error {
 	now := time.Now().UnixNano()
 	_, err := m.db.Exec(`
 		INSERT INTO portals (id, name, zone_a_id, zone_b_id, p1_x, p1_y, p1_z, p2_x, p2_y, p2_z, p3_x, p3_y, p3_z, n_x, n_y, n_z, width, height, enabled, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, portal.ID, portal.Name, portal.ZoneAID, portal.ZoneBID,
 		portal.P1X, portal.P1Y, portal.P1Z, portal.P2X, portal.P2Y, portal.P2Z,
 		portal.P3X, portal.P3Y, portal.P3Z, portal.NX, portal.NY, portal.NZ,

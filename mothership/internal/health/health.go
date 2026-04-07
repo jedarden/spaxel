@@ -19,6 +19,7 @@ type Checker struct {
 	db            *sql.DB
 	getNodeCount  func() int
 	shedder       *loadshed.Shedder
+	getShedLevel  func() int // optional override for load_level
 	level3Since   time.Time // When level 3 shedding started
 }
 
@@ -27,6 +28,7 @@ type Config struct {
 	DB           *sql.DB
 	GetNodeCount func() int
 	Shedder      *loadshed.Shedder
+	GetShedLevel func() int // optional: overrides Shedder for load_level
 }
 
 // New creates a new health checker.
@@ -36,6 +38,7 @@ func New(cfg Config) *Checker {
 		db:          cfg.DB,
 		getNodeCount: cfg.GetNodeCount,
 		shedder:     cfg.Shedder,
+		getShedLevel: cfg.GetShedLevel,
 	}
 }
 
@@ -46,7 +49,7 @@ type Response struct {
 	Version     string  `json:"version"`     // mothership version
 	NodesOnline int     `json:"nodes_online"` // count of connected nodes
 	DB          string  `json:"db"`          // "ok" or "failing"
-	LoadLevel   int     `json:"load_level"`  // 0-3, current load shedding level
+	SheddingLevel int     `json:"shedding_level"`  // 0-3, current load shedding level
 	Reason      string  `json:"reason,omitempty"` // explanation of degradation (only when status=degraded)
 }
 
@@ -85,7 +88,9 @@ func (c *Checker) check(version string) Response {
 
 	// Get load level (0-3)
 	loadLevel := 0
-	if c.shedder != nil {
+	if c.getShedLevel != nil {
+		loadLevel = c.getShedLevel()
+	} else if c.shedder != nil {
 		loadLevel = int(c.shedder.GetLevel())
 	}
 
@@ -126,13 +131,13 @@ func (c *Checker) check(version string) Response {
 	}
 
 	return Response{
-		Status:      status,
-		UptimeS:     uptime,
-		Version:     version,
-		NodesOnline: nodesOnline,
-		DB:          dbStatus,
-		LoadLevel:   loadLevel,
-		Reason:      reason,
+		Status:        status,
+		UptimeS:       uptime,
+		Version:       version,
+		NodesOnline:   nodesOnline,
+		DB:            dbStatus,
+		SheddingLevel: loadLevel,
+		Reason:        reason,
 	}
 }
 

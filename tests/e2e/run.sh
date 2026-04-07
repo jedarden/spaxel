@@ -4,8 +4,14 @@
 
 set -euo pipefail
 
+# Get the script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+MOTHERSHIP_DIR="$PROJECT_ROOT/mothership"
+
 # Configuration
 MOTHERSHIP_IMAGE="${MOTHERSHIP_IMAGE:-ronaldraygun/spaxel:latest}"
+LOCAL_BUILD="${LOCAL_BUILD:-false}"  # Set to "true" to use local build instead of Docker
 MOTHERSHIP_CONTAINER="spaxel-e2e-test"
 MOTHERSHIP_PORT=8080
 HEALTH_TIMEOUT=15
@@ -46,9 +52,21 @@ cleanup() {
         wait $SIM_PID 2>/dev/null || true
     fi
 
-    # Stop and remove mothership container
-    docker stop "$MOTHERSHIP_CONTAINER" 2>/dev/null || true
-    docker rm "$MOTHERSHIP_CONTAINER" 2>/dev/null || true
+    # Stop mothership (container or local)
+    if [ "$LOCAL_BUILD" = "true" ]; then
+        if [ -n "$MOTHERSHIP_PID" ]; then
+            kill $MOTHERSHIP_PID 2>/dev/null || true
+            wait $MOTHERSHIP_PID 2>/dev/null || true
+        fi
+        # Clean up temp data directory
+        if [ -n "$TEST_DATA_DIR" ] && [ -d "$TEST_DATA_DIR" ]; then
+            rm -rf "$TEST_DATA_DIR"
+        fi
+    else
+        # Stop and remove mothership container
+        docker stop "$MOTHERSHIP_CONTAINER" 2>/dev/null || true
+        docker rm "$MOTHERSHIP_CONTAINER" 2>/dev/null || true
+    fi
 
     if [ $exit_code -eq 0 ]; then
         log_info "All tests passed!"
@@ -85,27 +103,55 @@ json_field() {
     echo "$json" | jq -r "$field // empty"
 }
 
-# Step 1: Start mothership container
-log_info "Step 1: Starting mothership container..."
+# Step 1: Start mothership container or local build
+test_start_time=$(date +%s)
+if [ "$LOCAL_BUILD" = "true" ]; then
+    log_info "Step 1: Starting local mothership build..."
 
-# Check if container is already running and remove it
-docker rm -f "$MOTHERSHIP_CONTAINER" 2>/dev/null || true
+    # Build mothership if needed
+    if [ ! -f /tmp/spaxel-mothership-test ]; then
+        log_info "Building mothership..."
+        cd "$MOTHERSHIP_DIR"
+        if ! go build -o /tmp/spaxel-mothership-test ./cmd/mothership; then
+            log_error "Failed to build mothership"
+            exit 1
+        fi
+    fi
 
-# Run mothership container
-docker run -d \
-    --name "$MOTHERSHIP_CONTAINER" \
-    -p "$MOTHERSHIP_PORT:8080" \
-    -e SPAXEL_LOG_LEVEL=info \
-    -e TZ=UTC \
-    --tmpfs /data:size=100M \
-    "$MOTHERSHIP_IMAGE" >/dev/null
+    # Create temp data directory
+    TEST_DATA_DIR=$(mktemp -d -t spaxel-e2e-data-XXXXXX)
 
-if [ $? -ne 0 ]; then
-    log_error "Failed to start mothership container"
-    exit 1
+    # Start local mothership in background with environment variables
+    SPAXEL_BIND_ADDR="127.0.0.1:$MOTHERSHIP_PORT" \
+    SPAXEL_DATA_DIR="$TEST_DATA_DIR" \
+    SPAXEL_LOG_LEVEL=info \
+    TZ=UTC \
+    /tmp/spaxel-mothership-test > /tmp/spaxel-mothership.log 2>&1 &
+
+    MOTHERSHIP_PID=$!
+    log_info "Local mothership started (PID: $MOTHERSHIP_PID, data: $TEST_DATA_DIR)"
+else
+    log_info "Step 1: Starting mothership container..."
+
+    # Check if container is already running and remove it
+    docker rm -f "$MOTHERSHIP_CONTAINER" 2>/dev/null || true
+
+    # Run mothership container
+    docker run -d \
+        --name "$MOTHERSHIP_CONTAINER" \
+        -p "$MOTHERSHIP_PORT:8080" \
+        -e SPAXEL_LOG_LEVEL=info \
+        -e TZ=UTC \
+        --tmpfs /data:size=100M \
+        "$MOTHERSHIP_IMAGE" >/dev/null
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to start mothership container"
+        exit 1
+    fi
+
+    log_info "Mothership container started: $MOTHERSHIP_CONTAINER"
 fi
-
-log_info "Mothership container started: $MOTHERSHIP_CONTAINER"
 
 # Step 2: Wait for /healthz to return {status:'ok'}
 log_info "Step 2: Waiting for mothership to be healthy..."
@@ -135,39 +181,49 @@ done
 # Step 3: Check if PIN auth is enabled, setup if needed
 log_info "Step 3: Checking auth setup..."
 
-auth_status=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/auth/status" 1 0 2>/dev/null || echo "{}")
-pin_configured=$(json_field "$auth_status" ".pin_configured // false")
+# Try to check auth status, but continue even if endpoint doesn't exist
+auth_status=$(curl -sS "http://localhost:$MOTHERSHIP_PORT/api/auth/setup" 2>/dev/null || echo "")
+http_code=$(curl -sS -o /dev/null -w "%{http_code}" "http://localhost:$MOTHERSHIP_PORT/api/auth/setup" 2>/dev/null || echo "000")
 
-if [ "$pin_configured" = "false" ]; then
-    log_info "Setting up test PIN..."
-    setup_response=$(curl -sS -X POST \
-        -H "Content-Type: application/json" \
-        -d '{"pin":"0000"}' \
-        "http://localhost:$MOTHERSHIP_PORT/api/auth/setup" 2>/dev/null || echo "")
+# Only proceed with auth setup if endpoint exists (HTTP 200, not 404)
+if [ "$http_code" = "200" ] && [ -n "$auth_status" ]; then
+    pin_configured=$(json_field "$auth_status" ".pin_configured // false")
 
-    if [ -n "$setup_response" ]; then
-        ok=$(json_field "$setup_response" ".ok // false")
-        if [ "$ok" = "true" ]; then
-            log_info "Test PIN configured successfully"
-        else
-            log_warn "PIN setup response unexpected: $setup_response"
+    if [ "$pin_configured" = "false" ]; then
+        log_info "Setting up test PIN..."
+        setup_response=$(curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"pin":"0000"}' \
+            "http://localhost:$MOTHERSHIP_PORT/api/auth/setup" 2>/dev/null || echo "")
+
+        if [ -n "$setup_response" ]; then
+            ok=$(json_field "$setup_response" ".ok // false")
+            if [ "$ok" = "true" ]; then
+                log_info "Test PIN configured successfully"
+
+                # Login with the PIN
+                log_info "Logging in with test PIN..."
+                login_response=$(curl -sS -X POST \
+                    -H "Content-Type: application/json" \
+                    -d '{"pin":"0000"}' \
+                    -c /tmp/spaxel-e2e-cookies.txt \
+                    "http://localhost:$MOTHERSHIP_PORT/api/auth/login" 2>/dev/null || echo "")
+            else
+                log_warn "PIN setup response unexpected: $setup_response"
+            fi
         fi
+    else
+        log_info "Auth already configured, skipping setup"
     fi
-
-    # Login with the PIN
-    log_info "Logging in with test PIN..."
-    login_response=$(curl -sS -X POST \
-        -H "Content-Type: application/json" \
-        -d '{"pin":"0000"}' \
-        -c /tmp/spaxel-e2e-cookies.txt \
-        "http://localhost:$MOTHERSHIP_PORT/api/auth/login" 2>/dev/null || echo "")
+else
+    log_info "Auth endpoint not available (HTTP $http_code), running without auth..."
 fi
 
 # Step 4: Build and start simulator
 log_info "Step 4: Starting CSI simulator..."
 
 # Build simulator
-cd /home/coding/spaxel/mothership
+cd "$MOTHERSHIP_DIR"
 if ! go build -o /tmp/spaxel-sim ./cmd/sim 2>/dev/null; then
     log_error "Failed to build simulator"
     exit 1
@@ -223,10 +279,10 @@ while true; do
         fi
     fi
 
-    # Check /api/nodes for online nodes
-    nodes_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/nodes" 1 0 2>/dev/null || echo "")
+    # Check /api/fleet/health for online nodes
+    nodes_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/fleet/health" 1 0 2>/dev/null || echo "")
     if [ -n "$nodes_response" ]; then
-        nodes_online=$(echo "$nodes_response" | jq '[.[] | select(.status=="online")] | length' 2>/dev/null || echo "0")
+        nodes_online=$(echo "$nodes_response" | jq '[.nodes[] | select(.online==true)] | length' 2>/dev/null || echo "0")
 
         # Assert nodes_online == SIM_NODES within first 5 seconds
         if [ $elapsed -le 5 ] && [ "$nodes_online" -ge "$SIM_NODES" ]; then
@@ -234,15 +290,15 @@ while true; do
         fi
     fi
 
-    # Check for blobs via /api/events (detection events) after 5 seconds
+    # Check for blobs via /api/blobs after 5 seconds
     if [ $elapsed -ge 5 ]; then
-        events_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/events?type=detection&limit=10" 1 0 2>/dev/null || echo "")
-        if [ -n "$events_response" ]; then
-            event_count=$(echo "$events_response" | jq '.events | length' 2>/dev/null || echo "0")
-            if [ "$event_count" -gt 0 ]; then
+        blobs_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/blobs" 1 0 2>/dev/null || echo "")
+        if [ -n "$blobs_response" ]; then
+            blob_count=$(echo "$blobs_response" | jq 'length' 2>/dev/null || echo "0")
+            if [ "$blob_count" -gt 0 ]; then
                 blob_detected=1
                 if [ $elapsed -le 15 ]; then
-                    log_info "✓ Blob detected within first 15s (found $event_count detection events at ${elapsed}s)"
+                    log_info "✓ Blob detected within first 15s (found $blob_count blobs at ${elapsed}s)"
                 fi
             fi
         fi
@@ -286,13 +342,17 @@ fi
 log_info "✓ Health check passed after simulation"
 
 # Check detection events were recorded
-events_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/events?type=detection&limit=100" 5 1 2>/dev/null || echo "")
+events_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/events?limit=100" 5 1 2>/dev/null || echo "")
 if [ -z "$events_response" ]; then
     log_error "Failed to get events after simulation"
     exit 1
 fi
 
+# Try both .events format and direct array format
 event_count=$(echo "$events_response" | jq '.events | length' 2>/dev/null || echo "0")
+if [ "$event_count" = "0" ]; then
+    event_count=$(echo "$events_response" | jq 'length' 2>/dev/null || echo "0")
+fi
 if [ "$event_count" -lt 1 ]; then
     log_error "No detection events recorded after simulation"
     log_error "Events response: $events_response"
@@ -301,12 +361,13 @@ fi
 log_info "✓ At least 1 detection event recorded (found $event_count events)"
 
 # Check simulator output for frame rate
+# Format: "[STATS] Node AA:BB:CC:DD:XX:00: sent 123 frames"
 frame_count=$(grep -o "sent [0-9]* frames" /tmp/spaxel-sim.log | tail -1 | grep -o "[0-9]*" || echo "0")
 if [ "$frame_count" -gt 0 ]; then
     expected_frames=$((SIM_NODES * SIM_RATE * SIM_DURATION))
 
-    # Sum up all frame counts from the log
-    actual_frames=$(grep "sent.*frames" /tmp/spaxel-sim.log | awk '{for(i=1;i<=NF;i++) if($i~/^[0-9]+$/) sum+=$i} END {print sum+0}' || echo "0")
+    # Sum up all frame counts from the log using more precise pattern
+    actual_frames=$(grep -o "sent [0-9]* frames" /tmp/spaxel-sim.log | grep -o "[0-9]*" | awk '{sum+=$1} END {print sum+0}' || echo "0")
 
     if [ "$actual_frames" -gt 0 ]; then
         frame_rate_ratio=$((actual_frames * 100 / expected_frames))

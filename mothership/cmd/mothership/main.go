@@ -708,10 +708,16 @@ func main() {
             }
             data, _ := json.Marshal(msg)
             dashboardHub.Broadcast(data)
-            log.Printf("[INFO] Load shed level 3 — would push 10Hz cap to nodes")
+            // Push 10 Hz cap to all connected nodes
+            for _, mac := range ingestSrv.GetConnectedNodes() {
+                ingestSrv.SendConfigToMAC(mac, 10, 0.02)
+            }
+            log.Printf("[INFO] Load shed level 3 — pushed 10Hz cap to %d nodes", len(ingestSrv.GetConnectedNodes()))
         }
         if prevLevel == 3 && newLevel < 3 {
-            log.Printf("[INFO] Load shed recovered — restoring prior node rate")
+            // Restore prior rate when recovering from Level 3
+            // The rate controller will restore adaptive rates automatically
+            log.Printf("[INFO] Load shed recovered from level 3 — adaptive rate control restored")
         }
         log.Printf("[INFO] Load shedding level changed: %d → %d", prevLevel, newLevel)
     }
