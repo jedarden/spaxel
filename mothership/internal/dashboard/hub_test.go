@@ -727,6 +727,104 @@ func TestHub_BroadcastEventFromDB(t *testing.T) {
 	}
 }
 
+func TestHub_BroadcastSystemHealth(t *testing.T) {
+	tests := []struct {
+		name        string
+		uptimeS     int64
+		nodeCount   int
+		beadCount   int
+		goRoutines  int
+		memMB       float64
+	}{
+		{
+			name:       "fresh start",
+			uptimeS:    60,
+			nodeCount:  0,
+			beadCount:  0,
+			goRoutines: 12,
+			memMB:      45.2,
+		},
+		{
+			name:       "running system",
+			uptimeS:    86400,
+			nodeCount:  4,
+			beadCount:  28,
+			goRoutines: 87,
+			memMB:      128.5,
+		},
+		{
+			name:       "long uptime large fleet",
+			uptimeS:    2592000,
+			nodeCount:  16,
+			beadCount:  120,
+			goRoutines: 200,
+			memMB:      512.0,
+		},
+		{
+			name:       "zero values",
+			uptimeS:    0,
+			nodeCount:  0,
+			beadCount:  0,
+			goRoutines: 0,
+			memMB:      0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := NewHub()
+			go hub.Run()
+
+			client := &Client{
+				hub:  hub,
+				send: make(chan []byte, 10),
+			}
+
+			hub.Register(client)
+			time.Sleep(10 * time.Millisecond)
+			drainSnapshot(t, client.send)
+
+			hub.BroadcastSystemHealth(tc.uptimeS, tc.nodeCount, tc.beadCount, tc.goRoutines, tc.memMB)
+
+			select {
+			case msg := <-client.send:
+				var parsed map[string]interface{}
+				if err := json.Unmarshal(msg, &parsed); err != nil {
+					t.Fatalf("failed to parse system_health JSON: %v", err)
+				}
+
+				if parsed["type"] != "system_health" {
+					t.Errorf("expected type=system_health, got %v", parsed["type"])
+				}
+
+				health, ok := parsed["health"].(map[string]interface{})
+				if !ok {
+					t.Fatal("missing health object")
+				}
+
+				if health["uptime_s"] != float64(tc.uptimeS) {
+					t.Errorf("expected uptime_s=%d, got %v", tc.uptimeS, health["uptime_s"])
+				}
+				if health["node_count"] != float64(tc.nodeCount) {
+					t.Errorf("expected node_count=%d, got %v", tc.nodeCount, health["node_count"])
+				}
+				if health["bead_count"] != float64(tc.beadCount) {
+					t.Errorf("expected bead_count=%d, got %v", tc.beadCount, health["bead_count"])
+				}
+				if health["go_routines"] != float64(tc.goRoutines) {
+					t.Errorf("expected go_routines=%d, got %v", tc.goRoutines, health["go_routines"])
+				}
+				if health["mem_mb"] != tc.memMB {
+					t.Errorf("expected mem_mb=%f, got %v", tc.memMB, health["mem_mb"])
+				}
+
+			case <-time.After(100 * time.Millisecond):
+				t.Error("expected to receive system_health broadcast")
+			}
+		})
+	}
+}
+
 func TestHub_DeltaOmitsTypeField(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()
