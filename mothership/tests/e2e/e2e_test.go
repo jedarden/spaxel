@@ -5,8 +5,10 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,6 +19,12 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+// isTimeoutErr checks if the error is a timeout (compatible with gorilla/websocket v1.5+).
+func isTimeoutErr(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
 
 const (
 	// Default test configuration
@@ -308,7 +316,7 @@ func (h *TestHarness) WatchDashboardWS(ctx context.Context, duration time.Durati
 			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 			_, message, err := conn.ReadMessage()
 			if err != nil {
-				if websocket.IsTimeout(err) || err.Error() == "EOF" {
+				if isTimeoutErr(err) || err.Error() == "EOF" {
 					continue
 				}
 				return blobCounts, fmt.Errorf("read error: %w", err)
@@ -467,7 +475,7 @@ func (h *TestHarness) SimulateNode(ctx context.Context, mac string, duration tim
 		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			if !websocket.IsTimeout(err) {
+			if !isTimeoutErr(err) {
 				return err
 			}
 		} else if len(msg) > 0 && msg[0] == '{' {

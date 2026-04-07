@@ -33,6 +33,7 @@ type HealthMessage struct {
 	CSIRateHz      int    `json:"csi_rate_hz"`
 	WifiChannel    int    `json:"wifi_channel"`
 	IP             string `json:"ip,omitempty"`
+	NTPSynced      bool   `json:"ntp_synced"`
 }
 
 // BLEDevice represents a discovered BLE device
@@ -85,6 +86,7 @@ type ConfigMessage struct {
 	RateHz            *int    `json:"rate_hz,omitempty"`
 	TXSlotUS          *int    `json:"tx_slot_us,omitempty"`
 	VarianceThreshold *float64 `json:"variance_threshold,omitempty"`
+	NTPServer         *string `json:"ntp_server,omitempty"`
 }
 
 // OTAMessage triggers a firmware update

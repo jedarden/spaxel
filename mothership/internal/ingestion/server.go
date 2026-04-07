@@ -266,7 +266,18 @@ func (s *Server) SendConfigToMAC(mac string, rateHz int, varianceThreshold float
 	if !ok {
 		return
 	}
-	s.sendConfig(nc, rateHz, 0, varianceThreshold)
+	s.sendConfig(nc, rateHz, 0, varianceThreshold, "")
+}
+
+// SendNTPServerToMAC sends an NTP server configuration to a connected node by MAC.
+func (s *Server) SendNTPServerToMAC(mac, ntpServer string) {
+	s.mu.RLock()
+	nc, ok := s.connections[mac]
+	s.mu.RUnlock()
+	if !ok {
+		return
+	}
+	s.sendConfig(nc, 0, 0, 0, ntpServer)
 }
 
 // SendRoleToMAC sends a role assignment to a connected node by MAC.
@@ -379,7 +390,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 		fleetFn.OnNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)
 	} else {
 		s.sendRole(nc, "rx", "")
-		s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold)
+		s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold, "")
 	}
 
 	// Notify OTA manager of reconnection (for rollback detection)
@@ -660,7 +671,7 @@ func (s *Server) sendRole(nc *NodeConnection, role string, passiveBSSID string) 
 }
 
 // sendConfig sends configuration to a node
-func (s *Server) sendConfig(nc *NodeConnection, rateHz int, txSlotUS int, varianceThreshold float64) {
+func (s *Server) sendConfig(nc *NodeConnection, rateHz int, txSlotUS int, varianceThreshold float64, ntpServer string) {
 	msg := ConfigMessage{Type: "config"}
 	if rateHz > 0 {
 		msg.RateHz = &rateHz
@@ -670,6 +681,9 @@ func (s *Server) sendConfig(nc *NodeConnection, rateHz int, txSlotUS int, varian
 	}
 	if varianceThreshold > 0 {
 		msg.VarianceThreshold = &varianceThreshold
+	}
+	if ntpServer != "" {
+		msg.NTPServer = &ntpServer
 	}
 	data, _ := json.Marshal(msg)
 

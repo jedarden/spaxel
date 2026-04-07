@@ -5,11 +5,13 @@ package main
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,6 +20,12 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+// isTimeoutErr checks if the error is a timeout (compatible with gorilla/websocket v1.5+).
+func isTimeoutErr(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
 
 const (
 	// CSI frame constants from the plan
@@ -395,7 +403,7 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			if !websocket.IsTimeout(err) && err.Error() != "EOF" {
+			if !isTimeoutErr(err) && err.Error() != "EOF" {
 				return fmt.Errorf("read error: %w", err)
 			}
 		} else if len(msg) > 0 && msg[0] == '{' {
