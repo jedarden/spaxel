@@ -83,6 +83,7 @@ typedef struct {
     bool provisioned;
     bool debug;
     uint8_t mac[6];
+    char ntp_server[64];
     EventGroupHandle_t events;
 } spaxel_state_t;
 

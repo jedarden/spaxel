@@ -131,6 +131,12 @@ static esp_err_t load_nvs_config(void) {
         g_state.debug = (debug == 1);
     }
 
+    // Load NTP server
+    len = sizeof(g_state.ntp_server);
+    if (nvs_get_str(nvs, NVS_KEY_NTP_SERVER, g_state.ntp_server, &len) != ESP_OK) {
+        strncpy(g_state.ntp_server, "pool.ntp.org", sizeof(g_state.ntp_server));
+    }
+
     nvs_close(nvs);
 
     ESP_LOGI(TAG, "NVS config loaded: provisioned=%d, role=%s, rate=%d Hz",
@@ -200,8 +206,18 @@ static void state_machine_task(void *arg) {
                 if (bits & SPAXEL_EVENT_WIFI_CONNECTED) {
                     ESP_LOGI(TAG, "WiFi connected");
                     wifi_fail_count = 0;
-                    g_state.state = NODE_STATE_MOTHERSHIP_DISCOVERY;
                     discovery_fail_count = 0;
+
+                    // Initialize NTP after WiFi is up
+                    ESP_LOGI(TAG, "Starting NTP sync with server: %s", g_state.ntp_server);
+                    ntp_init();
+                    ntp_start_sync(g_state.ntp_server);
+                    if (!ntp_wait_sync(10000)) {
+                        ESP_LOGW(TAG, "NTP sync failed, proceeding without stagger");
+                    }
+                    ntp_start_periodic_resync();
+
+                    g_state.state = NODE_STATE_MOTHERSHIP_DISCOVERY;
                 } else if (bits & SPAXEL_EVENT_WIFI_FAILED) {
                     wifi_fail_count++;
                     ESP_LOGW(TAG, "WiFi failed (attempt %d)", wifi_fail_count);
@@ -315,6 +331,15 @@ static void state_machine_task(void *arg) {
 
                 if (bits & SPAXEL_EVENT_WIFI_CONNECTED) {
                     ESP_LOGI(TAG, "WiFi reconnected");
+
+                    // Re-sync NTP after reconnect
+                    ntp_init();
+                    ntp_start_sync(g_state.ntp_server);
+                    if (!ntp_wait_sync(10000)) {
+                        ESP_LOGW(TAG, "NTP resync failed after WiFi reconnect");
+                    }
+                    ntp_start_periodic_resync();
+
                     g_state.state = NODE_STATE_MOTHERSHIP_DISCOVERY;
                 } else {
                     wifi_fail_count++;

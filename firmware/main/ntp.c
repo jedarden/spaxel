@@ -35,9 +35,15 @@ static void sntp_sync_time_callback(struct timeval *tv) {
 // Periodic resync timer callback
 static void periodic_resync_callback(void *arg) {
     ESP_LOGI(TAG, "Periodic NTP resync triggered");
+    esp_sntp_stop();
+    s_is_synced = false;
+    if (s_ntp_events) {
+        xEventGroupClearBits(s_ntp_events, NTP_SYNC_BIT);
+    }
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, s_ntp_server);
+    sntp_set_time_sync_notification_cb(sntp_sync_time_callback);
     esp_sntp_init();
-    // No need to wait here - the callback will handle completion
 }
 
 esp_err_t ntp_init(void) {

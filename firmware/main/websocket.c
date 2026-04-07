@@ -2,6 +2,7 @@
 #include "spaxel.h"
 #include "csi.h"
 #include "wifi.h"
+#include "ntp.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
@@ -348,6 +349,9 @@ esp_err_t websocket_send_health(void) {
         }
     }
 
+    // NTP sync status
+    cJSON_AddBoolToObject(root, "ntp_synced", ntp_is_synced());
+
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
@@ -582,6 +586,15 @@ static void handle_config_msg(cJSON *root) {
         // Store in global for CSI module to use
         extern float g_variance_threshold;
         g_variance_threshold = (float)var_thresh->valuedouble;
+    }
+
+    // NTP server (runtime reconfiguration)
+    cJSON *ntp = cJSON_GetObjectItem(root, "ntp_server");
+    if (ntp && cJSON_IsString(ntp) && strlen(ntp->valuestring) > 0) {
+        strncpy(g_state.ntp_server, ntp->valuestring, sizeof(g_state.ntp_server) - 1);
+        g_state.ntp_server[sizeof(g_state.ntp_server) - 1] = '\0';
+        ESP_LOGI(TAG, "NTP server changed to: %s", g_state.ntp_server);
+        ntp_start_sync(g_state.ntp_server);
     }
 
     if (changed) {
