@@ -141,13 +141,65 @@ func (t *TriggersHandler) SetEngine(engine TriggerEngine) {
 
 // RegisterRoutes registers triggers endpoints on the given router.
 //
-// Routes:
+//	GET /api/triggers
 //
-//	GET    /api/triggers          — list all triggers
-//	POST   /api/triggers          — create a new trigger
-//	PUT    /api/triggers/{id}     — update an existing trigger
-//	DELETE /api/triggers/{id}     — delete a trigger
-//	POST   /api/triggers/{id}/test — fire trigger actions once for testing
+//	@Summary		List all triggers
+//		@Description	Returns all registered automation triggers as a JSON array. Each trigger includes its condition, actions, enabled state, and elapsed time since last fire.
+//		@Tags			triggers
+//		@Produce		json
+//	@Success		200	{array}		Trigger	"List of triggers"
+//		@Router			/api/triggers [get]
+//
+//	POST /api/triggers
+//
+//	@Summary		Create a trigger
+//		@Description	Creates a new automation trigger. The request body must include id, name, and condition. Actions default to an empty array if omitted.
+//		@Tags			triggers
+//		@Accept			json
+//		@Produce		json
+//		@Param			trigger	body		createTriggerRequest	true	"Trigger definition"
+//		@Success		201	{object}	Trigger	"Created trigger"
+//		@Failure		400	{object}	map[string]string	"Missing required fields or invalid condition value"
+//		@Failure		500	{object}	map[string]string	"Database error"
+//		@Router			/api/triggers [post]
+//
+//	PUT /api/triggers/{id}
+//
+//	@Summary		Update a trigger
+//		@Description	Updates an existing trigger. Only fields present in the request body are modified; omitted fields retain their current values.
+//		@Tags			triggers
+//		@Accept			json
+//		@Produce		json
+//		@Param			id		path		string		true	"Trigger ID"
+//		@Param			trigger	body		updateTriggerRequest	true	"Partial trigger object with fields to update"
+//		@Success		200	{object}	Trigger	"Updated trigger"
+//		@Failure		400	{object}	map[string]string	"Invalid request body or invalid condition value"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Failure		500	{object}	map[string]string	"Database error"
+//		@Router			/api/triggers/{id} [put]
+//
+//	DELETE /api/triggers/{id}
+//
+//	@Summary		Delete a trigger
+//		@Description	Removes a trigger by ID. Deleting a nonexistent ID returns 404.
+//		@Tags			triggers
+//		@Param			id	path		string	true	"Trigger ID"
+//		@Success		204	"Trigger deleted"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Failure		500	{object}	map[string]string	"Database error"
+//		@Router			/api/triggers/{id} [delete]
+//
+//	POST /api/triggers/{id}/test
+//
+//	@Summary		Test-fire a trigger
+//		@Description	Fires the trigger's actions once with a synthetic event payload for testing. If no automation engine is attached, returns a simulated success response. Does not update last_fired or trigger any real automation logic.
+//		@Tags			triggers
+//		@Produce		json
+//		@Param			id	path		string	true	"Trigger ID"
+//		@Success		200	{object}	map[string]interface{}	"Test fire result with status and trigger details"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Failure		500	{object}	map[string]string	"Engine test-fire failed"
+//		@Router			/api/triggers/{id}/test [post]
 func (t *TriggersHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/triggers", t.listTriggers)
 	r.Post("/api/triggers", t.createTrigger)

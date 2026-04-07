@@ -147,18 +147,121 @@ func (h *VolumeTriggersHandler) Close() error {
 
 // RegisterRoutes registers volume trigger endpoints on the given router.
 //
-// Endpoints:
+// Triggers:
 //
-//	GET    /api/triggers                    — list all triggers
-//	POST   /api/triggers                    — create trigger
-//	GET    /api/triggers/{id}               — get single trigger
-//	PUT    /api/triggers/{id}               — update trigger
-//	DELETE /api/triggers/{id}               — delete trigger
-//	POST   /api/triggers/{id}/test          — fire actions once with synthetic payload
-//	POST   /api/triggers/{id}/enable        — clear error state and re-enable
-//	POST   /api/triggers/{id}/disable       — disable trigger
-//	GET    /api/triggers/{id}/webhook-log   — last N webhook firings for a trigger
-//	GET    /api/triggers/log                — recent firing log across all triggers
+//	GET /api/triggers
+//
+//	@Summary		List all triggers
+//		@Description	Returns all automation triggers with 3D volume geometry, conditions, actions, enabled state, and elapsed time since last fire.
+//		@Tags			triggers
+//		@Produce		json
+//	@Success		200	{array}		TriggerResponse	"List of triggers"
+//	@Router			/api/triggers [get]
+//
+//	POST /api/triggers
+//
+//	@Summary		Create a trigger
+//		@Description	Creates a new automation trigger with 3D volume geometry. The request body must include name, shape, and condition. Actions default to an empty array if omitted. Enabled defaults to true.
+//		@Tags			triggers
+//		@Accept			json
+//		@Produce		json
+//	@Param			trigger	body		volumeCreateTriggerRequest	true	"Trigger definition"
+//		@Success		201		{object}	TriggerResponse	"Created trigger"
+//		@Failure		400	{object}	map[string]string	"Invalid request body, missing required fields, or invalid shape/condition"
+//		@Failure		500	{object}	map[string]string	"Database error"
+//		@Router			/api/triggers [post]
+//
+//	GET /api/triggers/{id}
+//
+//	@Summary		Get a trigger
+//		@Description	Returns a single trigger by its ID.
+//		@Tags			triggers
+//		@Produce		json
+//		@Param			id	path		string	true	"Trigger ID"
+//		@Success		200	{object}	TriggerResponse	"Trigger object"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Router			/api/triggers/{id} [get]
+//
+//	PUT /api/triggers/{id}
+//
+//	@Summary		Update a trigger
+//		@Description	Updates an existing trigger. Only fields present in the request body are modified; omitted fields retain their current values. Shape geometry is validated on update.
+//		@Tags			triggers
+//		@Accept			json
+//		@Produce		json
+//		@Param			id		path		string		true	"Trigger ID"
+//		@Param			trigger	body		volumeUpdateTriggerRequest	true	"Partial trigger object with fields to update"
+//		@Success		200	{object}	TriggerResponse	"Updated trigger"
+//		@Failure		400	{object}	map[string]string	"Invalid request body or invalid shape geometry"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Failure		500	{object}	map[string]string	"Database error"
+//		@Router			/api/triggers/{id} [put]
+//
+//	DELETE /api/triggers/{id}
+//
+//	@Summary		Delete a trigger
+//		@Description	Removes a trigger by ID and all associated state (trigger state, webhook log entries).
+//		@Tags			triggers
+//		@Param			id	path		string	true	"Trigger ID"
+//		@Success		204	"Trigger deleted"
+//		@Failure		500	{object}	map[string]string	"Database error"
+//		@Router			/api/triggers/{id} [delete]
+//
+//	POST /api/triggers/{id}/test
+//
+//	@Summary		Test-fire a trigger
+//		@Description	Fires the trigger's actions once with a synthetic event payload for testing. Webhook actions are executed immediately; MQTT and notification actions are reported as simulated. Test firings do NOT update last_fired, do NOT increment error counts, and do NOT disable the trigger on 4xx responses.
+//		@Tags			triggers
+//		@Produce		json
+//		@Param			id	path		string	true	"Trigger ID"
+//		@Success		200	{object}	WebhookTestResult	"Test fire results with per-action status"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Failure		500	{object}	map[string]string	"Failed to marshal test payload"
+//		@Router			/api/triggers/{id}/test [post]
+//
+//	POST /api/triggers/{id}/enable
+//
+//	@Summary		Enable a trigger
+//		@Description	Clears the error state (error_message and error_count) and re-enables the trigger.
+//		@Tags			triggers
+//		@Produce		json
+//		@Param			id	path		string	true	"Trigger ID"
+//		@Success		200	{object}	map[string]string	"ok"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Router			/api/triggers/{id}/enable [post]
+//
+//	POST /api/triggers/{id}/disable
+//
+//	@Summary		Disable a trigger
+//		@Description	Disables a trigger. The trigger will no longer be evaluated until re-enabled.
+//		@Tags			triggers
+//		@Produce		json
+//		@Param			id	path		string	true	"Trigger ID"
+//		@Success		200	{object}	map[string]string	"ok"
+//		@Failure		404	{object}	map[string]string	"Trigger not found"
+//		@Failure		500	{object}	map[string]string	"Database error"
+//		@Router			/api/triggers/{id}/disable [post]
+//
+//	GET /api/triggers/{id}/webhook-log
+//
+//	@Summary		Webhook firing log for a trigger
+//		@Description	Returns the most recent webhook firing log entries for a specific trigger. Entries include URL, timestamp, HTTP status code, latency, and any error message.
+//		@Tags			triggers
+//		@Produce		json
+//		@Param			id		path		string	true	"Trigger ID"
+//		@Param			limit	query		int		false	"Max entries to return (default 20, max 100)"
+//		@Success		200	{array}		volume.WebhookLogEntry	"Webhook log entries"
+//		@Router			/api/triggers/{id}/webhook-log [get]
+//
+//	GET /api/triggers/log
+//
+//	@Summary		Recent trigger firing log
+//		@Description	Returns the most recent trigger firing events across all triggers.
+//		@Tags			triggers
+//		@Produce		json
+//		@Param			limit	query		int		false	"Max entries to return (default 10, max 100)"
+//		@Success		200	{array}		map[string]interface{}	"Firing records"
+//		@Router			/api/triggers/log [get]
 func (h *VolumeTriggersHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/triggers", h.listTriggers)
 	r.Post("/api/triggers", h.createTrigger)
