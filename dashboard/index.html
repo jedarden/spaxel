@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="css/timeline.css">
     <link rel="stylesheet" href="css/apdetection.css">
     <link rel="stylesheet" href="css/ble-panel.css">
+    <link rel="stylesheet" href="css/security.css">
     <style>
         * {
             margin: 0;
@@ -2046,6 +2047,8 @@
                 <div>Weakest: <span id="quality-worst-link" class="tooltip-worst">--</span> at <span id="quality-worst-score">--%</span></div>
             </div>
         </div>
+        <!-- Security Status Indicator (managed by SecurityPanel) -->
+        <div class="status-item" id="security-status-container"></div>
         <div class="status-item" style="margin-left:auto; gap:6px;">
             <button id="ble-btn" onclick="BLEPanel && BLEPanel.open()">People & Devices<span id="ble-unregistered-badge" class="badge"></span></button>
             <button id="settings-btn" onclick="openSettingsPanel && openSettingsPanel()">Settings</button>

@@ -1,0 +1,489 @@
+/**
+ * Security Mode Dashboard UI Styles
+ */
+
+/* ── Security Status Indicator (in status bar) ───────────────────────────────── */
+
+.security-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.security-status-indicator:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.security-status-indicator.mode-disarmed {
+    background: rgba(136, 136, 136, 0.15);
+}
+
+.security-status-indicator.mode-learning {
+    background: rgba(255, 167, 38, 0.15);
+}
+
+.security-status-indicator.mode-ready {
+    background: rgba(102, 187, 106, 0.15);
+}
+
+.security-status-indicator.mode-armed {
+    background: rgba(244, 67, 54, 0.15);
+}
+
+.security-status-indicator.mode-alert {
+    background: rgba(239, 83, 80, 0.2);
+    animation: alert-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes alert-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(239, 83, 80, 0.4); }
+    50% { box-shadow: 0 0 16px rgba(239, 83, 80, 0.8); }
+}
+
+.security-toggle-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.security-toggle-btn:hover {
+    opacity: 1;
+}
+
+/* ── Security Dialog Overlay ───────────────────────────────────────────────────── */
+
+.security-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s ease;
+    pointer-events: none;
+}
+
+.security-dialog-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.security-dialog-overlay[style*="display: block"]::before,
+.security-dialog-overlay:not([style*="display: none"])::before {
+    opacity: 1;
+}
+
+.security-dialog-overlay[style*="display: block"],
+.security-dialog-overlay:not([style*="display: none"]) {
+    pointer-events: auto;
+}
+
+.security-dialog-card {
+    background: #1e1e3a;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    width: 480px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    z-index: 1;
+}
+
+.security-dialog-overlay[style*="display: block"] .security-dialog-card,
+.security-dialog-overlay:not([style*="display: none"]) .security-dialog-card {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.security-dialog-card.arm {
+    border-top: 4px solid #66bb6a;
+}
+
+.security-dialog-card.disarm {
+    border-top: 4px solid #ef5350;
+}
+
+.security-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.security-dialog-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #eee;
+}
+
+.security-dialog-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.security-dialog-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+
+.security-dialog-content {
+    margin-bottom: 24px;
+}
+
+.security-dialog-prompt {
+    margin: 0 0 20px;
+    font-size: 15px;
+    color: #ccc;
+    line-height: 1.5;
+}
+
+.security-dialog-warning {
+    background: rgba(255, 167, 38, 0.15);
+    border: 1px solid rgba(255, 167, 38, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 20px;
+}
+
+.security-dialog-warning p {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #ffa726;
+}
+
+.security-dialog-warning p:last-child {
+    margin-bottom: 0;
+}
+
+.security-dialog-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.stat-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 600;
+    color: #eee;
+}
+
+.security-dialog-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.security-dialog-btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.security-dialog-btn:active {
+    transform: translateY(1px);
+}
+
+.security-dialog-btn.cancel {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+}
+
+.security-dialog-btn.cancel:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #eee;
+}
+
+.security-dialog-btn.arm {
+    background: rgba(102, 187, 106, 0.2);
+    color: #66bb6a;
+}
+
+.security-dialog-btn.arm:hover {
+    background: rgba(102, 187, 106, 0.3);
+}
+
+.security-dialog-btn.disarm {
+    background: rgba(244, 67, 54, 0.2);
+    color: #ef5350;
+}
+
+.security-dialog-btn.disarm:hover {
+    background: rgba(244, 67, 54, 0.3);
+}
+
+/* ── Alert Banner ──────────────────────────────────────────────────────────────────── */
+
+#alert-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, rgba(185, 28, 28, 0.98), rgba(239, 68, 68, 0.95));
+    color: white;
+    padding: 16px 20px;
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    box-shadow: 0 4px 20px rgba(185, 28, 28, 0.4);
+    transform: translateY(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#alert-banner.visible {
+    transform: translateY(0);
+}
+
+.alert-banner-icon {
+    font-size: 28px;
+    animation: alert-shake 0.5s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes alert-shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+}
+
+.alert-banner-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.alert-banner-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.alert-banner-description {
+    font-size: 14px;
+    opacity: 0.95;
+    margin-bottom: 4px;
+}
+
+.alert-banner-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    opacity: 0.85;
+}
+
+.alert-banner-zone {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.alert-banner-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.alert-banner-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.alert-banner-btn:active {
+    transform: translateY(1px);
+}
+
+.alert-banner-btn.acknowledge {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.alert-banner-btn.acknowledge:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.alert-banner-btn.view {
+    background: white;
+    color: #b91c1c;
+}
+
+.alert-banner-btn.view:hover {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+/* ── Security Mode Indicator (full page overlay when armed) ──────────────────────── */
+
+#security-mode-indicator {
+    position: fixed;
+    top: 45px;
+    right: 20px;
+    background: rgba(239, 68, 68, 0.9);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    z-index: 150;
+    display: none;
+    animation: security-pulse 2s ease-in-out infinite;
+}
+
+#security-mode-indicator.active {
+    display: block;
+}
+
+@keyframes security-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+    50% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.8); }
+}
+
+/* ── Responsive Design ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+    .security-dialog-card {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 12px 12px 0 0;
+        margin: 0 auto;
+        position: fixed;
+        bottom: 0;
+        transform: translateY(100%);
+    }
+
+    .security-dialog-overlay[style*="display: block"] .security-dialog-card,
+    .security-dialog-overlay:not([style*="display: none"]) .security-dialog-card {
+        transform: translateY(0);
+    }
+
+    #alert-banner {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px 16px;
+        gap: 12px;
+    }
+
+    .alert-banner-content {
+        margin-bottom: 0;
+    }
+
+    .alert-banner-actions {
+        flex-direction: column;
+    }
+
+    .alert-banner-btn {
+        width: 100%;
+    }
+
+    .security-dialog-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Learning Progress Banner ─────────────────────────────────────────────────── */
+
+#anomaly-learning-banner {
+    position: fixed;
+    top: 45px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    z-index: 150;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+}
+
+#anomaly-learning-banner.visible {
+    display: flex;
+}
+
+#anomaly-learning-banner .progress-bar {
+    width: 80px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#anomaly-learning-banner .learning-progress {
+    height: 100%;
+    background: #fff;
+    border-radius: 3px;
+    transition: width 0.5s;
+}
