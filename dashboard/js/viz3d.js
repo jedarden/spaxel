@@ -670,6 +670,7 @@ const Viz3D = (function () {
 
             obj.group.position.set(b.x, 0, b.z);
             obj.lastPosition = { x: b.x, z: b.z };
+            obj.lastVelocity = { vx: b.vx || 0, vz: b.vz || 0 };
 
             const speed = Math.sqrt(b.vx*b.vx + b.vz*b.vz);
             _setPosture(obj.humanoid, speed > 0.25 ? 'walking' : 'standing');
@@ -1988,6 +1989,51 @@ const Viz3D = (function () {
         _fresnelZones = [];
     }
 
+    // ── WebSocket reconnect helpers ─────────────────────────────────────────
+
+    /**
+     * Clear all blob trails (called on reconnect).
+     */
+    function clearAllTrails() {
+        _blobs3D.forEach(function (obj) {
+            var arr = obj.trail.geometry.attributes.position.array;
+            arr.fill(0);
+            obj.trail.geometry.attributes.position.needsUpdate = true;
+            obj.trail.geometry.setDrawRange(0, 0);
+        });
+    }
+
+    /**
+     * Extrapolate a single blob's position during disconnect.
+     * @param {number} blobId
+     * @param {number} x - new X position
+     * @param {number} z - new Z position
+     */
+    function extrapolateBlobPosition(blobId, x, z) {
+        var obj = _blobs3D.get(blobId);
+        if (!obj) return;
+        obj.group.position.set(x, 0, z);
+    }
+
+    /**
+     * Get current blob states for extrapolation on disconnect.
+     * Returns array of { id, x, z, vx, vz } for each tracked blob.
+     * @returns {Array}
+     */
+    function getBlobStates() {
+        var states = [];
+        _blobs3D.forEach(function (obj, blobId) {
+            states.push({
+                id: blobId,
+                x: obj.lastPosition ? obj.lastPosition.x : 0,
+                z: obj.lastPosition ? obj.lastPosition.z : 0,
+                vx: obj.lastVelocity ? obj.lastVelocity.vx : 0,
+                vz: obj.lastVelocity ? obj.lastVelocity.vz : 0
+            });
+        });
+        return states;
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
     return {
         init,
@@ -1999,6 +2045,10 @@ const Viz3D = (function () {
         applyLinks,
         uploadFloorPlan,
         setViewPreset,
+        // WebSocket reconnect helpers
+        clearAllTrails: clearAllTrails,
+        extrapolateBlobPosition: extrapolateBlobPosition,
+        getBlobStates: getBlobStates,
         getNodeMesh: function (mac) { return _nodeMeshes.get(mac); },
         rebuildLinkLines: _rebuildLinkLines,
         // Ghost node API

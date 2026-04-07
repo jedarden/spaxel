@@ -58,6 +58,11 @@ func AllMigrations() []Migration {
 			Description: "add floorplan table for image upload and calibration",
 			Up:          migration_010_add_floorplan,
 		},
+		{
+			Version:     11,
+			Description: "add FTS5 table and triggers for events search",
+			Up:          migration_011_add_events_fts,
+		},
 	}
 }
 
@@ -500,6 +505,37 @@ CREATE TABLE IF NOT EXISTS floorplan (
 	rotation_deg    REAL,
 	updated_at      INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
 );
+`
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// migration_011_add_events_fts adds FTS5 full-text search for events.
+func migration_011_add_events_fts(tx *sql.Tx) error {
+	schema := `
+-- FTS5 index for natural-language search across event detail
+CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+	type, zone, person, detail_json,
+	content='events', content_rowid='id'
+);
+
+-- Triggers to keep events_fts in sync with the events table
+CREATE TRIGGER IF NOT EXISTS events_fts_insert AFTER INSERT ON events BEGIN
+	INSERT INTO events_fts(rowid, type, zone, person, detail_json)
+	VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
+END;
+
+CREATE TRIGGER IF NOT EXISTS events_fts_delete AFTER DELETE ON events BEGIN
+	INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
+	VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
+END;
+
+CREATE TRIGGER IF NOT EXISTS events_fts_update AFTER UPDATE ON events BEGIN
+	INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
+	VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
+	INSERT INTO events_fts(rowid, type, zone, person, detail_json)
+	VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
+END;
 `
 	_, err := tx.Exec(schema)
 	return err

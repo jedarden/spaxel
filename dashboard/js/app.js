@@ -12,7 +12,6 @@
     // Configuration
     // ============================================
     const CONFIG = {
-        wsReconnectDelay: 3000,
         gridWidth: 10,       // meters
         gridDepth: 10,       // meters
         gridDivisions: 20,
@@ -371,58 +370,32 @@
     }
 
     // ============================================
-    // WebSocket Connection
+    // WebSocket Connection (via SpaxelWebSocket)
     // ============================================
     function connectWebSocket() {
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsURL = `${wsProtocol}//${window.location.host}/ws/dashboard`;
+        // Initialize the WebSocket manager with callbacks
+        SpaxelWebSocket.init({
+            onOpen: function(ws) {
+                console.log('[Spaxel] WebSocket connected');
+                state.wsConnected = true;
+                state.awaitingSnapshot = true;
+            },
+            onMessage: function(data) {
+                handleMessage(data);
+            },
+            onClose: function(event) {
+                console.log('[Spaxel] WebSocket closed:', event.code, event.reason);
+                state.wsConnected = false;
 
-        console.log('[Spaxel] Connecting to', wsURL);
+                // Start blob extrapolation using captured blob states
+                SpaxelWebSocket.startExtrapolation();
+            },
+            onError: function(error) {
+                console.error('[Spaxel] WebSocket error:', error);
+            }
+        });
 
-        state.ws = new WebSocket(wsURL);
-        state.ws.binaryType = 'arraybuffer';
-
-        state.ws.onopen = function() {
-            console.log('[Spaxel] WebSocket connected');
-            state.wsConnected = true;
-            state.awaitingSnapshot = true;
-            updateConnectionStatus(true);
-        };
-
-        state.ws.onclose = function(event) {
-            console.log('[Spaxel] WebSocket closed:', event.code, event.reason);
-            state.wsConnected = false;
-            updateConnectionStatus(false);
-            scheduleReconnect();
-        };
-
-        state.ws.onerror = function(error) {
-            console.error('[Spaxel] WebSocket error:', error);
-        };
-
-        state.ws.onmessage = function(event) {
-            handleMessage(event.data);
-        };
-    }
-
-    function scheduleReconnect() {
-        console.log('[Spaxel] Reconnecting in', CONFIG.wsReconnectDelay, 'ms');
-        setTimeout(connectWebSocket, CONFIG.wsReconnectDelay);
-    }
-
-    function updateConnectionStatus(connected) {
-        const dot = document.getElementById('ws-status');
-        const text = document.getElementById('ws-status-text');
-
-        if (connected) {
-            dot.classList.remove('disconnected');
-            dot.classList.add('connected');
-            text.textContent = 'Connected';
-        } else {
-            dot.classList.remove('connected');
-            dot.classList.add('disconnected');
-            text.textContent = 'Disconnected';
-        }
+        SpaxelWebSocket.connect();
     }
 
     // ============================================
@@ -776,7 +749,16 @@
 
     function handleSnapshot(msg) {
         state.awaitingSnapshot = false;
+
+        // On reconnect: clear trails, restore scene, log duration
+        if (SpaxelWebSocket.isConnected()) {
+            SpaxelWebSocket.onReconnected();
+        }
+
         console.log('[Spaxel] Received snapshot, rebuilding state');
+
+        // Store snapshot for blob extrapolation on future disconnects
+        SpaxelWebSocket.setLastSnapshot(msg);
 
         // Nodes
         if (msg.nodes) {
