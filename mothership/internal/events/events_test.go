@@ -711,3 +711,43 @@ func TestInsertSystemEvent(t *testing.T) {
 		t.Errorf("Type = %q, want %q", eType, EventTypeSystem)
 	}
 }
+
+func TestStartArchiveScheduler(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+
+	// Start the scheduler with a done channel
+	done := make(chan struct{})
+	defer close(done)
+
+	// The scheduler should start without error
+	StartArchiveScheduler(db, done)
+
+	// Give the goroutine a moment to start
+	time.Sleep(10 * time.Millisecond)
+
+	// The test passes if we got here without panic
+	// The scheduler will schedule for next 02:00, which is in the future
+}
+
+func TestStartArchiveScheduler_StopsOnDone(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+
+	done := make(chan struct{})
+
+	// Start the scheduler
+	StartArchiveScheduler(db, done)
+
+	// Give the goroutine a moment to start
+	time.Sleep(10 * time.Millisecond)
+
+	// Signal done - should stop the scheduler gracefully
+	close(done)
+
+	// Give the goroutine a moment to stop
+	time.Sleep(10 * time.Millisecond)
+
+	// Test passes if we got here without deadlock
+}
+

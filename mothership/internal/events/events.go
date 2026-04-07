@@ -360,3 +360,36 @@ func InsertSystemEvent(db *sql.DB, message string, detail map[string]interface{}
 		Severity:   SeverityInfo,
 	})
 }
+
+// StartArchiveScheduler starts a goroutine that runs the archive job nightly at 02:00 local time.
+// The goroutine runs until the done channel is closed.
+func StartArchiveScheduler(db *sql.DB, done <-chan struct{}) {
+	go func() {
+		for {
+			// Calculate duration until next 02:00 local time
+			now := time.Now()
+			nextRun := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, now.Location())
+
+			// If we're already past 02:00 today, schedule for tomorrow
+			if now.After(nextRun) {
+				nextRun = nextRun.Add(24 * time.Hour)
+			}
+
+			duration := nextRun.Sub(now)
+			log.Printf("[events archive] Next run scheduled for %s (in %s)", nextRun.Format(time.RFC1123), duration.Round(time.Second))
+
+			// Wait until the next scheduled run time or done signal
+			select {
+			case <-time.After(duration):
+				// Time to run the archive job
+				log.Printf("[events archive] Running scheduled archive job")
+				if err := RunArchiveJob(db); err != nil {
+					log.Printf("[ERROR] Events archive job failed: %v", err)
+				}
+			case <-done:
+				log.Printf("[events archive] Scheduler stopped")
+				return
+			}
+		}
+	}()
+}
