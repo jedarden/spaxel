@@ -58,7 +58,11 @@
         bleDevices: new Map(),     // MAC -> { mac, name, rssi, last_seen, label, blob_id }
         // Alert tracking
         alerts: new Map(),         // id -> { id, ts, severity, description, acknowledged }
-        unacknowledgedCount: 0
+        unacknowledgedCount: 0,
+        // Event dedup: set of recently processed event IDs to avoid double-processing
+        // from immediate broadcast + delta buffering
+        recentEventIDs: new Set(),
+        recentEventIDsPruneAt: 0
     };
 
     // ============================================
@@ -431,6 +435,19 @@
         if (!msg.event) return;
 
         const event = msg.event;
+
+        // Dedup: skip if we already processed this event (from immediate broadcast or prior delta)
+        const eid = String(event.id);
+        if (state.recentEventIDs.has(eid)) return;
+        state.recentEventIDs.add(eid);
+
+        // Prune old IDs every 30 seconds to prevent unbounded growth
+        const now = Date.now();
+        if (now > state.recentEventIDsPruneAt) {
+            state.recentEventIDs.clear();
+            state.recentEventIDsPruneAt = now + 30000;
+        }
+
         console.log('[Spaxel] Event:', event.kind, 'in', event.zone, 'by', event.person_name || 'blob #' + event.blob_id);
 
         // Log to timeline
@@ -899,6 +916,13 @@
             if (window.Viz3D && window.Viz3D.handleZoneUpdate) {
                 Viz3D.handleZoneUpdate(msg.zones);
             }
+        }
+
+        // Events buffered since last tick (presence transitions, zone entries/exits, portal crossings)
+        if (msg.events && Array.isArray(msg.events)) {
+            msg.events.forEach(function (evt) {
+                handleEventMessage({ type: 'event', event: evt });
+            });
         }
     }
 
