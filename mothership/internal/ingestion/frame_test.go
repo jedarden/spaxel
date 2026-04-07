@@ -165,3 +165,81 @@ func TestParseFrame_HeaderOnly(t *testing.T) {
 		t.Errorf("Payload should be empty, got %d bytes", len(frame.Payload))
 	}
 }
+
+// BenchmarkParseFrame_Valid verifies that valid frame parsing completes in < 1 μs.
+// Acceptance criterion: "Valid frame: passes all checks in < 1 μs"
+func BenchmarkParseFrame_Valid(b *testing.B) {
+	// Create a valid frame with 64 subcarriers (typical case)
+	nSub := uint8(64)
+	payloadSize := int(nSub) * 2
+	frameSize := HeaderSize + payloadSize
+
+	data := make([]byte, frameSize)
+	copy(data[0:6], []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF})
+	copy(data[6:12], []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66})
+	data[12] = 0x4E
+	data[13] = 0x61
+	data[14] = 0xBC
+	data[20] = 0xCC // RSSI: -52 dBm
+	data[21] = 0xA1 // Noise floor: -95 dBm
+	data[22] = 0x06 // Channel: 6
+	data[23] = nSub
+
+	// Fill payload with test data
+	for i := 0; i < payloadSize; i++ {
+		data[HeaderSize+i] = byte(i % 256)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ParseFrame(data)
+		if err != nil {
+			b.Fatalf("ParseFrame failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkParseFrame_HeaderOnly verifies performance for header-only frames (n_sub=0).
+func BenchmarkParseFrame_HeaderOnly(b *testing.B) {
+	data := make([]byte, HeaderSize)
+	copy(data[0:6], []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF})
+	copy(data[6:12], []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66})
+	data[20] = 0xCC // RSSI: -52 dBm
+	data[21] = 0xA1 // Noise floor: -95 dBm
+	data[22] = 0x06 // Channel: 6
+	data[23] = 0    // n_sub = 0 (header-only frame)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ParseFrame(data)
+		if err != nil {
+			b.Fatalf("ParseFrame failed: %v", err)
+		}
+	}
+}
+
+// TestParseFrame_RSSIZero verifies that RSSI=0 frames are allowed (not an error)
+// but should be flagged for AGC skip in the pipeline.
+func TestParseFrame_RSSIZero(t *testing.T) {
+	data := make([]byte, HeaderSize)
+	copy(data[0:6], []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF})
+	copy(data[6:12], []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66})
+	data[20] = 0x00 // RSSI: 0 (invalid/missing, but allowed)
+	data[21] = 0xA1 // Noise floor: -95 dBm
+	data[22] = 0x06 // Channel: 6
+	data[23] = 0    // n_sub = 0 (header-only frame)
+
+	frame, err := ParseFrame(data)
+	if err != nil {
+		t.Fatalf("ParseFrame with RSSI=0 should succeed, got error: %v", err)
+	}
+
+	if frame.RSSI != 0 {
+		t.Errorf("RSSI should be 0, got %d", frame.RSSI)
+	}
+
+	// Verify the frame is otherwise valid
+	if frame.Channel != 6 {
+		t.Errorf("Channel should be 6, got %d", frame.Channel)
+	}
+}

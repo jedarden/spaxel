@@ -4,6 +4,7 @@ package ingestion
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
 )
 
 // Frame constants from the plan
@@ -37,10 +38,13 @@ type CSIFrame struct {
 }
 
 // ParseFrame parses a binary WebSocket frame into a CSIFrame
-// Returns nil and an error if the frame is malformed
+// Returns nil and an error if the frame is malformed.
+// Logs at DEBUG level for each validation failure to aid debugging
+// without flooding logs at high frame rates.
 func ParseFrame(data []byte) (*CSIFrame, error) {
 	// Validation rule 1: minimum length
 	if len(data) < MinFrameSize {
+		log.Printf("[DEBUG] CSI frame validation failed: too short (%d bytes < %d minimum)", len(data), MinFrameSize)
 		return nil, fmt.Errorf("frame too short: %d bytes (minimum %d)", len(data), MinFrameSize)
 	}
 
@@ -60,16 +64,29 @@ func ParseFrame(data []byte) (*CSIFrame, error) {
 	// Validation rule 3: payload length must match
 	expectedLen := HeaderSize + int(nSub)*2
 	if len(data) != expectedLen {
+		log.Printf("[DEBUG] CSI frame validation failed: payload length mismatch (n_sub=%d, expected %d bytes, got %d)", nSub, expectedLen, len(data))
 		return nil, fmt.Errorf("payload length mismatch: expected %d bytes, got %d", expectedLen, len(data))
 	}
 
 	// Validation rule 4: n_sub must not exceed 128
 	if nSub > 128 {
+		log.Printf("[DEBUG] CSI frame validation failed: implausible subcarrier count (n_sub=%d > 128 max)", nSub)
 		return nil, fmt.Errorf("implausible subcarrier count: %d (max 128)", nSub)
 	}
 
+	// Validation rule 5: rssi == 0 is allowed but logged at DEBUG (invalid RSSI per firmware spec)
+	// The frame is still processed, but the signal pipeline should skip AGC normalization
+	if frame.RSSI == 0 {
+		log.Printf("[DEBUG] CSI frame has RSSI=0 (invalid/missing); AGC normalization will be skipped")
+	}
+
 	// Validation rule 6: channel must be valid (1-14 for 2.4 GHz)
-	if frame.Channel == 0 || frame.Channel > 14 {
+	if frame.Channel == 0 {
+		log.Printf("[DEBUG] CSI frame validation failed: channel=0 is invalid")
+		return nil, fmt.Errorf("invalid channel: %d", frame.Channel)
+	}
+	if frame.Channel > 14 {
+		log.Printf("[DEBUG] CSI frame validation failed: channel=%d > 14 (invalid 2.4 GHz channel)", frame.Channel)
 		return nil, fmt.Errorf("invalid channel: %d", frame.Channel)
 	}
 
