@@ -52,6 +52,12 @@ type MotionBroadcaster interface {
 	BroadcastMotionState(states []MotionStateItem)
 }
 
+// EventBroadcaster broadcasts real-time events (presence transitions, zone
+// entries/exits, portal crossings) to dashboard clients.
+type EventBroadcaster interface {
+	BroadcastEvent(eventID string, timestamp time.Time, kind, zone string, blobID int, personName string)
+}
+
 // MotionStateItem represents a single link's current motion state.
 type MotionStateItem struct {
 	LinkID            string  `json:"link_id"`
@@ -101,6 +107,7 @@ type Server struct {
 	// Optional pipeline components (set via setters)
 	dashboardBroadcaster CSIBroadcaster
 	motionBroadcaster    MotionBroadcaster
+	eventBroadcaster    EventBroadcaster
 	processorMgr         *signal.ProcessorManager
 	replayStore          ReplayAppender
 	recorder             Recorder
@@ -176,6 +183,13 @@ func (s *Server) SetDashboardBroadcaster(broadcaster CSIBroadcaster) {
 func (s *Server) SetMotionBroadcaster(mb MotionBroadcaster) {
 	s.mu.Lock()
 	s.motionBroadcaster = mb
+	s.mu.Unlock()
+}
+
+// SetEventBroadcaster sets the callback for broadcasting real-time events.
+func (s *Server) SetEventBroadcaster(eb EventBroadcaster) {
+	s.mu.Lock()
+	s.eventBroadcaster = eb
 	s.mu.Unlock()
 }
 

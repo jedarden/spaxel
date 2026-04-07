@@ -28,8 +28,12 @@ type ZonesHandler struct {
 type Zone struct {
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
-	X, Y, Z         float64   `json:"x,y,z"`
-	W, D, H         float64   `json:"w,d,h"`
+	X               float64   `json:"x"`
+	Y               float64   `json:"y"`
+	Z               float64   `json:"z"`
+	W               float64   `json:"w"`
+	D               float64   `json:"d"`
+	H               float64   `json:"h"`
 	ZoneType       string    `json:"zone_type"`
 	Occupancy      int       `json:"occupancy"`
 	People         []string  `json:"people"`

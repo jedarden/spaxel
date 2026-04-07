@@ -27,7 +27,9 @@ var _ GroundTruthSource = (*BLEGroundTruthProvider)(nil)
 // GroundTruthPosition represents a known position from a ground truth source
 type GroundTruthPosition struct {
 	EntityID   string    `json:"entity_id"`
-	X, Y, Z    float64   `json:"x,y,z"`      // Position in metres
+	X          float64   `json:"x"`            // Position X in metres
+	Y          float64   `json:"y"`            // Position Y in metres
+	Z          float64   `json:"z"`            // Position Z in metres
 	Accuracy   float64   `json:"accuracy"`   // Position accuracy in metres (1σ)
 	Timestamp  time.Time `json:"timestamp"`
 	Source     string    `json:"source"`     // e.g., "ble", "manual"

@@ -53,15 +53,23 @@ type TriggerVolume struct {
 	Enabled   bool    `json:"enabled"`
 	AutomationID string `json:"automation_id,omitempty"`
 	// Box type
-	MinX, MinY, MinZ float64 `json:"min_x,omitempty"`
-	MaxX, MaxY, MaxZ float64 `json:"max_x,omitempty"`
+	MinX float64 `json:"min_x,omitempty"`
+	MinY float64 `json:"min_y,omitempty"`
+	MinZ float64 `json:"min_z,omitempty"`
+	MaxX float64 `json:"max_x,omitempty"`
+	MaxY float64 `json:"max_y,omitempty"`
+	MaxZ float64 `json:"max_z,omitempty"`
 	// Sphere type
-	CenterX, CenterY, CenterZ float64 `json:"center_x,omitempty"`
+	CenterX float64 `json:"center_x,omitempty"`
+	CenterY float64 `json:"center_y,omitempty"`
+	CenterZ float64 `json:"center_z,omitempty"`
 	Radius   float64 `json:"radius,omitempty"`
 	// Cylinder type
-	BaseX, BaseZ    float64 `json:"base_x,omitempty"`
+	BaseX float64 `json:"base_x,omitempty"`
+	BaseZ float64 `json:"base_z,omitempty"`
 	BaseRadius      float64 `json:"base_radius,omitempty"`
-	MinHeight, MaxHeight float64 `json:"min_height,omitempty"`
+	MinHeight float64 `json:"min_height,omitempty"`
+	MaxHeight float64 `json:"max_height,omitempty"`
 }
 
 // TriggerConfig holds configuration for the trigger.

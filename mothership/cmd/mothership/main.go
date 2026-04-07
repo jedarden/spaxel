@@ -1374,8 +1374,44 @@ func main() {
             if predictionHistory != nil && personID != "" {
                 predictionHistory.PersonZoneChange(personID, event.FromZone, event.ToZone, event.BlobID, time.Now())
             }
+
+            // Broadcast portal crossing event to dashboard
+            dashboardHub.BroadcastEvent(
+                fmt.Sprintf("portal:%s:%d", event.PortalID, event.Timestamp.UnixMilli()),
+                event.Timestamp,
+                "portal_crossing",
+                event.ToZone,
+                event.BlobID,
+                personName,
+            )
         })
-    }
+
+        // Zone entry callback — broadcast event to dashboard
+        zonesMgr.SetOnZoneEntry(func(event zones.ZoneTransitionEvent) {
+            personName := resolveBlobIdentity(event.BlobID, identityMatcher)
+            dashboardHub.BroadcastEvent(
+                fmt.Sprintf("zone_entry:%s:%d", event.ZoneID, event.Timestamp.UnixMilli()),
+                event.Timestamp,
+                "zone_entry",
+                event.ZoneName,
+                event.BlobID,
+                personName,
+            )
+        })
+
+        // Zone exit callback — broadcast event to dashboard
+        zonesMgr.SetOnZoneExit(func(event zones.ZoneTransitionEvent) {
+            personName := resolveBlobIdentity(event.BlobID, identityMatcher)
+            dashboardHub.BroadcastEvent(
+                fmt.Sprintf("zone_exit:%s:%d", event.ZoneID, event.Timestamp.UnixMilli()),
+                event.Timestamp,
+                "zone_exit",
+                event.ZoneName,
+                event.BlobID,
+                personName,
+            )
+        })
+    } // end if zonesMgr != nil
 
     // Phase 6: Diurnal patterns learned notification
     // Track which links have already broadcast their "patterns learned" notification
@@ -3444,6 +3480,18 @@ func (a *anomalyAlertAdapter) SendEscalation(event events.AnomalyEvent) error {
 		a.notifyService.Send(notif)
 	}
 	return nil
+}
+
+// resolveBlobIdentity returns the display name for a blob via the identity matcher.
+// Returns an empty string if no match is found or the matcher is nil.
+func resolveBlobIdentity(blobID int, matcher *ble.IdentityMatcher) string {
+	if matcher == nil {
+		return ""
+	}
+	if match := matcher.GetMatch(blobID); match != nil {
+		return match.DeviceName
+	}
+	return ""
 }
 
 // splitLinkID parses a link ID in format "nodeMAC-peerMAC" into its components

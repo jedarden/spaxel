@@ -138,18 +138,22 @@ func (g *Generator) generateSleepBlock(date, person string) string {
 	// Breathing anomaly
 	if breathAnomaly.Valid && breathAnomaly.Bool {
 		if breathSamplesJSON.Valid {
-			// Try to extract actual values from the JSON
-			type sampleInfo struct {
-				Avg float64 `json:"0"`
-				Personal float64 `json:"6"`
+			var info map[string]interface{}
+			if err := json.Unmarshal([]byte(breathSamplesJSON.String), &info); err == nil {
+				avg, _ := info["avg"].(float64)
+				personal, _ := info["personal_avg"].(float64)
+				if personal > 0 {
+					parts = append(parts, fmt.Sprintf("Breathing rate elevated (%.0f bpm vs. %.0f bpm average).",
+						avg, personal))
+				} else if avg > 0 {
+					parts = append(parts, fmt.Sprintf("Breathing rate elevated (%.0f bpm).", avg))
+				}
 			}
-			var info sampleInfo
-			if err := json.Unmarshal([]byte(breathSamplesJSON.String), &info); err == nil && info.Personal > 0 {
-				parts = append(parts, fmt.Sprintf("Breathing rate elevated (%.0f bpm vs. %.0f bpm average).",
-					info.Avg, info.Personal))
-			} else {
-				parts = append(parts, "Breathing rate elevated.")
-			}
+		}
+		if len(parts) > 0 && breathAnomaly.Bool {
+			// Already added above
+		} else {
+			parts = append(parts, "Breathing rate elevated.")
 		}
 	}
 
@@ -157,17 +161,18 @@ func (g *Generator) generateSleepBlock(date, person string) string {
 }
 
 // generateBreathingAnomalyBlock generates the overnight breathing anomaly section.
+// This covers the case where the sleep block already includes the anomaly but
+// we want to surface it as a standalone alert if it was severe.
 func (g *Generator) generateBreathingAnomalyBlock(date, person string) string {
 	query := `SELECT person, breathing_rate_avg, breathing_samples_json
 	           FROM sleep_records
-	           WHERE breathing_anomaly = 1 AND date < ?`
+	           WHERE breathing_anomaly = 1 AND date = ?`
 	var args []interface{}
 	args = append(args, date)
 	if person != "" {
 		query += ` AND person = ?`
 		args = append(args, person)
 	}
-	query += ` ORDER BY date DESC LIMIT 1`
 
 	row := g.db.QueryRow(query, args...)
 
@@ -186,20 +191,16 @@ func (g *Generator) generateBreathingAnomalyBlock(date, person string) string {
 	// Extract personal average from samples JSON
 	personalAvg := 0.0
 	if breathSamplesJSON.Valid {
-		type sampleInfo struct {
-			Personal float64 `json:"6"`
-		}
-		var info sampleInfo
+		var info map[string]interface{}
 		if err := json.Unmarshal([]byte(breathSamplesJSON.String), &info); err == nil {
-			personalAvg = info.Personal
+			personalAvg, _ = info["personal_avg"].(float64)
 		}
 	}
 
 	avgStr := fmt.Sprintf("%.0f", breathAvg.Float64)
-	personalStr := fmt.Sprintf("%.0f", personalAvg)
 	if personalAvg > 0 {
 		return fmt.Sprintf("Last night: Breathing rate elevated (%s bpm vs. %s bpm average for %s).",
-			avgStr, personalStr, personName)
+			avgStr, fmt.Sprintf("%.0f", personalAvg), personName)
 	}
 	return fmt.Sprintf("Last night: Breathing rate elevated (%s bpm for %s).", avgStr, personName)
 }

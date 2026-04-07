@@ -80,6 +80,28 @@ func (t *BreathingAnomalyTracker) SaveToJSON() ([]byte, error) {
 	return json.Marshal(t.personal)
 }
 
+// SaveToSettings persists personal averages to a settings map for later DB storage.
+// Returns a value suitable for INSERT into the settings table.
+func (t *BreathingAnomalyTracker) SaveToSettings() (string, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	data, err := json.Marshal(t.personal)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// LoadFromSettings restores personal averages from a settings value string.
+func (t *BreathingAnomalyTracker) LoadFromSettings(value string) error {
+	if value == "" {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return json.Unmarshal([]byte(value), &t.personal)
+}
+
 // ComputeBreathingRegularity computes the coefficient of variation (CV = std/mean)
 // of a slice of breathing rate samples.
 func ComputeBreathingRegularity(samples []float64) float64 {

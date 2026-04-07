@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -55,8 +56,11 @@ func (s *SleepRecordStore) Save(person string, report *SleepReport) error {
 
 	var restlessness *float64
 	if m.RestlessPeriods > 0 {
-		r := float64(m.RestlessPeriods)
-		restlessness = &r
+		timeInBedH := m.TimeInBed.Hours()
+		if timeInBedH > 0 {
+			r := math.Min(5.0, float64(m.RestlessPeriods)/timeInBedH)
+			restlessness = &r
+		}
 	}
 
 	var breathingAvg *float64
@@ -105,32 +109,31 @@ func (s *SleepRecordStore) Save(person string, report *SleepReport) error {
 	return err
 }
 
-// extractBreathingSamplesJSON builds a JSON array of breathing rate BPM values.
+// extractBreathingSamplesJSON builds a JSON object with per-night breathing statistics
+// and the raw per-sample BPM values collected throughout the ASLEEP state.
 func extractBreathingSamplesJSON(report *SleepReport) string {
 	m := report.Metrics
-	if m.MinBreathingRate == 0 && m.MaxBreathingRate == 0 {
+	if m.AvgBreathingRate == 0 && m.MinBreathingRate == 0 && m.MaxBreathingRate == 0 {
 		return ""
 	}
 
-	// Build a simple array representation: [avg, min, max, std_dev, regularity]
-	arr := []interface{}{
-		m.AvgBreathingRate,
-		m.MinBreathingRate,
-		m.MaxBreathingRate,
-		m.BreathingRateStdDev,
-		m.BreathingRegularity,
-		m.BreathingScore,
-	}
-	if m.BreathingAnomaly {
-		arr = append(arr, true)
-	} else {
-		arr = append(arr, false)
+	samples := map[string]interface{}{
+		"avg":        m.AvgBreathingRate,
+		"min":        m.MinBreathingRate,
+		"max":        m.MaxBreathingRate,
+		"std_dev":    m.BreathingRateStdDev,
+		"regularity": m.BreathingRegularity,
+		"anomaly":    m.BreathingAnomaly,
 	}
 	if m.PersonalAvgBPM > 0 {
-		arr = append(arr, m.PersonalAvgBPM)
+		samples["personal_avg"] = m.PersonalAvgBPM
+	}
+	// Include raw per-sample BPM values
+	if len(report.BreathingSamples) > 0 {
+		samples["rates"] = report.BreathingSamples
 	}
 
-	b, err := json.Marshal(arr)
+	b, err := json.Marshal(samples)
 	if err != nil {
 		return ""
 	}

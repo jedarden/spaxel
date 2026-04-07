@@ -42,7 +42,9 @@ type GroundTruthSample struct {
 
 // Vec3 represents a 3D position
 type Vec3 struct {
-	X, Y, Z float64 `json:"x,y,z"`
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
 }
 
 // GroundTruthStore persists ground truth samples to SQLite

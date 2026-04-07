@@ -12,6 +12,9 @@ type SleepReport struct {
 	GeneratedAt time.Time    `json:"generated_at"`
 	Metrics     *SleepMetrics `json:"metrics"`
 
+	// Raw breathing rate samples (BPM values collected per ~60s window during sleep)
+	BreathingSamples []float64 `json:"breathing_samples,omitempty"`
+
 	// Summary text
 	BreathingSummary string   `json:"breathing_summary"`
 	MotionSummary    string   `json:"motion_summary"`

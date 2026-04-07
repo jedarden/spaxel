@@ -48,6 +48,11 @@ func AllMigrations() []Migration {
 			Description: "add breathing anomaly columns to sleep_records",
 			Up:          migration_008_add_breathing_anomaly,
 		},
+		{
+			Version:     9,
+			Description: "add unique constraint on sleep_records person+date",
+			Up:          migration_009_sleep_records_unique,
+		},
 	}
 }
 
@@ -464,5 +469,12 @@ func migration_008_add_breathing_anomaly(tx *sql.Tx) error {
 		ALTER TABLE sleep_records ADD COLUMN breathing_anomaly INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE sleep_records ADD COLUMN breathing_samples_json TEXT;
 	`)
+	return err
+}
+
+// migration_009_sleep_records_unique adds a unique index on (person, date)
+// so that the ON CONFLICT upsert in Save() works correctly.
+func migration_009_sleep_records_unique(tx *sql.Tx) error {
+	_, err := tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sleep_person_date_unique ON sleep_records(person, date)`)
 	return err
 }

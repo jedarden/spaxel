@@ -906,11 +906,20 @@ func (ss *SleepSession) GenerateReport() *SleepReport {
 
 	metrics := ss.computeMetrics()
 
+	// Collect raw breathing rate samples for persistence
+	var breathingSamples []float64
+	for _, sample := range ss.breathingSamples {
+		if sample.IsDetected && sample.RateBPM > 0 {
+			breathingSamples = append(breathingSamples, sample.RateBPM)
+		}
+	}
+
 	report := &SleepReport{
 		LinkID:       ss.linkID,
 		SessionDate:  ss.sessionDate,
 		GeneratedAt:  time.Now(),
 		Metrics:      metrics,
+		BreathingSamples: breathingSamples,
 		BreathingSummary: generateBreathingSummary(metrics),
 		MotionSummary:    generateMotionSummary(metrics),
 		Recommendations:  generateRecommendations(metrics),

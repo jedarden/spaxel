@@ -84,7 +84,16 @@ type CrossingEvent struct {
 	ToZone      string    `json:"to_zone"`
 	Timestamp   time.Time `json:"timestamp"`
 	Identity    string    `json:"identity,omitempty"` // Device name if matched
- }
+}
+
+// ZoneTransitionEvent represents a blob entering or leaving a zone.
+type ZoneTransitionEvent struct {
+	BlobID    int       `json:"blob_id"`
+	ZoneID    string    `json:"zone_id"`
+	ZoneName  string    `json:"zone_name"`
+	Kind      string    `json:"kind"` // "zone_entry" or "zone_exit"
+	Timestamp time.Time `json:"timestamp"`
+}
 
 // ZoneOccupancy tracks current occupancy per zone.
 type ZoneOccupancy struct {
@@ -121,7 +130,9 @@ type Manager struct {
 	tz           *time.Location
 
 	// Callbacks
-	onCrossing func(CrossingEvent)
+	onCrossing  func(CrossingEvent)
+	onZoneEntry  func(ZoneTransitionEvent)
+	onZoneExit   func(ZoneTransitionEvent)
 }
 
 // NewManager creates a new zones manager. If tz is nil, UTC is used.
@@ -312,6 +323,20 @@ func (m *Manager) Close() error {
 func (m *Manager) SetOnCrossing(cb func(CrossingEvent)) {
 	m.mu.Lock()
 	m.onCrossing = cb
+	m.mu.Unlock()
+}
+
+// SetOnZoneEntry sets the callback for zone entry events.
+func (m *Manager) SetOnZoneEntry(cb func(ZoneTransitionEvent)) {
+	m.mu.Lock()
+	m.onZoneEntry = cb
+	m.mu.Unlock()
+}
+
+// SetOnZoneExit sets the callback for zone exit events.
+func (m *Manager) SetOnZoneExit(cb func(ZoneTransitionEvent)) {
+	m.mu.Lock()
+	m.onZoneExit = cb
 	m.mu.Unlock()
 }
 
@@ -508,6 +533,36 @@ func (m *Manager) UpdateBlobPositions(blobs []struct {
 		// Detect portal crossings
 		if existed && prev.ZoneID != zoneID {
 			m.detectCrossings(blob.ID, prev.X, prev.Y, prev.Z, blob.X, blob.Y, blob.Z, zoneID)
+
+			// Fire zone exit callback for previous zone
+			if prev.ZoneID != "" && m.onZoneExit != nil {
+				prevName := ""
+				if z, ok := m.zones[prev.ZoneID]; ok {
+					prevName = z.Name
+				}
+				go m.onZoneExit(ZoneTransitionEvent{
+					BlobID:    blob.ID,
+					ZoneID:    prev.ZoneID,
+					ZoneName:  prevName,
+					Kind:      "zone_exit",
+					Timestamp: now,
+				})
+			}
+
+			// Fire zone entry callback for new zone
+			if zoneID != "" && m.onZoneEntry != nil {
+				newName := ""
+				if z, ok := m.zones[zoneID]; ok {
+					newName = z.Name
+				}
+				go m.onZoneEntry(ZoneTransitionEvent{
+					BlobID:    blob.ID,
+					ZoneID:    zoneID,
+					ZoneName:  newName,
+					Kind:      "zone_entry",
+					Timestamp: now,
+				})
+			}
 		}
 	}
 
