@@ -395,6 +395,114 @@ func TestHub_BroadcastAlert(t *testing.T) {
 	}
 }
 
+func TestHub_BroadcastEvent(t *testing.T) {
+	tests := []struct {
+		name        string
+		eventID     string
+		kind        string
+		zone        string
+		blobID      int
+		personName  string
+	}{
+		{
+			name:       "zone entry with person",
+			eventID:    "zone_entry:1:1711234567890",
+			kind:       "zone_entry",
+			zone:       "Kitchen",
+			blobID:     2,
+			personName: "Alice",
+		},
+		{
+			name:       "zone exit without person",
+			eventID:    "zone_exit:1:1711234567891",
+			kind:       "zone_exit",
+			zone:       "Kitchen",
+			blobID:     3,
+			personName: "",
+		},
+		{
+			name:       "portal crossing with person",
+			eventID:    "portal:5:1711234567892",
+			kind:       "portal_crossing",
+			zone:       "Hallway",
+			blobID:     1,
+			personName: "Bob",
+		},
+		{
+			name:       "presence transition",
+			eventID:    "presence:AA:BB:CC:DD:EE:FF:11:22:33:44:55:66:1711234567893",
+			kind:       "presence_transition",
+			zone:       "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+			blobID:     0,
+			personName: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := NewHub()
+			go hub.Run()
+
+			client := &Client{
+				hub:  hub,
+				send: make(chan []byte, 10),
+			}
+
+			hub.Register(client)
+			time.Sleep(10 * time.Millisecond)
+			drainSnapshot(t, client.send)
+
+			ts := time.Date(2026, 4, 7, 14, 30, 5, 0, time.UTC)
+			hub.BroadcastEvent(tc.eventID, ts, tc.kind, tc.zone, tc.blobID, tc.personName)
+
+			select {
+			case msg := <-client.send:
+				var parsed map[string]interface{}
+				if err := json.Unmarshal(msg, &parsed); err != nil {
+					t.Fatalf("failed to parse event JSON: %v", err)
+				}
+
+				if parsed["type"] != "event" {
+					t.Errorf("expected type=event, got %v", parsed["type"])
+				}
+
+				evt, ok := parsed["event"].(map[string]interface{})
+				if !ok {
+					t.Fatal("missing event object")
+				}
+
+				if evt["id"] != tc.eventID {
+					t.Errorf("expected id=%s, got %v", tc.eventID, evt["id"])
+				}
+				if evt["kind"] != tc.kind {
+					t.Errorf("expected kind=%s, got %v", tc.kind, evt["kind"])
+				}
+				if evt["zone"] != tc.zone {
+					t.Errorf("expected zone=%s, got %v", tc.zone, evt["zone"])
+				}
+				if evt["blob_id"] != float64(tc.blobID) {
+					t.Errorf("expected blob_id=%d, got %v", tc.blobID, evt["blob_id"])
+				}
+				if tc.personName != "" && evt["person_name"] != tc.personName {
+					t.Errorf("expected person_name=%s, got %v", tc.personName, evt["person_name"])
+				}
+
+				tsVal, ok := evt["ts"].(float64)
+				if !ok {
+					t.Fatalf("expected ts to be numeric, got %T", evt["ts"])
+				}
+				expectedTs := float64(ts.UnixMilli())
+				if tsVal != expectedTs {
+					t.Errorf("expected ts=%v, got %v", expectedTs, tsVal)
+				}
+
+			case <-time.After(100 * time.Millisecond):
+				t.Error("expected to receive event broadcast")
+			}
+		})
+	}
+}
+
 func TestHub_DeltaOmitsTypeField(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()

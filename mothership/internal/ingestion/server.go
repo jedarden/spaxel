@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -489,14 +490,28 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 		s.linkDeltaRMS[linkID] = deltaRMS
 		mb := s.motionBroadcaster
 		rateCtrl := s.rateCtrl
+		eb := s.eventBroadcaster
 		s.mu.Unlock()
 
-		if stateChanged && mb != nil {
-			mb.BroadcastMotionState([]MotionStateItem{{
-				LinkID:         linkID,
-				MotionDetected: motionDetected,
-				DeltaRMS:       deltaRMS,
-			}})
+		if stateChanged {
+			if mb != nil {
+				mb.BroadcastMotionState([]MotionStateItem{{
+					LinkID:         linkID,
+					MotionDetected: motionDetected,
+					DeltaRMS:       deltaRMS,
+				}})
+			}
+			// Broadcast presence transition event to dashboard.
+			if eb != nil {
+				eb.BroadcastEvent(
+					fmt.Sprintf("presence:%s:%d", linkID, time.Now().UnixMilli()),
+					time.Now(),
+					"presence_transition",
+					linkID,
+					0,
+					"",
+				)
+			}
 		}
 
 		if rateCtrl != nil {
