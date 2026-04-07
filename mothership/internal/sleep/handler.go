@@ -2,16 +2,20 @@
 package sleep
 
 import (
+	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi"
+	_ "modernc.org/sqlite"
 )
 
 // Handler provides REST API handlers for the sleep module.
 type Handler struct {
 	monitor *Monitor
+	records *SleepRecordStore
 }
 
 // NewHandler creates a new sleep handler.
@@ -21,8 +25,21 @@ func NewHandler(monitor *Monitor) *Handler {
 	}
 }
 
+// SetDB sets the main DB connection for sleep record persistence.
+func (h *Handler) SetDB(dbPath string) {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		log.Printf("[WARN] Sleep records: failed to open DB %s: %v", dbPath, err)
+		return
+	}
+	db.SetMaxOpenConns(1)
+	h.records = NewSleepRecordStore(db)
+}
+
 // RegisterRoutes registers the sleep API routes on the provided router.
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/sleep", h.handleGetSleepRecords)
+	r.Get("/api/sleep/summary", h.handleGetSleepSummary)
 	r.Get("/api/sleep/status", h.handleGetStatus)
 	r.Get("/api/sleep/reports", h.handleGetReports)
 	r.Get("/api/sleep/reports/{linkID}", h.handleGetReport)
@@ -303,6 +320,58 @@ func (h *Handler) handleGetSamples(w http.ResponseWriter, r *http.Request) {
 	result["sleep_periods"] = periods
 
 	writeJSON(w, result)
+}
+
+// handleGetSleepRecords returns sleep records from the main DB.
+// GET /api/sleep?person=<name>&limit=30
+func (h *Handler) handleGetSleepRecords(w http.ResponseWriter, r *http.Request) {
+	if h.records == nil {
+		http.Error(w, "sleep records not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	person := r.URL.Query().Get("person")
+	limit := 30
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := time.ParseDuration(l); err == nil {
+			// Accept "7d", "30" as shorthand for days
+			limit = int(n.Hours() / 24)
+		}
+	}
+
+	records, err := h.records.Query(person, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, records)
+}
+
+// handleGetSleepSummary returns the most recent sleep summary for a person.
+// GET /api/sleep/summary?person=<name>
+func (h *Handler) handleGetSleepSummary(w http.ResponseWriter, r *http.Request) {
+	if h.records == nil {
+		http.Error(w, "sleep records not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	person := r.URL.Query().Get("person")
+	rec, err := h.records.GetSummary(person)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, rec)
+}
+
+// SaveRecord persists a sleep report to the main DB sleep_records table.
+func (h *Handler) SaveRecord(person string, report *SleepReport) error {
+	if h.records == nil {
+		return nil
+	}
+	return h.records.Save(person, report)
 }
 
 // writeJSON is a helper to write JSON responses.

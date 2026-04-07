@@ -219,11 +219,12 @@ func (lp *LinkProcessor) Reset() {
 
 // ProcessorManager manages LinkProcessors for all links
 type ProcessorManager struct {
-	mu         sync.RWMutex
-	processors map[string]*LinkProcessor
-	nSub       int
-	alpha      float64
-	fusionRate float64 // Hz
+	mu            sync.RWMutex
+	processors    map[string]*LinkProcessor
+	nSub          int
+	alpha         float64
+	fusionRate    float64 // Hz
+	trackedBlobs  []TrackedBlob
 }
 
 // ProcessorManagerConfig holds configuration for ProcessorManager
@@ -556,6 +557,28 @@ func (pm *ProcessorManager) CheckDiurnalReadinessTransitions(previouslyReady map
 		}
 	}
 	return newlyReady
+}
+
+// TrackedBlob represents a tracked spatial blob from the fusion engine.
+type TrackedBlob struct {
+	ID       int
+	X, Y, Z  float64
+	VX, VY, VZ float64
+	Weight   float64
+}
+
+// SetTrackedBlobs stores the latest tracked blobs from the fusion engine.
+func (pm *ProcessorManager) SetTrackedBlobs(blobs []TrackedBlob) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.trackedBlobs = blobs
+}
+
+// GetTrackedBlobs returns the latest tracked blobs from the fusion engine.
+func (pm *ProcessorManager) GetTrackedBlobs() []TrackedBlob {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.trackedBlobs
 }
 
 // GetLinkCompositeConfidence returns composite confidence for a specific link

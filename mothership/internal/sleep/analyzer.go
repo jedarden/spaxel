@@ -934,6 +934,13 @@ func (ss *SleepSession) Reset() {
 	ss.metrics = nil
 }
 
+// GetPersonID returns the person identity for this session.
+func (ss *SleepSession) GetPersonID() string {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+	return ss.personID
+}
+
 // GetBreathingSamples returns all breathing samples for the session
 func (ss *SleepSession) GetBreathingSamples() []BreathingSample {
 	ss.mu.RLock()

@@ -353,6 +353,11 @@ func main() {
         SleepEndHour:     7,  // 7 AM
     })
     sleepMonitor.SetProcessorManager(pm)
+
+    // Sleep handler (created early so callback can reference it)
+    sleepHandler := sleep.NewHandler(sleepMonitor)
+    sleepHandler.SetDB(filepath.Join(cfg.DataDir, "spaxel.db"))
+
     sleepMonitor.SetReportCallback(func(linkID string, report *sleep.SleepReport) {
         // Broadcast sleep report to dashboard
         msg := map[string]interface{}{
@@ -368,11 +373,27 @@ func main() {
             dashboardHub.Broadcast(data)
         }
 
+        // Persist sleep record to main DB (for GET /api/sleep endpoint)
+        person := sleepMonitor.GetAnalyzer().GetSession(linkID)
+        personName := linkID
+        if person != nil {
+            personName = person.GetPersonID()
+        }
+        if personName == "" {
+            personName = linkID
+        }
+        sleepHandler.SaveRecord(personName, report)
+
         // Send notification for morning report
+        body := fmt.Sprintf("Sleep quality: %s (%.0f/100)", report.Metrics.QualityRating, report.Metrics.OverallScore)
+        if report.Metrics.BreathingAnomaly {
+            body = fmt.Sprintf("Breathing rate elevated (%.0f bpm vs. %.0f bpm average). %s",
+                report.Metrics.AvgBreathingRate, report.Metrics.PersonalAvgBPM, body)
+        }
         if notifyService != nil {
             notif := notify.Notification{
                 Title:    "Sleep Report",
-                Body:     fmt.Sprintf("Sleep quality: %s (%.0f/100)", report.Metrics.QualityRating, report.Metrics.OverallScore),
+                Body:     body,
                 Priority: 2,
                 Tags:     []string{"sleep", "morning"},
                 Data:     report.ToJSONMap(),
@@ -380,7 +401,9 @@ func main() {
             notifyService.Send(notif) //nolint:errcheck
         }
 
-        log.Printf("[INFO] Sleep report for %s: score=%.1f rating=%s", linkID, report.Metrics.OverallScore, report.Metrics.QualityRating)
+        log.Printf("[INFO] Sleep report for %s: score=%.1f rating=%s breathing_avg=%.1f anomaly=%v",
+            linkID, report.Metrics.OverallScore, report.Metrics.QualityRating,
+            report.Metrics.AvgBreathingRate, report.Metrics.BreathingAnomaly)
     })
     sleepMonitor.Start()
     defer sleepMonitor.Stop()
@@ -2898,8 +2921,7 @@ func main() {
         })
     }
 
-    // Phase 6: Sleep quality REST API
-    sleepHandler := sleep.NewHandler(sleepMonitor)
+    // Phase 6: Sleep quality REST API (handler created earlier with monitor)
     sleepHandler.RegisterRoutes(r)
     log.Printf("[INFO] Sleep quality API registered at /api/sleep/*")
 
