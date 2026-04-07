@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -32,7 +34,7 @@ const (
 
 // PatternSlot represents a single (zone_id, hour_of_day, day_of_week) statistical slot.
 type PatternSlot struct {
-	ZoneID      int     `json:"zone_id"`
+	ZoneID      string  `json:"zone_id"`
 	HourOfDay   int     `json:"hour_of_day"`  // 0-23
 	DayOfWeek   int     `json:"day_of_week"`  // 0-6 (0=Sunday)
 	MeanCount   float64 `json:"mean_count"`
@@ -43,18 +45,18 @@ type PatternSlot struct {
 
 // patternKey is the composite key for pattern slots.
 type patternKey struct {
-	zoneID    int
+	zoneID    string
 	hourOfDay int
 	dayOfWeek int
 }
 
 // OccupancyProvider provides current zone occupancy counts.
 type OccupancyProvider interface {
-	GetZoneOccupancyCounts() map[int]int // zone_id -> blob count
+	GetZoneOccupancyCounts() map[string]int // zone_id -> blob count
 }
 
 // PatternLearner learns occupancy patterns using Welford's online algorithm.
-// It persists to the anomaly_patterns table in the main database.
+// It persists to the anomaly_patterns table in its database.
 type PatternLearner struct {
 	mu           sync.RWMutex
 	db           *sql.DB
@@ -65,16 +67,31 @@ type PatternLearner struct {
 	patterns map[patternKey]*PatternSlot
 }
 
-// NewPatternLearner creates a new pattern learner using the main database.
-func NewPatternLearner(db *sql.DB) (*PatternLearner, error) {
-	// Ensure required tables exist
-	_, err := db.Exec(`
+// NewPatternLearner creates a new pattern learner backed by its own SQLite database.
+func NewPatternLearner(dbPath string) (*PatternLearner, error) {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		return nil, fmt.Errorf("create data dir: %w", err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+
+	pl := &PatternLearner{
+		db:       db,
+		patterns: make(map[patternKey]*PatternSlot),
+	}
+
+	// Create tables
+	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS settings (
 			key TEXT PRIMARY KEY,
 			value_json TEXT NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS anomaly_patterns (
-			zone_id     INTEGER NOT NULL,
+			zone_id     TEXT NOT NULL,
 			hour_of_day INTEGER NOT NULL CHECK (hour_of_day BETWEEN 0 AND 23),
 			day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
 			mean_count  REAL NOT NULL DEFAULT 0,
@@ -85,12 +102,8 @@ func NewPatternLearner(db *sql.DB) (*PatternLearner, error) {
 		);
 	`)
 	if err != nil {
+		db.Close()
 		return nil, fmt.Errorf("create pattern tables: %w", err)
-	}
-
-	pl := &PatternLearner{
-		db:       db,
-		patterns: make(map[patternKey]*PatternSlot),
 	}
 
 	// Try to load learning start time from settings
@@ -134,6 +147,11 @@ func (pl *PatternLearner) loadPatterns() error {
 	return rows.Err()
 }
 
+// Close closes the database.
+func (pl *PatternLearner) Close() error {
+	return pl.db.Close()
+}
+
 // IsColdStart returns true if the system is within the 7-day cold start period.
 func (pl *PatternLearner) IsColdStart() bool {
 	pl.mu.RLock()
@@ -142,7 +160,7 @@ func (pl *PatternLearner) IsColdStart() bool {
 }
 
 // IsSlotReady returns true if a specific pattern slot has enough samples.
-func (pl *PatternLearner) IsSlotReady(zoneID, hourOfDay, dayOfWeek int) bool {
+func (pl *PatternLearner) IsSlotReady(zoneID string, hourOfDay, dayOfWeek int) bool {
 	pl.mu.RLock()
 	defer pl.mu.RUnlock()
 
@@ -152,7 +170,7 @@ func (pl *PatternLearner) IsSlotReady(zoneID, hourOfDay, dayOfWeek int) bool {
 }
 
 // GetPattern returns a pattern slot for inspection (returns a copy).
-func (pl *PatternLearner) GetPattern(zoneID, hourOfDay, dayOfWeek int) *PatternSlot {
+func (pl *PatternLearner) GetPattern(zoneID string, hourOfDay, dayOfWeek int) *PatternSlot {
 	pl.mu.RLock()
 	defer pl.mu.RUnlock()
 
@@ -166,13 +184,13 @@ func (pl *PatternLearner) GetPattern(zoneID, hourOfDay, dayOfWeek int) *PatternS
 }
 
 // GetPatterns returns all patterns, optionally filtered by zone.
-func (pl *PatternLearner) GetPatterns(zoneID int) []*PatternSlot {
+func (pl *PatternLearner) GetPatterns(zoneID string) []*PatternSlot {
 	pl.mu.RLock()
 	defer pl.mu.RUnlock()
 
 	var result []*PatternSlot
 	for key, slot := range pl.patterns {
-		if zoneID > 0 && key.zoneID != zoneID {
+		if zoneID != "" && key.zoneID != zoneID {
 			continue
 		}
 		cp := *slot
@@ -199,7 +217,7 @@ func WelfordUpdate(mean, m2, count, newValue float64) (newMean, newM2, newCount 
 // ObserveAndUpdate records an observation and updates the model using Welford's algorithm.
 // anomalyScore is the current anomaly score for this observation (0 if not yet computed).
 // If anomalyScore >= OutlierProtectionThreshold, the model update is skipped (outlier protection).
-func (pl *PatternLearner) ObserveAndUpdate(zoneID, hourOfDay, dayOfWeek int, observedCount int, anomalyScore float64) error {
+func (pl *PatternLearner) ObserveAndUpdate(zoneID string, hourOfDay, dayOfWeek int, observedCount int, anomalyScore float64) error {
 	// Outlier protection: don't learn from anomalies
 	if anomalyScore >= OutlierProtectionThreshold {
 		return nil
@@ -266,7 +284,7 @@ type AnomalyResult struct {
 }
 
 // ComputeAnomalyScore computes the anomaly score for an observation.
-func (pl *PatternLearner) ComputeAnomalyScore(zoneID, hourOfDay, dayOfWeek int, observedCount int) AnomalyResult {
+func (pl *PatternLearner) ComputeAnomalyScore(zoneID string, hourOfDay, dayOfWeek int, observedCount int) AnomalyResult {
 	pl.mu.RLock()
 	defer pl.mu.RUnlock()
 
@@ -320,7 +338,7 @@ func (pl *PatternLearner) ComputeAnomalyScore(zoneID, hourOfDay, dayOfWeek int, 
 
 // computeScoreLocked computes anomaly score while holding the write lock.
 // Used internally by updateAllZones to avoid lock ordering issues.
-func (pl *PatternLearner) computeScoreLocked(zoneID, hourOfDay, dayOfWeek int, observedCount int) float64 {
+func (pl *PatternLearner) computeScoreLocked(zoneID string, hourOfDay, dayOfWeek int, observedCount int) float64 {
 	if pl.securityMode {
 		return 1.0
 	}
@@ -466,7 +484,7 @@ func (pl *PatternLearner) updateAllZones(provider OccupancyProvider) {
 				updated_at = excluded.updated_at
 		`, zoneID, hourOfDay, dayOfWeek, newMean, variance, int(newCount), nowMs)
 		if err != nil {
-			log.Printf("[WARN] Failed to update pattern for zone %d: %v", zoneID, err)
+			log.Printf("[WARN] Failed to update pattern for zone %s: %v", zoneID, err)
 			continue
 		}
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	"github.com/spaxel/mothership/internal/events"
 )
 
 // Handler provides REST API handlers for analytics.
@@ -133,7 +134,9 @@ func (h *AnomalyHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/anomalies/model/update", h.handleUpdateModel)
 }
 
-// handleGetAnomalies returns all anomalies (active + recent history).
+// handleGetAnomalies returns anomalies filtered by the `since` query parameter.
+// Query params:
+//   - since: duration string (e.g. "24h", "7d", "1h"). Default "24h".
 func (h *AnomalyHandler) handleGetAnomalies(w http.ResponseWriter, r *http.Request) {
 	if h.detector == nil {
 		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
@@ -141,11 +144,35 @@ func (h *AnomalyHandler) handleGetAnomalies(w http.ResponseWriter, r *http.Reque
 	}
 
 	active := h.detector.GetActiveAnomalies()
-	history := h.detector.GetAnomalyHistory(50)
+
+	// Parse since duration
+	sinceStr := r.URL.Query().Get("since")
+	if sinceStr == "" {
+		sinceStr = "24h"
+	}
+	sinceDur, err := time.ParseDuration(sinceStr)
+	if err != nil {
+		http.Error(w, "invalid since duration: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Fetch enough history to cover the since window
+	limit := 1000
+	history := h.detector.GetAnomalyHistory(limit)
+
+	// Filter history by since timestamp
+	cutoff := time.Now().Add(-sinceDur)
+	var filtered []*events.AnomalyEvent
+	for _, ev := range history {
+		if ev.Timestamp.After(cutoff) {
+			filtered = append(filtered, ev)
+		}
+	}
 
 	response := map[string]interface{}{
 		"active":  active,
-		"history": history,
+		"history": filtered,
+		"since":   sinceStr,
 	}
 	writeJSON(w, response)
 }
@@ -249,4 +276,40 @@ func (h *AnomalyHandler) handleUpdateModel(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, map[string]string{"status": "updated"})
+}
+
+// PatternHandler provides REST API handlers for the Welford pattern learner.
+type PatternHandler struct {
+	learner *PatternLearner
+}
+
+// NewPatternHandler creates a new pattern handler.
+func NewPatternHandler(learner *PatternLearner) *PatternHandler {
+	return &PatternHandler{learner: learner}
+}
+
+// RegisterRoutes registers pattern API routes on the given router.
+func (h *PatternHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/anomaly_patterns", h.handleGetPatterns)
+}
+
+// handleGetPatterns returns pattern model data for debugging.
+// Query params:
+//   - zone: filter by zone_id (string). If omitted, returns all patterns.
+func (h *PatternHandler) handleGetPatterns(w http.ResponseWriter, r *http.Request) {
+	if h.learner == nil {
+		http.Error(w, "pattern learner not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	zoneID := r.URL.Query().Get("zone")
+
+	patterns := h.learner.GetPatterns(zoneID)
+
+	response := map[string]interface{}{
+		"cold_start": h.learner.IsColdStart(),
+		"patterns":   patterns,
+		"count":      len(patterns),
+	}
+	writeJSON(w, response)
 }

@@ -24,7 +24,7 @@ import (
 type NormalBehaviourSlot struct {
 	HourOfWeek         int   `json:"hour_of_week"`          // 0-167
 	ZoneID             string `json:"zone_id"`
-	ExpectedOccupancy  float64 ` json:"expected_occupancy"`  // 0.0-1.0, fraction of samples with occupancy
+	ExpectedOccupancy  float64 `json:"expected_occupancy"` // 0.0-1.0, fraction of samples with occupancy
 	TypicalPersonCount float64 `json:"typical_person_count"` // Mean person count
 	SampleCount        int     `json:"sample_count"`
 	TypicalBLEDevices  map[string]float64 `json:"typical_ble_devices,omitempty"` // MAC -> frequency (0.0-1.0)
@@ -923,6 +923,9 @@ func (d *Detector) createAnomaly(event *events.AnomalyEvent, isSecurityMode bool
 	// Store in active anomalies
 	d.activeAnomalies[event.ID] = event
 
+	// Also append to history
+	d.anomalyHistory = append(d.anomalyHistory, event)
+
 	// Persist to database
 	d.persistAnomaly(event)
 
@@ -1200,6 +1203,15 @@ func (d *Detector) UpdateBehaviourModel() error {
 	log.Printf("[INFO] Updating behaviour model from collected samples...")
 
 	// Update behaviour slots from occupancy samples
+	// First, collect all slots into memory to avoid holding a query connection
+	// while doing nested queries (deadlock with SetMaxOpenConns(1)).
+	type aggSlot struct {
+		HourOfWeek         int
+		ZoneID             string
+		ExpectedOccupancy  float64
+		TypicalPersonCount float64
+		SampleCount        int
+	}
 	rows, err := d.db.Query(`
 		SELECT hour_of_week, zone_id,
 		       AVG(CASE WHEN person_count > 0 THEN 1.0 ELSE 0.0 END) as expected_occupancy,
@@ -1211,16 +1223,27 @@ func (d *Detector) UpdateBehaviourModel() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
+	var slots []aggSlot
 	for rows.Next() {
+		var s aggSlot
+		if err := rows.Scan(&s.HourOfWeek, &s.ZoneID, &s.ExpectedOccupancy,
+			&s.TypicalPersonCount, &s.SampleCount); err != nil {
+			continue
+		}
+		slots = append(slots, s)
+	}
+	rows.Close()
+
+	for _, s := range slots {
 		slot := &NormalBehaviourSlot{
 			TypicalBLEDevices: make(map[string]float64),
 		}
-		if err := rows.Scan(&slot.HourOfWeek, &slot.ZoneID, &slot.ExpectedOccupancy,
-			&slot.TypicalPersonCount, &slot.SampleCount); err != nil {
-			continue
-		}
+		slot.HourOfWeek = s.HourOfWeek
+		slot.ZoneID = s.ZoneID
+		slot.ExpectedOccupancy = s.ExpectedOccupancy
+		slot.TypicalPersonCount = s.TypicalPersonCount
+		slot.SampleCount = s.SampleCount
 
 		// Calculate typical BLE devices (seen in > 50% of this slot)
 		bleRows, err := d.db.Query(`

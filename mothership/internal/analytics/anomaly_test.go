@@ -300,8 +300,11 @@ func TestAnomaly_UnusualDwell(t *testing.T) {
 		t.Errorf("Expected unusual_dwell anomaly, got %s", event.Type)
 	}
 
+	// Wait for async alert goroutine to complete
+	time.Sleep(10 * time.Millisecond)
+
 	// Check alert was sent
-	if len(alertHandler.alerts) == 0 {
+	if alertHandler.alertCount() == 0 {
 		t.Error("Expected alert to be sent")
 	}
 }
