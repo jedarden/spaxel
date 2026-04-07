@@ -1837,6 +1837,13 @@ func main() {
         volumeTriggersHandler.RegisterRoutes(r)
     }
 
+    // Phase 6: Zones and Portals REST API
+    if zonesMgr != nil {
+        zonesHandler := api.NewZonesHandler(zonesMgr)
+        zonesHandler.RegisterRoutes(r)
+        log.Printf("[INFO] Zones and portals API registered at /api/zones/* and /api/portals/*")
+    }
+
     // Phase 6: BLE REST API
     if bleRegistry != nil {
         r.Get("/api/ble/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -3004,6 +3011,13 @@ func main() {
     sleepHandler.RegisterRoutes(r)
     log.Printf("[INFO] Sleep quality API registered at /api/sleep/*")
 
+    // Phase 6: Tracked blobs REST API (for testing and external integrations)
+    r.Get("/api/blobs", func(w http.ResponseWriter, r *http.Request) {
+        blobs := pm.GetTrackedBlobs()
+        writeJSON(w, blobs)
+    })
+    log.Printf("[INFO] Tracked blobs API registered at /api/blobs")
+
     // Backup API — streams a zip of all databases via SQLite Online Backup API
     backupHandler := api.NewBackupHandler(cfg.DataDir, version)
     r.Get("/api/backup", backupHandler.HandleBackup)
@@ -3045,7 +3059,7 @@ func main() {
     if msPort == 0 {
         msPort = 8080
     }
-    provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort)
+    provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort, cfg.NTPServer, cfg.InstallSecretHex)
     r.Post("/api/provision", provSrv.HandleProvision)
 
     // Firmware manifest for esp-web-tools (onboarding wizard flashing)
