@@ -62,6 +62,26 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 // ── Device endpoints ──────────────────────────────────────────────────────────
 
+// listDevices handles GET /api/ble/devices.
+//
+// Returns a list of all BLE devices seen by the system. Devices can be filtered
+// by registration status (registered/discovered), time window (hours parameter),
+// and archival status.
+//
+// Query parameters:
+//   - registered: "true" to return only devices assigned to a person
+//   - discovered: "true" to return only unassigned devices
+//   - archived: "true" to include archived (soft-deleted) devices
+//   - hours: time window in hours (default: 24)
+//
+// Response: JSON object with "devices" array and "privacy_notice" string.
+// Each device includes: mac, name, label, manufacturer, device_type, device_name,
+// person_id, person_name, rssi_min, rssi_max, rssi_avg, first_seen_at, last_seen_at,
+// last_seen_node, is_archived, is_wearable, enabled, last_location.
+//
+// Status codes:
+//   - 200: Success
+//   - 500: Internal error
 func (h *Handler) listDevices(w http.ResponseWriter, r *http.Request) {
 	includeArchived := r.URL.Query().Get("archived") == "true"
 	registered := r.URL.Query().Get("registered")
@@ -122,6 +142,20 @@ func (h *Handler) listDevices(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getDevice handles GET /api/ble/devices/{mac}.
+//
+// Returns detailed information about a single BLE device by its MAC address.
+// The MAC address should be in uppercase colon-separated hex format (e.g., "AA:BB:CC:DD:EE:FF").
+//
+// URL parameters:
+//   - mac: BLE device MAC address
+//
+// Response: JSON device object with all fields including location history.
+//
+// Status codes:
+//   - 200: Success, device found
+//   - 404: Device not found
+//   - 500: Internal error
 func (h *Handler) getDevice(w http.ResponseWriter, r *http.Request) {
 	mac := chi.URLParam(r, "mac")
 	device, err := h.registry.GetDevice(mac)
@@ -136,6 +170,24 @@ func (h *Handler) getDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, device)
 }
 
+// getDeviceHistory handles GET /api/ble/devices/{mac}/history.
+//
+// Returns the sighting history for a specific BLE device. This includes
+// RSSI observations from nodes that have detected this device over time.
+//
+// URL parameters:
+//   - mac: BLE device MAC address
+//
+// Query parameters:
+//   - limit: maximum number of history entries to return (default: 100, max: 1000)
+//
+// Response: JSON object with "mac", "history" (array of sighting entries),
+// and "limit" fields. Each history entry includes timestamp, rssi_dbm, and node_mac.
+//
+// Status codes:
+//   - 200: Success
+//   - 404: Device not found
+//   - 500: Internal error
 func (h *Handler) getDeviceHistory(w http.ResponseWriter, r *http.Request) {
 	mac := chi.URLParam(r, "mac")
 
@@ -166,11 +218,31 @@ func (h *Handler) getDeviceHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateDeviceRequest struct {
-	Label      string `json:"label"`
-	DeviceType string `json:"device_type"`
-	PersonID   string `json:"person_id"`
+	Label      string `json:"label"`       // User-assigned display label
+	DeviceType string `json:"device_type"` // Device type (apple_phone, apple_watch, tile, etc.)
+	PersonID   string `json:"person_id"`   // Person ID to assign device to
 }
 
+// updateDevice handles PUT /api/ble/devices/{mac}.
+//
+// Updates a BLE device's properties. This endpoint is used to set a human-readable
+// label for a device and/or assign it to a person for identity tracking.
+//
+// URL parameters:
+//   - mac: BLE device MAC address (uppercase colon-separated hex)
+//
+// Request body: JSON object with optional fields:
+//   - label: User-assigned display label (e.g., "Alice's iPhone")
+//   - device_type: Device type identifier (e.g., "apple_phone", "tile", "fitbit")
+//   - person_id: UUID of person to assign this device to (must exist)
+//
+// Response: Updated device object as JSON.
+//
+// Status codes:
+//   - 200: Success, device updated
+//   - 400: Invalid request body or person_id not found
+//   - 404: Device not found
+//   - 500: Internal error
 func (h *Handler) updateDevice(w http.ResponseWriter, r *http.Request) {
 	mac := chi.URLParam(r, "mac")
 
