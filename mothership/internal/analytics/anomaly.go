@@ -1428,7 +1428,7 @@ func (d *Detector) QueryAnomalyEvents(since time.Time, limit int) ([]*events.Ano
 	}
 	defer rows.Close()
 
-	var events []*events.AnomalyEvent
+	var result []*events.AnomalyEvent
 	for rows.Next() {
 		var e events.AnomalyEvent
 		var tsNS int64
@@ -1443,9 +1443,9 @@ func (d *Detector) QueryAnomalyEvents(since time.Time, limit int) ([]*events.Ano
 		}
 		e.Timestamp = time.Unix(0, tsNS)
 		e.Acknowledged = acknowledged == 1
-		events = append(events, &e)
+		result = append(result, &e)
 	}
-	return events, rows.Err()
+	return result, rows.Err()
 }
 
 // CountAnomaliesSince returns the count of anomaly events since the given time.

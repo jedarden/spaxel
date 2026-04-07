@@ -57,6 +57,16 @@ func (m *mockDetectorProvider) GetAnomalyHistory(limit int) []*events.AnomalyEve
 	return m.history[len(m.history)-limit:]
 }
 
+func (m *mockDetectorProvider) CountAnomaliesSince(since time.Time) (int, error) {
+	count := 0
+	for _, e := range m.history {
+		if e.Timestamp.After(since) {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func TestSecurityHandler_Status(t *testing.T) {
 	tests := []struct {
 		name           string
