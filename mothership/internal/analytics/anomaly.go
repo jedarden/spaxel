@@ -442,6 +442,17 @@ func (d *Detector) loadLearningState() error {
 		d.modelReadyAt = d.learningStartTime.Add(7 * 24 * time.Hour)
 	}
 
+	// Load security_mode from database (persisted across restarts)
+	var securityModeStr string
+	err = d.db.QueryRow(`SELECT value FROM learning_state WHERE key = 'security_mode'`).Scan(&securityModeStr)
+	if err == nil {
+		d.securityMode = SecurityMode(securityModeStr)
+		log.Printf("[INFO] Loaded security mode from database: %s", d.securityMode)
+	} else if err != sql.ErrNoRows {
+		log.Printf("[WARN] Failed to load security_mode from database: %v", err)
+	}
+	// If security_mode doesn't exist in DB, default to disarmed (already set in NewDetector)
+
 	// Load device first seen times
 	deviceRows, err := d.db.Query(`SELECT mac, first_seen_ns FROM device_first_seen`)
 	if err != nil {

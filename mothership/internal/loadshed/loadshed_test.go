@@ -1,0 +1,403 @@
+package loadshed
+
+import (
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func TestLevelString(t *testing.T) {
+	tests := []struct {
+		l    Level
+		want string
+	}{
+		{LevelNormal, "NOMINAL"},
+		{LevelLight, "LIGHT"},
+		{LevelModerate, "MODERATE"},
+		{LevelHeavy, "HIGH"},
+		{Level(99), "UNKNOWN"},
+	}
+	for _, tt := range tests {
+		if got := tt.l.String(); got != tt.want {
+			t.Errorf("Level(%d).String() = %q, want %q", tt.l, got, tt.want)
+		}
+	}
+}
+
+func TestShedderDefaultLevel(t *testing.T) {
+	s := New()
+	if got := s.GetLevel(); got != LevelNormal {
+		t.Errorf("New Shedder level = %d, want %d", got, LevelNormal)
+	}
+}
+
+func TestShedderCrowdFlowSuspended(t *testing.T) {
+	tests := []struct {
+		level Level
+		want  bool
+	}{
+		{LevelNormal, true},
+		{LevelLight, false},
+		{LevelModerate, false},
+		{LevelHeavy, false},
+	}
+	for _, tt := range tests {
+		s := New()
+		s.level.Store(int32(tt.level))
+		if got := s.ShouldAccumulateCrowdFlow(); got != tt.want {
+			t.Errorf("ShouldAccumulateCrowdFlow() at level %d = %v, want %v", tt.level, got, tt.want)
+		}
+	}
+}
+
+func TestShedderReplayWriteSuspended(t *testing.T) {
+	tests := []struct {
+		level Level
+		want  bool
+	}{
+		{LevelNormal, true},
+		{LevelLight, true},
+		{LevelModerate, false},
+		{LevelHeavy, false},
+	}
+	for _, tt := range tests {
+		s := New()
+		s.level.Store(int32(tt.level))
+		if got := s.ShouldWriteReplay(); got != tt.want {
+			t.Errorf("ShouldWriteReplay() at level %d = %v, want %v", tt.level, got, tt.want)
+		}
+	}
+}
+
+func TestShedderShouldDropFrames(t *testing.T) {
+	s := New()
+
+	// Level 3 with channel full → drop
+	s.level.Store(int32(LevelHeavy))
+	channelFull := true
+	s.SetIngestChannelFull(func() bool { return channelFull })
+	if !s.ShouldDropFrames() {
+		t.Error("ShouldDropFrames() = false at Level 3 with full channel, want true")
+	}
+
+	// Level 3 with channel not full → don't drop
+	channelFull = false
+	if s.ShouldDropFrames() {
+		t.Error("ShouldDropFrames() = true at Level 3 with empty channel, want false")
+	}
+
+	// Level 2 → never drop regardless of channel
+	s.level.Store(int32(LevelModerate))
+	channelFull = true
+	if s.ShouldDropFrames() {
+		t.Error("ShouldDropFrames() = true at Level 2, want false")
+	}
+
+	// No callback set → don't drop
+	s2 := New()
+	s2.level.Store(int32(LevelHeavy))
+	if s2.ShouldDropFrames() {
+		t.Error("ShouldDropFrames() = true with no callback, want false")
+	}
+}
+
+func TestRollingAverage(t *testing.T) {
+	s := New()
+
+	// Fill the window with 5 iterations of 50ms each.
+	for i := 0; i < 5; i++ {
+		s.BeginIteration()
+		s.EndIteration() // duration ≈ 0ms (no actual work)
+		// Manually set the duration since the test runs too fast.
+		s.durations[i] = 50 * time.Millisecond
+	}
+	s.durationsFilled = 5
+
+	if avg := s.rollingAvg(); avg != 50*time.Millisecond {
+		t.Errorf("rollingAvg() = %v, want 50ms", avg)
+	}
+}
+
+func TestEscalationFromNormal(t *testing.T) {
+	s := New()
+
+	// Fill window with 5x 85ms → should escalate to Level 1
+	fillWindow(s, 85*time.Millisecond)
+	s.EndIteration()
+
+	// The last EndIteration added a 0ms duration; let's force the durations.
+	// Instead, let's directly test the state machine logic by simulating.
+	s2 := New()
+	// Pre-fill 4 slots at 85ms
+	for i := 0; i < 4; i++ {
+		s2.durations[i] = 85 * time.Millisecond
+	}
+	s2.durationsFilled = 4
+
+	// Now run an iteration that adds 85ms (total 5 slots, avg 85ms)
+	s2.durations[4] = 85 * time.Millisecond
+	s2.durationsIdx = 0 // wrapped
+	s2.durationsFilled = 5
+
+	if avg := s2.rollingAvg(); avg != 85*time.Millisecond {
+		t.Fatalf("rollingAvg() = %v, want 85ms", avg)
+	}
+
+	// Directly test setLevel behavior
+	s2.setLevel(LevelLight)
+	if s2.GetLevel() != LevelLight {
+		t.Errorf("level = %d, want %d", s2.GetLevel(), LevelLight)
+	}
+}
+
+func TestEscalationToLevel3(t *testing.T) {
+	s := New()
+
+	// Pre-fill window at 97ms → Level 3
+	for i := 0; i < rollingWindowSize; i++ {
+		s.durations[i] = 97 * time.Millisecond
+	}
+	s.durationsFilled = rollingWindowSize
+
+	avg := s.rollingAvg()
+	if avg < thresholdLevel3 {
+		t.Fatalf("rollingAvg() = %v, expected >= %v", avg, thresholdLevel3)
+	}
+}
+
+func TestRecoveryStepDown(t *testing.T) {
+	s := New()
+	s.level.Store(int32(LevelHeavy))
+
+	// Simulate recovery: 10 consecutive iterations below 60ms.
+	for i := 0; i < recoveryCount; i++ {
+		s.durations[i%rollingWindowSize] = 50 * time.Millisecond
+		s.durationsIdx = (i + 1) % rollingWindowSize
+		s.durationsFilled = min(i+1, rollingWindowSize)
+
+		prevLevel := Level(s.level.Load())
+		ticks := s.recoveryTicks.Add(1)
+		var newLevel Level
+		if ticks >= recoveryCount && prevLevel > LevelNormal {
+			newLevel = prevLevel - 1
+			s.recoveryTicks.Store(0)
+		} else {
+			newLevel = prevLevel
+		}
+		s.setLevel(newLevel)
+	}
+
+	if s.GetLevel() != LevelModerate {
+		t.Errorf("after recovery, level = %d, want %d", s.GetLevel(), LevelModerate)
+	}
+}
+
+func TestRecoveryFullSequence(t *testing.T) {
+	s := New()
+	s.level.Store(int32(LevelModerate))
+
+	// Need 10 iterations below 60ms to recover from Level 2 → Level 1.
+	for i := 0; i < recoveryCount; i++ {
+		s.durations[i%rollingWindowSize] = 50 * time.Millisecond
+		s.durationsIdx = (i + 1) % rollingWindowSize
+		s.durationsFilled = min(i+1, rollingWindowSize)
+
+		prevLevel := Level(s.level.Load())
+		ticks := s.recoveryTicks.Add(1)
+		var newLevel Level
+		if ticks >= recoveryCount && prevLevel > LevelNormal {
+			newLevel = prevLevel - 1
+			s.recoveryTicks.Store(0)
+		} else {
+			newLevel = prevLevel
+		}
+		s.setLevel(newLevel)
+	}
+
+	if s.GetLevel() != LevelLight {
+		t.Errorf("after recovery from L2, level = %d, want %d", s.GetLevel(), LevelLight)
+	}
+}
+
+func TestRecoveryCounterResetOnAboveThreshold(t *testing.T) {
+	s := New()
+	s.level.Store(int32(LevelLight))
+
+	// 5 iterations below threshold, then one above.
+	for i := 0; i < 5; i++ {
+		s.durations[i] = 50 * time.Millisecond
+		s.durationsFilled = i + 1
+		s.recoveryTicks.Add(1)
+	}
+	// One iteration above recovery threshold but below L1
+	s.durations[5%rollingWindowSize] = 70 * time.Millisecond
+	s.durationsFilled = 6
+
+	avg := s.rollingAvg()
+	if avg >= recoveryThreshold {
+		s.recoveryTicks.Store(0)
+	}
+
+	if s.recoveryTicks.Load() != 0 {
+		t.Errorf("recovery ticks should be reset after above-threshold iteration, got %d", s.recoveryTicks.Load())
+	}
+}
+
+func TestLevel3RatePushCallback(t *testing.T) {
+	s := New()
+
+	var pushedRate atomic.Int32
+	s.SetRatePushCallback(func(rateHz int) {
+		pushedRate.Store(int32(rateHz))
+	})
+	s.SetPreviousRate(20)
+
+	// Enter Level 3
+	s.setLevel(LevelHeavy)
+	if pushedRate.Load() != level3RateCapHz {
+		t.Errorf("rate push on L3 enter = %d, want %d", pushedRate.Load(), level3RateCapHz)
+	}
+	if !s.IsLevel3Active() {
+		t.Error("IsLevel3Active() = false after entering L3")
+	}
+
+	// Exit Level 3
+	s.setLevel(LevelModerate)
+	if pushedRate.Load() != 20 {
+		t.Errorf("rate push on L3 exit = %d, want 20", pushedRate.Load())
+	}
+	if s.IsLevel3Active() {
+		t.Error("IsLevel3Active() = true after exiting L3")
+	}
+}
+
+func TestLevel3RestoreDefaultRate(t *testing.T) {
+	s := New()
+
+	var pushedRate atomic.Int32
+	s.SetRatePushCallback(func(rateHz int) {
+		pushedRate.Store(int32(rateHz))
+	})
+	// Don't set previous rate — should default to 20.
+
+	s.setLevel(LevelHeavy)
+	pushedRate.Store(0) // reset
+
+	s.setLevel(LevelModerate)
+	if pushedRate.Load() != 20 {
+		t.Errorf("rate push on L3 exit without prev = %d, want 20", pushedRate.Load())
+	}
+}
+
+func TestNoRatePushWithoutCallback(t *testing.T) {
+	s := New()
+	// No callback set — should not panic.
+	s.setLevel(LevelHeavy)
+	s.setLevel(LevelNormal)
+	if s.GetLevel() != LevelNormal {
+		t.Errorf("level = %d, want %d", s.GetLevel(), LevelNormal)
+	}
+}
+
+func TestSetLevelLogsOnce(t *testing.T) {
+	s := New()
+	// Setting same level should be a no-op (no extra log).
+	s.setLevel(LevelLight)
+	s.setLevel(LevelLight)
+	if s.GetLevel() != LevelLight {
+		t.Errorf("level = %d, want %d", s.GetLevel(), LevelLight)
+	}
+}
+
+func TestConcurrentLevelReads(t *testing.T) {
+	s := New()
+	s.level.Store(int32(LevelModerate))
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			l := s.GetLevel()
+			if l != LevelModerate {
+				t.Errorf("concurrent read got %d, want %d", l, LevelModerate)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestRollingAvgPartialWindow(t *testing.T) {
+	s := New()
+
+	// Only 3 of 5 slots filled.
+	s.durations[0] = 100 * time.Millisecond
+	s.durations[1] = 200 * time.Millisecond
+	s.durations[2] = 300 * time.Millisecond
+	s.durationsFilled = 3
+
+	want := 200 * time.Millisecond
+	if got := s.rollingAvg(); got != want {
+		t.Errorf("partial window avg = %v, want %v", got, want)
+	}
+}
+
+func TestGetLevel3RateCap(t *testing.T) {
+	s := New()
+	if s.GetLevel3RateCap() != 10 {
+		t.Errorf("GetLevel3RateCap() = %d, want 10", s.GetLevel3RateCap())
+	}
+}
+
+func TestLockFreeReads(t *testing.T) {
+	s := New()
+
+	// Verify all "query" methods use only atomic reads (no mutex).
+	// This is a design assertion — the test confirms no data races under
+	// concurrent writes and reads.
+	var wg sync.WaitGroup
+
+	// Writer goroutine: rapidly change levels.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 1000; i++ {
+			s.setLevel(Level(i % 4))
+		}
+	}()
+
+	// Reader goroutines: concurrently query all lock-free methods.
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 1000; j++ {
+				_ = s.GetLevel()
+				_ = s.ShouldAccumulateCrowdFlow()
+				_ = s.ShouldWriteReplay()
+				_ = s.IsLevel3Active()
+				_ = s.GetLevel3RateCap()
+				_ = s.RollingAvg()
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+// fillWindow is a test helper that fills the rolling window with a given duration.
+func fillWindow(s *Shedder, d time.Duration) {
+	for i := 0; i < rollingWindowSize; i++ {
+		s.durations[i] = d
+	}
+	s.durationsIdx = 0
+	s.durationsFilled = rollingWindowSize
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

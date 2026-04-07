@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 )
 
 // writeJSON writes a JSON response with the given status code.
@@ -27,4 +28,9 @@ func writeJSONData(w http.ResponseWriter, v interface{}) {
 // writeJSONError writes a JSON error response.
 func writeJSONError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// joinComma joins a slice of strings with ", " separator.
+func joinComma(parts []string) string {
+	return strings.Join(parts, ", ")
 }

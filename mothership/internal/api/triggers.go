@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,10 +19,10 @@ import (
 
 // TriggersHandler manages automation triggers.
 type TriggersHandler struct {
-	mu        sync.RWMutex
-	db        *sql.DB
-	triggers  map[string]*Trigger
-	engine    TriggerEngine
+	mu       sync.RWMutex
+	db       *sql.DB
+	triggers map[string]*Trigger
+	engine   TriggerEngine
 }
 
 // Trigger represents an automation trigger.
@@ -138,13 +139,15 @@ func (t *TriggersHandler) SetEngine(engine TriggerEngine) {
 	t.mu.Unlock()
 }
 
-// RegisterRoutes registers triggers endpoints.
+// RegisterRoutes registers triggers endpoints on the given router.
 //
-// GET  /api/triggers         — list all triggers
-// POST /api/triggers         — create trigger
-// PUT  /api/triggers/{id}    — update
-// DELETE /api/triggers/{id}  — delete
-// POST /api/triggers/{id}/test — fire trigger once for testing
+// Routes:
+//
+//	GET    /api/triggers          — list all triggers
+//	POST   /api/triggers          — create a new trigger
+//	PUT    /api/triggers/{id}     — update an existing trigger
+//	DELETE /api/triggers/{id}     — delete a trigger
+//	POST   /api/triggers/{id}/test — fire trigger actions once for testing
 func (t *TriggersHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/triggers", t.listTriggers)
 	r.Post("/api/triggers", t.createTrigger)
@@ -153,11 +156,28 @@ func (t *TriggersHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/triggers/{id}/test", t.testTrigger)
 }
 
+// listTriggers handles GET /api/triggers.
+//
+// Returns all registered triggers as a JSON array.
+//
+// Response 200 (application/json):
+//
+//	[{
+//	  "id": "t1",
+//	  "name": "Couch Dwell",
+//	  "enabled": true,
+//	  "condition": "dwell",
+//	  "condition_params": {"duration_s": 30},
+//	  "time_constraint": {"from": "22:00", "to": "06:00"},
+//	  "actions": [{"type": "webhook", "url": "http://example.com/hook"}],
+//	  "last_fired": "2024-03-15T14:32:05Z",
+//	  "elapsed": 142,
+//	  "created_at": "2024-03-10T08:00:00Z"
+//	}]
 func (t *TriggersHandler) listTriggers(w http.ResponseWriter, r *http.Request) {
 	t.mu.RLock()
 	triggers := make([]*Trigger, 0, len(t.triggers))
 	for _, trigger := range t.triggers {
-		// Update elapsed time
 		if trigger.LastFired != nil {
 			trigger.Elapsed = int(time.Since(*trigger.LastFired).Seconds())
 		}
@@ -178,6 +198,26 @@ type createTriggerRequest struct {
 	Actions         json.RawMessage `json:"actions"`
 }
 
+// createTrigger handles POST /api/triggers.
+//
+// Creates a new automation trigger. The request body must include id, name,
+// and condition. Actions default to an empty array if omitted.
+//
+// Request body (application/json):
+//
+//	{
+//	  "id": "t1",
+//	  "name": "Couch Dwell",
+//	  "condition": "dwell",
+//	  "condition_params": {"duration_s": 30},
+//	  "time_constraint": {"from": "22:00", "to": "06:00"},
+//	  "actions": [{"type": "webhook", "url": "http://example.com/hook"}],
+//	  "enabled": true
+//	}
+//
+// Response 201 (application/json): the created trigger object.
+// Response 400: missing required fields or invalid condition value.
+// Response 500: database error.
 func (t *TriggersHandler) createTrigger(w http.ResponseWriter, r *http.Request) {
 	var req createTriggerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -257,6 +297,18 @@ type updateTriggerRequest struct {
 	Actions         *json.RawMessage `json:"actions,omitempty"`
 }
 
+// updateTrigger handles PUT /api/triggers/{id}.
+//
+// Updates an existing trigger. Only fields present in the request body are
+// modified; omitted fields retain their current values. If the body contains
+// no recognized fields, the current trigger is returned unchanged.
+//
+// Request body (application/json): partial trigger object with fields to update.
+//
+// Response 200 (application/json): the updated trigger object.
+// Response 400: invalid request body or invalid condition value.
+// Response 404: trigger not found.
+// Response 500: database error.
 func (t *TriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -321,7 +373,7 @@ func (t *TriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Request) 
 	}
 
 	args = append(args, id)
-	query := "UPDATE triggers SET " + joinComma(updates) + " WHERE id = ?"
+	query := "UPDATE triggers SET " + strings.Join(updates, ", ") + " WHERE id = ?"
 
 	_, err := t.db.Exec(query, args...)
 	if err != nil {
@@ -354,6 +406,12 @@ func (t *TriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, trigger)
 }
 
+// deleteTrigger handles DELETE /api/triggers/{id}.
+//
+// Removes a trigger by ID. Deleting a nonexistent ID is a no-op.
+//
+// Response 204: trigger deleted (or did not exist).
+// Response 500: database error.
 func (t *TriggersHandler) deleteTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -379,6 +437,22 @@ func (t *TriggersHandler) deleteTrigger(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// testTrigger handles POST /api/triggers/{id}/test.
+//
+// Fires the trigger's actions once with a synthetic event payload for testing.
+// If no automation engine is attached, returns a simulated success response.
+// Does not update last_fired or trigger any real automation logic.
+//
+// Response 200 (application/json):
+//
+//	{
+//	  "status": "fired",
+//	  "message": "Trigger fired successfully",
+//	  "trigger": { ... }
+//	}
+//
+// Response 404: trigger not found.
+// Response 500: engine test-fire failed.
 func (t *TriggersHandler) testTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -391,7 +465,6 @@ func (t *TriggersHandler) testTrigger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if engine is available
 	t.mu.RLock()
 	engine := t.engine
 	t.mu.RUnlock()
@@ -451,7 +524,6 @@ func (t *TriggersHandler) EvaluateTriggers(blobs []BlobPos) []string {
 		shouldFire := false
 		switch trigger.Condition {
 		case "enter", "leave":
-			// Volume-based trigger
 			if params.VolumeID != "" {
 				for _, blob := range blobs {
 					if t.engine != nil && t.engine.IsInVolume(blob.X, blob.Y, blob.Z, params.VolumeID) {
@@ -498,6 +570,6 @@ func (t *TriggersHandler) EvaluateTriggers(blobs []BlobPos) []string {
 
 // BlobPos represents a blob position for trigger evaluation.
 type BlobPos struct {
-	ID     int
+	ID      int
 	X, Y, Z float64
 }
