@@ -24,7 +24,7 @@ type DetectorProvider interface {
 	GetLearningProgress() float64
 	IsModelReady() bool
 	GetActiveAnomalies() []*events.AnomalyEvent
-	GetAnomalyHistory(limit int) []*events.AnomalyEvent
+	CountAnomaliesSince(since time.Time) (int, error)
 }
 
 // NewSecurityHandler creates a new security handler.
@@ -153,15 +153,9 @@ func (h *SecurityHandler) countAnomalies24h() int {
 		return 0
 	}
 
-	history := h.detector.GetAnomalyHistory(1000) // Get enough history
-	cutoff := time.Now().Add(-24 * time.Hour)
-
-	count := 0
-	for _, event := range history {
-		if event.Timestamp.After(cutoff) {
-			count++
-		}
+	count, err := h.detector.CountAnomaliesSince(time.Now().Add(-24 * time.Hour))
+	if err != nil {
+		return 0
 	}
-
 	return count
 }

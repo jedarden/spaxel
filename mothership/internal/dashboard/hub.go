@@ -47,6 +47,7 @@ type snapshotCache struct {
 	blobsJSON         []byte
 	nodesJSON         []byte
 	zonesJSON         []byte
+	portalsJSON       []byte
 	linksJSON         []byte
 	bleJSON           []byte
 	triggersJSON      []byte
@@ -58,8 +59,32 @@ type snapshotCache struct {
 // ZoneStateProvider is an interface to query zone data for the dashboard snapshot.
 type ZoneStateProvider interface {
 	GetAllZones() []ZoneSnapshot
+	GetAllPortals() []PortalSnapshot
 	GetOccupancy() map[string]ZoneOccupancySnapshot
 	GetOccupancyStatus() map[string]string
+}
+
+// PortalSnapshot is the wire format for a portal in the dashboard snapshot.
+type PortalSnapshot struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	ZoneA     string  `json:"zone_a"`
+	ZoneB     string  `json:"zone_b"`
+	P1X       float64 `json:"p1_x"`
+	P1Y       float64 `json:"p1_y"`
+	P1Z       float64 `json:"p1_z"`
+	P2X       float64 `json:"p2_x"`
+	P2Y       float64 `json:"p2_y"`
+	P2Z       float64 `json:"p2_z"`
+	P3X       float64 `json:"p3_x"`
+	P3Y       float64 `json:"p3_y"`
+	P3Z       float64 `json:"p3_z"`
+	NX        float64 `json:"n_x"`
+	NY        float64 `json:"n_y"`
+	NZ        float64 `json:"n_z"`
+	Width     float64 `json:"width"`
+	Height    float64 `json:"height"`
+	Enabled   bool    `json:"enabled"`
 }
 
 // ZoneSnapshot is the wire format for a zone in the dashboard snapshot.

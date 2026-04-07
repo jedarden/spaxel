@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/spaxel/mothership/internal/events"
 )
 
 // Handler provides REST API handlers for analytics.
@@ -137,6 +136,7 @@ func (h *AnomalyHandler) RegisterRoutes(r chi.Router) {
 // handleGetAnomalies returns anomalies filtered by the `since` query parameter.
 // Query params:
 //   - since: duration string (e.g. "24h", "7d", "1h"). Default "24h".
+// Uses DB-backed QueryAnomalyEvents so results survive server restarts.
 func (h *AnomalyHandler) handleGetAnomalies(w http.ResponseWriter, r *http.Request) {
 	if h.detector == nil {
 		http.Error(w, "anomaly detector not available", http.StatusServiceUnavailable)
@@ -156,22 +156,17 @@ func (h *AnomalyHandler) handleGetAnomalies(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Fetch enough history to cover the since window
-	limit := 1000
-	history := h.detector.GetAnomalyHistory(limit)
-
-	// Filter history by since timestamp
+	// Use DB-backed query so results persist across restarts
 	cutoff := time.Now().Add(-sinceDur)
-	var filtered []*events.AnomalyEvent
-	for _, ev := range history {
-		if ev.Timestamp.After(cutoff) {
-			filtered = append(filtered, ev)
-		}
+	history, err := h.detector.QueryAnomalyEvents(cutoff, 1000)
+	if err != nil {
+		http.Error(w, "failed to query anomalies: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	response := map[string]interface{}{
 		"active":  active,
-		"history": filtered,
+		"history": history,
 		"since":   sinceStr,
 	}
 	writeJSON(w, response)
