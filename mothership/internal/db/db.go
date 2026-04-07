@@ -10,113 +10,89 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
+
+	"github.com/spaxel/mothership/internal/startup"
 )
-
-// StartupPhase represents a phase in the database startup sequence.
-type StartupPhase int
-
-const (
-	PhaseDataDir StartupPhase = iota + 1
-	PhaseOpenDB
-	PhaseIntegrityCheck
-	PhaseSchemaMigration
-	PhaseConfigSecrets
-	PhaseSubsystems
-	PhaseReady
-)
-
-// PhaseLogger is called during each startup phase.
-type PhaseLogger func(phase StartupPhase, message string)
-
-// DefaultPhaseLogger logs to stdout.
-func DefaultPhaseLogger(phase StartupPhase, message string) {
-	log.Printf("[PHASE %d/7] %s", phase, message)
-}
 
 // OpenDB initializes the database with full startup sequence.
 // It runs migrations, creates backups, and returns a ready-to-use database connection.
 // The startup sequence is:
-//   1. Data directory: verify /data is writable
-//   2. SQLite: open database with WAL mode
-//   3. Integrity check: verify database integrity
-//   4. Schema migration: apply pending migrations with backup
-//   5. Config & secrets: load/generate install secret
-//   6. Subsystems: ready for other subsystems to use
-//   7. Ready: database is ready for use
+//   1. Data directory: verify /data is writable; acquire flock() lock
+//   2. SQLite: open database with WAL mode, busy_timeout=5000
+//   3. Schema migration: apply pending migrations with backup
+//   4. Config & secrets: load/generate install secret
 //
 // If any phase fails, the function returns an error and the caller should
 // exit without serving traffic.
-func OpenDB(dataDir, dbName string, logger PhaseLogger) (*sql.DB, error) {
-	if logger == nil {
-		logger = DefaultPhaseLogger
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func OpenDB(dataDir, dbName string) (*sql.DB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), startup.TotalTimeout)
 	defer cancel()
 
-	// Phase 1: Data directory
-	logger(PhaseDataDir, "Data directory: verify writable")
+	// Phase 1: Data directory + flock
+	done := startup.Phase(1, "Data directory")
 	dbPath := filepath.Join(dataDir, dbName)
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 
-	// Acquire file lock to prevent duplicate instances
+	// Acquire exclusive flock to prevent duplicate instances
 	lockPath := filepath.Join(dataDir, ".lock")
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("create lock file: %w", err)
 	}
-	defer lockFile.Close()
-	// Note: proper flock would require platform-specific code
-	// For now, we rely on SQLite's single-writer mode
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		lockFile.Close()
+		return nil, fmt.Errorf("acquire flock on %s (another instance running?): %w", lockPath, err)
+	}
+	done()
 
 	// Phase 2: SQLite open
-	logger(PhaseOpenDB, fmt.Sprintf("SQLite: opening %s", dbPath))
-	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)")
+	done = startup.Phase(2, "SQLite")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)")
 	if err != nil {
+		lockFile.Close()
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	db.SetMaxOpenConns(1) // SQLite is single-writer
 
-	// Test connection
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
+		lockFile.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	// Phase 3: Integrity check
-	logger(PhaseIntegrityCheck, "SQLite: running integrity check")
-	var integrityOK bool
-	err = db.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrityOK)
-	if err == nil && integrityOK {
-		logger(PhaseIntegrityCheck, "SQLite: integrity check passed")
-	} else {
-		// Database may be corrupt
+	// Integrity check
+	var integrityResult string
+	err = db.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrityResult)
+	if err != nil || integrityResult != "ok" {
 		corruptPath := dbPath + ".corrupt." + time.Now().Format("20060102-150405")
-		logger(PhaseIntegrityCheck, fmt.Sprintf("SQLite: integrity check failed, moving to %s and starting fresh", corruptPath))
+		log.Printf("[WARN] SQLite integrity check failed (%s), moving to %s and starting fresh", integrityResult, corruptPath)
 		db.Close()
-		if err := os.Rename(dbPath, corruptPath); err != nil {
-			return nil, fmt.Errorf("move corrupt database: %w", err)
+		if renameErr := os.Rename(dbPath, corruptPath); renameErr != nil {
+			lockFile.Close()
+			return nil, fmt.Errorf("move corrupt database: %w", renameErr)
 		}
-		// Reopen with fresh database
-		db, err = sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)")
+		db, err = sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)")
 		if err != nil {
+			lockFile.Close()
 			return nil, fmt.Errorf("open fresh sqlite: %w", err)
 		}
 		db.SetMaxOpenConns(1)
 	}
+	done()
 
-	// Phase 4: Schema migration
-	logger(PhaseSchemaMigration, "Schema migration: checking pending migrations")
-
+	// Phase 3: Schema migration
+	done = startup.Phase(3, "Schema migrations")
 	migrator, err := NewMigrator(dbPath, Config{
 		DataDir:         dataDir,
 		BackupRetention: 90 * 24 * time.Hour,
 	})
 	if err != nil {
 		db.Close()
+		lockFile.Close()
 		return nil, fmt.Errorf("create migrator: %w", err)
 	}
 	migrator.Register(AllMigrations()...)
@@ -124,54 +100,51 @@ func OpenDB(dataDir, dbName string, logger PhaseLogger) (*sql.DB, error) {
 	current, err := migrator.CurrentVersion(ctx)
 	if err != nil {
 		db.Close()
+		lockFile.Close()
 		return nil, fmt.Errorf("get current version: %w", err)
 	}
 
 	if current == 0 {
-		logger(PhaseSchemaMigration, "Schema migration: initializing new database")
+		log.Printf("[INFO] Initializing new database")
 	} else {
-		logger(PhaseSchemaMigration, fmt.Sprintf("Schema migration: current version %d", current))
+		log.Printf("[INFO] Current schema version %d", current)
 	}
 
 	if err := migrator.Migrate(ctx); err != nil {
 		db.Close()
+		lockFile.Close()
 		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
 
 	latest := len(AllMigrations())
-	logger(PhaseSchemaMigration, fmt.Sprintf("Schema migration: complete (version %d)", latest))
+	log.Printf("[INFO] Schema migration complete (version %d)", latest)
+	done()
 
-	// Phase 5: Config & secrets
-	logger(PhaseConfigSecrets, "Config & secrets: loading/generating install secret")
+	// Phase 4: Config & secrets
+	done = startup.Phase(4, "Config & secrets")
 	if err := ensureInstallSecret(ctx, db); err != nil {
 		db.Close()
+		lockFile.Close()
 		return nil, fmt.Errorf("ensure install secret: %w", err)
 	}
+	done()
 
-	// Phase 6: Subsystems ready
-	logger(PhaseSubsystems, "Subsystems: database ready for initialization")
-
-	// Phase 7: Ready
-	logger(PhaseReady, "Database ready")
 	return db, nil
 }
 
 // ensureInstallSecret ensures the install secret exists, generating one if needed.
 func ensureInstallSecret(ctx context.Context, db *sql.DB) error {
-	// Check if secret exists
 	var existingSecret []byte
 	err := db.QueryRowContext(ctx, "SELECT install_secret FROM auth WHERE id = 1").Scan(&existingSecret)
 	if err == nil && len(existingSecret) == 32 {
-		return nil // Secret exists
+		return nil
 	}
 
-	// Generate new secret
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		return fmt.Errorf("generate secret: %w", err)
 	}
 
-	// Insert or update
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO auth (id, install_secret) VALUES (1, ?)
 		ON CONFLICT(id) DO UPDATE SET install_secret = excluded.install_secret
@@ -185,9 +158,8 @@ func ensureInstallSecret(ctx context.Context, db *sql.DB) error {
 }
 
 // RunMigrations is a convenience function to run migrations on an existing database.
-// This is useful for the migrate.go command or for testing.
 func RunMigrations(dataDir, dbName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), startup.TotalTimeout)
 	defer cancel()
 
 	dbPath := filepath.Join(dataDir, dbName)

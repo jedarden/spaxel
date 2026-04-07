@@ -43,7 +43,9 @@ import (
 	"github.com/spaxel/mothership/internal/provisioning"
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
+	"github.com/spaxel/mothership/internal/shutdown"
 	"github.com/spaxel/mothership/internal/sleep"
+	"github.com/spaxel/mothership/internal/startup"
 	"github.com/spaxel/mothership/internal/volume"
 	"github.com/spaxel/mothership/internal/zones"
 	sigproc "github.com/spaxel/mothership/internal/signal"
@@ -206,8 +208,14 @@ func main() {
 	log.Printf("[INFO] Spaxel mothership v%s starting", version)
 	log.Printf("[DEBUG] Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Wrap all startup in a 30-second timeout context
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), startup.TotalTimeout)
+	defer startupCancel()
+
+	ctx, cancel := context.WithCancel(startupCtx)
 	defer cancel()
+
+	startupTotalStart := time.Now()
 
 	var explainabilityHandler *explainability.Handler
 
@@ -218,12 +226,15 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Phase 1: Open main database (used by health checker and other subsystems)
-	mainDB, err := db.OpenDB(cfg.DataDir, "spaxel.db", nil)
+	// Phases 1–4: Database initialization (data dir, SQLite, migrations, secrets)
+	// Each phase is logged with timing by db.OpenDB via the startup package.
+	startup.CheckTimeout(startupCtx)
+	mainDB, err := db.OpenDB(cfg.DataDir, "spaxel.db")
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to open main database: %v", err)
 	}
 	defer mainDB.Close()
+	startup.CheckTimeout(startupCtx)
 	log.Printf("[INFO] Main database at %s", filepath.Join(cfg.DataDir, "spaxel.db"))
 
 	// Create load shedder for health monitoring
@@ -283,6 +294,10 @@ func main() {
     }
     defer fleetReg.Close()
     log.Printf("[INFO] Fleet registry at %s", filepath.Join(cfg.DataDir, "fleet.db"))
+
+    // Phase 5: Subsystems — start all managers with 5s per-subsystem timeout
+    startup.CheckTimeout(startupCtx)
+    phase5Done := startup.Phase(5, "Subsystems")
 
     // Phase 6: BLE device registry
     bleRegistry, err := ble.NewRegistry(filepath.Join(cfg.DataDir, "ble.db"))
@@ -3118,6 +3133,13 @@ func main() {
         log.Printf("[WARN] No dashboard directory found, static files not served")
     }
 
+    // Phase 5 complete — all subsystems initialized
+    phase5Done()
+
+    // Phase 6: HTTP + mDNS
+    startup.CheckTimeout(startupCtx)
+    phase6Done := startup.Phase(6, "HTTP + mDNS")
+
     // mDNS advertisement
     var mdnsServer *mdns.Server
     if cfg.MDNSEnabled {
@@ -3155,21 +3177,87 @@ func main() {
             log.Fatalf("[FATAL] HTTP server error: %v", err)
         }
     }()
+    phase6Done()
+
+    // Phase 7: Health check and readiness
+    startup.CheckTimeout(startupCtx)
+    phase7Done := startup.Phase(7, "Health")
+
+    // Verify healthz responds
+    healthURL := fmt.Sprintf("http://%s/healthz", cfg.BindAddr)
+    healthCtx, healthCancel := context.WithTimeout(context.Background(), 3*time.Second)
+    defer healthCancel()
+    req, reqErr := http.NewRequestWithContext(healthCtx, http.MethodGet, healthURL, nil)
+    if reqErr == nil {
+        if resp, err := http.DefaultClient.Do(req); err == nil {
+            resp.Body.Close()
+            if resp.StatusCode == http.StatusOK {
+                log.Printf("[INFO] Health check passed (HTTP %d)", resp.StatusCode)
+            } else {
+                log.Printf("[WARN] Health check returned HTTP %d", resp.StatusCode)
+            }
+        } else {
+            log.Printf("[WARN] Health check failed: %v (continuing anyway)", err)
+        }
+    }
+
+    // Write ready marker file
+    if err := startup.WriteReadyFile(); err != nil {
+        log.Printf("[WARN] Failed to write ready file: %v", err)
+    }
+
+    phase7Done()
+    startupTotalElapsed := time.Since(startupTotalStart)
+    log.Printf("[READY] All 7 phases completed in %dms", startupTotalElapsed.Milliseconds())
+    startupCancel() // Release startup timeout context
 
     sig := <-sigChan
     log.Printf("[INFO] Received signal %v, initiating graceful shutdown", sig)
 
-    cancel()
+    // Remove ready marker on shutdown
+    startup.RemoveReadyFile()
 
+    // Create shutdown manager with 30-second deadline
+    shutdownMgr := shutdown.NewManager(mainDB)
+
+    // Wire up baseline flusher (using baselineStore for proper SQLite flush)
+    shutdownMgr.SetBaselineComponents(pm, baselineStore)
+
+    // Wire up recording syncer
+    if recMgr != nil {
+        shutdownMgr.SetRecordingSyncer(shutdown.NewRecorderManagerSyncer(recMgr))
+    }
+
+    // Wire up dashboard broadcaster
+    if dashboardHub != nil {
+        shutdownMgr.SetDashboardBroadcaster(shutdown.NewDashboardHubBroadcaster(dashboardHub))
+    }
+
+    // Wire up node connection closer
+    shutdownMgr.SetNodeCloser(shutdown.NewIngestionServerCloser(func() error {
+        ingestSrv.CloseAllConnections()
+        return nil
+    }))
+
+    // Wire up event writer
+    shutdownMgr.SetEventWriter(shutdown.NewDBEventWriter(mainDB))
+
+    // Wire up ingestion shutdowner
+    shutdownMgr.SetIngestionShutdowner(ingestSrv)
+
+    // Create shutdown context with 30s deadline
     shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
     defer shutdownCancel()
 
+    // Execute 10-step shutdown sequence
+    shutdownComplete := shutdownMgr.Shutdown(shutdownCtx, cancel)
+
+    // HTTP server shutdown (after step 2 - dashboard clients notified)
     if err := srv.Shutdown(shutdownCtx); err != nil {
         log.Printf("[ERROR] HTTP server shutdown error: %v", err)
     }
 
-    ingestSrv.Shutdown(shutdownCtx)
-
+    // mDNS shutdown
     if mdnsServer != nil {
         mdnsServer.Shutdown()
     }
@@ -3183,7 +3271,14 @@ func main() {
         }
     }
 
-    log.Printf("[INFO] Shutdown complete")
+    // Exit with appropriate code
+    if shutdownComplete {
+        log.Printf("[INFO] Shutdown complete - exiting 0")
+        os.Exit(0)
+    } else {
+        log.Printf("[ERROR] Shutdown exceeded deadline - exiting 1")
+        os.Exit(1)
+    }
 } // end main()
 
 // Dashboard zone state adapter

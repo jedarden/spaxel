@@ -298,6 +298,19 @@ func (s *Server) SendOTAToMAC(mac, url, sha256, version string) {
 
 // HandleNodeWS handles WebSocket connections at /ws/node
 func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
+	// Step 1 of shutdown: return HTTP 503 for new WebSocket upgrade requests
+	s.mu.RLock()
+	shuttingDown := s.shutdown
+	s.mu.RUnlock()
+
+	if shuttingDown {
+		log.Printf("[INFO] Rejecting new node connection during shutdown (HTTP 503)")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":"mothership shutting down","code":"shutting_down"}`))
+		return
+	}
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[WARN] WebSocket upgrade failed: %v", err)
@@ -651,6 +664,15 @@ func (s *Server) sendConfig(nc *NodeConnection, rateHz int, txSlotUS int, varian
 	nc.writeMu.Unlock()
 }
 
+// SetShuttingDown sets the shutdown flag. This causes HandleNodeWS to return HTTP 503
+// for new connection attempts. Called as step 1 of the graceful shutdown sequence.
+func (s *Server) SetShuttingDown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shutdown = true
+	log.Printf("[INFO] Ingestion server set to shutting down (HTTP 503 for new connections)")
+}
+
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) {
 	s.mu.Lock()
@@ -669,6 +691,25 @@ func (s *Server) Shutdown(ctx context.Context) {
 	s.mu.Unlock()
 
 	log.Printf("[INFO] Ingestion server shutdown complete")
+}
+
+// CloseAllConnections closes all node WebSocket connections with normal close frame.
+// This implements the shutdown.NodeConnectionCloser interface.
+func (s *Server) CloseAllConnections() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for mac, nc := range s.connections {
+		nc.writeMu.Lock()
+		// Send normal close frame (1000)
+		nc.Conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "mothership shutting down"))
+		nc.Conn.Close()
+		nc.writeMu.Unlock()
+		delete(s.connections, mac)
+	}
+	log.Printf("[INFO] All node connections closed")
+	return nil
 }
 
 // GetConnectedNodes returns a list of connected node MACs
