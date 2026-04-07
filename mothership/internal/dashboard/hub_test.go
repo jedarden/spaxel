@@ -777,3 +777,95 @@ func TestHub_DeltaOmitsTypeField(t *testing.T) {
 		t.Error("expected at least one delta message (no type field)")
 	}
 }
+
+func TestHub_BroadcastTriggerState(t *testing.T) {
+	tests := []struct {
+		name       string
+		triggerID  string
+		triggerName string
+		lastFired  time.Time
+		enabled    bool
+	}{
+		{
+			name:       "enabled trigger with last fired",
+			triggerID:  "trigger-1",
+			triggerName: "Couch Dwell",
+			lastFired:  time.Date(2026, 4, 7, 14, 32, 5, 0, time.UTC),
+			enabled:    true,
+		},
+		{
+			name:       "disabled trigger never fired",
+			triggerID:  "trigger-2",
+			triggerName: "Hallway Motion",
+			lastFired:  time.Time{},
+			enabled:    false,
+		},
+		{
+			name:       "enabled trigger never fired",
+			triggerID:  "trigger-3",
+			triggerName: "Kitchen Entry",
+			lastFired:  time.Time{},
+			enabled:    true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := NewHub()
+			go hub.Run()
+
+			client := &Client{
+				hub:  hub,
+				send: make(chan []byte, 10),
+			}
+
+			hub.Register(client)
+			time.Sleep(10 * time.Millisecond)
+			drainSnapshot(t, client.send)
+
+			hub.BroadcastTriggerState(tc.triggerID, tc.triggerName, tc.lastFired, tc.enabled)
+
+			select {
+			case msg := <-client.send:
+				var parsed map[string]interface{}
+				if err := json.Unmarshal(msg, &parsed); err != nil {
+					t.Fatalf("failed to parse trigger_state JSON: %v", err)
+				}
+
+				if parsed["type"] != "trigger_state" {
+					t.Errorf("expected type=trigger_state, got %v", parsed["type"])
+				}
+
+				trigger, ok := parsed["trigger"].(map[string]interface{})
+				if !ok {
+					t.Fatal("missing trigger object")
+				}
+
+				if trigger["id"] != tc.triggerID {
+					t.Errorf("expected id=%s, got %v", tc.triggerID, trigger["id"])
+				}
+				if trigger["name"] != tc.triggerName {
+					t.Errorf("expected name=%s, got %v", tc.triggerName, trigger["name"])
+				}
+				if trigger["enabled"] != tc.enabled {
+					t.Errorf("expected enabled=%v, got %v", tc.enabled, trigger["enabled"])
+				}
+
+				// Verify last_fired
+				if !tc.lastFired.IsZero() {
+					tsVal, ok := trigger["last_fired"].(float64)
+					if !ok {
+						t.Fatalf("expected last_fired to be numeric, got %T", trigger["last_fired"])
+					}
+					expectedTs := float64(tc.lastFired.UnixMilli())
+					if tsVal != expectedTs {
+						t.Errorf("expected last_fired=%v, got %v", expectedTs, tsVal)
+					}
+				}
+
+			case <-time.After(100 * time.Millisecond):
+				t.Error("expected to receive trigger_state broadcast")
+			}
+		})
+	}
+}

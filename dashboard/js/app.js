@@ -522,15 +522,19 @@
         if (!msg.health) return;
 
         const health = msg.health;
-        console.log('[Spaxel] System health:', health);
 
         // Update system health display in UI
         const healthEl = document.getElementById('system-uptime');
         if (healthEl) {
             const uptimeSec = health.uptime_s || 0;
-            const hours = Math.floor(uptimeSec / 3600);
+            const days = Math.floor(uptimeSec / 86400);
+            const hours = Math.floor((uptimeSec % 86400) / 3600);
             const mins = Math.floor((uptimeSec % 3600) / 60);
-            healthEl.textContent = hours + 'h ' + mins + 'm';
+            if (days > 0) {
+                healthEl.textContent = days + 'd ' + hours + 'h ' + mins + 'm';
+            } else {
+                healthEl.textContent = hours + 'h ' + mins + 'm';
+            }
         }
 
         const memEl = document.getElementById('system-memory');

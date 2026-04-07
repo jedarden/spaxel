@@ -33,6 +33,7 @@ type NotificationClient interface {
 // WSBroadcaster sends messages to dashboard WebSocket clients.
 type WSBroadcaster interface {
 	BroadcastAlert(alertID string, timestamp time.Time, severity, description string, acknowledged bool)
+	BroadcastTriggerState(triggerID, name string, lastFired time.Time, enabled bool)
 }
 
 // VolumeTriggersHandler manages automation trigger volumes with 3D geometry.
@@ -418,6 +419,9 @@ func (h *VolumeTriggersHandler) enableTrigger(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Broadcast updated trigger state to dashboard
+	h.broadcastTriggerState(id)
+
 	writeJSON(w, map[string]interface{}{"status": "ok"})
 }
 
@@ -436,6 +440,9 @@ func (h *VolumeTriggersHandler) disableTrigger(w http.ResponseWriter, r *http.Re
 		http.Error(w, "failed to update trigger", http.StatusInternalServerError)
 		return
 	}
+
+	// Broadcast updated trigger state to dashboard
+	h.broadcastTriggerState(id)
 
 	writeJSON(w, map[string]interface{}{"status": "ok"})
 }
@@ -547,6 +554,13 @@ func (h *VolumeTriggersHandler) onTriggerFired(event volume.FiredEvent) {
 	}
 
 	// Broadcast trigger state to dashboard
+	h.mu.RLock()
+	broadcaster := h.wsBroadcaster
+	h.mu.RUnlock()
+	if broadcaster != nil {
+		broadcaster.BroadcastTriggerState(t.ID, t.Name, event.Timestamp, t.Enabled)
+	}
+
 	log.Printf("[INFO] Trigger fired: %s (%s, %d blob(s))", t.Name, t.Condition, len(event.BlobIDs))
 }
 
@@ -738,4 +752,43 @@ func (h *VolumeTriggersHandler) executeNotification(action volume.Action, event 
 	if err := client.SendViaChannel(action.Type, title, body, data); err != nil {
 		log.Printf("[WARN] Notification failed: %v", err)
 	}
+}
+
+// broadcastTriggerState sends a trigger_state WebSocket message for a trigger by ID.
+func (h *VolumeTriggersHandler) broadcastTriggerState(triggerID string) {
+	t := h.store.GetTrigger(triggerID)
+	if t == nil {
+		return
+	}
+
+	h.mu.RLock()
+	broadcaster := h.wsBroadcaster
+	h.mu.RUnlock()
+
+	if broadcaster != nil {
+		var lastFired time.Time
+		if t.LastFired != nil {
+			lastFired = *t.LastFired
+		}
+		broadcaster.BroadcastTriggerState(t.ID, t.Name, lastFired, t.Enabled)
+	}
+}
+
+// GetTriggerStates returns all trigger states for the dashboard snapshot/delta protocol.
+// Implements dashboard.TriggerState interface.
+func (h *VolumeTriggersHandler) GetTriggerStates() []map[string]interface{} {
+	triggers := h.store.GetAll()
+	states := make([]map[string]interface{}, 0, len(triggers))
+	for _, t := range triggers {
+		state := map[string]interface{}{
+			"id":      t.ID,
+			"name":    t.Name,
+			"enabled": t.Enabled,
+		}
+		if t.LastFired != nil {
+			state["last_fired"] = t.LastFired.UnixMilli()
+		}
+		states = append(states, state)
+	}
+	return states
 }
