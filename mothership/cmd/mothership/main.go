@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/analytics"
+	"github.com/spaxel/mothership/internal/api"
 	"github.com/spaxel/mothership/internal/automation"
 	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/dashboard"
@@ -39,6 +40,7 @@ import (
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
 	"github.com/spaxel/mothership/internal/sleep"
+	"github.com/spaxel/mothership/internal/volume"
 	"github.com/spaxel/mothership/internal/zones"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 )
@@ -157,7 +159,13 @@ func main() {
     }
 
     // Phase 6: Zones manager
-    zonesMgr, err := zones.NewManager(filepath.Join(cfg.DataDir, "zones.db"))
+    zonesTz := time.Local
+    if envTz := os.Getenv("TZ"); envTz != "" {
+        if loc, err := time.LoadLocation(envTz); err == nil {
+            zonesTz = loc
+        }
+    }
+    zonesMgr, err := zones.NewManager(filepath.Join(cfg.DataDir, "zones.db"), zonesTz)
     if err != nil {
         log.Printf("[WARN] Failed to open zones database: %v", err)
     } else {
@@ -485,6 +493,28 @@ func main() {
 
     dashboardHub.SetIngestionState(ingestSrv)
 
+    // Wire zone state to dashboard for occupancy snapshots
+    if zonesMgr != nil {
+        dashboardHub.SetZoneState(&zoneStateAdapter{mgr: zonesMgr})
+
+        // Start occupancy reconciliation ticker: every 30s for the first 60s
+        go func() {
+            ticker := time.NewTicker(30 * time.Second)
+            defer ticker.Stop()
+            for {
+                select {
+                case <-ctx.Done():
+                    return
+                case <-ticker.C:
+                    if zonesMgr.IsReconciled() {
+                        return
+                    }
+                    zonesMgr.ReconcileTick()
+                }
+            }
+        }()
+    }
+
     // Wire ingestion → dashboard for CSI and motion broadcasts
     ingestSrv.SetDashboardBroadcaster(dashboardHub)
     ingestSrv.SetMotionBroadcaster(dashboardHub)
@@ -539,6 +569,16 @@ func main() {
             }
         }
     }()
+
+    // Phase 6: Volume triggers handler (webhook firing with fault tolerance)
+    volumeTriggersHandler, err := api.NewVolumeTriggersHandler(filepath.Join(cfg.DataDir, "spaxel.db"))
+    if err != nil {
+        log.Printf("[WARN] Failed to create volume triggers handler: %v", err)
+    } else {
+        defer volumeTriggersHandler.Close()
+        volumeTriggersHandler.SetWSBroadcaster(dashboardHub)
+        log.Printf("[INFO] Volume triggers handler initialized")
+    }
 
     // Phase 6: Wire anomaly detector providers (after dashboardHub and notifyService are ready)
     if anomalyDetector != nil {
@@ -930,6 +970,20 @@ func main() {
                     })
                 }
 
+                // Evaluate volume triggers (webhook firing with fault tolerance)
+                if volumeTriggersHandler != nil {
+                    volumeBlobs := make([]volume.BlobPos, len(blobs))
+                    for i, blob := range blobs {
+                        volumeBlobs[i] = volume.BlobPos{
+                            ID: blob.ID,
+                            X:  blob.X,
+                            Y:  blob.Y,
+                            Z:  blob.Z,
+                        }
+                    }
+                    volumeTriggersHandler.EvaluateTriggers(volumeBlobs)
+                }
+
                 // Process anomaly detection
                 if anomalyDetector != nil && zonesMgr != nil {
                     // Get current system mode for security mode checks
@@ -1047,7 +1101,7 @@ func main() {
                 },
             })
         }
-    }()
+    })
 
     // Set identity function for fall detector
     fallDetector.SetIdentityFunc(func(blobID int) string {
@@ -1515,6 +1569,11 @@ func main() {
     fleetHealthHandler := fleet.NewFleetHandler(selfHealManager, fleetReg)
     fleetHealthHandler.RegisterRoutes(r)
 
+    // Phase 6: Volume triggers REST API (webhook actions with fault tolerance)
+    if volumeTriggersHandler != nil {
+        volumeTriggersHandler.RegisterRoutes(r)
+    }
+
     // Phase 6: BLE REST API
     if bleRegistry != nil {
         r.Get("/api/ble/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -1612,38 +1671,13 @@ func main() {
                 return
             }
             writeJSON(w, zone)
-        })
-        r.Delete("/api/zones/{id}", func(w http.ResponseWriter, r *http.Request) {
-            id := chi.URLParam(r, "id")
-            if err := zonesMgr.DeleteZone(id); err != nil {
-                http.Error(w, err.Error(), http.StatusInternalServerError)
-                return
-            }
-            w.WriteHeader(http.StatusNoContent)
-        })
-        r.Get("/api/zones/occupancy", func(w http.ResponseWriter, r *http.Request) {
-            occupancy := zonesMgr.GetOccupancy()
-            writeJSON(w, occupancy)
-        })
-        r.Get("/api/zones/crossings", func(w http.ResponseWriter, r *http.Request) {
-            crossings := zonesMgr.GetRecentCrossings(20)
-            writeJSON(w, crossings)
-        })
-    }
-
     // Phase 6: Portals REST API
-    r.Get("/api/portals", func(w http.ResponseWriter, r *http.Request) {
-            if zonesMgr == nil {
-                writeJSON(w, zonesMgr.GetAllPortals())
-                return
-            }
-            writeJSON(w, []*zones.Portal{})
+    if zonesMgr != nil {
+        r.Get("/api/portals", func(w http.ResponseWriter, r *http.Request) {
+            portals := zonesMgr.GetAllPortals()
+            writeJSON(w, portals)
         })
         r.Post("/api/portals", func(w http.ResponseWriter, r *http.Request) {
-            if zonesMgr == nil {
-                http.Error(w, "zones manager not available", http.StatusServiceUnavailable)
-                return
-            }
             var portal zones.Portal
             if err := json.NewDecoder(r.Body).Decode(&portal); err != nil {
                 http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1660,16 +1694,27 @@ func main() {
         })
         r.Put("/api/portals/{id}", func(w http.ResponseWriter, r *http.Request) {
             id := chi.URLParam(r, "id")
-            if zonesMgr == nil {
-                http.Error(w, "zones manager not available", http.StatusServiceUnavailable)
-                return
-            }
             var portal zones.Portal
             if err := json.NewDecoder(r.Body).Decode(&portal); err != nil {
                 http.Error(w, err.Error(), http.StatusBadRequest)
                 return
             }
             portal.ID = id
+            if err := zonesMgr.UpdatePortal(&portal); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            writeJSON(w, portal)
+        })
+        r.Delete("/api/portals/{id}", func(w http.ResponseWriter, r *http.Request) {
+            id := chi.URLParam(r, "id")
+            if err := zonesMgr.DeletePortal(id); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            w.WriteHeader(http.StatusNoContent)
+        })
+    }
             if err := zonesMgr.UpdatePortal(&portal); err != nil {
                 http.Error(w, err.Error(), http.StatusInternalServerError)
                 return
@@ -2599,6 +2644,7 @@ func main() {
         }
 
         log.Printf("[INFO] Self-improving localization API registered at /api/localization/*")
+    }
 
     // Phase 6: Anomaly detection REST API
     if anomalyDetector != nil {
@@ -2807,7 +2853,61 @@ func main() {
         mdnsServer.Shutdown()
     }
 
+    // Persist zone occupancy for restart reconciliation
+    if zonesMgr != nil {
+        if err := zonesMgr.PersistOccupancy(); err != nil {
+            log.Printf("[WARN] Failed to persist zone occupancy on shutdown: %v", err)
+        } else {
+            log.Printf("[INFO] Zone occupancy persisted for restart recovery")
+        }
+    }
+
     log.Printf("[INFO] Shutdown complete")
+} // end main()
+
+// Dashboard zone state adapter
+
+type zoneStateAdapter struct {
+	mgr *zones.Manager
+}
+
+func (a *zoneStateAdapter) GetAllZones() []dashboard.ZoneSnapshot {
+	zones := a.mgr.GetAllZones()
+	result := make([]dashboard.ZoneSnapshot, 0, len(zones))
+	for _, z := range zones {
+		result = append(result, dashboard.ZoneSnapshot{
+			ID:    z.ID,
+			Name:  z.Name,
+			MinX:  z.MinX,
+			MinY:  z.MinY,
+			MinZ:  z.MinZ,
+			SizeX: z.MaxX - z.MinX,
+			SizeY: z.MaxY - z.MinY,
+			SizeZ: z.MaxZ - z.MinZ,
+		})
+	}
+	return result
+}
+
+func (a *zoneStateAdapter) GetOccupancy() map[string]dashboard.ZoneOccupancySnapshot {
+	occ := a.mgr.GetOccupancy()
+	result := make(map[string]dashboard.ZoneOccupancySnapshot, len(occ))
+	for id, o := range occ {
+		result[id] = dashboard.ZoneOccupancySnapshot{
+			Count:   o.Count,
+			BlobIDs: o.BlobIDs,
+		}
+	}
+	return result
+}
+
+func (a *zoneStateAdapter) GetOccupancyStatus() map[string]string {
+	status := a.mgr.GetOccupancyStatus()
+	result := make(map[string]string, len(status))
+	for id, s := range status {
+		result[id] = string(s)
+	}
+	return result
 }
 
 // Provider adapters for automation engine

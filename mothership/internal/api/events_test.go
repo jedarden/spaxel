@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spaxel/mothership/internal/eventbus"
 )
 
 // escapeFTS5 escapes special FTS5 characters in search queries.
@@ -425,15 +425,12 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	if len(page1.Events) != 30 {
 		t.Fatalf("page 1: got %d events, want 30", len(page1.Events))
 	}
-	if !page1.Cursor != 0 {
-		t.Fatal("page 1: expected has_more=true")
-	}
-	if page1.Cursor == "" {
-		t.Fatal("page 1: expected non-empty cursor")
+	if page1.Cursor == 0 {
+		t.Fatal("page 1: expected non-zero cursor")
 	}
 
 	// Page 2 using cursor
-	req = httptest.NewRequest("GET", "/api/events?limit=30&before="+page1.Cursor, nil)
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/events?limit=30&before=%d", page1.Cursor), nil)
 	w = httptest.NewRecorder()
 	h.listEvents(w, req)
 
@@ -453,7 +450,7 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	}
 
 	// Page 3
-	req = httptest.NewRequest("GET", "/api/events?limit=30&before="+page2.Cursor, nil)
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/events?limit=30&before=%d", page2.Cursor), nil)
 	w = httptest.NewRecorder()
 	h.listEvents(w, req)
 
@@ -465,7 +462,7 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	}
 
 	// Page 4 — should return remaining 10 events, no cursor
-	req = httptest.NewRequest("GET", "/api/events?limit=30&before="+page3.Cursor, nil)
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/events?limit=30&before=%d", page3.Cursor), nil)
 	w = httptest.NewRecorder()
 	h.listEvents(w, req)
 
@@ -478,9 +475,7 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	if page4.Cursor != 0 {
 		t.Error("page 4: expected has_more=false")
 	}
-	if page4.Cursor != "" {
-		t.Errorf("page 4: expected empty cursor, got %q", page4.Cursor)
-	}
+	
 
 	// Verify total across all pages
 	total := len(page1.Events) + len(page2.Events) + len(page3.Events) + len(page4.Events)
@@ -517,11 +512,11 @@ func TestListEvents_ConsistentPagination(t *testing.T) {
 
 	// Fetch same events via paginated requests
 	var paginated []*Event
-	cursor := ""
+	var cursor int64
 	for {
 		u := "/api/events?limit=10"
-		if cursor != "" {
-			u += "&before=" + cursor
+		if cursor != 0 {
+			u += fmt.Sprintf("&before=%d", cursor)
 		}
 		req := httptest.NewRequest("GET", u, nil)
 		w := httptest.NewRecorder()
@@ -531,7 +526,7 @@ func TestListEvents_ConsistentPagination(t *testing.T) {
 		json.NewDecoder(w.Body).Decode(&page)
 		paginated = append(paginated, page.Events...)
 		cursor = page.Cursor
-		if !page.Cursor != 0 {
+		if page.Cursor == 0 {
 			break
 		}
 	}
@@ -640,12 +635,12 @@ func TestListEvents_FTS5SearchPagination(t *testing.T) {
 	if len(page1.Events) != 10 {
 		t.Fatalf("page 1: got %d, want 10", len(page1.Events))
 	}
-	if !page1.Cursor != 0 {
+	if page1.Cursor == 0 {
 		t.Fatal("expected has_more=true")
 	}
 
 	// Page 2
-	req = httptest.NewRequest("GET", "/api/events?q=test&limit=10&before="+page1.Cursor, nil)
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/events?q=test&limit=10&before=%d", page1.Cursor), nil)
 	w = httptest.NewRecorder()
 	h.listEvents(w, req)
 
@@ -826,7 +821,7 @@ func TestRunArchive_NoOldEvents(t *testing.T) {
 	seedEvents(t, h, base, 10)
 
 	// Run archive — nothing should be archived (all recent)
-	h.runArchive(nil)
+	h.Archive(nil)
 
 	var count int
 	h.db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count)
@@ -858,7 +853,7 @@ func TestRunArchive_OldEvents(t *testing.T) {
 	}
 
 	// Run archive
-	h.runArchive(nil)
+	h.Archive(nil)
 
 	var eventCount, archiveCount int
 	h.db.QueryRow("SELECT COUNT(*) FROM events").Scan(&eventCount)

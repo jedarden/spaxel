@@ -14,6 +14,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// OccupancyStatus represents the confidence state of a zone's occupancy count.
+type OccupancyStatus string
+
+const (
+	OccupancyUncertain  OccupancyStatus = "uncertain"  // Restored from persisted data, not yet verified
+	OccupancyReconciled OccupancyStatus = "reconciled" // Verified against live blob counts
+)
+
 // ZoneType represents the type of zone for behavior customization.
 type ZoneType string
 
@@ -80,10 +88,11 @@ type CrossingEvent struct {
 
 // ZoneOccupancy tracks current occupancy per zone.
 type ZoneOccupancy struct {
-	ZoneID      string    `json:"zone_id"`
-	Count       int       `json:"count"`
-	BlobIDs     []int    `json:"blob_ids"`
-	LastUpdated time.Time `json:"last_updated"`
+	ZoneID      string          `json:"zone_id"`
+	Count       int             `json:"count"`
+	BlobIDs     []int           `json:"blob_ids"`
+	LastUpdated time.Time       `json:"last_updated"`
+	Status      OccupancyStatus `json:"status"` // uncertain or reconciled
 }
 
 // Manager handles zones, portals, and occupancy.
@@ -104,12 +113,19 @@ type Manager struct {
 	// Crossing detection state
 	blobSide      map[int]float64 // blobID -> which side of portal (>0 = A side, <0 = B side)
 
+	// Reconciliation state
+	startedAt    time.Time // time this session started
+	reconciled   bool      // whether initial reconciliation is complete
+	reconChecks  int       // consecutive checks where portal vs blob counts agree
+	reconDiscrep int       // consecutive checks where they disagree
+	tz           *time.Location
+
 	// Callbacks
 	onCrossing func(CrossingEvent)
 }
 
-// NewManager creates a new zones manager.
-func NewManager(dbPath string) (*Manager, error) {
+// NewManager creates a new zones manager. If tz is nil, UTC is used.
+func NewManager(dbPath string, tz *time.Location) (*Manager, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
@@ -117,8 +133,12 @@ func NewManager(dbPath string) (*Manager, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
-	 }
+	}
 	db.SetMaxOpenConns(1)
+
+	if tz == nil {
+		tz = time.UTC
+	}
 
 	m := &Manager{
 		db:            db,
@@ -130,7 +150,10 @@ func NewManager(dbPath string) (*Manager, error) {
 			ZoneID      string
 			LastUpdated time.Time
 		}),
-		blobSide:      make(map[int]float64),
+		blobSide:    make(map[int]float64),
+		startedAt:   time.Now(),
+		reconciled:  false,
+		tz:          tz,
 	}
 
 	if err := m.migrate(); err != nil {
@@ -145,6 +168,9 @@ func NewManager(dbPath string) (*Manager, error) {
 	if err := m.loadPortals(); err != nil {
 		log.Printf("[WARN] Failed to load portals: %v", err)
 	}
+
+	// Reconcile occupancy from persisted data + portal crossings since midnight
+	m.reconcileOccupancy()
 
 	return m, nil
 }
@@ -210,6 +236,10 @@ func (m *Manager) migrate() error {
 	// Add zone_type column if it doesn't exist (migration for existing databases)
 	m.db.Exec(`ALTER TABLE zones ADD COLUMN zone_type TEXT NOT NULL DEFAULT 'normal'`)
 	m.db.Exec(`ALTER TABLE zones ADD COLUMN is_children_zone INTEGER NOT NULL DEFAULT 0`)
+
+	// Add last_known_occupancy column for restart reconciliation
+	m.db.Exec(`ALTER TABLE zones ADD COLUMN last_known_occupancy INTEGER NOT NULL DEFAULT 0`)
+	m.db.Exec(`ALTER TABLE zones ADD COLUMN occupancy_updated_at INTEGER`)
 
 	return nil
 }
@@ -485,16 +515,19 @@ func (m *Manager) UpdateBlobPositions(blobs []struct {
 	for id, pos := range m.blobPositions {
 		if now.Sub(pos.LastUpdated) > 10*time.Second {
 			delete(m.blobPositions, id)
-			// Also remove from occupancy
-			for _, occ := range m.occupancy {
+			// Also remove from occupancy and persist
+			for zoneID, occ := range m.occupancy {
 				newBlobIDs := make([]int, 0)
 				for _, bid := range occ.BlobIDs {
 					if bid != id {
 						newBlobIDs = append(newBlobIDs, bid)
 					}
 				}
-				occ.BlobIDs = newBlobIDs
-				occ.Count = len(occ.BlobIDs)
+				if len(newBlobIDs) != len(occ.BlobIDs) {
+					occ.BlobIDs = newBlobIDs
+					occ.Count = len(occ.BlobIDs)
+					m.persistOccupancyCount(zoneID, occ.Count)
+				}
 			}
 		}
 	}
@@ -516,6 +549,7 @@ func (m *Manager) findZoneForPosition(x, y, z float64) string {
 }
 
 // updateOccupancy updates the occupancy count for a zone.
+// Persists the new count to SQLite for restart recovery.
 func (m *Manager) updateOccupancy(zoneID string, blobID int) {
 	occ, exists := m.occupancy[zoneID]
 	if !exists {
@@ -525,6 +559,7 @@ func (m *Manager) updateOccupancy(zoneID string, blobID int) {
 			Count:   1,
 		}
 		m.occupancy[zoneID] = occ
+		m.persistOccupancyCount(zoneID, 1)
 		return
 	}
 
@@ -537,6 +572,19 @@ func (m *Manager) updateOccupancy(zoneID string, blobID int) {
 
 	occ.BlobIDs = append(occ.BlobIDs, blobID)
 	occ.Count = len(occ.BlobIDs)
+	m.persistOccupancyCount(zoneID, occ.Count)
+}
+
+// persistOccupancyCount writes a single zone's occupancy to SQLite.
+// Caller must hold m.mu write lock.
+func (m *Manager) persistOccupancyCount(zoneID string, count int) {
+	nowMs := time.Now().UnixMilli()
+	_, err := m.db.Exec(`
+		UPDATE zones SET last_known_occupancy = ?, occupancy_updated_at = ? WHERE id = ?
+	`, count, nowMs, zoneID)
+	if err != nil {
+		log.Printf("[WARN] Failed to persist occupancy for zone %s: %v", zoneID, err)
+	}
 }
 
 // detectCrossings checks if a blob crossed any portals.
@@ -778,4 +826,247 @@ func (m *Manager) GetZoneByPosition(x, y, z float64) *Zone {
 		}
 	}
 	return nil
+}
+
+// ─── Occupancy Reconciliation ─────────────────────────────────────────────
+
+// reconcileOccupancy restores zone occupancy counts from persisted values
+// plus net portal crossings since midnight. Called once on startup.
+func (m *Manager) reconcileOccupancy() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, m.tz)
+	midnightMs := midnight.UnixMilli()
+
+	// Step 1: Load last_known_occupancy per zone
+	rows, err := m.db.Query(`SELECT id, last_known_occupancy FROM zones`)
+	if err != nil {
+		log.Printf("[WARN] Failed to load persisted occupancy: %v", err)
+		return
+	}
+	type persisted struct {
+		zoneID string
+		count  int
+	}
+	var persistedOcc []persisted
+	for rows.Next() {
+		var p persisted
+		if err := rows.Scan(&p.zoneID, &p.count); err != nil {
+			continue
+		}
+		persistedOcc = append(persistedOcc, p)
+	}
+	rows.Close()
+
+	// Step 2: Compute net portal crossings since midnight
+	crossRows, err := m.db.Query(`
+		SELECT zone_a_id, zone_b_id, direction, timestamp
+		FROM crossing_events
+		WHERE timestamp >= ?
+	`, midnightMs)
+	if err != nil {
+		log.Printf("[WARN] Failed to query portal crossings since midnight: %v", err)
+		return
+	}
+	defer crossRows.Close()
+
+	netPerZone := make(map[string]int)
+	for crossRows.Next() {
+		var zoneAID, zoneBID, direction string
+		var tsMs int64
+		if err := crossRows.Scan(&zoneAID, &zoneBID, &direction, &tsMs); err != nil {
+			continue
+		}
+		switch direction {
+		case "a_to_b", "1":
+			netPerZone[zoneBID]++
+			netPerZone[zoneAID]--
+		case "b_to_a", "-1":
+			netPerZone[zoneAID]++
+			netPerZone[zoneBID]--
+		}
+	}
+
+	// Step 3: Apply net crossings to loaded occupancy
+	anyRestored := false
+	for _, p := range persistedOcc {
+		if _, exists := m.zones[p.zoneID]; !exists {
+			continue
+		}
+		reconciled := p.count + netPerZone[p.zoneID]
+		if reconciled < 0 {
+			reconciled = 0
+		}
+		m.occupancy[p.zoneID] = &ZoneOccupancy{
+			ZoneID:      p.zoneID,
+			Count:       reconciled,
+			BlobIDs:     nil,
+			LastUpdated: now,
+			Status:      OccupancyUncertain,
+		}
+		if reconciled > 0 {
+			anyRestored = true
+			log.Printf("[INFO] Zone %s: restored occupancy %d (persisted %d + net crossings %+d)",
+				p.zoneID, reconciled, p.count, netPerZone[p.zoneID])
+		}
+	}
+
+	if anyRestored {
+		log.Printf("[INFO] Occupancy restored from persisted values (uncertain until verified)")
+	} else {
+		m.reconciled = true
+	}
+}
+
+// ReconcileTick should be called every ~30s for the first 60s of operation.
+// It compares portal-based occupancy against live blob counts per zone.
+// If they differ by >1 for 2 consecutive checks, blob count wins.
+// After 60s of live operation, marks all occupancies as reconciled.
+func (m *Manager) ReconcileTick() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	elapsed := time.Since(m.startedAt)
+
+	// Count blobs per zone from live positions
+	blobCounts := make(map[string]int)
+	for _, pos := range m.blobPositions {
+		if pos.ZoneID != "" {
+			blobCounts[pos.ZoneID]++
+		}
+	}
+
+	for zoneID, occ := range m.occupancy {
+		if occ.Status == OccupancyReconciled {
+			continue
+		}
+		blobCount := blobCounts[zoneID]
+		diff := occ.Count - blobCount
+		if diff < 0 {
+			diff = -diff
+		}
+
+		if diff > 1 {
+			m.reconDiscrep++
+			m.reconChecks = 0
+			if m.reconDiscrep >= 2 {
+				oldCount := occ.Count
+				occ.Count = blobCount
+				occ.BlobIDs = nil
+				occ.LastUpdated = time.Now()
+				log.Printf("[INFO] Zone %s: reconciling occupancy %d -> %d (blob count ground truth)",
+					zoneID, oldCount, blobCount)
+				m.reconDiscrep = 0
+			}
+		} else {
+			m.reconChecks++
+			m.reconDiscrep = 0
+			if m.reconChecks >= 2 {
+				occ.Status = OccupancyReconciled
+				occ.Count = blobCount
+				occ.BlobIDs = nil
+				occ.LastUpdated = time.Now()
+			}
+		}
+	}
+
+	// Also mark zones with no occupancy entry as reconciled
+	for zoneID := range m.zones {
+		if _, exists := m.occupancy[zoneID]; !exists {
+			m.occupancy[zoneID] = &ZoneOccupancy{
+				ZoneID:      zoneID,
+				Count:       0,
+				BlobIDs:     nil,
+				LastUpdated: time.Now(),
+				Status:      OccupancyReconciled,
+			}
+		}
+	}
+
+	// After 60s, force-reconcile everything
+	if elapsed >= 60*time.Second {
+		for _, occ := range m.occupancy {
+			if occ.Status == OccupancyUncertain {
+				occ.Status = OccupancyReconciled
+				occ.Count = blobCounts[occ.ZoneID]
+				occ.BlobIDs = nil
+				occ.LastUpdated = time.Now()
+			}
+		}
+		if !m.reconciled {
+			m.reconciled = true
+			log.Printf("[INFO] Occupancy reconciliation complete (60s elapsed)")
+		}
+		return
+	}
+
+	if !m.reconciled {
+		allReconciled := true
+		for _, occ := range m.occupancy {
+			if occ.Status != OccupancyReconciled {
+				allReconciled = false
+				break
+			}
+		}
+		if allReconciled && len(m.occupancy) > 0 {
+			m.reconciled = true
+			log.Printf("[INFO] Occupancy reconciliation complete (all zones verified)")
+		}
+	}
+}
+
+// PersistOccupancy writes current occupancy counts to SQLite for restart recovery.
+// Should be called on graceful shutdown and periodically.
+func (m *Manager) PersistOccupancy() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	nowMs := time.Now().UnixMilli()
+	for zoneID, occ := range m.occupancy {
+		_, err := m.db.Exec(`
+			UPDATE zones SET last_known_occupancy = ?, occupancy_updated_at = ? WHERE id = ?
+		`, occ.Count, nowMs, zoneID)
+		if err != nil {
+			return fmt.Errorf("persist occupancy for zone %s: %w", zoneID, err)
+		}
+	}
+	return nil
+}
+
+// PersistZoneOccupancy updates the persisted occupancy for a single zone.
+func (m *Manager) PersistZoneOccupancy(zoneID string) error {
+	m.mu.RLock()
+	occ, exists := m.occupancy[zoneID]
+	m.mu.RUnlock()
+
+	if !exists {
+		return nil
+	}
+
+	nowMs := time.Now().UnixMilli()
+	_, err := m.db.Exec(`
+		UPDATE zones SET last_known_occupancy = ?, occupancy_updated_at = ? WHERE id = ?
+	`, occ.Count, nowMs, zoneID)
+	return err
+}
+
+// IsReconciled returns whether the initial occupancy reconciliation is complete.
+func (m *Manager) IsReconciled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.reconciled
+}
+
+// GetOccupancyStatus returns the status map for all zones.
+func (m *Manager) GetOccupancyStatus() map[string]OccupancyStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make(map[string]OccupancyStatus, len(m.occupancy))
+	for id, occ := range m.occupancy {
+		result[id] = occ.Status
+	}
+	return result
 }

@@ -7,8 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi"
 	"github.com/spaxel/mothership/internal/volume"
 )
+
+// newTestRouter creates a chi.Router with the trigger routes registered.
+func newTestRouter(h *VolumeTriggersHandler) *chi.Mux {
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+	return r
+}
 
 // TestTestTriggerEndpoint tests POST /api/triggers/{id}/test.
 func TestTestTriggerEndpoint(t *testing.T) {
@@ -56,10 +64,11 @@ func TestTestTriggerEndpoint(t *testing.T) {
 	tg.Actions[0].Params["url"] = mockServer.URL
 	handler.store.Update(tg)
 
-	// Call test endpoint
+	// Call test endpoint via chi router
+	router := newTestRouter(handler)
 	req := httptest.NewRequest("POST", "/api/triggers/"+id+"/test", nil)
 	w := httptest.NewRecorder()
-	handler.testTrigger(w, req)
+	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -114,9 +123,10 @@ func TestTestTrigger_ReturnsErrorOnMissingURL(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	router := newTestRouter(handler)
 	req := httptest.NewRequest("POST", "/api/triggers/"+id+"/test", nil)
 	w := httptest.NewRecorder()
-	handler.testTrigger(w, req)
+	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -170,9 +180,10 @@ func TestTestTrigger_4xxInTestDoesNotDisable(t *testing.T) {
 	}
 
 	// Call test endpoint — 4xx from mock
+	router := newTestRouter(handler)
 	req := httptest.NewRequest("POST", "/api/triggers/"+id+"/test", nil)
 	w := httptest.NewRecorder()
-	handler.testTrigger(w, req)
+	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -259,7 +270,7 @@ func TestGetWebhookLogEndpoint(t *testing.T) {
 
 	now := time.Now().UnixMilli()
 	handler.store.WriteWebhookLog(id, "http://a.com", now, 200, 50, "")
-	handler.store.WriteWebhookLog(id, "http://b.com", now-1000, 500, "timeout")
+	handler.store.WriteWebhookLog(id, "http://b.com", now-1000, 500, 0, "timeout")
 
 	req := httptest.NewRequest("GET", "/api/triggers/"+id+"/webhook-log?limit=10", nil)
 	w := httptest.NewRecorder()

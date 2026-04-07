@@ -54,20 +54,22 @@ type snapshotCache struct {
 type ZoneStateProvider interface {
 	GetAllZones() []ZoneSnapshot
 	GetOccupancy() map[string]ZoneOccupancySnapshot
+	GetOccupancyStatus() map[string]string
 }
 
 // ZoneSnapshot is the wire format for a zone in the dashboard snapshot.
 type ZoneSnapshot struct {
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Count  int      `json:"count"`
-	People []string `json:"people"`
-	MinX   float64  `json:"x"`
-	MinY   float64  `json:"y"`
-	MinZ   float64  `json:"z"`
-	SizeX  float64  `json:"w"`
-	SizeY  float64  `json:"d"`
-	SizeZ  float64  `json:"h"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Count       int      `json:"count"`
+	People      []string `json:"people"`
+	MinX        float64  `json:"x"`
+	MinY        float64  `json:"y"`
+	MinZ        float64  `json:"z"`
+	SizeX       float64  `json:"w"`
+	SizeY       float64  `json:"d"`
+	SizeZ       float64  `json:"h"`
+	OccStatus   string   `json:"occ_status,omitempty"` // "uncertain" or "reconciled"
 }
 
 // ZoneOccupancySnapshot provides occupancy counts for zones.
@@ -499,15 +501,16 @@ func (h *Hub) buildSnapshot() map[string]interface{} {
 func (h *Hub) buildZoneSnapshots(zp ZoneStateProvider) []ZoneSnapshot {
 	zones := zp.GetAllZones()
 	occupancy := zp.GetOccupancy()
+	statusMap := zp.GetOccupancyStatus()
 	result := make([]ZoneSnapshot, 0, len(zones))
 	for _, z := range zones {
 		occ, ok := occupancy[z.ID]
 		people := make([]string, 0)
 		if ok {
-			// Blob IDs don't have names yet; leave people empty.
 			_ = occ.BlobIDs
 		}
-		result = append(result, ZoneSnapshot{
+		occStatus := statusMap[z.ID]
+		snap := ZoneSnapshot{
 			ID:     z.ID,
 			Name:   z.Name,
 			Count:  occ.Count,
@@ -518,7 +521,11 @@ func (h *Hub) buildZoneSnapshots(zp ZoneStateProvider) []ZoneSnapshot {
 			SizeX:  z.SizeX,
 			SizeY:  z.SizeY,
 			SizeZ:  z.SizeZ,
-		})
+		}
+		if occStatus == "uncertain" {
+			snap.OccStatus = "uncertain"
+		}
+		result = append(result, snap)
 	}
 	return result
 }

@@ -116,8 +116,49 @@ func (e *EventsHandler) migrate() error {
 		CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, timestamp_ms DESC);
 		CREATE INDEX IF NOT EXISTS idx_events_zone ON events(zone, timestamp_ms DESC);
 		CREATE INDEX IF NOT EXISTS idx_events_person ON events(person, timestamp_ms DESC);
+
+		CREATE TABLE IF NOT EXISTS events_archive (
+			id          INTEGER PRIMARY KEY,
+			timestamp_ms INTEGER NOT NULL,
+			type        TEXT    NOT NULL,
+			zone        TEXT,
+			person      TEXT,
+			blob_id     INTEGER,
+			detail_json TEXT,
+			severity    TEXT    NOT NULL DEFAULT 'info'
+		);
+		CREATE INDEX IF NOT EXISTS idx_events_archive_time ON events_archive(timestamp_ms DESC);
 	`)
 	return err
+}
+
+// Archive moves events older than 90 days (or the specified duration) to the archive table.
+// If retentionDays is nil, defaults to 90 days.
+func (e *EventsHandler) Archive(retentionDays *int) {
+	days := 90
+	if retentionDays != nil {
+		days = *retentionDays
+	}
+	cutoff := time.Now().AddDate(0, 0, -days).UnixNano() / 1e6
+
+	tx, err := e.db.Begin()
+	if err != nil {
+		log.Printf("[WARN] archive: begin tx: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	tx.Exec(`INSERT OR IGNORE INTO events_archive (id, timestamp_ms, type, zone, person, blob_id, detail_json, severity)
+		SELECT id, timestamp_ms, type, zone, person, blob_id, detail_json, severity
+		FROM events WHERE timestamp_ms < ?`, cutoff)
+	tx.Exec(`DELETE FROM events WHERE timestamp_ms < ?`, cutoff)
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("[WARN] archive: commit: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] events archived: removed events older than %d days", days)
 }
 
 // Close closes the database.
