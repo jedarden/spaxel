@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -1105,10 +1106,14 @@ func Test2xxResetsErrorCount(t *testing.T) {
 
 // TestTimeoutDoesNotDisable tests that request timeouts don't disable the trigger.
 func TestTimeoutDoesNotDisable(t *testing.T) {
-	// Mock server that never responds (will cause timeout)
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done()
-	}))
+	// Use a raw listener that accepts but never responds, then closes cleanly.
+	// httptest.Server.Close() blocks waiting for active connections, which
+	// causes the test to hang. A raw listener avoids this.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
 
 	handler, err := NewVolumeTriggersHandler(":memory:")
 	if err != nil {
@@ -1129,7 +1134,7 @@ func TestTimeoutDoesNotDisable(t *testing.T) {
 		Condition: "enter",
 		Enabled:  true,
 		Actions: []volume.Action{
-			{Type: "webhook", Params: map[string]interface{}{"url": mockServer.URL}},
+			{Type: "webhook", Params: map[string]interface{}{"url": "http://" + listener.Addr().String()}},
 		},
 	}
 
@@ -1148,11 +1153,6 @@ func TestTimeoutDoesNotDisable(t *testing.T) {
 
 	// Wait for the timeout to complete
 	time.Sleep(500 * time.Millisecond)
-
-	// Close the mock server before assertions so the blocked handler goroutine
-	// doesn't prevent the test from completing. The httptest.Server.Close()
-	// will shut down the listener, causing the blocked handler to return.
-	mockServer.Close()
 
 	tg, _ := handler.store.Get(id)
 	if !tg.Enabled {
