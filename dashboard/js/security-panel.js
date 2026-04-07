@@ -110,11 +110,11 @@
     }
 
     function fetchAnomalyCount() {
-        fetch(API.anomalyHistory + '?since=24h')
+        fetch(API.anomalyHistory + '?since=24h&limit=1')
             .then(res => res.json())
             .then(data => {
                 if (data.history && Array.isArray(data.history)) {
-                    _anomalyCount24h = data.history.length;
+                    _anomalyCount24h = data.total || data.history.length;
                     if (data.history.length > 0) {
                         _lastAnomaly = data.history[0];
                     }
@@ -232,8 +232,9 @@
                 progressEl.style.width = (_learningProgress * 100) + '%';
             }
             if (daysEl) {
-                const daysLeft = Math.ceil((1 - _learningProgress) * 7);
-                daysEl.textContent = daysLeft > 0 ? daysLeft + ' days remaining' : 'Almost ready...';
+                const daysComplete = Math.floor(_learningProgress * 7);
+                const daysTotal = 7;
+                daysEl.textContent = `${daysComplete} of ${daysTotal} days complete`;
             }
         } else {
             banner.classList.remove('visible');
@@ -297,6 +298,12 @@
                         <div class="stat-item">
                             <span class="stat-label">Last Event</span>
                             <span class="stat-value">${formatTimeAgo(_lastAnomaly.timestamp)}</span>
+                        </div>
+                        ` : ''}
+                        ${_lastAnomaly && _lastAnomaly.zone_name ? `
+                        <div class="stat-item stat-item-full">
+                            <span class="stat-label">Location</span>
+                            <span class="stat-value">${_lastAnomaly.zone_name}</span>
                         </div>
                         ` : ''}
                     </div>

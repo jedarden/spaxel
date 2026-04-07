@@ -226,6 +226,10 @@
     color: #eee;
 }
 
+.stat-item-full {
+    grid-column: 1 / -1;
+}
+
 .security-dialog-actions {
     display: flex;
     gap: 12px;

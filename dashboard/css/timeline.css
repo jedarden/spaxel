@@ -354,6 +354,11 @@
   --event-color-bg: rgba(74, 158, 255, 0.15);
 }
 
+.timeline-event[data-type="anomaly"] {
+  --event-color: #ff4757;
+  --event-color-bg: rgba(255, 71, 87, 0.15);
+}
+
 .timeline-event[data-type="anomaly_detected"] {
   --event-color: #ff4757;
   --event-color-bg: rgba(255, 71, 87, 0.15);
