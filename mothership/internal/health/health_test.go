@@ -36,7 +36,7 @@ func TestHealthCheckOK(t *testing.T) {
 	if resp.NodesOnline != 3 {
 		t.Errorf("expected nodes_online=3, got %d", resp.NodesOnline)
 	}
-	if resp.LoadLevel != 0 {
+	if resp.SheddingLevel != 0 {
 		t.Errorf("expected load_level=0, got %d", resp.LoadLevel)
 	}
 	if resp.UptimeS < 0 {
@@ -149,6 +149,53 @@ func TestHealthCheckLoadLevel3(t *testing.T) {
 	resp = checker.check("1.0.0")
 	if resp.Status != "degraded" {
 		t.Errorf("expected status=degraded after 60s level 3, got %s", resp.Status)
+	}
+}
+
+// TestHealthCheckSheddingLevelJSON tests that shedding_level is included in the
+// JSON response and reflects the shedder's current level.
+func TestHealthCheckSheddingLevelJSON(t *testing.T) {
+	tests := []struct {
+		name          string
+		shedLevel     loadshed.Level
+		wantLevel     int
+		wantStatus    string
+		wantDegraded  bool
+	}{
+		{"normal", loadshed.LevelNormal, 0, "ok", false},
+		{"light", loadshed.LevelLight, 1, "ok", false},
+		{"moderate", loadshed.LevelModerate, 2, "ok", false},
+		{"heavy_brief", loadshed.LevelHeavy, 3, "ok", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shedder := loadshed.New()
+			// Use the getShedLevel override to inject a specific level.
+			checker := New(Config{
+				DB:           &sql.DB{},
+				GetNodeCount: func() int { return 2 },
+				GetShedLevel: func() int { return tt.shedLevel },
+			})
+			checker.checkDB = func() string { return "ok" }
+
+			handler := checker.Handler("1.0.0")
+			req := httptest.NewRequest("GET", "/healthz", nil)
+			w := httptest.NewRecorder()
+			handler(w, req)
+
+			var resp Response
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode: %v", err)
+			}
+
+			if resp.SheddingLevel != tt.wantLevel {
+				t.Errorf("shedding_level = %d, want %d", resp.SheddingLevel, tt.wantLevel)
+			}
+			if resp.Status != tt.wantStatus {
+				t.Errorf("status = %q, want %q", resp.Status, tt.wantStatus)
+			}
+		})
 	}
 }
 

@@ -30,6 +30,7 @@ type Hub struct {
 	systemHealth    SystemHealthProvider
 	zoneState       ZoneStateProvider
 	eventStore      EventStore
+	securityState   SecurityStateProvider
 
 	// Pending events buffer — events accumulated between 10 Hz delta ticks.
 	pendingEvents   []map[string]interface{}
@@ -52,6 +53,7 @@ type snapshotCache struct {
 	bleJSON           []byte
 	triggersJSON      []byte
 	motionStatesJSON  []byte
+	securityJSON      []byte
 	confidence        int
 	timestampMs       int64
 }
@@ -139,6 +141,14 @@ type EventStore interface {
 	LogEvent(eventType string, timestamp time.Time, zone, person string, blobID int, detailJSON, severity string) error
 }
 
+// SecurityStateProvider provides security mode state for the dashboard snapshot.
+type SecurityStateProvider interface {
+	IsSecurityModeActive() bool
+	GetSecurityMode() string
+	GetLearningProgress() float64
+	IsModelReady() bool
+}
+
 // ZoneChangeBroadcaster notifies dashboard clients when zones or portals
 // are created, updated, or deleted via the REST API. Implementations should
 // both send an immediate typed broadcast and invalidate the snapshot cache
@@ -203,6 +213,13 @@ func (h *Hub) SetEventStore(store EventStore) {
 func (h *Hub) SetZoneState(state ZoneStateProvider) {
 	h.mu.Lock()
 	h.zoneState = state
+	h.mu.Unlock()
+}
+
+// SetSecurityState sets the security state provider for snapshot broadcasts.
+func (h *Hub) SetSecurityState(state SecurityStateProvider) {
+	h.mu.Lock()
+	h.securityState = state
 	h.mu.Unlock()
 }
 
@@ -440,15 +457,19 @@ func (h *Hub) BroadcastLocUpdate(blobs []tracking.Blob) {
 			trail[j] = trailPoint{pt[0], pt[1]}
 		}
 		wireBlobs[i] = blobJSON{
-			ID:     b.ID,
-			X:      b.X,
-			Z:      b.Z,
-			VX:     b.VX,
-			VZ:     b.VZ,
-			Weight: b.Weight,
-			Trail:  trail,
-			// Phase 6 identity fields (Posture, PersonID, etc.) omitted until
-			// tracking.Blob struct is extended.
+			ID:                 b.ID,
+			X:                  b.X,
+			Z:                  b.Z,
+			VX:                 b.VX,
+			VZ:                 b.VZ,
+			Weight:             b.Weight,
+			Trail:              trail,
+			Posture:            string(b.Posture),
+			PersonID:           b.PersonID,
+			PersonLabel:        b.PersonLabel,
+			PersonColor:        b.PersonColor,
+			IdentityConfidence: b.IdentityConfidence,
+			IdentitySource:     b.IdentitySource,
 		}
 	}
 
@@ -1080,6 +1101,18 @@ func (h *Hub) BroadcastLoadState(level int, label string) {
 		"severity":    "warning",
 		"description": "System load: " + label,
 		"load_level":  level,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastMorningSummary pushes a sleep morning summary card to all connected
+// dashboard clients. This is fired on the first connection after 6am when a
+// completed sleep session exists.
+func (h *Hub) BroadcastMorningSummary(summary map[string]interface{}) {
+	msg := map[string]interface{}{
+		"type":     "morning_summary",
+		"sleep":    summary,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)

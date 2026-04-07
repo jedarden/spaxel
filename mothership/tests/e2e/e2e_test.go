@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -54,10 +55,26 @@ func NewTestHarness(t *testing.T) *TestHarness {
 
 // Start starts the mothership process
 func (h *TestHarness) Start(ctx context.Context) error {
-	// Build mothership first
-	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", "/tmp/spaxel-mothership-test", "./cmd/mothership")
-	if output, err := buildCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to build mothership: %w: %s", err, string(output))
+	// Build mothership first, but only if binary doesn't exist
+	mothershipBin := "/tmp/spaxel-mothership-test"
+	if _, err := os.Stat(mothershipBin); os.IsNotExist(err) {
+		// Check if go is available
+		if _, err := exec.LookPath("go"); err == nil {
+			buildCmd := exec.CommandContext(ctx, "go", "build", "-o", mothershipBin, "./cmd/mothership")
+			if output, err := buildCmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to build mothership: %w: %s", err, string(output))
+			}
+		} else {
+			// Use the local mothership binary from the current directory
+			mothershipBin, err = os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get working directory: %w", err)
+			}
+			mothershipBin = filepath.Join(mothershipBin, "mothership")
+			if _, err := os.Stat(mothershipBin); os.IsNotExist(err) {
+				return fmt.Errorf("mothership binary not found at %s and go is not available", mothershipBin)
+			}
+		}
 	}
 
 	// Create temporary data directory
@@ -148,14 +165,22 @@ type HealthResponse struct {
 
 // RunSimulator starts the simulator
 func (h *TestHarness) RunSimulator(ctx context.Context, nodes, walkers, rate int, duration time.Duration) error {
-	// Build simulator
-	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", "/tmp/spaxel-sim-test", "./cmd/sim")
-	if output, err := buildCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to build simulator: %w: %s", err, string(output))
+	// Build simulator, but only if binary doesn't exist
+	simBin := "/tmp/spaxel-sim-test"
+	if _, err := os.Stat(simBin); os.IsNotExist(err) {
+		// Check if go is available
+		if _, err := exec.LookPath("go"); err == nil {
+			buildCmd := exec.CommandContext(ctx, "go", "build", "-o", simBin, "./cmd/sim")
+			if output, err := buildCmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to build simulator: %w: %s", err, string(output))
+			}
+		} else {
+			return fmt.Errorf("simulator binary not found at %s and go is not available", simBin)
+		}
 	}
 
 	// Start simulator
-	h.SimulatorCmd = exec.CommandContext(ctx, "/tmp/spaxel-sim-test",
+	h.SimulatorCmd = exec.CommandContext(ctx, simBin,
 		"--mothership", h.MothershipURL,
 		"--nodes", fmt.Sprintf("%d", nodes),
 		"--walkers", fmt.Sprintf("%d", walkers),

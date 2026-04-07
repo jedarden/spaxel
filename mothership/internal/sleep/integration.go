@@ -200,13 +200,15 @@ func (m *Monitor) runLoop() {
 	}
 }
 
-// collectSamples collects breathing and motion samples from all links
+// collectSamples collects breathing and motion samples from all links,
+// runs the session detection state machine, and tracks wake episodes.
 func (m *Monitor) collectSamples() {
 	m.mu.RLock()
 	pm := m.processorMgr
 	analyzer := m.analyzer
 	sleepStartHour := m.sleepStartHour
 	sleepEndHour := m.sleepEndHour
+	zoneMgr := m.zoneMgr
 	m.mu.RUnlock()
 
 	if pm == nil {
@@ -219,14 +221,9 @@ func (m *Monitor) collectSamples() {
 	// Check if we're in sleep hours
 	inSleepHours := false
 	if sleepStartHour > sleepEndHour {
-		// Window spans midnight
 		inSleepHours = hour >= sleepStartHour || hour < sleepEndHour
 	} else {
 		inSleepHours = hour >= sleepStartHour && hour < sleepEndHour
-	}
-
-	if !inSleepHours {
-		return
 	}
 
 	// Get all link states
@@ -241,24 +238,256 @@ func (m *Monitor) collectSamples() {
 		}
 		m.lastSample[state.LinkID] = now
 
-		// Create motion sample
-		motionSample := MotionSample{
-			Timestamp:      now,
-			DeltaRMS:       state.SmoothDeltaRMS,
-			MotionDetected: state.MotionDetected,
-		}
-		analyzer.ProcessMotion(state.LinkID, motionSample)
+		// Run session detection state machine
+		m.updateSessionState(state.LinkID, now, state.SmoothDeltaRMS, state.MotionDetected,
+			state.BreathingDetected, state.BreathingRate, zoneMgr)
 
-		// Create breathing sample
-		breathingSample := BreathingSample{
-			Timestamp:   now,
-			RateBPM:     state.BreathingRate,
-			Confidence:  state.AmbientConfidence,
-			IsDetected:  state.BreathingDetected,
-			HealthGated: false,
+		// Only feed samples to the analyzer if a session is confirmed
+		m.mu.RLock()
+		ls := m.linkSessionStates[state.LinkID]
+		m.mu.RUnlock()
+		if ls != nil && ls.State == SessionStateConfirmed {
+			// Create motion sample
+			motionSample := MotionSample{
+				Timestamp:      now,
+				DeltaRMS:       state.SmoothDeltaRMS,
+				MotionDetected: state.MotionDetected,
+			}
+			analyzer.ProcessMotion(state.LinkID, motionSample)
+
+			// Create breathing sample
+			breathingSample := BreathingSample{
+				Timestamp:   now,
+				RateBPM:     state.BreathingRate,
+				Confidence:  state.AmbientConfidence,
+				IsDetected:  state.BreathingDetected,
+				HealthGated: false,
+			}
+			analyzer.ProcessBreathing(state.LinkID, breathingSample)
 		}
-		analyzer.ProcessBreathing(state.LinkID, breathingSample)
 	}
+
+	// Check for session end conditions even outside sleep hours (e.g., person wakes at 6:50)
+	m.mu.Lock()
+	for linkID, ls := range m.linkSessionStates {
+		if ls.State == SessionStateConfirmed {
+			m.checkSessionEnd(linkID, now)
+		}
+	}
+	m.mu.Unlock()
+}
+
+// updateSessionState runs the session detection state machine for a link.
+// Session onset requires all of: in bedroom zone, stationary detection, for 15 consecutive minutes.
+// Session end requires: leaving bedroom zone, sustained motion > 2 min, or stationary loss > 30 min.
+func (m *Monitor) updateSessionState(linkID string, now time.Time,
+	smoothDeltaRMS float64, motionDetected, breathingDetected bool, breathingRate float64,
+	zoneMgr *zones.Manager) {
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ls, exists := m.linkSessionStates[linkID]
+	if !exists {
+		ls = &LinkSessionState{
+			State: SessionStateNone,
+		}
+		m.linkSessionStates[linkID] = ls
+	}
+
+	stationary := !motionDetected && smoothDeltaRMS < 0.03 && breathingDetected
+
+	switch ls.State {
+	case SessionStateNone:
+		// Check onset conditions: stationary in a bedroom zone
+		if stationary && m.isInBedroomZone(linkID, zoneMgr) {
+			ls.State = SessionStateTentative
+			ls.TentativeStartTime = now
+			ls.LastStationaryTime = now
+			ls.LastMotionTime = time.Time{}
+			log.Printf("[DEBUG] Sleep: tentative session for %s", linkID)
+		}
+
+	case SessionStateTentative:
+		if stationary {
+			ls.LastStationaryTime = now
+			ls.LastMotionTime = time.Time{}
+			// Check if 15-minute confirmation threshold met
+			if now.Sub(ls.TentativeStartTime) >= time.Duration(m.sessionConfirmMinutes)*time.Minute {
+				ls.State = SessionStateConfirmed
+				ls.ConfirmedStartTime = now
+				ls.SessionID = fmt.Sprintf("sleep-%s-%d", linkID, now.Unix())
+				log.Printf("[INFO] Sleep: session confirmed for %s after %.1f min",
+					linkID, now.Sub(ls.TentativeStartTime).Minutes())
+				// Fire session start callback
+				if m.onSessionStart != nil {
+					m.onSessionStart(events.SleepSessionStartEvent{
+						ZoneID:    ls.ZoneID,
+						PersonID:  ls.PersonID,
+						Timestamp: now,
+					})
+				}
+			}
+		} else {
+			// Motion detected — reset tentative if sustained motion > 2 min
+			if ls.LastMotionTime.IsZero() {
+				ls.LastMotionTime = now
+			} else if now.Sub(ls.LastMotionTime) >= time.Duration(m.wakeConfirmMinutes)*time.Minute {
+				// Sustained motion for > 2 min — cancel tentative
+				log.Printf("[DEBUG] Sleep: tentative session cancelled for %s (sustained motion)", linkID)
+				ls.State = SessionStateNone
+				ls.TentativeStartTime = time.Time{}
+				ls.LastMotionTime = time.Time{}
+			}
+		}
+
+	case SessionStateConfirmed:
+		if stationary {
+			ls.LastStationaryTime = now
+			ls.LastMotionTime = time.Time{}
+			ls.SustainedMotionStart = time.Time{}
+		} else if motionDetected && smoothDeltaRMS > WakeMotionThreshold {
+			ls.LastMotionTime = now
+			if ls.SustainedMotionStart.IsZero() {
+				ls.SustainedMotionStart = now
+			}
+		} else {
+			// Motion subsided — reset sustained motion timer
+			ls.SustainedMotionStart = time.Time{}
+		}
+	}
+}
+
+// checkSessionEnd evaluates end conditions for a confirmed session.
+func (m *Monitor) checkSessionEnd(linkID string, now time.Time) {
+	ls := m.linkSessionStates[linkID]
+	if ls == nil || ls.State != SessionStateConfirmed {
+		return
+	}
+
+	var ended bool
+	var reason string
+
+	// End condition 1: sustained motion > wakeConfirmMinutes
+	if !ls.SustainedMotionStart.IsZero() &&
+		now.Sub(ls.SustainedMotionStart) >= time.Duration(m.wakeConfirmMinutes)*time.Minute {
+		ended = true
+		reason = "sustained_motion"
+	}
+
+	// End condition 2: stationary detection dropped for > 30 minutes
+	// (person left room without portal crossing — reconciliation path)
+	if !ended && !ls.LastStationaryTime.IsZero() &&
+		now.Sub(ls.LastStationaryTime) > 30*time.Minute {
+		ended = true
+		reason = "stationary_lost"
+	}
+
+	// End condition 3: left bedroom zone (checked by zone transition events)
+
+	if ended {
+		log.Printf("[INFO] Sleep: session ended for %s (reason: %s, duration: %.1f min)",
+			linkID, reason, now.Sub(ls.ConfirmedStartTime).Minutes())
+		ls.State = SessionStateEnded
+
+		// Fire session end callback
+		if m.onSessionEnd != nil {
+			m.onSessionEnd(events.SleepSessionEndEvent{
+				ZoneID:        ls.ZoneID,
+				PersonID:      ls.PersonID,
+				StartTimestamp: ls.ConfirmedStartTime,
+				EndTimestamp:   now,
+				DurationMin:    now.Sub(ls.ConfirmedStartTime).Minutes(),
+			})
+		}
+	}
+}
+
+// isInBedroomZone checks if a link's detected blob is in a bedroom zone.
+// Returns true if any zone manager zone with zone_type='bedroom' has occupancy.
+func (m *Monitor) isInBedroomZone(linkID string, zoneMgr *zones.Manager) bool {
+	if zoneMgr == nil {
+		return false
+	}
+	allZones := zoneMgr.GetAllZones()
+	occupancy := zoneMgr.GetOccupancy()
+	for _, z := range allZones {
+		if z.ZoneType == zones.ZoneTypeBedroom && occupancy[z.ID] != nil && occupancy[z.ID].Count > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// NotifyZoneTransition is called when a zone transition event fires.
+// If the person leaves a bedroom zone, it ends any active sleep session for that link.
+func (m *Monitor) NotifyZoneTransition(linkID string, zoneID string, entered bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ls, exists := m.linkSessionStates[linkID]
+	if !exists || ls.State != SessionStateConfirmed {
+		return
+	}
+
+	if ls.ZoneID == zoneID && !entered {
+		// Person left the bedroom zone — end the session
+		now := time.Now()
+		log.Printf("[INFO] Sleep: session ended for %s (reason: left bedroom zone, duration: %.1f min)",
+			linkID, now.Sub(ls.ConfirmedStartTime).Minutes())
+		ls.State = SessionStateEnded
+
+		if m.onSessionEnd != nil {
+			m.onSessionEnd(events.SleepSessionEndEvent{
+				ZoneID:        ls.ZoneID,
+				PersonID:      ls.PersonID,
+				StartTimestamp: ls.ConfirmedStartTime,
+				EndTimestamp:   now,
+				DurationMin:    now.Sub(ls.ConfirmedStartTime).Minutes(),
+			})
+		}
+	}
+
+	// If the person entered a bedroom zone, update the tracking
+	if entered {
+		ls.ZoneID = zoneID
+		ls.InBedroomZone = true
+	}
+}
+
+// ShouldPushMorningSummary returns true if the morning summary should be pushed.
+// It fires only on the first connection after 6am AND after a sleep session has ended.
+func (m *Monitor) ShouldPushMorningSummary() (bool, *SleepReport) {
+	now := time.Now()
+	if now.Hour() < 6 {
+		return false, nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if we already pushed today
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if !m.morningSummaryPushed.IsZero() && m.morningSummaryPushed.After(today) {
+		return false, nil
+	}
+
+	// Check if any sessions ended today
+	for linkID, ls := range m.linkSessionStates {
+		if ls.State == SessionStateEnded {
+			session := m.analyzer.GetSession(linkID)
+			if session == nil {
+				continue
+			}
+			report := session.GenerateReport()
+			if report != nil && report.Metrics.TimeInBed > 0 {
+				m.morningSummaryPushed = now
+				return true, report
+			}
+		}
+	}
+
+	return false, nil
 }
 
 // checkReportGeneration checks if it's time to generate morning reports

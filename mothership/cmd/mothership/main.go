@@ -50,6 +50,7 @@ import (
 	"github.com/spaxel/mothership/internal/startup"
 	"github.com/spaxel/mothership/internal/volume"
 	"github.com/spaxel/mothership/internal/zones"
+	"github.com/spaxel/mothership/internal/auth"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 )
 
@@ -212,6 +213,19 @@ func main() {
 	startup.CheckTimeout(startupCtx)
 	log.Printf("[INFO] Main database at %s", filepath.Join(cfg.DataDir, "spaxel.db"))
 
+	// Events timeline handler (created early so fusion loop can log detection events)
+	eventsHandler := api.NewEventsHandlerFromDB(mainDB)
+	log.Printf("[INFO] Events handler initialized (shared DB)")
+
+	// Auth handler for PIN-based authentication and session management
+	authHandler, err := auth.NewHandler(auth.Config{DB: mainDB})
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to create auth handler: %v", err)
+	}
+	defer authHandler.Close()
+	authHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Auth handler registered at /api/auth/*")
+
 	// Create load shedder — single source of truth for load shedding state
 	shedder := loadshed.New()
 
@@ -237,6 +251,7 @@ func main() {
 	r.Get("/healthz", healthChecker.Handler(version))
 
     // Replay recording store
+    var replayStore api.RecordingStore
     if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
         log.Printf("[WARN] Failed to create data dir %s: %v", cfg.DataDir, err)
     } else {
@@ -246,6 +261,7 @@ func main() {
         } else {
             ingestSrv.SetReplayStore(store)
             defer store.Close()
+            replayStore = store
             log.Printf("[INFO] CSI replay store at %s (%d MB max)", filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB)
         }
     }
@@ -810,22 +826,24 @@ func main() {
             anomalyDetector.SetFeedbackStore(feedbackStore)
         }
 
+        // Wire security state into the dashboard hub for snapshot/delta broadcasts
+        dashboardHub.SetSecurityState(&securityStateAdapter{detector: anomalyDetector})
+
         // Set callback to broadcast anomalies to dashboard
         anomalyDetector.SetOnAnomaly(func(event events.AnomalyEvent) {
-            msg := map[string]interface{}{
-                "type":         "anomaly",
+            // Broadcast as typed anomaly_detected for dashboard alert handling
+            dashboardHub.BroadcastAnomaly(map[string]interface{}{
                 "id":           event.ID,
                 "anomaly_type": event.Type,
                 "score":        event.Score,
                 "description":  event.Description,
                 "zone_id":      event.ZoneID,
                 "zone_name":    event.ZoneName,
-                "timestamp":    event.Timestamp.Unix(),
-            }
-            data, _ := json.Marshal(msg)
-            dashboardHub.Broadcast(data)
+                "severity":     event.Severity,
+                "timestamp_ms": event.Timestamp.UnixMilli(),
+            })
 
-            // Broadcast as typed alert for dashboard alert handling
+            // Also broadcast as alert for the alert banner
             severity := "warning"
             if event.Score >= 0.85 {
                 severity = "critical"
@@ -833,18 +851,14 @@ func main() {
             dashboardHub.BroadcastAlert(event.ID, event.Timestamp, severity, event.Description, event.Acknowledged)
         })
 
-        // Set callback to broadcast security mode changes as alerts
+        // Set callback to broadcast security mode changes
         anomalyDetector.SetOnSecurityModeChange(func(oldMode, newMode analytics.SecurityMode, reason string) {
-            desc := "Security mode " + string(newMode)
-            if newMode == analytics.SecurityModeDisarmed {
-                desc = "Security mode disarmed"
-            }
-            severity := "warning"
-            if newMode == analytics.SecurityModeArmed {
-                severity = "critical"
-            }
-            alertID := "security-" + string(newMode) + "-" + time.Now().Format("20060102-150405")
-            dashboardHub.BroadcastAlert(alertID, time.Now(), severity, desc+" ("+reason+")", false)
+            dashboardHub.BroadcastSystemModeChange(map[string]interface{}{
+                "old_mode": string(oldMode),
+                "new_mode": string(newMode),
+                "reason":   reason,
+                "armed":    newMode != analytics.SecurityModeDisarmed,
+            })
         })
 
         // Load registered devices from BLE registry
@@ -1017,6 +1031,10 @@ func main() {
     }()
 
     // Phase 6: Periodic tracking + identity matching + fall detection
+    // Track last detection event time per blob for throttling (once per 5 seconds)
+    lastDetectionEvent := make(map[int]time.Time)
+    var lastDetectionEventMu sync.Mutex
+
     go func() {
         ticker := time.NewTicker(100 * time.Millisecond) // 10 Hz
         defer ticker.Stop()
@@ -1025,13 +1043,57 @@ func main() {
             case <-ctx.Done():
                 return
             case <-ticker.C:
-                // Get tracked blobs from fusion/tracker
+                shedder.BeginIteration()
+
+                // Stage 1: Get tracked blobs from fusion/tracker
+                st1 := shedder.BeginStage("fusion_track")
                 blobs := pm.GetTrackedBlobs()
+                shedder.EndStage(st1)
+
                 if len(blobs) == 0 {
+                    shedder.EndIteration()
                     continue
                 }
 
-                // Update identity matcher
+                // Log detection events for blobs (throttled to once per 5 seconds per blob)
+                for _, blob := range blobs {
+                    // Get zone name if available
+                    zoneName := ""
+                    if zonesMgr != nil {
+                        zoneName = zonesMgr.GetBlobZone(blob.ID)
+                    }
+
+                    // Get person ID if available
+                    personID := ""
+                    if identityMatcher != nil {
+                        if match := identityMatcher.GetMatch(blob.ID); match != nil {
+                            personID = match.PersonName
+                            if personID == "" {
+                                personID = match.PersonID
+                            }
+                        }
+                    }
+
+                    // Build detail JSON
+                    detail := map[string]interface{}{
+                        "x":         blob.X,
+                        "y":         blob.Y,
+                        "z":         blob.Z,
+                        "vx":        blob.VX,
+                        "vy":        blob.VY,
+                        "vz":        blob.VZ,
+                        "confidence": blob.Weight,
+                        "posture":   blob.Posture,
+                    }
+                    detailJSON, _ := json.Marshal(detail)
+
+                    // Log detection event with throttling (once per 5 seconds per blob)
+                    // This prevents flooding the events table while still providing visibility
+                    _ = eventsHandler.LogEvent("detection", time.Now(), zoneName, personID, blob.ID, string(detailJSON), "info")
+                }
+
+                // Stage 2: Update identity matcher
+                st2 := shedder.BeginStage("identity_match")
                 if identityMatcher != nil {
                     // Convert TrackedBlob to the anonymous struct expected by IdentityMatcher
                     matcherBlobs := make([]struct {
@@ -1166,16 +1228,20 @@ func main() {
                         explainabilityHandler.UpdateBlobs(blobSnapshots, linkStates, nil, identityMap)
                     }
                 }
+                shedder.EndStage(st2)
 
-                // Update zones occupancy
+                // Stage 3: Update zones occupancy
+                st3 := shedder.BeginStage("zone_occupancy")
                 if zonesMgr != nil {
                     for _, blob := range blobs {
                         zonesMgr.UpdateBlobPosition(blob.ID, blob.X, blob.Y, blob.Z)
                     }
                 }
+                shedder.EndStage(st3)
 
-                // Update flow analytics
-                if flowAccumulator != nil {
+                // Stage 4: Update flow analytics (suspended at load shed Level >= 1)
+                st4 := shedder.BeginStage("crowd_flow")
+                if flowAccumulator != nil && shedder.ShouldAccumulateCrowdFlow() {
                     for _, blob := range blobs {
                         // Get person ID from identity matcher
                         var personID string
@@ -1196,8 +1262,10 @@ func main() {
                         })
                     }
                 }
+                shedder.EndStage(st4)
 
-                // Run fall detection
+                // Stage 5: Fall detection
+                st5 := shedder.BeginStage("fall_detect")
                 for _, blob := range blobs {
                     fallDetector.Update([]struct {
                         ID      int
@@ -1206,6 +1274,7 @@ func main() {
                         Posture  string
                     }{{ID: blob.ID, X: blob.X, Y: blob.Y, Z: blob.Z, VX: blob.VX, VY: blob.VY, VZ: blob.VZ}}, time.Now())
                 }
+                shedder.EndStage(st5)
 
                 // Evaluate automations
                 if automationEngine != nil {
@@ -1300,6 +1369,7 @@ func main() {
                         }
                     }
                 }
+                shedder.EndIteration()
             }
         }
     }()
@@ -3062,7 +3132,7 @@ func main() {
     log.Printf("[INFO] Backup API registered at /api/backup")
 
     // Events timeline REST API (uses shared mainDB)
-    eventsHandler := api.NewEventsHandlerFromDB(mainDB)
+    // eventsHandler was created earlier to allow fusion loop to log detection events
     eventsHandler.SetHub(dashboardHub)
     eventsHandler.RegisterRoutes(r)
     log.Printf("[INFO] Events timeline API registered at /api/events/*")

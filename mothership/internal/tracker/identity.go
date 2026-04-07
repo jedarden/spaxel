@@ -223,3 +223,40 @@ func (tm *TrackManager) SetIdentityTTL(ttl time.Duration) {
 	defer tm.mu.Unlock()
 	tm.identityTTL = ttl
 }
+
+// UpdateIdentities updates blob identities from the identity provider.
+// This should be called after BLE position matching to apply identity information.
+func (tm *TrackManager) UpdateIdentities() {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if tm.identity == nil {
+		return
+	}
+
+	now := time.Now()
+
+	for i := range tm.blobs {
+		blob := &tm.blobs[i]
+		info := tm.identity.GetIdentity(blob.ID)
+
+		if info != nil {
+			tm.applyIdentity(blob, info, now)
+			tm.lastIdentities[blob.ID] = info
+		} else if lastInfo, hadIdentity := tm.lastIdentities[blob.ID]; hadIdentity {
+			// Check if identity should persist
+			if now.Sub(blob.IdentityLastSeen) < tm.identityTTL {
+				// Keep the identity
+				blob.PersonID = lastInfo.PersonID
+				blob.PersonLabel = lastInfo.PersonLabel
+				blob.PersonColor = lastInfo.PersonColor
+				blob.IdentityConfidence = lastInfo.IdentityConfidence * 0.9 // Decay slightly
+				blob.IdentitySource = "persistent"
+			} else {
+				// Identity expired
+				delete(tm.lastIdentities, blob.ID)
+				tm.clearIdentity(blob)
+			}
+		}
+	}
+}

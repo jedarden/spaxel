@@ -32,6 +32,8 @@ const (
 	EventTypeBaselineChanged  EventType = "baseline_changed"
 	EventTypeSystem           EventType = "system"
 	EventTypeLearningMilestone EventType = "learning_milestone"
+	EventTypeSleepStart       EventType = "sleep_session_start"
+	EventTypeSleepEnd         EventType = "sleep_session_end"
 )
 
 // EventSeverity represents the severity level of an event.

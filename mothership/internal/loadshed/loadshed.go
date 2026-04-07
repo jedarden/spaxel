@@ -192,6 +192,7 @@ func (s *Shedder) BeginStage(name string) Stage {
 	st := Stage{Name: name, start: time.Now()}
 	if s.stageIdx < len(s.stages) {
 		s.stages[s.stageIdx] = st
+		s.stageIdx++
 	}
 	return st
 }
@@ -323,6 +324,9 @@ func (s *Shedder) rollingAvg() time.Duration {
 	n := s.durationsFilled
 	if n == 0 {
 		return 0
+	}
+	if n > rollingWindowSize {
+		n = rollingWindowSize
 	}
 	var sum time.Duration
 	for i := 0; i < n; i++ {

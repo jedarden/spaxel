@@ -191,11 +191,11 @@ done
 log_info "Step 3: Checking auth setup..."
 
 # Try to check auth status, but continue even if endpoint doesn't exist
-auth_status=$(curl -sS "http://localhost:$MOTHERSHIP_PORT/api/auth/status" 2>/dev/null || echo "")
 http_code=$(curl -sS -o /dev/null -w "%{http_code}" "http://localhost:$MOTHERSHIP_PORT/api/auth/status" 2>/dev/null || echo "000")
 
 # Only proceed with auth setup if endpoint exists (HTTP 200, not 404)
-if [ "$http_code" = "200" ] && [ -n "$auth_status" ]; then
+if [ "$http_code" = "200" ]; then
+    auth_status=$(curl -sS "http://localhost:$MOTHERSHIP_PORT/api/auth/status" 2>/dev/null || echo "")
     pin_configured=$(json_field "$auth_status" ".pin_configured // false")
 
     if [ "$pin_configured" = "false" ]; then

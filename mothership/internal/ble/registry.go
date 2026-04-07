@@ -59,6 +59,7 @@ type DeviceRecord struct {
 	MfrDataHex   string     `json:"mfr_data_hex"`   // Raw manufacturer data (hex)
 	PersonID     string     `json:"person_id"`      // FK to people.id
 	PersonName   string     `json:"person_name"`    // Person name (joined from people)
+	PersonColor  string     `json:"person_color"`   // Person's color (joined from people)
 	RSSIMin      int        `json:"rssi_min"`       // Min RSSI observed
 	RSSIMax      int        `json:"rssi_max"`       // Max RSSI observed
 	RSSIAvg      int        `json:"rssi_avg"`       // Average RSSI
@@ -521,6 +522,7 @@ func (r *Registry) GetDevices(includeArchived bool) ([]DeviceRecord, error) {
 	query := `
 		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
 		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       COALESCE(p.color, '#6b7280'),
 		       d.rssi_min, d.rssi_max, d.rssi_avg,
 		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
 		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
@@ -555,6 +557,7 @@ func (r *Registry) GetDevice(mac string) (*DeviceRecord, error) {
 	row := r.db.QueryRow(`
 		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
 		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       COALESCE(p.color, '#6b7280'),
 		       d.rssi_min, d.rssi_max, d.rssi_avg,
 		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
 		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
@@ -570,6 +573,7 @@ func (r *Registry) GetRegisteredDevices(includeArchived bool) ([]DeviceRecord, e
 	query := `
 		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
 		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       COALESCE(p.color, '#6b7280'),
 		       d.rssi_min, d.rssi_max, d.rssi_avg,
 		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
 		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
@@ -605,6 +609,7 @@ func (r *Registry) GetDiscoveredDevices(includeArchived bool) ([]DeviceRecord, e
 	query := `
 		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
 		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       COALESCE(p.color, '#6b7280'),
 		       d.rssi_min, d.rssi_max, d.rssi_avg,
 		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
 		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
@@ -744,6 +749,7 @@ func (r *Registry) GetDevicesSeenInHours(hours int, includeArchived bool) ([]Dev
 	query := `
 		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
 		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+		       COALESCE(p.color, '#6b7280'),
 		       d.rssi_min, d.rssi_max, d.rssi_avg,
 		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
 		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
@@ -894,6 +900,7 @@ func (r *Registry) GetPersonDevices(personID string) ([]DeviceRecord, error) {
 	rows, err := r.db.Query(`
 		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
 		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+			       COALESCE(p.color, '#6b7280'),
 		       d.rssi_min, d.rssi_max, d.rssi_avg,
 		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
 		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time
@@ -1080,6 +1087,7 @@ func (r *Registry) GetAllPersonDevices() ([]DeviceRecord, error) {
 	rows, err := r.db.Query(`
 		SELECT d.mac, d.name, d.label, d.manufacturer, d.device_type, d.device_name,
 		       d.mfr_id, d.mfr_data_hex, d.person_id, COALESCE(p.name, ''),
+			       COALESCE(p.color, '#6b7280'),
 		       d.rssi_min, d.rssi_max, d.rssi_avg,
 		       d.first_seen_at, d.last_seen_at, d.last_seen_node, d.is_archived, d.is_wearable, d.enabled,
 		       d.last_x, d.last_y, d.last_z, d.last_confidence, d.last_loc_time

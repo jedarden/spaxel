@@ -565,6 +565,13 @@ type TrackedBlob struct {
 	X, Y, Z  float64
 	VX, VY, VZ float64
 	Weight   float64
+	// Identity fields (populated by BLE-to-blob matching)
+	PersonID           string  `json:"person_id,omitempty"`
+	PersonLabel        string  `json:"person_label,omitempty"`
+	PersonColor        string  `json:"person_color,omitempty"`
+	IdentityConfidence float64 `json:"identity_confidence,omitempty"`
+	IdentitySource     string  `json:"identity_source,omitempty"`
+	Posture            string  `json:"posture,omitempty"`
 }
 
 // SetTrackedBlobs stores the latest tracked blobs from the fusion engine.
