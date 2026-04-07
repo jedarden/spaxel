@@ -320,7 +320,7 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		response.Cursor = nextCursor
 	}
 
-	writeJSON(w, response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (e *EventsHandler) getEvent(w http.ResponseWriter, r *http.Request) {
@@ -346,5 +346,5 @@ func (e *EventsHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, event)
+	writeJSON(w, http.StatusOK, event)
 }

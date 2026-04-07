@@ -165,7 +165,7 @@ func (t *TriggersHandler) listTriggers(w http.ResponseWriter, r *http.Request) {
 	}
 	t.mu.RUnlock()
 
-	writeJSON(w, triggers)
+	writeJSON(w, http.StatusOK, triggers)
 }
 
 type createTriggerRequest struct {
@@ -245,8 +245,7 @@ func (t *TriggersHandler) createTrigger(w http.ResponseWriter, r *http.Request) 
 	}
 	t.mu.Unlock()
 
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, t.triggers[req.ID])
+	writeJSON(w, http.StatusCreated, t.triggers[req.ID])
 }
 
 type updateTriggerRequest struct {
@@ -317,7 +316,7 @@ func (t *TriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if len(updates) == 0 {
-		writeJSON(w, trigger)
+		writeJSON(w, http.StatusOK, trigger)
 		return
 	}
 
@@ -352,7 +351,7 @@ func (t *TriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Request) 
 	}
 	t.mu.Unlock()
 
-	writeJSON(w, trigger)
+	writeJSON(w, http.StatusOK, trigger)
 }
 
 func (t *TriggersHandler) deleteTrigger(w http.ResponseWriter, r *http.Request) {
@@ -398,7 +397,7 @@ func (t *TriggersHandler) testTrigger(w http.ResponseWriter, r *http.Request) {
 	t.mu.RUnlock()
 
 	if engine == nil {
-		writeJSON(w, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"status":  "ok",
 			"message": "trigger test simulated (no engine attached)",
 			"trigger": trigger,
@@ -411,7 +410,7 @@ func (t *TriggersHandler) testTrigger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "fired",
 		"message": "Trigger fired successfully",
 		"trigger": trigger,

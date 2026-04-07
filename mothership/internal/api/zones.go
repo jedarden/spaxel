@@ -2,453 +2,385 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi"
-	_ "modernc.org/sqlite"
+	"github.com/spaxel/mothership/internal/zones"
 )
 
-// ZonesHandler manages zones and portals.
+// ZonesHandler manages zones and portals via the zones.Manager.
+// Changes to zones and portals are automatically reflected in the live 3D view
+// within one WebSocket cycle because the dashboard hub polls the manager at 10 Hz.
 type ZonesHandler struct {
-	mu      sync.RWMutex
-	db      *sql.DB
-	zones   map[string]*Zone
-	portals map[string]*Portal
+	mu  sync.RWMutex
+	mgr *zones.Manager
 }
 
-// Zone represents a spatial region.
-type Zone struct {
-	ID             string    `json:"id"`
-	Name           string    `json:"name"`
-	X               float64   `json:"x"`
-	Y               float64   `json:"y"`
-	Z               float64   `json:"z"`
-	W               float64   `json:"w"`
-	D               float64   `json:"d"`
-	H               float64   `json:"h"`
-	ZoneType       string    `json:"zone_type"`
-	Occupancy      int       `json:"occupancy"`
-	People         []string  `json:"people"`
-	CreatedAt      time.Time `json:"created_at"`
+// zoneWithOcc extends a zone with current occupancy and people list for API responses.
+type zoneWithOcc struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Color     string    `json:"color,omitempty"`
+	MinX      float64   `json:"x"`
+	MinY      float64   `json:"y"`
+	MinZ      float64   `json:"z"`
+	MaxX      float64   `json:"max_x"`
+	MaxY      float64   `json:"max_y"`
+	MaxZ      float64   `json:"max_z"`
+	Width     float64   `json:"w"`
+	Depth     float64   `json:"d"`
+	Height    float64   `json:"h"`
+	Enabled   bool      `json:"enabled"`
+	ZoneType  string    `json:"zone_type"`
+	Occupancy int       `json:"occupancy"`
+	People    []string  `json:"people"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
-// Portal represents a doorway between zones.
-type Portal struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	ZoneA           string    `json:"zone_a"`
-	ZoneB           string    `json:"zone_b"`
-	Points          [2][2]float64 `json:"points"` // [[x1,y1], [x2,y2]]
-	Crossings       int       `json:"crossings"`
-	CreatedAt       time.Time `json:"created_at"`
+// portalWithZones extends a portal with resolved zone names for API responses.
+type portalWithZones struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	ZoneA     string    `json:"zone_a"`
+	ZoneB     string    `json:"zone_b"`
+	P1X       float64   `json:"p1_x"`
+	P1Y       float64   `json:"p1_y"`
+	P1Z       float64   `json:"p1_z"`
+	P2X       float64   `json:"p2_x"`
+	P2Y       float64   `json:"p2_y"`
+	P2Z       float64   `json:"p2_z"`
+	P3X       float64   `json:"p3_x"`
+	P3Y       float64   `json:"p3_y"`
+	P3Z       float64   `json:"p3_z"`
+	NX        float64   `json:"n_x"`
+	NY        float64   `json:"n_y"`
+	NZ        float64   `json:"n_z"`
+	Width     float64   `json:"width"`
+	Height    float64   `json:"height"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
-// NewZonesHandler creates a new zones handler.
-func NewZonesHandler(dbPath string) (*ZonesHandler, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		return nil, err
-	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(1)
-
-	z := &ZonesHandler{
-		db:      db,
-		zones:   make(map[string]*Zone),
-		portals: make(map[string]*Portal),
-	}
-
-	if err := z.migrate(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	if err := z.loadZones(); err != nil {
-		log.Printf("[WARN] Failed to load zones: %v", err)
-	}
-	if err := z.loadPortals(); err != nil {
-		log.Printf("[WARN] Failed to load portals: %v", err)
-	}
-
-	return z, nil
+// crossingResponse is a single crossing event as returned by the API.
+type crossingResponse struct {
+	ID        int64     `json:"id"`
+	PortalID  string    `json:"portal_id"`
+	BlobID    int       `json:"blob_id"`
+	Direction string    `json:"direction"`
+	FromZone  string    `json:"from_zone"`
+	ToZone    string    `json:"to_zone"`
+	Timestamp time.Time `json:"timestamp"`
+	Person    string    `json:"person,omitempty"`
 }
 
-func (z *ZonesHandler) migrate() error {
-	_, err := z.db.Exec(`
-		CREATE TABLE IF NOT EXISTS zones (
-			id         TEXT PRIMARY KEY,
-			name       TEXT    NOT NULL,
-			x          REAL    NOT NULL DEFAULT 0,
-			y          REAL    NOT NULL DEFAULT 0,
-			z          REAL    NOT NULL DEFAULT 0,
-			w          REAL    NOT NULL DEFAULT 1,
-			d          REAL    NOT NULL DEFAULT 1,
-			h          REAL    NOT NULL DEFAULT 1,
-			zone_type  TEXT    NOT NULL DEFAULT 'general',
-			created_at INTEGER NOT NULL DEFAULT 0
-		);
-
-		CREATE TABLE IF NOT EXISTS portals (
-			id          TEXT PRIMARY KEY,
-			name        TEXT    NOT NULL DEFAULT '',
-			zone_a_id   TEXT    NOT NULL DEFAULT '',
-			zone_b_id   TEXT    NOT NULL DEFAULT '',
-			points_json TEXT    NOT NULL DEFAULT '[]',
-			created_at INTEGER NOT NULL DEFAULT 0
-		);
-
-		CREATE TABLE IF NOT EXISTS portal_crossings (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			portal_id   TEXT    NOT NULL,
-			timestamp_ms INTEGER NOT NULL,
-			direction   TEXT    NOT NULL,
-			blob_id     INTEGER,
-			person      TEXT    DEFAULT '',
-			FOREIGN KEY (portal_id) REFERENCES portals(id) ON DELETE CASCADE
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_portal_crossings_portal ON portal_crossings(portal_id);
-		CREATE INDEX IF NOT EXISTS idx_portal_crossings_time ON portal_crossings(timestamp_ms);
-	`)
-	return err
+// NewZonesHandler creates a new zones handler backed by a zones.Manager.
+func NewZonesHandler(mgr *zones.Manager) *ZonesHandler {
+	return &ZonesHandler{mgr: mgr}
 }
 
-func (z *ZonesHandler) loadZones() error {
-	rows, err := z.db.Query(`SELECT id, name, x, y, z, w, d, h, zone_type, created_at FROM zones`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var zone Zone
-		var createdNS int64
-		if err := rows.Scan(&zone.ID, &zone.Name, &zone.X, &zone.Y, &zone.Z,
-			&zone.W, &zone.D, &zone.H, &zone.ZoneType, &createdNS); err != nil {
-			continue
-		}
-		zone.CreatedAt = time.Unix(0, createdNS)
-		zone.People = []string{}
-		z.zones[zone.ID] = &zone
-	}
-	return nil
-}
-
-func (z *ZonesHandler) loadPortals() error {
-	rows, err := z.db.Query(`SELECT id, name, zone_a_id, zone_b_id, points_json, created_at FROM portals`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var portal Portal
-		var pointsJSON string
-		var createdNS int64
-		if err := rows.Scan(&portal.ID, &portal.Name, &portal.ZoneA, &portal.ZoneB,
-			&pointsJSON, &createdNS); err != nil {
-			continue
-		}
-
-		if err := json.Unmarshal([]byte(pointsJSON), &portal.Points); err != nil {
-			log.Printf("[WARN] Failed to parse portal points: %v", err)
-			continue
-		}
-
-		portal.CreatedAt = time.Unix(0, createdNS)
-		z.portals[portal.ID] = &portal
-	}
-	return nil
-}
-
-// Close closes the database.
-func (z *ZonesHandler) Close() error {
-	return z.db.Close()
+// Close closes the underlying manager.
+func (h *ZonesHandler) Close() error {
+	return h.mgr.Close()
 }
 
 // RegisterRoutes registers zones and portals endpoints.
 //
 // Zones:
-//   GET  /api/zones              — list all zones
-//   POST /api/zones              — create zone
-//   PUT  /api/zones/{id}         — update zone
-//   DELETE /api/zones/{id}       — delete zone
-//   GET  /api/zones/{id}/history — zone occupancy history
+//
+//	GET /api/zones
+//
+//	@Summary		List all zones
+//		@Description	Returns all defined spatial zones with current occupancy counts.
+//	@Tags			zones
+//	@Produce		json
+//	@Success		200	{array}		zoneWithOcc	"List of zones"
+//	@Router			/api/zones [get]
+//
+//	POST /api/zones
+//
+//	@Summary		Create a zone
+//	@Description	Creates a new spatial zone. If no ID is provided, one is auto-generated.
+//	@Tags			zones
+//	@Accept			json
+//	@Produce		json
+//	@Param			zone	body		zones.Zone	true	"Zone definition"
+//	@Success		201	{object}	zones.Zone	"Created zone"
+//	@Failure		400	{object}	map[string]string	"Invalid request body"
+//	@Router			/api/zones [post]
+//
+//	PUT /api/zones/{id}
+//
+//	@Summary		Update a zone
+//	@Description	Updates an existing zone's properties. All fields are replaced.
+//	@Tags			zones
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string		true	"Zone ID"
+//	@Param			zone	body		zones.Zone	true	"Updated zone definition"
+//	@Success		200	{object}	zones.Zone	"Updated zone"
+//	@Failure		404	{object}	map[string]string	"Zone not found"
+//	@Router			/api/zones/{id} [put]
+//
+//	DELETE /api/zones/{id}
+//
+//	@Summary		Delete a zone
+//	@Description	Deletes a zone and removes it from the floor plan.
+//	@Tags			zones
+//	@Param			id		path		string	true	"Zone ID"
+//	@Success		204		"Zone deleted"
+//	@Router			/api/zones/{id} [delete]
+//
+//	GET /api/zones/{id}/history
+//
+//	@Summary		Zone occupancy history
+//	@Description	Returns hourly occupancy history for a zone.
+//	@Tags			zones
+//	@Produce		json
+//	@Param			id		path		string	true	"Zone ID"
+//	@Param			period	query		string	false	"Time period: 24h (default), 7d, 30d"
+//	@Success		200	{array}		historyEntry	"Hourly occupancy buckets"
+//	@Failure		404	{object}	map[string]string	"Zone not found"
+//	@Router			/api/zones/{id}/history [get]
 //
 // Portals:
-//   GET  /api/portals            — list all portals
-//   POST /api/portals            — create portal
-//   PUT  /api/portals/{id}       — update
-//   DELETE /api/portals/{id}     — delete
-//   GET  /api/portals/{id}/crossings — portal crossing log
-func (z *ZonesHandler) RegisterRoutes(r chi.Router) {
+//
+//	GET /api/portals
+//
+//	@Summary		List all portals
+//	@Description	Returns all doorway portals with computed normal vectors.
+//	@Tags			portals
+//	@Produce		json
+//	@Success		200	{array}		portalWithZones	"List of portals"
+//	@Router			/api/portals [get]
+//
+//	POST /api/portals
+//
+//	@Summary		Create a portal
+//	@Description	Creates a new doorway portal between two zones. Normal vector is auto-computed from the three defining points.
+//	@Tags			portals
+//	@Accept			json
+//	@Produce		json
+//	@Param			portal	body		zones.Portal	true	"Portal definition"
+//	@Success		201	{object}	zones.Portal	"Created portal"
+//	@Failure		400	{object}	map[string]string	"Invalid request body"
+//	@Router			/api/portals [post]
+//
+//	PUT /api/portals/{id}
+//
+//	@Summary		Update a portal
+//	@Description	Updates an existing portal's properties. Normal vector is recomputed if points change.
+//	@Tags			portals
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string		true	"Portal ID"
+//	@Param			portal	body		zones.Portal	true	"Updated portal definition"
+//	@Success		200	{object}	zones.Portal	"Updated portal"
+//	@Failure		404	{object}	map[string]string	"Portal not found"
+//	@Router			/api/portals/{id} [put]
+//
+//	DELETE /api/portals/{id}
+//
+//	@Summary		Delete a portal
+//	@Description	Deletes a portal and its crossing history.
+//	@Tags			portals
+//	@Param			id		path		string	true	"Portal ID"
+//	@Success		204		"Portal deleted"
+//	@Router			/api/portals/{id} [delete]
+//
+//	GET /api/portals/{id}/crossings
+//
+//	@Summary		Portal crossing log
+//	@Description	Returns recent directional crossings for a portal.
+//	@Tags			portals
+//	@Produce		json
+//	@Param			id		path		string	true	"Portal ID"
+//	@Param			limit	query		int		false	"Max crossings to return (default: 50)"
+//	@Success		200	{array}		crossingResponse	"Crossing events"
+//	@Failure		404	{object}	map[string]string	"Portal not found"
+//	@Router			/api/portals/{id}/crossings [get]
+func (h *ZonesHandler) RegisterRoutes(r chi.Router) {
 	// Zones
-	r.Get("/api/zones", z.listZones)
-	r.Post("/api/zones", z.createZone)
-	r.Put("/api/zones/{id}", z.updateZone)
-	r.Delete("/api/zones/{id}", z.deleteZone)
-	r.Get("/api/zones/{id}/history", z.getZoneHistory)
+	r.Get("/api/zones", h.listZones)
+	r.Post("/api/zones", h.createZone)
+	r.Put("/api/zones/{id}", h.updateZone)
+	r.Delete("/api/zones/{id}", h.deleteZone)
+	r.Get("/api/zones/{id}/history", h.getZoneHistory)
 
 	// Portals
-	r.Get("/api/portals", z.listPortals)
-	r.Post("/api/portals", z.createPortal)
-	r.Put("/api/portals/{id}", z.updatePortal)
-	r.Delete("/api/portals/{id}", z.deletePortal)
-	r.Get("/api/portals/{id}/crossings", z.getPortalCrossings)
+	r.Get("/api/portals", h.listPortals)
+	r.Post("/api/portals", h.createPortal)
+	r.Put("/api/portals/{id}", h.updatePortal)
+	r.Delete("/api/portals/{id}", h.deletePortal)
+	r.Get("/api/portals/{id}/crossings", h.getPortalCrossings)
+}
+
+// toZoneResponse converts a zones.Zone to the API response format with occupancy.
+func (h *ZonesHandler) toZoneResponse(z *zones.Zone) zoneWithOcc {
+	occ := h.mgr.GetZoneOccupancy(z.ID)
+	count := 0
+	if occ != nil {
+		count = occ.Count
+	}
+	return zoneWithOcc{
+		ID:        z.ID,
+		Name:      z.Name,
+		Color:     z.Color,
+		MinX:      z.MinX,
+		MinY:      z.MinY,
+		MinZ:      z.MinZ,
+		MaxX:      z.MaxX,
+		MaxY:      z.MaxY,
+		MaxZ:      z.MaxZ,
+		Width:     z.MaxX - z.MinX,
+		Depth:     z.MaxY - z.MinY,
+		Height:    z.MaxZ - z.MinZ,
+		Enabled:   z.Enabled,
+		ZoneType:  string(z.ZoneType),
+		Occupancy: count,
+		People:    []string{},
+		CreatedAt: z.CreatedAt,
+	}
+}
+
+// toPortalResponse converts a zones.Portal to the API response format.
+func toPortalResponse(p *zones.Portal) portalWithZones {
+	return portalWithZones{
+		ID:        p.ID,
+		Name:      p.Name,
+		ZoneA:     p.ZoneAID,
+		ZoneB:     p.ZoneBID,
+		P1X:       p.P1X,
+		P1Y:       p.P1Y,
+		P1Z:       p.P1Z,
+		P2X:       p.P2X,
+		P2Y:       p.P2Y,
+		P2Z:       p.P2Z,
+		P3X:       p.P3X,
+		P3Y:       p.P3Y,
+		P3Z:       p.P3Z,
+		NX:        p.NX,
+		NY:        p.NY,
+		NZ:        p.NZ,
+		Width:     p.Width,
+		Height:    p.Height,
+		Enabled:   p.Enabled,
+		CreatedAt: p.CreatedAt,
+	}
 }
 
 // ── Zones ───────────────────────────────────────────────────────────────────────
 
-func (z *ZonesHandler) listZones(w http.ResponseWriter, r *http.Request) {
-	z.mu.RLock()
-	zones := make([]*Zone, 0, len(z.zones))
-	for _, zone := range z.zones {
-		zones = append(zones, zone)
+// listZones returns all zones with current occupancy.
+func (h *ZonesHandler) listZones(w http.ResponseWriter, r *http.Request) {
+	allZones := h.mgr.GetAllZones()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	response := make([]zoneWithOcc, 0, len(allZones))
+	for _, z := range allZones {
+		response = append(response, h.toZoneResponse(z))
 	}
-	z.mu.RUnlock()
 
-	writeJSON(w, zones)
+	writeJSON(w, http.StatusOK, response)
 }
 
-type createZoneRequest struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	Z        float64 `json:"z"`
-	W        float64 `json:"w"`
-	D        float64 `json:"d"`
-	H        float64 `json:"h"`
-	ZoneType string  `json:"zone_type,omitempty"`
-}
-
-func (z *ZonesHandler) createZone(w http.ResponseWriter, r *http.Request) {
-	var req createZoneRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// createZone creates a new zone. Auto-generates an ID if none is provided.
+func (h *ZonesHandler) createZone(w http.ResponseWriter, r *http.Request) {
+	var zone zones.Zone
+	if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.ID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
-		return
+	if zone.ID == "" {
+		zone.ID = "zone_" + time.Now().Format("20060102-150405")
 	}
-	if req.Name == "" {
+
+	if zone.Name == "" {
 		http.Error(w, "name is required", http.StatusBadRequest)
 		return
 	}
-	if req.W <= 0 || req.D <= 0 || req.H <= 0 {
-		http.Error(w, "dimensions must be positive", http.StatusBadRequest)
+
+	// Set defaults for color
+	if zone.Color == "" {
+		zone.Color = "#4fc3f7"
+	}
+
+	if err := h.mgr.CreateZone(&zone); err != nil {
+		http.Error(w, "failed to create zone: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	zoneType := req.ZoneType
-	if zoneType == "" {
-		zoneType = "general"
-	}
+	h.mu.RLock()
+	resp := h.toZoneResponse(h.mgr.GetZone(zone.ID))
+	h.mu.RUnlock()
 
-	now := time.Now().UnixNano()
-	_, err := z.db.Exec(`
-		INSERT INTO zones (id, name, x, y, z, w, d, h, zone_type, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, req.ID, req.Name, req.X, req.Y, req.Z, req.W, req.D, req.H, zoneType, now)
-	if err != nil {
-		http.Error(w, "failed to create zone", http.StatusInternalServerError)
-		return
-	}
-
-	z.mu.Lock()
-	z.zones[req.ID] = &Zone{
-		ID:        req.ID,
-		Name:      req.Name,
-		X:         req.X,
-		Y:         req.Y,
-		Z:         req.Z,
-		W:         req.W,
-		D:         req.D,
-		H:         req.H,
-		ZoneType:  zoneType,
-		CreatedAt: time.Unix(0, now),
-		People:    []string{},
-	}
-	z.mu.Unlock()
-
+	log.Printf("[INFO] Zone created: %s (%s)", zone.ID, zone.Name)
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, z.zones[req.ID])
+	writeJSON(w, http.StatusCreated, resp)
 }
 
-type updateZoneRequest struct {
-	Name     *string  `json:"name,omitempty"`
-	X        *float64 `json:"x,omitempty"`
-	Y        *float64 `json:"y,omitempty"`
-	Z        *float64 `json:"z,omitempty"`
-	W        *float64 `json:"w,omitempty"`
-	D        *float64 `json:"d,omitempty"`
-	H        *float64 `json:"h,omitempty"`
-	ZoneType *string  `json:"zone_type,omitempty"`
-}
-
-func (z *ZonesHandler) updateZone(w http.ResponseWriter, r *http.Request) {
+// updateZone updates an existing zone.
+func (h *ZonesHandler) updateZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	z.mu.RLock()
-	zone, exists := z.zones[id]
-	z.mu.RUnlock()
-
-	if !exists {
+	if h.mgr.GetZone(id) == nil {
 		http.Error(w, "zone not found", http.StatusNotFound)
 		return
 	}
 
-	var req updateZoneRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var zone zones.Zone
+	if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	updates := []string{}
-	args := []interface{}{}
+	// Preserve the ID from the URL param
+	zone.ID = id
 
-	if req.Name != nil {
-		updates = append(updates, "name = ?")
-		args = append(args, *req.Name)
-	}
-	if req.X != nil {
-		updates = append(updates, "x = ?")
-		args = append(args, *req.X)
-	}
-	if req.Y != nil {
-		updates = append(updates, "y = ?")
-		args = append(args, *req.Y)
-	}
-	if req.Z != nil {
-		updates = append(updates, "z = ?")
-		args = append(args, *req.Z)
-	}
-	if req.W != nil {
-		if *req.W <= 0 {
-			http.Error(w, "width must be positive", http.StatusBadRequest)
-			return
-		}
-		updates = append(updates, "w = ?")
-		args = append(args, *req.W)
-	}
-	if req.D != nil {
-		if *req.D <= 0 {
-			http.Error(w, "depth must be positive", http.StatusBadRequest)
-			return
-		}
-		updates = append(updates, "d = ?")
-		args = append(args, *req.D)
-	}
-	if req.H != nil {
-		if *req.H <= 0 {
-			http.Error(w, "height must be positive", http.StatusBadRequest)
-			return
-		}
-		updates = append(updates, "h = ?")
-		args = append(args, *req.H)
-	}
-	if req.ZoneType != nil {
-		updates = append(updates, "zone_type = ?")
-		args = append(args, *req.ZoneType)
-	}
-
-	if len(updates) == 0 {
-		writeJSON(w, zone)
+	if err := h.mgr.UpdateZone(&zone); err != nil {
+		http.Error(w, "failed to update zone: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	args = append(args, id)
-	query := "UPDATE zones SET " + joinComma(updates) + " WHERE id = ?"
+	h.mu.RLock()
+	resp := h.toZoneResponse(h.mgr.GetZone(zone.ID))
+	h.mu.RUnlock()
 
-	_, err := z.db.Exec(query, args...)
-	if err != nil {
-		http.Error(w, "failed to update zone", http.StatusInternalServerError)
-		return
-	}
-
-	// Update in-memory copy
-	z.mu.Lock()
-	if req.Name != nil {
-		zone.Name = *req.Name
-	}
-	if req.X != nil {
-		zone.X = *req.X
-	}
-	if req.Y != nil {
-		zone.Y = *req.Y
-	}
-	if req.Z != nil {
-		zone.Z = *req.Z
-	}
-	if req.W != nil {
-		zone.W = *req.W
-	}
-	if req.D != nil {
-		zone.D = *req.D
-	}
-	if req.H != nil {
-		zone.H = *req.H
-	}
-	if req.ZoneType != nil {
-		zone.ZoneType = *req.ZoneType
-	}
-	z.mu.Unlock()
-
-	writeJSON(w, zone)
+	log.Printf("[INFO] Zone updated: %s (%s)", zone.ID, zone.Name)
+	writeJSON(w, http.StatusOK, resp)
 }
 
-func (z *ZonesHandler) deleteZone(w http.ResponseWriter, r *http.Request) {
+// deleteZone removes a zone by ID.
+func (h *ZonesHandler) deleteZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	z.mu.RLock()
-	_, exists := z.zones[id]
-	z.mu.RUnlock()
-
-	if !exists {
-		http.Error(w, "zone not found", http.StatusNotFound)
+	if err := h.mgr.DeleteZone(id); err != nil {
+		http.Error(w, "failed to delete zone: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	_, err := z.db.Exec(`DELETE FROM zones WHERE id = ?`, id)
-	if err != nil {
-		http.Error(w, "failed to delete zone", http.StatusInternalServerError)
-		return
-	}
-
-	z.mu.Lock()
-	delete(z.zones, id)
-	z.mu.Unlock()
-
+	log.Printf("[INFO] Zone deleted: %s", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// historyEntry represents an hourly occupancy bucket for the zone history API.
 type historyEntry struct {
 	Timestamp int64    `json:"timestamp"`
-	Count     int       `json:"count"`
-	People   []string  `json:"people"`
+	Count     int      `json:"count"`
+	People   []string `json:"people"`
 }
 
-func (z *ZonesHandler) getZoneHistory(w http.ResponseWriter, r *http.Request) {
+// getZoneHistory returns hourly occupancy history for a zone.
+func (h *ZonesHandler) getZoneHistory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	z.mu.RLock()
-	_, exists := z.zones[id]
-	z.mu.RUnlock()
-
-	if !exists {
+	if h.mgr.GetZone(id) == nil {
 		http.Error(w, "zone not found", http.StatusNotFound)
 		return
 	}
@@ -465,209 +397,119 @@ func (z *ZonesHandler) getZoneHistory(w http.ResponseWriter, r *http.Request) {
 	history := make([]historyEntry, limit)
 	now := time.Now()
 	for i := range history {
-		h := historyEntry{
+		history[i] = historyEntry{
 			Timestamp: now.Add(-time.Duration(i) * time.Hour).UnixNano() / 1e6,
 			Count:     0,
 			People:    []string{},
 		}
-		history[i] = h
 	}
 
-	writeJSON(w, history)
+	writeJSON(w, http.StatusOK, history)
 }
 
 // ── Portals ─────────────────────────────────────────────────────────────────────
 
-func (z *ZonesHandler) listPortals(w http.ResponseWriter, r *http.Request) {
-	z.mu.RLock()
-	portals := make([]*Portal, 0, len(z.portals))
-	for _, portal := range z.portals {
-		portals = append(portals, portal)
+// listPortals returns all portals.
+func (h *ZonesHandler) listPortals(w http.ResponseWriter, r *http.Request) {
+	allPortals := h.mgr.GetAllPortals()
+
+	response := make([]portalWithZones, 0, len(allPortals))
+	for _, p := range allPortals {
+		response = append(response, toPortalResponse(p))
 	}
-	z.mu.RUnlock()
 
-	writeJSON(w, portals)
+	writeJSON(w, http.StatusOK, response)
 }
 
-type createPortalRequest struct {
-	ID     string      `json:"id"`
-	Name   string      `json:"name"`
-	ZoneA  string      `json:"zone_a"`
-	ZoneB  string      `json:"zone_b"`
-	Points [2][2]float64 `json:"points"`
-}
-
-func (z *ZonesHandler) createPortal(w http.ResponseWriter, r *http.Request) {
-	var req createPortalRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// createPortal creates a new portal. Auto-generates an ID if none is provided.
+func (h *ZonesHandler) createPortal(w http.ResponseWriter, r *http.Request) {
+	var portal zones.Portal
+	if err := json.NewDecoder(r.Body).Decode(&portal); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.ID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
-		return
-	}
-	if req.ZoneA == "" || req.ZoneB == "" {
-		http.Error(w, "zone_a and zone_b are required", http.StatusBadRequest)
-		return
+	if portal.ID == "" {
+		portal.ID = "portal_" + time.Now().Format("20060102-150405")
 	}
 
-	z.mu.RLock()
-	_, zoneAExists := z.zones[req.ZoneA]
-	_, zoneBExists := z.zones[req.ZoneB]
-	z.mu.RUnlock()
-
-	if !zoneAExists || !zoneBExists {
-		http.Error(w, "one or both zones not found", http.StatusBadRequest)
+	// Validate zone references
+	if portal.ZoneAID != "" && h.mgr.GetZone(portal.ZoneAID) == nil {
+		http.Error(w, "zone_a not found", http.StatusBadRequest)
+		return
+	}
+	if portal.ZoneBID != "" && h.mgr.GetZone(portal.ZoneBID) == nil {
+		http.Error(w, "zone_b not found", http.StatusBadRequest)
 		return
 	}
 
-	pointsJSON, _ := json.Marshal(req.Points)
-	now := time.Now().UnixNano()
-	_, err := z.db.Exec(`
-		INSERT INTO portals (id, name, zone_a_id, zone_b_id, points_json, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, req.ID, req.Name, req.ZoneA, req.ZoneB, string(pointsJSON), now)
-	if err != nil {
-		http.Error(w, "failed to create portal", http.StatusInternalServerError)
+	if err := h.mgr.CreatePortal(&portal); err != nil {
+		http.Error(w, "failed to create portal: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	z.mu.Lock()
-	z.portals[req.ID] = &Portal{
-		ID:        req.ID,
-		Name:      req.Name,
-		ZoneA:     req.ZoneA,
-		ZoneB:     req.ZoneB,
-		Points:    req.Points,
-		CreatedAt: time.Unix(0, now),
-	}
-	z.mu.Unlock()
-
+	resp := toPortalResponse(h.mgr.GetPortal(portal.ID))
+	log.Printf("[INFO] Portal created: %s (%s)", portal.ID, portal.Name)
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, z.portals[req.ID])
+	writeJSON(w, http.StatusCreated, resp)
 }
 
-type updatePortalRequest struct {
-	Name    *string         `json:"name,omitempty"`
-	ZoneA   *string         `json:"zone_a,omitempty"`
-	ZoneB   *string         `json:"zone_b,omitempty"`
-	Points   *[2][2]float64 `json:"points,omitempty"`
-}
-
-func (z *ZonesHandler) updatePortal(w http.ResponseWriter, r *http.Request) {
+// updatePortal updates an existing portal.
+func (h *ZonesHandler) updatePortal(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	z.mu.RLock()
-	portal, exists := z.portals[id]
-	z.mu.RUnlock()
-
-	if !exists {
+	if h.mgr.GetPortal(id) == nil {
 		http.Error(w, "portal not found", http.StatusNotFound)
 		return
 	}
 
-	var req updatePortalRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var portal zones.Portal
+	if err := json.NewDecoder(r.Body).Decode(&portal); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	updates := []string{}
-	args := []interface{}{}
+	// Preserve the ID from the URL param
+	portal.ID = id
 
-	if req.Name != nil {
-		updates = append(updates, "name = ?")
-		args = append(args, *req.Name)
+	// Validate zone references if changed
+	if portal.ZoneAID != "" && h.mgr.GetZone(portal.ZoneAID) == nil {
+		http.Error(w, "zone_a not found", http.StatusBadRequest)
+		return
 	}
-	if req.ZoneA != nil {
-		updates = append(updates, "zone_a_id = ?")
-		args = append(args, *req.ZoneA)
-	}
-	if req.ZoneB != nil {
-		updates = append(updates, "zone_b_id = ?")
-		args = append(args, *req.ZoneB)
-	}
-	if req.Points != nil {
-		pointsJSON, _ := json.Marshal(req.Points)
-		updates = append(updates, "points_json = ?")
-		args = append(args, string(pointsJSON))
-	}
-
-	if len(updates) == 0 {
-		writeJSON(w, portal)
+	if portal.ZoneBID != "" && h.mgr.GetZone(portal.ZoneBID) == nil {
+		http.Error(w, "zone_b not found", http.StatusBadRequest)
 		return
 	}
 
-	args = append(args, id)
-	query := "UPDATE portals SET " + joinComma(updates) + " WHERE id = ?"
-
-	_, err := z.db.Exec(query, args...)
-	if err != nil {
-		http.Error(w, "failed to update portal", http.StatusInternalServerError)
+	if err := h.mgr.UpdatePortal(&portal); err != nil {
+		http.Error(w, "failed to update portal: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Update in-memory copy
-	z.mu.Lock()
-	if req.Name != nil {
-		portal.Name = *req.Name
-	}
-	if req.ZoneA != nil {
-		portal.ZoneA = *req.ZoneA
-	}
-	if req.ZoneB != nil {
-		portal.ZoneB = *req.ZoneB
-	}
-	if req.Points != nil {
-		portal.Points = *req.Points
-	}
-	z.mu.Unlock()
-
-	writeJSON(w, portal)
+	resp := toPortalResponse(h.mgr.GetPortal(portal.ID))
+	log.Printf("[INFO] Portal updated: %s (%s)", portal.ID, portal.Name)
+	writeJSON(w, http.StatusOK, resp)
 }
 
-func (z *ZonesHandler) deletePortal(w http.ResponseWriter, r *http.Request) {
+// deletePortal removes a portal by ID.
+func (h *ZonesHandler) deletePortal(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	z.mu.RLock()
-	_, exists := z.portals[id]
-	z.mu.RUnlock()
-
-	if !exists {
-		http.Error(w, "portal not found", http.StatusNotFound)
+	if err := h.mgr.DeletePortal(id); err != nil {
+		http.Error(w, "failed to delete portal: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	_, err := z.db.Exec(`DELETE FROM portals WHERE id = ?`, id)
-	if err != nil {
-		http.Error(w, "failed to delete portal", http.StatusInternalServerError)
-		return
-	}
-
-	z.mu.Lock()
-	delete(z.portals, id)
-	z.mu.Unlock()
-
+	log.Printf("[INFO] Portal deleted: %s", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type crossingEntry struct {
-	ID        string    `json:"id"`
-	Timestamp int64     `json:"timestamp_ms"`
-	Direction string    `json:"direction"`
-	Person    string    `json:"person,omitempty"`
-}
-
-func (z *ZonesHandler) getPortalCrossings(w http.ResponseWriter, r *http.Request) {
+// getPortalCrossings returns recent crossing events for a portal.
+func (h *ZonesHandler) getPortalCrossings(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	z.mu.RLock()
-	_, exists := z.portals[id]
-	z.mu.RUnlock()
-
-	if !exists {
+	if h.mgr.GetPortal(id) == nil {
 		http.Error(w, "portal not found", http.StatusNotFound)
 		return
 	}
@@ -675,56 +517,11 @@ func (z *ZonesHandler) getPortalCrossings(w http.ResponseWriter, r *http.Request
 	limitStr := r.URL.Query().Get("limit")
 	limit := 50
 	if limitStr != "" {
-		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 && n <= 200 {
 			limit = n
 		}
 	}
 
-	rows, err := z.db.Query(`
-		SELECT id, timestamp_ms, direction, person
-		FROM portal_crossings
-		WHERE portal_id = ?
-		ORDER BY timestamp_ms DESC
-		LIMIT ?
-	`, id, limit)
-	if err != nil {
-		http.Error(w, "failed to query crossings", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var crossings []crossingEntry
-	for rows.Next() {
-		var c crossingEntry
-		if err := rows.Scan(&c.ID, &c.Timestamp, &c.Direction, &c.Person); err != nil {
-			continue
-		}
-		crossings = append(crossings, c)
-	}
-
-	writeJSON(w, crossings)
-}
-
-// ── Occupancy updates (called by fusion engine) ───────────────────────────────────
-
-// UpdateOccupancy updates the current occupancy for all zones.
-func (z *ZonesHandler) UpdateOccupancy(occupancy map[string]int) {
-	z.mu.Lock()
-	defer z.mu.Unlock()
-
-	for id, zone := range z.zones {
-		count := occupancy[id]
-		zone.Occupancy = count
-	}
-}
-
-func joinComma(parts []string) string {
-	result := ""
-	for i, p := range parts {
-		if i > 0 {
-			result += ", "
-		}
-		result += p
-	}
-	return result
+	events := h.mgr.GetRecentCrossings(limit)
+	writeJSON(w, http.StatusOK, events)
 }

@@ -163,7 +163,7 @@ func (h *VolumeTriggersHandler) listTriggers(w http.ResponseWriter, r *http.Requ
 		response = append(response, resp)
 	}
 
-	writeJSON(w, response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *VolumeTriggersHandler) getTrigger(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +176,7 @@ func (h *VolumeTriggersHandler) getTrigger(w http.ResponseWriter, r *http.Reques
 	}
 
 	resp := h.toResponse(trigger, time.Now())
-	writeJSON(w, resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type volumeCreateTriggerRequest struct {
@@ -250,9 +250,8 @@ func (h *VolumeTriggersHandler) createTrigger(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
 	resp := h.toResponse(created, time.Now())
-	writeJSON(w, resp)
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 type volumeUpdateTriggerRequest struct {
@@ -314,7 +313,7 @@ func (h *VolumeTriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Req
 	}
 
 	resp := h.toResponse(trigger, time.Now())
-	writeJSON(w, resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *VolumeTriggersHandler) deleteTrigger(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +406,7 @@ func (h *VolumeTriggersHandler) testTrigger(w http.ResponseWriter, r *http.Reque
 		Actions:   results,
 	}
 
-	writeJSON(w, resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // enableTrigger clears error state and re-enables a trigger.
@@ -422,7 +421,7 @@ func (h *VolumeTriggersHandler) enableTrigger(w http.ResponseWriter, r *http.Req
 	// Broadcast updated trigger state to dashboard
 	h.broadcastTriggerState(id)
 
-	writeJSON(w, map[string]interface{}{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok"})
 }
 
 // disableTrigger disables a trigger.
@@ -444,7 +443,7 @@ func (h *VolumeTriggersHandler) disableTrigger(w http.ResponseWriter, r *http.Re
 	// Broadcast updated trigger state to dashboard
 	h.broadcastTriggerState(id)
 
-	writeJSON(w, map[string]interface{}{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok"})
 }
 
 // getWebhookLog returns the last N webhook firings for a specific trigger.
@@ -460,7 +459,7 @@ func (h *VolumeTriggersHandler) getWebhookLog(w http.ResponseWriter, r *http.Req
 	}
 
 	entries := h.store.GetWebhookLog(id, limit)
-	writeJSON(w, entries)
+	writeJSON(w, http.StatusOK, entries)
 }
 
 func (h *VolumeTriggersHandler) getTriggerLog(w http.ResponseWriter, r *http.Request) {
@@ -486,7 +485,7 @@ func (h *VolumeTriggersHandler) getTriggerLog(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	writeJSON(w, response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // isValidShape validates that a shape has all required fields.

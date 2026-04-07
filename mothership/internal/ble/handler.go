@@ -23,20 +23,178 @@ func NewHandler(registry *Registry) *Handler {
 
 // RegisterRoutes mounts BLE endpoints on r.
 //
-//	GET    /api/ble/devices              — list all BLE devices
-//	GET    /api/ble/devices/{mac}        — get single device
-//	GET    /api/ble/devices/{mac}/aliases — get alias history for device
-//	PUT    /api/ble/devices/{mac}        — update device (label, device_type, person_id)
-//	DELETE /api/ble/devices/{mac}        — archive device (soft delete)
-//	POST   /api/ble/devices/preregister  — manually register a device by MAC address
-//	GET    /api/ble/duplicates           — list possible duplicate devices
-//	POST   /api/ble/merge                — merge two devices (MAC rotation)
-//	POST   /api/ble/split                — split alias from canonical device
-//	GET    /api/people                   — list all people with device counts
-//	POST   /api/people                   — create new person
-//	GET    /api/people/{id}              — get single person with devices
-//	PUT    /api/people/{id}              — update person name/color
-//	DELETE /api/people/{id}              — delete person
+// GET /api/ble/devices
+//
+//	@Summary		List BLE devices
+//	@Description	Returns a list of all BLE devices seen by the system. Devices can be filtered by registration status (registered/discovered), time window (hours parameter), and archival status.
+//	@Tags			ble
+//	@Produce		json
+//	@Param			registered	query	bool		false	"Filter to only devices assigned to a person"
+//	@Param			discovered	query	bool		false	"Filter to only unassigned devices"
+//	@Param			archived		query	bool		false	"Include archived (soft-deleted) devices"
+//	@Param			hours		query	int		false	"Time window in hours (default: 24)"
+//	@Success		200			{object}	map[string]interface{}	"List of devices with privacy_notice"
+//	@Router			/api/ble/devices [get]
+//
+// GET /api/ble/devices/{mac}
+//
+//	@Summary		Get BLE device
+//	@Description	Returns detailed information about a single BLE device by its MAC address.
+//	@Tags			ble
+//	@Produce		json
+//	@Param			mac		path		string	true	"BLE device MAC address (uppercase colon-separated hex)"
+//	@Success		200		{object}	DeviceRecord	"Device details"
+//	@Failure		404		{object}	map[string]string	"Device not found"
+//	@Router			/api/ble/devices/{mac} [get]
+//
+// PUT /api/ble/devices/{mac}
+//
+//	@Summary		Update BLE device
+//	@Description	Updates a BLE device's properties. Used to set a human-readable label and/or assign it to a person for identity tracking.
+//	@Tags			ble
+//	@Accept			json
+//	@Produce		json
+//	@Param			mac		path		string					true	"BLE device MAC address"
+//	@Param			request	body		updateDeviceRequest	true	"Device update fields"
+//	@Success		200		{object}	DeviceRecord	"Updated device"
+//	@Failure		400		{object}	map[string]string	"Invalid request or person not found"
+//	@Failure		404		{object}	map[string]string	"Device not found"
+//	@Router			/api/ble/devices/{mac} [put]
+//
+// DELETE /api/ble/devices/{mac}
+//
+//	@Summary		Archive BLE device
+//	@Description	Soft-deletes a BLE device by marking it as archived.
+//	@Tags			ble
+//	@Param			mac		path		string	true	"BLE device MAC address"
+//	@Success		204		"No content"
+//	@Failure		404		{object}	map[string]string	"Device not found"
+//	@Router			/api/ble/devices/{mac} [delete]
+//
+// GET /api/ble/devices/{mac}/history
+//
+//	@Summary		Get device sighting history
+//	@Description	Returns the sighting history for a specific BLE device including RSSI observations from nodes.
+//	@Tags			ble
+//	@Produce		json
+//	@Param			mac		path		string	true	"BLE device MAC address"
+//	@Param			limit	query	int		false	"Maximum history entries (default: 100, max: 1000)"
+//	@Success		200		{object}	map[string]interface{}	"Device sighting history"
+//	@Failure		404		{object}	map[string]string	"Device not found"
+//	@Router			/api/ble/devices/{mac}/history [get]
+//
+// GET /api/ble/devices/{mac}/aliases
+//
+//	@Summary		Get device aliases
+//	@Description	Returns the alias history for a device, including all rotated addresses merged to this canonical device.
+//	@Tags			ble
+//	@Produce		json
+//	@Param			mac		path		string	true	"BLE device MAC address"
+//	@Success		200		{object}	map[string]interface{}	"Device aliases"
+//	@Router			/api/ble/devices/{mac}/aliases [get]
+//
+// POST /api/ble/devices/preregister
+//
+//	@Summary		Preregister BLE device
+//	@Description	Manually creates a device entry for a known MAC address. Useful for pre-registering tracker tags.
+//	@Tags			ble
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body	preregisterDeviceRequest	true	"Device MAC and optional label"
+//	@Success		201		{object}	DeviceRecord	"Created device"
+//	@Failure		400		{object}	map[string]string	"Invalid request"
+//	@Router			/api/ble/devices/preregister [post]
+//
+// GET /api/ble/duplicates
+//
+//	@Summary		List possible duplicate devices
+//	@Description	Returns device pairs that may be the same device with rotated MAC addresses.
+//	@Tags			ble
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}	"List of possible duplicates"
+//	@Router			/api/ble/duplicates [get]
+//
+// POST /api/ble/merge
+//
+//	@Summary		Merge BLE devices
+//	@Description	Merges two devices, keeping mac1 and removing mac2. Used for MAC rotation consolidation.
+//	@Tags			ble
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body	mergeDevicesRequest	true	"Two MAC addresses to merge"
+//	@Success		200		{object}	map[string]interface{}	"Merged device"
+//	@Failure		400		{object}	map[string]string	"Invalid request"
+//	@Failure		404		{object}	map[string]string	"Device not found"
+//	@Router			/api/ble/merge [post]
+//
+// POST /api/ble/split
+//
+//	@Summary		Split device alias
+//	@Description	Splits an alias from its canonical device, creating a separate device entry.
+//	@Tags			ble
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body	splitDeviceRequest	true	"Canonical and alias addresses"
+//	@Success		200		{object}	map[string]interface{}	"Split devices"
+//	@Failure		400		{object}	map[string]string	"Invalid request"
+//	@Failure		404		{object}	map[string]string	"Device not found"
+//	@Router			/api/ble/split [post]
+//
+// GET /api/people
+//
+//	@Summary		List people
+//	@Description	Returns all people with their associated device counts and devices.
+//	@Tags			people
+//	@Produce		json
+//	@Success		200	{array}		map[string]interface{}	"List of people with devices"
+//	@Router			/api/people [get]
+//
+// POST /api/people
+//
+//	@Summary		Create person
+//	@Description	Creates a new person for BLE device assignment.
+//	@Tags			people
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body	createPersonRequest	true	"Person name and optional color"
+//	@Success		201		{object}	Person	"Created person"
+//	@Failure		400		{object}	map[string]string	"Invalid request"
+//	@Router			/api/people [post]
+//
+// GET /api/people/{id}
+//
+//	@Summary		Get person
+//	@Description	Returns a single person with their associated devices.
+//	@Tags			people
+//	@Produce		json
+//	@Param			id		path		string	true	"Person UUID"
+//	@Success		200		{object}	map[string]interface{}	"Person with devices"
+//	@Failure		404		{object}	map[string]string	"Person not found"
+//	@Router			/api/people/{id} [get]
+//
+// PUT /api/people/{id}
+//
+//	@Summary		Update person
+//	@Description	Updates a person's name and/or color.
+//	@Tags			people
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string				true	"Person UUID"
+//	@Param			request	body	updatePersonRequest	true	"Person update fields"
+//	@Success		200		{object}	Person	"Updated person"
+//	@Failure		400		{object}	map[string]string	"Invalid request"
+//	@Failure		404		{object}	map[string]string	"Person not found"
+//	@Router			/api/people/{id} [put]
+//
+// DELETE /api/people/{id}
+//
+//	@Summary		Delete person
+//	@Description	Deletes a person and unassigns all their devices.
+//	@Tags			people
+//	@Param			id		path		string	true	"Person UUID"
+//	@Success		204		"No content"
+//	@Failure		404		{object}	map[string]string	"Person not found"
+//	@Router			/api/people/{id} [delete]
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Device endpoints
 	r.Get("/api/ble/devices", h.listDevices)
