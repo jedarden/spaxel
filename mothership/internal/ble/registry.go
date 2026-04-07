@@ -1373,10 +1373,13 @@ func (r *Registry) GetCurrentDevices() []map[string]interface{} {
 	result := make([]map[string]interface{}, len(devices))
 	for i, d := range devices {
 		result[i] = map[string]interface{}{
-			"mac":           d.Addr,
-			"name":          d.Name,
-			"label":         d.Label,
-			"manufacturer":  d.Manufacturer,
+			"mac":            d.Addr,
+			"name":           d.Name,
+			"label":          d.Label,
+			"rssi":           d.RSSIAvg,
+			"last_seen":      d.LastSeenAt.UnixMilli(),
+			"blob_id":        nil,
+			"manufacturer":   d.Manufacturer,
 			"device_type":   d.DeviceType,
 			"device_name":   d.DeviceName,
 			"mfr_id":        d.MfrID,

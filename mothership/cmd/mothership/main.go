@@ -652,6 +652,11 @@ func main() {
 
     dashboardHub.SetIngestionState(ingestSrv)
 
+    // Wire BLE state to dashboard for ble_scan broadcasts (5s interval)
+    if bleRegistry != nil {
+        dashboardHub.SetBLEState(bleRegistry)
+    }
+
     // Wire zone state to dashboard for occupancy snapshots
     if zonesMgr != nil {
         dashboardHub.SetZoneState(&zoneStateAdapter{mgr: zonesMgr})
@@ -674,9 +679,10 @@ func main() {
         }()
     }
 
-    // Wire ingestion → dashboard for CSI and motion broadcasts
+    // Wire ingestion → dashboard for CSI, motion, and event broadcasts
     ingestSrv.SetDashboardBroadcaster(dashboardHub)
     ingestSrv.SetMotionBroadcaster(dashboardHub)
+    ingestSrv.SetEventBroadcaster(dashboardHub)
 
     // Phase 6: Wire BLE messages to registry and identity matcher
     ingestSrv.SetBLEHandler(func(nodeMAC string, devices []ingestion.BLEDevice) {
