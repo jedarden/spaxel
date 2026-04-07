@@ -24,13 +24,22 @@ import (
 //   3. Schema migration: apply pending migrations with backup
 //   4. Config & secrets: load/generate install secret
 //
+// The parentCtx should be the startup timeout context from main so that all
+// phases share the same 30-second deadline. If parentCtx is nil, a fresh
+// context with TotalTimeout is created.
+//
 // If any phase fails, the function returns an error and the caller should
 // exit without serving traffic.
-func OpenDB(dataDir, dbName string) (*sql.DB, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), startup.TotalTimeout)
-	defer cancel()
+func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) {
+	var cancel context.CancelFunc
+	ctx := parentCtx
+	if ctx == nil {
+		ctx, cancel = context.WithTimeout(context.Background(), startup.TotalTimeout)
+		defer cancel()
+	}
 
 	// Phase 1: Data directory + flock
+	startup.CheckTimeout(ctx)
 	done := startup.Phase(1, "Data directory")
 	dbPath := filepath.Join(dataDir, dbName)
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
@@ -50,6 +59,7 @@ func OpenDB(dataDir, dbName string) (*sql.DB, error) {
 	done()
 
 	// Phase 2: SQLite open
+	startup.CheckTimeout(ctx)
 	done = startup.Phase(2, "SQLite")
 	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)")
 	if err != nil {
@@ -85,6 +95,7 @@ func OpenDB(dataDir, dbName string) (*sql.DB, error) {
 	done()
 
 	// Phase 3: Schema migration
+	startup.CheckTimeout(ctx)
 	done = startup.Phase(3, "Schema migrations")
 	migrator, err := NewMigrator(dbPath, Config{
 		DataDir:         dataDir,
@@ -121,6 +132,7 @@ func OpenDB(dataDir, dbName string) (*sql.DB, error) {
 	done()
 
 	// Phase 4: Config & secrets
+	startup.CheckTimeout(ctx)
 	done = startup.Phase(4, "Config & secrets")
 	if err := ensureInstallSecret(ctx, db); err != nil {
 		db.Close()

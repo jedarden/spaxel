@@ -150,6 +150,8 @@ const (
 	readDeadline = 60 * time.Second
 
 	// Malformed frame thresholds
+	// WARN logged when count exceeds 100 within the window
+	// Connection closed when count exceeds 1000 within the window
 	malformedWarnThreshold  = 100
 	malformedCloseThreshold = 1000
 	malformedWindow         = time.Minute
@@ -586,6 +588,10 @@ func (s *Server) recordMalformed(mac string) {
 		return
 	}
 
+	// Log at DEBUG level for each validation failure
+	log.Printf("[DEBUG] Node %s sent malformed CSI frame (count in window: %d)", mac, counter.count+1)
+
+	// Reset counter if window has expired (sliding 60-second window)
 	if time.Since(counter.firstSeen) > malformedWindow {
 		counter.count = 0
 		counter.firstSeen = time.Now()
@@ -593,14 +599,22 @@ func (s *Server) recordMalformed(mac string) {
 
 	counter.count++
 
-	if counter.count == malformedWarnThreshold {
-		log.Printf("[WARN] Node %s sending malformed CSI frames (count=%d)", mac, counter.count)
+	// Log WARN when count exceeds 100 within the window
+	if counter.count > malformedWarnThreshold && counter.count <= malformedWarnThreshold+1 {
+		// Only log once when crossing the threshold to avoid spam
+		log.Printf("[WARN] Node %s sent %d malformed frames in 60s", mac, counter.count)
 	}
 
-	if counter.count >= malformedCloseThreshold {
-		log.Printf("[ERROR] Node %s exceeded malformed frame threshold, closing connection", mac)
+	// Close connection when count exceeds 1000 within the window
+	if counter.count > malformedCloseThreshold {
+		log.Printf("[ERROR] Node %s sent %d malformed frames in 60s — closing connection: Excessive malformed frames — possible firmware bug", mac, counter.count)
 		if nc, exists := s.connections[mac]; exists {
+			nc.writeMu.Lock()
+			// Send close message with specific error text
+			nc.Conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Excessive malformed frames — possible firmware bug"))
 			nc.Conn.Close()
+			nc.writeMu.Unlock()
 		}
 	}
 }

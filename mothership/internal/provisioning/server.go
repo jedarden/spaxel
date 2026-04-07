@@ -53,12 +53,24 @@ type Server struct {
 // NewServer creates a provisioning server.
 // dataDir is where the install secret is persisted.
 // mdnsName and msPort are embedded in the payload so the node can find the mothership.
-func NewServer(dataDir, mdnsName string, msPort int) *Server {
+// ntpServer is the NTP server hostname to embed in the provisioning payload.
+// installSecretHex is an optional 64-char hex string; if provided, it overrides the persisted secret.
+func NewServer(dataDir, mdnsName string, msPort int, ntpServer string, installSecretHex string) *Server {
 	s := &Server{
 		secretFile: filepath.Join(dataDir, "install_secret.bin"),
 		mdnsName:   mdnsName,
 		msPort:     msPort,
-		ntpServer:  envOr("SPAXEL_NTP_SERVER", "pool.ntp.org"),
+		ntpServer:  ntpServer,
+	}
+	// If install secret provided via config, use it instead of loading/creating
+	if installSecretHex != "" {
+		decoded, err := hex.DecodeString(installSecretHex)
+		if err == nil && len(decoded) == 32 {
+			s.installSecret = decoded
+			log.Printf("[INFO] provisioning: using install secret from SPAXEL_INSTALL_SECRET")
+		} else {
+			log.Printf("[WARN] provisioning: invalid SPAXEL_INSTALL_SECRET, will use persisted secret")
+		}
 	}
 	if err := s.loadOrCreateSecret(); err != nil {
 		log.Printf("[ERROR] provisioning: could not load/create install secret: %v", err)

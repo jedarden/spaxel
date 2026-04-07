@@ -19,10 +19,11 @@ const (
 
 	// SubsystemTimeout is the maximum time for each subsystem start in Phase 5.
 	SubsystemTimeout = 5 * time.Second
-
-	// ReadyFile is written on successful startup (Phase 7).
-	ReadyFile = "/tmp/spaxel.ready"
 )
+
+// ReadyFile is the path for the ready marker file.
+// Override in tests before calling WriteReadyFile/RemoveReadyFile.
+var ReadyFile = "/tmp/spaxel.ready"
 
 // Phase logs the start of a startup phase and returns a function that logs
 // completion with elapsed time. The returned function should be called via
