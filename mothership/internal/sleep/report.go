@@ -47,6 +47,21 @@ func generateBreathingSummary(m *SleepMetrics) string {
 		summary += "Your breathing was steady throughout the night."
 	}
 
+	// Regularity assessment
+	if m.BreathingRegularity > 0 {
+		summary += fmt.Sprintf(" Regularity: %s (CV=%.2f).", BreathingRegularityLabel(m.BreathingRegularity), m.BreathingRegularity)
+	}
+
+	// Anomaly assessment
+	if m.BreathingAnomaly {
+		if m.PersonalAvgBPM > 0 {
+			summary += fmt.Sprintf(" Breathing rate elevated (%.0f bpm vs. %.0f bpm average).",
+				m.AvgBreathingRate, m.PersonalAvgBPM)
+		} else {
+			summary += " Breathing rate was elevated compared to your personal average."
+		}
+	}
+
 	// Range info
 	if m.MaxBreathingRate > 0 {
 		summary += fmt.Sprintf(" Range: %.1f-%.1f BPM.", m.MinBreathingRate, m.MaxBreathingRate)
@@ -145,7 +160,8 @@ func FormatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d seconds", d/time.Second)
 	}
 	if d < time.Hour {
-		return fmt.Sprintf("%d minutes", d/time.Minute)
+		mins := d / time.Minute
+		return fmt.Sprintf("%d minute%s", mins, pluralS(int(mins)))
 	}
 
 	hours := d / time.Hour
@@ -164,6 +180,14 @@ func pluralS(n int) string {
 	return "s"
 }
 
+// formatMinutes handles singular/plural for minutes.
+func formatMinutes(n int) string {
+	if n == 1 {
+		return "1 minute"
+	}
+	return fmt.Sprintf("%d minutes", n)
+}
+
 // ToJSONMap converts the report to a map for JSON serialization
 func (r *SleepReport) ToJSONMap() map[string]interface{} {
 	m := map[string]interface{}{
@@ -178,12 +202,15 @@ func (r *SleepReport) ToJSONMap() map[string]interface{} {
 	}
 
 	// Add detailed metrics
-	m["metrics"] = map[string]interface{}{
+	metricsMap := map[string]interface{}{
 		"total_duration_hours":   r.Metrics.TotalDuration.Hours(),
 		"time_in_bed_hours":      r.Metrics.TimeInBed.Hours(),
 		"avg_breathing_rate":     r.Metrics.AvgBreathingRate,
 		"breathing_rate_std_dev": r.Metrics.BreathingRateStdDev,
+		"breathing_regularity":   r.Metrics.BreathingRegularity,
 		"breathing_score":        r.Metrics.BreathingScore,
+		"breathing_anomaly":      r.Metrics.BreathingAnomaly,
+		"breathing_anomaly_count": r.Metrics.BreathingAnomalyCount,
 		"quiet_time_pct":         r.Metrics.QuietTimePct,
 		"motion_events":          r.Metrics.MotionEvents,
 		"restless_periods":       r.Metrics.RestlessPeriods,
@@ -192,6 +219,19 @@ func (r *SleepReport) ToJSONMap() map[string]interface{} {
 		"longest_deep_period_mins": r.Metrics.LongestDeepPeriod.Minutes(),
 		"continuity_score":       r.Metrics.ContinuityScore,
 	}
+
+	// Add breathing rate range
+	if r.Metrics.MinBreathingRate > 0 {
+		metricsMap["min_breathing_rate"] = r.Metrics.MinBreathingRate
+		metricsMap["max_breathing_rate"] = r.Metrics.MaxBreathingRate
+	}
+
+	// Add personal baseline comparison for anomaly
+	if r.Metrics.PersonalAvgBPM > 0 {
+		metricsMap["personal_avg_bpm"] = r.Metrics.PersonalAvgBPM
+	}
+
+	m["metrics"] = metricsMap
 
 	// Add timing
 	if !r.Metrics.SleepStartTime.IsZero() {

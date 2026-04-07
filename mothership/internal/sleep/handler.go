@@ -208,12 +208,15 @@ func (h *Handler) handleGetSession(w http.ResponseWriter, r *http.Request) {
 
 	// Include live metrics if available
 	if metrics != nil {
-		result["metrics"] = map[string]interface{}{
+		metricsMap := map[string]interface{}{
 			"total_duration_hours":     metrics.TotalDuration.Hours(),
 			"time_in_bed_hours":        metrics.TimeInBed.Hours(),
 			"avg_breathing_rate":       metrics.AvgBreathingRate,
 			"breathing_rate_std_dev":   metrics.BreathingRateStdDev,
+			"breathing_regularity":     metrics.BreathingRegularity,
 			"breathing_score":          metrics.BreathingScore,
+			"breathing_anomaly":        metrics.BreathingAnomaly,
+			"breathing_anomaly_count":  metrics.BreathingAnomalyCount,
 			"quiet_time_pct":           metrics.QuietTimePct,
 			"motion_events":            metrics.MotionEvents,
 			"restless_periods":         metrics.RestlessPeriods,
@@ -225,14 +228,18 @@ func (h *Handler) handleGetSession(w http.ResponseWriter, r *http.Request) {
 			"quality_rating":           metrics.QualityRating,
 		}
 
-		if metricsMap, ok := result["metrics"].(map[string]interface{}); ok {
-			if !metrics.SleepStartTime.IsZero() {
-				metricsMap["sleep_start_time"] = metrics.SleepStartTime.Format("15:04")
-			}
-			if !metrics.SleepEndTime.IsZero() {
-				metricsMap["sleep_end_time"] = metrics.SleepEndTime.Format("15:04")
-			}
+		if metrics.PersonalAvgBPM > 0 {
+			metricsMap["personal_avg_bpm"] = metrics.PersonalAvgBPM
 		}
+
+		if !metrics.SleepStartTime.IsZero() {
+			metricsMap["sleep_start_time"] = metrics.SleepStartTime.Format("15:04")
+		}
+		if !metrics.SleepEndTime.IsZero() {
+			metricsMap["sleep_end_time"] = metrics.SleepEndTime.Format("15:04")
+		}
+
+		result["metrics"] = metricsMap
 	}
 
 	writeJSON(w, result)

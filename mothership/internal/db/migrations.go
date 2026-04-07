@@ -43,6 +43,11 @@ func AllMigrations() []Migration {
 			Description: "add webhook_log, trigger_state tables and trigger error columns",
 			Up:          migration_007_add_webhook_tables,
 		},
+		{
+			Version:     8,
+			Description: "add breathing anomaly columns to sleep_records",
+			Up:          migration_008_add_breathing_anomaly,
+		},
 	}
 }
 
@@ -450,5 +455,14 @@ CREATE TABLE IF NOT EXISTS webhook_log (
 CREATE INDEX IF NOT EXISTS idx_webhook_log_trigger ON webhook_log(trigger_id, fired_at_ms DESC);
 `
 	_, err := tx.Exec(schema)
+	return err
+}
+
+// migration_008_add_breathing_anomaly adds breathing anomaly tracking columns to sleep_records.
+func migration_008_add_breathing_anomaly(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		ALTER TABLE sleep_records ADD COLUMN breathing_anomaly INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE sleep_records ADD COLUMN breathing_samples_json TEXT;
+	`)
 	return err
 }

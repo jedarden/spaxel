@@ -127,8 +127,12 @@ type SleepMetrics struct {
 	MinBreathingRate    float64 `json:"min_breathing_rate"`
 	MaxBreathingRate    float64 `json:"max_breathing_rate"`
 	BreathingRateStdDev float64 `json:"breathing_rate_std_dev"`
+	BreathingRegularity float64 `json:"breathing_regularity"` // CV (std/mean)
 	BreathingScore      float64 `json:"breathing_score"` // 0-100
 	BreathingAnomalyCount int   `json:"breathing_anomaly_count"` // Anomalies < 8 or > 25 bpm
+	BreathingAnomaly    bool    `json:"breathing_anomaly"`    // Elevated vs personal average
+	PersonalAvgBPM      float64 `json:"personal_avg_bpm,omitempty"` // Person's rolling average for comparison
+	BreathingSamplesJSON string `json:"breathing_samples_json,omitempty"` // Raw samples for storage
 
 	// Motion metrics
 	MotionEvents      int     `json:"motion_events"`
@@ -227,6 +231,9 @@ type SleepAnalyzer struct {
 	sleepStartHour int
 	sleepEndHour   int
 
+	// Breathing anomaly tracking (per-person rolling baseline)
+	anomalyTracker *BreathingAnomalyTracker
+
 	// Report callback
 	onReportGenerated func(linkID string, report *SleepReport)
 }
@@ -234,9 +241,10 @@ type SleepAnalyzer struct {
 // NewSleepAnalyzer creates a new sleep analyzer
 func NewSleepAnalyzer() *SleepAnalyzer {
 	return &SleepAnalyzer{
-		sessions:       make(map[string]*SleepSession),
-		sleepStartHour: DefaultSleepStartHour,
-		sleepEndHour:   DefaultSleepEndHour,
+		sessions:        make(map[string]*SleepSession),
+		sleepStartHour:  DefaultSleepStartHour,
+		sleepEndHour:    DefaultSleepEndHour,
+		anomalyTracker:  NewBreathingAnomalyTracker(),
 	}
 }
 
@@ -304,7 +312,8 @@ func (sa *SleepAnalyzer) GetAllSessions() map[string]*SleepSession {
 	return result
 }
 
-// GenerateMorningReports generates reports for all completed sleep sessions
+// GenerateMorningReports generates reports for all completed sleep sessions.
+// It also checks breathing anomalies against personal baselines and updates them.
 func (sa *SleepAnalyzer) GenerateMorningReports() map[string]*SleepReport {
 	sa.mu.RLock()
 	defer sa.mu.RUnlock()
@@ -312,6 +321,20 @@ func (sa *SleepAnalyzer) GenerateMorningReports() map[string]*SleepReport {
 	reports := make(map[string]*SleepReport)
 	for linkID, session := range sa.sessions {
 		if report := session.GenerateReport(); report != nil {
+			// Check breathing anomaly against personal baseline
+			person := session.personID
+			if person == "" {
+				person = linkID
+			}
+			if report.Metrics.AvgBreathingRate > 0 {
+				personalAvg := sa.anomalyTracker.GetPersonalAverage(person)
+				report.Metrics.PersonalAvgBPM = personalAvg
+				isAnomaly := sa.anomalyTracker.CheckAnomaly(person, report.Metrics.AvgBreathingRate)
+				report.Metrics.BreathingAnomaly = isAnomaly
+				// Update personal rolling average after checking
+				sa.anomalyTracker.UpdatePersonalAverage(person, report.Metrics.AvgBreathingRate)
+			}
+
 			reports[linkID] = report
 
 			if sa.onReportGenerated != nil {
@@ -332,6 +355,23 @@ func (sa *SleepAnalyzer) getOrCreateSession(linkID string) *SleepSession {
 	session := NewSleepSession(linkID, sa.sleepStartHour, sa.sleepEndHour)
 	sa.sessions[linkID] = session
 	return session
+}
+
+// GetAnomalyTracker returns the breathing anomaly tracker for external access
+// (e.g., loading/saving personal baselines from SQLite).
+func (sa *SleepAnalyzer) GetAnomalyTracker() *BreathingAnomalyTracker {
+	return sa.anomalyTracker
+}
+
+// SetPersonID sets the person identity for a sleep session link.
+func (sa *SleepAnalyzer) SetPersonID(linkID, personID string) {
+	sa.mu.Lock()
+	defer sa.mu.Unlock()
+	if session, exists := sa.sessions[linkID]; exists {
+		session.mu.Lock()
+		session.personID = personID
+		session.mu.Unlock()
+	}
 }
 
 // NewSleepSession creates a new sleep session
@@ -711,6 +751,9 @@ func (ss *SleepSession) calculateBreathingMetrics(m *SleepMetrics) {
 	// Count breathing anomalies (per task spec: < 8 or > 25 bpm for > 3 minutes)
 	m.BreathingAnomalyCount = len(ss.breathingAnomalies)
 
+	// Compute breathing regularity (coefficient of variation)
+	m.BreathingRegularity = ss.computeBreathingRegularity()
+
 	// Calculate breathing score (0-100)
 	m.BreathingScore = ss.calculateBreathingScore(m.AvgBreathingRate, m.BreathingRateStdDev, m.MinBreathingRate, m.MaxBreathingRate)
 }
@@ -738,11 +781,22 @@ func (ss *SleepSession) calculateBreathingScore(avg, stdDev, min, max float64) f
 	}
 
 	// Penalize high variability
-	if stdDev > 3 {
-		score -= math.Min(20, (stdDev-3)*4)
+	if stdDev > 2 {
+		score -= math.Min(35, (stdDev-2)*10)
 	}
 
 	return math.Max(0, math.Min(100, score))
+}
+
+// computeBreathingRegularity computes CV (std/mean) of detected breathing rates.
+func (ss *SleepSession) computeBreathingRegularity() float64 {
+	var rates []float64
+	for _, sample := range ss.breathingSamples {
+		if sample.IsDetected && sample.RateBPM > 0 {
+			rates = append(rates, sample.RateBPM)
+		}
+	}
+	return ComputeBreathingRegularity(rates)
 }
 
 // calculateMotionMetrics computes motion quality metrics
