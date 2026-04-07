@@ -155,6 +155,11 @@ esp_err_t provision_write_nvs(cJSON *prov) {
         nvs_set_u8(nvs, NVS_KEY_DEBUG, cJSON_IsTrue(debug_flag) ? 1 : 0);
     }
 
+    cJSON *ntp_server = cJSON_GetObjectItem(prov, "ntp_server");
+    if (ntp_server && cJSON_IsString(ntp_server)) {
+        nvs_set_str(nvs, NVS_KEY_NTP_SERVER, ntp_server->valuestring);
+    }
+
     nvs_set_u8(nvs, NVS_KEY_PROVISIONED, 1);
     nvs_set_u8(nvs, NVS_KEY_SCHEMA_VER, NVS_SCHEMA_VERSION);
 

@@ -1398,7 +1398,7 @@ func (d *Detector) GetActiveAnomalies() []*events.AnomalyEvent {
 	return result
 }
 
-// GetAnomalyHistory returns recent anomaly events.
+// GetAnomalyHistory returns recent anomaly events from memory.
 func (d *Detector) GetAnomalyHistory(limit int) []*events.AnomalyEvent {
 	d.mu.RLock()
 	history := d.anomalyHistory
@@ -1408,6 +1408,54 @@ func (d *Detector) GetAnomalyHistory(limit int) []*events.AnomalyEvent {
 		return history
 	}
 	return history[len(history)-limit:]
+}
+
+// QueryAnomalyEvents queries persisted anomaly events from the database.
+// This works across server restarts unlike GetAnomalyHistory which is in-memory only.
+func (d *Detector) QueryAnomalyEvents(since time.Time, limit int) ([]*events.AnomalyEvent, error) {
+	rows, err := d.db.Query(`
+		SELECT id, type, score, description, timestamp,
+		       zone_id, zone_name, blob_id, person_id, person_name,
+		       device_mac, device_name, position_x, position_y, position_z,
+		       acknowledged
+		FROM anomaly_events
+		WHERE timestamp >= ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`, since.UnixNano(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query anomaly events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []*events.AnomalyEvent
+	for rows.Next() {
+		var e events.AnomalyEvent
+		var tsNS int64
+		var acknowledged int
+		if err := rows.Scan(&e.ID, &e.Type, &e.Score, &e.Description, &tsNS,
+			&e.ZoneID, &e.ZoneName, &e.BlobID,
+			&e.PersonID, &e.PersonName,
+			&e.DeviceMAC, &e.DeviceName,
+			&e.Position.X, &e.Position.Y, &e.Position.Z,
+			&acknowledged); err != nil {
+			continue
+		}
+		e.Timestamp = time.Unix(0, tsNS)
+		e.Acknowledged = acknowledged == 1
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
+// CountAnomaliesSince returns the count of anomaly events since the given time.
+func (d *Detector) CountAnomaliesSince(since time.Time) (int, error) {
+	var count int
+	err := d.db.QueryRow(
+		`SELECT COUNT(*) FROM anomaly_events WHERE timestamp >= ?`,
+		since.UnixNano(),
+	).Scan(&count)
+	return count, err
 }
 
 // GetWeeklySummary returns a summary of anomalies for the past week.

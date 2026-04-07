@@ -29,6 +29,11 @@ type Hub struct {
 	triggerState    TriggerState
 	systemHealth    SystemHealthProvider
 	zoneState       ZoneStateProvider
+	eventStore      EventStore
+
+	// Pending events buffer — events accumulated between 10 Hz delta ticks.
+	pendingEvents   []map[string]interface{}
+	pendingEventsMu sync.Mutex
 
 	// Snapshot protocol: stores the last full snapshot for delta computation.
 	// Updated on every 10 Hz tick.
@@ -104,6 +109,11 @@ type SystemHealthProvider interface {
 	GetMemoryMB() float64
 }
 
+// EventStore is an interface for persisting events to the database.
+type EventStore interface {
+	LogEvent(eventType string, timestamp time.Time, zone, person string, blobID int, detailJSON, severity string) error
+}
+
 // Client represents a dashboard WebSocket client
 type Client struct {
 	hub  *Hub
@@ -145,6 +155,13 @@ func (h *Hub) SetTriggerState(state TriggerState) {
 func (h *Hub) SetSystemHealth(provider SystemHealthProvider) {
 	h.mu.Lock()
 	h.systemHealth = provider
+	h.mu.Unlock()
+}
+
+// SetEventStore sets the event persistence store
+func (h *Hub) SetEventStore(store EventStore) {
+	h.mu.Lock()
+	h.eventStore = store
 	h.mu.Unlock()
 }
 
@@ -641,6 +658,14 @@ func (h *Hub) tickDelta() {
 	h.snap.timestampMs = now
 	h.snapMu.Unlock()
 
+	// Include any pending events that arrived since the last tick.
+	h.pendingEventsMu.Lock()
+	if len(h.pendingEvents) > 0 {
+		delta["events"] = h.pendingEvents
+		h.pendingEvents = nil
+	}
+	h.pendingEventsMu.Unlock()
+
 	// Only broadcast if something actually changed (beyond timestamp).
 	if len(delta) <= 1 {
 		return
@@ -848,20 +873,44 @@ func (h *Hub) BroadcastAnomaly(anomaly interface{}) {
 }
 
 // BroadcastEvent broadcasts an event (presence transition, zone entry/exit, portal crossing) to all dashboard clients.
+// It also persists the event to the database and buffers it for inclusion in the next incremental update.
 func (h *Hub) BroadcastEvent(eventID string, timestamp time.Time, kind, zone string, blobID int, personName string) {
+	evt := map[string]interface{}{
+		"id":          eventID,
+		"ts":          timestamp.UnixMilli(),
+		"kind":        kind,
+		"zone":        zone,
+		"blob_id":     blobID,
+		"person_name": personName,
+	}
+
 	msg := map[string]interface{}{
-		"type": "event",
-		"event": map[string]interface{}{
-			"id":         eventID,
-			"ts":         timestamp.UnixMilli(),
-			"kind":       kind,
-			"zone":       zone,
-			"blob_id":    blobID,
-			"person_name": personName,
-		},
+		"type":  "event",
+		"event": evt,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
+
+	// Buffer for inclusion in the next incremental update.
+	h.pendingEventsMu.Lock()
+	h.pendingEvents = append(h.pendingEvents, evt)
+	// Keep buffer bounded to prevent unbounded growth.
+	if len(h.pendingEvents) > 100 {
+		h.pendingEvents = h.pendingEvents[len(h.pendingEvents)-50:]
+	}
+	h.pendingEventsMu.Unlock()
+
+	// Persist to database if store is configured.
+	h.mu.RLock()
+	store := h.eventStore
+	h.mu.RUnlock()
+	if store != nil {
+		go func() {
+			if err := store.LogEvent(kind, timestamp, zone, personName, blobID, "", "info"); err != nil {
+				log.Printf("[WARN] Failed to persist event %s: %v", eventID, err)
+			}
+		}()
+	}
 }
 
 // BroadcastAlert broadcasts an alert (anomaly detection, security mode trigger) to all dashboard clients.

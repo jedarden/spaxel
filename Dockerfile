@@ -21,7 +21,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o spaxel ./cmd/mothership
 
 # Stage 2: Minimal runtime image
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM debian:12-slim
+
+# Install wget for health check
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary
 COPY --from=builder /app/spaxel /spaxel
@@ -36,8 +39,9 @@ VOLUME ["/data", "/firmware"]
 # Expose HTTP/WebSocket port
 EXPOSE 8080
 
-# Health check — distroless has no shell or wget, so remove container-level check.
-# K8s liveness/readiness probes handle health checking instead.
+# Health check — verifies service responds with status=ok
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget -qO- http://localhost:8080/healthz | grep -q '"status":"ok"' || exit 1
 
-# Run as non-root (distroless default is UID 65532)
+# Run as non-root
 ENTRYPOINT ["/spaxel"]

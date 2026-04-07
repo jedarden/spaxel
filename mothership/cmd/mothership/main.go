@@ -25,13 +25,16 @@ import (
 	"github.com/spaxel/mothership/internal/automation"
 	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/dashboard"
+	"github.com/spaxel/mothership/internal/db"
 	"github.com/spaxel/mothership/internal/diagnostics"
 	"github.com/spaxel/mothership/internal/events"
 	"github.com/spaxel/mothership/internal/explainability"
 	"github.com/spaxel/mothership/internal/falldetect"
 	"github.com/spaxel/mothership/internal/fleet"
+	"github.com/spaxel/mothership/internal/health"
 	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/learning"
+	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
 	"github.com/spaxel/mothership/internal/mqtt"
 	"github.com/spaxel/mothership/internal/notify"
@@ -215,15 +218,28 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"ok","version":"%s"}`, version)
-	 })
+	// Phase 1: Open main database (used by health checker and other subsystems)
+	mainDB, err := db.OpenDB(cfg.DataDir, "spaxel.db", nil)
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to open main database: %v", err)
+	}
+	defer mainDB.Close()
+	log.Printf("[INFO] Main database at %s", filepath.Join(cfg.DataDir, "spaxel.db"))
+
+	// Create load shedder for health monitoring
+	shedder := loadshed.New()
 
 	// Create ingestion server
     ingestSrv := ingestion.NewServer()
     r.HandleFunc("/ws/node", ingestSrv.HandleNodeWS)
+
+	// Wire up health checker with all dependencies
+	healthChecker := health.New(health.Config{
+		DB:           mainDB,
+		GetNodeCount: func() int { return len(ingestSrv.GetConnectedNodes()) },
+		Shedder:      shedder,
+	})
+	r.Get("/healthz", healthChecker.Handler(version))
 
     // Signal processing pipeline
     pm := sigproc.NewProcessorManager(sigproc.ProcessorManagerConfig{

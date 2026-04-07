@@ -64,6 +64,7 @@ typedef enum {
 #define NVS_KEY_PKT_RATE "pkt_rate"
 #define NVS_KEY_AP_MODE "ap_mode"
 #define NVS_KEY_DEBUG "debug"
+#define NVS_KEY_NTP_SERVER "ntp_server"
 
 // Current NVS schema version
 #define NVS_SCHEMA_VERSION 1

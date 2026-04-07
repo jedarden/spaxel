@@ -5,6 +5,7 @@
 #include "ble.h"
 #include "provision.h"
 #include "nvs_migration.h"
+#include "ntp.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"

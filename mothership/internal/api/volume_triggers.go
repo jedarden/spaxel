@@ -47,6 +47,22 @@ type VolumeTriggersHandler struct {
 }
 
 // TriggerResponse represents a trigger as returned by the API.
+//
+// JSON fields:
+//   - id: integer trigger ID (auto-assigned)
+//   - name: user-defined trigger name
+//   - shape: 3D volume geometry (box or cylinder)
+//   - condition: trigger condition (enter, leave, dwell, vacant, count)
+//   - condition_params: condition-specific parameters (duration_s, count_threshold, person)
+//   - time_constraint: optional time window (from, to in HH:MM format)
+//   - actions: list of actions to execute when triggered (webhook, mqtt, ntfy, pushover)
+//   - enabled: whether the trigger is active
+//   - error_message: last error description (set by 4xx webhook responses)
+//   - error_count: consecutive error count (reset on 2xx success)
+//   - last_fired: timestamp of last firing (omitted if never fired)
+//   - elapsed: seconds since last fire (computed at response time)
+//   - created_at: creation timestamp
+//   - updated_at: last modification timestamp
 type TriggerResponse struct {
 	ID             string                  `json:"id"`
 	Name           string                  `json:"name"`
@@ -64,7 +80,9 @@ type TriggerResponse struct {
 	UpdatedAt      time.Time               `json:"updated_at"`
 }
 
-// WebhookTestResult is returned by the test endpoint.
+// WebhookTestResult is returned by POST /api/triggers/{id}/test.
+//
+// Contains the overall test status and per-action execution results.
 type WebhookTestResult struct {
 	Status    string        `json:"status"`
 	ResponseMs int64         `json:"response_ms"`
@@ -72,7 +90,7 @@ type WebhookTestResult struct {
 	Actions   []ActionResult `json:"actions"`
 }
 
-// ActionResult represents the outcome of executing a single action.
+// ActionResult represents the outcome of executing a single action during a test fire.
 type ActionResult struct {
 	Type      string `json:"type"`
 	URL       string `json:"url,omitempty"`
@@ -127,18 +145,20 @@ func (h *VolumeTriggersHandler) Close() error {
 	return h.store.Close()
 }
 
-// RegisterRoutes registers volume trigger endpoints.
+// RegisterRoutes registers volume trigger endpoints on the given router.
 //
-// GET    /api/triggers              — list all triggers
-// POST   /api/triggers              — create trigger
-// GET    /api/triggers/{id}         — get single trigger
-// PUT    /api/triggers/{id}         — update trigger
-// DELETE /api/triggers/{id}         — delete trigger
-// POST   /api/triggers/{id}/test    — fire webhook actions once with synthetic payload
-// POST   /api/triggers/{id}/enable  — clear error state and re-enable
-// POST   /api/triggers/{id}/disable — disable trigger
-// GET    /api/triggers/{id}/webhook-log — last N webhook firings for a trigger
-// GET    /api/triggers/log          — get recent firing log
+// Endpoints:
+//
+//	GET    /api/triggers                    — list all triggers
+//	POST   /api/triggers                    — create trigger
+//	GET    /api/triggers/{id}               — get single trigger
+//	PUT    /api/triggers/{id}               — update trigger
+//	DELETE /api/triggers/{id}               — delete trigger
+//	POST   /api/triggers/{id}/test          — fire actions once with synthetic payload
+//	POST   /api/triggers/{id}/enable        — clear error state and re-enable
+//	POST   /api/triggers/{id}/disable       — disable trigger
+//	GET    /api/triggers/{id}/webhook-log   — last N webhook firings for a trigger
+//	GET    /api/triggers/log                — recent firing log across all triggers
 func (h *VolumeTriggersHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/triggers", h.listTriggers)
 	r.Post("/api/triggers", h.createTrigger)
@@ -152,6 +172,28 @@ func (h *VolumeTriggersHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/triggers/log", h.getTriggerLog)
 }
 
+// listTriggers handles GET /api/triggers.
+//
+// Returns all registered automation triggers as a JSON array. Each trigger
+// includes its 3D shape geometry, condition, actions, enabled state, and
+// elapsed time since last fire.
+//
+// Response 200 (application/json):
+//
+//	[{
+//	  "id": "1",
+//	  "name": "Couch Dwell",
+//	  "shape": {"type": "box", "x": 1, "y": 2, "z": 0, "w": 1, "d": 1, "h": 1.5},
+//	  "condition": "dwell",
+//	  "condition_params": {"duration_s": 30},
+//	  "time_constraint": {"from": "22:00", "to": "06:00"},
+//	  "actions": [{"type": "webhook", "url": "http://example.com/hook"}],
+//	  "enabled": true,
+//	  "last_fired": "2024-03-15T14:32:05Z",
+//	  "elapsed": 142,
+//	  "created_at": "2024-03-10T08:00:00Z",
+//	  "updated_at": "2024-03-10T08:00:00Z"
+//	}]
 func (h *VolumeTriggersHandler) listTriggers(w http.ResponseWriter, r *http.Request) {
 	triggers := h.store.GetAll()
 
@@ -166,6 +208,12 @@ func (h *VolumeTriggersHandler) listTriggers(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, response)
 }
 
+// getTrigger handles GET /api/triggers/{id}.
+//
+// Returns a single trigger by its integer ID.
+//
+// Response 200 (application/json): the trigger object.
+// Response 404: trigger not found.
 func (h *VolumeTriggersHandler) getTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -179,6 +227,7 @@ func (h *VolumeTriggersHandler) getTrigger(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// volumeCreateTriggerRequest is the request body for POST /api/triggers.
 type volumeCreateTriggerRequest struct {
 	Name            string                   `json:"name"`
 	Shape           volume.ShapeJSON         `json:"shape"`
@@ -189,6 +238,27 @@ type volumeCreateTriggerRequest struct {
 	Enabled         *bool                    `json:"enabled,omitempty"`
 }
 
+// createTrigger handles POST /api/triggers.
+//
+// Creates a new automation trigger with 3D volume geometry. The request body
+// must include name, shape, and condition. Actions default to an empty array
+// if omitted. Enabled defaults to true.
+//
+// Request body (application/json):
+//
+//	{
+//	  "name": "Couch Dwell",
+//	  "shape": {"type": "box", "x": 1, "y": 2, "z": 0, "w": 1, "d": 1, "h": 1.5},
+//	  "condition": "dwell",
+//	  "condition_params": {"duration_s": 30},
+//	  "time_constraint": {"from": "22:00", "to": "06:00"},
+//	  "actions": [{"type": "webhook", "url": "http://example.com/hook"}],
+//	  "enabled": true
+//	}
+//
+// Response 201 (application/json): the created trigger object.
+// Response 400: missing required fields, invalid shape geometry, or invalid condition value.
+// Response 500: database error.
 func (h *VolumeTriggersHandler) createTrigger(w http.ResponseWriter, r *http.Request) {
 	var req volumeCreateTriggerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -254,6 +324,8 @@ func (h *VolumeTriggersHandler) createTrigger(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusCreated, resp)
 }
 
+// volumeUpdateTriggerRequest is the request body for PUT /api/triggers/{id}.
+// Only non-nil fields are updated.
 type volumeUpdateTriggerRequest struct {
 	Name            *string                  `json:"name,omitempty"`
 	Shape           *volume.ShapeJSON        `json:"shape,omitempty"`
@@ -264,6 +336,18 @@ type volumeUpdateTriggerRequest struct {
 	Enabled         *bool                    `json:"enabled,omitempty"`
 }
 
+// updateTrigger handles PUT /api/triggers/{id}.
+//
+// Updates an existing trigger. Only fields present in the request body are
+// modified; omitted fields retain their current values. Shape geometry is
+// validated on update.
+//
+// Request body (application/json): partial trigger object with fields to update.
+//
+// Response 200 (application/json): the updated trigger object.
+// Response 400: invalid request body or invalid shape geometry.
+// Response 404: trigger not found.
+// Response 500: database error.
 func (h *VolumeTriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -316,6 +400,12 @@ func (h *VolumeTriggersHandler) updateTrigger(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// deleteTrigger handles DELETE /api/triggers/{id}.
+//
+// Removes a trigger by ID and all associated state (trigger state, webhook log entries).
+//
+// Response 204: trigger deleted.
+// Response 500: database error.
 func (h *VolumeTriggersHandler) deleteTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -328,8 +418,28 @@ func (h *VolumeTriggersHandler) deleteTrigger(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// testTrigger fires webhook actions once with a synthetic payload.
-// Returns {status, response_ms, actions: [{type, url, status, response_ms, error}]}
+// testTrigger handles POST /api/triggers/{id}/test.
+//
+// Fires the trigger's actions once with a synthetic event payload for testing.
+// Webhook actions are executed immediately; MQTT and notification actions are
+// reported as simulated (not executed). Test firings do NOT update last_fired,
+// do NOT increment error counts, and do NOT disable the trigger on 4xx responses.
+//
+// Response 200 (application/json):
+//
+//	{
+//	  "status": "ok",
+//	  "response_ms": 42,
+//	  "actions": [{
+//	    "type": "webhook",
+//	    "url": "http://example.com/hook",
+//	    "status": 200,
+//	    "response_ms": 42
+//	  }]
+//	}
+//
+// Response 404: trigger not found.
+// Response 500: failed to marshal test payload.
 func (h *VolumeTriggersHandler) testTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -409,7 +519,12 @@ func (h *VolumeTriggersHandler) testTrigger(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// enableTrigger clears error state and re-enables a trigger.
+// enableTrigger handles POST /api/triggers/{id}/enable.
+//
+// Clears the error state (error_message and error_count) and re-enables the trigger.
+//
+// Response 200 (application/json): {"status": "ok"}
+// Response 404: trigger not found.
 func (h *VolumeTriggersHandler) enableTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -424,7 +539,13 @@ func (h *VolumeTriggersHandler) enableTrigger(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok"})
 }
 
-// disableTrigger disables a trigger.
+// disableTrigger handles POST /api/triggers/{id}/disable.
+//
+// Disables a trigger. The trigger will no longer be evaluated until re-enabled.
+//
+// Response 200 (application/json): {"status": "ok"}
+// Response 404: trigger not found.
+// Response 500: database error.
 func (h *VolumeTriggersHandler) disableTrigger(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -446,7 +567,15 @@ func (h *VolumeTriggersHandler) disableTrigger(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok"})
 }
 
-// getWebhookLog returns the last N webhook firings for a specific trigger.
+// getWebhookLog handles GET /api/triggers/{id}/webhook-log.
+//
+// Returns the most recent webhook firing log entries for a specific trigger.
+// Entries include URL, timestamp, HTTP status code, latency, and any error message.
+//
+// Query parameters:
+//   - limit: maximum entries to return (default 20, max 100)
+//
+// Response 200 (application/json): array of webhook log entries.
 func (h *VolumeTriggersHandler) getWebhookLog(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -462,6 +591,14 @@ func (h *VolumeTriggersHandler) getWebhookLog(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, entries)
 }
 
+// getTriggerLog handles GET /api/triggers/log.
+//
+// Returns the most recent trigger firing events across all triggers.
+//
+// Query parameters:
+//   - limit: maximum entries to return (default 10, max 100)
+//
+// Response 200 (application/json): array of firing records.
 func (h *VolumeTriggersHandler) getTriggerLog(w http.ResponseWriter, r *http.Request) {
 	// Get limit from query param (default 10, max 100)
 	limitStr := r.URL.Query().Get("limit")

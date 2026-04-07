@@ -53,6 +53,11 @@ func AllMigrations() []Migration {
 			Description: "add unique constraint on sleep_records person+date",
 			Up:          migration_009_sleep_records_unique,
 		},
+		{
+			Version:     10,
+			Description: "add floorplan table for image upload and calibration",
+			Up:          migration_010_add_floorplan,
+		},
 	}
 }
 
@@ -476,5 +481,26 @@ func migration_008_add_breathing_anomaly(tx *sql.Tx) error {
 // so that the ON CONFLICT upsert in Save() works correctly.
 func migration_009_sleep_records_unique(tx *sql.Tx) error {
 	_, err := tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sleep_person_date_unique ON sleep_records(person, date)`)
+	return err
+}
+
+// migration_010_add_floorplan creates the floorplan table for storing
+// uploaded floor plan images and pixel-to-meter calibration data.
+func migration_010_add_floorplan(tx *sql.Tx) error {
+	schema := `
+-- Floor plan definition
+CREATE TABLE IF NOT EXISTS floorplan (
+	id              INTEGER PRIMARY KEY CHECK (id = 1),
+	image_path      TEXT,
+	cal_ax          REAL,
+	cal_ay          REAL,
+	cal_bx          REAL,
+	cal_by          REAL,
+	distance_m      REAL,
+	rotation_deg    REAL,
+	updated_at      INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+);
+`
+	_, err := tx.Exec(schema)
 	return err
 }

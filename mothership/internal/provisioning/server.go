@@ -28,6 +28,7 @@ type Payload struct {
 	NodeToken string `json:"node_token"`
 	MsMDNS   string `json:"ms_mdns"`
 	MsPort    int    `json:"ms_port"`
+	NTPServer string `json:"ntp_server"`
 	Debug     bool   `json:"debug"`
 }
 
@@ -46,6 +47,7 @@ type Server struct {
 	installSecret []byte // 32-byte HMAC key; persisted to secretFile
 	mdnsName      string
 	msPort        int
+	ntpServer     string
 }
 
 // NewServer creates a provisioning server.
@@ -56,11 +58,19 @@ func NewServer(dataDir, mdnsName string, msPort int) *Server {
 		secretFile: filepath.Join(dataDir, "install_secret.bin"),
 		mdnsName:   mdnsName,
 		msPort:     msPort,
+		ntpServer:  envOr("SPAXEL_NTP_SERVER", "pool.ntp.org"),
 	}
 	if err := s.loadOrCreateSecret(); err != nil {
 		log.Printf("[ERROR] provisioning: could not load/create install secret: %v", err)
 	}
 	return s
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // loadOrCreateSecret reads or generates the 32-byte install secret.
@@ -135,14 +145,15 @@ func (s *Server) HandleProvision(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload := Payload{
-		Version:   1,
-		WifiSSID:  req.WifiSSID,
-		WifiPass:  req.WifiPass,
-		NodeID:    nodeID,
-		NodeToken: token,
-		MsMDNS:   s.mdnsName,
-		MsPort:    s.msPort,
-		Debug:     req.Debug,
+		Version:    1,
+		WifiSSID:   req.WifiSSID,
+		WifiPass:   req.WifiPass,
+		NodeID:     nodeID,
+		NodeToken:  token,
+		MsMDNS:     s.mdnsName,
+		MsPort:     s.msPort,
+		NTPServer:  s.ntpServer,
+		Debug:      req.Debug,
 	}
 
 	log.Printf("[INFO] provisioning: generated payload node_id=%s mac=%s", nodeID, req.MAC)
