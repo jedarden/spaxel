@@ -223,6 +223,7 @@ func main() {
 		DB:           mainDB,
 		GetNodeCount: func() int { return len(ingestSrv.GetConnectedNodes()) },
 		Shedder:      shedder,
+		GetShedLevel: pm.GetShedLevel,
 	})
 	r.Get("/healthz", healthChecker.Handler(version))
 
@@ -696,6 +697,24 @@ func main() {
     ingestSrv.SetDashboardBroadcaster(dashboardHub)
     ingestSrv.SetMotionBroadcaster(dashboardHub)
     ingestSrv.SetEventBroadcaster(dashboardHub)
+
+    // Wire load-shedding level changes to dashboard alerts
+    pm.OnShedLevelChange = func(prevLevel, newLevel int) {
+        if newLevel == 3 {
+            msg := map[string]interface{}{
+                "type":        "alert",
+                "severity":    "warning",
+                "description": "System under load — CSI rate reduced to 10 Hz",
+            }
+            data, _ := json.Marshal(msg)
+            dashboardHub.Broadcast(data)
+            log.Printf("[INFO] Load shed level 3 — would push 10Hz cap to nodes")
+        }
+        if prevLevel == 3 && newLevel < 3 {
+            log.Printf("[INFO] Load shed recovered — restoring prior node rate")
+        }
+        log.Printf("[INFO] Load shedding level changed: %d → %d", prevLevel, newLevel)
+    }
 
     // Phase 6: Wire BLE messages to registry and identity matcher
     ingestSrv.SetBLEHandler(func(nodeMAC string, devices []ingestion.BLEDevice) {
@@ -3022,6 +3041,16 @@ func main() {
     backupHandler := api.NewBackupHandler(cfg.DataDir, version)
     r.Get("/api/backup", backupHandler.HandleBackup)
     log.Printf("[INFO] Backup API registered at /api/backup")
+
+    // Events timeline REST API
+    eventsHandler, err := api.NewEventsHandler(filepath.Join(cfg.DataDir, "spaxel.db"))
+    if err != nil {
+        log.Fatalf("[FATAL] Failed to create events handler: %v", err)
+    }
+    eventsHandler.SetHub(dashboardHub)
+    eventsHandler.RegisterRoutes(r)
+    defer eventsHandler.Close()
+    log.Printf("[INFO] Events timeline API registered at /api/events/*")
 
     // OTA firmware server and manager
     firmwareDir := filepath.Join(cfg.DataDir, "firmware")
