@@ -293,7 +293,7 @@ func (h *ZonesHandler) listZones(w http.ResponseWriter, r *http.Request) {
 func (h *ZonesHandler) createZone(w http.ResponseWriter, r *http.Request) {
 	var zone zones.Zone
 	if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 
@@ -302,7 +302,7 @@ func (h *ZonesHandler) createZone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if zone.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "name is required")
 		return
 	}
 
@@ -330,13 +330,13 @@ func (h *ZonesHandler) updateZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	if h.mgr.GetZone(id) == nil {
-		http.Error(w, "zone not found", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "zone not found")
 		return
 	}
 
 	var zone zones.Zone
 	if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 
@@ -344,7 +344,7 @@ func (h *ZonesHandler) updateZone(w http.ResponseWriter, r *http.Request) {
 	zone.ID = id
 
 	if err := h.mgr.UpdateZone(&zone); err != nil {
-		http.Error(w, "failed to update zone: "+err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to update zone: "+err.Error())
 		return
 	}
 
@@ -361,7 +361,7 @@ func (h *ZonesHandler) deleteZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	if err := h.mgr.DeleteZone(id); err != nil {
-		http.Error(w, "failed to delete zone: "+err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to delete zone: "+err.Error())
 		return
 	}
 
@@ -381,7 +381,7 @@ func (h *ZonesHandler) getZoneHistory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	if h.mgr.GetZone(id) == nil {
-		http.Error(w, "zone not found", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "zone not found")
 		return
 	}
 
@@ -425,7 +425,7 @@ func (h *ZonesHandler) listPortals(w http.ResponseWriter, r *http.Request) {
 func (h *ZonesHandler) createPortal(w http.ResponseWriter, r *http.Request) {
 	var portal zones.Portal
 	if err := json.NewDecoder(r.Body).Decode(&portal); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 
@@ -435,16 +435,16 @@ func (h *ZonesHandler) createPortal(w http.ResponseWriter, r *http.Request) {
 
 	// Validate zone references
 	if portal.ZoneAID != "" && h.mgr.GetZone(portal.ZoneAID) == nil {
-		http.Error(w, "zone_a not found", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "zone_a not found")
 		return
 	}
 	if portal.ZoneBID != "" && h.mgr.GetZone(portal.ZoneBID) == nil {
-		http.Error(w, "zone_b not found", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "zone_b not found")
 		return
 	}
 
 	if err := h.mgr.CreatePortal(&portal); err != nil {
-		http.Error(w, "failed to create portal: "+err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to create portal: "+err.Error())
 		return
 	}
 
@@ -459,13 +459,13 @@ func (h *ZonesHandler) updatePortal(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	if h.mgr.GetPortal(id) == nil {
-		http.Error(w, "portal not found", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "portal not found")
 		return
 	}
 
 	var portal zones.Portal
 	if err := json.NewDecoder(r.Body).Decode(&portal); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 
@@ -474,16 +474,16 @@ func (h *ZonesHandler) updatePortal(w http.ResponseWriter, r *http.Request) {
 
 	// Validate zone references if changed
 	if portal.ZoneAID != "" && h.mgr.GetZone(portal.ZoneAID) == nil {
-		http.Error(w, "zone_a not found", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "zone_a not found")
 		return
 	}
 	if portal.ZoneBID != "" && h.mgr.GetZone(portal.ZoneBID) == nil {
-		http.Error(w, "zone_b not found", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "zone_b not found")
 		return
 	}
 
 	if err := h.mgr.UpdatePortal(&portal); err != nil {
-		http.Error(w, "failed to update portal: "+err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to update portal: "+err.Error())
 		return
 	}
 
@@ -497,7 +497,7 @@ func (h *ZonesHandler) deletePortal(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	if err := h.mgr.DeletePortal(id); err != nil {
-		http.Error(w, "failed to delete portal: "+err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to delete portal: "+err.Error())
 		return
 	}
 
@@ -510,7 +510,7 @@ func (h *ZonesHandler) getPortalCrossings(w http.ResponseWriter, r *http.Request
 	id := chi.URLParam(r, "id")
 
 	if h.mgr.GetPortal(id) == nil {
-		http.Error(w, "portal not found", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "portal not found")
 		return
 	}
 

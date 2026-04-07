@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi"
@@ -142,7 +143,7 @@ func TestCreateZone(t *testing.T) {
 				MinX: 4, MinY: 0, MinZ: 0, MaxX: 8, MaxY: 5, MaxZ: 2.5,
 			},
 			wantStatus: http.StatusCreated,
-			wantID:     "zone_",
+			wantID:     "", // auto-generated, check prefix in test
 		},
 		{
 			name: "create bedroom zone",
@@ -175,8 +176,15 @@ func TestCreateZone(t *testing.T) {
 			if err := json.NewDecoder(rr.Body).Decode(&created); err != nil {
 				t.Fatalf("Failed to decode response: %v", err)
 			}
-			if created.ID != tt.wantID {
-				t.Errorf("Expected ID starting with %q, got %q", tt.wantID, created.ID)
+			// For auto-generated IDs, check prefix; otherwise check exact match
+			if tt.wantID == "" {
+				if !strings.HasPrefix(created.ID, "zone_") {
+					t.Errorf("Expected ID starting with \"zone_\", got %q", created.ID)
+				}
+			} else {
+				if created.ID != tt.wantID {
+					t.Errorf("Expected ID %q, got %q", tt.wantID, created.ID)
+				}
 			}
 			if created.CreatedAt.IsZero() {
 				t.Error("Expected non-zero CreatedAt")
