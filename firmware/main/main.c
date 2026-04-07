@@ -4,6 +4,7 @@
 #include "csi.h"
 #include "ble.h"
 #include "provision.h"
+#include "nvs_migration.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -68,14 +69,6 @@ static esp_err_t load_nvs_config(void) {
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to open NVS namespace: %s", esp_err_to_name(err));
         return err;
-    }
-
-    // Check schema version
-    uint8_t schema_ver = 0;
-    nvs_get_u8(nvs, NVS_KEY_SCHEMA_VER, &schema_ver);
-    if (schema_ver < NVS_SCHEMA_VERSION) {
-        ESP_LOGW(TAG, "NVS schema migration needed: %d -> %d", schema_ver, NVS_SCHEMA_VERSION);
-        // Migration code would go here
     }
 
     // Check provisioned flag
@@ -382,6 +375,13 @@ void app_main(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // Run NVS schema migration if needed
+    esp_err_t migration_err = nvs_migration_run();
+    if (migration_err != ESP_OK) {
+        ESP_LOGE(TAG, "NVS migration failed: %s", esp_err_to_name(migration_err));
+        // Continue anyway - NVS should be in a consistent state
+    }
 
     // Get MAC address
     esp_read_mac(g_state.mac, ESP_MAC_WIFI_STA);
