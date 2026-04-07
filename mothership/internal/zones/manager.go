@@ -683,7 +683,7 @@ func (m *Manager) recordCrossing(event CrossingEvent) {
 	_, err := m.db.Exec(`
 		INSERT INTO crossing_events (portal_id, blob_id, direction, from_zone, to_zone, timestamp, identity)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, event.PortalID, event.BlobID, event.Direction, event.FromZone, event.ToZone, event.Timestamp.UnixNano(), event.Identity)
+	`, event.PortalID, event.BlobID, event.Direction, event.FromZone, event.ToZone, event.Timestamp.UnixMilli(), event.Identity)
 	if err != nil {
 		log.Printf("[WARN] Failed to record crossing event: %v", err)
 	}
@@ -752,7 +752,7 @@ func (m *Manager) GetRecentCrossings(limit int) []CrossingEvent {
 		if err := rows.Scan(&event.PortalID, &event.BlobID, &event.Direction, &event.FromZone, &event.ToZone, &ts, &event.Identity); err != nil {
 			continue
 		}
-		event.Timestamp = time.Unix(0, ts)
+		event.Timestamp = time.UnixMilli(ts)
 		events = append(events, event)
 	}
 	return events
@@ -782,7 +782,7 @@ func (m *Manager) GetBlobDwellTime(blobID int, zoneID string) (time.Duration, bo
 	}
 
 	// Calculate dwell time since entering the zone
-	dwellTime := time.Since(time.Unix(0, enterTime))
+	dwellTime := time.Since(time.UnixMilli(enterTime))
 	return dwellTime, true
 }
 
@@ -836,7 +836,7 @@ func (m *Manager) reconcileOccupancy() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	now := time.Now()
+	now := time.Now().In(m.tz)
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, m.tz)
 	midnightMs := midnight.UnixMilli()
 
@@ -862,7 +862,7 @@ func (m *Manager) reconcileOccupancy() {
 
 	// Step 2: Compute net portal crossings since midnight
 	crossRows, err := m.db.Query(`
-		SELECT zone_a_id, zone_b_id, direction, timestamp
+		SELECT from_zone, to_zone, timestamp
 		FROM crossing_events
 		WHERE timestamp >= ?
 	`, midnightMs)
@@ -874,19 +874,14 @@ func (m *Manager) reconcileOccupancy() {
 
 	netPerZone := make(map[string]int)
 	for crossRows.Next() {
-		var zoneAID, zoneBID, direction string
+		var fromZone, toZone string
 		var tsMs int64
-		if err := crossRows.Scan(&zoneAID, &zoneBID, &direction, &tsMs); err != nil {
+		if err := crossRows.Scan(&fromZone, &toZone, &tsMs); err != nil {
 			continue
 		}
-		switch direction {
-		case "a_to_b", "1":
-			netPerZone[zoneBID]++
-			netPerZone[zoneAID]--
-		case "b_to_a", "-1":
-			netPerZone[zoneAID]++
-			netPerZone[zoneBID]--
-		}
+		// Each crossing: from_zone loses one, to_zone gains one
+		netPerZone[fromZone]--
+		netPerZone[toZone]++
 	}
 
 	// Step 3: Apply net crossings to loaded occupancy
@@ -960,15 +955,17 @@ func (m *Manager) ReconcileTick() {
 					zoneID, oldCount, blobCount)
 				m.reconDiscrep = 0
 			}
-		} else {
+		} else if diff == 0 {
+			// Exact match — mark reconciled after 2 consecutive checks
 			m.reconChecks++
 			m.reconDiscrep = 0
 			if m.reconChecks >= 2 {
 				occ.Status = OccupancyReconciled
-				occ.Count = blobCount
-				occ.BlobIDs = nil
-				occ.LastUpdated = time.Now()
 			}
+		} else {
+			// diff == 1: close but not exact, stay uncertain
+			m.reconChecks = 0
+			m.reconDiscrep = 0
 		}
 	}
 
