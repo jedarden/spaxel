@@ -135,6 +135,12 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 
 	latest := len(AllMigrations())
 	log.Printf("[INFO] Schema migration complete (version %d)", latest)
+
+	// FTS5 rebuild check: if events_fts is empty but events has rows,
+	// the FTS index is stale and needs rebuilding (e.g., after a DB restore).
+	if err := ensureFTSSync(ctx, db); err != nil {
+		log.Printf("[WARN] FTS5 sync check failed (non-fatal): %v", err)
+	}
 	done()
 
 	// Phase 4: Config & secrets
@@ -194,6 +200,26 @@ func RunMigrations(dataDir, dbName string) error {
 	migrator.Register(AllMigrations()...)
 
 	return migrator.Migrate(ctx)
+}
+
+// ensureFTSSync checks if the events_fts table is in sync with the events
+// table and rebuilds it if necessary. This handles cases where the FTS index
+// gets out of sync (e.g., after a DB restore or migration re-creation).
+func ensureFTSSync(ctx context.Context, db *sql.DB) error {
+	var ftsCount, eventsCount int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM events_fts").Scan(&ftsCount); err != nil {
+		// FTS table might not exist yet (migration 011 hasn't run)
+		return nil
+	}
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM events").Scan(&eventsCount); err != nil {
+		return err
+	}
+	if eventsCount > 0 && ftsCount == 0 {
+		log.Printf("[INFO] Rebuilding events_fts index (%d rows to index)", eventsCount)
+		_, err := db.ExecContext(ctx, "INSERT INTO events_fts(events_fts) VALUES ('rebuild')")
+		return err
+	}
+	return nil
 }
 
 // CurrentVersion returns the current schema version of the database.

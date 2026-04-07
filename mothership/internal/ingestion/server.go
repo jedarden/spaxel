@@ -260,6 +260,23 @@ func (s *Server) SetAPDetector(detector *apdetector.Detector) {
 	s.mu.Unlock()
 }
 
+// SetShedder sets the load shedder for frame dropping and replay write control.
+// This also wires the IngestChannelFull callback to check the frame gauge.
+func (s *Server) SetShedder(sh *loadshed.Shedder) {
+	s.mu.Lock()
+	s.shedder = sh
+	s.mu.Unlock()
+	if sh != nil {
+		sh.SetIngestChannelFull(s.isChannelOverHalfFull)
+	}
+}
+
+// isChannelOverHalfFull reports whether the frame gauge channel is more than
+// 50% full. Used by the load shedder to decide whether to drop CSI frames.
+func (s *Server) isChannelOverHalfFull() bool {
+	return len(s.frameGauge) > frameGaugeSize/2
+}
+
 // GetConnectedMACs returns the MACs of currently-connected nodes.
 func (s *Server) GetConnectedMACs() []string {
 	return s.GetConnectedNodes()
@@ -459,6 +476,14 @@ func (s *Server) handleMessages(nc *NodeConnection) {
 
 // handleBinaryFrame processes a CSI binary frame
 func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
+	// Load shedding Level 3: drop frames when ingest channel > 50% full.
+	s.mu.RLock()
+	sh := s.shedder
+	s.mu.RUnlock()
+	if sh != nil && sh.ShouldDropFrames() {
+		return
+	}
+
 	frame, err := ParseFrame(data)
 	if err != nil {
 		s.recordMalformed(nc.MAC)
@@ -475,7 +500,8 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 	s.mu.RUnlock()
 
 	// 1. Record raw frame to disk before any processing.
-	if replay != nil {
+	// Load shedding Level 2+: suspend CSI replay buffer writes.
+	if replay != nil && (sh == nil || sh.ShouldWriteReplay()) {
 		if err := replay.Append(recvTime.UnixNano(), data); err != nil {
 			log.Printf("[WARN] Replay append error: %v", err)
 		}

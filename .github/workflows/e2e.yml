@@ -1,19 +1,19 @@
 name: E2E Tests
 
+# Only triggers from Argo Workflows via spaxel-ci
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'mothership/**'
-      - 'tests/**'
-      - '.github/workflows/e2e.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'mothership/**'
-      - 'tests/**'
-      - '.github/workflows/e2e.yml'
   workflow_dispatch:
+    inputs:
+      argo_run_id:
+        description: 'Argo Workflow run ID that triggered this'
+        required: false
+        type: string
+  repository_dispatch:
+    types: [e2e-test-trigger]
+
+# Note: This workflow is triggered by Argo Workflows (spaxel-ci) via repository_dispatch event.
+# The Argo Workflow posts to GitHub's repository_dispatch API to trigger this workflow.
+# Results are posted back as a bead comment via the Argo Workflow.
 
 jobs:
   e2e:

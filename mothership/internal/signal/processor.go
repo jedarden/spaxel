@@ -219,18 +219,12 @@ func (lp *LinkProcessor) Reset() {
 
 // ProcessorManager manages LinkProcessors for all links
 type ProcessorManager struct {
-	mu            sync.RWMutex
-	processors    map[string]*LinkProcessor
-	nSub          int
-	alpha         float64
-	fusionRate    float64 // Hz
-	trackedBlobs  []TrackedBlob
-	iterDurations [5]time.Duration // ring buffer for last 5 iteration times
-	iterIdx       int              // next write index (mod 5)
-	iterCount     int              // how many values filled (0-5)
-	shedLevel     int              // current load shedding level (0-3)
-	steadyCount   int              // consecutive iters below recovery threshold
-	OnShedLevelChange func(prevLevel, newLevel int) // called when shed level changes (optional)
+	mu           sync.RWMutex
+	processors   map[string]*LinkProcessor
+	nSub         int
+	alpha        float64
+	fusionRate   float64 // Hz
+	trackedBlobs []TrackedBlob
 }
 
 // ProcessorManagerConfig holds configuration for ProcessorManager
@@ -256,7 +250,6 @@ func NewProcessorManager(cfg ProcessorManagerConfig) *ProcessorManager {
 
 // Process processes a CSI frame for a link
 func (pm *ProcessorManager) Process(linkID string, payload []int8, rssiDBm int8, nSub int, recvTime time.Time) (*ProcessResult, error) {
-	t0 := time.Now()
 	pm.mu.Lock()
 	processor, exists := pm.processors[linkID]
 	if !exists {
@@ -264,71 +257,8 @@ func (pm *ProcessorManager) Process(linkID string, payload []int8, rssiDBm int8,
 		pm.processors[linkID] = processor
 	}
 	result, err := processor.Process(payload, rssiDBm, nSub, recvTime)
-	pm.updateShedding(time.Since(t0))
 	pm.mu.Unlock()
 	return result, err
-}
-
-// updateShedding updates the load-shedding level based on a rolling 5-iteration average.
-// Caller must hold pm.mu (write lock).
-func (pm *ProcessorManager) updateShedding(elapsed time.Duration) {
-	pm.iterDurations[pm.iterIdx%5] = elapsed
-	pm.iterIdx++
-	if pm.iterCount < 5 {
-		pm.iterCount++
-	}
-
-	// compute rolling avg
-	var sum time.Duration
-	for i := 0; i < pm.iterCount; i++ {
-		sum += pm.iterDurations[i]
-	}
-	avg := sum / time.Duration(pm.iterCount)
-
-	// level up
-	if avg >= 95*time.Millisecond && pm.shedLevel < 3 {
-		pm.notifyShedLevelChange(pm.shedLevel, 3)
-		pm.shedLevel = 3
-		pm.steadyCount = 0
-	} else if avg >= 90*time.Millisecond && pm.shedLevel < 2 {
-		pm.notifyShedLevelChange(pm.shedLevel, 2)
-		pm.shedLevel = 2
-		pm.steadyCount = 0
-	} else if avg >= 80*time.Millisecond && pm.shedLevel < 1 {
-		pm.notifyShedLevelChange(pm.shedLevel, 1)
-		pm.shedLevel = 1
-		pm.steadyCount = 0
-	}
-
-	// recovery: step down one level when avg < 60ms for 10 consecutive iters
-	if avg < 60*time.Millisecond {
-		pm.steadyCount++
-		if pm.steadyCount >= 10 && pm.shedLevel > 0 {
-			pm.notifyShedLevelChange(pm.shedLevel, pm.shedLevel-1)
-			pm.shedLevel--
-			pm.steadyCount = 0
-		}
-	} else {
-		pm.steadyCount = 0
-	}
-}
-
-// GetShedLevel returns the current load-shedding level (0-3).
-func (pm *ProcessorManager) GetShedLevel() int {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.shedLevel
-}
-
-// notifyShedLevelChange fires the OnShedLevelChange callback if set.
-// Caller must hold pm.mu (write lock).
-func (pm *ProcessorManager) notifyShedLevelChange(prevLevel, newLevel int) {
-	if prevLevel == newLevel {
-		return
-	}
-	if pm.OnShedLevelChange != nil {
-		pm.OnShedLevelChange(prevLevel, newLevel)
-	}
 }
 
 // GetProcessor returns the processor for a link, or nil if not exists

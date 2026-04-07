@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -543,7 +542,6 @@ func generateCSIFrame(mac string, frameIndex uint64) []byte {
 	// Generate CSI payload (I, Q pairs)
 	for k := 0; k < DefaultNSub; k++ {
 		amplitude := 30.0 + float64(k)*0.1
-		phase := float64(k) * 0.2
 		iVal := int8(amplitude * 0.707) // cos(45deg) ~= 0.707
 		qVal := int8(amplitude * 0.707)
 

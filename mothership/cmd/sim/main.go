@@ -12,7 +12,6 @@ import (
 	"math"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"sync"
@@ -165,7 +164,8 @@ func main() {
 
 	log.Printf("[INFO] Simulation completed successfully")
 	if *showFrameRate {
-		for _, n := range virtualNodes {
+		for i := range virtualNodes {
+			n := &virtualNodes[i]
 			log.Printf("[STATS] Node %s: sent %d frames", n.mac, n.frameCount)
 		}
 	}
@@ -459,7 +459,7 @@ func (n *VirtualNode) generateCSIFrame(walker Walker, frameIndex uint64) []byte 
 	buf[20] = byte(rssi)
 
 	// Noise floor (1 byte, int8)
-	buf[21] = byte(-95) // Typical noise floor
+	buf[21] = 161 // -95 dBm as int8 bit pattern (0xA1)
 
 	// Channel (1 byte, uint8)
 	buf[22] = 6 // Channel 6

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -60,6 +61,7 @@ type QueryParams struct {
 	Limit       int
 	BeforeID    int64 // Cursor for pagination
 	AfterID     int64
+	BeforeTS    int64 // Timestamp-based cursor for keyset pagination (used by REST API)
 	Type        EventType
 	Zone        string
 	Person      string
@@ -116,14 +118,17 @@ func QueryEvents(db *sql.DB, params QueryParams) ([]Event, string, bool, error) 
 	}
 
 	query := `
-		SELECT id, timestamp_ms, type, zone, person, blob_id, detail_json, severity
-		FROM events
-		WHERE 1=1
-	`
+			SELECT id, timestamp_ms, type, zone, person, blob_id, detail_json, severity
+			FROM events
+			WHERE 1=1
+		`
 	args := []interface{}{}
 
-	// Cursor pagination
-	if params.BeforeID > 0 {
+	// Cursor pagination: prefer BeforeTS (timestamp keyset) over BeforeID
+	if params.BeforeTS > 0 {
+		query += " AND timestamp_ms < ?"
+		args = append(args, params.BeforeTS)
+	} else if params.BeforeID > 0 {
 		query += " AND id < ?"
 		args = append(args, params.BeforeID)
 	} else if params.AfterID > 0 {
@@ -161,17 +166,21 @@ func QueryEvents(db *sql.DB, params QueryParams) ([]Event, string, bool, error) 
 
 	// FTS5 full-text search (must use the FTS table)
 	if params.SearchQuery != "" {
+		ftsQuery := prepareFTSQuery(params.SearchQuery)
 		// Use subquery to search FTS and join with events table
 		query = `
-			SELECT e.id, e.timestamp_ms, e.type, e.zone, e.person, e.blob_id, e.detail_json, e.severity
-			FROM events e
-			INNER JOIN events_fts fts ON e.id = fts.rowid
-			WHERE events_fts MATCH ?
-		`
-		args = []interface{}{params.SearchQuery}
+				SELECT e.id, e.timestamp_ms, e.type, e.zone, e.person, e.blob_id, e.detail_json, e.severity
+				FROM events e
+				INNER JOIN events_fts fts ON e.id = fts.rowid
+				WHERE events_fts MATCH ?
+			`
+		args = []interface{}{ftsQuery}
 
 		// Reapply other filters to the subquery
-		if params.BeforeID > 0 {
+		if params.BeforeTS > 0 {
+			query += " AND e.timestamp_ms < ?"
+			args = append(args, params.BeforeTS)
+		} else if params.BeforeID > 0 {
 			query += " AND e.id < ?"
 			args = append(args, params.BeforeID)
 		} else if params.AfterID > 0 {
@@ -233,6 +242,37 @@ func QueryEvents(db *sql.DB, params QueryParams) ([]Event, string, bool, error) 
 	}
 
 	return events, nextCursor, hasMore, nil
+}
+
+// prepareFTSQuery appends a trailing * for prefix matching if the query
+// doesn't already end with a FTS5 operator character. This enables
+// partial word matching (e.g., "kit" matches "kitchen").
+func prepareFTSQuery(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return q
+	}
+	// If the query already ends with a FTS5 special character or operator, leave it alone.
+	last := q[len(q)-1]
+	if last == '*' || last == '"' || last == ')' {
+		return q
+	}
+	// For simple terms (no operators), append * for prefix matching.
+	if strings.Contains(q, " AND ") || strings.Contains(q, " OR ") ||
+		strings.Contains(q, " NOT ") || strings.Contains(q, " NEAR ") {
+		parts := strings.Fields(q)
+		for i, p := range parts {
+			if p == "AND" || p == "OR" || p == "NOT" || p == "NEAR" {
+				continue
+			}
+			if (strings.HasPrefix(p, `"`) && strings.HasSuffix(p, `"`)) || p == "(" || p == ")" {
+				continue
+			}
+			parts[i] = p + "*"
+		}
+		return strings.Join(parts, " ")
+	}
+	return q + "*"
 }
 
 // ArchiveDays is the number of days after which events are archived.

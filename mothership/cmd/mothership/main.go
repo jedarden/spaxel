@@ -212,12 +212,13 @@ func main() {
 	startup.CheckTimeout(startupCtx)
 	log.Printf("[INFO] Main database at %s", filepath.Join(cfg.DataDir, "spaxel.db"))
 
-	// Create load shedder for health monitoring
+	// Create load shedder — single source of truth for load shedding state
 	shedder := loadshed.New()
 
 	// Create ingestion server
     ingestSrv := ingestion.NewServer()
     r.HandleFunc("/ws/node", ingestSrv.HandleNodeWS)
+    ingestSrv.SetShedder(shedder)
 
     // Signal processing pipeline
     pm := sigproc.NewProcessorManager(sigproc.ProcessorManagerConfig{
@@ -232,7 +233,6 @@ func main() {
 		DB:           mainDB,
 		GetNodeCount: func() int { return len(ingestSrv.GetConnectedNodes()) },
 		Shedder:      shedder,
-		GetShedLevel: pm.GetShedLevel,
 	})
 	r.Get("/healthz", healthChecker.Handler(version))
 
@@ -699,9 +699,16 @@ func main() {
     ingestSrv.SetMotionBroadcaster(dashboardHub)
     ingestSrv.SetEventBroadcaster(dashboardHub)
 
-    // Wire load-shedding level changes to dashboard alerts
-    pm.OnShedLevelChange = func(prevLevel, newLevel int) {
-        if newLevel == 3 {
+    // Wire load-shedding level changes to dashboard alerts and node rate push
+    shedder.SetPreviousRate(20) // default rate before any Level 3 event
+    shedder.SetRatePushCallback(func(rateHz int) {
+        for _, mac := range ingestSrv.GetConnectedNodes() {
+            ingestSrv.SendConfigToMAC(mac, rateHz, 0.02)
+        }
+        log.Printf("[INFO] Load shed rate push — %d Hz to %d nodes", rateHz, len(ingestSrv.GetConnectedNodes()))
+    })
+    shedder.OnLevelChange = func(prev, new loadshed.Level) {
+        if new == loadshed.LevelHeavy {
             msg := map[string]interface{}{
                 "type":        "alert",
                 "severity":    "warning",
@@ -709,18 +716,18 @@ func main() {
             }
             data, _ := json.Marshal(msg)
             dashboardHub.Broadcast(data)
-            // Push 10 Hz cap to all connected nodes
-            for _, mac := range ingestSrv.GetConnectedNodes() {
-                ingestSrv.SendConfigToMAC(mac, 10, 0.02)
+            log.Printf("[INFO] Load shed entered Level 3 — CSI rate reduced to 10 Hz")
+        }
+        if prev == loadshed.LevelHeavy && new < loadshed.LevelHeavy {
+            msg := map[string]interface{}{
+                "type":        "info",
+                "description": "System load recovered — CSI rate restored",
             }
-            log.Printf("[INFO] Load shed level 3 — pushed 10Hz cap to %d nodes", len(ingestSrv.GetConnectedNodes()))
+            data, _ := json.Marshal(msg)
+            dashboardHub.Broadcast(data)
+            log.Printf("[INFO] Load shed recovered from Level 3 — adaptive rate control restored")
         }
-        if prevLevel == 3 && newLevel < 3 {
-            // Restore prior rate when recovering from Level 3
-            // The rate controller will restore adaptive rates automatically
-            log.Printf("[INFO] Load shed recovered from level 3 — adaptive rate control restored")
-        }
-        log.Printf("[INFO] Load shedding level changed: %d → %d", prevLevel, newLevel)
+        dashboardHub.BroadcastLoadState(int(new), new.String())
     }
 
     // Phase 6: Wire BLE messages to registry and identity matcher

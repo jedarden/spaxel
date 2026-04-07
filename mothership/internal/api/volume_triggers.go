@@ -16,7 +16,7 @@ import (
 
 	"github.com/spaxel/mothership/internal/volume"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 // MQTTClient interface for MQTT publishing.
