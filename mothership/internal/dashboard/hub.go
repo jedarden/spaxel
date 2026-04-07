@@ -156,9 +156,9 @@ func (h *Hub) SetZoneState(state ZoneStateProvider) {
 }
 
 // Run starts the hub's main loop.
-// The 10 Hz delta tick replaces the old 5 s state / 500 ms presence /
-// 5 s BLE periodic broadcasts.  System health (60 s) is kept as a
-// separate low-frequency broadcast.
+// The 10 Hz delta tick replaces the old 5 s state / 500 ms presence broadcasts.
+// BLE scan results are broadcast every 5 s as a separate typed message.
+// System health (60 s) is kept as a separate low-frequency broadcast.
 func (h *Hub) Run() {
 	// 10 Hz snapshot/delta tick
 	deltaTicker := time.NewTicker(100 * time.Millisecond)
@@ -167,6 +167,10 @@ func (h *Hub) Run() {
 	// System health broadcast ticker (60 seconds) — kept separate
 	healthTicker := time.NewTicker(60 * time.Second)
 	defer healthTicker.Stop()
+
+	// BLE scan broadcast ticker (5 seconds)
+	bleScanTicker := time.NewTicker(5 * time.Second)
+	defer bleScanTicker.Stop()
 
 	for {
 		select {
@@ -216,6 +220,9 @@ func (h *Hub) Run() {
 
 		case <-healthTicker.C:
 			h.broadcastSystemHealth()
+
+		case <-bleScanTicker.C:
+			h.broadcastBLEScan()
 		}
 	}
 }
@@ -688,6 +695,23 @@ func (h *Hub) broadcastSystemHealth() {
 		provider.GetGoRoutineCount(),
 		provider.GetMemoryMB(),
 	)
+}
+
+// broadcastBLEScan broadcasts the current BLE device list to all dashboard clients.
+// Called every 5 seconds when devices are present.
+func (h *Hub) broadcastBLEScan() {
+	h.mu.RLock()
+	ble := h.bleState
+	clientCount := len(h.clients)
+	h.mu.RUnlock()
+
+	if ble == nil || clientCount == 0 {
+		return
+	}
+
+	if devices := ble.GetCurrentDevices(); len(devices) > 0 {
+		h.BroadcastBLEScan(devices)
+	}
 }
 
 // BroadcastFleetChange broadcasts a fleet change event to all dashboard clients.
