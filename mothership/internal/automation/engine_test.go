@@ -379,24 +379,25 @@ func TestDayOfWeekCondition(t *testing.T) {
 	}
 
 	// Test weekdays (Mon=1, Fri=5)
+	// January 2024: 1=Mon, 5=Fri, 6=Sat, 7=Sun
 	weekdayTests := []struct {
-		weekday  time.Weekday
+		day      int
 		expected bool
 	}{
-		{time.Monday, true},
-		{time.Friday, true},
-		{time.Saturday, false},
-		{time.Sunday, false},
+		{1, true},  // Monday
+		{5, true},  // Friday
+		{6, false}, // Saturday
+		{7, false}, // Sunday
 	}
 
 	for _, tc := range weekdayTests {
-		testTime := time.Date(2024, 1, int(tc.weekday), 12, 0, 0, time.Local)
+		testTime := time.Date(2024, time.January, tc.day, 12, 0, 0, 0, time.Local)
 		result := engine.isDayOfWeek("1,2,3,4,5", testTime)
 		if result != tc.expected {
-				dayName := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
-				t.Errorf("Day %s: expected %v, got %v", dayName[tc.weekday], tc.expected, result)
-			}
+			dayName := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+			t.Errorf("Day %s: expected %v, got %v", dayName[testTime.Weekday()], tc.expected, result)
 		}
+	}
 }
 
 func TestWebhookDispatch(t *testing.T) {

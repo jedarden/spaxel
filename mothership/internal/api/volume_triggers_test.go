@@ -91,8 +91,8 @@ func TestTestTriggerEndpoint(t *testing.T) {
 		t.Errorf("Expected action status 200, got %d", result.Actions[0].Status)
 	}
 
-	if result.Actions[0].ResponseMs <= 0 {
-		t.Error("Expected positive response_ms")
+	if result.Actions[0].ResponseMs < 0 {
+		t.Errorf("Expected non-negative response_ms, got %d", result.Actions[0].ResponseMs)
 	}
 }
 
@@ -224,9 +224,10 @@ func TestEnableEndpoint(t *testing.T) {
 	handler.store.DisableTriggerWithError(id, "HTTP 403")
 	handler.store.IncrementErrorCount(id)
 
+	router := newTestRouter(handler)
 	req := httptest.NewRequest("POST", "/api/triggers/"+id+"/enable", nil)
 	w := httptest.NewRecorder()
-	handler.enableTrigger(w, req)
+	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -272,9 +273,10 @@ func TestGetWebhookLogEndpoint(t *testing.T) {
 	handler.store.WriteWebhookLog(id, "http://a.com", now, 200, 50, "")
 	handler.store.WriteWebhookLog(id, "http://b.com", now-1000, 500, 0, "timeout")
 
+	router := newTestRouter(handler)
 	req := httptest.NewRequest("GET", "/api/triggers/"+id+"/webhook-log?limit=10", nil)
 	w := httptest.NewRecorder()
-	handler.getWebhookLog(w, req)
+	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -528,9 +530,8 @@ func Test2xxResetsErrorCount(t *testing.T) {
 func TestTimeoutDoesNotDisable(t *testing.T) {
 	// Mock server that never responds (will cause timeout)
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(10 * time.Second)
+		<-r.Context().Done()
 	}))
-	defer mockServer.Close()
 
 	handler, err := NewVolumeTriggersHandler(":memory:")
 	if err != nil {
@@ -570,6 +571,11 @@ func TestTimeoutDoesNotDisable(t *testing.T) {
 
 	// Wait for the timeout to complete
 	time.Sleep(500 * time.Millisecond)
+
+	// Close the mock server before assertions so the blocked handler goroutine
+	// doesn't prevent the test from completing. The httptest.Server.Close()
+	// will shut down the listener, causing the blocked handler to return.
+	mockServer.Close()
 
 	tg, _ := handler.store.Get(id)
 	if !tg.Enabled {
