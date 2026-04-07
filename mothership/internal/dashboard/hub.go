@@ -1071,3 +1071,16 @@ func (h *Hub) BroadcastPortalChange(action string, portal PortalSnapshot) {
 	h.snap.portalsJSON = nil
 	h.snapMu.Unlock()
 }
+
+// BroadcastLoadState broadcasts a load shedding state change to all dashboard clients.
+// Used when the system enters or exits heavy load shedding (Level 3).
+func (h *Hub) BroadcastLoadState(level int, label string) {
+	msg := map[string]interface{}{
+		"type":        "alert",
+		"severity":    "warning",
+		"description": "System load: " + label,
+		"load_level":  level,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}

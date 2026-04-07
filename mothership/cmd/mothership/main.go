@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/analytics"
 	"github.com/spaxel/mothership/internal/api"
