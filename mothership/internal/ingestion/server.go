@@ -533,7 +533,12 @@ func (s *Server) handleJSONMessage(nc *NodeConnection, data []byte) {
 		nc.LastHealthTime = time.Now()
 
 	case *BLEMessage:
-		// TODO: forward BLE data to identity matcher
+		s.mu.RLock()
+		handler := s.bleHandler
+		s.mu.RUnlock()
+		if handler != nil {
+			handler(nc.MAC, msg.Devices)
+		}
 
 	case *MotionHintMessage:
 		s.mu.RLock()
