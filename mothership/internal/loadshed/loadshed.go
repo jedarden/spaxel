@@ -76,10 +76,15 @@ type IngestChannelFull func() bool
 // rate config changes to all connected nodes.
 type RatePushCallback func(rateHz int)
 
+// StageTiming captures the duration of a named pipeline stage.
+type StageTiming struct {
+	Name     string
+	Duration time.Duration
+}
+
 // Stage represents a named pipeline stage for timing instrumentation.
 type Stage struct {
-	Name string
-	// Start is set by BeginStage. Use StageDuration() to get elapsed time.
+	Name  string
 	start time.Time
 }
 
@@ -89,12 +94,16 @@ type Shedder struct {
 	recoveryTicks atomic.Int32 // Consecutive iterations below recovery threshold.
 
 	// Rolling average window (ring buffer).
-	durations [rollingWindowSize]time.Duration
-	durationsIdx int
+	durations      [rollingWindowSize]time.Duration
+	durationsIdx   int
 	durationsFilled int // how many slots have been written (< rollingWindowSize on startup)
 
-	// Pipeline stage timing for instrumentation.
-	stages [8]Stage
+	// Pipeline stage timing for instrumentation (captured at EndIteration).
+	stageTimings [8]StageTiming
+	stageCount   int // number of stages in last iteration
+
+	// Pipeline stage registration during an iteration.
+	stages   [8]Stage
 	stageIdx int
 
 	// Iteration timing.
@@ -105,8 +114,12 @@ type Shedder struct {
 	ratePush   RatePushCallback
 
 	// Previous rate before Level 3 was entered, for restoration.
-	prevRateHz atomic.Int32
+	prevRateHz  atomic.Int32
 	level3Active atomic.Bool
+
+	// OnLevelChange is an optional callback invoked after a level change.
+	// It receives (previousLevel, newLevel).
+	OnLevelChange func(prev, new Level)
 }
 
 // New creates a new Shedder.
@@ -190,15 +203,13 @@ func (s *Shedder) EndStage(st Stage) {
 
 // GetStageDurations returns the durations of all stages from the most recent
 // completed iteration.
-func (s *Shedder) GetStageDurations() []time.Duration {
-	n := s.stageIdx
-	if n > len(s.stages) {
-		n = len(s.stages)
+func (s *Shedder) GetStageDurations() []StageTiming {
+	n := s.stageCount
+	if n > len(s.stageTimings) {
+		n = len(s.stageTimings)
 	}
-	result := make([]time.Duration, n)
-	for i := 0; i < n; i++ {
-		result[i] = time.Since(s.stages[i].start)
-	}
+	result := make([]StageTiming, n)
+	copy(result, s.stageTimings[:n])
 	return result
 }
 
@@ -206,6 +217,20 @@ func (s *Shedder) GetStageDurations() []time.Duration {
 // average, and evaluates the shedding state machine.
 func (s *Shedder) EndIteration() {
 	elapsed := time.Since(s.iterStart)
+
+	// Capture stage durations at iteration end (not lazily).
+	now := time.Now()
+	n := s.stageIdx
+	if n > len(s.stages) {
+		n = len(s.stages)
+	}
+	s.stageCount = n
+	for i := 0; i < n; i++ {
+		s.stageTimings[i] = StageTiming{
+			Name:     s.stages[i].Name,
+			Duration: now.Sub(s.stages[i].start),
+		}
+	}
 
 	// Update rolling average window.
 	s.durations[s.durationsIdx] = elapsed
@@ -285,6 +310,11 @@ func (s *Shedder) setLevel(new Level) {
 			}
 			s.ratePush(prevRate)
 		}
+	}
+
+	// Notify external listener (e.g., dashboard alert).
+	if s.OnLevelChange != nil {
+		s.OnLevelChange(prev, new)
 	}
 }
 

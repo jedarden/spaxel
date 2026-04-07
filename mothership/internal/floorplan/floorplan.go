@@ -6,17 +6,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
 	"log"
-	"mime/multipart"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -89,16 +87,24 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Decode image to validate format
-	img, format, err := image.DecodeConfig(file)
+	// Read entire file into memory for validation and saving
+	// multipart.File doesn't support Seek, so we need to buffer
+	fileData, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "invalid image format (PNG/JPG only)", http.StatusBadRequest)
+		http.Error(w, "failed to read file", http.StatusInternalServerError)
 		return
 	}
 
-	// Reset file reader
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		http.Error(w, "failed to read file", http.StatusInternalServerError)
+	// Check file size
+	if len(fileData) > MaxUploadSize {
+		http.Error(w, "file too large (max 10 MB)", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	// Decode image to validate format
+	img, format, err := image.DecodeConfig(bytes.NewReader(fileData))
+	if err != nil {
+		http.Error(w, "invalid image format (PNG/JPG only)", http.StatusBadRequest)
 		return
 	}
 
@@ -116,15 +122,7 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 
 	// Save to disk
 	imagePath := filepath.Join(h.floorplanDir, DefaultImageFilename)
-	outFile, err := os.Create(imagePath)
-	if err != nil {
-		log.Printf("[ERROR] Failed to create floorplan image: %v", err)
-		http.Error(w, "failed to save image", http.StatusInternalServerError)
-		return
-	}
-	defer outFile.Close()
-
-	if _, err := io.Copy(outFile, file); err != nil {
+	if err := os.WriteFile(imagePath, fileData, 0644); err != nil {
 		log.Printf("[ERROR] Failed to write floorplan image: %v", err)
 		http.Error(w, "failed to save image", http.StatusInternalServerError)
 		return
@@ -359,7 +357,9 @@ func currentTimestamp() int64 {
 }
 
 func sqrt(dx, dy float64) float64 {
-	return dx*dx + dy*dy // Return squared distance to avoid math import
+	// Calculate Euclidean distance: sqrt(dx² + dy²)
+	// Use math.Sqrt for proper calculation
+	return math.Sqrt(dx*dx + dy*dy)
 }
 
 func atan2(y, x float64) float64 {

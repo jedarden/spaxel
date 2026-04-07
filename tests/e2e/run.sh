@@ -231,9 +231,18 @@ fi
 # Step 4: Build and start simulator
 log_info "Step 4: Starting CSI simulator..."
 
-# Build simulator
-cd "$MOTHERSHIP_DIR"
-if ! go build -o /tmp/spaxel-sim ./cmd/sim 2>/dev/null; then
+# Build simulator using Docker (since go may not be available on host)
+if [ ! -f /tmp/spaxel-sim ]; then
+    log_info "Building simulator with Docker..."
+    docker run --rm \
+        -v "$PROJECT_ROOT/mothership:/src" \
+        -v /tmp:/out \
+        -w /src \
+        golang:1.25-bookworm \
+        sh -c "go build -o /out/spaxel-sim ./cmd/sim"
+fi
+
+if [ ! -f /tmp/spaxel-sim ]; then
     log_error "Failed to build simulator"
     exit 1
 fi
@@ -288,10 +297,11 @@ while true; do
         fi
     fi
 
-    # Check /api/fleet/health for online nodes
-    nodes_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/fleet/health" 1 0 2>/dev/null || echo "")
+    # Check /api/nodes for online nodes
+    nodes_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/api/nodes" 1 0 2>/dev/null || echo "")
     if [ -n "$nodes_response" ]; then
-        nodes_online=$(echo "$nodes_response" | jq '[.nodes[] | select(.online==true)] | length' 2>/dev/null || echo "0")
+        # Count nodes with status "online"
+        nodes_online=$(echo "$nodes_response" | jq '[.[] | select(.status=="online")] | length' 2>/dev/null || echo "0")
 
         # Assert nodes_online == SIM_NODES within first 5 seconds
         if [ $elapsed -le 5 ] && [ "$nodes_online" -ge "$SIM_NODES" ]; then

@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-chi/chi"
+	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/zones"
 )
 
@@ -1022,5 +1024,296 @@ func TestPortalCRUDRoundTrip(t *testing.T) {
 	json.NewDecoder(rr5.Body).Decode(&portals)
 	if len(portals) != 0 {
 		t.Errorf("Expected 0 portals after delete, got %d", len(portals))
+	}
+}
+
+// ── Zone/Portal WebSocket Broadcast Tests ─────────────────────────────────────
+
+// mockZoneBroadcaster captures zone and portal change broadcasts for testing.
+type mockZoneBroadcaster struct {
+	mu            sync.Mutex
+	zoneChanges   []mockZoneChange
+	portalChanges []mockPortalChange
+}
+
+type mockZoneChange struct {
+	action string
+	zone   dashboard.ZoneSnapshot
+}
+
+type mockPortalChange struct {
+	action string
+	portal dashboard.PortalSnapshot
+}
+
+func (m *mockZoneBroadcaster) BroadcastZoneChange(action string, zone dashboard.ZoneSnapshot) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.zoneChanges = append(m.zoneChanges, mockZoneChange{action: action, zone: zone})
+}
+
+func (m *mockZoneBroadcaster) BroadcastPortalChange(action string, portal dashboard.PortalSnapshot) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.portalChanges = append(m.portalChanges, mockPortalChange{action: action, portal: portal})
+}
+
+func (m *mockZoneBroadcaster) getZoneChanges() []mockZoneChange {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]mockZoneChange{}, m.zoneChanges...)
+}
+
+func (m *mockZoneBroadcaster) getPortalChanges() []mockPortalChange {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]mockPortalChange{}, m.portalChanges...)
+}
+
+// newTestHandlerWithBroadcaster creates a ZonesHandler with a mock broadcaster.
+func newTestHandlerWithBroadcaster(t *testing.T) (*ZonesHandler, *mockZoneBroadcaster, func()) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "zones.db")
+	mgr, err := zones.NewManager(dbPath, nil)
+	if err != nil {
+		t.Fatalf("Failed to create zones manager: %v", err)
+	}
+	handler := NewZonesHandler(mgr)
+	mock := &mockZoneBroadcaster{}
+	handler.SetZoneChangeBroadcaster(mock)
+	return handler, mock, func() { mgr.Close() }
+}
+
+// TestZoneCreateBroadcasts verifies that creating a zone triggers a WebSocket broadcast.
+func TestZoneCreateBroadcasts(t *testing.T) {
+	h, mock, cleanup := newTestHandlerWithBroadcaster(t)
+	defer cleanup()
+
+	r := setupRouter(h)
+	body, _ := json.Marshal(zones.Zone{
+		ID: "z1", Name: "Kitchen",
+		MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5,
+	})
+	req := httptest.NewRequest("POST", "/api/zones", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("Expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	changes := mock.getZoneChanges()
+	if len(changes) != 1 {
+		t.Fatalf("Expected 1 zone broadcast, got %d", len(changes))
+	}
+	if changes[0].action != "created" {
+		t.Errorf("Expected action 'created', got %q", changes[0].action)
+	}
+	if changes[0].zone.ID != "z1" || changes[0].zone.Name != "Kitchen" {
+		t.Errorf("Broadcast zone mismatch: %+v", changes[0].zone)
+	}
+	if changes[0].zone.SizeX != 4 || changes[0].zone.SizeY != 3 || changes[0].zone.SizeZ != 2.5 {
+		t.Errorf("Broadcast zone dimensions wrong: %+v", changes[0].zone)
+	}
+}
+
+// TestZoneUpdateBroadcasts verifies that updating a zone triggers a WebSocket broadcast.
+func TestZoneUpdateBroadcasts(t *testing.T) {
+	h, mock, cleanup := newTestHandlerWithBroadcaster(t)
+	defer cleanup()
+
+	h.mgr.CreateZone(&zones.Zone{
+		ID: "z1", Name: "Kitchen",
+		MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5,
+	})
+
+	r := setupRouter(h)
+	body, _ := json.Marshal(zones.Zone{
+		ID: "z1", Name: "Big Kitchen",
+		MinX: 0, MinY: 0, MinZ: 0, MaxX: 8, MaxY: 6, MaxZ: 3,
+	})
+	req := httptest.NewRequest("PUT", "/api/zones/z1", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	changes := mock.getZoneChanges()
+	if len(changes) != 1 {
+		t.Fatalf("Expected 1 zone broadcast, got %d", len(changes))
+	}
+	if changes[0].action != "updated" {
+		t.Errorf("Expected action 'updated', got %q", changes[0].action)
+	}
+	if changes[0].zone.Name != "Big Kitchen" {
+		t.Errorf("Expected name 'Big Kitchen', got %q", changes[0].zone.Name)
+	}
+	if changes[0].zone.SizeX != 8 {
+		t.Errorf("Expected SizeX=8, got %f", changes[0].zone.SizeX)
+	}
+}
+
+// TestZoneDeleteBroadcasts verifies that deleting a zone triggers a WebSocket broadcast.
+func TestZoneDeleteBroadcasts(t *testing.T) {
+	h, mock, cleanup := newTestHandlerWithBroadcaster(t)
+	defer cleanup()
+
+	h.mgr.CreateZone(&zones.Zone{
+		ID: "z1", Name: "Kitchen",
+		MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5,
+	})
+
+	r := setupRouter(h)
+	req := httptest.NewRequest("DELETE", "/api/zones/z1", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("Expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	changes := mock.getZoneChanges()
+	if len(changes) != 1 {
+		t.Fatalf("Expected 1 zone broadcast, got %d", len(changes))
+	}
+	if changes[0].action != "deleted" {
+		t.Errorf("Expected action 'deleted', got %q", changes[0].action)
+	}
+	if changes[0].zone.ID != "z1" {
+		t.Errorf("Expected zone ID 'z1', got %q", changes[0].zone.ID)
+	}
+}
+
+// TestPortalCreateBroadcasts verifies that creating a portal triggers a WebSocket broadcast.
+func TestPortalCreateBroadcasts(t *testing.T) {
+	h, mock, cleanup := newTestHandlerWithBroadcaster(t)
+	defer cleanup()
+
+	h.mgr.CreateZone(&zones.Zone{ID: "z1", Name: "A", MinX: 0, MinY: 0, MinZ: 0, MaxX: 1, MaxY: 1, MaxZ: 1})
+	h.mgr.CreateZone(&zones.Zone{ID: "z2", Name: "B", MinX: 1, MinY: 0, MinZ: 0, MaxX: 2, MaxY: 1, MaxZ: 1})
+
+	r := setupRouter(h)
+	body, _ := json.Marshal(zones.Portal{
+		ID: "p1", Name: "Door", ZoneAID: "z1", ZoneBID: "z2",
+		P1X: 1, P1Y: 0, P1Z: 0, P2X: 1, P2Y: 0.5, P2Z: 0, P3X: 1, P3Y: 0.5, P3Z: 1,
+		Width: 1, Height: 1,
+	})
+	req := httptest.NewRequest("POST", "/api/portals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("Expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	changes := mock.getPortalChanges()
+	if len(changes) != 1 {
+		t.Fatalf("Expected 1 portal broadcast, got %d", len(changes))
+	}
+	if changes[0].action != "created" {
+		t.Errorf("Expected action 'created', got %q", changes[0].action)
+	}
+	if changes[0].portal.ID != "p1" || changes[0].portal.Name != "Door" {
+		t.Errorf("Broadcast portal mismatch: %+v", changes[0].portal)
+	}
+}
+
+// TestPortalUpdateBroadcasts verifies that updating a portal triggers a WebSocket broadcast.
+func TestPortalUpdateBroadcasts(t *testing.T) {
+	h, mock, cleanup := newTestHandlerWithBroadcaster(t)
+	defer cleanup()
+
+	h.mgr.CreateZone(&zones.Zone{ID: "z1", Name: "A", MinX: 0, MinY: 0, MinZ: 0, MaxX: 1, MaxY: 1, MaxZ: 1})
+	h.mgr.CreateZone(&zones.Zone{ID: "z2", Name: "B", MinX: 1, MinY: 0, MinZ: 0, MaxX: 2, MaxY: 1, MaxZ: 1})
+	h.mgr.CreatePortal(&zones.Portal{
+		ID: "p1", Name: "Door", ZoneAID: "z1", ZoneBID: "z2",
+		P1X: 1, P1Y: 0, P1Z: 0, P2X: 1, P2Y: 0.5, P2Z: 0, P3X: 1, P3Y: 0.5, P3Z: 1,
+		Width: 1, Height: 1,
+	})
+
+	r := setupRouter(h)
+	body, _ := json.Marshal(zones.Portal{
+		ID: "p1", Name: "Big Door", ZoneAID: "z1", ZoneBID: "z2",
+		P1X: 1, P1Y: 0, P1Z: 0, P2X: 1, P2Y: 1, P2Z: 0, P3X: 1, P3Y: 1, P3Z: 2,
+		Width: 2, Height: 2,
+	})
+	req := httptest.NewRequest("PUT", "/api/portals/p1", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	changes := mock.getPortalChanges()
+	if len(changes) != 1 {
+		t.Fatalf("Expected 1 portal broadcast, got %d", len(changes))
+	}
+	if changes[0].action != "updated" {
+		t.Errorf("Expected action 'updated', got %q", changes[0].action)
+	}
+	if changes[0].portal.Name != "Big Door" {
+		t.Errorf("Expected name 'Big Door', got %q", changes[0].portal.Name)
+	}
+}
+
+// TestPortalDeleteBroadcasts verifies that deleting a portal triggers a WebSocket broadcast.
+func TestPortalDeleteBroadcasts(t *testing.T) {
+	h, mock, cleanup := newTestHandlerWithBroadcaster(t)
+	defer cleanup()
+
+	h.mgr.CreateZone(&zones.Zone{ID: "z1", Name: "A", MinX: 0, MinY: 0, MinZ: 0, MaxX: 1, MaxY: 1, MaxZ: 1})
+	h.mgr.CreatePortal(&zones.Portal{
+		ID: "p1", Name: "Door", ZoneAID: "z1", ZoneBID: "z1",
+		P1X: 0, P1Y: 0, P1Z: 0, P2X: 1, P2Y: 0, P2Z: 0, P3X: 0, P3Y: 0, P3Z: 1,
+		Width: 1, Height: 1,
+	})
+
+	r := setupRouter(h)
+	req := httptest.NewRequest("DELETE", "/api/portals/p1", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("Expected 204, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	changes := mock.getPortalChanges()
+	if len(changes) != 1 {
+		t.Fatalf("Expected 1 portal broadcast, got %d", len(changes))
+	}
+	if changes[0].action != "deleted" {
+		t.Errorf("Expected action 'deleted', got %q", changes[0].action)
+	}
+	if changes[0].portal.ID != "p1" {
+		t.Errorf("Expected portal ID 'p1', got %q", changes[0].portal.ID)
+	}
+}
+
+// TestNoBroadcastWithoutBroadcaster verifies that zone CRUD works even when
+// no broadcaster is set (nil broadcaster is a no-op).
+func TestNoBroadcastWithoutBroadcaster(t *testing.T) {
+	h, cleanup := newTestHandler(t)
+	defer cleanup()
+
+	r := setupRouter(h)
+	body, _ := json.Marshal(zones.Zone{
+		ID: "z1", Name: "Kitchen",
+		MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5,
+	})
+	req := httptest.NewRequest("POST", "/api/zones", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 without broadcaster, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/spaxel/mothership/internal/explainability"
 	"github.com/spaxel/mothership/internal/falldetect"
 	"github.com/spaxel/mothership/internal/fleet"
+	"github.com/spaxel/mothership/internal/floorplan"
 	"github.com/spaxel/mothership/internal/health"
 	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/learning"
@@ -1853,6 +1854,10 @@ func main() {
     fleetHandler := fleet.NewHandler(fleetMgr)
     fleetHandler.RegisterRoutes(r)
 
+    // Floorplan REST API
+    floorplanHandler := floorplan.NewHandler(mainDB, cfg.DataDir)
+    floorplanHandler.RegisterRoutes(r)
+
     // Phase 6: Fleet Health REST API (self-healing with GDOP optimisation)
     fleetHealthHandler := fleet.NewFleetHandler(selfHealManager, fleetReg)
     fleetHealthHandler.RegisterRoutes(r)
@@ -1865,6 +1870,7 @@ func main() {
     // Phase 6: Zones and Portals REST API
     if zonesMgr != nil {
         zonesHandler := api.NewZonesHandler(zonesMgr)
+        zonesHandler.SetZoneChangeBroadcaster(dashboardHub)
         zonesHandler.RegisterRoutes(r)
         log.Printf("[INFO] Zones and portals API registered at /api/zones/* and /api/portals/*")
     }
@@ -3049,7 +3055,7 @@ func main() {
     log.Printf("[INFO] Backup API registered at /api/backup")
 
     // Events timeline REST API (uses shared mainDB)
-    eventsHandler := api.NewEventsHandler(mainDB)
+    eventsHandler := api.NewEventsHandlerFromDB(mainDB)
     eventsHandler.SetHub(dashboardHub)
     eventsHandler.RegisterRoutes(r)
     log.Printf("[INFO] Events timeline API registered at /api/events/*")

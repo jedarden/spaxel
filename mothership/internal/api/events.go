@@ -3,6 +3,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,6 +12,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	_ "modernc.org/sqlite"
+
+	"github.com/spaxel/mothership/internal/events"
 )
 
 const (
@@ -20,9 +24,10 @@ const (
 
 // EventsHandler manages the events timeline.
 type EventsHandler struct {
-	mu  sync.RWMutex
-	db  *sql.DB
-	hub DashboardHub
+	mu     sync.RWMutex
+	db     *sql.DB
+	hub    DashboardHub
+	ownsDB bool
 }
 
 // DashboardHub is the interface for broadcasting to dashboard clients.
@@ -77,11 +82,89 @@ func (e *EventsHandler) SetHub(hub DashboardHub) {
 	e.hub = hub
 }
 
-// NewEventsHandler creates a new events handler using the shared database connection.
+// NewEventsHandler creates a new events handler backed by a SQLite file at dbPath.
+// It opens the database, creates the schema, and takes ownership of the connection.
+// Use Close() to release resources.
+func NewEventsHandler(dbPath string) (*EventsHandler, error) {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open events db: %w", err)
+	}
+	if err := createEventsSchema(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("init events schema: %w", err)
+	}
+	log.Printf("[INFO] Events handler initialized (own DB: %s)", dbPath)
+	return &EventsHandler{db: db, ownsDB: true}, nil
+}
+
+// NewEventsHandlerFromDB creates a new events handler using an existing database connection.
 // The events table schema must already exist (created by migrations 001 and 011).
-func NewEventsHandler(db *sql.DB) *EventsHandler {
-	log.Printf("[INFO] Events handler initialized")
+func NewEventsHandlerFromDB(db *sql.DB) *EventsHandler {
+	log.Printf("[INFO] Events handler initialized (shared DB)")
 	return &EventsHandler{db: db}
+}
+
+// Close releases resources. If the handler owns the DB connection, it closes it.
+func (e *EventsHandler) Close() {
+	if e.ownsDB {
+		e.db.Close()
+	}
+}
+
+// Archive runs the archive job to move old events to the archive table.
+func (e *EventsHandler) Archive(_ interface{}) {
+	events.RunArchiveJob(e.db)
+}
+
+// createEventsSchema creates the events, events_archive, and FTS5 tables.
+func createEventsSchema(db *sql.DB) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS events (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp_ms INTEGER NOT NULL,
+		type        TEXT    NOT NULL,
+		zone        TEXT,
+		person      TEXT,
+		blob_id     INTEGER,
+		detail_json TEXT,
+		severity    TEXT    NOT NULL DEFAULT 'info'
+	);
+	CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp_ms DESC);
+	CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, timestamp_ms DESC);
+	CREATE INDEX IF NOT EXISTS idx_events_zone ON events(zone, timestamp_ms DESC);
+	CREATE INDEX IF NOT EXISTS idx_events_person ON events(person, timestamp_ms DESC);
+	CREATE TABLE IF NOT EXISTS events_archive (
+		id          INTEGER PRIMARY KEY,
+		timestamp_ms INTEGER NOT NULL,
+		type        TEXT    NOT NULL,
+		zone        TEXT,
+		person      TEXT,
+		blob_id     INTEGER,
+		detail_json TEXT,
+		severity    TEXT    NOT NULL DEFAULT 'info'
+	);
+	CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+		type, zone, person, detail_json,
+		content='events', content_rowid='id'
+	);
+	CREATE TRIGGER IF NOT EXISTS events_fts_insert AFTER INSERT ON events BEGIN
+		INSERT INTO events_fts(rowid, type, zone, person, detail_json)
+		VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
+	END;
+	CREATE TRIGGER IF NOT EXISTS events_fts_delete AFTER DELETE ON events BEGIN
+		INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
+		VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
+	END;
+	CREATE TRIGGER IF NOT EXISTS events_fts_update AFTER UPDATE ON events BEGIN
+		INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
+		VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
+	INSERT INTO events_fts(rowid, type, zone, person, detail_json)
+	VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
+	END;
+	`
+	_, err := db.Exec(schema)
+	return err
 }
 
 // isValidEventType checks whether the event type string is a known type.

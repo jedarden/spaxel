@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -380,7 +379,7 @@ func TestHandlerGetCalibration(t *testing.T) {
 	}
 }
 
-func TestHandlerGetCalibration(t *testing.T) {
+func TestHandlerGetFloorplanEmpty(t *testing.T) {
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "floorplan-test")
 	if err != nil {

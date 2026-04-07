@@ -388,6 +388,7 @@ func (h *ZonesHandler) createZone(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	log.Printf("[INFO] Zone created: %s (%s)", zone.ID, zone.Name)
+	h.notifyZoneChange("created", h.mgr.GetZone(zone.ID))
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, http.StatusCreated, resp)
 }
@@ -420,12 +421,18 @@ func (h *ZonesHandler) updateZone(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	log.Printf("[INFO] Zone updated: %s (%s)", zone.ID, zone.Name)
+	h.notifyZoneChange("updated", h.mgr.GetZone(zone.ID))
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // deleteZone removes a zone by ID.
 func (h *ZonesHandler) deleteZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	// Broadcast before deleting so we can still read the zone.
+	if z := h.mgr.GetZone(id); z != nil {
+		h.notifyZoneChange("deleted", z)
+	}
 
 	if err := h.mgr.DeleteZone(id); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to delete zone: "+err.Error())
@@ -517,6 +524,7 @@ func (h *ZonesHandler) createPortal(w http.ResponseWriter, r *http.Request) {
 
 	resp := toPortalResponse(h.mgr.GetPortal(portal.ID))
 	log.Printf("[INFO] Portal created: %s (%s)", portal.ID, portal.Name)
+	h.notifyPortalChange("created", h.mgr.GetPortal(portal.ID))
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, http.StatusCreated, resp)
 }
@@ -556,12 +564,18 @@ func (h *ZonesHandler) updatePortal(w http.ResponseWriter, r *http.Request) {
 
 	resp := toPortalResponse(h.mgr.GetPortal(portal.ID))
 	log.Printf("[INFO] Portal updated: %s (%s)", portal.ID, portal.Name)
+	h.notifyPortalChange("updated", h.mgr.GetPortal(portal.ID))
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // deletePortal removes a portal by ID.
 func (h *ZonesHandler) deletePortal(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	// Broadcast before deleting so we can still read the portal.
+	if p := h.mgr.GetPortal(id); p != nil {
+		h.notifyPortalChange("deleted", p)
+	}
 
 	if err := h.mgr.DeletePortal(id); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to delete portal: "+err.Error())

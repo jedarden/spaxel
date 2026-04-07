@@ -177,51 +177,53 @@ func (h *TestHarness) RunSimulator(ctx context.Context, nodes, walkers, rate int
 	return nil
 }
 
-// GetNodes retrieves the list of nodes from /api/fleet/health
+// GetNodes retrieves the list of nodes from /api/nodes
 func (h *TestHarness) GetNodes(ctx context.Context) ([]Node, error) {
-	resp, err := http.Get(h.APIURL + "/api/fleet/health")
+	resp, err := http.Get(h.APIURL + "/api/nodes")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var fleetHealth FleetHealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fleetHealth); err != nil {
+	var nodes []NodeRecord
+	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
 		return nil, err
 	}
 
-	// Convert fleet health nodes to test nodes
-	nodes := make([]Node, 0, len(fleetHealth.Nodes))
-	for _, n := range fleetHealth.Nodes {
-		nodes = append(nodes, Node{
+	// Convert NodeRecord to test Node format
+	result := make([]Node, 0, len(nodes))
+	now := time.Now()
+	for _, n := range nodes {
+		// Determine if node is online: seen within last 30 seconds
+		isOnline := now.Sub(n.LastSeenAt) < 30*time.Second
+		result = append(result, Node{
 			MAC:      n.MAC,
 			Name:     n.Name,
 			Role:     n.Role,
-			Status:   map[bool]string{true: "online", false: "offline"}[n.Online],
-			RSSI:     -60, // Default value since health response doesn't include RSSI
-			UptimeS:  0,
-			LastSeen: 0,
+			Status:   map[bool]string{true: "online", false: "offline"}[isOnline],
+			RSSI:     -60, // Not included in NodeRecord response
+			UptimeS:  int64(now.Sub(n.FirstSeenAt).Seconds()),
+			LastSeen: n.LastSeenAt.UnixMilli(),
 		})
 	}
 
-	return nodes, nil
+	return result, nil
 }
 
-// FleetHealthResponse represents the /api/fleet/health response
-type FleetHealthResponse struct {
-	CoverageScore float64       `json:"coverage_score"`
-	MeanGDOP      float64       `json:"mean_gdop"`
-	IsDegraded    bool          `json:"is_degraded"`
-	Nodes         []FleetNode   `json:"nodes"`
-}
-
-// FleetNode represents a node in the fleet health response
-type FleetNode struct {
-	MAC         string  `json:"mac"`
-	Name        string  `json:"name"`
-	Role        string  `json:"role"`
-	HealthScore float64 `json:"health_score"`
-	Online      bool    `json:"online"`
+// NodeRecord represents a node from the /api/nodes response
+type NodeRecord struct {
+	MAC             string    `json:"mac"`
+	Name            string    `json:"name"`
+	Role            string    `json:"role"`
+	PosX            float64   `json:"pos_x"`
+	PosY            float64   `json:"pos_y"`
+	PosZ            float64   `json:"pos_z"`
+	Virtual         bool      `json:"virtual"`
+	FirstSeenAt     time.Time `json:"first_seen_at"`
+	LastSeenAt      time.Time `json:"last_seen_at"`
+	FirmwareVersion string    `json:"firmware_version"`
+	ChipModel       string    `json:"chip_model"`
+	HealthScore     float64   `json:"health_score"`
 }
 
 // Node represents a node from the API (for compatibility with tests)
@@ -235,13 +237,16 @@ type Node struct {
 	RSSI     int    `json:"rssi"`
 	UptimeS  int64  `json:"uptime_s"`
 	LastSeen int64  `json:"last_seen_ms"`
+	PosX     float64 `json:"pos_x"`
+	PosY     float64 `json:"pos_y"`
+	PosZ     float64 `json:"pos_z"`
 }
 
 // Position represents a node position
 type Position struct {
-	X float64 `json:"pos_x"`
-	Y float64 `json:"pos_y"`
-	Z float64 `json:"pos_z"`
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
 }
 
 // GetEvents retrieves events from the API

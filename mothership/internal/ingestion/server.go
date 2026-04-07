@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/spaxel/mothership/internal/apdetector"
+	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/signal"
 )
 
@@ -118,6 +119,9 @@ type Server struct {
 	bleHandler           BLEHandler
 	apDetector           *apdetector.Detector
 
+	// Load shedding
+	shedder    *loadshed.Shedder
+	frameGauge chan struct{} // bounded gauge for tracking in-flight frames
 
 	// Token validator for node authentication
 	// Function that takes (mac, token) and returns true if valid
@@ -155,6 +159,9 @@ const (
 	malformedWarnThreshold  = 100
 	malformedCloseThreshold = 1000
 	malformedWindow         = time.Minute
+
+	// Frame gauge buffer size for load shedding fullness detection.
+	frameGaugeSize = 256
 )
 
 // NewServer creates a new ingestion server
@@ -165,6 +172,7 @@ func NewServer() *Server {
 		linkMotionState: make(map[string]bool),
 		linkDeltaRMS:    make(map[string]float64),
 		malformedCounts: make(map[string]*malformedCounter),
+		frameGauge:      make(chan struct{}, frameGaugeSize),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
