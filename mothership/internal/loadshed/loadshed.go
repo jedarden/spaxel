@@ -243,6 +243,12 @@ func (s *Shedder) EndIteration() {
 	avg := s.rollingAvg()
 
 	// Evaluate state machine.
+	s.evaluate(avg)
+}
+
+// evaluate runs the shedding state machine with the given rolling average.
+// Extracted from EndIteration so tests can inject controlled timing values.
+func (s *Shedder) evaluate(avg time.Duration) {
 	prevLevel := Level(s.level.Load())
 	var newLevel Level
 

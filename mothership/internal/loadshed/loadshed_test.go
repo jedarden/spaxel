@@ -554,22 +554,23 @@ func TestEndIterationRecoveryCounterReset(t *testing.T) {
 	s := New()
 	s.level.Store(int32(LevelLight))
 
-	// 5 iterations below threshold.
+	// Build up recovery ticks (5 iterations with ~0ms real time).
 	for i := 0; i < 5; i++ {
-		fillWindow(s, 50*time.Millisecond)
 		s.BeginIteration()
 		s.EndIteration()
-		fillWindow(s, 50*time.Millisecond)
 	}
 
-	// One iteration between recovery (60ms) and L1 (80ms) — should reset.
+	if s.recoveryTicks.Load() != 5 {
+		t.Fatalf("expected 5 recovery ticks, got %d", s.recoveryTicks.Load())
+	}
+
+	// Set window to avg in [60ms, 80ms) — recovery counter should reset.
+	// Use evaluate() directly since EndIteration measures real wall time.
 	fillWindow(s, 70*time.Millisecond)
-	s.BeginIteration()
-	s.EndIteration()
-	fillWindow(s, 70*time.Millisecond)
+	s.evaluate(s.rollingAvg())
 
 	if s.recoveryTicks.Load() != 0 {
-		t.Errorf("recovery ticks should be 0 after 70ms iteration, got %d", s.recoveryTicks.Load())
+		t.Errorf("recovery ticks should be 0 after avg in [60ms, 80ms), got %d", s.recoveryTicks.Load())
 	}
 	if s.GetLevel() != LevelLight {
 		t.Errorf("level should remain Light, got %d", s.GetLevel())
