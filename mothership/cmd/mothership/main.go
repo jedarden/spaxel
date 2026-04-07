@@ -3048,15 +3048,16 @@ func main() {
     r.Get("/api/backup", backupHandler.HandleBackup)
     log.Printf("[INFO] Backup API registered at /api/backup")
 
-    // Events timeline REST API
-    eventsHandler, err := api.NewEventsHandler(filepath.Join(cfg.DataDir, "spaxel.db"))
-    if err != nil {
-        log.Fatalf("[FATAL] Failed to create events handler: %v", err)
-    }
+    // Events timeline REST API (uses shared mainDB)
+    eventsHandler := api.NewEventsHandler(mainDB)
     eventsHandler.SetHub(dashboardHub)
     eventsHandler.RegisterRoutes(r)
-    defer eventsHandler.Close()
     log.Printf("[INFO] Events timeline API registered at /api/events/*")
+
+    // Start nightly events archive scheduler (runs at 02:00 local time)
+    archiveDone := make(chan struct{})
+    events.StartArchiveScheduler(mainDB, archiveDone)
+    defer close(archiveDone)
 
     // OTA firmware server and manager
     firmwareDir := filepath.Join(cfg.DataDir, "firmware")
@@ -3094,7 +3095,7 @@ func main() {
     if msPort == 0 {
         msPort = 8080
     }
-    provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort, cfg.NTPServer, cfg.InstallSecretHex)
+    provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort, cfg.NTPServer, cfg.InstallSecret)
     r.Post("/api/provision", provSrv.HandleProvision)
 
     // Firmware manifest for esp-web-tools (onboarding wizard flashing)
