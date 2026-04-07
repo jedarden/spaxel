@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/zones"
 )
@@ -212,6 +212,11 @@ func TestCreateZoneInvalid(t *testing.T) {
 			body:    ``,
 			wantMsg: "invalid request body",
 		},
+			{
+				name:    "missing name",
+				body:    `{"id":"z1","x":0,"y":0,"z":0,"max_x":1,"max_y":1,"max_z":1}`,
+				wantMsg: "name is required",
+			},
 	}
 
 	for _, tt := range tests {
