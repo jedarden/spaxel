@@ -418,7 +418,7 @@ func (r *RotationDetector) updateCandidates(now time.Time) {
 
 		// Reset confirmation count if we haven't seen the new address recently
 		lastSeen, err := r.registry.GetDeviceLastSeen(candidate.NewAddr)
-		if err != nil || now.Sub(time.Unix(0, lastSeen)) > RotationTimeWindow {
+		if err != nil || now.Sub(lastSeen) > RotationTimeWindow {
 			candidate.ConfirmCount = 0
 		}
 	}

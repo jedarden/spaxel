@@ -5,7 +5,6 @@ package explainability
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -26,7 +25,9 @@ type Handler struct {
 // BlobExplanation contains all data needed to explain a blob detection.
 type BlobExplanation struct {
 	BlobID       int                    `json:"blob_id"`
-	X, Y, Z      float64               `json:"x,y,z"`
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
 	Confidence   float64               `json:"confidence"`
 	Timestamp    int64                 `json:"timestamp_ms"`
 	ContributingLinks []LinkContribution `json:"contributing_links"`
@@ -211,7 +212,7 @@ func (h *Handler) refreshData(w http.ResponseWriter, r *http.Request) {
 
 	// Update fusion result snapshot
 	h.fusionResult = &FusionResultSnapshot{
-		Timestamp: req.GridData.Rows, // placeholder
+		Timestamp: int64(req.GridData.Rows), // placeholder
 		Blobs:    req.Blobs,
 		GridData: req.GridData,
 	}

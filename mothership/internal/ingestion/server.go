@@ -229,7 +229,7 @@ func (s *Server) SetOTAManager(h OTAStatusHandler) {
 }
 
 // SetAPDetector sets the AP detector for passive radar auto-detection.
-func (s *Server) SetAPDetector(detector interface{}) {
+func (s *Server) SetAPDetector(detector *apdetector.Detector) {
 	s.mu.Lock()
 	s.apDetector = detector
 	s.mu.Unlock()
@@ -336,14 +336,8 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 
 	// Process AP BSSID for passive radar auto-detection
 	if apDet != nil {
-		// The AP detector has a ProcessHello method we can call via reflection
-		// or we can type assert if we know the concrete type
-		if detector, ok := apDet.(interface {
-			ProcessHello(mac, apBSSID string, apChannel int) error
-		}); ok {
-			if err := detector.ProcessHello(hello.MAC, hello.APBSSID, hello.APChannel); err != nil {
-				log.Printf("[WARN] AP detector process hello failed: %v", err)
-			}
+		if err := apDet.ProcessHello(hello.MAC, hello.APBSSID, hello.APChannel); err != nil {
+			log.Printf("[WARN] AP detector process hello failed: %v", err)
 		}
 	}
 

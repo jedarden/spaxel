@@ -261,11 +261,10 @@ func TestSelfImprovingLocalizer_Integration(t *testing.T) {
 	sil.SetNodePosition("node4", 0, 10)
 
 	// Add BLE observations for an entity at (5, 5)
-	now := time.Now()
-	sil.AddBLEObservation("phone1", "node1", -80, now)
-	sil.AddBLEObservation("phone1", "node2", -80, now)
-	sil.AddBLEObservation("phone1", "node3", -80, now)
-	sil.AddBLEObservation("phone1", "node4", -80, now)
+	sil.AddBLEObservation("phone1", "node1", -80)
+	sil.AddBLEObservation("phone1", "node2", -80)
+	sil.AddBLEObservation("phone1", "node3", -80)
+	sil.AddBLEObservation("phone1", "node4", -80)
 
 	// Check ground truth
 	gt := sil.GetGroundTruth("phone1")

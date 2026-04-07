@@ -4,7 +4,6 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,7 +21,7 @@ type TriggersHandler struct {
 	mu        sync.RWMutex
 	db        *sql.DB
 	triggers  map[string]*Trigger
-	engine    *TriggerEngine
+	engine    TriggerEngine
 }
 
 // Trigger represents an automation trigger.

@@ -1385,7 +1385,7 @@ func (r *Registry) GetCurrentDevices() []map[string]interface{} {
 			"rssi_min":      d.RSSIMin,
 			"rssi_max":      d.RSSIMax,
 			"rssi_avg":      d.RSSIAvg,
-			"rssi_count":    d.RSSICount(d.Addr),
+			"rssi_count":    r.GetDeviceRSSICount(d.Addr),
 			"first_seen_at": d.FirstSeenAt.UnixMilli(),
 			"last_seen_at":  d.LastSeenAt.UnixMilli(),
 			"last_seen_node": d.LastSeenNode,

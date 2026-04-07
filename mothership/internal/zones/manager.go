@@ -29,8 +29,12 @@ type Zone struct {
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
 	Color          string    `json:"color"` // Hex color for visualization
-	MinX, MinY, MinZ float64 `json:"min_x,max_x,min_y,max_y,min_z,max_z"`
-	MaxX, MaxY, MaxZ float64 `json:"max_x,max_y,max_z,max_x,max_y,max_z"`
+	MinX float64 `json:"min_x"`
+	MinY float64 `json:"min_y"`
+	MinZ float64 `json:"min_z"`
+	MaxX float64 `json:"max_x"`
+	MaxY float64 `json:"max_y"`
+	MaxZ float64 `json:"max_z"`
 	Enabled        bool      `json:"enabled"`
 	ZoneType       ZoneType  `json:"zone_type"`        // Zone type for behavior customization
 	IsChildrenZone bool      `json:"is_children_zone"` // Suppresses fall detection in this zone (deprecated, use ZoneType)
@@ -44,11 +48,19 @@ type Portal struct {
 	ZoneAID      string    `json:"zone_a_id"`
 	ZoneBID      string    `json:"zone_b_id"`
 	// Portal plane definition (3 points defining the doorway plane)
-	P1X, P1Y, P1Z float64 `json:"p1_x,p1_y,p1_z"`
-	P2X, P2Y, P2Z float64 `json:"p2_x,p2_y,p2_z"`
-	P3X, P3Y, P3Z float64 `json:"p3_x,p3_y,p3_z"`
+	P1X float64 `json:"p1_x"`
+	P1Y float64 `json:"p1_y"`
+	P1Z float64 `json:"p1_z"`
+	P2X float64 `json:"p2_x"`
+	P2Y float64 `json:"p2_y"`
+	P2Z float64 `json:"p2_z"`
+	P3X float64 `json:"p3_x"`
+	P3Y float64 `json:"p3_y"`
+	P3Z float64 `json:"p3_z"`
 	// Portal normal vector (computed from points)
-	NX, NY, NZ float64 `json:"n_x,n_y,n_z"`
+	NX float64 `json:"n_x"`
+	NY float64 `json:"n_y"`
+	NZ float64 `json:"n_z"`
 	Width       float64   `json:"width"` // Portal width in meters
 	Height      float64   `json:"height"` // Portal height in meters
 	Enabled     bool      `json:"enabled"`

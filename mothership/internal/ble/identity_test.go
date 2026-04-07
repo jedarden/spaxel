@@ -2,6 +2,8 @@ package ble
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )

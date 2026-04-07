@@ -3,7 +3,6 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -20,7 +19,7 @@ import (
 type EventsHandler struct {
 	mu  sync.RWMutex
 	db  *sql.DB
-	hub *DashboardHub
+	hub DashboardHub
 }
 
 // DashboardHub is the interface for broadcasting to dashboard clients.

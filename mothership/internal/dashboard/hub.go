@@ -28,6 +28,52 @@ type Hub struct {
 	bleState        BLEState
 	triggerState    TriggerState
 	systemHealth    SystemHealthProvider
+	zoneState       ZoneStateProvider
+
+	// Snapshot protocol: stores the last full snapshot for delta computation.
+	// Updated on every 10 Hz tick.
+	snapMu sync.RWMutex
+	snap   snapshotCache
+}
+
+// snapshotCache holds serialised JSON bytes for each snapshot field,
+// allowing cheap byte-level comparison when computing deltas.
+type snapshotCache struct {
+	blobsJSON         []byte
+	nodesJSON         []byte
+	zonesJSON         []byte
+	linksJSON         []byte
+	bleJSON           []byte
+	triggersJSON      []byte
+	motionStatesJSON  []byte
+	confidence        int
+	timestampMs       int64
+}
+
+// ZoneStateProvider is an interface to query zone data for the dashboard snapshot.
+type ZoneStateProvider interface {
+	GetAllZones() []ZoneSnapshot
+	GetOccupancy() map[string]ZoneOccupancySnapshot
+}
+
+// ZoneSnapshot is the wire format for a zone in the dashboard snapshot.
+type ZoneSnapshot struct {
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Count  int      `json:"count"`
+	People []string `json:"people"`
+	MinX   float64  `json:"x"`
+	MinY   float64  `json:"y"`
+	MinZ   float64  `json:"z"`
+	SizeX  float64  `json:"w"`
+	SizeY  float64  `json:"d"`
+	SizeZ  float64  `json:"h"`
+}
+
+// ZoneOccupancySnapshot provides occupancy counts for zones.
+type ZoneOccupancySnapshot struct {
+	Count   int    `json:"count"`
+	BlobIDs []int  `json:"blob_ids"`
 }
 
 // IngestionState is an interface to query node/link/motion state from ingestion
@@ -100,30 +146,48 @@ func (h *Hub) SetSystemHealth(provider SystemHealthProvider) {
 	h.mu.Unlock()
 }
 
-// Run starts the hub's main loop
+// SetZoneState sets the zone state provider for snapshot broadcasts.
+func (h *Hub) SetZoneState(state ZoneStateProvider) {
+	h.mu.Lock()
+	h.zoneState = state
+	h.mu.Unlock()
+}
+
+// Run starts the hub's main loop.
+// The 10 Hz delta tick replaces the old 5 s state / 500 ms presence /
+// 5 s BLE periodic broadcasts.  System health (60 s) is kept as a
+// separate low-frequency broadcast.
 func (h *Hub) Run() {
-	stateTicker := time.NewTicker(5 * time.Second)
-	defer stateTicker.Stop()
+	// 10 Hz snapshot/delta tick
+	deltaTicker := time.NewTicker(100 * time.Millisecond)
+	defer deltaTicker.Stop()
 
-	presenceTicker := time.NewTicker(500 * time.Millisecond)
-	defer presenceTicker.Stop()
-
-	// BLE scan broadcast ticker (5 seconds)
-	bleScanTicker := time.NewTicker(5 * time.Second)
-	defer bleScanTicker.Stop()
-
-	// System health broadcast ticker (60 seconds)
+	// System health broadcast ticker (60 seconds) — kept separate
 	healthTicker := time.NewTicker(60 * time.Second)
 	defer healthTicker.Stop()
 
 	for {
 		select {
 		case client := <-h.register:
+			// Build and send snapshot BEFORE adding the client to the
+			// broadcast map so that no delta messages race ahead of the
+			// initial state.
+			snap := h.buildSnapshot()
+			data, err := json.Marshal(snap)
+			if err != nil {
+				log.Printf("[WARN] Failed to marshal snapshot: %v", err)
+			} else {
+				select {
+				case client.send <- data:
+				default:
+					log.Printf("[WARN] Snapshot dropped for new client (buffer full)")
+				}
+			}
+
 			h.mu.Lock()
 			h.clients[client] = struct{}{}
 			h.mu.Unlock()
 			log.Printf("[INFO] Dashboard client connected (total: %d)", len(h.clients))
-			h.sendInitialState(client)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -145,14 +209,8 @@ func (h *Hub) Run() {
 			}
 			h.mu.RUnlock()
 
-		case <-stateTicker.C:
-			h.broadcastState()
-
-		case <-presenceTicker.C:
-			h.broadcastPresence()
-
-		case <-bleScanTicker.C:
-			h.broadcastBLEScan()
+		case <-deltaTicker.C:
+			h.tickDelta()
 
 		case <-healthTicker.C:
 			h.broadcastSystemHealth()
@@ -239,36 +297,6 @@ func (h *Hub) BroadcastMotionState(states []ingestion.MotionStateItem) {
 	h.Broadcast(data)
 }
 
-// BroadcastPresenceUpdate sends periodic presence state for all links.
-// Broadcasts every 500ms with {type: "presence_update", links: {linkID: {...}}}.
-func (h *Hub) broadcastPresence() {
-	h.mu.RLock()
-	state := h.ingestionState
-	clientCount := len(h.clients)
-	h.mu.RUnlock()
-
-	if state == nil || clientCount == 0 {
-		return
-	}
-
-	items := state.GetAllMotionStates()
-	if len(items) == 0 {
-		return
-	}
-
-	links := make(map[string]ingestion.MotionStateItem, len(items))
-	for _, item := range items {
-		links[item.LinkID] = item
-	}
-
-	msg := map[string]interface{}{
-		"type":  "presence_update",
-		"links": links,
-	}
-	data, _ := json.Marshal(msg)
-	h.Broadcast(data)
-}
-
 // ─── Phase 3 Broadcasts ─────────────────────────────────────────────────────
 
 // nodeJSON is the wire format for a fleet node sent to the dashboard.
@@ -343,6 +371,7 @@ type blobJSON struct {
 }
 
 // BroadcastLocUpdate sends localisation results to all dashboard clients.
+// It also stores the latest blob data for the snapshot/delta protocol.
 func (h *Hub) BroadcastLocUpdate(blobs []tracking.Blob) {
 	wireBlobs := make([]blobJSON, len(blobs))
 	for i, b := range blobs {
@@ -362,6 +391,14 @@ func (h *Hub) BroadcastLocUpdate(blobs []tracking.Blob) {
 			// tracking.Blob struct is extended.
 		}
 	}
+
+	// Store for snapshot protocol.
+	h.snapMu.Lock()
+	if data, err := json.Marshal(wireBlobs); err == nil {
+		h.snap.blobsJSON = data
+	}
+	h.snapMu.Unlock()
+
 	msg := map[string]interface{}{
 		"type":  "loc_update",
 		"blobs": wireBlobs,
@@ -392,54 +429,231 @@ func (h *Hub) BroadcastCoverageMap(data []float32, cols, rows int, cellSize floa
 }
 
 func (h *Hub) sendInitialState(client *Client) {
-	h.mu.RLock()
-	state := h.ingestionState
-	h.mu.RUnlock()
-
-	if state == nil {
-		return
-	}
-
-	msg := h.buildStateMsg(state)
-	data, _ := json.Marshal(msg)
-
+	// Legacy path kept for tests that call sendInitialState directly.
+	// The Run() loop now handles snapshot delivery on register.
+	snap := h.buildSnapshot()
+	data, _ := json.Marshal(snap)
 	select {
 	case client.send <- data:
 	default:
 	}
 }
 
-func (h *Hub) broadcastState() {
+// buildSnapshot constructs the full snapshot message for a new client connection.
+func (h *Hub) buildSnapshot() map[string]interface{} {
+	now := time.Now().UnixMilli()
+	snap := map[string]interface{}{
+		"type":         "snapshot",
+		"timestamp_ms": now,
+	}
+
 	h.mu.RLock()
-	state := h.ingestionState
+	ing := h.ingestionState
+	ble := h.bleState
+	trig := h.triggerState
+	zones := h.zoneState
+	h.mu.RUnlock()
+
+	if ing != nil {
+		if nodes := ing.GetConnectedNodesInfo(); len(nodes) > 0 {
+			snap["nodes"] = nodes
+		}
+		if links := ing.GetAllLinksInfo(); len(links) > 0 {
+			snap["links"] = links
+		}
+		if motionStates := ing.GetAllMotionStates(); len(motionStates) > 0 {
+			snap["motion_states"] = motionStates
+		}
+	}
+
+	if ble != nil {
+		if devices := ble.GetCurrentDevices(); len(devices) > 0 {
+			snap["ble_devices"] = devices
+		}
+	}
+
+	if trig != nil {
+		if triggers := trig.GetTriggerStates(); len(triggers) > 0 {
+			snap["triggers"] = triggers
+		}
+	}
+
+	if zones != nil {
+		snap["zones"] = h.buildZoneSnapshots(zones)
+	}
+
+	// Include latest blobs from the snapshot cache.
+	h.snapMu.RLock()
+	if len(h.snap.blobsJSON) > 0 {
+		var blobs []blobJSON
+		if json.Unmarshal(h.snap.blobsJSON, &blobs) == nil {
+			snap["blobs"] = blobs
+		}
+	}
+	h.snapMu.RUnlock()
+
+	return snap
+}
+
+// buildZoneSnapshots converts zone state into the wire format for the snapshot.
+func (h *Hub) buildZoneSnapshots(zp ZoneStateProvider) []ZoneSnapshot {
+	zones := zp.GetAllZones()
+	occupancy := zp.GetOccupancy()
+	result := make([]ZoneSnapshot, 0, len(zones))
+	for _, z := range zones {
+		occ := occupancy[z.ID]
+		people := make([]string, 0)
+		if occ != nil {
+			// Blob IDs don't have names yet; leave people empty.
+			_ = occ.BlobIDs
+		}
+		result = append(result, ZoneSnapshot{
+			ID:     z.ID,
+			Name:   z.Name,
+			Count:  func() int { if occ != nil { return occ.Count }; return 0 }(),
+			People: people,
+			MinX:   z.MinX,
+			MinY:   z.MinY,
+			MinZ:   z.MinZ,
+			SizeX:  z.MaxX - z.MinX,
+			SizeY:  z.MaxY - z.MinY,
+			SizeZ:  z.MaxZ - z.MinZ,
+		})
+	}
+	return result
+}
+
+// tickDelta is called every 100 ms (10 Hz). It computes which snapshot
+// fields changed since the last tick and broadcasts only those fields.
+// Delta messages omit the "type" field so the frontend can distinguish
+// them from event-driven messages.
+func (h *Hub) tickDelta() {
+	h.mu.RLock()
 	clientCount := len(h.clients)
 	h.mu.RUnlock()
 
-	if state == nil || clientCount == 0 {
+	if clientCount == 0 {
 		return
 	}
 
-	msg := h.buildStateMsg(state)
-	data, _ := json.Marshal(msg)
+	now := time.Now().UnixMilli()
+	delta := make(map[string]interface{})
+	delta["timestamp_ms"] = now
+
+	h.mu.RLock()
+	ing := h.ingestionState
+	ble := h.bleState
+	trig := h.triggerState
+	zones := h.zoneState
+	h.mu.RUnlock()
+
+	// --- blobs (stored by BroadcastLocUpdate) ---
+	h.snapMu.Lock()
+	if ing != nil {
+		if nodes := ing.GetConnectedNodesInfo(); len(nodes) > 0 {
+			if data, err := json.Marshal(nodes); err == nil {
+				if !bytesEqual(data, h.snap.nodesJSON) {
+					delta["nodes"] = nodes
+					h.snap.nodesJSON = data
+				}
+			}
+		} else {
+			if len(h.snap.nodesJSON) > 0 {
+				delta["nodes"] = []ingestion.NodeInfo{}
+				h.snap.nodesJSON = nil
+			}
+		}
+
+		if links := ing.GetAllLinksInfo(); len(links) > 0 {
+			if data, err := json.Marshal(links); err == nil {
+				if !bytesEqual(data, h.snap.linksJSON) {
+					delta["links"] = links
+					h.snap.linksJSON = data
+				}
+			}
+		} else {
+			if len(h.snap.linksJSON) > 0 {
+				delta["links"] = []ingestion.LinkInfo{}
+				h.snap.linksJSON = nil
+			}
+		}
+
+		if motionStates := ing.GetAllMotionStates(); len(motionStates) > 0 {
+			if data, err := json.Marshal(motionStates); err == nil {
+				if !bytesEqual(data, h.snap.motionStatesJSON) {
+					delta["motion_states"] = motionStates
+					h.snap.motionStatesJSON = data
+				}
+			}
+		}
+	}
+
+	if len(h.snap.blobsJSON) > 0 {
+		delta["blobs"] = json.RawMessage(h.snap.blobsJSON)
+	}
+
+	if ble != nil {
+		if devices := ble.GetCurrentDevices(); len(devices) > 0 {
+			if data, err := json.Marshal(devices); err == nil {
+				if !bytesEqual(data, h.snap.bleJSON) {
+					delta["ble_devices"] = devices
+					h.snap.bleJSON = data
+				}
+			}
+		}
+	}
+
+	if trig != nil {
+		if triggers := trig.GetTriggerStates(); len(triggers) > 0 {
+			if data, err := json.Marshal(triggers); err == nil {
+				if !bytesEqual(data, h.snap.triggersJSON) {
+					delta["triggers"] = triggers
+					h.snap.triggersJSON = data
+				}
+			}
+		}
+	}
+
+	if zones != nil {
+		zs := h.buildZoneSnapshots(zones)
+		if data, err := json.Marshal(zs); err == nil {
+			if !bytesEqual(data, h.snap.zonesJSON) {
+				delta["zones"] = zs
+				h.snap.zonesJSON = data
+			}
+		}
+	}
+
+	h.snap.timestampMs = now
+	h.snapMu.Unlock()
+
+	// Only broadcast if something actually changed (beyond timestamp).
+	if len(delta) <= 1 {
+		return
+	}
+
+	data, err := json.Marshal(delta)
+	if err != nil {
+		log.Printf("[WARN] Failed to marshal delta: %v", err)
+		return
+	}
 	h.Broadcast(data)
 }
 
-func (h *Hub) buildStateMsg(state IngestionState) map[string]interface{} {
-	msg := map[string]interface{}{
-		"type": "state",
+// bytesEqual compares two byte slices. Nil and empty are treated as equal.
+func bytesEqual(a, b []byte) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
 	}
-
-	if nodes := state.GetConnectedNodesInfo(); nodes != nil {
-		msg["nodes"] = nodes
+	if len(a) != len(b) {
+		return false
 	}
-	if links := state.GetAllLinksInfo(); links != nil {
-		msg["links"] = links
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
 	}
-	if motionStates := state.GetAllMotionStates(); len(motionStates) > 0 {
-		msg["motion_states"] = motionStates
-	}
-
-	return msg
+	return true
 }
 
 // ClientCount returns the number of connected dashboard clients

@@ -10,7 +10,8 @@ import (
 	"time"
 )
 
-// Mock providers for type mockZoneProvider struct {
+// Mock providers
+type mockZoneProvider struct {
 	zones     map[string]string
 	occupancy map[string]struct {
 		count   int
@@ -82,10 +83,15 @@ type mockNotifySender struct {
 
 func (m *mockNotifySender) SendViaChannel(channelType string, title, body string, data map[string]interface{}) error {
 	m.sent = append(m.sent, struct {
+		channel string
+		title   string
+		body    string
+		data    map[string]interface{}
+	}{
 		channel: channelType,
 		title:   title,
-		body:   body,
-		data:   data,
+		body:    body,
+		data:    data,
 	})
 	return nil
 }
@@ -391,7 +397,6 @@ func TestDayOfWeekCondition(t *testing.T) {
 				t.Errorf("Day %s: expected %v, got %v", dayName[tc.weekday], tc.expected, result)
 			}
 		}
-	}
 }
 
 func TestWebhookDispatch(t *testing.T) {

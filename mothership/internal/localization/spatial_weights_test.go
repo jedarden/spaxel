@@ -2,7 +2,6 @@ package localization
 
 import (
 	"math"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"

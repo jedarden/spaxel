@@ -85,7 +85,8 @@ func (tm *TrackManager) UpdateWithIdentity(measurements [][4]float64, identities
 	now := time.Now()
 	applied := make(map[int]bool)
 
-	for _, i := range tm.blobs {
+	for idx := range tm.blobs {
+		i := &tm.blobs[idx]
 		if info, ok := identities[i.ID]; ok {
 			tm.applyIdentity(i, info, now)
 			tm.lastIdentities[i.ID] = info

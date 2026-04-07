@@ -1,8 +1,4 @@
-//go:build phase6
-
-// Package main provides the mothership entry point — phase 6 (advanced features).
-// Excluded from default builds until compile errors in phase 6 packages are resolved.
-// Build with: go build -tags phase6 ./cmd/mothership
+// Package main provides the mothership entry point.
 package main
 
 import (
@@ -665,7 +661,7 @@ func main() {
     })
 
     // Wire GDOP improvement accessor
-    diagnosticEngine.SetGDOPImprovementAccessor(func(nodeMAC string, targetPos diagnostics.Vec3) float64) {
+    diagnosticEngine.SetGDOPImprovementAccessor(func(nodeMAC string, targetPos diagnostics.Vec3) float64 {
         // Calculate current worst GDOP vs new worst GDOP with node at target position
         currentWorstX, currentWorstZ, currentWorstGDOP := fleetHealer.GetWorstCoverageZone()
         _ = currentWorstX
@@ -1051,7 +1047,7 @@ func main() {
                 },
             })
         }
-    })
+    }()
 
     // Set identity function for fall detector
     fallDetector.SetIdentityFunc(func(blobID int) string {

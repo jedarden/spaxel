@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -18,8 +15,8 @@ import (
 // ReplayHandler manages CSI replay sessions.
 type ReplayHandler struct {
 	mu         sync.RWMutex
-	store      *RecordingStore
-	sessions   map[string]*ReplaySession
+	store      RecordingStore
+	sessions   map[string]*_replaySession
 	nextID     int
 	replayPath string
 }
@@ -264,7 +261,7 @@ func (h *ReplayHandler) seek(w http.ResponseWriter, r *http.Request) {
 			return false // stop after first match
 		}
 		return true
-	}
+	})
 
 	writeJSON(w, map[string]interface{}{
 		"status":      "seeked",
