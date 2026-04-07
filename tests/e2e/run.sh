@@ -2,7 +2,7 @@
 # End-to-end integration test harness for Spaxel
 # Starts the mothership, runs the CSI simulator, and asserts on behavior
 
-set -euo pipefail
+set -eo pipefail
 
 # Get the script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MOTHERSHIP_DIR="$PROJECT_ROOT/mothership"
 
 # Configuration
-MOTHERSHIP_IMAGE="${MOTHERSHIP_IMAGE:-ronaldraygun/spaxel:latest}"
+MOTHERSHIP_IMAGE="${MOTHERSHIP_IMAGE:-spaxel-e2e:test}"
 LOCAL_BUILD="${LOCAL_BUILD:-false}"  # Set to "true" to use local build instead of Docker
 MOTHERSHIP_CONTAINER="spaxel-e2e-test"
 MOTHERSHIP_PORT=8080
@@ -21,6 +21,10 @@ SIM_WALKERS=2
 SIM_RATE=20
 SIM_SEED=42
 TEST_TIMEOUT=90
+
+# Initialize PIDs
+SIM_PID=""
+MOTHERSHIP_PID=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -161,16 +165,21 @@ while true; do
     elapsed=$(($(date +%s) - start_time))
     if [ $elapsed -ge $HEALTH_TIMEOUT ]; then
         log_error "Health check timeout after ${HEALTH_TIMEOUT}s"
-        docker logs "$MOTHERSHIP_CONTAINER" --tail 50
+        if [ "$LOCAL_BUILD" = "true" ]; then
+            cat /tmp/spaxel-mothership.log | tail -50
+        else
+            docker logs "$MOTHERSHIP_CONTAINER" --tail 50
+        fi
         exit 1
     fi
 
     health_response=$(http_get "http://localhost:$MOTHERSHIP_PORT/healthz" 1 0 2>/dev/null || echo "")
 
     if [ -n "$health_response" ]; then
-        status=$(json_field "$health_response" ".status")
+        status=$(echo "$health_response" | jq -r '.status // empty' 2>/dev/null || echo "")
         if [ "$status" = "ok" ]; then
-            log_info "Mothership is healthy (status: ok, uptime: $(json_field "$health_response" ".uptime_s")s)"
+            uptime=$(echo "$health_response" | jq -r '.uptime_s // 0' 2>/dev/null || echo "0")
+            log_info "Mothership is healthy (status: ok, uptime: ${uptime}s)"
             break
         fi
     fi

@@ -166,8 +166,8 @@ func migration_001_initial_schema(tx *sql.Tx) error {
 		cal_ay          REAL,
 		cal_bx          REAL,
 		cal_by          REAL,
-		cal_distance_m  REAL,
-		room_bounds_json TEXT,
+		distance_m      REAL,
+		rotation_deg    REAL,
 		updated_at      INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
 	);
 
@@ -489,25 +489,32 @@ func migration_009_sleep_records_unique(tx *sql.Tx) error {
 	return err
 }
 
-// migration_010_add_floorplan creates the floorplan table for storing
+// migration_010_add_floorplan updates the floorplan table schema for
 // uploaded floor plan images and pixel-to-meter calibration data.
+// For databases with the old schema (cal_distance_m, room_bounds_json),
+// it adds the new columns (distance_m, rotation_deg).
 func migration_010_add_floorplan(tx *sql.Tx) error {
-	schema := `
--- Floor plan definition
-CREATE TABLE IF NOT EXISTS floorplan (
-	id              INTEGER PRIMARY KEY CHECK (id = 1),
-	image_path      TEXT,
-	cal_ax          REAL,
-	cal_ay          REAL,
-	cal_bx          REAL,
-	cal_by          REAL,
-	distance_m      REAL,
-	rotation_deg    REAL,
-	updated_at      INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
-);
-`
-	_, err := tx.Exec(schema)
-	return err
+	// Check if distance_m column already exists (indicates correct schema)
+	var colExists bool
+	err := tx.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('floorplan') WHERE name = 'distance_m'
+	`).Scan(&colExists)
+	if err != nil {
+		return err
+	}
+
+	// If distance_m doesn't exist, we have the old schema - add new columns
+	if !colExists {
+		_, err = tx.Exec(`ALTER TABLE floorplan ADD COLUMN distance_m REAL`)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`ALTER TABLE floorplan ADD COLUMN rotation_deg REAL`)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // migration_011_add_events_fts adds FTS5 full-text search for events.

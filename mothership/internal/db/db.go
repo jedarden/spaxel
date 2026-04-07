@@ -46,6 +46,12 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 
+	// Create floorplan storage directory
+	floorplanDir := filepath.Join(dataDir, "floorplan")
+	if err := os.MkdirAll(floorplanDir, 0755); err != nil {
+		return nil, fmt.Errorf("create floorplan dir: %w", err)
+	}
+
 	// Acquire exclusive flock to prevent duplicate instances
 	lockPath := filepath.Join(dataDir, ".lock")
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)

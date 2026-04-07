@@ -139,6 +139,15 @@ type EventStore interface {
 	LogEvent(eventType string, timestamp time.Time, zone, person string, blobID int, detailJSON, severity string) error
 }
 
+// ZoneChangeBroadcaster notifies dashboard clients when zones or portals
+// are created, updated, or deleted via the REST API. Implementations should
+// both send an immediate typed broadcast and invalidate the snapshot cache
+// so the next delta tick doesn't send stale data.
+type ZoneChangeBroadcaster interface {
+	BroadcastZoneChange(action string, zone ZoneSnapshot)
+	BroadcastPortalChange(action string, portal PortalSnapshot)
+}
+
 // Client represents a dashboard WebSocket client
 type Client struct {
 	hub  *Hub
@@ -681,6 +690,14 @@ func (h *Hub) tickDelta() {
 				h.snap.zonesJSON = data
 			}
 		}
+
+		ps := zones.GetAllPortals()
+		if data, err := json.Marshal(ps); err == nil {
+			if !bytesEqual(data, h.snap.portalsJSON) {
+				delta["portals"] = ps
+				h.snap.portalsJSON = data
+			}
+		}
 	}
 
 	h.snap.timestampMs = now
@@ -1017,4 +1034,40 @@ func (h *Hub) BroadcastEventFromDB(id int64, timestamp int64, eventType, zone, p
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
+}
+
+// BroadcastZoneChange sends an immediate zone change event to all dashboard
+// clients and invalidates the cached zone snapshot so the next delta tick
+// reflects the new state. action is "created", "updated", or "deleted".
+func (h *Hub) BroadcastZoneChange(action string, zone ZoneSnapshot) {
+	msg := map[string]interface{}{
+		"type":  "zone_change",
+		"action": action,
+		"zone":  zone,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+
+	// Invalidate cached zones snapshot so the next delta tick re-serialises.
+	h.snapMu.Lock()
+	h.snap.zonesJSON = nil
+	h.snapMu.Unlock()
+}
+
+// BroadcastPortalChange sends an immediate portal change event to all dashboard
+// clients and invalidates the cached portal snapshot. action is "created",
+// "updated", or "deleted".
+func (h *Hub) BroadcastPortalChange(action string, portal PortalSnapshot) {
+	msg := map[string]interface{}{
+		"type":   "portal_change",
+		"action":  action,
+		"portal": portal,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+
+	// Invalidate cached portals snapshot.
+	h.snapMu.Lock()
+	h.snap.portalsJSON = nil
+	h.snapMu.Unlock()
 }

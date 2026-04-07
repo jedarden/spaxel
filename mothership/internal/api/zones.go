@@ -10,15 +10,17 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/zones"
 )
 
 // ZonesHandler manages zones and portals via the zones.Manager.
-// Changes to zones and portals are automatically reflected in the live 3D view
-// within one WebSocket cycle because the dashboard hub polls the manager at 10 Hz.
+// Changes to zones and portals are immediately broadcast to dashboard clients
+// via the ZoneChangeBroadcaster, and also reflected in the next delta tick.
 type ZonesHandler struct {
 	mu  sync.RWMutex
 	mgr *zones.Manager
+	bc  dashboard.ZoneChangeBroadcaster
 }
 
 // zoneWithOcc extends a zone with current occupancy and people list for API responses.
@@ -81,6 +83,71 @@ type crossingResponse struct {
 // NewZonesHandler creates a new zones handler backed by a zones.Manager.
 func NewZonesHandler(mgr *zones.Manager) *ZonesHandler {
 	return &ZonesHandler{mgr: mgr}
+}
+
+// SetZoneChangeBroadcaster sets the broadcaster for immediate WebSocket
+// notifications when zones or portals are modified.
+func (h *ZonesHandler) SetZoneChangeBroadcaster(bc dashboard.ZoneChangeBroadcaster) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.bc = bc
+}
+
+// notifyZoneChange broadcasts a zone change event if a broadcaster is set.
+func (h *ZonesHandler) notifyZoneChange(action string, z *zones.Zone) {
+	h.mu.RLock()
+	bc := h.bc
+	h.mu.RUnlock()
+	if bc == nil {
+		return
+	}
+	occ := h.mgr.GetZoneOccupancy(z.ID)
+	count := 0
+	if occ != nil {
+		count = occ.Count
+	}
+	bc.BroadcastZoneChange(action, dashboard.ZoneSnapshot{
+		ID:    z.ID,
+		Name:  z.Name,
+		Count: count,
+		MinX:  z.MinX,
+		MinY:  z.MinY,
+		MinZ:  z.MinZ,
+		SizeX: z.MaxX - z.MinX,
+		SizeY: z.MaxY - z.MinY,
+		SizeZ: z.MaxZ - z.MinZ,
+	})
+}
+
+// notifyPortalChange broadcasts a portal change event if a broadcaster is set.
+func (h *ZonesHandler) notifyPortalChange(action string, p *zones.Portal) {
+	h.mu.RLock()
+	bc := h.bc
+	h.mu.RUnlock()
+	if bc == nil {
+		return
+	}
+	bc.BroadcastPortalChange(action, dashboard.PortalSnapshot{
+		ID:      p.ID,
+		Name:    p.Name,
+		ZoneA:   p.ZoneAID,
+		ZoneB:   p.ZoneBID,
+		P1X:     p.P1X,
+		P1Y:     p.P1Y,
+		P1Z:     p.P1Z,
+		P2X:     p.P2X,
+		P2Y:     p.P2Y,
+		P2Z:     p.P2Z,
+		P3X:     p.P3X,
+		P3Y:     p.P3Y,
+		P3Z:     p.P3Z,
+		NX:      p.NX,
+		NY:      p.NY,
+		NZ:      p.NZ,
+		Width:   p.Width,
+		Height:  p.Height,
+		Enabled: p.Enabled,
+	})
 }
 
 // Close closes the underlying manager.
