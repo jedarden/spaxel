@@ -361,11 +361,12 @@ func TestUpdateTrigger(t *testing.T) {
 			wantEnable: false,
 		},
 		{
-			name:     "no-op update returns current",
-			setup:    Trigger{ID: "t1", Name: "Same", Condition: "leave", Enabled: true},
-			body:     `{}`,
-			wantCode: http.StatusOK,
-			wantName: "Same",
+			name:       "no-op update returns current",
+			setup:      Trigger{ID: "t1", Name: "Same", Condition: "leave", Enabled: true},
+			body:       `{}`,
+			wantCode:   http.StatusOK,
+			wantName:   "Same",
+			wantEnable: true,
 		},
 	}
 
