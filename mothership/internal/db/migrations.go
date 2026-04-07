@@ -38,6 +38,11 @@ func AllMigrations() []Migration {
 			Description: "add virtual node columns for passive radar AP",
 			Up:          migration_006_add_virtual_node_columns,
 		},
+		{
+			Version:     7,
+			Description: "add webhook_log, trigger_state tables and trigger error columns",
+			Up:          migration_007_add_webhook_tables,
+		},
 	}
 }
 
@@ -411,3 +416,39 @@ func migration_006_add_virtual_node_columns(tx *sql.Tx) error {
 	return err
 }
 
+
+// migration_007_add_webhook_tables adds webhook_log, trigger_state tables
+// and error_message/error_count columns to the triggers table.
+func migration_007_add_webhook_tables(tx *sql.Tx) error {
+	schema := `
+-- Error tracking columns on triggers
+ALTER TABLE triggers ADD COLUMN error_message TEXT DEFAULT '';
+ALTER TABLE triggers ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0;
+
+-- Trigger blob state persistence across restarts
+CREATE TABLE IF NOT EXISTS trigger_state (
+	trigger_id  INTEGER NOT NULL,
+	blob_id     INTEGER NOT NULL,
+	inside      INTEGER NOT NULL DEFAULT 0,
+	enter_time  INTEGER NOT NULL DEFAULT 0,
+	last_check  INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (trigger_id, blob_id),
+	FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
+);
+
+-- Webhook audit log
+CREATE TABLE IF NOT EXISTS webhook_log (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	trigger_id  INTEGER NOT NULL,
+	fired_at_ms INTEGER NOT NULL,
+	url         TEXT NOT NULL,
+	status_code INTEGER,
+	latency_ms  INTEGER NOT NULL DEFAULT 0,
+	error       TEXT DEFAULT '',
+	FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_log_trigger ON webhook_log(trigger_id, fired_at_ms DESC);
+`
+	_, err := tx.Exec(schema)
+	return err
+}
