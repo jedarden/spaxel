@@ -2961,6 +2961,11 @@ func main() {
     sleepHandler.RegisterRoutes(r)
     log.Printf("[INFO] Sleep quality API registered at /api/sleep/*")
 
+    // Backup API — streams a zip of all databases via SQLite Online Backup API
+    backupHandler := api.NewBackupHandler(cfg.DataDir, version)
+    r.Get("/api/backup", backupHandler.HandleBackup)
+    log.Printf("[INFO] Backup API registered at /api/backup")
+
     // OTA firmware server and manager
     firmwareDir := filepath.Join(cfg.DataDir, "firmware")
     otaSrv := ota.NewServer(firmwareDir)
