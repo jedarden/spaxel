@@ -3318,6 +3318,34 @@ type zoneStateAdapter struct {
 	mgr *zones.Manager
 }
 
+func (a *zoneStateAdapter) GetAllPortals() []dashboard.PortalSnapshot {
+	portals := a.mgr.GetAllPortals()
+	result := make([]dashboard.PortalSnapshot, 0, len(portals))
+	for _, p := range portals {
+		result = append(result, dashboard.PortalSnapshot{
+			ID:    p.ID,
+			Name:  p.Name,
+			ZoneA: p.ZoneAID,
+			ZoneB: p.ZoneBID,
+			P1X:   p.P1X,
+			P1Y:   p.P1Y,
+			P1Z:   p.P1Z,
+			P2X:   p.P2X,
+			P2Y:   p.P2Y,
+			P2Z:   p.P2Z,
+			P3X:   p.P3X,
+			P3Y:   p.P3Y,
+			P3Z:   p.P3Z,
+			NX:    p.NX,
+			NY:    p.NY,
+			NZ:    p.NZ,
+			Width: p.Width,
+			Height: p.Height,
+		})
+	}
+	return result
+}
+
 func (a *zoneStateAdapter) GetAllZones() []dashboard.ZoneSnapshot {
 	zones := a.mgr.GetAllZones()
 	result := make([]dashboard.ZoneSnapshot, 0, len(zones))
