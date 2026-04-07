@@ -33,6 +33,45 @@ static char s_ota_version[32] = {0};
 // Cancels the automatic rollback timer in the ESP-IDF OTA framework.
 static bool s_ota_confirmed = false;
 
+// One-shot timer: if role is not received within 60 s of connection,
+// the new OTA partition stays unconfirmed and the bootloader will
+// roll back to the previous partition on the next reset.
+static esp_timer_handle_t s_ota_valid_timer = NULL;
+
+#define SPAXEL_OTA_VALID_TIMEOUT_S 60
+
+static void ota_validation_timeout_cb(void *arg) {
+    if (!s_ota_confirmed) {
+        ESP_LOGW(TAG, "OTA validation: timed out, rollback on next reset");
+    }
+}
+
+static bool is_running_ota_partition(void) {
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    return running != NULL &&
+           running->type == ESP_PARTITION_TYPE_APP &&
+           running->subtype != ESP_PARTITION_SUBTYPE_APP_FACTORY;
+}
+
+static void start_ota_validation_timer(void) {
+    if (s_ota_valid_timer == NULL) {
+        esp_timer_create_args_t timer_args = {
+            .callback = ota_validation_timeout_cb,
+            .name = "ota_valid",
+        };
+        esp_timer_create(&timer_args, &s_ota_valid_timer);
+    }
+    esp_timer_start_once(s_ota_valid_timer, SPAXEL_OTA_VALID_TIMEOUT_S * 1000000ULL);
+    ESP_LOGI(TAG, "OTA validation: waiting for role message (timeout %ds)",
+             SPAXEL_OTA_VALID_TIMEOUT_S);
+}
+
+static void stop_ota_validation_timer(void) {
+    if (s_ota_valid_timer != NULL) {
+        esp_timer_stop(s_ota_valid_timer);
+    }
+}
+
 // Forward declarations
 static void ws_event_handler(void *args, esp_event_base_t base,
                               int32_t id, void *data);
@@ -112,6 +151,14 @@ bool websocket_connect(const char *host, uint16_t port) {
     // Send hello message
     websocket_send_hello();
 
+    // If booting from an unconfirmed OTA partition, start a 60 s timer.
+    // If the mothership doesn't send a role message within that window,
+    // the partition stays unconfirmed and the bootloader will roll back
+    // to the previous firmware on the next reset.
+    if (!s_ota_confirmed && is_running_ota_partition()) {
+        start_ota_validation_timer();
+    }
+
     return true;
 }
 
@@ -122,6 +169,7 @@ void websocket_disconnect(void) {
         s_ws = NULL;
     }
     s_connected = false;
+    stop_ota_validation_timer();
 }
 
 bool websocket_is_connected(void) {
@@ -472,17 +520,17 @@ static void handle_role_msg(cJSON *root) {
     }
 
     // Confirm OTA partition valid on first role message received after boot.
-    // This means we successfully connected and are running the new firmware.
+    // This means we successfully connected and the mothership accepted us.
     if (!s_ota_confirmed) {
         s_ota_confirmed = true;
-        const esp_partition_t *running = esp_ota_get_running_partition();
-        if (running && running->type == ESP_PARTITION_TYPE_APP &&
-            running->subtype != ESP_PARTITION_SUBTYPE_APP_FACTORY) {
+        stop_ota_validation_timer();
+        if (is_running_ota_partition()) {
             esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
             if (err == ESP_OK) {
-                ESP_LOGI(TAG, "OTA partition confirmed valid (rollback cancelled)");
+                ESP_LOGI(TAG, "OTA validation: marked valid after role received");
             } else {
-                ESP_LOGW(TAG, "OTA confirm failed: %s", esp_err_to_name(err));
+                ESP_LOGW(TAG, "OTA validation: failed to mark valid: %s",
+                         esp_err_to_name(err));
             }
         }
     }
