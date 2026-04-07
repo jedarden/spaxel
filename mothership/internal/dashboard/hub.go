@@ -501,23 +501,23 @@ func (h *Hub) buildZoneSnapshots(zp ZoneStateProvider) []ZoneSnapshot {
 	occupancy := zp.GetOccupancy()
 	result := make([]ZoneSnapshot, 0, len(zones))
 	for _, z := range zones {
-		occ := occupancy[z.ID]
+		occ, ok := occupancy[z.ID]
 		people := make([]string, 0)
-		if occ != nil {
+		if ok {
 			// Blob IDs don't have names yet; leave people empty.
 			_ = occ.BlobIDs
 		}
 		result = append(result, ZoneSnapshot{
 			ID:     z.ID,
 			Name:   z.Name,
-			Count:  func() int { if occ != nil { return occ.Count }; return 0 }(),
+			Count:  occ.Count,
 			People: people,
 			MinX:   z.MinX,
 			MinY:   z.MinY,
 			MinZ:   z.MinZ,
-			SizeX:  z.MaxX - z.MinX,
-			SizeY:  z.MaxY - z.MinY,
-			SizeZ:  z.MaxZ - z.MinZ,
+			SizeX:  z.SizeX,
+			SizeY:  z.SizeY,
+			SizeZ:  z.SizeZ,
 		})
 	}
 	return result
@@ -661,25 +661,6 @@ func (h *Hub) ClientCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.clients)
-}
-
-// broadcastBLEScan broadcasts the current BLE device list to all dashboard clients.
-func (h *Hub) broadcastBLEScan() {
-	h.mu.RLock()
-	state := h.bleState
-	clientCount := len(h.clients)
-	h.mu.RUnlock()
-
-	if state == nil || clientCount == 0 {
-		return
-	}
-
-	devices := state.GetCurrentDevices()
-	if len(devices) == 0 {
-		return
-	}
-
-	h.BroadcastBLEScan(devices)
 }
 
 // broadcastSystemHealth broadcasts system health stats to all dashboard clients.

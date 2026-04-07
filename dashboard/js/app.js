@@ -37,6 +37,7 @@
     const state = {
         ws: null,
         wsConnected: false,
+        awaitingSnapshot: false,   // true between WS open and first snapshot message
         nodes: new Map(),        // MAC -> { mac, firmware, chip, lastSeen }
         links: new Map(),        // linkID -> { nodeMAC, peerMAC, lastFrame, lastCSI, motionDetected, deltaRMS, ampHistory, lastAmpSample }
         selectedLinkID: null,
@@ -377,6 +378,7 @@
         state.ws.onopen = function() {
             console.log('[Spaxel] WebSocket connected');
             state.wsConnected = true;
+            state.awaitingSnapshot = true;
             updateConnectionStatus(true);
         };
 
@@ -555,6 +557,19 @@
     }
 
     function handleJSONMessage(msg) {
+        // Snapshot: first message on every connect/reconnect.  Contains full state.
+        if (msg.type === 'snapshot') {
+            handleSnapshot(msg);
+            return;
+        }
+
+        // Incremental update: 10 Hz delta with no type field.
+        // Only fields that changed since last tick are present.
+        if (!msg.type) {
+            handleIncrementalUpdate(msg);
+            return;
+        }
+
         switch (msg.type) {
             case 'state':
                 // Initial state dump
@@ -730,6 +745,153 @@
             default:
                 // Log unhandled types for future debugging
                 console.log('[Spaxel] Unknown message type:', msg.type, msg);
+        }
+    }
+
+    // ─── Snapshot + Incremental Update Protocol ─────────────────────────────
+
+    function handleSnapshot(msg) {
+        state.awaitingSnapshot = false;
+        console.log('[Spaxel] Received snapshot, rebuilding state');
+
+        // Nodes
+        if (msg.nodes) {
+            state.nodes.clear();
+            msg.nodes.forEach(function (node) {
+                state.nodes.set(node.mac, {
+                    mac: node.mac,
+                    firmware: node.firmware_version,
+                    chip: node.chip,
+                    lastSeen: Date.now()
+                });
+            });
+        }
+
+        // Links
+        if (msg.links) {
+            state.links.clear();
+            msg.links.forEach(function (link) {
+                state.links.set(link.id, {
+                    nodeMAC: link.node_mac,
+                    peerMAC: link.peer_mac,
+                    lastFrame: Date.now(),
+                    lastCSI: null,
+                    motionDetected: false,
+                    deltaRMS: 0,
+                    ampHistory: [],
+                    lastAmpSample: 0
+                });
+            });
+        }
+
+        // Motion states
+        if (msg.motion_states) {
+            msg.motion_states.forEach(function (ms) { applyMotionState(ms); });
+        }
+
+        // Blobs (localisation)
+        if (msg.blobs) {
+            Viz3D.handleLocUpdate({ type: 'loc_update', blobs: msg.blobs });
+        }
+
+        // BLE devices
+        if (msg.ble_devices) {
+            handleBLEScanMessage({ type: 'ble_scan', devices: msg.ble_devices });
+        }
+
+        // Triggers
+        if (msg.triggers) {
+            msg.triggers.forEach(function (trigger) {
+                if (window.Automations && window.Automations.updateTriggerState) {
+                    window.Automations.updateTriggerState(trigger);
+                }
+            });
+        }
+
+        // Zones
+        if (msg.zones) {
+            if (window.Viz3D && window.Viz3D.handleZoneUpdate) {
+                Viz3D.handleZoneUpdate(msg.zones);
+            }
+        }
+
+        updateNodeList();
+        updateLinkList();
+        Viz3D.applyLinks(msg.links || []);
+    }
+
+    function handleIncrementalUpdate(msg) {
+        // Drop incremental updates until the snapshot has been received.
+        if (state.awaitingSnapshot) return;
+
+        // Blobs (always present when localisation is running)
+        if (msg.blobs) {
+            Viz3D.handleLocUpdate({ type: 'loc_update', blobs: msg.blobs });
+        }
+
+        // Nodes (only present when node list changed)
+        if (msg.nodes !== undefined) {
+            if (msg.nodes.length > 0) {
+                msg.nodes.forEach(function (node) {
+                    state.nodes.set(node.mac, {
+                        mac: node.mac,
+                        firmware: node.firmware_version,
+                        chip: node.chip,
+                        lastSeen: Date.now()
+                    });
+                });
+            }
+            updateNodeList();
+        }
+
+        // Links (only present when link list changed)
+        if (msg.links !== undefined) {
+            if (msg.links.length > 0) {
+                msg.links.forEach(function (link) {
+                    state.links.set(link.id, {
+                        nodeMAC: link.node_mac,
+                        peerMAC: link.peer_mac,
+                        lastFrame: Date.now(),
+                        lastCSI: null,
+                        motionDetected: false,
+                        deltaRMS: 0,
+                        ampHistory: [],
+                        lastAmpSample: 0
+                    });
+                });
+            }
+            updateLinkList();
+            Viz3D.applyLinks(msg.links);
+        }
+
+        // Motion states (only present when motion state changed)
+        if (msg.motion_states) {
+            var changed = false;
+            msg.motion_states.forEach(function (ms) {
+                if (applyMotionState(ms)) changed = true;
+            });
+            if (changed) updateLinkList();
+        }
+
+        // BLE devices
+        if (msg.ble_devices) {
+            handleBLEScanMessage({ type: 'ble_scan', devices: msg.ble_devices });
+        }
+
+        // Triggers
+        if (msg.triggers) {
+            msg.triggers.forEach(function (trigger) {
+                if (window.Automations && window.Automations.updateTriggerState) {
+                    window.Automations.updateTriggerState(trigger);
+                }
+            });
+        }
+
+        // Zones
+        if (msg.zones) {
+            if (window.Viz3D && window.Viz3D.handleZoneUpdate) {
+                Viz3D.handleZoneUpdate(msg.zones);
+            }
         }
     }
 
