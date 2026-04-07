@@ -294,6 +294,107 @@ func TestHub_SnapshotBeforeDelta(t *testing.T) {
 	}
 }
 
+func TestHub_BroadcastAlert(t *testing.T) {
+	tests := []struct {
+		name         string
+		alertID      string
+		severity     string
+		description  string
+		acknowledged bool
+	}{
+		{
+			name:         "critical anomaly alert",
+			alertID:      "anomaly-001",
+			severity:     "critical",
+			description:  "Unusual activity detected in Kitchen at 3am",
+			acknowledged: false,
+		},
+		{
+			name:         "warning security mode armed",
+			alertID:      "security-armed-20260407-030000",
+			severity:     "warning",
+			description:  "Security mode armed (auto-away)",
+			acknowledged: false,
+		},
+		{
+			name:         "acknowledged alert",
+			alertID:      "anomaly-002",
+			severity:     "warning",
+			description:  "Environmental change detected",
+			acknowledged: true,
+		},
+		{
+			name:         "security mode disarmed",
+			alertID:      "security-disarmed-20260407-080000",
+			severity:     "warning",
+			description:  "Security mode disarmed (BLE device detected)",
+			acknowledged: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := NewHub()
+			go hub.Run()
+
+			client := &Client{
+				hub:  hub,
+				send: make(chan []byte, 10),
+			}
+
+			hub.Register(client)
+			time.Sleep(10 * time.Millisecond)
+			drainSnapshot(t, client.send)
+
+			ts := time.Date(2026, 4, 7, 3, 0, 0, 0, time.UTC)
+			hub.BroadcastAlert(tc.alertID, ts, tc.severity, tc.description, tc.acknowledged)
+
+			select {
+			case msg := <-client.send:
+				var parsed map[string]interface{}
+				if err := json.Unmarshal(msg, &parsed); err != nil {
+					t.Fatalf("failed to parse alert JSON: %v", err)
+				}
+
+				if parsed["type"] != "alert" {
+					t.Errorf("expected type=alert, got %v", parsed["type"])
+				}
+
+				alert, ok := parsed["alert"].(map[string]interface{})
+				if !ok {
+					t.Fatal("missing alert object")
+				}
+
+				if alert["id"] != tc.alertID {
+					t.Errorf("expected id=%s, got %v", tc.alertID, alert["id"])
+				}
+				if alert["severity"] != tc.severity {
+					t.Errorf("expected severity=%s, got %v", tc.severity, alert["severity"])
+				}
+				if alert["description"] != tc.description {
+					t.Errorf("expected description=%s, got %v", tc.description, alert["description"])
+				}
+				if alert["acknowledged"] != tc.acknowledged {
+					t.Errorf("expected acknowledged=%v, got %v", tc.acknowledged, alert["acknowledged"])
+				}
+
+				// ts should be Unix milliseconds
+				tsVal, ok := alert["ts"].(float64)
+				if !ok {
+					t.Fatalf("expected ts to be numeric, got %T", alert["ts"])
+				}
+				expectedTs := float64(ts.UnixMilli())
+				if tsVal != expectedTs {
+					t.Errorf("expected ts=%v, got %v", expectedTs, tsVal)
+				}
+
+			case <-time.After(100 * time.Millisecond):
+				t.Error("expected to receive alert broadcast")
+			}
+		})
+	}
+}
+
 func TestHub_DeltaOmitsTypeField(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()
