@@ -42,12 +42,18 @@ func Phase(num int, description string) func() {
 	}
 }
 
+// FatalFunc is called by CheckTimeout when the startup context is expired.
+// Defaults to log.Fatalf; override in tests to avoid os.Exit.
+var FatalFunc = func(format string, args ...interface{}) {
+	log.Fatalf(format, args...)
+}
+
 // CheckTimeout checks if the startup context has exceeded its deadline.
 // If so, it logs a fatal message and exits. This should be called before
 // each phase to enforce the 30-second total startup timeout.
 func CheckTimeout(ctx context.Context) {
 	if ctx.Err() != nil {
-		log.Fatalf("[STARTUP TIMEOUT] Failed to reach ready state in 30s")
+		FatalFunc("[STARTUP TIMEOUT] Failed to reach ready state in 30s")
 	}
 }
 

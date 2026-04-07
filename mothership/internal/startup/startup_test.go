@@ -40,6 +40,13 @@ func TestCheckTimeout_NoTimeout(t *testing.T) {
 }
 
 func TestCheckTimeout_Expired(t *testing.T) {
+	// Override FatalFunc to panic instead of os.Exit so we can test it
+	orig := FatalFunc
+	FatalFunc = func(format string, args ...interface{}) {
+		panic(fmt.Sprintf(format, args...))
+	}
+	defer func() { FatalFunc = orig }()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	time.Sleep(5 * time.Millisecond)
@@ -47,7 +54,7 @@ func TestCheckTimeout_Expired(t *testing.T) {
 	defer func() {
 		r := recover()
 		if r == nil {
-			t.Error("CheckTimeout should log.Fatalf on expired context")
+			t.Error("CheckTimeout should fatal on expired context")
 		}
 	}()
 	CheckTimeout(ctx)

@@ -202,8 +202,8 @@ func main() {
 
 	// Phases 1–4: Database initialization (data dir, SQLite, migrations, secrets)
 	// Each phase is logged with timing by db.OpenDB via the startup package.
-	startup.CheckTimeout(startupCtx)
-	mainDB, err := db.OpenDB(cfg.DataDir, "spaxel.db")
+	// The startup context is passed so all phases share the same 30s deadline.
+	mainDB, err := db.OpenDB(startupCtx, cfg.DataDir, "spaxel.db")
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to open main database: %v", err)
 	}
@@ -273,40 +273,48 @@ func main() {
     startup.CheckTimeout(startupCtx)
     phase5Done := startup.Phase(5, "Subsystems")
 
-    // Phase 6: BLE device registry
-    bleRegistry, err := ble.NewRegistry(filepath.Join(cfg.DataDir, "ble.db"))
-    if err != nil {
+    // Phase 5: BLE device registry
+    var bleRegistry *ble.Registry
+    if err := startup.SubsystemStart(startupCtx, "BLE registry", func(ctx context.Context) error {
+        var innerErr error
+        bleRegistry, innerErr = ble.NewRegistry(filepath.Join(cfg.DataDir, "ble.db"))
+        return innerErr
+    }); err != nil {
         log.Printf("[WARN] Failed to open BLE registry: %v", err)
     } else {
         defer bleRegistry.Close()
         log.Printf("[INFO] BLE registry at %s", filepath.Join(cfg.DataDir, "ble.db"))
     }
 
-    // Phase 6: RSSI cache for BLE triangulation
+    // Phase 5: RSSI cache for BLE triangulation
     rssiCache := ble.NewRSSICache(10 * time.Second)
 
-    // Phase 6: BLE identity matcher
+    // Phase 5: BLE identity matcher
     var identityMatcher *ble.IdentityMatcher
     if bleRegistry != nil {
         identityMatcher = ble.NewIdentityMatcher(bleRegistry, rssiCache, fleetReg)
     }
 
-    // Phase 6: Zones manager
+    // Phase 5: Zones manager
     zonesTz := time.Local
     if envTz := os.Getenv("TZ"); envTz != "" {
         if loc, err := time.LoadLocation(envTz); err == nil {
             zonesTz = loc
         }
     }
-    zonesMgr, err := zones.NewManager(filepath.Join(cfg.DataDir, "zones.db"), zonesTz)
-    if err != nil {
+    var zonesMgr *zones.Manager
+    if err := startup.SubsystemStart(startupCtx, "Zones manager", func(ctx context.Context) error {
+        var innerErr error
+        zonesMgr, innerErr = zones.NewManager(filepath.Join(cfg.DataDir, "zones.db"), zonesTz)
+        return innerErr
+    }); err != nil {
         log.Printf("[WARN] Failed to open zones database: %v", err)
     } else {
         defer zonesMgr.Close()
         log.Printf("[INFO] Zones manager at %s", filepath.Join(cfg.DataDir, "zones.db"))
     }
 
-    // Phase 6: Flow analytics accumulator
+    // Phase 5: Flow analytics accumulator
     flowAccumulator, err := analytics.NewFlowAccumulator(filepath.Join(cfg.DataDir, "analytics.db"))
     if err != nil {
         log.Printf("[WARN] Failed to open analytics database: %v", err)
@@ -315,7 +323,7 @@ func main() {
         log.Printf("[INFO] Flow analytics at %s", filepath.Join(cfg.DataDir, "analytics.db"))
     }
 
-    // Phase 6: Anomaly detector for security mode
+    // Phase 5: Anomaly detector for security mode
     var anomalyDetector *analytics.Detector
     anomalyDetector, err = analytics.NewDetector(
         filepath.Join(cfg.DataDir, "anomaly.db"),
@@ -332,7 +340,7 @@ func main() {
         // Note: Providers will be wired after dashboardHub and notifyService are created
     }
 
-    // Phase 6: Automation engine
+    // Phase 5: Automation engine
     automationEngine, err := automation.NewEngine(filepath.Join(cfg.DataDir, "automation.db"))
     if err != nil {
         log.Printf("[WARN] Failed to open automation database: %v", err)
@@ -341,7 +349,7 @@ func main() {
         log.Printf("[INFO] Automation engine at %s", filepath.Join(cfg.DataDir, "automation.db"))
     }
 
-    // Phase 6: Fall detector
+    // Phase 5: Fall detector
     fallDetector := falldetect.NewDetector()
     log.Printf("[INFO] Fall detector initialized")
 
