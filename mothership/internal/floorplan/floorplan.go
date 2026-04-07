@@ -91,9 +91,12 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 	// multipart.File doesn't support Seek, so we need to buffer
 	fileData, err := io.ReadAll(file)
 	if err != nil {
+		log.Printf("[ERROR] Failed to read uploaded file: %v", err)
 		http.Error(w, "failed to read file", http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("[DEBUG] Read %d bytes from uploaded file", len(fileData))
 
 	// Check file size
 	if len(fileData) > MaxUploadSize {
@@ -102,7 +105,7 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Decode image to validate format
-	img, format, err := image.DecodeConfig(bytes.NewReader(fileData))
+	_, format, err := image.DecodeConfig(bytes.NewReader(fileData))
 	if err != nil {
 		http.Error(w, "invalid image format (PNG/JPG only)", http.StatusBadRequest)
 		return
@@ -111,12 +114,6 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 	// Validate format
 	if format != "jpeg" && format != "png" {
 		http.Error(w, "invalid image format (PNG/JPG only)", http.StatusBadRequest)
-		return
-	}
-
-	// Check minimum size
-	if img.Width < 100 || img.Height < 100 {
-		http.Error(w, "image too small (minimum 100x100)", http.StatusBadRequest)
 		return
 	}
 
