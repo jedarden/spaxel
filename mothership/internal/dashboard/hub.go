@@ -922,19 +922,20 @@ func (h *Hub) BroadcastSystemHealth(uptimeS int64, nodeCount, beadCount, goRouti
 }
 
 // BroadcastEventFromDB broadcasts an event from the database to all dashboard clients.
-// This is called by the EventsHandler when a new event is logged.
+// Field names match BroadcastEvent so the frontend can handle both uniformly:
+// { type: "event", event: { id, ts, kind, zone, blob_id, person_name, detail_json, severity } }
 func (h *Hub) BroadcastEventFromDB(id int64, timestamp int64, eventType, zone, person string, blobID int, detailJSON, severity string) {
 	msg := map[string]interface{}{
 		"type": "event",
 		"event": map[string]interface{}{
-			"id":          id,
-			"timestamp_ms": timestamp,
-			"type":        eventType,
-			"zone":        zone,
-			"person":      person,
-			"blob_id":     blobID,
-			"detail_json": detailJSON,
-			"severity":    severity,
+			"id":           id,
+			"ts":           timestamp,
+			"kind":         eventType,
+			"zone":         zone,
+			"blob_id":      blobID,
+			"person_name":  person,
+			"detail_json":  detailJSON,
+			"severity":     severity,
 		},
 	}
 	data, _ := json.Marshal(msg)

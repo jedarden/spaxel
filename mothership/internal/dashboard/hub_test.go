@@ -503,6 +503,230 @@ func TestHub_BroadcastEvent(t *testing.T) {
 	}
 }
 
+func TestHub_BroadcastBLEScan(t *testing.T) {
+	tests := []struct {
+		name    string
+		devices []map[string]interface{}
+	}{
+		{
+			name: "single device",
+			devices: []map[string]interface{}{
+				{"mac": "AA:BB:CC:DD:EE:FF", "name": "iPhone", "rssi": -62,
+					"last_seen": int64(1711234567890), "label": "Alice", "blob_id": 1},
+			},
+		},
+		{
+			name: "multiple devices",
+			devices: []map[string]interface{}{
+				{"mac": "AA:BB:CC:DD:EE:FF", "name": "iPhone", "rssi": -62,
+					"last_seen": int64(1711234567890), "label": "Alice", "blob_id": 1},
+				{"mac": "11:22:33:44:55:66", "name": "Apple Watch", "rssi": -70,
+					"last_seen": int64(1711234567891), "label": "", "blob_id": nil},
+			},
+		},
+		{
+			name:    "empty device list",
+			devices: []map[string]interface{}{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := NewHub()
+			go hub.Run()
+
+			client := &Client{
+				hub:  hub,
+				send: make(chan []byte, 10),
+			}
+
+			hub.Register(client)
+			time.Sleep(10 * time.Millisecond)
+			drainSnapshot(t, client.send)
+
+			hub.BroadcastBLEScan(tc.devices)
+
+			select {
+			case msg := <-client.send:
+				var parsed map[string]interface{}
+				if err := json.Unmarshal(msg, &parsed); err != nil {
+					t.Fatalf("failed to parse ble_scan JSON: %v", err)
+				}
+
+				if parsed["type"] != "ble_scan" {
+					t.Errorf("expected type=ble_scan, got %v", parsed["type"])
+				}
+
+				devs, ok := parsed["devices"].([]interface{})
+				if !ok {
+					t.Fatal("missing devices array")
+				}
+				if len(devs) != len(tc.devices) {
+					t.Errorf("expected %d devices, got %d", len(tc.devices), len(devs))
+				}
+
+				for i, dev := range tc.devices {
+					d := devs[i].(map[string]interface{})
+					if d["mac"] != dev["mac"] {
+						t.Errorf("device %d: expected mac=%v, got %v", i, dev["mac"], d["mac"])
+					}
+					if d["name"] != dev["name"] {
+						t.Errorf("device %d: expected name=%v, got %v", i, dev["name"], d["name"])
+					}
+				}
+
+			case <-time.After(100 * time.Millisecond):
+				t.Error("expected to receive ble_scan broadcast")
+			}
+		})
+	}
+}
+
+func TestHub_BroadcastEventFromDB(t *testing.T) {
+	tests := []struct {
+		name        string
+		id          int64
+		timestamp   int64
+		eventType   string
+		zone        string
+		person      string
+		blobID      int
+		detailJSON  string
+		severity    string
+	}{
+		{
+			name:      "zone entry with person and detail",
+			id:        42,
+			timestamp: 1711234567890,
+			eventType: "zone_entry",
+			zone:      "Kitchen",
+			person:    "Alice",
+			blobID:    2,
+			detailJSON: `{"direction":"north"}`,
+			severity:  "info",
+		},
+		{
+			name:       "zone exit without person",
+			id:         43,
+			timestamp:  1711234567891,
+			eventType:  "zone_exit",
+			zone:       "Kitchen",
+			person:     "",
+			blobID:     3,
+			severity:   "info",
+		},
+		{
+			name:       "portal crossing",
+			id:         44,
+			timestamp:  1711234567892,
+			eventType:  "portal_crossing",
+			zone:       "Hallway",
+			person:     "Bob",
+			blobID:     1,
+			severity:   "info",
+		},
+		{
+			name:       "anomaly alert",
+			id:         45,
+			timestamp:  1711234567893,
+			eventType:  "anomaly",
+			zone:       "Kitchen",
+			person:     "",
+			blobID:     0,
+			detailJSON: `{"score":0.92}`,
+			severity:   "warning",
+		},
+		{
+			name:       "minimal event",
+			id:         46,
+			timestamp:  1711234567894,
+			eventType:  "system",
+			zone:       "",
+			person:     "",
+			blobID:     0,
+			severity:   "info",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := NewHub()
+			go hub.Run()
+
+			client := &Client{
+				hub:  hub,
+				send: make(chan []byte, 10),
+			}
+
+			hub.Register(client)
+			time.Sleep(10 * time.Millisecond)
+			drainSnapshot(t, client.send)
+
+			hub.BroadcastEventFromDB(tc.id, tc.timestamp, tc.eventType, tc.zone, tc.person, tc.blobID, tc.detailJSON, tc.severity)
+
+			select {
+			case msg := <-client.send:
+				var parsed map[string]interface{}
+				if err := json.Unmarshal(msg, &parsed); err != nil {
+					t.Fatalf("failed to parse event JSON: %v", err)
+				}
+
+				if parsed["type"] != "event" {
+					t.Errorf("expected type=event, got %v", parsed["type"])
+				}
+
+				evt, ok := parsed["event"].(map[string]interface{})
+				if !ok {
+					t.Fatal("missing event object")
+				}
+
+				// Verify canonical field names (matching BroadcastEvent format)
+				if evt["ts"] != float64(tc.timestamp) {
+					t.Errorf("expected ts=%d, got %v", tc.timestamp, evt["ts"])
+				}
+				if evt["kind"] != tc.eventType {
+					t.Errorf("expected kind=%s, got %v", tc.eventType, evt["kind"])
+				}
+				if evt["zone"] != tc.zone {
+					t.Errorf("expected zone=%s, got %v", tc.zone, evt["zone"])
+				}
+				if evt["blob_id"] != float64(tc.blobID) {
+					t.Errorf("expected blob_id=%d, got %v", tc.blobID, evt["blob_id"])
+				}
+				if evt["person_name"] != tc.person {
+					t.Errorf("expected person_name=%s, got %v", tc.person, evt["person_name"])
+				}
+
+				// Verify extra DB fields are present
+				if evt["severity"] != tc.severity {
+					t.Errorf("expected severity=%s, got %v", tc.severity, evt["severity"])
+				}
+
+				// detail_json should be present when non-empty
+				if tc.detailJSON != "" {
+					if evt["detail_json"] != tc.detailJSON {
+						t.Errorf("expected detail_json=%s, got %v", tc.detailJSON, evt["detail_json"])
+					}
+				}
+
+				// Verify legacy field names are NOT used
+				if _, hasLegacy := evt["timestamp_ms"]; hasLegacy {
+					t.Error("legacy field timestamp_ms should not be present (use ts)")
+				}
+				if _, hasLegacy := evt["type"]; hasLegacy {
+					t.Error("legacy field type should not be present inside event (use kind)")
+				}
+				if _, hasLegacy := evt["person"]; hasLegacy {
+					t.Error("legacy field person should not be present (use person_name)")
+				}
+
+			case <-time.After(100 * time.Millisecond):
+				t.Error("expected to receive event broadcast")
+			}
+		})
+	}
+}
+
 func TestHub_DeltaOmitsTypeField(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()
