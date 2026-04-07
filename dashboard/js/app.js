@@ -55,7 +55,10 @@
         diurnalPollTimer: null,
         healthPollTimer: null,
         // BLE device tracking
-        bleDevices: new Map()      // MAC -> { mac, name, rssi, last_seen, label, blob_id }
+        bleDevices: new Map(),     // MAC -> { mac, name, rssi, last_seen, label, blob_id }
+        // Alert tracking
+        alerts: new Map(),         // id -> { id, ts, severity, description, acknowledged }
+        unacknowledgedCount: 0
     };
 
     // ============================================

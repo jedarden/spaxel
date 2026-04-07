@@ -772,6 +772,27 @@ func main() {
             }
             data, _ := json.Marshal(msg)
             dashboardHub.Broadcast(data)
+
+            // Broadcast as typed alert for dashboard alert handling
+            severity := "warning"
+            if event.Score >= 0.85 {
+                severity = "critical"
+            }
+            dashboardHub.BroadcastAlert(event.ID, event.Timestamp, severity, event.Description, event.Acknowledged)
+        })
+
+        // Set callback to broadcast security mode changes as alerts
+        anomalyDetector.SetOnSecurityModeChange(func(oldMode, newMode analytics.SecurityMode, reason string) {
+            desc := "Security mode " + string(newMode)
+            if newMode == analytics.SecurityModeDisarmed {
+                desc = "Security mode disarmed"
+            }
+            severity := "warning"
+            if newMode == analytics.SecurityModeArmed {
+                severity = "critical"
+            }
+            alertID := "security-" + string(newMode) + "-" + time.Now().Format("20060102-150405")
+            dashboardHub.BroadcastAlert(alertID, time.Now(), severity, desc+" ("+reason+")", false)
         })
 
         // Load registered devices from BLE registry

@@ -76,6 +76,25 @@ type Tracker struct {
 	blobs   []*Blob
 	nextID  int
 	lastRun time.Time
+
+	// onBlobAppeared is called when a new blob track is created.
+	onBlobAppeared func(b *Blob)
+	// onBlobDisappeared is called when a blob track is pruned after gap tolerance.
+	onBlobDisappeared func(b *Blob)
+}
+
+// OnBlobAppeared sets the callback invoked when a new blob track is created.
+func (t *Tracker) OnBlobAppeared(cb func(b *Blob)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.onBlobAppeared = cb
+}
+
+// OnBlobDisappeared sets the callback invoked when a blob track is pruned.
+func (t *Tracker) OnBlobDisappeared(cb func(b *Blob)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.onBlobDisappeared = cb
 }
 
 // NewTracker creates an empty Tracker.
@@ -151,6 +170,9 @@ func (t *Tracker) Update(measurements [][4]float64) []Blob {
 		}
 		t.nextID++
 		t.blobs = append(t.blobs, b)
+		if t.onBlobAppeared != nil {
+			t.onBlobAppeared(b)
+		}
 	}
 
 	// Prune tracks unseen beyond gap tolerance.
@@ -158,6 +180,8 @@ func (t *Tracker) Update(measurements [][4]float64) []Blob {
 	for _, b := range t.blobs {
 		if now.Sub(b.LastSeen) < gapTolerance {
 			live = append(live, b)
+		} else if t.onBlobDisappeared != nil {
+			t.onBlobDisappeared(b)
 		}
 	}
 	t.blobs = live
