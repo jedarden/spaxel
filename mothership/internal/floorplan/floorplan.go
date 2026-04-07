@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -350,7 +351,7 @@ func (h *Handler) getFloorplan(w http.ResponseWriter, r *http.Request) {
 // Helper functions
 
 func currentTimestamp() int64 {
-	return int64(float64(1e9))
+	return time.Now().UnixMilli()
 }
 
 func sqrt(dx, dy float64) float64 {
