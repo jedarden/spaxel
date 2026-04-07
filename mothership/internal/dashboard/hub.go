@@ -531,6 +531,9 @@ func (h *Hub) buildSnapshot() map[string]interface{} {
 
 	if zones != nil {
 		snap["zones"] = h.buildZoneSnapshots(zones)
+		if portals := zones.GetAllPortals(); len(portals) > 0 {
+			snap["portals"] = portals
+		}
 	}
 
 	// Include latest blobs from the snapshot cache.

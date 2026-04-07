@@ -5,14 +5,12 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi"
-	_ "modernc.org/sqlite"
 )
 
 const (
@@ -79,84 +77,11 @@ func (e *EventsHandler) SetHub(hub DashboardHub) {
 	e.hub = hub
 }
 
-// NewEventsHandler creates a new events handler.
-func NewEventsHandler(dbPath string) (*EventsHandler, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		return nil, err
-	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(1)
-
-	e := &EventsHandler{
-		db: db,
-	}
-
-	if err := e.migrate(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	log.Printf("[INFO] Events handler initialized with DB at %s", dbPath)
-	return e, nil
-}
-
-func (e *EventsHandler) migrate() error {
-	_, err := e.db.Exec(`
-		CREATE TABLE IF NOT EXISTS events (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			timestamp_ms INTEGER NOT NULL,
-			type        TEXT    NOT NULL,
-			zone        TEXT,
-			person      TEXT,
-			blob_id     INTEGER,
-			detail_json TEXT,
-			severity    TEXT    NOT NULL DEFAULT 'info'
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp_ms DESC);
-		CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, timestamp_ms DESC);
-		CREATE INDEX IF NOT EXISTS idx_events_zone ON events(zone, timestamp_ms DESC);
-		CREATE INDEX IF NOT EXISTS idx_events_person ON events(person, timestamp_ms DESC);
-
-		CREATE TABLE IF NOT EXISTS events_archive (
-			id          INTEGER PRIMARY KEY,
-			timestamp_ms INTEGER NOT NULL,
-			type        TEXT    NOT NULL,
-			zone        TEXT,
-			person      TEXT,
-			blob_id     INTEGER,
-			detail_json TEXT,
-			severity    TEXT    NOT NULL DEFAULT 'info'
-		);
-		CREATE INDEX IF NOT EXISTS idx_events_archive_time ON events_archive(timestamp_ms DESC);
-
-		CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
-			type, zone, person, detail_json,
-			content='events', content_rowid='id'
-		);
-
-		CREATE TRIGGER IF NOT EXISTS events_fts_insert AFTER INSERT ON events BEGIN
-			INSERT INTO events_fts(rowid, type, zone, person, detail_json)
-			VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
-		END;
-
-		CREATE TRIGGER IF NOT EXISTS events_fts_delete AFTER DELETE ON events BEGIN
-			INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
-			VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
-		END;
-
-		CREATE TRIGGER IF NOT EXISTS events_fts_update AFTER UPDATE ON events BEGIN
-			INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
-			VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
-			INSERT INTO events_fts(rowid, type, zone, person, detail_json)
-			VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
-		END;
-	`)
-	return err
+// NewEventsHandler creates a new events handler using the shared database connection.
+// The events table schema must already exist (created by migrations 001 and 011).
+func NewEventsHandler(db *sql.DB) *EventsHandler {
+	log.Printf("[INFO] Events handler initialized")
+	return &EventsHandler{db: db}
 }
 
 // isValidEventType checks whether the event type string is a known type.
@@ -169,40 +94,6 @@ func isValidEventType(t string) bool {
 		return true
 	}
 	return false
-}
-
-// Archive moves events older than 90 days (or the specified duration) to the archive table.
-// If retentionDays is nil, defaults to 90 days.
-func (e *EventsHandler) Archive(retentionDays *int) {
-	days := 90
-	if retentionDays != nil {
-		days = *retentionDays
-	}
-	cutoff := time.Now().AddDate(0, 0, -days).UnixNano() / 1e6
-
-	tx, err := e.db.Begin()
-	if err != nil {
-		log.Printf("[WARN] archive: begin tx: %v", err)
-		return
-	}
-	defer tx.Rollback()
-
-	tx.Exec(`INSERT OR IGNORE INTO events_archive (id, timestamp_ms, type, zone, person, blob_id, detail_json, severity)
-		SELECT id, timestamp_ms, type, zone, person, blob_id, detail_json, severity
-		FROM events WHERE timestamp_ms < ?`, cutoff)
-	tx.Exec(`DELETE FROM events WHERE timestamp_ms < ?`, cutoff)
-
-	if err := tx.Commit(); err != nil {
-		log.Printf("[WARN] archive: commit: %v", err)
-		return
-	}
-
-	log.Printf("[INFO] events archived: removed events older than %d days", days)
-}
-
-// Close closes the database.
-func (e *EventsHandler) Close() error {
-	return e.db.Close()
 }
 
 // RegisterRoutes registers events endpoints.
@@ -224,6 +115,41 @@ type eventsResponse struct {
 	Cursor        string   `json:"cursor,omitempty"`
 	HasMore       bool     `json:"has_more"`
 	TotalFiltered int      `json:"total_filtered"`
+}
+
+// prepareFTSQuery appends a trailing * for prefix matching if the query
+// doesn't already end with a FTS5 operator character. This enables
+// partial word matching (e.g., "kit" matches "kitchen").
+func prepareFTSQuery(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return q
+	}
+	// If the query already ends with a FTS5 special character or operator, leave it alone.
+	last := q[len(q)-1]
+	if last == '*' || last == '"' || last == ')' {
+		return q
+	}
+	// For simple terms (no operators), append * for prefix matching.
+	// If the query contains FTS5 operators (AND, OR, NOT, NEAR), append * to each
+	// simple token instead.
+	if strings.Contains(q, " AND ") || strings.Contains(q, " OR ") ||
+		strings.Contains(q, " NOT ") || strings.Contains(q, " NEAR ") {
+		// Has operators — append * to each token that isn't an operator or quoted phrase.
+		parts := strings.Fields(q)
+		for i, p := range parts {
+			if p == "AND" || p == "OR" || p == "NOT" || p == "NEAR" {
+				continue
+			}
+			if (strings.HasPrefix(p, `"`) && strings.HasSuffix(p, `"`)) || p == "(" || p == ")" {
+				continue
+			}
+			parts[i] = p + "*"
+		}
+		return strings.Join(parts, " ")
+	}
+	// Simple single-term query — just append * for prefix matching.
+	return q + "*"
 }
 
 func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
@@ -266,6 +192,11 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		afterTS = t.UnixNano() / 1e6
+	}
+
+	// Prepare FTS5 query with prefix matching
+	if q != "" {
+		q = prepareFTSQuery(q)
 	}
 
 	// Determine query mode: FTS5 or regular

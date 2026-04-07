@@ -218,15 +218,6 @@ func main() {
     ingestSrv := ingestion.NewServer()
     r.HandleFunc("/ws/node", ingestSrv.HandleNodeWS)
 
-	// Wire up health checker with all dependencies
-	healthChecker := health.New(health.Config{
-		DB:           mainDB,
-		GetNodeCount: func() int { return len(ingestSrv.GetConnectedNodes()) },
-		Shedder:      shedder,
-		GetShedLevel: pm.GetShedLevel,
-	})
-	r.Get("/healthz", healthChecker.Handler(version))
-
     // Signal processing pipeline
     pm := sigproc.NewProcessorManager(sigproc.ProcessorManagerConfig{
         NSub:       64,
@@ -234,6 +225,15 @@ func main() {
         Tau:        30.0,
     })
     ingestSrv.SetProcessorManager(pm)
+
+	// Wire up health checker with all dependencies (after pm is created)
+	healthChecker := health.New(health.Config{
+		DB:           mainDB,
+		GetNodeCount: func() int { return len(ingestSrv.GetConnectedNodes()) },
+		Shedder:      shedder,
+		GetShedLevel: pm.GetShedLevel,
+	})
+	r.Get("/healthz", healthChecker.Handler(version))
 
     // Replay recording store
     if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
