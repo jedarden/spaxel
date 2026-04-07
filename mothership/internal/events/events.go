@@ -9,6 +9,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/spaxel/mothership/internal/eventbus"
 )
 
 // EventType represents the type of an event.
@@ -66,7 +68,7 @@ type QueryParams struct {
 	SearchQuery string // FTS5 search query
 }
 
-// InsertEvent inserts a new event into the database.
+// InsertEvent inserts a new event into the database and publishes it to the event bus.
 func InsertEvent(db *sql.DB, e Event) (int64, error) {
 	if e.TimestampMs == 0 {
 		e.TimestampMs = time.Now().UnixMilli()
@@ -87,6 +89,18 @@ func InsertEvent(db *sql.DB, e Event) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("get last insert id: %w", err)
 	}
+
+	// Publish to the internal event bus for WebSocket clients and other subscribers.
+	// This is non-blocking; subscribers run in separate goroutines.
+	eventbus.PublishDefault(eventbus.Event{
+		Type:        string(e.Type),
+		TimestampMs: e.TimestampMs,
+		Zone:        e.Zone,
+		Person:      e.Person,
+		BlobID:      e.BlobID,
+		Detail:      e.DetailJSON, // Pass as string; subscribers can parse if needed
+		Severity:    string(e.Severity),
+	})
 
 	return id, nil
 }
