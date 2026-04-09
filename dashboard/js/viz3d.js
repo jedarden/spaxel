@@ -934,8 +934,11 @@ const Viz3D = (function () {
         canvas.addEventListener('mouseleave', _hideBlobFeedbackTooltip);
         canvas.addEventListener('contextmenu', _onBlobContextMenu);
 
-        // Close context menu on click elsewhere
-        document.addEventListener('click', _hideBlobContextMenu);
+        // Close context menus on click elsewhere
+        document.addEventListener('click', function() {
+            _hideBlobContextMenu();
+            _hideNodeContextMenu();
+        });
     }
 
     /**
@@ -1118,54 +1121,86 @@ const Viz3D = (function () {
         _hideBlobFeedbackTooltip();
     }
 
-    // ── Blob Context Menu ───────────────────────────────────────────────────────
+    // ── Context Menu (Blobs & Nodes) ────────────────────────────────────────────
 
     let _blobContextMenu = null;
+    let _nodeContextMenu = null;
 
     /**
-     * Handle context menu (right-click) on blobs.
+     * Handle context menu (right-click) on blobs and nodes.
      */
     function _onBlobContextMenu(event) {
         event.preventDefault();
 
-        if (!_camera || !_scene || _blobs3D.size === 0) return;
+        if (!_camera || !_scene) return;
 
         // Calculate mouse position in normalized device coordinates
         var rect = event.target.getBoundingClientRect();
         _mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         _mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-        // Raycast to find clicked blob
         _raycaster.setFromCamera(_mouse, _camera);
 
-        var blobMeshes = [];
-        _blobs3D.forEach(function(obj) {
-            if (obj.group) {
-                blobMeshes.push(obj.group);
+        // Check for blob intersection first
+        if (_blobs3D.size > 0) {
+            var blobMeshes = [];
+            _blobs3D.forEach(function(obj) {
+                if (obj.group) {
+                    blobMeshes.push(obj.group);
+                }
+            });
+
+            var blobIntersects = _raycaster.intersectObjects(blobMeshes, true);
+
+            if (blobIntersects.length > 0) {
+                // Find the blob object from the intersected mesh
+                var intersected = blobIntersects[0].object;
+                var blobObj = null;
+
+                // Walk up the parent chain to find the group
+                var current = intersected;
+                while (current) {
+                    _blobs3D.forEach(function(obj, id) {
+                        if (obj.group === current) {
+                            blobObj = obj;
+                        }
+                    });
+                    if (blobObj) break;
+                    current = current.parent;
+                }
+
+                if (blobObj) {
+                    _showBlobContextMenu(event, blobObj);
+                    return;
+                }
             }
-        });
+        }
 
-        var intersects = _raycaster.intersectObjects(blobMeshes, true);
+        // Check for node intersection
+        if (_nodeMeshes.size > 0) {
+            var nodeMeshes = Array.from(_nodeMeshes.values());
+            var nodeIntersects = _raycaster.intersectObjects(nodeMeshes, true);
 
-        if (intersects.length > 0) {
-            // Find the blob object from the intersected mesh
-            var intersected = intersects[0].object;
-            var blobObj = null;
+            if (nodeIntersects.length > 0) {
+                var intersectedNode = nodeIntersects[0].object;
+                var nodeMAC = null;
 
-            // Walk up the parent chain to find the group
-            var current = intersected;
-            while (current) {
-                _blobs3D.forEach(function(obj, id) {
-                    if (obj.group === current) {
-                        blobObj = obj;
-                    }
-                });
-                if (blobObj) break;
-                current = current.parent;
-            }
+                // Walk up the parent chain to find the node mesh/group
+                var current = intersectedNode;
+                while (current && !nodeMAC) {
+                    _nodeMeshes.forEach(function(mesh, mac) {
+                        if (mesh === current) {
+                            nodeMAC = mac;
+                        }
+                    });
+                    if (nodeMAC) break;
+                    current = current.parent;
+                }
 
-            if (blobObj) {
-                _showBlobContextMenu(event, blobObj);
+                if (nodeMAC) {
+                    _showNodeContextMenu(event, nodeMAC);
+                    return;
+                }
             }
         }
     }
@@ -1221,6 +1256,64 @@ const Viz3D = (function () {
         if (_blobContextMenu) {
             document.body.removeChild(_blobContextMenu);
             _blobContextMenu = null;
+        }
+    }
+
+    /**
+     * Show context menu for a node.
+     */
+    function _showNodeContextMenu(event, nodeMAC) {
+        // Remove existing context menus
+        _hideBlobContextMenu();
+        _hideNodeContextMenu();
+
+        // Create context menu element
+        var menu = document.createElement('div');
+        menu.className = 'blob-context-menu';
+        menu.innerHTML =
+            '<div class="blob-context-menu-item" onclick="Viz3D.identifyNode(\'' + nodeMAC + '\')">' +
+            '  <span class="blob-context-menu-icon">&#9889;</span>' +
+            '  Identify (blink LED)' +
+            '</div>';
+
+        // Position menu at cursor
+        menu.style.left = event.clientX + 'px';
+        menu.style.top = event.clientY + 'px';
+
+        document.body.appendChild(menu);
+        _nodeContextMenu = menu;
+
+        // Prevent menu from going off screen
+        var rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            menu.style.left = (event.clientX - rect.width) + 'px';
+        }
+        if (rect.bottom > window.innerHeight) {
+            menu.style.top = (event.clientY - rect.height) + 'px';
+        }
+    }
+
+    /**
+     * Hide the node context menu.
+     */
+    function _hideNodeContextMenu() {
+        if (_nodeContextMenu) {
+            document.body.removeChild(_nodeContextMenu);
+            _nodeContextMenu = null;
+        }
+    }
+
+    /**
+     * Identify a node by blinking its LED.
+     * @param {string} mac - The MAC address of the node to identify
+     */
+    function identifyNode(mac) {
+        _hideNodeContextMenu();
+
+        if (window.identifyNode) {
+            window.identifyNode(mac);
+        } else {
+            console.error('[Viz3D] identifyNode function not available');
         }
     }
 
@@ -2172,5 +2265,9 @@ const Viz3D = (function () {
         addFresnelZone: addFresnelZone,
         removeFresnelZone: removeFresnelZone,
         clearFresnelZones: clearFresnelZones,
+        // Blob explainability
+        explainBlob: explainBlob,
+        // Node identification
+        identifyNode: identifyNode,
     };
 })();
