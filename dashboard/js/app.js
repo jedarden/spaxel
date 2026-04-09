@@ -1995,6 +1995,11 @@
             window.Fresnel.init(scene);
         }
 
+        // Initialize VolumeEditor with scene, camera, controls, renderer
+        if (window.VolumeEditor && window.VolumeEditor.init) {
+            window.VolumeEditor.init(scene, camera, controls, renderer);
+        }
+
         // Add event listeners for Fresnel interaction
         renderer.domElement.addEventListener('mousemove', onFresnelMouseMove);
         renderer.domElement.addEventListener('click', onFresnelClick);
