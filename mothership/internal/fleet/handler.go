@@ -10,14 +10,25 @@ import (
 	"github.com/spaxel/mothership/internal/events"
 )
 
+// NodeIdentifier sends identify commands to connected nodes.
+type NodeIdentifier interface {
+	SendIdentifyToMAC(mac string, durationMS int) bool
+}
+
 // Handler serves the fleet REST API.
 type Handler struct {
-	mgr *Manager
+	mgr    *Manager
+	nodeID NodeIdentifier
 }
 
 // NewHandler creates a new fleet REST handler backed by mgr.
 func NewHandler(mgr *Manager) *Handler {
 	return &Handler{mgr: mgr}
+}
+
+// SetNodeIdentifier sets the node identifier for sending identify commands.
+func (h *Handler) SetNodeIdentifier(ni NodeIdentifier) {
+	h.nodeID = ni
 }
 
 // RegisterRoutes mounts fleet endpoints on r.
@@ -27,6 +38,7 @@ func NewHandler(mgr *Manager) *Handler {
 //	POST   /api/nodes/{mac}/role     — override node role
 //	PUT    /api/nodes/{mac}/position — update node 3D position
 //	DELETE /api/nodes/{mac}          — delete a node
+//	POST   /api/nodes/{mac}/identify — blink LED for identification
 //	POST   /api/nodes/virtual        — add a virtual planning node
 //	PUT    /api/room                 — update room dimensions
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -35,6 +47,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/nodes/{mac}/role", h.setNodeRole)
 	r.Put("/api/nodes/{mac}/position", h.updateNodePosition)
 	r.Delete("/api/nodes/{mac}", h.deleteNode)
+	r.Post("/api/nodes/{mac}/identify", h.identifyNode)
 	r.Post("/api/nodes/virtual", h.addVirtualNode)
 	r.Put("/api/room", h.updateRoom)
 	// System mode endpoints
@@ -164,6 +177,46 @@ func (h *Handler) deleteNode(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mgr.BroadcastRegistry()
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type identifyNodeRequest struct {
+	DurationMS int `json:"duration_ms"`
+}
+
+func (h *Handler) identifyNode(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// Verify node exists.
+	if _, err := h.mgr.registry.GetNode(mac); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse request body.
+	var req identifyNodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Default to 5000ms if not specified.
+	durationMS := req.DurationMS
+	if durationMS <= 0 {
+		durationMS = 5000
+	}
+
+	// Send identify command if node identifier is available.
+	if h.nodeID != nil {
+		if !h.nodeID.SendIdentifyToMAC(mac, durationMS) {
+			http.Error(w, "node not connected", http.StatusNotFound)
+			return
+		}
+	}
+
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 type updateRoomRequest struct {

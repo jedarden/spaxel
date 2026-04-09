@@ -1991,6 +1991,7 @@ func main() {
 
 	// Fleet REST API
 	fleetHandler := fleet.NewHandler(fleetMgr)
+	fleetHandler.SetNodeIdentifier(ingestSrv)
 	fleetHandler.RegisterRoutes(r)
 
 	// Floorplan REST API

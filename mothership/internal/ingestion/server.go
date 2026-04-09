@@ -334,6 +334,32 @@ func (s *Server) SendOTAToMAC(mac, url, sha256, version string) {
 	log.Printf("[INFO] Sent OTA trigger to node %s: version=%s url=%s", mac, version, url)
 }
 
+// SendIdentifyToMAC sends an LED blink command to a connected node.
+// Returns false if the node is not connected.
+func (s *Server) SendIdentifyToMAC(mac string, durationMS int) bool {
+	s.mu.RLock()
+	nc, ok := s.connections[mac]
+	s.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	msg := IdentifyMessage{Type: "identify", DurationMS: durationMS}
+	data, _ := json.Marshal(msg)
+	nc.writeMu.Lock()
+	nc.Conn.WriteMessage(websocket.TextMessage, data)
+	nc.writeMu.Unlock()
+	log.Printf("[INFO] Sent identify command to node %s: duration=%dms", mac, durationMS)
+	return true
+}
+
+// IsNodeConnected returns true if the node with the given MAC is currently connected.
+func (s *Server) IsNodeConnected(mac string) bool {
+	s.mu.RLock()
+	_, ok := s.connections[mac]
+	s.mu.RUnlock()
+	return ok
+}
+
 // HandleNodeWS handles WebSocket connections at /ws/node
 func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	// Step 1 of shutdown: return HTTP 503 for new WebSocket upgrade requests
