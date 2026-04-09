@@ -239,19 +239,20 @@ func (d *Detector) upsertVirtualNode(ap *APInfo) error {
 	// Use INSERT OR REPLACE to handle both new and existing virtual nodes
 	// Note: updated_at will be set automatically by DEFAULT
 	query := `
-		INSERT INTO nodes (mac, name, role, pos_x, pos_y, pos_z, virtual, node_type, ap_bssid, ap_channel, last_seen_ms, created_at, updated_at)
-		VALUES (?, ?, 'ap', 0, 0, 2.5, 1, 'ap', ?, ?, ?, ?, ?)
+		INSERT INTO nodes (mac, name, role, pos_x, pos_y, pos_z, virtual, node_type, ap_bssid, ap_channel, manufacturer, last_seen_ms, created_at, updated_at)
+		VALUES (?, ?, 'ap', 0, 0, 2.5, 1, 'ap', ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(mac) DO UPDATE SET
 			name = excluded.name,
 			ap_bssid = excluded.ap_bssid,
 			ap_channel = excluded.ap_channel,
+			manufacturer = excluded.manufacturer,
 			last_seen_ms = excluded.last_seen_ms,
 			updated_at = excluded.updated_at,
 			virtual = 1,
 			node_type = 'ap'
 	`
 
-	_, err := d.db.Exec(query, mac, name, ap.BSSID, ap.Channel, nowMs, nowMs, nowMs)
+	_, err := d.db.Exec(query, mac, name, ap.BSSID, ap.Channel, ap.Manufacturer, nowMs, nowMs, nowMs)
 	return err
 }
 

@@ -23,6 +23,7 @@ type NodeRecord struct {
 	PosY            float64
 	PosZ            float64
 	Virtual         bool
+	Manufacturer    string    // Hardware manufacturer from OUI lookup (for virtual AP nodes)
 	FirstSeenAt     time.Time
 	LastSeenAt      time.Time
 	FirmwareVersion string
@@ -88,6 +89,7 @@ func (r *Registry) migrate() error {
 			pos_y            REAL    NOT NULL DEFAULT 0,
 			pos_z            REAL    NOT NULL DEFAULT 0,
 			virtual          INTEGER NOT NULL DEFAULT 0,
+			manufacturer     TEXT    NOT NULL DEFAULT '',
 			first_seen_at    INTEGER NOT NULL DEFAULT 0,
 			last_seen_at     INTEGER NOT NULL DEFAULT 0,
 			firmware_version TEXT    NOT NULL DEFAULT '',
@@ -128,6 +130,7 @@ func (r *Registry) migrate() error {
 		"ALTER TABLE nodes ADD COLUMN previous_role TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE nodes ADD COLUMN went_offline_at INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE nodes ADD COLUMN health_score REAL NOT NULL DEFAULT 0",
+		"ALTER TABLE nodes ADD COLUMN manufacturer TEXT NOT NULL DEFAULT ''",
 	}
 	for _, m := range migrations {
 		_, _ = r.db.Exec(m) // Ignore errors (column may already exist)
@@ -226,6 +229,12 @@ func (r *Registry) SetNodeName(mac, name string) error {
 	return err
 }
 
+// SetNodeManufacturer updates the manufacturer for a node (typically for virtual AP nodes).
+func (r *Registry) SetNodeManufacturer(mac, manufacturer string) error {
+	_, err := r.db.Exec(`UPDATE nodes SET manufacturer=? WHERE mac=?`, manufacturer, mac)
+	return err
+}
+
 // AddVirtualNode inserts or updates a virtual node for coverage planning.
 func (r *Registry) AddVirtualNode(mac, name string, x, y, z float64) error {
 	now := time.Now().UnixNano()
@@ -251,7 +260,7 @@ func (r *Registry) DeleteNode(mac string) error {
 // GetNode returns a single node record.
 func (r *Registry) GetNode(mac string) (*NodeRecord, error) {
 	row := r.db.QueryRow(`
-		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, first_seen_at, last_seen_at, firmware_version, chip_model, health_score
+		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, manufacturer, first_seen_at, last_seen_at, firmware_version, chip_model, health_score
 		FROM nodes WHERE mac=?`, mac)
 	return scanNode(row)
 }
@@ -269,7 +278,7 @@ func (r *Registry) GetNodePosition(mac string) (x, y, z float64, ok bool) {
 // GetAllNodes returns all node records ordered by first_seen_at.
 func (r *Registry) GetAllNodes() ([]NodeRecord, error) {
 	rows, err := r.db.Query(`
-		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, first_seen_at, last_seen_at, firmware_version, chip_model, health_score
+		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, manufacturer, first_seen_at, last_seen_at, firmware_version, chip_model, health_score
 		FROM nodes ORDER BY first_seen_at ASC`)
 	if err != nil {
 		return nil, err
@@ -372,7 +381,7 @@ func scanNode(s scanner) (*NodeRecord, error) {
 	err := s.Scan(
 		&n.MAC, &n.Name, &n.Role, &n.PreviousRole, &offlineNS,
 		&n.PosX, &n.PosY, &n.PosZ,
-		&virtual, &firstNS, &lastNS,
+		&virtual, &n.Manufacturer, &firstNS, &lastNS,
 		&n.FirmwareVersion, &n.ChipModel, &n.HealthScore,
 	)
 	if err != nil {
