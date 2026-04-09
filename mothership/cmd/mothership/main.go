@@ -3226,6 +3226,11 @@ func main() {
 	r.Get("/api/backup", backupHandler.HandleBackup)
 	log.Printf("[INFO] Backup API registered at /api/backup")
 
+	// Phase 8: Pre-deployment simulator REST API
+	simulatorHandler := api.NewSimulatorHandler()
+	simulatorHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Pre-deployment simulator API registered at /api/simulator/*")
+
 	// Events timeline REST API (uses shared mainDB)
 	// eventsHandler was created earlier to allow fusion loop to log detection events
 	eventsHandler.SetHub(dashboardHub)

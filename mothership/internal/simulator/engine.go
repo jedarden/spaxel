@@ -10,9 +10,10 @@
 package simulator
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -732,21 +733,10 @@ func (e *Engine) generateRecommendations(coverageScore float64, gdopMap []float6
 		recs = append(recs, "Coverage looks good! No specific recommendations.")
 	}
 
-	return reps
+	return recs
 }
 
 // Errors
 var (
 	ErrNodeOutsideSpace = fmt.Errorf("node position is outside the defined space")
 )
-
-// randFloat64 returns a random float64 in [0, 1).
-func randFloat64() float64 {
-	return float64(time.Now().UnixNano()%1000) / 1000.0
-}
-
-// fmt is a simplified string formatter.
-func fmt(format string, args ...interface{}) string {
-	// In actual implementation, use fmt.Sprintf
-	return format // Placeholder
-}
