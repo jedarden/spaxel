@@ -206,8 +206,8 @@ func (ns *NodeSet) UnmarshalJSON(data []byte) error {
 // CornerPositions returns suggested node positions at room corners
 // for a given space. Useful for quick initial placement.
 func CornerPositions(s *Space) []Point {
-	minX, minY, _, maxX, maxY, maxZ := s.Bounds()
-	height := (maxZ - minX) / 2 // Average height
+	minX, minY, minZ, maxX, maxY, maxZ := s.Bounds()
+	height := (maxZ - minZ) / 2 // Average height
 
 	return []Point{
 		{X: minX, Y: minY, Z: height},          // Bottom-left, high
@@ -222,7 +222,7 @@ func CornerPositions(s *Space) []Point {
 // SuggestedNodes creates a suggested node set for a space
 // with nodes positioned at corners and mid-points
 func SuggestedNodes(s *Space, count int) *NodeSet {
-	ns := NewNode()
+	ns := NewNodeSet()
 	positions := CornerPositions(s)
 
 	// Use corner positions, then add random positions if needed
