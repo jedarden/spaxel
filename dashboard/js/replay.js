@@ -20,6 +20,9 @@
         speeds: [1, 2, 5],
         // Timestamp range padding when creating replay sessions
         sessionPaddingMs: 5000,
+        // Event fetch configuration
+        eventFetchBatchSize: 100, // events per batch
+        eventMarkerTypes: ['anomaly', 'anomaly_detected', 'security_alert', 'portal_crossing', 'zone_entry', 'zone_exit'],
     };
 
     // ============================================

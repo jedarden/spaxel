@@ -1,12 +1,33 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spaxel/mothership/internal/replay"
 )
+
+// parseISO8601 parses an ISO8601 timestamp string and returns Unix milliseconds
+func parseISO8601(s string) (int64, error) {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		// Try alternative formats
+		t, err = time.Parse("2006-01-02T15:04:05", s)
+		if err != nil {
+			t, err = time.Parse("2006-01-02T15:04:05Z", s)
+			if err != nil {
+				t, err = time.Parse("2006-01-02T15:04:05.999Z", s)
+				if err != nil {
+					return 0, err
+				}
+			}
+		}
+	}
+	return t.UnixMilli(), nil
+}
 
 const (
 	// Dashboard ping/pong timing
@@ -80,15 +101,163 @@ func (s *Server) readPump(conn *websocket.Conn, client *Client) {
 	})
 
 	for {
-		_, _, err := conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("[WARN] Dashboard read error: %v", err)
 			}
 			break
 		}
-		// Dashboard clients don't send meaningful messages in Phase 1
-		// Just keep the connection alive
+
+		// Handle WebSocket commands from dashboard
+		s.handleCommand(message, client)
+	}
+}
+
+// handleCommand processes WebSocket commands from the dashboard client
+func (s *Server) handleCommand(data []byte, client *Client) {
+	var cmd map[string]interface{}
+	if err := json.Unmarshal(data, &cmd); err != nil {
+		log.Printf("[DEBUG] Failed to parse WebSocket command: %v", err)
+		return
+	}
+
+	cmdType, ok := cmd["type"].(string)
+	if !ok {
+		return
+	}
+
+	switch cmdType {
+	case "replay_seek":
+		s.handleReplaySeek(cmd)
+	case "replay_play":
+		s.handleReplayPlay(cmd)
+	case "replay_pause":
+		s.handleReplayPause(cmd)
+	case "replay_set_params":
+		s.handleReplaySetParams(cmd)
+	case "replay_apply_to_live":
+		s.handleReplayApplyToLive(cmd)
+	case "replay_set_speed":
+		s.handleReplaySetSpeed(cmd)
+	default:
+		// Unknown command type - ignore
+		log.Printf("[DEBUG] Unknown WebSocket command type: %s", cmdType)
+	}
+}
+
+// handleReplaySeek handles replay_seek commands
+func (s *Server) handleReplaySeek(cmd map[string]interface{}) {
+	targetISO, ok := cmd["timestamp_iso8601"].(string)
+	if !ok {
+		log.Printf("[WARN] replay_seek missing timestamp_iso8601")
+		return
+	}
+
+	targetMS, err := parseISO8601(targetISO)
+	if err != nil {
+		log.Printf("[WARN] replay_seek invalid timestamp: %v", err)
+		return
+	}
+
+	// Forward to replay handler if available
+	if s.hub.replayHandler != nil {
+		s.hub.replayHandler.Seek(targetMS)
+	}
+}
+
+// handleReplayPlay handles replay_play commands
+func (s *Server) handleReplayPlay(cmd map[string]interface{}) {
+	speedVal, ok := cmd["speed"]
+	var speed float64 = 1.0
+	if ok {
+		switch v := speedVal.(type) {
+		case float64:
+			speed = speedVal.(float64)
+		case int:
+			speed = float64(speedVal.(int))
+		}
+	}
+
+	// Forward to replay handler if available
+	if s.hub.replayHandler != nil {
+		s.hub.replayHandler.Play(speed)
+	}
+}
+
+// handleReplayPause handles replay_pause commands
+func (s *Server) handleReplayPause(cmd map[string]interface{}) {
+	// Forward to replay handler if available
+	if s.hub.replayHandler != nil {
+		s.hub.replayHandler.Pause()
+	}
+}
+
+// handleReplaySetParams handles replay_set_params commands
+func (s *Server) handleReplaySetParams(cmd map[string]interface{}) {
+	params := &replay.TunableParams{}
+
+	if val, ok := cmd["delta_rms_threshold"]; ok {
+		if f, ok := val.(float64); ok {
+			params.DeltaRMSThreshold = &f
+		}
+	}
+	if val, ok := cmd["tau_s"]; ok {
+		if f, ok := val.(float64); ok {
+			params.TauS = &f
+		}
+	}
+	if val, ok := cmd["fresnel_decay"]; ok {
+		if f, ok := val.(float64); ok {
+			params.FresnelDecay = &f
+		}
+	}
+	if val, ok := cmd["n_subcarriers"]; ok {
+		if i, ok := val.(float64); ok {
+			ival := int(i)
+			params.NSubcarriers = &ival
+		}
+	}
+	if val, ok := cmd["breathing_sensitivity"]; ok {
+		if f, ok := val.(float64); ok {
+			params.BreathingSensitivity = &f
+		}
+	}
+
+	// Forward to replay handler if available
+	if s.hub.replayHandler != nil {
+		s.hub.replayHandler.SetParams(params)
+	}
+}
+
+// handleReplayApplyToLive handles replay_apply_to_live commands
+func (s *Server) handleReplayApplyToLive(cmd map[string]interface{}) {
+	// This would copy replay parameters to live configuration
+	// Requires confirmation from user (handled on frontend)
+	log.Printf("[INFO] Apply replay parameters to live requested")
+
+	// Forward to replay handler if available
+	if s.hub.replayHandler != nil {
+		s.hub.replayHandler.ApplyToLive()
+	}
+}
+
+// handleReplaySetSpeed handles replay_set_speed commands
+func (s *Server) handleReplaySetSpeed(cmd map[string]interface{}) {
+	speedVal, ok := cmd["speed"]
+	var speed float64 = 1.0
+	if ok {
+		switch v := speedVal.(type) {
+		case float64:
+			speed = speedVal.(float64)
+		case int:
+			speed = float64(speedVal.(int))
+		}
+	}
+
+	// Forward to replay handler if available
+	if s.hub.replayHandler != nil {
+		s.hub.replayHandler.SetSpeed(speed)
 	}
 }
 
