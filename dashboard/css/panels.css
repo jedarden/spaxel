@@ -2361,3 +2361,856 @@
         width: 100%;
     }
 }
+
+/* ============================================
+   Pre-Deployment Simulator Styles
+   ============================================ */
+
+/* Simulator Panel */
+.simulator-panel {
+    position: fixed;
+    top: 40px;
+    right: 0;
+    bottom: 0;
+    width: 360px;
+    background: #1e1e3a;
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.simulator-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.simulator-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #eee;
+}
+
+.sim-close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.sim-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+
+.simulator-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.sim-section {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sim-section:last-child {
+    border-bottom: none;
+}
+
+.sim-section h3 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+}
+
+/* Space Controls */
+.sim-space-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.sim-space-controls label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #ccc;
+}
+
+.sim-space-controls input[type="number"] {
+    width: 80px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: #eee;
+    font-size: 13px;
+    text-align: right;
+}
+
+/* Tool Buttons */
+.sim-tools {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.sim-tool-btn {
+    flex: 1;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: #ccc;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sim-tool-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+
+.sim-tool-btn.active {
+    background: rgba(79, 195, 247, 0.2);
+    border-color: rgba(79, 195, 247, 0.4);
+    color: #4fc3f7;
+}
+
+/* General Buttons */
+.sim-btn {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #ccc;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sim-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #eee;
+}
+
+.sim-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sim-btn-primary {
+    background: rgba(79, 195, 247, 0.2);
+    border-color: rgba(79, 195, 247, 0.3);
+    color: #4fc3f7;
+}
+
+.sim-btn-primary:hover:not(:disabled) {
+    background: rgba(79, 195, 247, 0.3);
+}
+
+.sim-btn-danger {
+    background: rgba(244, 67, 54, 0.15);
+    border-color: rgba(244, 67, 54, 0.25);
+    color: #ef5350;
+}
+
+.sim-btn-danger:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
+/* Node List */
+.sim-node-list {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sim-node-list .sim-btn {
+    flex: 1;
+}
+
+/* Walker Controls */
+.sim-walker-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.sim-walker-controls select {
+    flex: 1;
+    min-width: 120px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: #eee;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.sim-walker-controls .sim-btn {
+    flex: 0 0 auto;
+}
+
+/* Items List (Nodes/Walkers) */
+.sim-items-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.sim-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+.sim-item-name {
+    flex: 1;
+    font-size: 13px;
+    color: #eee;
+}
+
+.sim-item-position {
+    font-size: 11px;
+    color: #888;
+    font-family: monospace;
+}
+
+.sim-item-delete {
+    padding: 4px 8px;
+    background: rgba(244, 67, 54, 0.15);
+    border: none;
+    border-radius: 4px;
+    color: #ef5350;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.sim-item-delete:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
+/* GDOP Controls */
+.sim-gdop-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sim-gdop-controls label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.sim-gdop-controls input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #4fc3f7;
+    cursor: pointer;
+}
+
+/* Simulation Controls */
+.sim-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sim-controls .sim-btn {
+    flex: 1;
+}
+
+/* Progress Bar */
+.sim-progress {
+    margin-top: 12px;
+}
+
+.sim-progress > span:first-child {
+    display: block;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 6px;
+}
+
+.sim-progress-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.sim-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+/* Results */
+.sim-results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.sim-result-label {
+    font-size: 13px;
+    color: #ccc;
+}
+
+.sim-result-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #4fc3f7;
+}
+
+/* Recommendations */
+.sim-recommendations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-recommendation {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid transparent;
+}
+
+.sim-rec-priority {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.sim-rec-priority.high {
+    background: rgba(244, 67, 54, 0.2);
+    color: #ef5350;
+}
+
+.sim-rec-priority.medium {
+    background: rgba(255, 167, 38, 0.2);
+    color: #ffa726;
+}
+
+.sim-rec-priority.low {
+    background: rgba(102, 187, 106, 0.2);
+    color: #66bb6a;
+}
+
+.sim-rec-text {
+    font-size: 13px;
+    color: #ccc;
+    line-height: 1.4;
+}
+
+/* Shopping List */
+.sim-shopping-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-shopping-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.sim-shopping-item span {
+    font-size: 13px;
+    color: #ccc;
+}
+
+.sim-shopping-item strong {
+    font-size: 14px;
+    color: #4fc3f7;
+}
+
+/* Scrollbar */
+.simulator-content::-webkit-scrollbar,
+.sim-items-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.simulator-content::-webkit-scrollbar-track,
+.sim-items-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.simulator-content::-webkit-scrollbar-thumb,
+.sim-items-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.simulator-content::-webkit-scrollbar-thumb:hover,
+.sim-items-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .simulator-panel {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .sim-tools {
+        flex-wrap: wrap;
+    }
+
+    .sim-walker-controls {
+        flex-direction: column;
+    }
+
+    .sim-walker-controls select {
+        width: 100%;
+    }
+}
+
+/* ----- Simulator Panel Components ----- */
+
+/* Simulator Panel Container */
+.simulator-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #1a1a2e;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Simulator Header */
+.simulator-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.simulator-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #eee;
+}
+
+.sim-close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.sim-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+
+/* Simulator Content */
+.simulator-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+/* Simulator Sections */
+.sim-section {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.sim-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #4fc3f7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Space Controls */
+.sim-space-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.sim-space-controls label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #888;
+}
+
+.sim-space-controls input {
+    margin-top: 4px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: #eee;
+    font-size: 13px;
+}
+
+.sim-space-controls input:focus {
+    outline: none;
+    border-color: #4fc3f7;
+}
+
+/* Tool Buttons */
+.sim-tools {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sim-tool-btn {
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sim-tool-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+
+.sim-tool-btn.active {
+    background: rgba(79, 195, 247, 0.2);
+    border-color: rgba(79, 195, 247, 0.5);
+    color: #4fc3f7;
+}
+
+.sim-tool-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Node and Walker Lists */
+.sim-node-list,
+.sim-walker-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sim-items-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Simulator Items */
+.sim-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.sim-item-name {
+    flex: 1;
+    font-size: 13px;
+    color: #eee;
+}
+
+.sim-item-position {
+    font-size: 11px;
+    color: #888;
+    margin-right: 8px;
+}
+
+.sim-item-delete {
+    padding: 4px 8px;
+    background: rgba(244, 67, 54, 0.2);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    border-radius: 3px;
+    color: #ef5350;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sim-item-delete:hover {
+    background: rgba(244, 67, 54, 0.3);
+}
+
+/* GDOP Controls */
+.sim-gdop-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.sim-gdop-controls label {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    color: #888;
+    gap: 6px;
+}
+
+.sim-gdop-controls input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+/* Simulation Controls */
+.sim-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+/* Progress Bar */
+.sim-progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.sim-progress-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.sim-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+    transition: width 0.1s linear;
+}
+
+/* Simulator Buttons */
+.sim-btn {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #eee;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sim-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sim-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sim-btn-primary {
+    background: rgba(79, 195, 247, 0.2);
+    border-color: rgba(79, 195, 247, 0.3);
+    color: #4fc3f7;
+}
+
+.sim-btn-primary:hover:not(:disabled) {
+    background: rgba(79, 195, 247, 0.3);
+}
+
+.sim-btn-danger {
+    background: rgba(244, 67, 54, 0.2);
+    border-color: rgba(244, 67, 54, 0.3);
+    color: #ef5350;
+}
+
+.sim-btn-danger:hover:not(:disabled) {
+    background: rgba(244, 67, 54, 0.3);
+}
+
+/* Results Section */
+.sim-results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.sim-result-label {
+    font-size: 13px;
+    color: #888;
+}
+
+.sim-result-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #4fc3f7;
+}
+
+/* Recommendations */
+.sim-recommendations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-recommendation {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    border-left: 3px solid;
+}
+
+.sim-recommendation.high {
+    border-left-color: #f44336;
+}
+
+.sim-recommendation.medium {
+    border-left-color: #ff9800;
+}
+
+.sim-recommendation.low {
+    border-left-color: #4caf50;
+}
+
+.sim-rec-priority {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.sim-recommendation.high .sim-rec-priority {
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+}
+
+.sim-recommendation.medium .sim-rec-priority {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ff9800;
+}
+
+.sim-recommendation.low .sim-rec-priority {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+}
+
+.sim-rec-text {
+    flex: 1;
+    font-size: 13px;
+    color: #eee;
+}
+
+/* Shopping List */
+.sim-shopping-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-shopping-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    font-size: 13px;
+    color: #eee;
+}
+
+.sim-shopping-item strong {
+    color: #4fc3f7;
+}

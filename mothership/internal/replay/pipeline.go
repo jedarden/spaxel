@@ -137,6 +137,15 @@ func (p *Pipeline) processWithParams(linkID string, parsed *ingestion.ParsedFram
 			// Re-check motion detection with new threshold
 			result.MotionDetected = result.SmoothDeltaRMS > *p.params.DeltaRMSThreshold
 		}
+
+		// Apply minimum confidence filter if set
+		if p.params.MinConfidence != nil && result.AmbientConfidence < *p.params.MinConfidence {
+			// Suppress low-confidence detections
+			result.MotionDetected = false
+		}
+
+		// Note: FresnelWeightSigma and NSubcarriers are applied at the fusion level
+		// BreathingSensitivity is applied in the breathing detection module
 	}
 
 	return result

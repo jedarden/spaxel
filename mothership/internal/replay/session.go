@@ -50,6 +50,8 @@ type TunableParams struct {
 	FresnelDecay       *float64 `json:"fresnel_decay,omitempty"`
 	NSubcarriers       *int     `json:"n_subcarriers,omitempty"`
 	BreathingSensitivity *float64 `json:"breathing_sensitivity,omitempty"`
+	FresnelWeightSigma  *float64 `json:"fresnel_weight_sigma,omitempty"`
+	MinConfidence      *float64 `json:"min_confidence,omitempty"`
 }
 
 // NewSession creates a new replay session.

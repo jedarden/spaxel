@@ -2069,94 +2069,22 @@ func main() {
 		log.Printf("[INFO] Zones and portals API registered at /api/zones/* and /api/portals/*")
 	}
 
-	// Phase 6: BLE REST API
-	if bleRegistry != nil {
-		r.Get("/api/ble/devices", func(w http.ResponseWriter, r *http.Request) {
-			devices, err := bleRegistry.GetDevices(false)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			writeJSON(w, devices)
-		})
-		r.Get("/api/ble/devices/{addr}", func(w http.ResponseWriter, r *http.Request) {
-			addr := chi.URLParam(r, "addr")
-			device, err := bleRegistry.GetDevice(addr)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			}
-			writeJSON(w, device)
-		})
-		r.Post("/api/ble/devices", func(w http.ResponseWriter, r *http.Request) {
-			var device ble.DeviceRecord
-			if err := json.NewDecoder(r.Body).Decode(&device); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			if device.Addr == "" {
-				http.Error(w, "addr required", http.StatusBadRequest)
-				return
-			}
-			result, err := bleRegistry.PreregisterDevice(device.Addr, device.Name)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			writeJSON(w, result)
-		})
-		r.Put("/api/ble/devices/{addr}", func(w http.ResponseWriter, r *http.Request) {
-			addr := chi.URLParam(r, "addr")
-			var device ble.DeviceRecord
-			if err := json.NewDecoder(r.Body).Decode(&device); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			updates := map[string]interface{}{}
-			if device.Name != "" {
-				updates["name"] = device.Name
-			}
-			if device.Label != "" {
-				updates["label"] = device.Label
-			}
-			if device.DeviceType != "" {
-				updates["device_type"] = string(device.DeviceType)
-			}
-			if device.PersonID != "" {
-				updates["person_id"] = device.PersonID
-			}
-			if len(updates) == 0 {
-				writeJSON(w, device)
-				return
-			}
-			if err := bleRegistry.UpdateDevice(addr, updates); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			result, err := bleRegistry.GetDevice(addr)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			writeJSON(w, result)
-		})
-		r.Delete("/api/ble/devices/{addr}", func(w http.ResponseWriter, r *http.Request) {
-			addr := chi.URLParam(r, "addr")
-			if err := bleRegistry.DeleteDevice(addr); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-		})
-		r.Get("/api/ble/matches", func(w http.ResponseWriter, r *http.Request) {
-			if identityMatcher == nil {
-				writeJSON(w, []*ble.IdentityMatch{})
-				return
-			}
-			matches := identityMatcher.GetAllMatches()
-			writeJSON(w, matches)
-		})
-	}
+		// Phase 6: BLE REST API
+		if bleRegistry != nil {
+			bleHandler := ble.NewHandler(bleRegistry)
+			bleHandler.RegisterRoutes(r)
+			log.Printf("[INFO] BLE REST API registered at /api/ble/* and /api/people/*")
+
+			// BLE identity matches endpoint (not in ble.Handler)
+			r.Get("/api/ble/matches", func(w http.ResponseWriter, r *http.Request) {
+				if identityMatcher == nil {
+					writeJSON(w, []*ble.IdentityMatch{})
+					return
+				}
+				matches := identityMatcher.GetAllMatches()
+				writeJSON(w, matches)
+			})
+		}
 
 	// Phase 6: Automation REST API
 	if automationEngine != nil {

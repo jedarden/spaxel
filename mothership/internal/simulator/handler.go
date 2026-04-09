@@ -37,6 +37,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Delete("/api/simulator/walkers/{id}", h.removeWalker)
 	r.Post("/api/simulator/simulate", h.simulate)
 	r.Get("/api/simulator/results", h.getResults)
+	r.Post("/api/simulator/gdop", h.computeGDOP)
+	r.Get("/api/simulator/status", h.getStatus)
 	r.Post("/api/simulator/subscribe", h.subscribe)
 }
 
@@ -45,17 +47,20 @@ func (h *Handler) getSpace(w http.ResponseWriter, r *http.Request) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	nodes := h.engine.GetVirtualNodes()
-	space := h.getSpaceFromNodes(nodes)
-
+	space := h.engine.space
 	writeJSON(w, space)
 }
 
 // setSpace handles PUT /api/simulator/space
 func (h *Handler) setSpace(w http.ResponseWriter, r *http.Request) {
-	var space SpaceDefinition
+	var space Space
 	if err := json.NewDecoder(r.Body).Decode(&space); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := space.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -63,7 +68,7 @@ func (h *Handler) setSpace(w http.ResponseWriter, r *http.Request) {
 	h.engine.SetSpace(&space)
 	h.mu.Unlock()
 
-	log.Printf("[SIM] Space updated: %.1fx%.1fx%.1f m", space.Width, space.Depth, space.Height)
+	log.Printf("[SIM] Space updated: %s", space.ID)
 
 	writeJSON(w, map[string]interface{}{
 		"ok": true,
@@ -78,7 +83,7 @@ func (h *Handler) getNodes(w http.ResponseWriter, r *http.Request) {
 
 // addNode handles POST /api/simulator/nodes
 func (h *Handler) addNode(w http.ResponseWriter, r *http.Request) {
-	var node VirtualNode
+	var node Node
 	if err := json.NewDecoder(r.Body).Decode(&node); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -86,6 +91,10 @@ func (h *Handler) addNode(w http.ResponseWriter, r *http.Request) {
 
 	if node.ID == "" {
 		node.ID = fmt.Sprintf("node_%d", time.Now().UnixNano())
+	}
+
+	if node.Type == "" {
+		node.Type = NodeTypeVirtual
 	}
 
 	if err := h.engine.AddVirtualNode(&node); err != nil {
@@ -114,7 +123,7 @@ func (h *Handler) getWalkers(w http.ResponseWriter, r *http.Request) {
 
 // addWalker handles POST /api/simulator/walkers
 func (h *Handler) addWalker(w http.ResponseWriter, r *http.Request) {
-	var walker Walker
+	var walker SimWalker
 	if err := json.NewDecoder(r.Body).Decode(&walker); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -122,6 +131,10 @@ func (h *Handler) addWalker(w http.ResponseWriter, r *http.Request) {
 
 	if walker.ID == "" {
 		walker.ID = fmt.Sprintf("walker_%d", time.Now().UnixNano())
+	}
+
+	if walker.Type == "" {
+		walker.Type = WalkerTypeRandom
 	}
 
 	h.engine.AddWalker(&walker)
@@ -142,6 +155,17 @@ func (h *Handler) removeWalker(w http.ResponseWriter, r *http.Request) {
 // simulate handles POST /api/simulator/simulate
 // Runs one simulation tick and returns results.
 func (h *Handler) simulate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DurationSec  int     `json:"duration_sec"`
+		TickRateHz   int     `json:"tick_rate_hz"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Use defaults if request body is empty
+		req.DurationSec = 30
+		req.TickRateHz = 10
+	}
+
 	result := h.engine.RunSimulation()
 	writeJSON(w, result)
 }
@@ -155,6 +179,58 @@ func (h *Handler) getResults(w http.ResponseWriter, r *http.Request) {
 		result = h.engine.RunSimulation()
 	}
 	writeJSON(w, result)
+}
+
+// computeGDOP handles POST /api/simulator/gdop
+func (h *Handler) computeGDOP(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Nodes []Node `json:"nodes"`
+		Space *Space  `json:"space"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Space == nil {
+		req.Space = DefaultSpace()
+	}
+
+	// Create temporary engine for GDOP computation
+	engine := NewEngine(req.Space)
+	for _, node := range req.Nodes {
+		engine.AddVirtualNode(&node)
+	}
+
+	// Run simulation to get GDOP map
+	result := engine.RunSimulation()
+
+	writeJSON(w, map[string]interface{}{
+		"gdop_map":        result.GDOPMap,
+		"grid_dimensions": result.GridDimensions,
+		"coverage_score":  result.CoverageScore,
+	})
+}
+
+// getStatus handles GET /api/simulator/status
+func (h *Handler) getStatus(w http.ResponseWriter, r *http.Request) {
+	result := h.engine.GetResults()
+
+	walkerPositions := make([]map[string]interface{}, 0)
+	if result != nil {
+		for _, blob := range result.Blobs {
+			walkerPositions = append(walkerPositions, map[string]interface{}{
+				"id":       blob.WalkerID,
+				"position": blob.Position,
+			})
+		}
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"state":            "running",
+		"walker_positions": walkerPositions,
+	})
 }
 
 // subscribe handles POST /api/simulator/subscribe
@@ -202,56 +278,6 @@ func (h *Handler) subscribe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetEngine returns the simulator engine for direct access.
-func (h *Handler) GetEngine() *Engine {
-	return h.engine
-}
-
-// getSpaceFromNodes derives space bounds from node positions.
-func (h *Handler) getSpaceFromNodes(nodes []*VirtualNode) *SpaceDefinition {
-	if len(nodes) == 0 {
-		return &SpaceDefinition{
-			Width: 10, Depth: 10, Height: 2.5,
-			OriginX: 0, OriginZ: 0,
-		}
-	}
-
-	minX, maxX := nodes[0].Position[0], nodes[0].Position[0]
-	minY, maxY := nodes[0].Position[1], nodes[0].Position[1]
-	minZ, maxZ := nodes[0].Position[2], nodes[0].Position[2]
-
-	for _, node := range nodes {
-		if node.Position[0] < minX {
-			minX = node.Position[0]
-		}
-		if node.Position[0] > maxX {
-			maxX = node.Position[0]
-		}
-		if node.Position[1] < minY {
-			minY = node.Position[1]
-		}
-		if node.Position[1] > maxY {
-			maxY = node.Position[1]
-		}
-		if node.Position[2] < minZ {
-			minZ = node.Position[2]
-		}
-		if node.Position[2] > maxZ {
-			maxZ = node.Position[2]
-		}
-	}
-
-	// Add margin
-	margin := 0.5
-	return &SpaceDefinition{
-		Width:   (maxX - minX) + 2*margin,
-		Depth:   (maxY - minY) + 2*margin,
-		Height:  maxZ + 0.5, // Floor to ceiling
-		OriginX: minX - margin,
-		OriginZ: minY - margin,
-	}
-}
-
 // sendSSEEvent sends an SSE event.
 func sendSSEEvent(w http.ResponseWriter, event string, data interface{}) {
 	jsonData, err := json.Marshal(data)
@@ -275,11 +301,4 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 		return
 	}
 	w.Write(data)
-}
-
-// GetResults returns the most recent simulation results from the engine.
-func (e *Engine) GetResults() *SimulationResult {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.publishedResults
 }

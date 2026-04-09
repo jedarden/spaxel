@@ -41,6 +41,11 @@
             title: 'Replay',
             icon: '&#x23F5;',
             description: 'Time-travel debugging mode'
+        },
+        simulate: {
+            title: 'Simulate',
+            icon: '&#x269B;',
+            description: 'Pre-deployment simulator'
         }
     };
 

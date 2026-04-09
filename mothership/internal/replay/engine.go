@@ -461,6 +461,16 @@ func (e *Engine) runFusion() []BlobUpdate {
 	return blobs
 }
 
+// splitLinkID splits a link ID in "nodeMAC:peerMAC" format.
+func splitLinkID(linkID string) []string {
+	for i := 0; i < len(linkID); i++ {
+		if linkID[i] == ':' {
+			return []string{linkID[:i], linkID[i+1:]}
+		}
+	}
+	return []string{linkID}
+}
+
 // reprocessCurrentPosition re-processes the current position with new parameters.
 func (e *Engine) reprocessCurrentPosition() {
 	e.mu.Lock()

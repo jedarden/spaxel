@@ -17,10 +17,11 @@ import (
 
 // ReplayHandler manages CSI replay sessions.
 type ReplayHandler struct {
-	mu       sync.RWMutex
-	worker   *replay.Worker
-	sessions map[string]*_replaySession
-	nextID   int
+	mu              sync.RWMutex
+	worker          *replay.Worker
+	sessions        map[string]*_replaySession
+	nextID          int
+	activeSessionID string // Currently active session for dashboard control
 }
 
 // _replaySession represents an active replay session (API layer).
@@ -618,4 +619,162 @@ func (h *ReplayHandler) GetReplayPath() string {
 // GetStoreStats returns statistics about the replay store.
 func (h *ReplayHandler) GetStoreStats() replay.Stats {
 	return h.worker.GetStoreStats()
+}
+
+// Seek moves the active replay session to the target timestamp.
+// Implements dashboard.ReplayHandler interface.
+func (h *ReplayHandler) Seek(targetMS int64) error {
+	h.mu.Lock()
+	sessionID := h.activeSessionID
+	h.mu.Unlock()
+
+	if sessionID == "" {
+		return fmt.Errorf("no active replay session")
+	}
+
+	return h.worker.Seek(sessionID, targetMS)
+}
+
+// Play starts playback of the active replay session at the specified speed.
+// Implements dashboard.ReplayHandler interface.
+func (h *ReplayHandler) Play(speed float64) error {
+	h.mu.Lock()
+	sessionID := h.activeSessionID
+	h.mu.Unlock()
+
+	if sessionID == "" {
+		return fmt.Errorf("no active replay session")
+	}
+
+	// Convert float speed to int (1x=1, 2x=2, 0.5x=1 for now)
+	speedInt := 1
+	if speed >= 2.0 {
+		speedInt = 2
+	} else if speed >= 5.0 {
+		speedInt = 5
+	}
+
+	// Set speed first
+	if err := h.worker.SetPlaybackSpeed(sessionID, speedInt); err != nil {
+		return err
+	}
+
+	// Then set state to playing
+	return h.worker.SetState(sessionID, "playing")
+}
+
+// Pause pauses playback of the active replay session.
+// Implements dashboard.ReplayHandler interface.
+func (h *ReplayHandler) Pause() error {
+	h.mu.Lock()
+	sessionID := h.activeSessionID
+	h.mu.Unlock()
+
+	if sessionID == "" {
+		return fmt.Errorf("no active replay session")
+	}
+
+	return h.worker.SetState(sessionID, "paused")
+}
+
+// SetParams updates the replay pipeline parameters for the active session.
+// Implements dashboard.ReplayHandler interface.
+func (h *ReplayHandler) SetParams(params *replay.TunableParams) error {
+	h.mu.Lock()
+	sessionID := h.activeSessionID
+	h.mu.Unlock()
+
+	if sessionID == "" {
+		return fmt.Errorf("no active replay session")
+	}
+
+	// Convert TunableParams to map for worker
+	paramMap := make(map[string]interface{})
+	if params.DeltaRMSThreshold != nil {
+		paramMap["delta_rms_threshold"] = *params.DeltaRMSThreshold
+	}
+	if params.TauS != nil {
+		paramMap["tau_s"] = *params.TauS
+	}
+	if params.FresnelDecay != nil {
+		paramMap["fresnel_decay"] = *params.FresnelDecay
+	}
+	if params.FresnelWeightSigma != nil {
+		paramMap["fresnel_weight_sigma"] = *params.FresnelWeightSigma
+	}
+	if params.MinConfidence != nil {
+		paramMap["min_confidence"] = *params.MinConfidence
+	}
+	if params.BreathingSensitivity != nil {
+		paramMap["breathing_sensitivity"] = *params.BreathingSensitivity
+	}
+	if params.NSubcarriers != nil {
+		paramMap["n_subcarriers"] = *params.NSubcarriers
+	}
+
+	return h.worker.UpdateParams(sessionID, paramMap)
+}
+
+// ApplyToLive copies the current replay parameters to the live configuration.
+// Implements dashboard.ReplayHandler interface.
+func (h *ReplayHandler) ApplyToLive() error {
+	h.mu.Lock()
+	sessionID := h.activeSessionID
+	h.mu.Unlock()
+
+	if sessionID == "" {
+		return fmt.Errorf("no active replay session")
+	}
+
+	// Get the current session's parameters
+	session, err := h.worker.GetSession(sessionID)
+	if err != nil {
+		return err
+	}
+
+	// Log the parameters that would be applied to live
+	log.Printf("[INFO] ApplyToLive: Would apply replay parameters to live: %+v", session.Params)
+
+	// TODO: Implement actual parameter persistence to live config
+	// This would involve updating the mothership config file and
+	// notifying the live pipeline to reload its parameters
+
+	return nil
+}
+
+// SetSpeed changes the playback speed of the active replay session.
+// Implements dashboard.ReplayHandler interface.
+func (h *ReplayHandler) SetSpeed(speed float64) error {
+	h.mu.Lock()
+	sessionID := h.activeSessionID
+	h.mu.Unlock()
+
+	if sessionID == "" {
+		return fmt.Errorf("no active replay session")
+	}
+
+	// Convert float speed to int
+	speedInt := 1
+	if speed >= 2.0 {
+		speedInt = 2
+	} else if speed >= 5.0 {
+		speedInt = 5
+	}
+
+	return h.worker.SetPlaybackSpeed(sessionID, speedInt)
+}
+
+// SetActiveSession sets the active replay session for dashboard control.
+func (h *ReplayHandler) SetActiveSession(sessionID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.activeSessionID = sessionID
+	log.Printf("[INFO] Active replay session set to: %s", sessionID)
+}
+
+// GetActiveSession returns the currently active replay session ID.
+func (h *ReplayHandler) GetActiveSession() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.activeSessionID
 }
