@@ -110,6 +110,7 @@
 
         content.innerHTML = `
             ${renderDetectionSettings(settings)}
+            ${renderSecuritySettings(settings)}
             ${renderNotificationSettings(settings)}
             ${renderSystemInfo()}
         `;
@@ -194,6 +195,24 @@
                 <button class="panel-btn panel-btn-primary panel-btn-full" id="save-detection-btn"
                         ${settingsState.saving ? 'disabled' : ''}>
                     ${settingsState.saving ? 'Saving...' : 'Save Detection Settings'}
+                </button>
+            </div>
+        `;
+    }
+
+    function renderSecuritySettings(settings) {
+        return `
+            <div class="panel-section">
+                <div class="panel-section-header">Security</div>
+
+                <div class="panel-info-card">
+                    <div class="panel-info-card-title">Dashboard PIN</div>
+                    <div class="panel-info-card-value">Configured</div>
+                    <div class="panel-info-card-subtitle">Protects access to your dashboard</div>
+                </div>
+
+                <button class="panel-btn panel-btn-secondary panel-btn-full" id="change-pin-btn">
+                    Change PIN
                 </button>
             </div>
         `;
@@ -395,6 +414,12 @@
         if (logoutBtn) {
             logoutBtn.addEventListener('click', handleLogout);
         }
+
+        // Change PIN
+        const changePinBtn = document.getElementById('change-pin-btn');
+        if (changePinBtn) {
+            changePinBtn.addEventListener('click', openChangePINModal);
+        }
     }
 
     /**
@@ -514,6 +539,224 @@
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
+    }
+
+    // ============================================
+    // Change PIN Modal
+    // ============================================
+
+    const changePINState = {
+        oldPin: '',
+        newPin: '',
+        confirmPin: '',
+        error: '',
+        isSubmitting: false
+    };
+
+    function openChangePINModal() {
+        changePINState.oldPin = '';
+        changePINState.newPin = '';
+        changePINState.confirmPin = '';
+        changePINState.error = '';
+        changePINState.isSubmitting = false;
+
+        const modal = document.createElement('div');
+        modal.id = 'change-pin-modal';
+        modal.className = 'panel-modal-overlay';
+        modal.innerHTML = renderChangePINModal();
+        document.body.appendChild(modal);
+
+        attachChangePINEvents(modal);
+
+        // Focus first input
+        setTimeout(function() {
+            const firstInput = modal.querySelector('#change-pin-old');
+            if (firstInput) firstInput.focus();
+        }, 10);
+    }
+
+    function closeChangePINModal() {
+        const modal = document.getElementById('change-pin-modal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+
+    function renderChangePINModal() {
+        return `
+            <div class="panel-modal">
+                <div class="panel-modal-header">
+                    <h2>Change PIN</h2>
+                    <button class="panel-modal-close" id="change-pin-close">&times;</button>
+                </div>
+                <div class="panel-modal-body">
+                    ${changePINState.error ? `
+                        <div class="panel-error" id="change-pin-error">${escapeHtml(changePINState.error)}</div>
+                    ` : ''}
+
+                    <div class="panel-form-group">
+                        <label for="change-pin-old">Current PIN</label>
+                        <input type="password" id="change-pin-old" class="panel-input"
+                               maxlength="8" placeholder="Enter current PIN" autocomplete="current-password">
+                    </div>
+
+                    <div class="panel-form-group">
+                        <label for="change-pin-new">New PIN</label>
+                        <input type="password" id="change-pin-new" class="panel-input"
+                               maxlength="8" placeholder="Enter new PIN (4-8 digits)" autocomplete="new-password">
+                    </div>
+
+                    <div class="panel-form-group">
+                        <label for="change-pin-confirm">Confirm New PIN</label>
+                        <input type="password" id="change-pin-confirm" class="panel-input"
+                               maxlength="8" placeholder="Confirm new PIN" autocomplete="new-password">
+                    </div>
+
+                    <div class="panel-modal-actions">
+                        <button class="panel-btn panel-btn-secondary" id="change-pin-cancel" ${changePINState.isSubmitting ? 'disabled' : ''}>
+                            Cancel
+                        </button>
+                        <button class="panel-btn panel-btn-primary" id="change-pin-submit" ${changePINState.isSubmitting ? 'disabled' : ''}>
+                            ${changePINState.isSubmitting ? 'Changing...' : 'Change PIN'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function attachChangePINEvents(modal) {
+        // Close button
+        const closeBtn = modal.querySelector('#change-pin-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeChangePINModal);
+        }
+
+        // Cancel button
+        const cancelBtn = modal.querySelector('#change-pin-cancel');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', closeChangePINModal);
+        }
+
+        // Submit button
+        const submitBtn = modal.querySelector('#change-pin-submit');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', submitChangePIN);
+        }
+
+        // Close on overlay click
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeChangePINModal();
+            }
+        });
+
+        // Handle Enter key
+        const inputs = modal.querySelectorAll('.panel-input');
+        inputs.forEach(function(input) {
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    submitChangePIN();
+                }
+            });
+
+            // Only allow digits
+            input.addEventListener('input', function(e) {
+                const value = e.target.value;
+                if (!/^\d*$/.test(value)) {
+                    e.target.value = value.replace(/\D/g, '');
+                }
+            });
+        });
+    }
+
+    function submitChangePIN() {
+        const oldPinInput = document.getElementById('change-pin-old');
+        const newPinInput = document.getElementById('change-pin-new');
+        const confirmPinInput = document.getElementById('change-pin-confirm');
+
+        if (!oldPinInput || !newPinInput || !confirmPinInput) {
+            return;
+        }
+
+        const oldPin = oldPinInput.value.trim();
+        const newPin = newPinInput.value.trim();
+        const confirmPin = confirmPinInput.value.trim();
+
+        // Validation
+        if (!oldPin || oldPin.length < 4) {
+            changePINState.error = 'Please enter your current PIN (4-8 digits)';
+            updateChangePINModal();
+            return;
+        }
+
+        if (!newPin || newPin.length < 4 || newPin.length > 8) {
+            changePINState.error = 'New PIN must be 4-8 digits';
+            updateChangePINModal();
+            return;
+        }
+
+        if (newPin !== confirmPin) {
+            changePINState.error = 'New PINs do not match';
+            updateChangePINModal();
+            return;
+        }
+
+        if (oldPin === newPin) {
+            changePINState.error = 'New PIN must be different from current PIN';
+            updateChangePINModal();
+            return;
+        }
+
+        changePINState.oldPin = oldPin;
+        changePINState.newPin = newPin;
+        changePINState.confirmPin = confirmPin;
+        changePINState.error = '';
+        changePINState.isSubmitting = true;
+        updateChangePINModal();
+
+        // Send change PIN request
+        fetch('/api/auth/change-pin', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                old_pin: oldPin,
+                new_pin: newPin
+            })
+        })
+        .then(function(res) {
+            if (res.status === 403) {
+                throw new Error('Incorrect current PIN');
+            }
+            if (!res.ok) {
+                return res.text().then(function(text) {
+                    throw new Error(text || 'Failed to change PIN');
+                });
+            }
+            return res.json();
+        })
+        .then(function(data) {
+            closeChangePINModal();
+            SpaxelPanels.showSuccess('PIN changed successfully');
+        })
+        .catch(function(err) {
+            changePINState.error = err.message || 'Failed to change PIN';
+            changePINState.isSubmitting = false;
+            updateChangePINModal();
+        });
+    }
+
+    function updateChangePINModal() {
+        const modal = document.getElementById('change-pin-modal');
+        if (!modal) return;
+
+        const modalContent = modal.querySelector('.panel-modal');
+        if (modalContent) {
+            modalContent.innerHTML = renderChangePINModal().match(/<div class="panel-modal">([\s\S]*)<\/div>/)[1];
+            attachChangePINEvents(modal);
+        }
     }
 
     // ============================================

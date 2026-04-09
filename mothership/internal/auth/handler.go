@@ -168,6 +168,7 @@ func (h *Handler) RegisterRoutes(mux interface{ HandleFunc(pattern string, handl
 	mux.HandleFunc("POST /api/auth/setup", h.handleSetup)
 	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
+	mux.HandleFunc("POST /api/auth/change-pin", h.RequireAuth(h.handleChangePIN))
 }
 
 // handleStatus returns whether a PIN is configured.
@@ -381,6 +382,89 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	})
 
 	log.Printf("[INFO] Logout from %s", r.RemoteAddr)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+}
+
+// handleChangePIN changes the user's PIN.
+// Requires valid session (authenticated).
+func (h *Handler) handleChangePIN(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse request
+	var req struct {
+		OldPIN string `json:"old_pin"`
+		NewPIN string `json:"new_pin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Get current PIN hash
+	var currentHash string
+	err := h.db.QueryRow("SELECT pin_bcrypt FROM auth WHERE id = 1").Scan(&currentHash)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("[ERROR] Failed to get current PIN: %v", err)
+		return
+	}
+
+	if currentHash == "" {
+		http.Error(w, "PIN not configured", http.StatusNotFound)
+		return
+	}
+
+	// Verify old PIN matches current hash
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPIN)); err != nil {
+		// Old PIN doesn't match
+		http.Error(w, "Incorrect current PIN", http.StatusForbidden)
+		log.Printf("[WARN] Failed PIN change attempt from %s: incorrect old PIN", r.RemoteAddr)
+		return
+	}
+
+	// Validate new PIN
+	if len(req.NewPIN) < 4 || len(req.NewPIN) > 8 {
+		http.Error(w, "PIN must be 4-8 digits", http.StatusBadRequest)
+		return
+	}
+
+	// Ensure new PIN is numeric
+	for _, c := range req.NewPIN {
+		if c < '0' || c > '9' {
+			http.Error(w, "PIN must contain only digits", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Hash new PIN with bcrypt (cost 12)
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPIN), 12)
+	if err != nil {
+		http.Error(w, "Failed to hash PIN", http.StatusInternalServerError)
+		log.Printf("[ERROR] Failed to hash new PIN: %v", err)
+		return
+	}
+
+	// Update PIN in database
+	_, err = h.db.Exec(`
+		UPDATE auth
+		SET pin_bcrypt = ?, updated_at = ?
+		WHERE id = 1
+	`, newHash, time.Now().UnixMilli())
+	if err != nil {
+		http.Error(w, "Failed to update PIN", http.StatusInternalServerError)
+		log.Printf("[ERROR] Failed to update PIN: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] PIN changed successfully from %s", r.RemoteAddr)
+
+	// Note: Existing sessions remain valid after PIN change
+	// (session tokens are independent of PIN)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})

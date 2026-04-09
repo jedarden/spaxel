@@ -724,3 +724,241 @@ func TestHandleInstallSecret_AfterPINSet_Authorized(t *testing.T) {
 		t.Errorf("Expected 64-char hex secret, got %d chars", len(resp["install_secret"]))
 	}
 }
+
+func TestHandler_ChangePIN_Success(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	h, err := NewHandler(Config{DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+
+	// Setup PIN first
+	reqBody := `{"pin": "1234"}`
+	req := httptest.NewRequest("POST", "/api/auth/setup", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.handleSetup(w, req)
+
+	// Get session cookie
+	cookies := w.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "spaxel_session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("Session cookie not set")
+	}
+
+	// Change PIN
+	changeReqBody := `{"old_pin": "1234", "new_pin": "5678"}`
+	req = httptest.NewRequest("POST", "/api/auth/change-pin", strings.NewReader(changeReqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(sessionCookie)
+	w = httptest.NewRecorder()
+	h.handleChangePIN(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	if resp["ok"] != "true" {
+		t.Error("Expected ok: true response")
+	}
+
+	// Verify old PIN no longer works
+	loginReqBody := `{"pin": "1234"}`
+	req = httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(loginReqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	h.handleLogin(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected old PIN to be invalid (401), got %d", w.Code)
+	}
+
+	// Verify new PIN works
+	loginReqBody = `{"pin": "5678"}`
+	req = httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(loginReqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	h.handleLogin(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected new PIN to work (200), got %d", w.Code)
+	}
+
+	// Verify original session still works
+	req = httptest.NewRequest("GET", "/api/test", nil)
+	req.AddCookie(sessionCookie)
+	if !h.IsAuthenticated(req) {
+		t.Error("Expected original session to remain valid after PIN change")
+	}
+}
+
+func TestHandler_ChangePIN_WrongOldPIN(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	h, err := NewHandler(Config{DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+
+	// Setup PIN first
+	reqBody := `{"pin": "1234"}`
+	req := httptest.NewRequest("POST", "/api/auth/setup", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.handleSetup(w, req)
+
+	// Get session cookie
+	cookies := w.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "spaxel_session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("Session cookie not set")
+	}
+
+	// Try to change with wrong old PIN
+	changeReqBody := `{"old_pin": "9999", "new_pin": "5678"}`
+	req = httptest.NewRequest("POST", "/api/auth/change-pin", strings.NewReader(changeReqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(sessionCookie)
+	w = httptest.NewRecorder()
+	h.handleChangePIN(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403 for wrong old PIN, got %d", w.Code)
+	}
+
+	// Verify original PIN still works
+	loginReqBody := `{"pin": "1234"}`
+	req = httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(loginReqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	h.handleLogin(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected original PIN to still work after failed change, got %d", w.Code)
+	}
+}
+
+func TestHandler_ChangePIN_Unauthenticated(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	h, err := NewHandler(Config{DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+
+	// Setup PIN first
+	reqBody := `{"pin": "1234"}`
+	req := httptest.NewRequest("POST", "/api/auth/setup", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.handleSetup(w, req)
+
+	// Try to change PIN without authentication (no cookie)
+	changeReqBody := `{"old_pin": "1234", "new_pin": "5678"}`
+	req := httptest.NewRequest("POST", "/api/auth/change-pin", strings.NewReader(changeReqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+
+	// Use RequireAuth wrapper
+	wrappedHandler := h.RequireAuth(h.handleChangePIN)
+	wrappedHandler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 for unauthenticated request, got %d", w.Code)
+	}
+}
+
+func TestHandler_ChangePIN_InvalidNewPIN(t *testing.T) {
+	tests := []struct {
+		name       string
+		oldPIN     string
+		newPIN     string
+		wantStatus int
+	}{
+		{"too short", "1234", "123", http.StatusBadRequest},
+		{"too long", "1234", "123456789", http.StatusBadRequest},
+		{"non-numeric", "1234", "abcd", http.StatusBadRequest},
+		{"mixed", "1234", "12a4", http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+
+			h, err := NewHandler(Config{DB: db})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer h.Close()
+
+			// Setup PIN first
+			reqBody := `{"pin": "1234"}`
+			req := httptest.NewRequest("POST", "/api/auth/setup", strings.NewReader(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			h.handleSetup(w, req)
+
+			// Get session cookie
+			cookies := w.Result().Cookies()
+			var sessionCookie *http.Cookie
+			for _, c := range cookies {
+				if c.Name == "spaxel_session" {
+					sessionCookie = c
+					break
+				}
+			}
+			if sessionCookie == nil {
+				t.Fatal("Session cookie not set")
+			}
+
+			// Try to change with invalid new PIN
+			changeReqBody := `{"old_pin": "` + tt.oldPIN + `", "new_pin": "` + tt.newPIN + `"}`
+			req = httptest.NewRequest("POST", "/api/auth/change-pin", strings.NewReader(changeReqBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(sessionCookie)
+			w = httptest.NewRecorder()
+			h.handleChangePIN(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("Expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+}
