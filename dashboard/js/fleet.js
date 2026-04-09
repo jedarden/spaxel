@@ -259,6 +259,21 @@
                 color: #666;
                 margin-left: 0.5rem;
             }
+            .fleet-identify-btn {
+                background: rgba(255, 193, 7, 0.2);
+                border: 1px solid rgba(255, 193, 7, 0.4);
+                color: #ffc107;
+                font-size: 0.7rem;
+                padding: 0.15rem 0.4rem;
+                border-radius: 3px;
+                cursor: pointer;
+                transition: all 0.2s;
+                margin-left: 0.5rem;
+            }
+            .fleet-identify-btn:hover {
+                background: rgba(255, 193, 7, 0.3);
+                border-color: rgba(255, 193, 7, 0.6);
+            }
             .fleet-history-list {
                 max-height: 120px;
                 overflow-y: auto;
@@ -547,6 +562,7 @@
             var role = state.roles.get(mac) || node.role || 'rx';
             var healthScore = node.health_score || 0;
             var healthDisplay = healthScore > 0 ? (healthScore * 100).toFixed(0) + '%' : '--';
+            var isOnline = node.online || false;
 
             html += '<div class="fleet-role-item">' +
                 '<span class="node-mac">' + formatMAC(mac) + '</span>' +
@@ -554,6 +570,7 @@
                 '<span class="node-role ' + role + '">' + role + '</span>' +
                 '<span class="health-score">' + healthDisplay + '</span>' +
                 '</span>' +
+                (isOnline ? '<button class="fleet-identify-btn" onclick="FleetPanel.identifyNode(\'' + mac + '\')" title="Identify (blink LED)">⚡</button>' : '') +
                 '</div>';
         });
         container.innerHTML = html;
@@ -844,8 +861,39 @@
         handleFleetHealth: handleFleetHealth,
         showWarning: showWarning,
         dismissWarning: dismissWarning,
-        getState: function() { return state; }
+        getState: function() { return state; },
+        identifyNode: identifyNode
     };
+
+    // ============================================
+    // Identify Node Action
+    // ============================================
+    function identifyNode(mac, durationMs) {
+        var payload = durationMs ? JSON.stringify({ duration_ms: durationMs }) : JSON.stringify({});
+
+        fetch('/api/nodes/' + mac + '/identify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+        })
+        .then(function(res) {
+            if (!res.ok) {
+                throw new Error('Identify failed: ' + res.status);
+            }
+            return res.json();
+        })
+        .then(function(data) {
+            if (window.SpaxelApp && window.SpaxelApp.showToast) {
+                window.SpaxelApp.showToast('Identify command sent to ' + mac, 'success');
+            }
+        })
+        .catch(function(err) {
+            console.error('[Fleet] Identify error:', err);
+            if (window.SpaxelApp && window.SpaxelApp.showToast) {
+                window.SpaxelApp.showToast('Failed to identify ' + mac + ': ' + err.message, 'error');
+            }
+        });
+    }
 
     // Auto-init when DOM is ready
     if (document.readyState === 'loading') {
