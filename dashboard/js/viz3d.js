@@ -2107,6 +2107,270 @@ const Viz3D = (function () {
         });
     }
 
+    // ── GDOP Overlay Visualization ───────────────────────────────────────────────────
+
+    // GDOP overlay state
+    let _gdopOverlayVisible = false;
+    let _gdopMesh = null;          // THREE.Mesh with GDOP texture
+    let _gdopTexture = null;       // THREE.DataTexture with GDOP data
+    let _gdopData = null;         // Cached GDOP heatmap data
+    let _gdopLegendVisible = false;
+    let _gdopLegendSprites = [];  // Array of THREE.Sprite for legend
+
+    /**
+     * Set visibility of GDOP overlay layer.
+     * @param {boolean} visible - Whether to show GDOP overlay
+     */
+    function setGDOPOverlayVisible(visible) {
+        _gdopOverlayVisible = visible;
+
+        if (_gdopMesh) {
+            _gdopMesh.visible = visible;
+        }
+        if (_gdopLegendVisible) {
+            _gdopLegendSprites.forEach(function(sprite) {
+                sprite.visible = visible;
+            });
+        }
+
+        if (visible && !_gdopData) {
+            fetchGDOPData();
+        }
+    }
+
+    /**
+     * Fetch GDOP heatmap data from API.
+     */
+    function fetchGDOPData() {
+        fetch('/api/simulator/gdop/compute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                cell_size: 0.2,
+                max_zone: 3,
+                threshold: 0.02
+            })
+        })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                _gdopData = data;
+                updateGDOPOverlay(data);
+            })
+            .catch(function(err) {
+                console.error('[Viz3D] Failed to fetch GDOP data:', err);
+            });
+    }
+
+    /**
+     * Update the GDOP overlay with new data.
+     * @param {Object} data - GDOP computation results
+     */
+    function updateGDOPOverlay(data) {
+        if (!data || !data.gdop_heatmap) {
+            console.warn('[Viz3D] No GDOP heatmap data in response');
+            return;
+        }
+
+        var heatmap = data.gdop_heatmap;
+        var width = heatmap.width;
+        var depth = heatmap.depth;
+        var cellSize = heatmap.cell_size;
+        var originX = heatmap.origin_x;
+        var originY = heatmap.origin_y;
+
+        // Create texture from GDOP data
+        var gdopValues = new Float32Array(heatmap.gdop_values);
+        var colors = new Uint8Array(heatmap.colors.flat());
+
+        // Create data texture
+        if (_gdopTexture) {
+            _gdopTexture.dispose();
+        }
+
+        _gdopTexture = new THREE.DataTexture(colors, width, depth, THREE.RGBFormat);
+        _gdopTexture.needsUpdate = true;
+
+        // Create or update mesh
+        if (!_gdopMesh) {
+            var geo = new THREE.PlaneGeometry(
+                width * cellSize,
+                depth * cellSize
+            );
+            var mat = new THREE.MeshBasicMaterial({
+                map: _gdopTexture,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            _gdopMesh = new THREE.Mesh(geo, mat);
+            _gdopMesh.rotation.x = -Math.PI / 2;
+            _gdopMesh.position.set(
+                originX + (width * cellSize) / 2,
+                0.01, // Slightly above floor
+                originY + (depth * cellSize) / 2
+            );
+            _scene.add(_gdopMesh);
+            _gdopMesh.visible = _gdopOverlayVisible;
+        } else {
+            // Update existing mesh dimensions
+            _gdopMesh.geometry.dispose();
+            _gdopMesh.geometry = new THREE.PlaneGeometry(
+                width * cellSize,
+                depth * cellSize
+            );
+            _gdopMesh.position.set(
+                originX + (width * cellSize) / 2,
+                0.01,
+                originY + (depth * cellSize) / 2
+            );
+            _gdopMesh.material.map = _gdopTexture;
+        }
+
+        // Update or create legend
+        updateGDOPLegend(data.coverage_score);
+
+        console.log('[Viz3D] GDOP overlay updated:', data.coverage_score.toFixed(1) + '% coverage');
+    }
+
+    /**
+     * Update or create the GDOP legend.
+     * @param {number} coverageScore - Coverage percentage (0-100)
+     */
+    function updateGDOPLegend(coverageScore) {
+        // Clear existing legend sprites
+        _gdopLegendSprites.forEach(function(sprite) {
+            _scene.remove(sprite);
+        });
+        _gdopLegendSprites = [];
+
+        if (!_gdopOverlayVisible) {
+            return;
+        }
+
+        // Create legend sprites
+        var legendItems = [
+            { color: [34, 197, 94], label: 'Excellent', gdop: '< 2' },
+            { color: [255, 193, 7], label: 'Good', gdop: '2-4' },
+            { color: [255, 146, 0], label: 'Fair', gdop: '4-8' },
+            { color: [220, 53, 69], label: 'Poor', gdop: '> 8' },
+            { color: [80, 80, 80], label: 'None', gdop: '∞' }
+        ];
+
+        var startY = 1.5;
+        var spacing = 0.15;
+
+        legendItems.forEach(function(item, index) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+
+            var ctx = canvas.getContext('2d');
+
+            // Draw color box
+            ctx.fillStyle = 'rgb(' + item.color.join(',') + ')';
+            ctx.fillRect(10, 16, 32, 32);
+
+            // Draw border
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(10, 16, 32, 32);
+
+            // Draw label
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(item.label + ' (GDOP ' + item.gdop + ')', 50, 32);
+
+            // Create texture
+            var texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+
+            // Create sprite
+            var material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                depthTest: false
+            });
+
+            var sprite = new THREE.Sprite(material);
+            sprite.scale.set(1.5, 0.4, 1);
+            sprite.position.set(
+                (_room ? (_room.origin_x || 0) + _room.width + 0.5 : 6),
+                startY - index * spacing,
+                (_room ? (_room.origin_z || 0) + _room.depth / 2 : 2.5)
+            );
+
+            _scene.add(sprite);
+            _gdopLegendSprites.push(sprite);
+        });
+
+        // Add coverage score sprite
+        var scoreCanvas = document.createElement('canvas');
+        scoreCanvas.width = 256;
+        scoreCanvas.height = 64;
+
+        var scoreCtx = scoreCanvas.getContext('2d');
+        scoreCtx.fillStyle = '#ffffff';
+        scoreCtx.font = 'bold 28px Arial, sans-serif';
+        scoreCtx.textAlign = 'center';
+        scoreCtx.textBaseline = 'middle';
+        scoreCtx.fillText('Coverage: ' + coverageScore.toFixed(1) + '%', 128, 32);
+
+        var scoreTexture = new THREE.CanvasTexture(scoreCanvas);
+        scoreTexture.needsUpdate = true;
+
+        var scoreSprite = new THREE.Sprite(
+            new THREE.SpriteMaterial({
+                map: scoreTexture,
+                transparent: true,
+                depthTest: false
+            })
+        );
+        scoreSprite.scale.set(2, 0.5, 1);
+        scoreSprite.position.set(
+            (_room ? (_room.origin_x || 0) + _room.width + 0.5 : 6),
+            startY - legendItems.length * spacing - 0.2,
+            (_room ? (_room.origin_z || 0) + _room.depth / 2 : 2.5)
+        );
+
+        _scene.add(scoreSprite);
+        _gdopLegendSprites.push(scoreSprite);
+
+        _gdopLegendVisible = true;
+    }
+
+    /**
+     * Clear the GDOP overlay.
+     */
+    function clearGDOPOverlay() {
+        if (_gdopMesh) {
+            _scene.remove(_gdopMesh);
+            _gdopMesh.geometry.dispose();
+            _gdopMesh.material.dispose();
+            _gdopMesh = null;
+        }
+        if (_gdopTexture) {
+            _gdopTexture.dispose();
+            _gdopTexture = null;
+        }
+
+        _gdopData = null;
+    }
+
+    /**
+     * Get current GDOP overlay state.
+     * @returns {Object} State object
+     */
+    function getGDOPState() {
+        return {
+            visible: _gdopOverlayVisible,
+            hasData: _gdopData !== null,
+            coverageScore: _gdopData ? _gdopData.coverage_score : null
+        };
+    }
+
     /**
      * Focus the camera on a specific zone.
      * @param {string} zoneID - The zone ID to focus on
@@ -2611,6 +2875,10 @@ const Viz3D = (function () {
         enterReplayMode: enterReplayMode,
         exitReplayMode: exitReplayMode,
         updateReplayBlobs: updateReplayBlobs,
+        // GDOP overlay support
+        setGDOPOverlayVisible: setGDOPOverlayVisible,
+        clearGDOPOverlay: clearGDOPOverlay,
+        getGDOPState: getGDOPState,
     };
     // ── Replay Mode Support ─────────────────────────────────────────────────────
     // Store live blob states for replay mode restoration

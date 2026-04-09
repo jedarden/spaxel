@@ -32,6 +32,10 @@ type ReplaySession struct {
 
 	// Pipeline state for this session
 	baselineState map[string]*signal.BaselineState // per-link baseline
+
+	// Most recent blobs from replay fusion
+	LastBlobs    []BlobUpdate
+	LastBlobTime int64 // timestamp_ms of the last blob update
 }
 
 // FusionEngine is the interface required for replay blob generation.
@@ -253,8 +257,12 @@ func (w *Worker) processSession(s *ReplaySession) {
 	// Run fusion to generate blobs if we have a fusion engine
 	if w.fusionEngine != nil {
 		blobs := w.runFusion()
+		s.LastBlobs = blobs
+		s.LastBlobTime = frameTimeNS / 1e6
 		w.broadcaster.BroadcastReplayBlobs(blobs, frameTimeNS/1e6)
 	} else {
+		s.LastBlobs = []BlobUpdate{}
+		s.LastBlobTime = frameTimeNS / 1e6
 		w.broadcaster.BroadcastReplayBlobs([]BlobUpdate{}, frameTimeNS/1e6)
 	}
 }
@@ -343,6 +351,8 @@ func (w *Worker) StartSession(fromMS, toMS int64, speed int) (string, error) {
 		Params:    make(map[string]interface{}),
 		CreatedAt: time.Now(),
 		baselineState: make(map[string]*signal.BaselineState),
+		LastBlobs:    []BlobUpdate{},
+		LastBlobTime: fromMS,
 	}
 
 	w.sessions[id] = s

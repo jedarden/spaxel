@@ -547,6 +547,29 @@ func (h *ReplayHandler) getSessionState(w http.ResponseWriter, r *http.Request) 
 		progress = float64(session.CurrentMS-session.FromMS) / float64(duration)
 	}
 
+	// Convert replay blobs to API format
+	blobs := make([]map[string]interface{}, 0, len(session.LastBlobs))
+	for _, b := range session.LastBlobs {
+		blob := map[string]interface{}{
+			"id":                  b.ID,
+			"x":                   b.X,
+			"y":                   b.Y,
+			"z":                   b.Z,
+			"vx":                  b.VX,
+			"vy":                  b.VY,
+			"vz":                  b.VZ,
+			"weight":              b.Weight,
+			"posture":             b.Posture,
+			"person_id":           b.PersonID,
+			"person_label":        b.PersonLabel,
+			"person_color":        b.PersonColor,
+			"identity_confidence": b.IdentityConfidence,
+			"identity_source":     b.IdentitySource,
+			"trail":               b.Trail,
+		}
+		blobs = append(blobs, blob)
+	}
+
 	// Build response with session state and blobs
 	response := map[string]interface{}{
 		"session_id":  sessionID,
@@ -557,7 +580,8 @@ func (h *ReplayHandler) getSessionState(w http.ResponseWriter, r *http.Request) 
 		"speed":       session.Speed,
 		"progress":    progress,
 		"params":      session.Params,
-		"blobs":       []interface{}{}, // TODO: populate with actual blob data
+		"blobs":       blobs,
+		"timestamp_ms": session.LastBlobTime,
 	}
 
 	writeJSON(w, http.StatusOK, response)

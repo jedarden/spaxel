@@ -16,7 +16,12 @@
 		initialLoadLimit: 200,
 		fetchSinceHours: 24,
 		debounceMs: 300,
-		replaySeekWindowSec: 5 // seconds before/after event timestamp
+		replaySeekWindowSec: 5, // seconds before/after event timestamp
+		virtualization: {
+			enabled: true,
+			rootMargin: '200px', // load items 200px before they enter viewport
+			threshold: 0.01 // trigger when 1% of item is visible
+		}
 	};
 
 	// ============================================

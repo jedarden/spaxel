@@ -184,7 +184,7 @@ func isValidEventType(t string) bool {
 // GET /api/events — paginated event list with FTS5 search and keyset cursor pagination.
 //
 //	Query params: limit (default 50, max 500), before (timestamp_ms cursor),
-//	after (ISO8601), type, zone, person, q (FTS5 query).
+//	after (ISO8601), type, zone, person, q (FTS5 query), mode (expert|simple).
 //
 // GET /api/events/{id} — single event by ID.
 func (e *EventsHandler) RegisterRoutes(r chi.Router) {
@@ -259,6 +259,7 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	zone := r.URL.Query().Get("zone")
 	person := r.URL.Query().Get("person")
 	afterStr := r.URL.Query().Get("after")
+	mode := r.URL.Query().Get("mode") // "expert" or "simple" (default: simple)
 
 	// Validate event type
 	if eventType != "" && !isValidEventType(eventType) {
@@ -276,6 +277,22 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		afterTS = t.UnixNano() / 1e6
 	}
+
+	// In simple mode, filter out system-only event types
+	// Simple mode shows: zone_entry, zone_exit, portal_crossing, fall_alert, anomaly, security_alert, learning_milestone
+	// Simple mode hides: node_online, node_offline, ota_update, baseline_changed, system
+	simpleModeTypes := map[string]bool{
+		"zone_entry":        true,
+		"zone_exit":         true,
+		"portal_crossing":   true,
+		"fall_alert":        true,
+		"anomaly":           true,
+		"security_alert":    true,
+		"learning_milestone": true,
+		"presence_transition": true,
+		"stationary_detected": true,
+	}
+	isSimpleMode := mode != "expert"
 
 	// Prepare FTS5 query with prefix matching
 	if q != "" {
@@ -306,32 +323,29 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		baseArgs = []interface{}{}
 	}
 
-	// Collect filter conditions (excludes before cursor — that's pagination, not filtering)
-	type cond struct {
-		sql string
-		arg interface{}
-	}
-	var filters []cond
-
-	if eventType != "" {
-		filters = append(filters, cond{p + "type = ?", eventType})
-	}
-	if zone != "" {
-		filters = append(filters, cond{p + "zone = ?", zone})
-	}
-	if person != "" {
-		filters = append(filters, cond{p + "person = ?", person})
-	}
-	if afterTS > 0 {
-		filters = append(filters, cond{p + "timestamp_ms >= ?", afterTS})
-	}
-
-	// Build WHERE clause with all filters (no before, no LIMIT)
+	// Build WHERE clause with filters
 	whereSQL := baseWhere
 	whereArgs := append([]interface{}{}, baseArgs...)
-	for _, f := range filters {
-		whereSQL += " AND " + f.sql
-		whereArgs = append(whereArgs, f.arg)
+
+	if eventType != "" {
+		whereSQL += " AND " + p + "type = ?"
+		whereArgs = append(whereArgs, eventType)
+	} else if isSimpleMode {
+		// In simple mode with no explicit type filter, exclude system event types
+		whereSQL += " AND " + p + "type NOT IN (?, ?, ?, ?, ?)"
+		whereArgs = append(whereArgs, "node_online", "node_offline", "ota_update", "baseline_changed", "system")
+	}
+	if zone != "" {
+		whereSQL += " AND " + p + "zone = ?"
+		whereArgs = append(whereArgs, zone)
+	}
+	if person != "" {
+		whereSQL += " AND " + p + "person = ?"
+		whereArgs = append(whereArgs, person)
+	}
+	if afterTS > 0 {
+		whereSQL += " AND " + p + "timestamp_ms >= ?"
+		whereArgs = append(whereArgs, afterTS)
 	}
 
 	// COUNT for total_filtered
