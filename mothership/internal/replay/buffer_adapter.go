@@ -5,6 +5,8 @@
 package replay
 
 import (
+	"time"
+
 	"github.com/spaxel/mothership/internal/recording"
 )
 
@@ -35,6 +37,14 @@ func (a *BufferAdapter) Stats() Stats {
 // The recording.Buffer's Scan method signature matches what we need.
 func (a *BufferAdapter) Scan(fn func(recvTimeNS int64, frame []byte) bool) error {
 	return a.buf.Scan(fn)
+}
+
+// ScanRange reads records whose recvTimeNS falls within [fromNS, toNS] (inclusive).
+// Records are delivered oldest-first. Returning false from fn stops the scan early.
+func (a *BufferAdapter) ScanRange(fromNS, toNS int64, fn func(recvTimeNS int64, frame []byte) bool) error {
+	from := time.Unix(0, fromNS)
+	to := time.Unix(0, toNS)
+	return a.buf.ScanRange(from, to, fn)
 }
 
 // Close closes the underlying recording buffer.

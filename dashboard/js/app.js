@@ -753,6 +753,13 @@
                 }
                 break;
 
+            case 'replay_update':
+                // Replay blob updates during time-travel debugging
+                if (msg.blobs && Viz3D.updateReplayBlobs) {
+                    Viz3D.updateReplayBlobs(msg.blobs, msg.timestamp_ms);
+                }
+                break;
+
             default:
                 // Log unhandled types for future debugging
                 console.log('[Spaxel] Unknown message type:', msg.type, msg);

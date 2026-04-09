@@ -53,6 +53,7 @@ type Worker struct {
 type RecordingStore interface {
 	Stats() Stats
 	Scan(fn func(recvTimeNS int64, frame []byte) bool) error
+	ScanRange(fromNS, toNS int64, fn func(recvTimeNS int64, frame []byte) bool) error
 	Close() error
 }
 
@@ -182,27 +183,36 @@ func (w *Worker) tick() {
 // processSession reads and processes frames for a session.
 func (w *Worker) processSession(s *ReplaySession) {
 	// Read next frame(s) from replay store
+	// Use ScanRange to only read frames after current position
 	var frameData []byte
 	var frameTimeNS int64
+	frameFound := false
 
-	err := w.store.Scan(func(recvTimeNS int64, frame []byte) bool {
+	// Scan from current position to end of session, looking for the next frame
+	// We add a small lookahead window (1 second worth at 20 Hz = 20 frames) to find the next frame
+	fromNS := s.CurrentMS * 1e6
+	toNS := s.ToMS * 1e6
+	if toNS <= fromNS {
+		// At end of session
+		s.State = "paused"
+		return
+	}
+
+	// Look ahead for the next frame after current position
+	err := w.store.ScanRange(fromNS, toNS, func(recvTimeNS int64, frame []byte) bool {
 		recvMS := recvTimeNS / 1e6
-		if recvMS < s.CurrentMS {
-			return true // skip frames before current position
+		if recvMS <= s.CurrentMS {
+			return true // skip frames at or before current position
 		}
-		if recvMS > s.ToMS {
-			return false // past session end
-		}
-		if recvMS > s.CurrentMS {
-			frameTimeNS = recvTimeNS
-			frameData = frame
-			s.CurrentMS = recvMS
-			return false // stop at first frame after current position
-		}
-		return true
+		// Found next frame
+		frameTimeNS = recvTimeNS
+		frameData = frame
+		frameFound = true
+		s.CurrentMS = recvMS
+		return false // stop at first frame after current position
 	})
 
-	if err != nil || len(frameData) == 0 {
+	if err != nil || !frameFound || len(frameData) == 0 {
 		// No more frames in this session
 		s.State = "paused"
 		return

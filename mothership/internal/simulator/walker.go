@@ -12,8 +12,9 @@ import (
 type WalkerType string
 
 const (
-	WalkerTypeRandomWalk WalkerType = "random_walk" // Random Gaussian walk
-	WalkerTypePathFollow  WalkerType = "path_follow"  // Follow a predefined path
+	WalkerTypeRandomWalk  WalkerType = "random_walk"  // Random Gaussian walk
+	WalkerTypePathFollow   WalkerType = "path_follow"   // Follow a predefined path
+	WalkerTypeNodeToNode   WalkerType = "node_to_node"  // Traverse between virtual nodes
 )
 
 // Walker represents a simulated person moving through the space
@@ -28,6 +29,12 @@ type Walker struct {
 	Speed      float64    `json:"speed"`                // Movement speed in m/s
 	Height     float64    `json:"height"`               // Person height in meters
 	BLEAddress string     `json:"ble_address,omitempty"` // Simulated BLE device
+	// Node-to-node traversal fields
+	Nodes      []*Node    `json:"nodes,omitempty"`      // List of nodes to visit
+	NodeIndex  int        `json:"node_index,omitempty"` // Current target node index
+	WaitTimer  float64    `json:"wait_timer,omitempty"` // Time remaining at current node
+	WaitTime   float64    `json:"wait_time,omitempty"`  // How long to wait at each node (seconds)
+	ShouldWait bool       `json:"should_wait,omitempty"` // Whether to wait at nodes
 }
 
 // NewWalker creates a new walker at the given position
@@ -70,6 +77,33 @@ func NewPathWalker(id string, path []Point, speed float64) *Walker {
 	return w
 }
 
+// NewNodeToNodeWalker creates a walker that traverses between virtual nodes
+func NewNodeToNodeWalker(id string, nodes []*Node, speed float64, waitTime float64) *Walker {
+	if len(nodes) == 0 {
+		panic("nodes cannot be empty")
+	}
+	if len(nodes) == 1 {
+		panic("need at least 2 nodes for node-to-node traversal")
+	}
+
+	// Start at the first node
+	w := NewWalker(id, nodes[0].Position)
+	w.Type = WalkerTypeNodeToNode
+	w.Nodes = nodes
+	w.NodeIndex = 1 // Target is the second node
+	w.Speed = speed
+	w.WaitTime = waitTime
+	w.WaitTimer = waitTime
+	w.ShouldWait = waitTime > 0
+
+	return w
+}
+
+// NewNodeToNodeWalkerNoWait creates a walker that traverses between nodes without waiting
+func NewNodeToNodeWalkerNoWait(id string, nodes []*Node, speed float64) *Walker {
+	return NewNodeToNodeWalker(id, nodes, speed, 0)
+}
+
 // Update updates the walker's position based on their movement type
 // dt is the time step in seconds
 func (w *Walker) Update(dt float64, space *Space) {
@@ -78,6 +112,8 @@ func (w *Walker) Update(dt float64, space *Space) {
 		w.updateRandomWalk(dt, space)
 	case WalkerTypePathFollow:
 		w.updatePathFollow(dt)
+	case WalkerTypeNodeToNode:
+		w.updateNodeToNode(dt, space)
 	}
 }
 
@@ -170,6 +206,78 @@ func (w *Walker) updatePathFollow(dt float64) {
 	w.Velocity.Z = (dz / dist) * w.Speed
 }
 
+// updateNodeToNode implements traversal between virtual nodes
+func (w *Walker) updateNodeToNode(dt float64, space *Space) {
+	// If no nodes configured, fall back to random walk
+	if len(w.Nodes) == 0 {
+		w.updateRandomWalk(dt, space)
+		return
+	}
+
+	// Get current target node
+	targetNode := w.Nodes[w.NodeIndex]
+	targetPos := targetNode.Position
+
+	// Vector to target
+	dx := targetPos.X - w.Position.X
+	dy := targetPos.Y - w.Position.Y
+	dz := targetPos.Z - w.Position.Z
+	dist := math.Sqrt(dx*dx + dy*dy + dz*dz)
+
+	// Check if we've arrived at the target node
+	if dist < 0.3 { // Within 30cm of node
+		// Wait at node if configured
+		if w.ShouldWait {
+			if w.WaitTimer > 0 {
+				// Still waiting
+				w.WaitTimer -= dt
+				// Set velocity to zero while waiting
+				w.Velocity = Point{X: 0, Y: 0, Z: 0}
+				return
+			}
+			// Done waiting, reset timer for next node
+			w.WaitTimer = w.WaitTime
+		}
+
+		// Move to next node
+		w.NodeIndex = (w.NodeIndex + 1) % len(w.Nodes)
+		return
+	}
+
+	// Move towards target node
+	// Calculate speed variation for realism (0.8x to 1.2x base speed)
+	speedVariation := 0.8 + 0.4*rand.Float64()
+	currentSpeed := w.Speed * speedVariation
+
+	// Accelerate/decelerate naturally when starting/stopping
+	maxSpeed := currentSpeed
+	if dist < 1.0 {
+		// Slow down when approaching target
+		maxSpeed = currentSpeed * (dist / 1.0)
+		if maxSpeed < 0.1 {
+			maxSpeed = 0.1
+		}
+	}
+
+	moveDist := maxSpeed * dt
+	if moveDist > dist {
+		moveDist = dist
+	}
+
+	t := moveDist / dist
+	w.Position.X += dx * t
+	w.Position.Y += dy * t
+	w.Position.Z += dz * t
+
+	// Update velocity vector for consistency
+	w.Velocity.X = (dx / dist) * maxSpeed
+	w.Velocity.Y = (dy / dist) * maxSpeed
+	w.Velocity.Z = (dz / dist) * maxSpeed
+
+	// Keep walker at standing height
+	w.Position.Z = w.Height
+}
+
 // WalkerSet is a collection of walkers
 type WalkerSet struct {
 	walkers []*Walker
@@ -193,6 +301,16 @@ func (ws *WalkerSet) AddRandomWalker(id string, position Point, speed float64) {
 // AddPathWalker adds a path-following walker
 func (ws *WalkerSet) AddPathWalker(id string, path []Point, speed float64) {
 	ws.Add(NewPathWalker(id, path, speed))
+}
+
+// AddNodeToNodeWalker adds a node-to-node traversal walker
+func (ws *WalkerSet) AddNodeToNodeWalker(id string, nodes []*Node, speed float64, waitTime float64) {
+	ws.Add(NewNodeToNodeWalker(id, nodes, speed, waitTime))
+}
+
+// AddNodeToNodeWalkerNoWait adds a node-to-node walker that doesn't wait at nodes
+func (ws *WalkerSet) AddNodeToNodeWalkerNoWait(id string, nodes []*Node, speed float64) {
+	ws.Add(NewNodeToNodeWalkerNoWait(id, nodes, speed))
 }
 
 // Count returns the number of walkers
@@ -307,6 +425,57 @@ func CreatePathWalkers(count int, space *Space) *WalkerSet {
 	}
 
 	return ws
+}
+
+// CreateNodeToNodeWalkers creates walkers that traverse between virtual nodes
+// The walkers move from node to node, optionally waiting at each node
+func CreateNodeToNodeWalkers(count int, nodes *NodeSet, speed float64, waitTime float64) *WalkerSet {
+	ws := NewWalkerSet()
+
+	allNodes := nodes.All()
+	if len(allNodes) < 2 {
+		// Not enough nodes, return empty set
+		return ws
+	}
+
+	for i := 0; i < count; i++ {
+		// Each walker gets the same set of nodes but starts at a different target
+		// Create a copy of nodes for this walker
+		nodeList := make([]*Node, len(allNodes))
+		copy(nodeList, allNodes)
+
+		// Shuffle the node order for variety (except first, keep it consistent)
+		if i > 0 && len(nodeList) > 2 {
+			// Simple rotation for variety
+			offset := i % (len(nodeList) - 1)
+			for j := 0; j < offset; j++ {
+				// Rotate nodes[1:] by one position
+				first := nodeList[1]
+				copy(nodeList[1:], nodeList[2:])
+				nodeList[len(nodeList)-1] = first
+			}
+		}
+
+		walker := NewNodeToNodeWalker(
+			fmt.Sprintf("walker-%d", i),
+			nodeList,
+			speed,
+			waitTime,
+		)
+
+		// Start at first node position
+		walker.Position = nodeList[0].Position
+		walker.NodeIndex = 1 // Target is second node
+
+		ws.Add(walker)
+	}
+
+	return ws
+}
+
+// CreateNodeToNodeWalkersNoWait creates node-to-node walkers that don't wait at nodes
+func CreateNodeToNodeWalkersNoWait(count int, nodes *NodeSet, speed float64) *WalkerSet {
+	return CreateNodeToNodeWalkers(count, nodes, speed, 0)
 }
 
 // SimulationTick represents one tick of simulation state
