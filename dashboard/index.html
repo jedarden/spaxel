@@ -2428,6 +2428,38 @@
         .tuning-btn.reset:hover {
             background: rgba(255, 255, 255, 0.15);
         }
+
+        /* Fresnel zone debug tooltip */
+        .fresnel-tooltip {
+            position: fixed;
+            display: none;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(79, 195, 247, 0.5);
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #eee;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 280px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .fresnel-tooltip strong {
+            color: #4fc3f7;
+        }
+
+        /* Fresnel ellipsoid hover effect on link items */
+        .link-item.fresnel-hover {
+            background: rgba(79, 195, 247, 0.15);
+            border-left: 2px solid #4fc3f7;
+        }
+        .link-item.flash-highlight {
+            animation: flashLink 1s ease-out;
+        }
+        @keyframes flashLink {
+            0%, 100% { background: transparent; }
+            50% { background: rgba(79, 195, 247, 0.3); }
+        }
     </style>
 </head>
 <body>
@@ -2556,6 +2588,15 @@
                 </div>
             </div>
         </div>
+        <div class="link-section" id="debug-section" style="display: none;">
+            <h3>Debug</h3>
+            <div id="debug-controls">
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="fresnel-zones-toggle" onchange="toggleFresnelDebugOverlay(this.checked)">
+                    <span>Fresnel Zones</span>
+                </label>
+            </div>
+        </div>
     </div>
 
     <!-- Amplitude chart -->
@@ -2591,6 +2632,8 @@
     <script src="js/auth.js"></script>
     <!-- 3-D spatial visualisation layer -->
     <script src="js/viz3d.js"></script>
+    <!-- Fresnel zone helper (shared with explainability) -->
+    <script src="js/fresnel.js"></script>
     <!-- Node placement, GDOP coverage, room editor -->
     <script src="js/placement.js"></script>
     <!-- Panel Framework (must load before modules that use it) -->

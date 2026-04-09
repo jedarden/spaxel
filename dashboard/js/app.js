@@ -61,7 +61,13 @@
         // Event dedup: set of recently processed event IDs to avoid double-processing
         // from immediate broadcast + delta buffering
         recentEventIDs: new Set(),
-        recentEventIDsPruneAt: 0
+        recentEventIDsPruneAt: 0,
+        // Fresnel debug overlay state
+        fresnelDebugVisible: false,
+        fresnelEllipsoids: new Map(),  // linkID -> { wireframe, fill, data }
+        fresnelRaycaster: new THREE.Raycaster(),
+        fresnelMouse: new THREE.Vector2(),
+        fresnelHoveredEllipsoid: null
     };
 
     // ============================================
@@ -1728,6 +1734,284 @@
             // Turn on
             Viz3D.toggleFresnelZones(true);
             if (btn) btn.classList.add('active');
+        }
+    };
+
+    // ============================================
+    // Fresnel Zone Debug Overlay
+    // ============================================
+
+    /**
+     * Toggle Fresnel zone debug overlay for all active links.
+     * @param {boolean} visible - Whether to show Fresnel zones
+     */
+    window.toggleFresnelDebugOverlay = function(visible) {
+        state.fresnelDebugVisible = visible;
+
+        if (visible) {
+            rebuildFresnelDebugEllipsoids();
+        } else {
+            clearFresnelDebugEllipsoids();
+        }
+    };
+
+    /**
+     * Rebuild Fresnel zone ellipsoids for all active links.
+     * Called when the overlay is toggled on or when links change.
+     */
+    function rebuildFresnelDebugEllipsoids() {
+        if (!state.fresnelDebugVisible) return;
+        if (!window.Fresnel) {
+            console.warn('[Fresnel Debug] Fresnel module not loaded');
+            return;
+        }
+
+        // Clear existing ellipsoids
+        clearFresnelDebugEllipsoids();
+
+        // Get node positions from Viz3D
+        var nodeMeshes = Viz3D.getNodeMesh ? Viz3D.getNodeMesh() : new Map();
+
+        // Create ellipsoids for each active link
+        state.links.forEach(function(link, linkID) {
+            var parts = linkID.split(':');
+            if (parts.length < 2) return;
+
+            var txMAC = link.nodeMAC || parts[0];
+            var rxMAC = link.peerMAC || parts[1];
+
+            var txMesh = nodeMeshes.get(txMAC);
+            var rxMesh = nodeMeshes.get(rxMAC);
+
+            if (!txMesh || !rxMesh) return;
+
+            var tx = txMesh.position;
+            var rx = rxMesh.position;
+
+            // Get channel from link health data (default to 6 for 2.4 GHz)
+            var healthData = state.worstLinkID === linkID ? { score: state.worstLinkScore } : null;
+            var channel = 6; // Default 2.4 GHz channel
+
+            // Determine color based on link health
+            var healthScore = healthData ? healthData.score : 0.5;
+            var color = getFresnelHealthColor(healthScore);
+
+            // Create Fresnel ellipsoid
+            var ellipsoid = window.Fresnel.addFresnelEllipsoid(tx, rx, channel, color);
+            if (ellipsoid) {
+                // Store link info in userData for interactions
+                ellipsoid.wireframe.userData.linkID = linkID;
+                ellipsoid.wireframe.userData.txMAC = txMAC;
+                ellipsoid.wireframe.userData.rxMAC = rxMAC;
+                ellipsoid.fill.userData.linkID = linkID;
+                ellipsoid.fill.userData.txMAC = txMAC;
+                ellipsoid.fill.userData.rxMAC = rxMAC;
+
+                state.fresnelEllipsoids.set(linkID, ellipsoid);
+            }
+        });
+
+        console.log('[Fresnel Debug] Created ' + state.fresnelEllipsoids.size + ' Fresnel ellipsoids');
+    }
+
+    /**
+     * Clear all Fresnel debug ellipsoids from the scene.
+     */
+    function clearFresnelDebugEllipsoids() {
+        state.fresnelEllipsoids.forEach(function(ellipsoid) {
+            if (window.Fresnel) {
+                window.Fresnel.removeFresnelEllipsoid(ellipsoid);
+            }
+        });
+        state.fresnelEllipsoids.clear();
+        hideFresnelTooltip();
+    }
+
+    /**
+     * Get color for Fresnel zone based on link health score.
+     * @param {number} score - Health score (0-1)
+     * @returns {number} Color hex value
+     */
+    function getFresnelHealthColor(score) {
+        if (score >= 0.7) return 0x66bb6a; // green
+        if (score >= 0.4) return 0xeab308; // yellow
+        return 0xef4444; // red
+    }
+
+    /**
+     * Handle mouse move events for Fresnel ellipsoid hover detection.
+     */
+    function onFresnelMouseMove(event) {
+        if (!state.fresnelDebugVisible) return;
+
+        // Calculate mouse position in normalized device coordinates
+        var rect = renderer.domElement.getBoundingClientRect();
+        state.fresnelMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        state.fresnelMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Raycast against all Fresnel ellipsoids
+        state.fresnelRaycaster.setFromCamera(state.fresnelMouse, camera);
+
+        var intersects = [];
+        state.fresnelEllipsoids.forEach(function(ellipsoid) {
+            var result = state.fresnelRaycaster.intersectObject(ellipsoid.fill, true);
+            if (result.length > 0) {
+                intersects.push(result[0]);
+            }
+        });
+
+        if (intersects.length > 0) {
+            var intersect = intersects[0];
+            var linkID = intersect.object.userData.linkID;
+
+            if (state.fresnelHoveredEllipsoid !== linkID) {
+                // New hover
+                state.fresnelHoveredEllipsoid = linkID;
+                highlightFresnelLink(linkID, true);
+                showFresnelTooltip(event, linkID, intersect.point);
+            } else {
+                // Update tooltip position
+                updateFresnelTooltipPosition(event);
+            }
+        } else {
+            if (state.fresnelHoveredEllipsoid !== null) {
+                // Hover ended
+                highlightFresnelLink(state.fresnelHoveredEllipsoid, false);
+                state.fresnelHoveredEllipsoid = null;
+                hideFresnelTooltip();
+            }
+        }
+    }
+
+    /**
+     * Handle click events on Fresnel ellipsoids.
+     */
+    function onFresnelClick(event) {
+        if (!state.fresnelDebugVisible || state.fresnelHoveredEllipsoid === null) return;
+
+        var linkID = state.fresnelHoveredEllipsoid;
+
+        // Select the corresponding link in the link panel
+        selectLink(linkID);
+
+        // Flash the link entry to highlight it
+        var linkItem = document.querySelector('.link-item[data-link-id="' + linkID + '"]');
+        if (linkItem) {
+            linkItem.classList.add('flash-highlight');
+            setTimeout(function() {
+                linkItem.classList.remove('flash-highlight');
+            }, 1000);
+        }
+    }
+
+    /**
+     * Highlight or unhighlight a link when its Fresnel ellipsoid is hovered.
+     * @param {string} linkID - Link ID
+     * @param {boolean} highlight - Whether to highlight
+     */
+    function highlightFresnelLink(linkID, highlight) {
+        var linkItem = document.querySelector('.link-item[data-link-id="' + linkID + '"]');
+        if (linkItem) {
+            if (highlight) {
+                linkItem.classList.add('fresnel-hover');
+            } else {
+                linkItem.classList.remove('fresnel-hover');
+            }
+        }
+
+        // Also highlight the link line in 3D if Viz3D supports it
+        if (window.Viz3D && window.Viz3D.highlightLink) {
+            window.Viz3D.highlightLink(linkID, highlight);
+        }
+    }
+
+    /**
+     * Show tooltip with Fresnel ellipsoid details.
+     * @param {MouseEvent} event - Mouse event
+     * @param {string} linkID - Link ID
+     * @param {THREE.Vector3} point - 3D point of intersection
+     */
+    function showFresnelTooltip(event, linkID, point) {
+        var tooltip = document.getElementById('fresnel-tooltip');
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'fresnel-tooltip';
+            tooltip.className = 'fresnel-tooltip';
+            document.body.appendChild(tooltip);
+        }
+
+        var link = state.links.get(linkID);
+        var ellipsoid = state.fresnelEllipsoids.get(linkID);
+        if (!link || !ellipsoid) return;
+
+        var data = ellipsoid.data;
+        var healthScore = state.worstLinkID === linkID ? state.worstLinkScore : 0.5;
+
+        var txLabel = state.nodes.get(data.txMAC) ? state.nodes.get(data.txMAC).mac : data.txMAC;
+        var rxLabel = state.nodes.get(data.rxMAC) ? state.nodes.get(data.rxMAC).mac : data.rxMAC;
+
+        tooltip.innerHTML =
+            '<strong>Link:</strong> ' + abbreviateLinkID(linkID) + '<br>' +
+            '<strong>TX:</strong> ' + txLabel + '<br>' +
+            '<strong>RX:</strong> ' + rxLabel + '<br>' +
+            '<strong>Fresnel radius at midpoint:</strong> ' + data.b.toFixed(3) + ' m<br>' +
+            '<strong>Link distance:</strong> ' + data.d.toFixed(2) + ' m<br>' +
+            '<strong>Wavelength:</strong> ' + data.lambda.toFixed(3) + ' m (ch ' + data.channel + ')<br>' +
+            '<strong>Link health:</strong> ' + Math.round(healthScore * 100) + '%';
+
+        tooltip.style.display = 'block';
+        updateFresnelTooltipPosition(event);
+    }
+
+    /**
+     * Update tooltip position based on mouse event.
+     * @param {MouseEvent} event - Mouse event
+     */
+    function updateFresnelTooltipPosition(event) {
+        var tooltip = document.getElementById('fresnel-tooltip');
+        if (!tooltip) return;
+
+        tooltip.style.left = (event.clientX + 15) + 'px';
+        tooltip.style.top = (event.clientY + 15) + 'px';
+    }
+
+    /**
+     * Hide the Fresnel tooltip.
+     */
+    function hideFresnelTooltip() {
+        var tooltip = document.getElementById('fresnel-tooltip');
+        if (tooltip) {
+            tooltip.style.display = 'none';
+        }
+    }
+
+    // Add Fresnel interaction event listeners after scene initialization
+    var originalInitScene = initScene;
+    initScene = function() {
+        originalInitScene();
+
+        // Initialize Fresnel module with scene
+        if (window.Fresnel && window.Fresnel.init) {
+            window.Fresnel.init(scene);
+        }
+
+        // Add event listeners for Fresnel interaction
+        renderer.domElement.addEventListener('mousemove', onFresnelMouseMove);
+        renderer.domElement.addEventListener('click', onFresnelClick);
+
+        // Show debug section if expert mode (always visible for now)
+        var debugSection = document.getElementById('debug-section');
+        if (debugSection) {
+            debugSection.style.display = 'block';
+        }
+    };
+
+    // Update Fresnel ellipsoids when links change
+    var originalUpdateLinkList = updateLinkList;
+    updateLinkList = function() {
+        originalUpdateLinkList();
+        if (state.fresnelDebugVisible) {
+            rebuildFresnelDebugEllipsoids();
         }
     };
 })();
