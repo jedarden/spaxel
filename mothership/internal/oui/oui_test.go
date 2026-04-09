@@ -14,50 +14,50 @@ func TestLookupOUI(t *testing.T) {
 	}{
 		{
 			name:      "Apple OUI",
-			mac:       "00:11:B0:AA:BB:CC",
-			want:      "AppleComputer",
+			mac:       "00:50:E4:AA:BB:CC",
+			want:      "Apple, Inc.",
 			wantEmpty: false,
 		},
 		{
 			name:      "Cisco OUI",
 			mac:       "00:12:00:AA:BB:CC",
-			want:      "CiscroSystems",
+			want:      "Cisco Systems, Inc",
 			wantEmpty: false,
 		},
 		{
 			name:      "Netgear OUI",
-			mac:       "00:15:F2:AA:BB:CC",
-			want:      "Netgear",
+			mac:       "00:09:5B:AA:BB:CC",
+			want:      "NETGEAR",
 			wantEmpty: false,
 		},
 		{
 			name:      "ASUS OUI",
-			mac:       "00:16:0A:AA:BB:CC",
-			want:      "ASUSTekComputer",
+			mac:       "00:15:F2:AA:BB:CC",
+			want:      "ASUSTek COMPUTER INC.",
 			wantEmpty: false,
 		},
 		{
-			name:      "Google OUI",
+			name:      "AVM OUI",
 			mac:       "00:1A:4F:AA:BB:CC",
-			want:      "Google",
+			want:      "AVM GmbH",
 			wantEmpty: false,
 		},
 		{
 			name:      "Intel OUI",
-			mac:       "00:1A:CD:AA:BB:CC",
-			want:      "Intel",
+			mac:       "00:02:B3:AA:BB:CC",
+			want:      "Intel Corporation",
 			wantEmpty: false,
 		},
 		{
 			name:      "Realtek OUI",
-			mac:       "00:50:E4:AA:BB:CC",
-			want:      "RealtekSemiconductor",
+			mac:       "00:E0:4C:AA:BB:CC",
+			want:      "REALTEK SEMICONDUCTOR CORP.",
 			wantEmpty: false,
 		},
 		{
 			name:      "Amazon OUI",
-			mac:       "10:BF:48:AA:BB:CC",
-			want:      "AmazonTechnologies",
+			mac:       "00:71:47:AA:BB:CC",
+			want:      "Amazon Technologies Inc.",
 			wantEmpty: false,
 		},
 		{
@@ -74,14 +74,14 @@ func TestLookupOUI(t *testing.T) {
 		},
 		{
 			name:      "Lowercase MAC",
-			mac:       "00:11:b0:aa:bb:cc",
-			want:      "AppleComputer",
+			mac:       "00:50:e4:aa:bb:cc",
+			want:      "Apple, Inc.",
 			wantEmpty: false,
 		},
 		{
 			name:      "Mixed case MAC",
-			mac:       "00:11:B0:aA:Bb:Cc",
-			want:      "AppleComputer",
+			mac:       "00:50:E4:aA:Bb:Cc",
+			want:      "Apple, Inc.",
 			wantEmpty: false,
 		},
 		{
@@ -98,14 +98,14 @@ func TestLookupOUI(t *testing.T) {
 		},
 		{
 			name:      "Exact OUI match - HP",
-			mac:       "00:13:D1:AA:BB:CC",
-			want:      "HP",
+			mac:       "00:16:B9:AA:BB:CC",
+			want:      "ProCurve Networking by HP",
 			wantEmpty: false,
 		},
 		{
 			name:      "Exact OUI match - D-Link",
-			mac:       "00:13:A0:AA:BB:CC",
-			want:      "DLinkCorporation",
+			mac:       "00:05:5D:AA:BB:CC",
+			want:      "D-LINK SYSTEMS, INC.",
 			wantEmpty: false,
 		},
 	}
@@ -142,14 +142,14 @@ func TestLookupOUI_WithBytes(t *testing.T) {
 	}{
 		{
 			name:      "Apple bytes",
-			macBytes:  []byte{0x00, 0x11, 0xB0, 0xAA, 0xBB, 0xCC},
-			want:      "AppleComputer",
+			macBytes:  []byte{0x00, 0x50, 0xE4, 0xAA, 0xBB, 0xCC},
+			want:      "Apple, Inc.",
 			wantEmpty: false,
 		},
 		{
 			name:      "Cisco bytes",
 			macBytes:  []byte{0x00, 0x12, 0x00, 0xAA, 0xBB, 0xCC},
-			want:      "CiscroSystems",
+			want:      "Cisco Systems, Inc",
 			wantEmpty: false,
 		},
 		{
@@ -209,14 +209,14 @@ func TestLookupOUI_NoPanic(t *testing.T) {
 
 func TestLookupOUI_BigEndian(t *testing.T) {
 	// Test that the OUI lookup uses big-endian byte order
-	// For OUI 00:11:B0, the bytes are [0x00, 0x11, 0xB0]
-	// The key should be 0x000011B0 (or 0x11B0 after shift)
-	mac := []byte{0x00, 0x11, 0xB0, 0xAA, 0xBB, 0xCC}
+	// For OUI 00:50:E4, the bytes are [0x00, 0x50, 0xE4]
+	// The key should be 0x0050E4
+	mac := []byte{0x00, 0x50, 0xE4, 0xAA, 0xBB, 0xCC}
 	got := LookupOUI(mac)
 
 	// If big-endian is used correctly, this should match Apple
-	if got != "AppleComputer" {
-		t.Errorf("LookupOUI with big-endian OUI = %q; want 'AppleComputer'", got)
+	if got != "Apple, Inc." {
+		t.Errorf("LookupOUI with big-endian OUI = %q; want 'Apple, Inc.'", got)
 	}
 }
 
