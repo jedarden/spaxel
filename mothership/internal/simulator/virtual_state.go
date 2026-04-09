@@ -552,14 +552,26 @@ func (s *VirtualNodeStore) Close() error {
 		return nil
 	}
 
-	s.closed = false
+	// Mark as closed to prevent new operations during final save
+	s.closed = true
 
-	// Final save before closing
-	if err := s.saveLocked(); err != nil {
-		return fmt.Errorf("final save: %w", err)
+	// Final save before closing (saveLocked checks closed flag, so we need special handling)
+	data, err := json.MarshalIndent(s.nodes, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal nodes: %w", err)
 	}
 
-	s.closed = true
+	// Write to temporary file first
+	tmpPath := s.path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, s.path); err != nil {
+		return fmt.Errorf("rename file: %w", err)
+	}
+
 	return nil
 }
 
