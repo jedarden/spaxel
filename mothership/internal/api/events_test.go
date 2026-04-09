@@ -1410,3 +1410,388 @@ func TestListEvents_ModeWithCombinedFilters(t *testing.T) {
 		}
 	}
 }
+
+// --- POST /api/events/{id}/feedback tests ---
+
+func TestPostEventFeedback_ValidFeedbackCorrect(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create an event to submit feedback for
+	ts := time.Now()
+	h.LogEvent("detection", ts, "Kitchen", "Alice", 42, `{"key":"val"}`, "info")
+
+	// Get the event ID
+	req := httptest.NewRequest("GET", "/api/events?limit=1", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var listResp eventsResponse
+	json.NewDecoder(w.Body).Decode(&listResp)
+	if len(listResp.Events) == 0 {
+		t.Fatal("no events returned")
+	}
+	eventID := listResp.Events[0].ID
+
+	// Create feedback request
+	feedbackReq := FeedbackRequest{
+		Type:   "correct",
+		BlobID: 42,
+	}
+	body, _ := json.Marshal(feedbackReq)
+
+	// Test the handler
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
+
+	req = httptest.NewRequest("POST", "/api/events/"+strconv.FormatInt(eventID, 10)+"/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["ok"] != true {
+		t.Errorf("ok = %v, want true", resp["ok"])
+	}
+}
+
+func TestPostEventFeedback_ValidFeedbackIncorrect(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create an event to submit feedback for
+	ts := time.Now()
+	h.LogEvent("detection", ts, "Kitchen", "Alice", 42, `{"key":"val"}`, "info")
+
+	// Get the event ID
+	req := httptest.NewRequest("GET", "/api/events?limit=1", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var listResp eventsResponse
+	json.NewDecoder(w.Body).Decode(&listResp)
+	if len(listResp.Events) == 0 {
+		t.Fatal("no events returned")
+	}
+	eventID := listResp.Events[0].ID
+
+	// Create feedback request
+	feedbackReq := FeedbackRequest{
+		Type:   "incorrect",
+		BlobID: 42,
+	}
+	body, _ := json.Marshal(feedbackReq)
+
+	// Test the handler
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
+
+	req = httptest.NewRequest("POST", "/api/events/"+strconv.FormatInt(eventID, 10)+"/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["ok"] != true {
+		t.Errorf("ok = %v, want true", resp["ok"])
+	}
+}
+
+func TestPostEventFeedback_ValidFeedbackMissed(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create an event to submit feedback for
+	ts := time.Now()
+	h.LogEvent("detection", ts, "Kitchen", "Alice", 0, `{"key":"val"}`, "info")
+
+	// Get the event ID
+	req := httptest.NewRequest("GET", "/api/events?limit=1", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var listResp eventsResponse
+	json.NewDecoder(w.Body).Decode(&listResp)
+	if len(listResp.Events) == 0 {
+		t.Fatal("no events returned")
+	}
+	eventID := listResp.Events[0].ID
+
+	// Create feedback request with position (for "missed" type)
+	feedbackReq := FeedbackRequest{
+		Type: "missed",
+		Position: &struct {
+			X float64 `json:"x"`
+			Y float64 `json:"y"`
+			Z float64 `json:"z"`
+		}{
+			X: 1.5,
+			Y: 2.3,
+			Z: 0.8,
+		},
+	}
+	body, _ := json.Marshal(feedbackReq)
+
+	// Test the handler
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
+
+	req = httptest.NewRequest("POST", "/api/events/"+strconv.FormatInt(eventID, 10)+"/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["ok"] != true {
+		t.Errorf("ok = %v, want true", resp["ok"])
+	}
+}
+
+func TestPostEventFeedback_EventNotFound(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create feedback request
+	feedbackReq := FeedbackRequest{
+		Type:   "correct",
+		BlobID: 42,
+	}
+	body, _ := json.Marshal(feedbackReq)
+
+	// Test the handler with non-existent event ID
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
+
+	req := httptest.NewRequest("POST", "/api/events/999999/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "event not found" {
+		t.Errorf("error = %q, want 'event not found'", resp["error"])
+	}
+}
+
+func TestPostEventFeedback_InvalidEventID(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create feedback request
+	feedbackReq := FeedbackRequest{
+		Type:   "correct",
+		BlobID: 42,
+	}
+	body, _ := json.Marshal(feedbackReq)
+
+	// Test the handler with invalid event ID
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
+
+	req := httptest.NewRequest("POST", "/api/events/invalid/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "invalid event id" {
+		t.Errorf("error = %q, want 'invalid event id'", resp["error"])
+	}
+}
+
+func TestPostEventFeedback_InvalidFeedbackType(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create an event to submit feedback for
+	ts := time.Now()
+	h.LogEvent("detection", ts, "Kitchen", "Alice", 42, `{"key":"val"}`, "info")
+
+	// Get the event ID
+	req := httptest.NewRequest("GET", "/api/events?limit=1", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var listResp eventsResponse
+	json.NewDecoder(w.Body).Decode(&listResp)
+	if len(listResp.Events) == 0 {
+		t.Fatal("no events returned")
+	}
+	eventID := listResp.Events[0].ID
+
+	// Create feedback request with invalid type
+	feedbackReq := FeedbackRequest{
+		Type:   "invalid_type",
+		BlobID: 42,
+	}
+	body, _ := json.Marshal(feedbackReq)
+
+	// Test the handler
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
+
+	req = httptest.NewRequest("POST", "/api/events/"+strconv.FormatInt(eventID, 10)+"/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if !strings.Contains(resp["error"], "invalid feedback type") {
+		t.Errorf("error = %q, want error containing 'invalid feedback type'", resp["error"])
+	}
+}
+
+func TestPostEventFeedback_InvalidRequestBody(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create an event to submit feedback for
+	ts := time.Now()
+	h.LogEvent("detection", ts, "Kitchen", "Alice", 42, `{"key":"val"}`, "info")
+
+	// Get the event ID
+	req := httptest.NewRequest("GET", "/api/events?limit=1", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var listResp eventsResponse
+	json.NewDecoder(w.Body).Decode(&listResp)
+	if len(listResp.Events) == 0 {
+		t.Fatal("no events returned")
+	}
+	eventID := listResp.Events[0].ID
+
+	// Test with invalid JSON body
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
+
+	req = httptest.NewRequest("POST", "/api/events/"+strconv.FormatInt(eventID, 10)+"/feedback", strings.NewReader("invalid json"))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "invalid request body" {
+		t.Errorf("error = %q, want 'invalid request body'", resp["error"])
+	}
+}
+
+func TestPostEventFeedback_WithFeedbackHandler(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Create an event to submit feedback for
+	ts := time.Now()
+	h.LogEvent("detection", ts, "Kitchen", "Alice", 42, `{"key":"val"}`, "info")
+
+	// Get the event ID
+	req := httptest.NewRequest("GET", "/api/events?limit=1", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var listResp eventsResponse
+	json.NewDecoder(w.Body).Decode(&listResp)
+	if len(listResp.Events) == 0 {
+		t.Fatal("no events returned")
+	}
+	eventID := listResp.Events[0].ID
+
+	// Create a mock feedback handler that sets a flag
+	var feedbackProcessed bool
+	mockHandler := &mockFeedbackHandler{
+		submitFunc: func(w http.ResponseWriter, r *http.Request, req FeedbackRequest) {
+			feedbackProcessed = true
+			// Verify the request
+			if req.EventID != eventID {
+				t.Errorf("event ID = %d, want %d", req.EventID, eventID)
+			}
+			if req.Type != "correct" {
+				t.Errorf("type = %q, want 'correct'", req.Type)
+			}
+			if req.BlobID != 42 {
+				t.Errorf("blob_id = %d, want 42", req.BlobID)
+			}
+			writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+		},
+	}
+
+	// Set the feedback handler
+	h.SetFeedbackHandler(mockHandler)
+
+	// Create feedback request
+	feedbackReq := FeedbackRequest{
+		Type:   "correct",
+		BlobID: 42,
+	}
+	body, _ := json.Marshal(feedbackReq)
+
+	// Test the handler
+	r := chi.NewRouter()
+	r.Post("/api/events/{id}/feedback", h.postEventFeedback)
+
+	req = httptest.NewRequest("POST", "/api/events/"+strconv.FormatInt(eventID, 10)+"/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if !feedbackProcessed {
+		t.Error("feedback handler was not called")
+	}
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+}
+
+// mockFeedbackHandler is a mock implementation of the feedback handler interface
+type mockFeedbackHandler struct {
+	submitFunc func(w http.ResponseWriter, r *http.Request, req FeedbackRequest)
+}
+
+func (m *mockFeedbackHandler) SubmitFeedback(w http.ResponseWriter, r *http.Request, req FeedbackRequest) {
+	if m.submitFunc != nil {
+		m.submitFunc(w, r, req)
+	}
+}

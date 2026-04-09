@@ -3,6 +3,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -314,7 +315,7 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		untilTS = t.UnixNano() / 1e6
 	}
 
-	// In simple mode, filter out system-only event types
+	// Person-relevant event types for simple mode
 	// Simple mode shows only person-relevant events: zone_entry, zone_exit, portal_crossing, fall_alert, anomaly, anomaly_detected, security_alert, sleep_session_end
 	// Simple mode hides: node_online, node_offline, ota_update, baseline_changed, system, learning_milestone, detection, presence_transition, stationary_detected
 	simpleModeTypes := map[string]bool{
@@ -326,6 +327,16 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		"anomaly_detected":  true,
 		"security_alert":    true,
 		"sleep_session_end": true,
+	}
+	// System event types that should be shown as secondary in expert mode
+	systemEventTypes := map[string]bool{
+		"node_online":       true,
+		"node_offline":      true,
+		"ota_update":        true,
+		"baseline_changed":  true,
+		"system":            true,
+		"learning_milestone": true,
+		"anomaly_learned":    true,
 	}
 	isSimpleMode := mode != "expert"
 
@@ -366,9 +377,21 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		whereSQL += " AND " + p + "type = ?"
 		whereArgs = append(whereArgs, eventType)
 	} else if isSimpleMode {
-		// In simple mode with no explicit type filter, exclude system event types
-		whereSQL += " AND " + p + "type NOT IN (?, ?, ?, ?, ?)"
-		whereArgs = append(whereArgs, "node_online", "node_offline", "ota_update", "baseline_changed", "system")
+		// In simple mode with no explicit type filter, only show person-relevant event types
+		// Build IN clause for simple mode types
+		simpleTypeList := make([]string, 0, len(simpleModeTypes))
+		for eventType := range simpleModeTypes {
+			simpleTypeList = append(simpleTypeList, eventType)
+		}
+		// Build placeholder string for IN clause
+		placeholders := make([]string, len(simpleTypeList))
+		for i := range placeholders {
+			placeholders[i] = "?"
+		}
+		whereSQL += " AND " + p + "type IN (" + strings.Join(placeholders, ", ") + ")"
+		for _, eventType := range simpleTypeList {
+			whereArgs = append(whereArgs, eventType)
+		}
 	}
 	if zone != "" {
 		whereSQL += " AND " + p + "zone = ?"
@@ -533,8 +556,9 @@ func (e *EventsHandler) postEventFeedback(w http.ResponseWriter, r *http.Request
 
 // FeedbackRequest represents a feedback submission for an event.
 type FeedbackRequest struct {
-	Type     string `json:"type"`     // "correct" or "incorrect"
-	BlobID   int    `json:"blob_id"`  // Optional: blob ID being rated
+	Type    string `json:"type"`     // "correct" or "incorrect"
+	EventID int64  `json:"-"`        // Set from URL path, not from request body
+	BlobID  int    `json:"blob_id"`  // Optional: blob ID being rated
 	Position *struct {
 		X float64 `json:"x"`
 		Y float64 `json:"y"`
