@@ -1021,6 +1021,7 @@ const Viz3D = (function () {
         canvas.addEventListener('mousemove', _onBlobMouseMove);
         canvas.addEventListener('mouseleave', _hideBlobFeedbackTooltip);
         canvas.addEventListener('contextmenu', _onBlobContextMenu);
+        canvas.addEventListener('click', _onBlobClick);
 
         // Close context menus on click elsewhere
         document.addEventListener('click', function() {
@@ -1098,6 +1099,8 @@ const Viz3D = (function () {
             '<div class="feedback-tooltip-content">' +
             '  <div class="feedback-tooltip-label">Track #' + blobId + '</div>' +
             '  <div class="feedback-tooltip-actions">' +
+            '    <button class="feedback-btn-icon feedback-why" title="Why is this here?" ' +
+            '            onclick="Viz3D.explainBlob(' + blobId + ')">&#128526;</button>' +
             '    <button class="feedback-btn-icon feedback-thumbs-up" title="Correct detection" ' +
             '            onclick="Viz3D.submitBlobFeedback(' + blobId + ', \'TRUE_POSITIVE\')">&#x1F44D;</button>' +
             '    <button class="feedback-btn-icon feedback-thumbs-down" title="Incorrect detection" ' +
@@ -1392,6 +1395,57 @@ const Viz3D = (function () {
     }
 
     /**
+     * Handle click on blobs for explainability.
+     * Opens the explainability view when a blob figure is clicked.
+     */
+    function _onBlobClick(event) {
+        if (!_camera || !_scene) return;
+
+        // Don't trigger if right-click (context menu)
+        if (event.button === 2) return;
+
+        // Calculate mouse position in normalized device coordinates
+        var rect = event.target.getBoundingClientRect();
+        _mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        _mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Raycast to find clicked blob
+        _raycaster.setFromCamera(_mouse, _camera);
+
+        var blobMeshes = [];
+        _blobs3D.forEach(function(obj) {
+            if (obj.group) {
+                blobMeshes.push(obj.group);
+            }
+        });
+
+        var intersects = _raycaster.intersectObjects(blobMeshes, true);
+
+        if (intersects.length > 0) {
+            // Find the blob object from the intersected mesh
+            var intersected = intersects[0].object;
+            var blobObj = null;
+
+            // Walk up the parent chain to find the group
+            var current = intersected;
+            while (current) {
+                _blobs3D.forEach(function(obj, id) {
+                    if (obj.group === current) {
+                        blobObj = obj;
+                    }
+                });
+                if (blobObj) break;
+                current = current.parent;
+            }
+
+            if (blobObj) {
+                // Open explainability view
+                explainBlob(blobObj.blobId);
+            }
+        }
+    }
+
+    /**
      * Identify a node by blinking its LED.
      * @param {string} mac - The MAC address of the node to identify
      */
@@ -1473,6 +1527,12 @@ const Viz3D = (function () {
             '}' +
             '.feedback-thumbs-down:hover {' +
             '  background: rgba(244, 67, 54, 0.4);' +
+            '}' +
+            '.feedback-why {' +
+            '  background: rgba(76, 195, 247, 0.3);' +
+            '}' +
+            '.feedback-why:hover {' +
+            '  background: rgba(76, 195, 247, 0.5);' +
             '}';
         document.head.appendChild(style);
     }
@@ -2359,5 +2419,112 @@ const Viz3D = (function () {
         explainBlob: explainBlob,
         // Node identification
         identifyNode: identifyNode,
+        // Replay mode support
+        enterReplayMode: enterReplayMode,
+        exitReplayMode: exitReplayMode,
+        updateReplayBlobs: updateReplayBlobs,
     };
+    // ── Replay Mode Support ─────────────────────────────────────────────────────
+    // Store live blob states for replay mode restoration
+    let _liveBlobStates = new Map();
+    let _isReplayMode = false;
+    /**
+     * Enter replay mode: store current blob states and prepare for replay visualization
+     */
+    function enterReplayMode() {
+        if (_isReplayMode) return;
+        _isReplayMode = true;
+        // Store current blob states for restoration
+        _liveBlobStates.clear();
+        _blobs3D.forEach(function(obj, blobId) {
+            _liveBlobStates.set(blobId, {
+                id: blobId,
+                x: obj.lastPosition ? obj.lastPosition.x : 0,
+                y: obj.lastPosition ? obj.lastPosition.y : 1.3,
+                z: obj.lastPosition ? obj.lastPosition.z : 0,
+                vx: obj.lastVelocity ? obj.lastVelocity.vx : 0,
+                vy: obj.lastVelocity ? obj.lastVelocity.vy : 0,
+                vz: obj.lastVelocity ? obj.lastVelocity.vz : 0,
+                weight: obj.weight || 0.5,
+                posture: obj.posture || 'unknown',
+                personId: obj.personId || null,
+                personLabel: obj.personLabel || null,
+                personColor: obj.personColor || null,
+                trail: obj.trail ? obj.trail.slice() : []
+            });
+        });
+        console.log('[Viz3D] Replay mode entered, stored', _liveBlobStates.size, 'blob states');
+    }
+    /**
+     * Exit replay mode: restore live blob states
+     */
+    function exitReplayMode() {
+        if (!_isReplayMode) return;
+        _isReplayMode = false;
+        // Clear all replay blobs
+        _blobs3D.forEach(function(obj, blobId) {
+            _removeBlobObj(blobId, obj);
+        });
+        _blobs3D.clear();
+        // Restore live blob states
+        var liveBlobs = [];
+        _liveBlobStates.forEach(function(state) {
+            liveBlobs.push({
+                id: state.id,
+                x: state.x,
+                y: state.y,
+                z: state.z,
+                vx: state.vx,
+                vy: state.vy,
+                vz: state.vz,
+                weight: state.weight,
+                posture: state.posture,
+                person_id: state.personId,
+                person_label: state.personLabel,
+                person_color: state.personColor
+            });
+        });
+        if (liveBlobs.length > 0) {
+            applyLocUpdate(liveBlobs);
+        }
+        _liveBlobStates.clear();
+        console.log('[Viz3D] Replay mode exited, restored', liveBlobs.length, 'blob states');
+    }
+    /**
+     * Update blobs during replay mode
+     * @param {Array} blobs - Array of blob updates from replay worker
+     * @param {number} timestampMS - Replay timestamp in milliseconds
+     */
+    function updateReplayBlobs(blobs, timestampMS) {
+        if (!_isReplayMode) {
+            console.warn('[Viz3D] updateReplayBlobs called but not in replay mode');
+            return;
+        }
+        // Clear current blobs
+        _blobs3D.forEach(function(obj, blobId) {
+            _removeBlobObj(blobId, obj);
+        });
+        _blobs3D.clear();
+        // Add replay blobs
+        if (blobs && blobs.length > 0) {
+            var blobUpdates = blobs.map(function(b) {
+                return {
+                    id: b.id,
+                    x: b.x,
+                    y: b.y,
+                    z: b.z,
+                    vx: b.vx,
+                    vy: b.vy,
+                    vz: b.vz,
+                    weight: b.weight,
+                    posture: b.posture,
+                    person_id: b.person_id,
+                    person_label: b.person_label,
+                    person_color: b.person_color,
+                    trail: b.trail
+                };
+            });
+            applyLocUpdate(blobUpdates);
+        }
+    }
 })();

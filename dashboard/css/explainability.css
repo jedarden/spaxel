@@ -1,0 +1,359 @@
+/* ============================================
+   Detection Explainability Panel Styles
+   ============================================ */
+
+/* ----- Loading State ----- */
+.explainability-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: #888;
+}
+
+.panel-loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(76, 195, 247, 0.2);
+    border-top-color: #4fc3f7;
+    border-radius: 50%;
+    animation: explainability-spin 1s linear infinite;
+    margin-bottom: 12px;
+}
+
+@keyframes explainability-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ----- Empty State ----- */
+.panel-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.panel-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.panel-empty-text {
+    font-size: 14px;
+}
+
+/* ----- Confidence Gauge ----- */
+.explainability-confidence {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.confidence-gauge {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    margin-bottom: 12px;
+}
+
+.confidence-ring {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.confidence-ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 6;
+}
+
+.confidence-ring-fill {
+    fill: none;
+    stroke: #4fc3f7;
+    stroke-width: 6;
+    stroke-linecap: round;
+    transform-origin: 50% 50%;
+    transition: stroke-dasharray 0.5s ease;
+}
+
+.confidence-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    font-weight: 700;
+    color: #4fc3f7;
+}
+
+.confidence-label {
+    font-size: 14px;
+    color: #888;
+}
+
+/* ----- Sections ----- */
+.explainability-section {
+    margin-bottom: 20px;
+}
+
+.explainability-section.collapsed {
+    margin-bottom: 8px;
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccc;
+    margin: 0 0 12px 0;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+}
+
+.section-header:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.toggle-icon {
+    font-size: 12px;
+    color: #888;
+    transition: transform 0.2s;
+}
+
+.section-content {
+    margin-top: 12px;
+}
+
+/* ----- Links Table ----- */
+.links-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.links-table th,
+.links-table td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.links-table th {
+    font-weight: 600;
+    color: #888;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.links-table tr:last-child td {
+    border-bottom: none;
+}
+
+.links-table-detailed {
+    font-size: 12px;
+}
+
+.links-table-detailed th,
+.links-table-detailed td {
+    padding: 6px 8px;
+}
+
+/* ----- Table Cells ----- */
+.link-cell {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-size: 11px;
+}
+
+.link-id {
+    color: #4fc3f7;
+}
+
+.deltarms-cell {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    color: #a5d6a7;
+}
+
+.zone-cell {
+    text-align: center;
+}
+
+.zone-badge {
+    display: inline-block;
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.weight-cell {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    color: #ffcc80;
+}
+
+.contributing-cell {
+    text-align: center;
+}
+
+.contributing-badge {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    border-radius: 50%;
+    font-size: 12px;
+}
+
+.contributing-yes .contributing-badge {
+    background: #22c55e;
+    color: white;
+}
+
+.contributing-no .contributing-badge {
+    color: #666;
+}
+
+.contribution-cell {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    color: #90caf9;
+    font-size: 11px;
+}
+
+/* ----- BLE Match Card ----- */
+.ble-match-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.ble-match-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.ble-match-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ble-match-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #eee;
+}
+
+.ble-match-confidence {
+    margin-left: auto;
+    font-size: 12px;
+    color: #888;
+}
+
+.ble-match-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ble-match-detail {
+    display: flex;
+    font-size: 12px;
+}
+
+.detail-label {
+    color: #888;
+    min-width: 70px;
+}
+
+.detail-value {
+    color: #ccc;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+}
+
+/* ----- Footer ----- */
+.explainability-footer {
+    padding-top: 16px;
+    margin-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: center;
+}
+
+.panel-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.panel-btn:active {
+    transform: scale(0.98);
+}
+
+.panel-btn-primary {
+    background: #4fc3f7;
+    color: #1a1a2e;
+}
+
+.panel-btn-primary:hover {
+    background: #29b6f6;
+}
+
+.panel-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+
+.panel-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ----- Confidence Color Variants ----- */
+.confidence-ring-fill.high {
+    stroke: #22c55e;
+}
+
+.confidence-value.high {
+    color: #22c55e;
+}
+
+.confidence-ring-fill.medium {
+    stroke: #ff9800;
+}
+
+.confidence-value.medium {
+    color: #ff9800;
+}
+
+.confidence-ring-fill.low {
+    stroke: #f44336;
+}
+
+.confidence-value.low {
+    color: #f44336;
+}

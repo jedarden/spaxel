@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="css/anomaly.css">
     <link rel="stylesheet" href="css/sleep.css">
     <link rel="stylesheet" href="css/floorplan.css">
+    <link rel="stylesheet" href="css/explainability.css">
     <style>
         * {
             margin: 0;
@@ -2136,6 +2137,283 @@
         .ws-lost-dismiss-btn:hover {
             background: rgba(255, 255, 255, 0.15);
         }
+
+        /* ===== Replay Control Bar ===== */
+        #pause-live-btn {
+            background: rgba(255, 193, 7, 0.15);
+            border: 1px solid rgba(255, 193, 7, 0.4);
+            color: #ffc107;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #pause-live-btn:hover {
+            background: rgba(255, 193, 7, 0.25);
+        }
+
+        /* Replay control bar (shown during replay mode) */
+        .replay-control-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 12px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            z-index: 150;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .replay-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .replay-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ccc;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        .replay-btn:hover {
+            background: rgba(79, 195, 247, 0.2);
+            border-color: rgba(79, 195, 247, 0.4);
+            color: #4fc3f7;
+        }
+
+        .replay-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .replay-timestamp {
+            font-size: 14px;
+            font-weight: 600;
+            color: #eee;
+            font-family: monospace;
+        }
+        .replay-range {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .replay-playback {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            padding-left: 12px;
+        }
+
+        .replay-speed {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ccc;
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .replay-speed:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+
+        .replay-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            padding-left: 12px;
+        }
+
+        .replay-scrubber {
+            width: 200px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+            outline: none;
+        }
+        .replay-scrubber::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #4fc3f7;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .replay-scrubber::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        .replay-scrubber::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            background: #4fc3f7;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .replay-tuning-btn {
+            background: rgba(171, 71, 188, 0.15);
+            border: 1px solid rgba(171, 71, 188, 0.4);
+            color: #ba68c8;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .replay-tuning-btn:hover {
+            background: rgba(171, 71, 188, 0.25);
+        }
+
+        /* Replay tuning panel */
+        .replay-tuning-panel {
+            position: fixed;
+            top: 60px;
+            right: 340px;
+            width: 280px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 8px;
+            padding: 16px;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .replay-tuning-panel.visible {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .replay-tuning-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .replay-tuning-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .replay-tuning-header h3 {
+            font-size: 14px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+        .replay-tuning-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .replay-tuning-close:hover {
+            color: #ccc;
+        }
+
+        .replay-tuning-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .tuning-param {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .tuning-param label {
+            font-size: 11px;
+            color: #aaa;
+            display: flex;
+            justify-content: space-between;
+        }
+        .tuning-param input[type="range"] {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+            outline: none;
+        }
+        .tuning-param input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #4fc3f7;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .tuning-param input[type="range"]::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            background: #4fc3f7;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+        .tuning-param-value {
+            font-family: monospace;
+            color: #4fc3f7;
+            font-size: 11px;
+        }
+
+        .tuning-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .tuning-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .tuning-btn.apply {
+            background: #4fc3f7;
+            color: #1a1a2e;
+        }
+        .tuning-btn.apply:hover {
+            background: #29b6f6;
+        }
+        .tuning-btn.reset {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+        }
+        .tuning-btn.reset:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
     </style>
 </head>
 <body>
@@ -2200,6 +2478,13 @@
         <!-- Security Status Indicator (managed by SecurityPanel) -->
         <div class="status-item" id="security-status-container"></div>
         <div class="status-item" style="margin-left:auto; gap:6px;">
+            <button id="pause-live-btn" onclick="SpaxelReplay && SpaxelReplay.pauseLive()" title="Pause live mode and enter replay">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px;">
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+                Pause
+            </button>
             <button id="ble-btn" onclick="BLEPanel && BLEPanel.open()">People & Devices<span id="ble-unregistered-badge" class="badge"></span></button>
             <button id="settings-btn" onclick="openSettingsPanel && openSettingsPanel()">Settings</button>
             <button id="add-node-btn" onclick="SpaxelOnboard && SpaxelOnboard.start()">+ Add Node</button>
@@ -2343,6 +2628,8 @@
     <script src="js/sleep.js"></script>
     <!-- Diurnal Baseline Visualization -->
     <script src="js/diurnal-chart.js"></script>
+    <!-- Time-Travel Replay -->
+    <script src="js/replay.js"></script>
 
     <!-- Room editor panel -->
     <div id="room-editor-panel">

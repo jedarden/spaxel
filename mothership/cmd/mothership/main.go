@@ -45,6 +45,7 @@ import (
 	"github.com/spaxel/mothership/internal/ota"
 	"github.com/spaxel/mothership/internal/prediction"
 	"github.com/spaxel/mothership/internal/provisioning"
+	"github.com/spaxel/mothership/internal/recording"
 	"github.com/spaxel/mothership/internal/recorder"
 	"github.com/spaxel/mothership/internal/replay"
 	"github.com/spaxel/mothership/internal/shutdown"
@@ -285,31 +286,40 @@ func main() {
 	settingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Settings API registered at /api/settings")
 
-	// Replay recording store
+	// Replay recording store - use recording.Buffer wrapped with replay adapter
 	var replayStore api.RecordingStore
+	var recordingBuf *recording.Buffer
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		log.Printf("[WARN] Failed to create data dir %s: %v", cfg.DataDir, err)
 	} else {
-		store, err := replay.NewRecordingStore(filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB)
+		buf, err := recording.NewBuffer(filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB, 0)
 		if err != nil {
-			log.Printf("[WARN] Failed to open replay store: %v (CSI recording disabled)", err)
+			log.Printf("[WARN] Failed to open recording buffer: %v (CSI recording disabled)", err)
 		} else {
-			ingestSrv.SetReplayStore(store)
-			defer store.Close()
-			replayStore = store
-			log.Printf("[INFO] CSI replay store at %s (%d MB max)", filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB)
+			recordingBuf = buf
+			// Wrap with replay adapter so it can be used by replay worker
+			adapter := replay.NewBufferAdapter(buf)
+			replayStore = adapter
+			ingestSrv.SetReplayStore(adapter)
+			defer buf.Close()
+			log.Printf("[INFO] CSI recording buffer at %s (%d MB max, retention=%v)",
+				filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB, buf.Retention())
 		}
 	}
 
 	// Phase 6: CSI Replay REST API
 	var replayHandler *api.ReplayHandler
 	if replayStore != nil {
-		replayHandler, err = api.NewReplayHandler(filepath.Join(cfg.DataDir, "csi_replay.bin"), replayStore)
+		replayHandler, err = api.NewReplayHandler(replayStore)
 		if err != nil {
 			log.Printf("[WARN] Failed to create replay handler: %v", err)
 		} else {
+			// Wire up replay worker with signal processor and blob broadcaster
+			replayHandler.SetProcessorManager(pm)
+			replayHandler.SetBlobBroadcaster(dashboardHub)
+			replayHandler.Start()
+			defer replayHandler.Stop()
 			replayHandler.RegisterRoutes(r)
-			defer replayHandler.Close()
 			log.Printf("[INFO] Replay REST API registered at /api/replay/*")
 		}
 	}
@@ -784,6 +794,13 @@ func main() {
 	ingestSrv.SetDashboardBroadcaster(dashboardHub)
 	ingestSrv.SetMotionBroadcaster(dashboardHub)
 	ingestSrv.SetEventBroadcaster(dashboardHub)
+
+	// Wire replay handler with dashboard hub and processor manager
+	if replayHandler != nil {
+		replayHandler.SetBlobBroadcaster(dashboardHub)
+		replayHandler.SetProcessorManager(pm)
+		replayHandler.Start()
+	}
 
 	// Wire load-shedding level changes to dashboard alerts and node rate push
 	shedder.SetPreviousRate(20) // default rate before any Level 3 event
@@ -1294,8 +1311,23 @@ func main() {
 							}
 						}
 
-						// Update explainability handler (pass nil grid for now)
-						explainabilityHandler.UpdateBlobs(blobSnapshots, linkStates, nil, identityMap)
+						// Update explainability handler with grid data
+						var gridSnapshot *explainability.GridSnapshot
+						if fusionEngine != nil {
+							if grid := fusionEngine.GetGridSnapshot(); grid != nil {
+								gridSnapshot = &explainability.GridSnapshot{
+									Width:     grid.Width,
+									Depth:     grid.Depth,
+									CellSize:  grid.CellSize,
+									OriginX:   grid.OriginX,
+									OriginZ:   grid.OriginZ,
+									Data:      grid.Data,
+									Rows:      grid.Rows,
+									Cols:      grid.Cols,
+								}
+							}
+						}
+						explainabilityHandler.UpdateBlobs(blobSnapshots, linkStates, gridSnapshot, identityMap)
 					}
 				}
 				shedder.EndStage(st2)

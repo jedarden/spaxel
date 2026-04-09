@@ -289,6 +289,30 @@ func (pm *ProcessorManager) RemoveProcessor(linkID string) {
 	delete(pm.processors, linkID)
 }
 
+// ProcessWithBaseline processes a CSI frame with a provided baseline state (for replay).
+// The baseline is used directly without updating the stored baseline.
+func (pm *ProcessorManager) ProcessWithBaseline(linkID string, payload []int8, rssiDBM int8, nSub int, recvTime time.Time, baseline *BaselineState) (*ProcessResult, error) {
+	pm.mu.Lock()
+	processor, exists := pm.processors[linkID]
+	if !exists {
+		processor = NewLinkProcessor(linkID, pm.nSub, pm.alpha)
+		pm.processors[linkID] = processor
+	}
+
+	// If a baseline is provided, use it temporarily
+	if baseline != nil && baseline.IsInitialized() {
+		oldBaseline := processor.baseline
+		processor.baseline = baseline
+		defer func() {
+			processor.baseline = oldBaseline
+		}()
+	}
+
+	result, err := processor.Process(payload, rssiDBM, nSub, recvTime)
+	pm.mu.Unlock()
+	return result, err
+}
+
 // LinkMotionState represents the motion state of a single link
 type LinkMotionState struct {
 	LinkID            string

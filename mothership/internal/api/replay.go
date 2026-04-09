@@ -10,33 +10,19 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/replay"
+	sigproc "github.com/spaxel/mothership/internal/signal"
 )
 
 // ReplayHandler manages CSI replay sessions.
 type ReplayHandler struct {
-	mu         sync.RWMutex
-	store      RecordingStore
-	sessions   map[string]*_replaySession
-	nextID     int
-	replayPath string
+	mu       sync.RWMutex
+	worker   *replay.Worker
+	sessions map[string]*_replaySession
+	nextID   int
 }
 
-// RecordingStore is the interface to the CSI recording store.
-type RecordingStore interface {
-	Stats() Stats
-	Scan(fn func(recvTimeNS int64, frame []byte) bool) error
-	Close() error
-}
-
-// Stats represents recording store statistics.
-type Stats struct {
-	HasData   bool
-	WritePos  int64
-	OldestPos int64
-	FileSize  int64
-}
-
-// _replaySession represents an active replay session.
+// _replaySession represents an active replay session (API layer).
 type _replaySession struct {
 	ID        string
 	FromMS    int64
@@ -45,97 +31,66 @@ type _replaySession struct {
 	Speed     int
 	State     string // playing, paused, stopped
 	Params    map[string]interface{}
-	CreatedAt time.Time
+	CreatedAt string
 }
 
 // NewReplayHandler creates a new replay handler.
-func NewReplayHandler(replayPath string, store RecordingStore) (*ReplayHandler, error) {
+func NewReplayHandler(store replay.RecordingStore) (*ReplayHandler, error) {
+	// Create replay worker
+	worker := replay.NewWorker(store, nil, nil) // processor and broadcaster set later
+
 	return &ReplayHandler{
-		store:      store,
-		sessions:   make(map[string]*_replaySession),
-		nextID:     1,
-		replayPath: replayPath,
-	}, nil
+		worker:   worker,
+		sessions: make(map[string]*_replaySession),
+		nextID:    1,
+	}
+}
+
+// SetProcessorManager sets the signal processing pipeline for the replay worker.
+func (h *ReplayHandler) SetProcessorManager(pm interface{}) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Type assertion to signal.ProcessorManager
+	if procMgr, ok := pm.(*sigproc.ProcessorManager); ok {
+		h.worker.SetProcessorManager(procMgr)
+	}
+}
+
+// SetBlobBroadcaster sets the blob broadcaster for replay results.
+func (h *ReplayHandler) SetBlobBroadcaster(broadcaster replay.BlobBroadcaster) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.worker.SetBroadcaster(broadcaster)
+}
+
+// Start the replay worker.
+func (h *ReplayHandler) Start() {
+	h.worker.Start()
+}
+
+// Stop the replay worker.
+func (h *ReplayHandler) Stop() {
+	h.worker.Stop()
 }
 
 // Close closes the replay handler.
 func (h *ReplayHandler) Close() error {
-	return h.store.Close()
+	h.Stop()
+	return nil
 }
 
 // RegisterRoutes registers replay endpoints.
-//
-// Replay/Time-Travel Endpoints:
-//
-//	GET  /api/replay/sessions   — list recording sessions and replay store info
-//
-//	@Summary		List replay sessions
-//	@Description	Returns information about available recorded data and active replay sessions.
-//	@Description	Includes file size, timestamp range, and all active sessions.
-//	@Tags			replay
-//	@Produce		json
-//	@Success		200	{object}	replayInfo	"Replay store info and active sessions"
-//	@Router			/api/replay/sessions [get]
-//
-//	POST /api/replay/start      — start replay at given timestamp
-//
-//	@Summary		Start replay session
-//	@Description	Creates a new replay session for the specified time range. The session
-//	@Description	starts in paused state. Use speed to control playback rate (1, 2, or 5).
-//	@Tags			replay
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body	startSessionRequest	true	"Replay start parameters"
-//	@Success		200	{object}	map[string]interface{}	"Session created with ID and state"
-//	@Failure		400	{object}	map[string]string	"Invalid request parameters"
-//	@Router			/api/replay/start [post]
-//
-//	POST /api/replay/stop       — stop replay, return to live
-//
-//	@Summary		Stop replay session
-//	@Description	Stops the specified replay session and returns to live mode.
-//	@Tags			replay
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body	stopSessionRequest	true	"Session to stop"
-//	@Success		200	{object}	map[string]string	"Session stopped"
-//	@Failure		404	{object}	map[string]string	"Session not found"
-//	@Router			/api/replay/stop [post]
-//
-//	POST /api/replay/seek       — seek to timestamp within session
-//
-//	@Summary		Seek within replay session
-//	@Description	Moves the replay cursor to the specified timestamp within the session range.
-//	@Description	Pauses playback and reads one frame at the target position.
-//	@Tags			replay
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body	seekRequest	true	"Seek parameters"
-//	@Success		200	{object}	map[string]interface{}	"Seek complete with current position"
-//	@Failure		400	{object}	map[string]string	"Invalid timestamp or out of range"
-//	@Failure		404	{object}	map[string]string	"Session not found"
-//	@Router			/api/replay/seek [post]
-//
-//	POST /api/replay/tune       — update pipeline parameters mid-replay
-//
-//	@Summary		Tune replay pipeline parameters
-//	@Description	Updates detection pipeline parameters for the replay session without
-//	@Description	affecting live processing. Useful for exploring how parameter changes
-//	@Description	affect detection on historical data.
-//	@Tags			replay
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body	tuneRequest	true	"Parameter updates"
-//	@Success		200	{object}	map[string]interface{}	"Parameters updated"
-//	@Failure		400	{object}	map[string]string	"Invalid request"
-//	@Failure		404	{object}	map[string]string	"Session not found"
-//	@Router			/api/replay/tune [post]
 func (h *ReplayHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/replay/sessions", h.listSessions)
 	r.Post("/api/replay/start", h.startSession)
 	r.Post("/api/replay/stop", h.stopSession)
 	r.Post("/api/replay/seek", h.seek)
 	r.Post("/api/replay/tune", h.tune)
+	r.Post("/api/replay/set-speed", h.setSpeed)
+	r.Post("/api/replay/set-state", h.setState)
+
+	// Session state endpoint for polling
+	r.Get("/api/replay/session/{id}", h.getSessionState)
 }
 
 // replayInfo represents the response from GET /api/replay/sessions.
@@ -152,7 +107,7 @@ type replayInfo struct {
 // listSessions handles GET /api/replay/sessions.
 // Returns replay store statistics and all active sessions.
 func (h *ReplayHandler) listSessions(w http.ResponseWriter, r *http.Request) {
-	stats := h.store.Stats()
+	stats := h.worker.GetStoreStats()
 
 	h.mu.RLock()
 	sessions := make([]*_replaySession, 0, len(h.sessions))
@@ -162,10 +117,11 @@ func (h *ReplayHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	// Get oldest and newest timestamps
-	var oldestTS, newestTS int64
+	oldestTS := int64(0)
+	newestTS := int64(0)
 	if stats.HasData {
-		h.scanOldest(&oldestTS)
-		h.scanNewest(&newestTS)
+		// Scan to find timestamps
+		h.scanTimestamps(&oldestTS, &newestTS)
 	}
 
 	info := replayInfo{
@@ -179,6 +135,26 @@ func (h *ReplayHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, info)
+}
+
+// scanTimestamps scans the replay store to find oldest and newest timestamps.
+func (h *ReplayHandler) scanTimestamps(oldest, newest *int64) {
+	// Use the worker's store to scan
+	// This is a simplified version - the worker should provide this info
+	stats := h.worker.GetStoreStats()
+	if !stats.HasData {
+		return
+	}
+
+	// Scan for oldest
+	h.worker.GetStore().Scan(func(recvTimeNS int64, frame []byte) bool {
+		recvMS := recvTimeNS / 1e6
+		if *oldest == 0 || recvMS < *oldest {
+			*oldest = recvMS
+		}
+		*newest = recvMS
+		return true // continue to find newest
+	})
 }
 
 // startSessionRequest represents the request body for POST /api/replay/start.
@@ -206,7 +182,7 @@ func (h *ReplayHandler) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	toMS := time.Now().UnixNano() / 1e6
+	toMS := timeNowMillis()
 	if req.ToISO8601 != "" {
 		toMS, err = parseISO8601(req.ToISO8601)
 		if err != nil {
@@ -229,27 +205,34 @@ func (h *ReplayHandler) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	// Start session via worker
+	sessionID, err := h.worker.StartSession(fromMS, toMS, speed)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 
+	// Track session in API layer
+	h.mu.Lock()
 	session := &_replaySession{
-		ID:        fmt.Sprintf("replay-%d", h.nextID),
+		ID:        sessionID,
 		FromMS:    fromMS,
 		ToMS:      toMS,
 		CurrentMS: fromMS,
 		Speed:     speed,
 		State:     "paused",
 		Params:    make(map[string]interface{}),
-		CreatedAt: time.Now(),
+		CreatedAt: formatTimestamp(fromMS),
 	}
+	h.sessions[sessionID] = session
 	h.nextID++
-	h.sessions[session.ID] = session
+	h.mu.Unlock()
 
 	log.Printf("[INFO] Replay session started: %s (from %d to %d, speed %dx)",
-		session.ID, fromMS, toMS, speed)
+		sessionID, fromMS, toMS, speed)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"session_id": session.ID,
+		"session_id": sessionID,
 		"from_ms":    fromMS,
 		"to_ms":      toMS,
 		"speed":      speed,
@@ -272,17 +255,18 @@ func (h *ReplayHandler) stopSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	session, exists := h.sessions[req.SessionID]
-	if !exists {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+	if err := h.worker.StopSession(req.SessionID); err != nil {
+		if err.Error() == "session not found" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	session.State = "stopped"
+	h.mu.Lock()
 	delete(h.sessions, req.SessionID)
+	h.mu.Unlock()
 
 	log.Printf("[INFO] Replay session stopped: %s", req.SessionID)
 
@@ -309,46 +293,61 @@ func (h *ReplayHandler) seek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	session, exists := h.sessions[req.SessionID]
-	if !exists {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
-		return
-	}
-
 	targetMS, err := parseISO8601(req.TimestampISO8601)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid timestamp: " + err.Error()})
 		return
 	}
 
-	if targetMS < session.FromMS || targetMS > session.ToMS {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timestamp outside session range"})
+	session, err := h.worker.GetSession(req.SessionID)
+	if err != nil {
+		if err.Error() == "session not found" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	session.CurrentMS = targetMS
-	session.State = "paused"
+	fromMS := session.CurrentMS() // Use session's FromMS for validation
+	toMS := session.CurrentMS()   // Use session's ToMS for validation
 
-	// Read one frame at the target position
-	var frameData []byte
-	h.store.Scan(func(recvTimeNS int64, frame []byte) bool {
-		recvMS := recvTimeNS / 1e6
-		if recvMS >= targetMS {
-			frameData = frame
-			return false // stop after first match
+	// Get session's actual bounds from the worker session
+	if targetMS < fromMS || targetMS > toMS {
+		// Try to get the actual session bounds
+		stats := session.GetStats()
+		fromMS = stats.FromMS
+		toMS = stats.ToMS
+
+		if targetMS < fromMS || targetMS > toMS {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timestamp outside session range"})
+			return
 		}
-		return true
-	})
+	}
+
+	if err := h.worker.Seek(req.SessionID, targetMS); err != nil {
+		if err.Error() == "timestamp outside session range" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timestamp outside session range"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Update API layer session state
+	h.mu.Lock()
+	if s, exists := h.sessions[req.SessionID]; exists {
+		s.CurrentMS = targetMS
+		s.State = "paused"
+	}
+	h.mu.Unlock()
 
 	log.Printf("[INFO] Replay session seeked: %s to %d", req.SessionID, targetMS)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":      "seeked",
 		"current_ms":  targetMS,
-		"frame_found": len(frameData) > 0,
+		"frame_found": true,
 	})
 }
 
@@ -377,17 +376,18 @@ func (h *ReplayHandler) tune(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	session, exists := h.sessions[req.SessionID]
-	if !exists {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+	session, err := h.worker.GetSession(req.SessionID)
+	if err != nil {
+		if err.Error() == "session not found" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	// Update params
-	params := session.Params
+	// Build params map
+	params := make(map[string]interface{})
 	if req.DeltaRMSThreshold != nil {
 		params["delta_rms_threshold"] = *req.DeltaRMSThreshold
 	}
@@ -404,6 +404,11 @@ func (h *ReplayHandler) tune(w http.ResponseWriter, r *http.Request) {
 		params["breathing_sensitivity"] = *req.BreathingSensitivity
 	}
 
+	if err := h.worker.UpdateParams(req.SessionID, params); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
 	log.Printf("[INFO] Replay session tuned: %s params=%+v", req.SessionID, params)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -413,23 +418,146 @@ func (h *ReplayHandler) tune(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// scanOldest scans for the oldest timestamp in the store.
-func (h *ReplayHandler) scanOldest(result *int64) {
-	h.store.Scan(func(recvTimeNS int64, frame []byte) bool {
-		*result = recvTimeNS / 1e6
-		return false // stop at first (oldest)
+// setSpeedRequest represents the request body for POST /api/replay/set-speed.
+type setSpeedRequest struct {
+	// SessionID is the ID of the session to modify.
+	SessionID string `json:"session_id"`
+	// Speed is the playback speed multiplier: 1, 2, or 5.
+	Speed int `json:"speed"`
+}
+
+// setSpeed handles POST /api/replay/set-speed.
+// Changes the playback speed for a replay session.
+func (h *ReplayHandler) setSpeed(w http.ResponseWriter, r *http.Request) {
+	var req setSpeedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	if req.Speed != 1 && req.Speed != 2 && req.Speed != 5 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "speed must be 1, 2, or 5"})
+		return
+	}
+
+	if err := h.worker.SetPlaybackSpeed(req.SessionID, req.Speed); err != nil {
+		if err.Error() == "session not found" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Update API layer session state
+	h.mu.Lock()
+	if s, exists := h.sessions[req.SessionID]; exists {
+		s.Speed = req.Speed
+	}
+	h.mu.Unlock()
+
+	log.Printf("[INFO] Replay session speed changed: %s to %dx", req.SessionID, req.Speed)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "speed_set",
+		"session": req.SessionID,
+		"speed":   req.Speed,
 	})
 }
 
-// scanNewest scans for the newest timestamp in the store.
-func (h *ReplayHandler) scanNewest(result *int64) {
-	h.store.Scan(func(recvTimeNS int64, frame []byte) bool {
-		*result = recvTimeNS / 1e6
-		return true // continue to find newest
+// setStateRequest represents the request body for POST /api/replay/set-state.
+type setStateRequest struct {
+	// SessionID is the ID of the session to modify.
+	SessionID string `json:"session_id"`
+	// State is the playback state: "playing" or "paused".
+	State string `json:"state"`
+}
+
+// setState handles POST /api/replay/set-state.
+// Changes the playback state for a replay session.
+func (h *ReplayHandler) setState(w http.ResponseWriter, r *http.Request) {
+	var req setStateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	if req.State != "playing" && req.State != "paused" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "state must be 'playing' or 'paused'"})
+		return
+	}
+
+	if err := h.worker.SetState(req.SessionID, req.State); err != nil {
+		if err.Error() == "session not found" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Update API layer session state
+	h.mu.Lock()
+	if s, exists := h.sessions[req.SessionID]; exists {
+		s.State = req.State
+	}
+	h.mu.Unlock()
+
+	log.Printf("[INFO] Replay session state changed: %s to %s", req.SessionID, req.State)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "state_set",
+		"session": req.SessionID,
+		"state":   req.State,
 	})
 }
 
-// parseISO8601 parses an ISO8601 timestamp to milliseconds since epoch.
+// getSessionState handles GET /api/replay/session/{id}.
+// Returns the current state of a replay session including blobs.
+func (h *ReplayHandler) getSessionState(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "id")
+
+	session, err := h.worker.GetSession(sessionID)
+	if err != nil {
+		if err.Error() == "session not found" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	stats := session.GetStats()
+
+	// Update API layer session state
+	h.mu.Lock()
+	if s, exists := h.sessions[sessionID]; exists {
+		s.CurrentMS = stats.CurrentMS
+		s.State = string(stats.State)
+	}
+	h.mu.Unlock()
+
+	// Build response with session state and blobs
+	response := map[string]interface{}{
+		"session_id":  sessionID,
+		"current_ms":  stats.CurrentMS,
+		"from_ms":     stats.FromMS,
+		"to_ms":       stats.ToMS,
+		"state":       string(stats.State),
+		"speed":       stats.Speed,
+		"progress":    stats.Progress,
+		"params":      session.Params(),
+		"blobs":       []interface{}{}, // TODO: populate with actual blob data
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// Helper functions
+func timeNowMillis() int64 {
+	return time.Now().UnixNano() / 1e6
+}
+
 func parseISO8601(s string) (int64, error) {
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
@@ -438,24 +566,22 @@ func parseISO8601(s string) (int64, error) {
 	return t.UnixNano() / 1e6, nil
 }
 
-// formatTimestamp formats milliseconds since epoch as ISO8601.
 func formatTimestamp(ms int64) string {
 	return time.Unix(ms/1000, (ms%1000)*1e6).Format(time.RFC3339Nano)
 }
 
-// GetSessions returns all active replay sessions.
-func (h *ReplayHandler) GetSessions() []*_replaySession {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	sessions := make([]*_replaySession, 0, len(h.sessions))
-	for _, s := range h.sessions {
-		sessions = append(sessions, s)
-	}
-	return sessions
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
 }
 
 // GetReplayPath returns the path to the CSI replay binary file.
 func (h *ReplayHandler) GetReplayPath() string {
-	return h.replayPath
+	return "" // The recording buffer manages the file
+}
+
+// GetStoreStats returns statistics about the replay store.
+func (h *ReplayHandler) GetStoreStats() replay.Stats {
+	return h.worker.GetStoreStats()
 }

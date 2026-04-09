@@ -10,6 +10,7 @@ import (
 
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/replay"
 	"github.com/spaxel/mothership/internal/tracking"
 )
 
@@ -1126,6 +1127,41 @@ func (h *Hub) BroadcastMorningSummary(summary map[string]interface{}) {
 	msg := map[string]interface{}{
 		"type":     "morning_summary",
 		"sleep":    summary,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastReplayBlobs broadcasts replay blob updates to all dashboard clients.
+// This implements the replay.BlobBroadcaster interface for time-travel debugging.
+func (h *Hub) BroadcastReplayBlobs(blobs []replay.BlobUpdate, timestampMS int64) {
+	wireBlobs := make([]blobJSON, len(blobs))
+	for i, b := range blobs {
+		trail := make([]trailPoint, len(b.Trail)/2)
+		for j := 0; j < len(b.Trail)/2; j++ {
+			trail[j] = trailPoint{b.Trail[j*2], b.Trail[j*2+1]}
+		}
+		wireBlobs[i] = blobJSON{
+			ID:                 b.ID,
+			X:                  b.X,
+			Z:                  b.Z,
+			VX:                 b.VX,
+			VZ:                 b.VZ,
+			Weight:             b.Weight,
+			Trail:              trail,
+			Posture:            b.Posture,
+			PersonID:           b.PersonID,
+			PersonLabel:        b.PersonLabel,
+			PersonColor:        b.PersonColor,
+			IdentityConfidence: b.IdentityConfidence,
+			IdentitySource:     b.IdentitySource,
+		}
+	}
+
+	msg := map[string]interface{}{
+		"type":         "replay_update",
+		"blobs":        wireBlobs,
+		"timestamp_ms": timestampMS,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)

@@ -1,6 +1,7 @@
 package fusion
 
 import (
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -42,6 +43,21 @@ type Result struct {
 	Timestamp time.Time
 	// ActiveLinks is the number of links that contributed to this fusion.
 	ActiveLinks int
+	// PerBlobContributions maps blob index to list of contributing link IDs.
+	PerBlobContributions [][]string
+	// AllContributions lists all link contributions (including non-contributing).
+	AllContributions []LinkContribution
+}
+
+// LinkContribution describes a link's contribution to fusion.
+type LinkContribution struct {
+	LinkID    string  // "node_mac:peer_mac"
+	NodeMAC   string
+	PeerMAC   string
+	DeltaRMS  float64
+	ZoneNum   int     // Fresnel zone number at the peak position
+	Weight    float64 // Learned weight for this link
+	Contributing bool // Whether this link contributed to a blob
 }
 
 // Engine runs the multi-link 3D Fresnel zone fusion.
@@ -137,6 +153,16 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 	e.grid.Reset()
 
 	activeLinks := 0
+	activeLinkData := make([]struct {
+		linkID    string
+		nodeMAC   string
+		peerMAC   string
+		deltaRMS  float64
+		weight    float64
+		posA      NodePosition
+		posB      NodePosition
+	}, 0)
+
 	for _, lm := range links {
 		if !lm.Motion || lm.DeltaRMS < minDelta {
 			continue
@@ -159,6 +185,26 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 			weightedActivation,
 		)
 		activeLinks++
+
+		// Store active link data for contribution tracking
+		linkID := lm.NodeMAC + ":" + lm.PeerMAC
+		activeLinkData = append(activeLinkData, struct {
+			linkID    string
+			nodeMAC   string
+			peerMAC   string
+			deltaRMS  float64
+			weight    float64
+			posA      NodePosition
+			posB      NodePosition
+		}{
+			linkID:   linkID,
+			nodeMAC:  lm.NodeMAC,
+			peerMAC:  lm.PeerMAC,
+			deltaRMS: lm.DeltaRMS,
+			weight:   healthWeight,
+			posA:     posA,
+			posB:     posB,
+		})
 	}
 
 	result := &Result{
@@ -177,16 +223,87 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 
 	rawPeaks := e.grid.Peaks(e.maxBlobs, e.blobThresh)
 	blobs := make([]Blob, len(rawPeaks))
+
+	// Track per-blob contributions
+	perBlobContributions := make([][]string, len(rawPeaks))
+	allContributions := make([]LinkContribution, 0, len(activeLinkData))
+
+	// Compute total activation for normalization
+	totalActivation := 0.0
+	for _, ld := range activeLinkData {
+		totalActivation += ld.deltaRMS * ld.weight
+	}
+
 	for i, p := range rawPeaks {
 		blobs[i] = Blob{X: p[0], Y: p[1], Z: p[2], Confidence: p[3]}
+
+		// Determine which links contributed to this blob
+		// A link contributes if the blob position is within its first 3 Fresnel zones
+		blobContributors := make([]string, 0)
+		for _, ld := range activeLinkData {
+			zoneNum := fresnelZoneAtPosition(ld.posA, ld.posB, p[0], p[1], p[2])
+			if zoneNum <= 3 {
+				blobContributors = append(blobContributors, ld.linkID)
+			}
+
+			// Add to all contributions with zone info
+			contribution := (ld.deltaRMS * ld.weight)
+			if totalActivation > 0 {
+				contribution /= totalActivation
+			}
+			allContributions = append(allContributions, LinkContribution{
+				LinkID:       ld.linkID,
+				NodeMAC:      ld.nodeMAC,
+				PeerMAC:      ld.peerMAC,
+				DeltaRMS:     ld.deltaRMS,
+				ZoneNum:      zoneNum,
+				Weight:       ld.weight,
+				Contributing: zoneNum <= 3,
+			})
+		}
+		perBlobContributions[i] = blobContributors
 	}
+
 	result.Blobs = blobs
+	result.PerBlobContributions = perBlobContributions
+	result.AllContributions = allContributions
 
 	e.mu.Lock()
 	e.lastResult = result
 	e.mu.Unlock()
 
 	return result
+}
+
+// fresnelZoneAtPosition computes the Fresnel zone number for a position.
+func fresnelZoneAtPosition(tx, rx NodePosition, x, y, z float64) int {
+	const lambda = 0.125
+
+	// Direct path distance
+	dx := rx.X - tx.X
+	dy := rx.Y - tx.Y
+	dz := rx.Z - tx.Z
+	directDist := math.Sqrt(dx*dx + dy*dy + dz*dz)
+
+	// Distance from TX to position
+	dtx := math.Sqrt((x-tx.X)*(x-tx.X) + (y-tx.Y)*(y-tx.Y) + (z-tx.Z)*(z-tx.Z))
+
+	// Distance from position to RX
+	drx := math.Sqrt((rx.X-x)*(rx.X-x) + (rx.Y-y)*(rx.Y-y) + (rx.Z-z)*(rx.Z-z))
+
+	// Excess path length
+	excess := dtx + drx - directDist
+	if excess < 0 {
+		excess = 0
+	}
+
+	// Zone number (1-indexed)
+	zoneNum := int(math.Ceil(excess / (lambda / 2)))
+	if zoneNum < 1 {
+		zoneNum = 1
+	}
+
+	return zoneNum
 }
 
 // LastResult returns the most recent fusion result, or nil.
@@ -202,4 +319,34 @@ func (e *Engine) LastResult() *Result {
 func FresnelZoneRadius(linkLength float64) float64 {
 	const lambda = 0.125
 	return math.Sqrt(lambda * linkLength / 4.0)
+}
+
+// GetGridSnapshot returns a snapshot of the current fusion grid state.
+// This is used by the explainability system to visualize contributing links.
+func (e *Engine) GetGridSnapshot() *GridSnapshot {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.grid == nil {
+		return nil
+	}
+
+	// Get grid dimensions
+	nx, ny, nz, cellSize, ox, oy, oz := e.grid.Dims()
+	width := float64(nx) * cellSize
+	depth := float64(nz) * cellSize
+
+	// Get the normalized grid data
+	data := e.grid.Snapshot()
+
+	return &GridSnapshot{
+		Width:     width,
+		Depth:     depth,
+		CellSize:  cellSize,
+		OriginX:   ox,
+		OriginZ:   oz,
+		Data:      data,
+		Rows:      ny,
+		Cols:      nx,
+	}
 }
