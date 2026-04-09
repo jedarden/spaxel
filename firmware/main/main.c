@@ -6,6 +6,7 @@
 #include "provision.h"
 #include "nvs_migration.h"
 #include "ntp.h"
+#include "led.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -430,6 +431,9 @@ void app_main(void) {
 
     // Initialize WiFi
     wifi_init();
+
+    // Initialize LED
+    led_init();
 
     // Initialize CSI
     csi_init();

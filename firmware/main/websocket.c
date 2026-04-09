@@ -3,6 +3,7 @@
 #include "csi.h"
 #include "wifi.h"
 #include "ntp.h"
+#include "led.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
@@ -171,6 +172,9 @@ void websocket_disconnect(void) {
     }
     s_connected = false;
     stop_ota_validation_timer();
+
+    // Stop any running LED blink on disconnect
+    led_stop_blink();
 }
 
 bool websocket_is_connected(void) {
@@ -648,8 +652,12 @@ static void handle_identify_msg(cJSON *root) {
     }
 
     ESP_LOGI(TAG, "Identify: blinking LED for %lu ms", duration_ms);
-    // LED control would be implemented here if LED GPIO is configured
-    // For now, just log
+
+    // Start LED blink
+    esp_err_t err = led_blink_identify(duration_ms);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start LED blink: %s", esp_err_to_name(err));
+    }
 }
 
 static void ota_task(void *arg) {
