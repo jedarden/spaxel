@@ -3154,6 +3154,11 @@ func main() {
 	tracksHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Tracks API registered at /api/tracks")
 
+	// Diurnal baseline REST API
+	diurnalHandler := api.NewDiurnalHandler(pm)
+	diurnalHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Diurnal baseline API registered at /api/diurnal/*")
+
 	// Backup API — streams a zip of all databases via SQLite Online Backup API
 	backupHandler := api.NewBackupHandler(cfg.DataDir, version)
 	r.Get("/api/backup", backupHandler.HandleBackup)
