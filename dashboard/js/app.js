@@ -1708,4 +1708,19 @@
     window.setFlowTimeFilter = function(value) {
         Viz3D.setFlowTimeFilter(value);
     };
+
+    window.toggleFresnelZones = function() {
+        var btn = document.getElementById('fresnel-toggle-btn');
+        var isActive = btn && btn.classList.contains('active');
+
+        if (isActive) {
+            // Turn off
+            Viz3D.toggleFresnelZones(false);
+            if (btn) btn.classList.remove('active');
+        } else {
+            // Turn on
+            Viz3D.toggleFresnelZones(true);
+            if (btn) btn.classList.add('active');
+        }
+    };
 })();

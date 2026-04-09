@@ -403,6 +403,11 @@ const Viz3D = (function () {
             _scene.add(line);
             _linkLines.set(id, line);
         });
+
+        // Update Fresnel zones if visible
+        if (_fresnelZonesVisible) {
+            rebuildActiveFresnelZones();
+        }
     }
 
     /**
@@ -2160,9 +2165,54 @@ const Viz3D = (function () {
     const FRESNEL_CONFIG = {
         color: 0x4FC3F7,      // Blue for Fresnel zones
         opacity: 0.25,        // Opacity for Fresnel zones
+        wavelength: 0.123,    // WiFi wavelength at 2.437 GHz (c/f in meters)
+        maxZones: 5           // Maximum number of Fresnel zones to visualize
     };
 
     let _fresnelZones = [];  // Array of THREE.Mesh for explainability Fresnel zones
+    let _fresnelActiveZones = [];  // Array of THREE.Line for active link Fresnel zones (wireframe)
+    let _fresnelZonesVisible = false;  // Toggle state for active link Fresnel zones
+
+    /**
+     * Calculate Fresnel zone ellipsoid geometry for a link.
+     * @param {THREE.Vector3} tx - Transmitter position
+     * @param {THREE.Vector3} rx - Receiver position
+     * @param {number} zoneNumber - Fresnel zone number (1-based)
+     * @returns {Object} Ellipsoid parameters: { center, semiAxes, rotation }
+     */
+    function _calculateFresnelZone(tx, rx, zoneNumber) {
+        // WiFi wavelength and Fresnel zone constants
+        const lambda = FRESNEL_CONFIG.wavelength;  // ~0.123 m for 2.4 GHz
+        const n = zoneNumber;
+
+        // Direct distance between TX and RX
+        const d = tx.distanceTo(rx);
+
+        // Fresnel zone path difference: n * lambda / 2
+        const deltaL = n * lambda / 2;
+
+        // Ellipsoid semi-axes calculation
+        // For a prolate spheroid with foci at tx and rx:
+        // Semi-major axis (a) = (d + deltaL) / 2
+        // Semi-minor axis (b) = sqrt(deltaL * (d + deltaL)) / 2
+        const a = (d + deltaL) / 2;
+        const b = Math.sqrt(deltaL * (d + deltaL)) / 2;
+
+        // Center of ellipsoid (midpoint between TX and RX)
+        const center = new THREE.Vector3().addVectors(tx, rx).multiplyScalar(0.5);
+
+        // Rotation: align with TX-RX axis
+        const direction = new THREE.Vector3().subVectors(rx, tx).normalize();
+        const up = new THREE.Vector3(0, 1, 0);
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
+
+        return {
+            center: center,
+            semiAxes: new THREE.Vector3(b, b, a),  // X, Y, Z semi-axes (Z is along link axis)
+            rotation: quaternion,
+            zoneNumber: n
+        };
+    }
 
     /**
      * Add a Fresnel zone ellipsoid to the scene.
@@ -2228,6 +2278,143 @@ const Viz3D = (function () {
             mesh.material.dispose();
         });
         _fresnelZones = [];
+    }
+
+    // ── Active Link Fresnel Zone Visualization (Wireframe) ────────────────────────
+
+    /**
+     * Create a wireframe Fresnel zone ellipsoid for an active link.
+     * @param {THREE.Vector3} tx - Transmitter position
+     * @param {THREE.Vector3} rx - Receiver position
+     * @param {number} zoneNumber - Fresnel zone number (1-5)
+     * @param {number} color - Color hex value
+     * @returns {THREE.LineSegments|null} The created wireframe mesh
+     */
+    function _createWireframeFresnelZone(tx, rx, zoneNumber, color) {
+        if (!_scene) return null;
+
+        // Calculate Fresnel zone geometry
+        var zone = _calculateFresnelZone(tx, rx, zoneNumber);
+        if (!zone) return null;
+
+        // Create wireframe ellipsoid using TorusGeometry (thin tube)
+        // Torus with tube radius ~0.005m, following the ellipsoid path
+        var tubeRadius = 0.008;  // 8mm tube thickness for visibility
+        var tubularSegments = 64;
+        var radialSegments = 8;
+        var geometry = new THREE.TorusGeometry(
+            zone.semiAxes.z,  // major radius (distance from center to ellipsoid surface along Z axis)
+            tubeRadius,
+            tubularSegments,
+            radialSegments
+        );
+
+        // Apply scaling to create ellipsoid instead of torus
+        // Scale X and Y by semi-minor / semi-major ratio
+        var scaleRatio = zone.semiAxes.x / zone.semiAxes.z;
+        geometry.scale(scaleRatio, scaleRatio, 1.0);
+
+        // Position and rotate
+        var mesh = new THREE.Mesh(geometry);
+
+        // Rotate to align with link direction
+        mesh.position.copy(zone.center);
+        mesh.quaternion.copy(zone.rotation);
+
+        // Orient the torus: rotate 90 degrees so tube lies in correct plane
+        var orientQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            Math.PI / 2
+        );
+        mesh.quaternion.multiply(orientQuat);
+
+        // Create wireframe material
+        var material = new THREE.LineBasicMaterial({
+            color: color || FRESNEL_CONFIG.color,
+            transparent: true,
+            opacity: 0.4,
+            depthTest: false
+        });
+
+        // Convert mesh to wireframe
+        var wireframe = new THREE.LineSegments(
+            new THREE.WireframeGeometry(geometry),
+            material
+        );
+        wireframe.position.copy(mesh.position);
+        wireframe.quaternion.copy(mesh.quaternion);
+
+        // Clean up temporary mesh
+        mesh.geometry.dispose();
+
+        _scene.add(wireframe);
+        return wireframe;
+    }
+
+    /**
+     * Rebuild Fresnel zone visualization for all active links.
+     * Creates wireframe ellipsoids for the first 3 Fresnel zones of each active link.
+     */
+    function rebuildActiveFresnelZones() {
+        // Clear existing Fresnel zones
+        clearActiveFresnelZones();
+
+        if (!_fresnelZonesVisible) return;
+
+        // Get active links
+        _activeLinks.forEach(function(link, linkID) {
+            var txMesh = _nodeMeshes.get(link.node_mac);
+            var rxMesh = _nodeMeshes.get(link.peer_mac);
+            if (!txMesh || !rxMesh) return;
+
+            var tx = txMesh.position;
+            var rx = rxMesh.position;
+
+            // Determine color based on link health
+            var healthData = _linkHealth.get(linkID);
+            var healthScore = healthData ? healthData.score : 0.5;
+            var zoneColor = _getHealthColor(healthScore);
+
+            // Create Fresnel zones for first 3 zones
+            for (var n = 1; n <= 3; n++) {
+                var wireframe = _createWireframeFresnelZone(tx, rx, n, zoneColor);
+                if (wireframe) {
+                    _fresnelActiveZones.push(wireframe);
+                    wireframe.userData = {
+                        linkID: linkID,
+                        zoneNumber: n
+                    };
+                }
+            }
+        });
+    }
+
+    /**
+     * Clear all active Fresnel zone wireframes.
+     */
+    function clearActiveFresnelZones() {
+        _fresnelActiveZones.forEach(function(wireframe) {
+            if (_scene) {
+                _scene.remove(wireframe);
+            }
+            wireframe.geometry.dispose();
+            wireframe.material.dispose();
+        });
+        _fresnelActiveZones = [];
+    }
+
+    /**
+     * Toggle visibility of Fresnel zone overlays for active links.
+     * @param {boolean} visible - Whether to show Fresnel zones
+     */
+    function toggleFresnelZones(visible) {
+        _fresnelZonesVisible = visible;
+
+        if (visible) {
+            rebuildActiveFresnelZones();
+        } else {
+            clearActiveFresnelZones();
+        }
     }
 
     // ── WebSocket reconnect helpers ─────────────────────────────────────────
@@ -2415,6 +2602,7 @@ const Viz3D = (function () {
         addFresnelZone: addFresnelZone,
         removeFresnelZone: removeFresnelZone,
         clearFresnelZones: clearFresnelZones,
+        toggleFresnelZones: toggleFresnelZones,
         // Blob explainability
         explainBlob: explainBlob,
         // Node identification

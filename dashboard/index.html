@@ -1496,6 +1496,20 @@
         #gdop-toggle-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
         #gdop-toggle-btn.active { background: rgba(76,175,80,0.25); color: #66bb6a; border-color: #66bb6a; }
 
+        /* Fresnel zone toggle */
+        #fresnel-toggle-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #888;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #fresnel-toggle-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
+        #fresnel-toggle-btn.active { background: rgba(79,195,247,0.25); color: #4fc3f7; border-color: #4fc3f7; }
+
         /* Virtual node status badge */
         .node-status.virtual {
             background: rgba(128, 203, 196, 0.25);
@@ -2493,6 +2507,7 @@
             <button class="view-btn" id="view-topdown"     onclick="Viz3D.setViewPreset('topdown')">Top</button>
             <button class="view-btn" id="view-follow"      onclick="Viz3D.setViewPreset('follow')">Follow</button>
             <button id="gdop-toggle-btn" onclick="Placement && Placement.toggleGDOP()">GDOP</button>
+            <button id="fresnel-toggle-btn" onclick="toggleFresnelZones()">Fresnel</button>
             <button id="room-editor-btn" onclick="Placement && Placement.toggleRoomEditor()">Room</button>
             <button id="floorplan-btn" onclick="FloorPlanSetup.togglePanel()">Floor plan</button>
         </div>
