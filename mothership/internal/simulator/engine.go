@@ -23,9 +23,9 @@ type Engine struct {
 	mu                sync.RWMutex
 	space             *SpaceDefinition
 	virtualNodes      []*VirtualNode
-	walkers           []*Walker
+	walkers           []*EngineWalker
 	grid              *Grid
-	links             []*Link
+	links             []*EngineLink
 	publishedResults  *SimulationResult
 	subscribers       []chan *SimulationResult
 }
@@ -48,7 +48,7 @@ type VirtualNode struct {
 }
 
 // Walker represents a simulated person moving through the space.
-type Walker struct {
+type EngineWalker struct {
 	ID          string      `json:"id"`
 	Position    [3]float64 `json:"position"`    // x, y, z in meters
 	Velocity    [3]float64 `json:"velocity"`    // vx, vy, vz in m/s
@@ -69,7 +69,7 @@ type Grid struct {
 }
 
 // Link represents a virtual WiFi link between two nodes.
-type Link struct {
+type EngineLink struct {
 	ID         string     `json:"id"`
 	TXNodeID   string     `json:"tx_node_id"`
 	RXNodeID   string     `json:"rx_node_id"`
@@ -110,7 +110,7 @@ func NewEngine(space *SpaceDefinition) *Engine {
 	return &Engine{
 		space:       space,
 		virtualNodes: make([]*VirtualNode, 0),
-		walkers:      make([]*Walker, 0),
+		walkers:      make([]*EngineWalker, 0),
 		subscribers:  make([]chan *SimulationResult, 0),
 	}
 }
@@ -166,7 +166,7 @@ func (e *Engine) RemoveVirtualNode(id string) {
 }
 
 // AddWalker adds a simulated walker.
-func (e *Engine) AddWalker(walker *Walker) {
+func (e *Engine) AddWalker(walker *EngineWalker) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -203,12 +203,12 @@ func (e *Engine) GetVirtualNodes() []*VirtualNode {
 }
 
 // GetWalkers returns all walkers.
-func (e *Engine) GetWalkers() []*Walker {
+func (e *Engine) GetWalkers() []*EngineWalker {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
 	// Return copies
-	walkers := make([]*Walker, len(e.walkers))
+	walkers := make([]*EngineWalker, len(e.walkers))
 	for i, w := range e.walkers {
 		walkerCopy := *w
 		walkers[i] = &walkerCopy
@@ -316,7 +316,7 @@ func (e *Engine) initializeGrid() {
 
 // generateLinks creates virtual links between all node pairs.
 func (e *Engine) generateLinks() {
-	e.links = make([]*Link, 0)
+	e.links = make([]*EngineLink, 0)
 
 	// Create links between all pairs of nodes
 	for i, tx := range e.virtualNodes {
@@ -350,7 +350,7 @@ func (e *Engine) generateLinks() {
 }
 
 // computeZoneCache precomputes Fresnel zone numbers for all grid cells.
-func (e *Engine) computeZoneCache(link *Link) []*ZoneInfo {
+func (e *Engine) computeZoneCache(link *EngineLink) []*ZoneInfo {
 	const lambda = 0.123    // WiFi wavelength
 	halfLambda := lambda / 2
 
@@ -438,8 +438,8 @@ func (e *Engine) updateWalkers() {
 			}
 
 			// Random velocity perturbation
-			walker.Velocity[0] += (randFloat64() - 0.5) * 0.1
-			walker.Velocity[1] += (randFloat64() - 0.5) * 0.1
+			walker.Velocity[0] += (rand.Float64() - 0.5) * 0.1
+			walker.Velocity[1] += (rand.Float64() - 0.5) * 0.1
 
 			// Clamp velocity
 			maxSpeed := 0.5
@@ -525,7 +525,7 @@ func (e *Engine) detectBlobs() []BlobResult {
 }
 
 // computeCSIAtPosition computes simulated CSI amplitude at a position.
-func (e *Engine) computeCSIAtPosition(link *Link, pos [3]float64) float64 {
+func (e *Engine) computeCSIAtPosition(link *EngineLink, pos [3]float64) float64 {
 	// Simplified path loss model
 	// PL(d) = PL_0 + 10*n*log10(d/d_0)
 	// PL_0 = 40 dB at d_0 = 1m, n = 2.0 (free space)

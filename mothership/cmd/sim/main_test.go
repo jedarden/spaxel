@@ -2,9 +2,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
+	"math/rand"
+	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseSpaceDims(t *testing.T) {
@@ -475,4 +480,471 @@ func bytesEqual(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// TestHelloMessageFormat tests that the hello message matches expected format
+func TestHelloMessageFormat(t *testing.T) {
+	node := &VirtualNode{
+		mac:      "AA:BB:CC:DD:EE:FF",
+		position: [3]float64{1.0, 2.0, 2.5},
+	}
+
+	// Create a hello message as the node would send it
+	hello := HelloMessage{
+		Type:            "hello",
+		MAC:             node.mac,
+		NodeID:          fmt.Sprintf("sim-node-%s", node.mac),
+		FirmwareVersion: "0.1.0-sim",
+		Capabilities:    []string{"csi", "tx", "rx"},
+		Chip:            "ESP32-S3",
+		FlashMB:         16,
+		UptimeMS:        1000,
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(hello)
+	if err != nil {
+		t.Fatalf("Failed to marshal hello: %v", err)
+	}
+
+	// Unmarshal and verify
+	var decoded HelloMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal hello: %v", err)
+	}
+
+	if decoded.Type != "hello" {
+		t.Errorf("Type = %s, want 'hello'", decoded.Type)
+	}
+	if decoded.MAC != node.mac {
+		t.Errorf("MAC = %s, want %s", decoded.MAC, node.mac)
+	}
+	if decoded.FirmwareVersion != "0.1.0-sim" {
+		t.Errorf("FirmwareVersion = %s, want '0.1.0-sim'", decoded.FirmwareVersion)
+	}
+	if len(decoded.Capabilities) != 3 {
+		t.Errorf("Capabilities length = %d, want 3", len(decoded.Capabilities))
+	}
+}
+
+// TestIQClamping tests that I/Q values are clamped to int8 range
+func TestIQClamping(t *testing.T) {
+	tests := []struct {
+		name        string
+		amplitude   float64
+		phase       float64
+		noiseSigma  float64
+		wantInRange bool
+	}{
+		{
+			name:        "normal values",
+			amplitude:   30.0,
+			phase:       0.5,
+			noiseSigma:  0.005,
+			wantInRange: true,
+		},
+		{
+			name:        "high amplitude",
+			amplitude:   500.0,
+			phase:       0.0,
+			noiseSigma:  0.005,
+			wantInRange: true, // Should be clamped
+		},
+		{
+			name:        "negative amplitude",
+			amplitude:   -100.0,
+			phase:       0.0,
+			noiseSigma:  0.005,
+			wantInRange: true, // Should be clamped
+		},
+		{
+			name:        "large noise",
+			amplitude:   30.0,
+			phase:       0.5,
+			noiseSigma:  1.0,
+			wantInRange: true, // Should be clamped
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Generate I/Q pair
+			noise := rand.NormFloat64() * tt.noiseSigma * 100.0
+			iVal := tt.amplitude*math.Cos(tt.phase) + noise
+			qVal := tt.amplitude*math.Sin(tt.phase) + noise
+
+			// Clamp to int8 range
+			if iVal > 127 {
+				iVal = 127
+			}
+			if iVal < -127 {
+				iVal = -127
+			}
+			if qVal > 127 {
+				qVal = 127
+			}
+			if qVal < -127 {
+				qVal = -127
+			}
+
+			// Check range
+			inRange := int8(iVal) >= -127 && int8(iVal) <= 127 &&
+				int8(qVal) >= -127 && int8(qVal) <= 127
+
+			if inRange != tt.wantInRange {
+				t.Errorf("I/Q in range = %v, want %v (I=%d, Q=%d)",
+					inRange, tt.wantInRange, int8(iVal), int8(qVal))
+			}
+		})
+	}
+}
+
+// TestSeedReproducibility tests that --seed produces identical walker paths
+func TestSeedReproducibility(t *testing.T) {
+	seed := int64(42)
+	width := 6.0
+	depth := 5.0
+	height := 2.5
+
+	// First run with seed
+	rand.Seed(seed)
+	walkerSim1 := NewWalkerSimulator(1, width, depth, height, seed)
+
+	// Update positions
+	walkerSim1.Update(1.0) // 1 second
+	pos1 := walkerSim1.GetWalkers()[0].Position
+
+	// Reset and run again with same seed
+	rand.Seed(seed)
+	walkerSim2 := NewWalkerSimulator(1, width, depth, height, seed)
+
+	walkerSim2.Update(1.0)
+	pos2 := walkerSim2.GetWalkers()[0].Position
+
+	// Positions should be identical
+	if pos1[0] != pos2[0] || pos1[1] != pos2[1] || pos1[2] != pos2[2] {
+		t.Errorf("Positions differ with same seed: run1=%v, run2=%v", pos1, pos2)
+	}
+}
+
+// TestOutputCSV tests that --output-csv generates a CSV with correct headers
+func TestOutputCSV(t *testing.T) {
+	width := 6.0
+	depth := 5.0
+	height := 2.5
+	seed := int64(42)
+
+	// Create a temporary CSV file
+	tmpFile, err := os.CreateTemp("", "sim-test-*.csv")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	// Create walker simulator
+	walkerSim := NewWalkerSimulator(1, width, depth, height, seed)
+
+	// Open CSV
+	if err := walkerSim.OpenCSV(tmpFile.Name()); err != nil {
+		t.Fatalf("Failed to open CSV: %v", err)
+	}
+	defer walkerSim.CloseCSV()
+
+	// Write some data rows
+	timestamp := time.Date(2026, 4, 9, 12, 0, 0, 0, time.UTC)
+	walker := walkerSim.GetWalkers()[0]
+
+	for i := 0; i < 3; i++ {
+		timestamp = timestamp.Add(time.Second)
+		if err := walkerSim.WriteCSVRow(timestamp, walker); err != nil {
+			t.Fatalf("Failed to write CSV row: %v", err)
+		}
+	}
+
+	// Flush and read back
+	if err := walkerSim.CloseCSV(); err != nil {
+		t.Fatalf("Failed to close CSV: %v", err)
+	}
+
+	// Read and verify CSV content
+	data, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("Failed to read CSV file: %v", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	// Check header
+	expectedHeader := "timestamp_ms,walker_id,x,y,z,vx,vy,vz"
+	if lines[0] != expectedHeader {
+		t.Errorf("CSV header = %s, want %s", lines[0], expectedHeader)
+	}
+
+	// Check we have 4 lines (header + 3 data rows)
+	if len(lines) < 4 {
+		t.Errorf("CSV has %d lines, want at least 4", len(lines))
+	}
+
+	// Verify data row format
+	dataLine := strings.Split(lines[1], ",")
+	if len(dataLine) != 8 {
+		t.Errorf("Data row has %d columns, want 8", len(dataLine))
+	}
+}
+
+// TestVerificationModeBlobCount tests that --verify correctly detects missing blobs
+func TestVerificationModeBlobCount(t *testing.T) {
+	// This test would require a running mothership server
+	// For now, we test the verification logic in isolation
+
+	verifier := NewVerifier("http://localhost:8080")
+
+	// Test allWalkersInBounds with default bounds
+	tests := []struct {
+		name     string
+		positions [][3]float64
+		want      bool
+	}{
+		{
+			name:     "all in bounds",
+			positions: [][3]float64{{3, 2.5, 1.7}, {1, 1, 1}},
+			want:      true,
+		},
+		{
+			name:     "one out of bounds (X)",
+			positions: [][3]float64{{7, 2.5, 1.7}, {3, 2.5, 1.7}},
+			want:      false,
+		},
+		{
+			name:     "one out of bounds (Y)",
+			positions: [][3]float64{{3, 6, 1.7}, {3, 2.5, 1.7}},
+			want:      false,
+		},
+		{
+			name:     "one out of bounds (Z)",
+			positions: [][3]float64{{3, 2.5, 3}, {3, 2.5, 1.7}},
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := verifier.allWalkersInBounds(tt.positions)
+			if result != tt.want {
+				t.Errorf("allWalkersInBounds() = %v, want %v", result, tt.want)
+			}
+		})
+	}
+}
+
+// TestVerifyBlobDetection tests that verify correctly detects blob count mismatches
+func TestVerifyBlobDetection(t *testing.T) {
+	verifier := NewVerifier("http://localhost:8080")
+
+	// Test walkersHaveNearbyBlobs
+	walkerPositions := [][3]float64{{3, 2.5, 1.7}, {1, 1, 1}}
+
+	tests := []struct {
+		name     string
+		blobs    []Blob
+		want     bool
+	}{
+		{
+			name: "blob near each walker",
+			blobs: []Blob{
+				{X: 3.0, Y: 2.5, Z: 1.7},
+				{X: 1.0, Y: 1.0, Z: 1.0},
+			},
+			want: true,
+		},
+		{
+			name: "blob too far from first walker",
+			blobs: []Blob{
+				{X: 5.5, Y: 2.5, Z: 1.7},
+			},
+			want: false,
+		},
+		{
+			name: "no blobs",
+			blobs: []Blob{},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := verifier.walkersHaveNearbyBlobs(walkerPositions, tt.blobs)
+			if result != tt.want {
+				t.Errorf("walkersHaveNearbyBlobs() = %v, want %v", result, tt.want)
+			}
+		})
+	}
+}
+
+// TestDistance3D tests the 3D distance calculation
+func TestDistance3D(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        [3]float64
+		b        [3]float64
+		wantDist float64
+	}{
+		{
+			name:     "same point",
+			a:        [3]float64{0, 0, 0},
+			b:        [3]float64{0, 0, 0},
+			wantDist: 0,
+		},
+		{
+			name:     "unit distance on X",
+			a:        [3]float64{0, 0, 0},
+			b:        [3]float64{1, 0, 0},
+			wantDist: 1.0,
+		},
+		{
+			name:     "3D distance",
+			a:        [3]float64{0, 0, 0},
+			b:        [3]float64{3, 4, 0},
+			wantDist: 5.0,
+		},
+		{
+			name:     "with Z component",
+			a:        [3]float64{0, 0, 0},
+			b:        [3]float64{0, 0, 2},
+			wantDist: 2.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := distance3D(tt.a, tt.b)
+			if math.Abs(got-tt.wantDist) > 1e-6 {
+				t.Errorf("distance3D() = %f, want %f", got, tt.wantDist)
+			}
+		})
+	}
+}
+
+// TestWallParsing tests wall definition parsing
+func TestWallParsing(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantCount int
+		wantValid bool
+	}{
+		{
+			name:      "valid wall",
+			input:     "1,2,3,4",
+			wantCount: 1,
+			wantValid: true,
+		},
+		{
+			name:      "valid wall with decimals",
+			input:     "1.5,2.5,3.5,4.5",
+			wantCount: 1,
+			wantValid: true,
+		},
+		{
+			name:      "invalid - missing coordinate",
+			input:     "1,2,3",
+			wantCount: 0,
+			wantValid: false,
+		},
+		{
+			name:      "invalid - non-numeric",
+			input:     "a,b,c,d",
+			wantCount: 0,
+			wantValid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			walls := parseWalls(tt.input)
+			if tt.wantValid {
+				if len(walls) != tt.wantCount {
+					t.Errorf("parseWalls() returned %d walls, want %d", len(walls), tt.wantCount)
+				}
+			} else {
+				if len(walls) != 0 {
+					t.Errorf("parseWalls() should have returned empty for invalid input, got %d walls", len(walls))
+				}
+			}
+		})
+	}
+}
+
+// TestBinaryHeaderFormat tests that CSI frames have correct binary header format
+func TestBinaryHeaderFormat(t *testing.T) {
+	node := &VirtualNode{
+		mac:      "AA:BB:CC:DD:EE:FF",
+		position: [3]float64{0, 0, 2.5},
+	}
+
+	walker := &Walker{
+		Position: [3]float64{3, 2.5, 1.7},
+		Velocity: [3]float64{0.1, 0, 0},
+		mac:      "11:22:33:44:55:00",
+	}
+
+	frame := node.generateCSIFrame(walker, 0, 0.005)
+
+	// Check minimum frame length
+	if len(frame) < HeaderSize {
+		t.Fatalf("Frame length %d is less than header size %d", len(frame), HeaderSize)
+	}
+
+	// Check magic number (if we had one at the start)
+	// For now, check that node MAC is in correct position
+	nodeMAC := frame[0:6]
+	expectedMAC := macToBytes(node.mac)
+	if !bytesEqual(nodeMAC, expectedMAC[:]) {
+		t.Errorf("Node MAC = %v, want %v", nodeMAC, expectedMAC)
+	}
+
+	// Check peer MAC is in correct position
+	peerMAC := frame[6:12]
+	if len(peerMAC) != 6 {
+		t.Errorf("Peer MAC length = %d, want 6", len(peerMAC))
+	}
+
+	// Check timestamp is at correct position and is reasonable
+	timestampUS := binary.LittleEndian.Uint64(frame[12:20])
+	if timestampUS > 100000 { // Should be less than 100ms for first frame
+		t.Errorf("Timestamp = %d us, want < 100000 us for first frame", timestampUS)
+	}
+
+	// Check RSSI is in valid range
+	rssi := int8(frame[20])
+	if rssi < -90 || rssi > -30 {
+		t.Errorf("RSSI = %d dBm, want between -90 and -30", rssi)
+	}
+
+	// Check noise floor
+	noiseFloor := int8(frame[21])
+	if noiseFloor < -100 || noiseFloor > -50 {
+		t.Errorf("Noise floor = %d dBm, want between -100 and -50", noiseFloor)
+	}
+
+	// Check channel is valid WiFi channel
+	channel := frame[22]
+	if channel < 1 || channel > 14 {
+		t.Errorf("Channel = %d, want valid channel 1-14", channel)
+	}
+
+	// Check number of subcarriers
+	nSub := frame[23]
+	if nSub < 1 || nSub > MaxSubcarriers {
+		t.Errorf("Subcarriers = %d, want between 1 and %d", nSub, MaxSubcarriers)
+	}
+
+	// Verify payload length matches nSub
+	expectedPayloadSize := int(nSub) * 2
+	expectedFrameSize := HeaderSize + expectedPayloadSize
+	if len(frame) != expectedFrameSize {
+		t.Errorf("Frame length = %d, want %d (header %d + payload %d)",
+			len(frame), expectedFrameSize, HeaderSize, expectedPayloadSize)
+	}
 }

@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spaxel/mothership/internal/simulator"
 )
 
 // Version is set by the build process via -ldflags
@@ -48,7 +50,7 @@ var (
 	nodes         = flag.Int("nodes", 4, "Number of virtual nodes to simulate")
 	walkers       = flag.Int("walkers", 1, "Number of walking persons to simulate")
 	rate          = flag.Int("rate", 20, "CSI packet rate in Hz")
-	duration      = flag.Duration("duration", 30*time.Second, "Simulation duration")
+	duration      = flag.Duration("duration", 30*time.Second, "Simulation duration (0 = run until Ctrl+C)")
 	enableBLE     = flag.Bool("ble", false, "Also send simulated BLE advertisements")
 	seed          = flag.Int64("seed", 42, "Random seed for reproducible runs")
 	spaceWidth    = flag.Float64("width", 6.0, "Space width in meters")
@@ -57,6 +59,13 @@ var (
 	spaceDims     = flag.String("space", "", "Space dimensions as 'WxDxH' (meters), overrides --width/--depth/--height")
 	showFrameRate = flag.Bool("show-frame-rate", true, "Show per-second frame counts to stdout")
 	verbose       = flag.Bool("verbose", false, "Enable verbose logging")
+
+	// New flags for verification and advanced simulation
+	verifyMode    = flag.Bool("verify", false, "Verify blob count after simulation (exit code 0=pass, 1=fail)")
+	noiseSigma    = flag.Float64("noise-sigma", 0.005, "Gaussian noise standard deviation for I/Q generation")
+	wallDefs      = flag.String("wall", "", "Add wall as 'x1,y1,x2,y2' (can be repeated)")
+	outputCSV    = flag.String("output-csv", "", "Write ground truth to CSV file")
+	provision     = flag.Bool("provision", false, "Auto-provision via POST /api/provision")
 )
 
 // CSIFrame represents a CSI binary frame
@@ -155,23 +164,67 @@ func main() {
 		*spaceHeight = height
 	}
 
-	if *seed != 0 {
-		rand.Seed(*seed)
+	// Parse wall definitions
+	walls := parseWalls(*wallDefs)
+
+	// Create simulation configuration
+	config := SimConfig{
+		MothershipURL: *mothershipURL,
+		Token:         *token,
+		Nodes:         *nodes,
+		Walkers:       *walkers,
+		Rate:          *rate,
+		Duration:      *duration,
+		EnableBLE:     *enableBLE,
+		Seed:          *seed,
+		SpaceWidth:    *spaceWidth,
+		SpaceDepth:    *spaceDepth,
+		SpaceHeight:   *spaceHeight,
+		NoiseSigma:    *noiseSigma,
+		VerifyMode:    *verifyMode,
+		OutputCSV:     *outputCSV,
+		Walls:         walls,
+		Verbose:       *verbose,
+		ShowFrameRate: *showFrameRate,
+	}
+
+	if err := runSimulation(config); err != nil {
+		log.Fatalf("[ERROR] Simulation failed: %v", err)
+	}
+}
+
+// runSimulation runs the complete simulation workflow
+func runSimulation(config SimConfig) error {
+	if config.Seed != 0 {
+		rand.Seed(config.Seed)
 	}
 
 	log.Printf("[INFO] CSI Simulator starting")
-	log.Printf("[INFO] Configuration: nodes=%d, walkers=%d, rate=%d Hz, duration=%s", *nodes, *walkers, *rate, *duration)
-	log.Printf("[INFO] Space: %.1fx%.1fx%.1f m", *spaceWidth, *spaceDepth, *spaceHeight)
-	if *token != "" {
+	log.Printf("[INFO] Configuration: nodes=%d, walkers=%d, rate=%d Hz, duration=%s",
+		config.Nodes, config.Walkers, config.Rate, config.Duration)
+	log.Printf("[INFO] Space: %.1fx%.1fx%.1f m", config.SpaceWidth, config.SpaceDepth, config.SpaceHeight)
+	if len(config.Walls) > 0 {
+		log.Printf("[INFO] Walls: %d defined", len(config.Walls))
+	}
+	if config.Token != "" {
 		log.Printf("[INFO] Using authentication token")
 	}
-	log.Printf("[INFO] Connecting to: %s", *mothershipURL)
+	log.Printf("[INFO] Connecting to: %s", config.MothershipURL)
+
+	// Create walker simulator
+	walkerSim := NewWalkerSimulator(config.Walkers, config.SpaceWidth, config.SpaceDepth, config.SpaceHeight, config.Seed)
+
+	// Open CSV file if specified
+	if config.OutputCSV != "" {
+		if err := walkerSim.OpenCSV(config.OutputCSV); err != nil {
+			return fmt.Errorf("failed to open CSV file: %w", err)
+		}
+		defer walkerSim.CloseCSV()
+		log.Printf("[INFO] Writing ground truth to %s", config.OutputCSV)
+	}
 
 	// Create virtual nodes at corners and edges of the room
-	virtualNodes := createVirtualNodes(*nodes, *spaceWidth, *spaceDepth, *spaceHeight)
-
-	// Create walkers
-	walkers := createWalkers(*walkers, *spaceWidth, *spaceDepth, *spaceHeight)
+	virtualNodes := createVirtualNodes(config.Nodes, config.SpaceWidth, config.SpaceDepth, config.SpaceHeight)
 
 	// Start all nodes
 	var wg sync.WaitGroup
@@ -179,7 +232,7 @@ func main() {
 		wg.Add(1)
 		go func(n *VirtualNode) {
 			defer wg.Done()
-			if err := n.run(walkers, *rate, *duration, *enableBLE, *verbose); err != nil {
+			if err := n.run(config, walkerSim); err != nil {
 				log.Printf("[ERROR] Node %s failed: %v", n.mac, err)
 				os.Exit(1)
 			}
@@ -196,6 +249,54 @@ func main() {
 			log.Printf("[STATS] Node %s: sent %d frames", n.mac, n.frameCount)
 		}
 	}
+
+	// Verification mode: check blob count
+	if config.VerifyMode {
+		log.Printf("[INFO] Running verification mode...")
+
+		// Get walker positions
+		walkerPositions := make([][3]float64, walkerSim.Count())
+		for i, w := range walkerSim.GetWalkers() {
+			walkerPositions[i] = w.Position
+		}
+
+		// Run verification
+		verifier := NewVerifier(config.MothershipURL)
+		result, err := verifier.Verify(walkerSim.Count(), walkerPositions)
+		if err != nil {
+			log.Printf("[ERROR] Verification failed: %v", err)
+			os.Exit(1)
+		}
+
+		verifier.ExitWithResult(result)
+	}
+}
+
+// SimConfig holds simulation configuration
+type SimConfig struct {
+	MothershipURL string
+	Token         string
+	Nodes         int
+	Walkers       int
+	Rate          int
+	Duration      time.Duration
+	EnableBLE     bool
+	Seed          int64
+	SpaceWidth    float64
+	SpaceDepth    float64
+	SpaceHeight   float64
+	NoiseSigma    float64
+	VerifyMode    bool
+	OutputCSV     string
+	Walls         []WallDef
+	Verbose       bool
+	ShowFrameRate bool
+}
+
+// WallDef defines a wall segment
+type WallDef struct {
+	X1, Y1, X2, Y2 float64
+}
 }
 
 // createVirtualNodes positions virtual nodes in the space
@@ -255,18 +356,55 @@ func createWalkers(count int, width, depth, height float64) []Walker {
 	return walkers
 }
 
+// parseWalls parses wall definitions from command line flag
+func parseWalls(wallDefs string) []WallDef {
+	if wallDefs == "" {
+		return nil
+	}
+
+	var walls []WallDef
+	parts := strings.Split(wallDefs, ",")
+	if len(parts) < 4 {
+		log.Printf("[WARN] Invalid wall definition: %s (expected x1,y1,x2,y2)", wallDefs)
+		return nil
+	}
+
+	var x1, y1, x2, y2 float64
+	var err error
+	if x1, err = strconv.ParseFloat(parts[0], 64); err != nil {
+		log.Printf("[WARN] Invalid wall x1: %v", err)
+		return nil
+	}
+	if y1, err = strconv.ParseFloat(parts[1], 64); err != nil {
+		log.Printf("[WARN] Invalid wall y1: %v", err)
+		return nil
+	}
+	if x2, err = strconv.ParseFloat(parts[2], 64); err != nil {
+		log.Printf("[WARN] Invalid wall x2: %v", err)
+		return nil
+	}
+	if y2, err = strconv.ParseFloat(parts[3], 64); err != nil {
+		log.Printf("[WARN] Invalid wall y2: %v", err)
+		return nil
+	}
+
+	walls = append(walls, WallDef{X1: x1, Y1: y1, X2: x2, Y2: y2})
+	log.Printf("[INFO] Added wall: (%.1f,%.1f) to (%.1f,%.1f)", x1, y1, x2, y2)
+	return walls
+}
+
 // run starts the virtual node simulation
-func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, enableBLE, verbose bool) error {
+func (n *VirtualNode) run(config SimConfig, walkerSim *WalkerSimulator) error {
 	// Parse mothership URL
-	u, err := url.Parse(*mothershipURL)
+	u, err := url.Parse(config.MothershipURL)
 	if err != nil {
 		return fmt.Errorf("invalid mothership URL: %w", err)
 	}
 
 	// Prepare WebSocket request headers with authentication token
 	headers := make(map[string][]string)
-	if *token != "" {
-		headers["X-Spaxel-Token"] = []string{*token}
+	if config.Token != "" {
+		headers["X-Spaxel-Token"] = []string{config.Token}
 	}
 
 	// Connect to mothership
@@ -314,7 +452,7 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 		return fmt.Errorf("failed to send hello: %w", err)
 	}
 
-	if verbose {
+	if config.Verbose {
 		log.Printf("[DEBUG] Node %s sent hello", n.mac)
 	}
 
@@ -322,7 +460,7 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 	time.Sleep(100 * time.Millisecond)
 
 	// Start ticker for CSI frames
-	ticker := time.NewTicker(time.Second / time.Duration(rateHz))
+	ticker := time.NewTicker(time.Second / time.Duration(config.Rate))
 	defer ticker.Stop()
 
 	// Health ticker (every 10 seconds)
@@ -331,33 +469,42 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 
 	// BLE ticker (every 5 seconds)
 	var bleTicker *time.Ticker
-	if enableBLE {
+	if config.EnableBLE {
 		bleTicker = time.NewTicker(5 * time.Second)
 		defer bleTicker.Stop()
 	}
 
 	// Frame rate tracking ticker
 	var frameRateTicker *time.Ticker
-	if *showFrameRate {
+	if config.ShowFrameRate {
 		frameRateTicker = time.NewTicker(time.Second)
 		defer frameRateTicker.Stop()
 	}
 
 	startTime := time.Now()
 	frameIndex := uint64(0)
+	lastCSVWrite := startTime
 
 	// Main loop (run forever if duration is 0)
-	for duration == 0 || time.Since(startTime) < duration {
+	for config.Duration == 0 || time.Since(startTime) < config.Duration {
 		select {
 		case <-ticker.C:
 			// Update walker positions
-			for i := range walkers {
-				updateWalkerPosition(&walkers[i], *spaceWidth, *spaceDepth)
+			walkerSim.Update(0.05) // 50ms step
+
+			// Write CSV row if configured (every 100ms)
+			if config.OutputCSV != "" && time.Since(lastCSVWrite) > 100*time.Millisecond {
+				for _, w := range walkerSim.GetWalkers() {
+					if err := walkerSim.WriteCSVRow(time.Now(), w); err != nil {
+						log.Printf("[WARN] Failed to write CSV: %v", err)
+					}
+				}
+				lastCSVWrite = time.Now()
 			}
 
 			// Generate and send CSI frames for each link
-			for _, walker := range walkers {
-				frame := n.generateCSIFrame(walker, frameIndex)
+			for _, walker := range walkerSim.GetWalkers() {
+				frame := n.generateCSIFrame(walker, frameIndex, config.NoiseSigma)
 				if err := conn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
 					return fmt.Errorf("failed to send CSI frame: %w", err)
 				}
@@ -377,7 +524,7 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 				WifiRSSIdBm:  -50 - rand.Intn(20), // -50 to -70
 				UptimeMS:     uptime,
 				TemperatureC: 40 + rand.Float64()*5,
-				CSIRateHz:    rateHz,
+				CSIRateHz:    config.Rate,
 				WifiChannel:  6,
 				IP:           "192.168.1.100",
 			}
@@ -392,12 +539,13 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 				return fmt.Errorf("failed to send health: %w", err)
 			}
 
-			if verbose {
+			if config.Verbose {
 				log.Printf("[DEBUG] Node %s sent health", n.mac)
 			}
 
 		case <-bleTicker.C:
 			// Send BLE scan results
+			walkers := walkerSim.GetWalkers()
 			if len(walkers) > 0 {
 				walker := walkers[0] // Use first walker's BLE
 				ble := BLEMessage{
@@ -406,7 +554,7 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 					TimestampMS: time.Now().UnixMilli(),
 					Devices: []BLEDevice{
 						{
-							Addr:     walker.mac,
+							Addr:     walker.BLEAddress,
 							AddrType: "public",
 							RSSIdBm:  -60 - rand.Intn(20),
 							Name:     "SimPhone",
@@ -425,7 +573,7 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 					return fmt.Errorf("failed to send BLE: %w", err)
 				}
 
-				if verbose {
+				if config.Verbose {
 					log.Printf("[DEBUG] Node %s sent BLE scan", n.mac)
 				}
 			}
@@ -458,24 +606,32 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 }
 
 // generateCSIFrame creates a synthetic CSI frame based on walker position
-func (n *VirtualNode) generateCSIFrame(walker Walker, frameIndex uint64) []byte {
+func (n *VirtualNode) generateCSIFrame(walker *Walker, frameIndex uint64, noiseSigma float64) []byte {
 	nSub := DefaultSubcarriers
 
 	// Calculate distance to walker
-	dx := walker.position[0] - n.position[0]
-	dy := walker.position[1] - n.position[1]
-	dz := walker.position[2] - n.position[2]
+	dx := walker.Position[0] - n.position[0]
+	dy := walker.Position[1] - n.position[1]
+	dz := walker.Position[2] - n.position[2]
 	distance := math.Sqrt(dx*dx + dy*dy + dz*dz)
 
 	// Calculate path loss for RSSI
 	// Free space path loss: PL(d) = PL_0 + 10*n*log10(d/d_0)
 	// PL_0 = 40 dB at d_0 = 1m, n = 2.0
-	pathLoss := 40 + 20*math.Log10(distance/1.0)
+	pathLoss := 40.0 + 20.0*math.Log10(distance/1.0)
 	rssi := int8(-30 - pathLoss) // -30 dBm reference
+
+	// Clamp RSSI to valid range
+	if rssi < -90 {
+		rssi = -90
+	}
+	if rssi > -30 {
+		rssi = -30
+	}
 
 	// Add Fresnel zone modulation
 	// When walker is in a Fresnel zone, amplitude increases
-	fresnelMod := fresnelModulation(n.position, walker.position)
+	fresnelMod := fresnelModulation(n.position, walker.Position)
 
 	// Create frame
 	buf := make([]byte, HeaderSize + nSub*2)
@@ -489,7 +645,7 @@ func (n *VirtualNode) generateCSIFrame(walker Walker, frameIndex uint64) []byte 
 	copy(buf[6:12], peerMAC[:])
 
 	// Timestamp (8 bytes, uint64, little-endian)
-	timestampUS := uint64(frameIndex * 1_000_000 / uint64(*rate))
+	timestampUS := uint64(frameIndex * 1_000_000 / 20) // Assume 20 Hz
 	binary.LittleEndian.PutUint64(buf[12:20], timestampUS)
 
 	// RSSI (1 byte, int8)
@@ -512,16 +668,30 @@ func (n *VirtualNode) generateCSIFrame(walker Walker, frameIndex uint64) []byte 
 		// Add subcarrier-dependent phase
 		phase := float64(k) * 0.2
 
-		// Add noise
-		noise := rand.NormFloat64() * 2.0
+		// Add noise with configurable sigma
+		noise := rand.NormFloat64() * noiseSigma * 100.0 // Scale up for visibility
 
-		// Convert to I, Q
-		iVal := int8(amplitude*math.Cos(phase) + noise)
-		qVal := int8(amplitude*math.Sin(phase) + noise)
+		// Convert to I, Q and clamp to int8 range
+		iVal := amplitude*math.Cos(phase) + noise
+		qVal := amplitude*math.Sin(phase) + noise
+
+		// Clamp to int8 range
+		if iVal > 127 {
+			iVal = 127
+		}
+		if iVal < -127 {
+			iVal = -127
+		}
+		if qVal > 127 {
+			qVal = 127
+		}
+		if qVal < -127 {
+			qVal = -127
+		}
 
 		offset := HeaderSize + k*2
-		buf[offset] = byte(iVal)
-		buf[offset+1] = byte(qVal)
+		buf[offset] = byte(int8(iVal))
+		buf[offset+1] = byte(int8(qVal))
 	}
 
 	return buf

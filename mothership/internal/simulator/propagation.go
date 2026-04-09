@@ -489,7 +489,3 @@ func IsInFirstFresnelZone(tx, rx, point Point) bool {
 	return FresnelZoneNumber(tx, rx, point) == 1
 }
 
-// IsInFresnelZones returns true if the point is within the first N Fresnel zones
-func IsInFresnelZones(tx, rx, point Point, maxZone int) bool {
-	return FresnelZoneNumber(tx, rx, point) <= maxZone
-}
