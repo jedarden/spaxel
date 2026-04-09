@@ -31,6 +31,7 @@ type Hub struct {
 	zoneState       ZoneStateProvider
 	eventStore      EventStore
 	securityState   SecurityStateProvider
+	sleepState      SleepStateProvider
 
 	// Pending events buffer — events accumulated between 10 Hz delta ticks.
 	pendingEvents   []map[string]interface{}
@@ -149,6 +150,11 @@ type SecurityStateProvider interface {
 	IsModelReady() bool
 }
 
+// SleepStateProvider provides sleep monitoring state for morning summary push.
+type SleepStateProvider interface {
+	ShouldPushMorningSummary() (bool, map[string]interface{})
+}
+
 // ZoneChangeBroadcaster notifies dashboard clients when zones or portals
 // are created, updated, or deleted via the REST API. Implementations should
 // both send an immediate typed broadcast and invalidate the snapshot cache
@@ -220,6 +226,13 @@ func (h *Hub) SetZoneState(state ZoneStateProvider) {
 func (h *Hub) SetSecurityState(state SecurityStateProvider) {
 	h.mu.Lock()
 	h.securityState = state
+	h.mu.Unlock()
+}
+
+// SetSleepState sets the sleep state provider for morning summary push.
+func (h *Hub) SetSleepState(state SleepStateProvider) {
+	h.mu.Lock()
+	h.sleepState = state
 	h.mu.Unlock()
 }
 

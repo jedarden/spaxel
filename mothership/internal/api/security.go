@@ -25,6 +25,7 @@ type DetectorProvider interface {
 	IsModelReady() bool
 	GetActiveAnomalies() []*events.AnomalyEvent
 	CountAnomaliesSince(since time.Time) (int, error)
+	GetSystemMode() events.SystemMode
 }
 
 // NewSecurityHandler creates a new security handler.
@@ -39,6 +40,8 @@ func (h *SecurityHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/security/arm", h.handleArm)
 	r.Post("/api/security/disarm", h.handleDisarm)
 	r.Get("/api/security/status", h.handleStatus)
+	r.Get("/api/mode", h.handleGetMode)
+	r.Post("/api/mode", h.handleSetMode)
 }
 
 // SecurityStatus represents the current security mode state.
@@ -48,6 +51,17 @@ type SecurityStatus struct {
 	LearningUntil   string `json:"learning_until,omitempty"` // ISO8601 when model will be ready, empty if ready
 	AnomalyCount24h int    `json:"anomaly_count_24h"`
 	ModelReady      bool   `json:"model_ready"`
+}
+
+// SystemModeResponse represents the current system mode response.
+type SystemModeResponse struct {
+	Mode            string    `json:"mode"`            // "home", "away", "sleep"
+	Armed           bool      `json:"armed"`
+	LearningUntil   string    `json:"learning_until,omitempty"`
+	AnomalyCount24h int       `json:"anomaly_count_24h"`
+	ModelReady      bool      `json:"model_ready"`
+	LastChange      string    `json:"last_change,omitempty"`
+	LastChangeBy    string    `json:"last_change_by,omitempty"`
 }
 
 // handleStatus returns the current security mode status.
@@ -158,4 +172,103 @@ func (h *SecurityHandler) countAnomalies24h() int {
 		return 0
 	}
 	return count
+}
+
+// handleGetMode returns the current system mode (home/away/sleep).
+// Response JSON:
+// {
+//   "mode": "home",
+//   "armed": false,
+//   "learning_until": "2024-04-15T10:30:00Z",  // omitted if model_ready
+//   "anomaly_count_24h": 5,
+//   "model_ready": false,
+//   "last_change": "2024-04-15T10:30:00Z",
+//   "last_change_by": "auto_away"
+// }
+func (h *SecurityHandler) handleGetMode(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	mode := h.detector.GetSystemMode()
+	armed := h.detector.IsSecurityModeActive()
+	modelReady := h.detector.IsModelReady()
+	progress := h.detector.GetLearningProgress()
+
+	response := SystemModeResponse{
+		Mode:            string(mode),
+		Armed:           armed,
+		ModelReady:      modelReady,
+		AnomalyCount24h: h.countAnomalies24h(),
+	}
+
+	// Calculate learning_until if model is not ready
+	if !modelReady {
+		elapsed := time.Duration(float64(7*24*time.Hour) * progress)
+		remaining := 7*24*time.Hour - elapsed
+		learningUntil := time.Now().Add(remaining)
+		response.LearningUntil = learningUntil.Format(time.RFC3339)
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// handleSetMode sets the system mode (home/away/sleep).
+// Request body:
+// {
+//   "mode": "away",  // "home", "away", or "sleep"
+//   "reason": "manual"  // optional reason for logging
+// }
+// Response: SystemModeResponse
+func (h *SecurityHandler) handleSetMode(w http.ResponseWriter, r *http.Request) {
+	if h.detector == nil {
+		http.Error(w, "detector not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Mode   string `json:"mode"`   // "home", "away", or "sleep"
+		Reason string `json:"reason"` // optional reason
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Default reason
+	if req.Reason == "" {
+		req.Reason = "api"
+	}
+
+	var securityMode analytics.SecurityMode
+	switch req.Mode {
+	case "away":
+		securityMode = analytics.SecurityModeArmed
+	case "sleep":
+		securityMode = analytics.SecurityModeArmedStay
+	case "home", "":
+		securityMode = analytics.SecurityModeDisarmed
+	default:
+		http.Error(w, "invalid mode: must be 'home', 'away', or 'sleep'", http.StatusBadRequest)
+		return
+	}
+
+	h.detector.SetSecurityMode(securityMode, req.Reason)
+
+	// Return updated status
+	mode := h.detector.GetSystemMode()
+	armed := h.detector.IsSecurityModeActive()
+	modelReady := h.detector.IsModelReady()
+
+	response := SystemModeResponse{
+		Mode:            string(mode),
+		Armed:           armed,
+		ModelReady:      modelReady,
+		AnomalyCount24h: h.countAnomalies24h(),
+		LastChange:      time.Now().Format(time.RFC3339),
+		LastChangeBy:    req.Reason,
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }

@@ -447,7 +447,8 @@ func (m *Monitor) NotifyZoneTransition(linkID string, zoneID string, entered boo
 
 // ShouldPushMorningSummary returns true if the morning summary should be pushed.
 // It fires only on the first connection after 6am AND after a sleep session has ended.
-func (m *Monitor) ShouldPushMorningSummary() (bool, *SleepReport) {
+// Returns (shouldPush, summaryMap) where summaryMap is the report converted to map[string]interface{}.
+func (m *Monitor) ShouldPushMorningSummary() (bool, map[string]interface{}) {
 	now := time.Now()
 	if now.Hour() < 6 {
 		return false, nil
@@ -472,7 +473,47 @@ func (m *Monitor) ShouldPushMorningSummary() (bool, *SleepReport) {
 			report := session.GenerateReport()
 			if report != nil && report.Metrics.TimeInBed > 0 {
 				m.morningSummaryPushed = now
-				return true, report
+				// Convert report to map[string]interface{} format
+				summaryMap := map[string]interface{}{
+					"link_id":        report.LinkID,
+					"session_date":   report.SessionDate.Format("2006-01-02"),
+					"generated_at":   report.GeneratedAt.UnixMilli(),
+					"overall_score":  report.Metrics.OverallScore,
+					"quality_rating": report.Metrics.QualityRating,
+					"breathing_summary": report.BreathingSummary,
+					"motion_summary":    report.MotionSummary,
+					"recommendations":   report.Recommendations,
+					"metrics": map[string]interface{}{
+						"total_duration_hours":     report.Metrics.TotalDuration.Hours(),
+						"time_in_bed_hours":        report.Metrics.TimeInBed.Hours(),
+						"sleep_efficiency":        report.Metrics.SleepEfficiency,
+						"sleep_latency_minutes":   report.Metrics.SleepLatencyMinutes,
+						"waso_minutes":            report.Metrics.WASOMinutes,
+						"wake_episode_count":       report.Metrics.WakeEpisodeCount,
+						"avg_breathing_rate":       report.Metrics.AvgBreathingRate,
+						"breathing_rate_std_dev":   report.Metrics.BreathingRateStdDev,
+						"breathing_regularity":     report.Metrics.BreathingRegularity,
+						"breathing_score":          report.Metrics.BreathingScore,
+						"breathing_anomaly":        report.Metrics.BreathingAnomaly,
+						"breathing_anomaly_count":  report.Metrics.BreathingAnomalyCount,
+						"quiet_time_pct":           report.Metrics.QuietTimePct,
+						"motion_events":            report.Metrics.MotionEventCount,
+						"restless_periods":         report.Metrics.RestlessPeriods,
+						"motion_score":             report.Metrics.MotionScore,
+						"interruptions":            report.Metrics.Interruptions,
+						"longest_deep_period_mins": report.Metrics.LongestDeepPeriod.Minutes(),
+						"continuity_score":         report.Metrics.ContinuityScore,
+					},
+				}
+				// Add breathing rate range
+				if report.Metrics.MinBreathingRate > 0 {
+					summaryMap["metrics"].(map[string]interface{})["min_breathing_rate"] = report.Metrics.MinBreathingRate
+					summaryMap["metrics"].(map[string]interface{})["max_breathing_rate"] = report.Metrics.MaxBreathingRate
+				}
+				if report.Metrics.PersonalAvgBPM > 0 {
+					summaryMap["metrics"].(map[string]interface{})["personal_avg_bpm"] = report.Metrics.PersonalAvgBPM
+				}
+				return true, summaryMap
 			}
 		}
 	}

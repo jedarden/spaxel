@@ -667,6 +667,144 @@ func (d *Detector) GetLearningProgress() float64 {
 	return progress
 }
 
+// ProcessBLEDeviceSighting processes a BLE device sighting for auto-away/auto-disarm.
+// Returns a SystemModeChangeEvent if the mode changed, nil otherwise.
+func (d *Detector) ProcessBLEDeviceSighting(mac string, rssi int, nodeMAC string) *events.SystemModeChangeEvent {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	now := time.Now()
+
+	// Track when registered devices are seen
+	if d.registeredDevices[mac] && rssi > d.config.AutoDisarmRSSIThreshold {
+		// Registered device detected in close range
+		d.autoDisarmState.RegisteredDeviceSeen = true
+		d.autoDisarmState.SeenDeviceMAC = mac
+		d.autoDisarmState.SeenDeviceRSSI = rssi
+		d.autoDisarmState.LastSeenTime = now
+
+		// Auto-disarm: if currently in away mode, switch to home
+		if d.securityMode == SecurityModeArmed && !d.IsManualOverrideActive() {
+			// Get person name from device provider
+			personName := ""
+			if d.personProvider != nil {
+				if devices, err := d.personProvider.GetAllRegisteredDevices(); err == nil {
+					if personID, ok := devices[mac]; ok {
+						personName = d.personProvider.GetPersonName(personID)
+					}
+				}
+			}
+
+			reason := "Auto-disarm activated — registered device detected"
+			if personName != "" {
+				reason = fmt.Sprintf("Welcome home — %s arrived", personName)
+			}
+
+			return d.setSystemMode(events.ModeHome, reason, personName)
+		}
+	}
+
+	// Update last motion time for auto-away (any BLE device indicates presence)
+	d.autoAwayState.LastMotionTime = now
+
+	return nil
+}
+
+// ProcessMotionForAutoAway should be called when any motion is detected.
+// It updates the last motion time to prevent auto-away while activity is present.
+func (d *Detector) ProcessMotionForAutoAway() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.autoAwayState.LastMotionTime = time.Now()
+}
+
+// CheckAutoAway checks if auto-away should be triggered (all registered devices absent for > 15 minutes).
+// Should be called periodically (e.g., every minute).
+// Returns a SystemModeChangeEvent if mode changed, nil otherwise.
+func (d *Detector) CheckAutoAway() *events.SystemModeChangeEvent {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	now := time.Now()
+
+	// Check if all registered devices have been absent for > 15 minutes
+	if len(d.registeredDevices) == 0 {
+		return nil // No registered devices, can't do auto-away
+	}
+
+	// Check if any registered device has been seen recently (within last 15 minutes)
+	// This is a simplified check - in practice, we'd track per-device last seen times
+	timeSinceLastMotion := now.Sub(d.autoAwayState.LastMotionTime)
+
+	if timeSinceLastMotion > d.config.AutoAwayDuration && !d.IsManualOverrideActive() {
+		// Only trigger if not already in away mode
+		if d.securityMode != SecurityModeArmed {
+			return d.setSystemMode(events.ModeAway, "Auto-away activated — all BLE devices absent", "")
+		}
+	}
+
+	return nil
+}
+
+// setSystemMode sets the system mode and fires the mode change callback.
+// Must be called while holding the mutex.
+func (d *Detector) setSystemMode(newMode events.SystemMode, reason, personName string) *events.SystemModeChangeEvent {
+	oldMode := d.securityModeToSystemMode(d.securityMode)
+	event := &events.SystemModeChangeEvent{
+		PreviousMode: oldMode,
+		NewMode:      newMode,
+		Reason:       reason,
+		Timestamp:    time.Now(),
+		PersonName:   personName,
+	}
+
+	// Update security mode state
+	switch newMode {
+	case events.ModeAway:
+		d.securityMode = SecurityModeArmed
+	case events.ModeHome:
+		d.securityMode = SecurityModeDisarmed
+	case events.ModeSleep:
+		d.securityMode = SecurityModeArmedStay // Stay mode for sleep
+	}
+
+	// Fire callback
+	if d.onModeChange != nil {
+		go d.onModeChange(*event)
+	}
+
+	// Broadcast to dashboard
+	if d.onSecurityModeChange != nil {
+		go d.onSecurityModeChange(oldMode, d.securityMode, reason)
+	}
+
+	// Persist to database
+	d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode', ?)`, string(d.securityMode))
+
+	log.Printf("[INFO] System mode changed: %s -> %s (reason: %s)", oldMode, newMode, reason)
+
+	return event
+}
+
+// securityModeToSystemMode converts SecurityMode to SystemMode.
+func (d *Detector) securityModeToSystemMode(mode SecurityMode) events.SystemMode {
+	switch mode {
+	case SecurityModeArmed:
+		return events.ModeAway
+	case SecurityModeArmedStay:
+		return events.ModeSleep
+	default:
+		return events.ModeHome
+	}
+}
+
+// GetSystemMode returns the current SystemMode (Home/Away/Sleep).
+func (d *Detector) GetSystemMode() events.SystemMode {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.securityModeToSystemMode(d.securityMode)
+}
+
 // ProcessOccupancy records an occupancy observation and checks for unusual hour anomalies.
 func (d *Detector) ProcessOccupancy(zoneID string, personCount int, bleDevices []string, isSecurityMode bool) *events.AnomalyEvent {
 	d.mu.Lock()
@@ -677,6 +815,12 @@ func (d *Detector) ProcessOccupancy(zoneID string, personCount int, bleDevices [
 
 	// Record the sample
 	d.recordOccupancySample(hourOfWeek, zoneID, personCount, bleDevices, now)
+
+	// Update person count for auto-away tracking
+	d.autoAwayState.LastPersonCount = personCount
+	if personCount > 0 {
+		d.autoAwayState.LastMotionTime = now
+	}
 
 	// Check for anomaly (only if model is ready, or if in security mode)
 	if !d.modelReady && !isSecurityMode {

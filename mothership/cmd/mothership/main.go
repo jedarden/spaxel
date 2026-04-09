@@ -432,6 +432,7 @@ func main() {
 		SleepEndHour:   7,  // 7 AM
 	})
 	sleepMonitor.SetProcessorManager(pm)
+	sleepMonitor.SetZoneManager(zonesMgr)
 
 	// Sleep handler (created early so callback can reference it)
 	sleepHandler := sleep.NewHandler(sleepMonitor)

@@ -739,6 +739,20 @@
                 handleSystemHealthMessage(msg);
                 break;
 
+            case 'morning_summary':
+                // Sleep morning summary (shown once after wake time)
+                if (window.SpaxelSleep && window.SpaxelSleep.handleMorningSummary) {
+                    window.SpaxelSleep.handleMorningSummary(msg);
+                }
+                break;
+
+            case 'sleep_status':
+                // Live sleep session status updates
+                if (window.SpaxelSleep && window.SpaxelSleep.handleSleepStatus) {
+                    window.SpaxelSleep.handleSleepStatus(msg);
+                }
+                break;
+
             default:
                 // Log unhandled types for future debugging
                 console.log('[Spaxel] Unknown message type:', msg.type, msg);
