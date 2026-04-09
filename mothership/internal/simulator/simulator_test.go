@@ -553,3 +553,389 @@ func TestGenerateShoppingList(t *testing.T) {
 		t.Errorf("Expected %d optimal positions, got %d", nodes.Count(), len(list.OptimalPositions))
 	}
 }
+
+func TestGDOPColorMap(t *testing.T) {
+	tests := []struct {
+		gdop        float64
+		expectedR   uint8
+		expectedG   uint8
+		expectedB   uint8
+		description string
+	}{
+		{1.0, 34, 197, 94, "excellent - green"},
+		{2.5, 255, 193, 7, "good - yellow"},
+		{5.0, 255, 146, 0, "fair - orange"},
+		{10.0, 220, 53, 69, "poor - red"},
+		{math.Inf(1), 80, 80, 80, "none - gray"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			color := GDOPColorMap(tt.gdop)
+			if color.R != tt.expectedR {
+				t.Errorf("GDOP %f: expected R=%d, got R=%d", tt.gdop, tt.expectedR, color.R)
+			}
+			if color.G != tt.expectedG {
+				t.Errorf("GDOP %f: expected G=%d, got G=%d", tt.gdop, tt.expectedG, color.G)
+			}
+			if color.B != tt.expectedB {
+				t.Errorf("GDOP %f: expected B=%d, got B=%d", tt.gdop, tt.expectedB, color.B)
+			}
+		})
+	}
+}
+
+func TestGDOPHeatmapData(t *testing.T) {
+	space := DefaultSpace()
+	nodes := SuggestedNodes(space, 4)
+	links := GenerateAllLinks(nodes)
+
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+
+	config := GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.5,
+	}
+
+	gc := NewGDOPComputer(links, config)
+	results := gc.ComputeAll()
+	heatmap := gc.ToHeatmapData(results)
+
+	// Verify dimensions match
+	if heatmap.Width != len(results[0]) {
+		t.Errorf("Expected width %d, got %d", len(results[0]), heatmap.Width)
+	}
+	if heatmap.Depth != len(results) {
+		t.Errorf("Expected depth %d, got %d", len(results), heatmap.Depth)
+	}
+
+	// Verify array sizes
+	expectedCells := heatmap.Width * heatmap.Depth
+	if len(heatmap.GDOPValues) != expectedCells {
+		t.Errorf("Expected %d GDOP values, got %d", expectedCells, len(heatmap.GDOPValues))
+	}
+	if len(heatmap.Qualities) != expectedCells {
+		t.Errorf("Expected %d qualities, got %d", expectedCells, len(heatmap.Qualities))
+	}
+	if len(heatmap.Colors) != expectedCells {
+		t.Errorf("Expected %d colors, got %d", expectedCells, len(heatmap.Colors))
+	}
+	if len(heatmap.AccuracyMap) != expectedCells {
+		t.Errorf("Expected %d accuracy values, got %d", expectedCells, len(heatmap.AccuracyMap))
+	}
+
+	// Verify cell size and origin
+	if heatmap.CellSize != config.CellSize {
+		t.Errorf("Expected cell size %f, got %f", config.CellSize, heatmap.CellSize)
+	}
+	if heatmap.OriginX != config.MinX {
+		t.Errorf("Expected origin X %f, got %f", config.MinX, heatmap.OriginX)
+	}
+	if heatmap.OriginY != config.MinY {
+		t.Errorf("Expected origin Y %f, got %f", config.MinY, heatmap.OriginY)
+	}
+
+	// Verify all colors have 3 components (RGB)
+	for i, color := range heatmap.Colors {
+		if len(color) != 3 {
+			t.Errorf("Color at index %d should have 3 components, got %d", i, len(color))
+		}
+	}
+}
+
+func TestComputeAccuracyMap(t *testing.T) {
+	space := DefaultSpace()
+	nodes := SuggestedNodes(space, 4)
+	links := GenerateAllLinks(nodes)
+
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+
+	config := GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.5,
+	}
+
+	gc := NewGDOPComputer(links, config)
+	results := gc.ComputeAll()
+	accuracyMap := gc.ComputeAccuracyMap(results)
+
+	// Verify dimensions
+	if len(accuracyMap) != len(results) {
+		t.Errorf("Expected %d rows, got %d", len(results), len(accuracyMap))
+	}
+
+	for i, row := range accuracyMap {
+		if len(row) != len(results[i]) {
+			t.Errorf("Row %d: expected %d cols, got %d", i, len(results[i]), len(row))
+		}
+	}
+
+	// All accuracy values should be non-negative
+	for y, row := range accuracyMap {
+		for x, accuracy := range row {
+			if !math.IsInf(accuracy, 1) && accuracy < 0 {
+				t.Errorf("Accuracy at [%d][%d] is negative: %f", y, x, accuracy)
+			}
+		}
+	}
+}
+
+func TestComputeColorMap(t *testing.T) {
+	space := DefaultSpace()
+	nodes := SuggestedNodes(space, 4)
+	links := GenerateAllLinks(nodes)
+
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+
+	config := GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.5,
+	}
+
+	gc := NewGDOPComputer(links, config)
+	results := gc.ComputeAll()
+	colors := gc.ComputeColorMap(results)
+
+	// Verify flattened size
+	expectedCells := len(results) * len(results[0])
+	if len(colors) != expectedCells {
+		t.Errorf("Expected %d color entries, got %d", expectedCells, len(colors))
+	}
+
+	// All colors should have 3 components (RGB)
+	for i, color := range colors {
+		if len(color) != 3 {
+			t.Errorf("Color at index %d should have 3 components, got %d", i, len(color))
+		}
+		// RGB values should be in [0, 255]
+		for j, v := range color {
+			if v < 0 || v > 255 {
+				t.Errorf("Color[%d][%d] = %d is outside [0, 255] range", i, j, v)
+			}
+		}
+	}
+}
+
+func TestGetWorstCoverageCells(t *testing.T) {
+	space := DefaultSpace()
+	nodes := SuggestedNodes(space, 4)
+	links := GenerateAllLinks(nodes)
+
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+
+	config := GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.5,
+	}
+
+	gc := NewGDOPComputer(links, config)
+	results := gc.ComputeAll()
+
+	worst := gc.GetWorstCoverageCells(results, 5)
+
+	// Should return at most 5 cells
+	if len(worst) > 5 {
+		t.Errorf("Expected at most 5 cells, got %d", len(worst))
+	}
+
+	// Should be sorted by GDOP (worst first)
+	for i := 1; i < len(worst); i++ {
+		prevGDOP := worst[i-1].GDOP
+		currGDOP := worst[i].GDOP
+
+		// Handle infinity comparison
+		prevInf := math.IsInf(prevGDOP, 0)
+		currInf := math.IsInf(currGDOP, 0)
+
+		if prevInf && !currInf {
+			t.Errorf("Cell %d should have infinity (worst), but doesn't", i-1)
+		}
+		if !prevInf && !currInf && currGDOP > prevGDOP {
+			t.Errorf("Cells not sorted by GDOP: [%d]=%f, [%d]=%f", i-1, prevGDOP, i, currGDOP)
+		}
+	}
+}
+
+func TestGetBestCoverageCells(t *testing.T) {
+	space := DefaultSpace()
+	nodes := SuggestedNodes(space, 4)
+	links := GenerateAllLinks(nodes)
+
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+
+	config := GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.5,
+	}
+
+	gc := NewGDOPComputer(links, config)
+	results := gc.ComputeAll()
+
+	best := gc.GetBestCoverageCells(results, 5)
+
+	// Should return at most 5 cells
+	if len(best) > 5 {
+		t.Errorf("Expected at most 5 cells, got %d", len(best))
+	}
+
+	// Should be sorted by GDOP (best first)
+	for i := 1; i < len(best); i++ {
+		prevGDOP := best[i-1].GDOP
+		currGDOP := best[i].GDOP
+
+		// Handle infinity comparison
+		prevInf := math.IsInf(prevGDOP, 0)
+		currInf := math.IsInf(currGDOP, 0)
+
+		if !prevInf && currInf {
+			t.Errorf("Cell %d should have finite (best), but has infinity", i)
+		}
+		if !prevInf && !currInf && currGDOP < prevGDOP {
+			t.Errorf("Cells not sorted by GDOP: [%d]=%f, [%d]=%f", i-1, prevGDOP, i, currGDOP)
+		}
+	}
+
+	// All best cells should have good or excellent GDOP (< 4)
+	for i, cell := range best {
+		if !math.IsInf(cell.GDOP, 0) && cell.GDOP >= 4.0 {
+			t.Errorf("Best cell %d has GDOP %f, which is not 'good'", i, cell.GDOP)
+		}
+	}
+}
+
+func TestGenerateCSIFrame(t *testing.T) {
+	pm := NewPropagationModel(DefaultSpace())
+
+	tx := NewPoint(0, 0, 2)
+	rx := NewPoint(5, 0, 2)
+	walker := NewPoint(2.5, 0, 1.7)
+
+	frame := pm.GenerateCSIFrame(tx, rx, walker, 0)
+
+	// Verify frame structure
+	if len(frame.NodeMAC) != 6 {
+		t.Errorf("Expected 6-byte NodeMAC, got %d", len(frame.NodeMAC))
+	}
+	if len(frame.PeerMAC) != 6 {
+		t.Errorf("Expected 6-byte PeerMAC, got %d", len(frame.PeerMAC))
+	}
+	if frame.NSub != 64 {
+		t.Errorf("Expected 64 subcarriers, got %d", frame.NSub)
+	}
+	if len(frame.Subcarriers) != 64 {
+		t.Errorf("Expected 64 subcarrier values, got %d", len(frame.Subcarriers))
+	}
+
+	// Verify RSSI is in realistic range
+	if frame.RSSI < -90 || frame.RSSI > -30 {
+		t.Errorf("RSSI %d is outside realistic range [-90, -30]", frame.RSSI)
+	}
+
+	// Verify noise floor
+	if frame.NoiseFloor != -95 {
+		t.Errorf("Expected noise floor -95, got %d", frame.NoiseFloor)
+	}
+
+	// Verify channel
+	if frame.Channel < 1 || frame.Channel > 14 {
+		t.Errorf("Channel %d is invalid", frame.Channel)
+	}
+}
+
+func TestGenerateCSIFrames(t *testing.T) {
+	pm := NewPropagationModel(DefaultSpace())
+
+	nodes := NewNodeSet()
+	nodes.AddVirtualNode("tx", "TX", NewPoint(0, 0, 2))
+	nodes.AddVirtualNode("rx", "RX", NewPoint(5, 0, 2))
+
+	links := GenerateAllLinks(nodes)
+	if len(links) == 0 {
+		t.Fatal("Expected at least one link")
+	}
+
+	walker := NewPoint(2.5, 0, 1.7)
+
+	frames := pm.GenerateCSIFrames(links[0], walker, 10, 20)
+
+	if len(frames) != 10 {
+		t.Errorf("Expected 10 frames, got %d", len(frames))
+	}
+
+	// Verify timestamps are monotonically increasing
+	for i := 1; i < len(frames); i++ {
+		if frames[i].TimestampUs <= frames[i-1].TimestampUs {
+			t.Errorf("Frame %d timestamp %d <= frame %d timestamp %d",
+				i, frames[i].TimestampUs, i-1, frames[i-1].TimestampUs)
+		}
+	}
+
+	// Verify interval is correct (50μs at 20Hz)
+	expectedInterval := uint64(1000000 / 20)
+	for i := 1; i < len(frames); i++ {
+		actualInterval := frames[i].TimestampUs - frames[i-1].TimestampUs
+		if actualInterval != expectedInterval {
+			t.Errorf("Frame %d interval is %d, expected %d", i, actualInterval, expectedInterval)
+		}
+	}
+}
+
+func TestComputeLinkMetrics(t *testing.T) {
+	pm := NewPropagationModel(DefaultSpace())
+
+	nodes := NewNodeSet()
+	nodes.AddVirtualNode("tx", "TX", NewPoint(0, 0, 2))
+	nodes.AddVirtualNode("rx", "RX", NewPoint(5, 0, 2))
+
+	links := GenerateAllLinks(nodes)
+	if len(links) == 0 {
+		t.Fatal("Expected at least one link")
+	}
+
+	// Create walker positions along a path
+	positions := []Point{
+		NewPoint(1, 0, 1.7),
+		NewPoint(2, 0, 1.7),
+		NewPoint(3, 0, 1.7),
+		NewPoint(4, 0, 1.7),
+	}
+
+	metrics := pm.ComputeLinkMetrics(links[0], positions, 100)
+
+	// Verify metrics are in valid ranges
+	if metrics.AvgRSSI < -90 || metrics.AvgRSSI > -20 {
+		t.Errorf("AvgRSSI %f is outside realistic range", metrics.AvgRSSI)
+	}
+	if metrics.RSSIStdDev < 0 {
+		t.Errorf("RSSIStdDev %f is negative", metrics.RSSIStdDev)
+	}
+	if metrics.AvgDeltaRMS < 0 {
+		t.Errorf("AvgDeltaRMS %f is negative", metrics.AvgDeltaRMS)
+	}
+	if metrics.PacketDelivery < 0 || metrics.PacketDelivery > 1 {
+		t.Errorf("PacketDelivery %f is outside [0, 1] range", metrics.PacketDelivery)
+	}
+	if metrics.LinkQuality < 0 || metrics.LinkQuality > 1 {
+		t.Errorf("LinkQuality %f is outside [0, 1] range", metrics.LinkQuality)
+	}
+
+	// Link with walker in middle should have good deltaRMS
+	if metrics.AvgDeltaRMS < 0.01 {
+		t.Errorf("AvgDeltaRMS %f seems too low for walker in middle of link", metrics.AvgDeltaRMS)
+	}
+}

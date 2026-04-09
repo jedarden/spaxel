@@ -323,6 +323,215 @@ func ExpectedAccuracy(gdop float64) float64 {
 	return baseAccuracy * gdop
 }
 
+// GDOPColor represents a color for GDOP visualization
+type GDOPColor struct {
+	R, G, B uint8 // RGB values 0-255
+}
+
+// GDOPColorMap returns the color for a given GDOP value for visualization
+// Uses: green (excellent), yellow (good), orange (fair), red (poor), gray (none)
+func GDOPColorMap(gdop float64) GDOPColor {
+	if math.IsInf(gdop, 0) {
+		return GDOPColor{R: 80, G: 80, B: 80} // Gray for no coverage
+	}
+	if gdop < 2.0 {
+		return GDOPColor{R: 34, G: 197, B: 94} // Green (#22c65e) for excellent
+	}
+	if gdop < 4.0 {
+		return GDOPColor{R: 255, G: 193, B: 7} // Yellow (#ffc107) for good
+	}
+	if gdop < 8.0 {
+		return GDOPColor{R: 255, G: 146, B: 0} // Orange (#ff9200) for fair
+	}
+	return GDOPColor{R: 220, G: 53, B: 69} // Red (#dc3545) for poor
+}
+
+// GDOPHeatmapData represents flattened GDOP data for frontend rendering
+type GDOPHeatmapData struct {
+	Width      int         `json:"width"`       // Grid width (columns)
+	Depth      int         `json:"depth"`       // Grid depth (rows)
+	CellSize   float64     `json:"cell_size"`   // Cell size in meters
+	OriginX    float64     `json:"origin_x"`    // Grid origin X
+	OriginY    float64     `json:"origin_y"`    // Grid origin Y
+	GDOPValues []float64   `json:"gdop_values"` // Flattened GDOP values (9999 = infinity)
+	Qualities  []string    `json:"qualities"`   // Flattened quality strings
+	Colors     [][]uint8   `json:"colors"`      // Flattened RGB colors [width*depth*3]
+	AccuracyMap []float64   `json:"accuracy_map"` // Expected accuracy in meters per cell
+}
+
+// ToHeatmapData converts GDOP results to a heatmap-friendly format
+func (gc *GDOPComputer) ToHeatmapData(results [][]GDOPResult) *GDOPHeatmapData {
+	if len(results) == 0 || len(results[0]) == 0 {
+		return &GDOPHeatmapData{}
+	}
+
+	depth := len(results)    // rows (Y)
+	width := len(results[0]) // cols (X)
+	totalCells := width * depth
+
+	data := &GDOPHeatmapData{
+		Width:       width,
+		Depth:       depth,
+		CellSize:    gc.config.CellSize,
+		OriginX:     gc.config.MinX,
+		OriginY:     gc.config.MinY,
+		GDOPValues:  make([]float64, totalCells),
+		Qualities:   make([]string, totalCells),
+		Colors:      make([][]uint8, totalCells),
+		AccuracyMap: make([]float64, totalCells),
+	}
+
+	for y := 0; y < depth; y++ {
+		for x := 0; x < width; x++ {
+			idx := y*width + x
+			result := results[y][x]
+
+			// GDOP value (9999 for infinity)
+			if math.IsInf(result.GDOP, 0) {
+				data.GDOPValues[idx] = 9999.0
+			} else {
+				data.GDOPValues[idx] = result.GDOP
+			}
+
+			// Quality string
+			data.Qualities[idx] = result.Quality
+
+			// RGB color
+			color := GDOPColorMap(result.GDOP)
+			data.Colors[idx] = []uint8{color.R, color.G, color.B}
+
+			// Expected accuracy
+			data.AccuracyMap[idx] = ExpectedAccuracy(result.GDOP)
+		}
+	}
+
+	return data
+}
+
+// ComputeAccuracyMap computes expected accuracy for each cell
+// Returns a 2D array of accuracy values in meters (infinity = no coverage)
+func (gc *GDOPComputer) ComputeAccuracyMap(results [][]GDOPResult) [][]float64 {
+	if len(results) == 0 {
+		return nil
+	}
+
+	accuracyMap := make([][]float64, len(results))
+	for i := range results {
+		accuracyMap[i] = make([]float64, len(results[i]))
+		for j := range results[i] {
+			accuracyMap[i][j] = ExpectedAccuracy(results[i][j].GDOP)
+		}
+	}
+
+	return accuracyMap
+}
+
+// ComputeColorMap computes RGB colors for each cell for visualization
+// Returns a flattened array of RGB values [width*depth*3]
+func (gc *GDOPComputer) ComputeColorMap(results [][]GDOPResult) [][]uint8 {
+	if len(results) == 0 || len(results[0]) == 0 {
+		return nil
+	}
+
+	depth := len(results)
+	width := len(results[0])
+	totalCells := width * depth
+
+	colors := make([][]uint8, totalCells)
+
+	for y := 0; y < depth; y++ {
+		for x := 0; x < width; x++ {
+			idx := y*width + x
+			color := GDOPColorMap(results[y][x].GDOP)
+			colors[idx] = []uint8{color.R, color.G, color.B}
+		}
+	}
+
+	return colors
+}
+
+// GetWorstCoverageCells returns the N cells with the worst GDOP values
+func (gc *GDOPComputer) GetWorstCoverageCells(results [][]GDOPResult, n int) []GDOPResult {
+	if len(results) == 0 {
+		return nil
+	}
+
+	// Flatten all cells
+	cells := make([]GDOPResult, 0)
+	for _, row := range results {
+		cells = append(cells, row...)
+	}
+
+	// Sort by GDOP (descending, so worst first)
+	for i := 0; i < len(cells); i++ {
+		for j := i + 1; j < len(cells); j++ {
+			// Handle infinity: infinity is worse than any finite value
+			iInf := math.IsInf(cells[i].GDOP, 0)
+			jInf := math.IsInf(cells[j].GDOP, 0)
+
+			var swap bool
+			if iInf && !jInf {
+				swap = false // i stays (infinity at top)
+			} else if !iInf && jInf {
+				swap = true // j is infinity, should be before i
+			} else if !iInf && !jInf {
+				swap = cells[j].GDOP > cells[i].GDOP
+			}
+
+			if swap {
+				cells[i], cells[j] = cells[j], cells[i]
+			}
+		}
+	}
+
+	// Return top N worst cells
+	if n > len(cells) {
+		n = len(cells)
+	}
+	return cells[:n]
+}
+
+// GetBestCoverageCells returns the N cells with the best GDOP values
+func (gc *GDOPComputer) GetBestCoverageCells(results [][]GDOPResult, n int) []GDOPResult {
+	if len(results) == 0 {
+		return nil
+	}
+
+	// Flatten all cells
+	cells := make([]GDOPResult, 0)
+	for _, row := range results {
+		cells = append(cells, row...)
+	}
+
+	// Sort by GDOP (ascending, so best first)
+	for i := 0; i < len(cells); i++ {
+		for j := i + 1; j < len(cells); j++ {
+			// Handle infinity: finite values are better than infinity
+			iInf := math.IsInf(cells[i].GDOP, 0)
+			jInf := math.IsInf(cells[j].GDOP, 0)
+
+			var swap bool
+			if !iInf && jInf {
+				swap = false // i is finite, j is infinity, i is better
+			} else if iInf && !jInf {
+				swap = true // i is infinity, j is finite, j should be before i
+			} else if !iInf && !jInf {
+				swap = cells[j].GDOP < cells[i].GDOP
+			}
+
+			if swap {
+				cells[i], cells[j] = cells[j], cells[i]
+			}
+		}
+	}
+
+	// Return top N best cells
+	if n > len(cells) {
+		n = len(cells)
+	}
+	return cells[:n]
+}
+
 // OptimizeNodePositions uses a greedy algorithm to find better node positions
 // for a given number of nodes within the space
 func OptimizeNodePositions(space *Space, numNodes int, iterations int) *NodeSet {
