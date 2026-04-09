@@ -42,6 +42,9 @@ type Hub struct {
 	// Updated on every 10 Hz tick.
 	snapMu sync.RWMutex
 	snap   snapshotCache
+
+	// Replay handler for time-travel debugging
+	replayHandler ReplayHandler
 }
 
 // snapshotCache holds serialised JSON bytes for each snapshot field,
@@ -154,6 +157,23 @@ type SecurityStateProvider interface {
 // SleepStateProvider provides sleep monitoring state for morning summary push.
 type SleepStateProvider interface {
 	ShouldPushMorningSummary() (bool, map[string]interface{})
+}
+
+// ReplayHandler is the interface for replay engine operations.
+type ReplayHandler interface {
+	Seek(targetMS int64) error
+	Play(speed float64) error
+	Pause() error
+	SetParams(params *replay.TunableParams) error
+	ApplyToLive() error
+	SetSpeed(speed float64) error
+}
+
+// SetReplayHandler sets the replay handler for time-travel debugging.
+func (h *Hub) SetReplayHandler(handler ReplayHandler) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.replayHandler = handler
 }
 
 // ZoneChangeBroadcaster notifies dashboard clients when zones or portals

@@ -1,278 +1,230 @@
-// Package main provides CSI frame generation for the simulator.
 package main
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
-
-	"github.com/spaxel/mothership/internal/simulator"
+	"math/rand"
 )
 
 const (
-	// CSI frame header size (24 bytes per Phase 1 protocol)
-	HeaderSize = 24
+	// WiFi physical constants
+	wavelength      = 0.123  // meters (2.4 GHz)
+	halfWavelength  = wavelength / 2.0
+	subcarrierSpacing = 312.5e3 // Hz
+	c               = 3e8 // speed of light m/s
 
-	// Magic number for CSI frame identification
-	CSIMagic = 0xABCDEF01
-
-	// Protocol version
-	CSIVersion = 1
-
-	// Default number of subcarriers (HT20)
-	DefaultSubcarriers = 52
-
-	// Maximum subcarriers (HT20 64 total)
-	MaxSubcarriers = 64
-
-	// WiFi channels
-	DefaultChannel = 6 // 2.4 GHz channel 6
-	Channel5GHzStart = 36 // 5 GHz channel 36
+	// CSI frame constants
+	magic   = 0xABCDEF01
+	version = 1
+	nSub    = 64 // number of subcarriers for HT20
 )
 
-// CSIFrameGenerator generates synthetic CSI binary frames
-type CSIFrameGenerator struct {
-	nodeMAC      []byte
-	nodePosition simulator.Point
-	peerMAC      []byte
-	peerPosition simulator.Point
-	channel      uint8
-	frameIndex   uint64
-	physics      *simulator.PhysicsModel
-}
+// generateCSIFrame generates a synthetic CSI binary frame
+func generateCSIFrame(tx, rx *VirtualNode, walkers []*Walker, walls []Wall, frameNum int, rng *rand.Rand) []byte {
+	// Calculate combined CSI from all walkers
+	amplitude, phaseBase := computeCSIForWalkers(tx, rx, walkers, walls)
 
-// NewCSIFrameGenerator creates a new CSI frame generator
-func NewCSIFrameGenerator(nodeMAC string, nodePos simulator.Point, physics *simulator.PhysicsModel) *CSIFrameGenerator {
-	macBytes := macStringToBytes(nodeMAC)
+	// Compute RSSI from amplitude
+	rssi := amplitudeToRSSI(amplitude)
 
-	return &CSIFrameGenerator{
-		nodeMAC:      macBytes[:],
-		nodePosition: nodePos,
-		peerMAC:      []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x00}, // Default peer
-		peerPosition: simulator.Point{X: 0, Y: 0, Z: 1.7},
-		channel:      DefaultChannel,
-		frameIndex:   0,
-		physics:      physics,
-	}
-}
-
-// SetPeer sets the peer (transmitter) MAC and position
-func (g *CSIFrameGenerator) SetPeer(peerMAC string, pos simulator.Point) {
-	macBytes := macStringToBytes(peerMAC)
-	copy(g.peerMAC, macBytes[:])
-	g.peerPosition = pos
-}
-
-// SetChannel sets the WiFi channel
-func (g *CSIFrameGenerator) SetChannel(channel uint8) {
-	g.channel = channel
-}
-
-// SetFrameIndex sets the current frame index
-func (g *CSIFrameGenerator) SetFrameIndex(index uint64) {
-	g.frameIndex = index
-}
-
-// GenerateFrame generates a synthetic CSI frame for a walker at the given position
-// Returns the complete binary frame ready to send over WebSocket
-func (g *CSIFrameGenerator) GenerateFrame(walkerPos simulator.Point) []byte {
-	nSub := DefaultSubcarriers
-
-	// Calculate frame size
-	frameSize := HeaderSize + nSub*2
-	buf := make([]byte, frameSize)
-
-	// Calculate distance to walker for RSSI
-	distance := g.nodePosition.Distance(walkerPos)
-	rssi := g.physics.ComputeRSSI(distance)
-
-	// Calculate Fresnel modulation
-	fresnelMod := simulator.ComputeFresnelModulation(g.nodePosition, g.peerPosition, walkerPos)
+	// Create frame buffer
+	frame := make([]byte, headerSize+nSub*2)
 
 	// Write header
-	g.writeHeader(buf, nSub, rssi, walkerPos)
-
-	// Generate subcarrier CSI payload
-	g.writePayload(buf[HeaderSize:], walkerPos, fresnelMod, nSub)
-
-	// Increment frame index
-	g.frameIndex++
-
-	return buf
-}
-
-// writeHeader writes the 24-byte CSI frame header matching the Phase 1 protocol
-func (g *CSIFrameGenerator) writeHeader(buf []byte, nSub int, rssi int8, walkerPos simulator.Point) {
-	// According to the task, header is 24 bytes:
-	// Bytes 0-5: Node MAC (6 bytes)
-	// Bytes 6-11: Peer MAC (6 bytes)
-	// Bytes 12-19: Timestamp_us (8 bytes, uint64)
-	// Byte 20: RSSI (1 byte, signed)
-	// Byte 21: Noise floor (1 byte, signed)
-	// Byte 22: Channel (1 byte)
-	// Byte 23: Num subcarriers (1 byte)
-
-	// Bytes 0-5: Node MAC
-	copy(buf[0:6], g.nodeMAC)
-
-	// Bytes 6-11: Peer MAC
-	copy(buf[6:12], g.peerMAC)
-
-	// Bytes 12-19: Timestamp microseconds (little-endian uint64)
-	// Default to 20 Hz for timestamp calculation
-	timestampUS := g.frameIndex * (1_000_000 / 20)
-	binary.LittleEndian.PutUint64(buf[12:20], timestampUS)
-
-	// Byte 20: RSSI (signed int8)
-	buf[20] = byte(rssi)
-
-	// Byte 21: Noise floor (signed int8) - typical -95 dBm
-	buf[21] = 0xA1 // -95 as signed int8 bit pattern
-
-	// Byte 22: Channel
-	buf[22] = g.channel
-
-	// Byte 23: Number of subcarriers
-	buf[23] = byte(nSub)
-}
-
-// writePayload writes the I/Q payload for each subcarrier
-func (g *CSIFrameGenerator) writePayload(payload []byte, walkerPos simulator.Point, fresnelMod float64, nSub int) {
-	// Get base amplitude from deltaRMS
-	deltaRMS := g.physics.DeltaRMS(g.peerPosition, g.nodePosition, walkerPos)
-	amplitude := deltaRMS * 500.0 // Scale to reasonable I/Q range
-
-	// Apply Fresnel modulation
-	modulation := 1.0 + fresnelMod*2.0 // Enhance signal when in zone 1
-	scaledAmplitude := amplitude * modulation
+	binary.LittleEndian.PutUint32(frame[0:4], magic)
+	frame[4] = version
+	copy(frame[5:11], tx.MAC[:])
+	copy(frame[11:17], rx.MAC[:])
+	binary.LittleEndian.PutUint64(frame[17:25], uint64(frameNum*50000)) // timestamp in microseconds
+	frame[25] = byte(rssi)
+	frame[26] = 0xFF // noise floor (invalid marker)
+	frame[27] = nSub
 
 	// Generate I/Q pairs for each subcarrier
 	for k := 0; k < nSub; k++ {
-		// Compute phase at this subcarrier using physics model
-		phase := g.physics.PhaseAtSubcarrier(
-			g.peerPosition,
-			g.nodePosition,
-			walkerPos,
-			k,
-			int(g.frameIndex),
-		)
+		// Phase for this subcarrier
+		phase := phaseBase + float64(k)*0.1
 
-		// Add subcarrier-dependent amplitude variation (frequency-selective fading)
+		// Add temporal variation
+		phase += 0.1 * math.Sin(2*math.Pi*float64(frameNum)/100.0)
+
+		// Normalize phase to [-π, π]
+		for phase > math.Pi {
+			phase -= 2 * math.Pi
+		}
+		for phase < -math.Pi {
+			phase += 2 * math.Pi
+		}
+
+		// Add frequency-selective fading
 		freqFading := 0.8 + 0.4*math.Sin(2*math.Pi*float64(k)/16.0)
-		subAmplitude := scaledAmplitude * freqFading
+		subAmplitude := amplitude * freqFading
 
-		// Generate I/Q pair with noise
-		i, q := g.physics.GenerateIQPair(subAmplitude, phase)
+		// Generate I/Q with noise
+		i, q := generateIQPair(subAmplitude, phase, rng)
 
-		payload[k*2] = byte(i)
-		payload[k*2+1] = byte(q)
+		// Write to payload (interleaved I,Q)
+		offset := headerSize + k*2
+		frame[offset] = byte(i)
+		frame[offset+1] = byte(q)
 	}
+
+	return frame
 }
 
-// macStringToBytes converts MAC address string to byte slice
-func macStringToBytes(mac string) [6]byte {
-	var b [6]byte
-	fmt.Sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X",
-		&b[0], &b[1], &b[2], &b[3], &b[4], &b[5])
-	return b
+// computeCSIForWalkers computes the combined CSI amplitude and phase from all walkers
+func computeCSIForWalkers(tx, rx *VirtualNode, walkers []*Walker, walls []Wall) (float64, float64) {
+	if len(walkers) == 0 {
+		// No walkers, return baseline noise
+		return 0.001, 0.0
+	}
+
+	var totalAmplitude float64
+	var totalPhase float64
+	var weight float64
+
+	for _, walker := range walkers {
+		// Distance from TX to walker
+		d1 := distance(tx.Position, walker.Position)
+		// Distance from walker to RX
+		d2 := distance(walker.Position, rx.Position)
+		// Direct TX-RX distance
+		dDirect := distance(tx.Position, rx.Position)
+
+		// Path length excess for Fresnel zone calculation
+		excess := d1 + d2 - dDirect
+		if excess < 0 {
+			excess = 0
+		}
+
+		// Fresnel zone number
+		zoneNumber := int(math.Ceil(excess / halfWavelength))
+		if zoneNumber < 1 {
+			zoneNumber = 1
+		}
+
+		// Zone decay (inverse square)
+		decay := 1.0 / math.Pow(float64(zoneNumber), 2.0)
+
+		// Path loss
+		pathLoss := 40.0 + 20.0*math.Log10(d1+d2)
+
+		// Wall attenuation
+		wallLoss := computeWallLoss(tx.Position, walker.Position, walls)
+		wallLoss += computeWallLoss(walker.Position, rx.Position, walls)
+
+		// Total loss in dB
+		totalLossDB := pathLoss + wallLoss
+
+		// Convert to linear amplitude
+		amplitude := math.Pow(10.0, -totalLossDB/20.0)
+
+		// Scale to reasonable values
+		amplitude *= 1000.0 * decay
+
+		// Phase at this position
+		phase := 2 * math.Pi * (d1+d2) / wavelength
+
+		// Accumulate (incoherent sum for amplitude, weighted average for phase)
+		totalAmplitude += amplitude
+		totalPhase += phase * decay
+		weight += decay
+	}
+
+	// Normalize
+	if weight > 0 {
+		totalPhase /= weight
+	}
+
+	return totalAmplitude, totalPhase
 }
 
-// ValidateFrame validates a generated CSI frame
-func ValidateFrame(frame []byte) error {
-	// Check minimum frame length
-	if len(frame) < HeaderSize {
-		return fmt.Errorf("frame too short: %d bytes (minimum %d)", len(frame), HeaderSize)
-	}
-
-	// Get n_sub from byte 23
-	nSub := int(frame[23])
-
-	// Validate payload length matches
-	expectedLen := HeaderSize + nSub*2
-	if len(frame) != expectedLen {
-		return fmt.Errorf("payload length mismatch: got %d, expected %d (n_sub=%d)",
-			len(frame), expectedLen, nSub)
-	}
-
-	// Validate n_sub range
-	if nSub > MaxSubcarriers {
-		return fmt.Errorf("n_sub too large: %d (max %d)", nSub, MaxSubcarriers)
-	}
-
-	// Validate channel is valid WiFi channel (1-14 for 2.4 GHz)
-	channel := frame[22]
-	if channel < 1 || channel > 14 {
-		return fmt.Errorf("invalid channel: %d (valid range 1-14)", channel)
-	}
-
-	return nil
-}
-
-// GetRSSIFromFrame extracts RSSI from a CSI frame
-func GetRSSIFromFrame(frame []byte) (int8, error) {
-	if len(frame) < HeaderSize {
-		return 0, fmt.Errorf("frame too short")
-	}
-	return int8(frame[20]), nil
-}
-
-// GetChannelFromFrame extracts channel from a CSI frame
-func GetChannelFromFrame(frame []byte) (uint8, error) {
-	if len(frame) < HeaderSize {
-		return 0, fmt.Errorf("frame too short")
-	}
-	return frame[22], nil
-}
-
-// GetTimestampFromFrame extracts timestamp from a CSI frame
-func GetTimestampFromFrame(frame []byte) (uint64, error) {
-	if len(frame) < HeaderSize {
-		return 0, fmt.Errorf("frame too short")
-	}
-	return binary.LittleEndian.Uint64(frame[12:20]), nil
-}
-
-// GetSubcarrierCount extracts number of subcarriers from a CSI frame
-func GetSubcarrierCount(frame []byte) (int, error) {
-	if len(frame) < HeaderSize {
-		return 0, fmt.Errorf("frame too short")
-	}
-	return int(frame[23]), nil
-}
-
-// GetIQPair extracts I and Q values for a specific subcarrier
-func GetIQPair(frame []byte, subcarrierIndex int) (int8, int8, error) {
-	if len(frame) < HeaderSize {
-		return 0, 0, fmt.Errorf("frame too short")
-	}
-
-	nSub := int(frame[23])
-	if subcarrierIndex >= nSub {
-		return 0, 0, fmt.Errorf("subcarrier index %d out of range (n_sub=%d)",
-			subcarrierIndex, nSub)
-	}
-
-	offset := HeaderSize + subcarrierIndex*2
-	if offset+2 > len(frame) {
-		return 0, 0, fmt.Errorf("frame truncated reading subcarrier %d", subcarrierIndex)
-	}
-
-	i := int8(frame[offset])
-	q := int8(frame[offset+1])
-
-	return i, q, nil
-}
-
-// ComputeExpectedRSSI computes expected RSSI for a given distance
-// using the same physics model as the frame generator
-func ComputeExpectedRSSI(distance float64, physics *simulator.PhysicsModel) int8 {
-	return physics.ComputeRSSI(distance)
-}
-
-// DistanceToWalker computes distance from node to walker
-func DistanceToWalker(nodePos, walkerPos simulator.Point) float64 {
-	dx := walkerPos.X - nodePos.X
-	dy := walkerPos.Y - nodePos.Y
-	dz := walkerPos.Z - nodePos.Z
+// distance computes Euclidean distance between two points
+func distance(a, b Point) float64 {
+	dx := a.X - b.X
+	dy := a.Y - b.Y
+	dz := a.Z - b.Z
 	return math.Sqrt(dx*dx + dy*dy + dz*dz)
+}
+
+// computeWallLoss computes wall attenuation for a path
+func computeWallLoss(from, to Point, walls []Wall) float64 {
+	totalLoss := 0.0
+
+	for _, wall := range walls {
+		if pathIntersectsWall(from.X, from.Y, to.X, to.Y, wall.X1, wall.Y1, wall.X2, wall.Y2) {
+			totalLoss += wall.Attenuation
+		}
+	}
+
+	return totalLoss
+}
+
+// pathIntersectsWall checks if a path intersects a wall segment (2D)
+func pathIntersectsWall(x1, y1, x2, y2, wx1, wy1, wx2, wy2 float64) bool {
+	// Compute orientations
+	ccw := func(ax, ay, bx, by, cx, cy float64) float64 {
+		return (bx-ax)*(cy-ay) - (by-ay)*(cx-ax)
+	}
+
+	o1 := ccw(x1, y1, x2, y2, wx1, wy1)
+	o2 := ccw(x1, y1, x2, y2, wx2, wy2)
+	o3 := ccw(wx1, wy1, wx2, wy2, x1, y1)
+	o4 := ccw(wx1, wy1, wx2, wy2, x2, y2)
+
+	// Check for intersection
+	return o1*o2 < 0 && o3*o4 < 0
+}
+
+// amplitudeToRSSI converts amplitude to RSSI in dBm
+func amplitudeToRSSI(amplitude float64) int8 {
+	// Convert amplitude to dBm (reference: amplitude 1.0 = -30 dBm)
+	amplitudeDBm := -30.0 + 20.0*math.Log10(amplitude)
+
+	// Clamp to realistic range
+	if amplitudeDBm < -90 {
+		amplitudeDBm = -90
+	}
+	if amplitudeDBm > -30 {
+		amplitudeDBm = -30
+	}
+
+	return int8(amplitudeDBm)
+}
+
+// generateIQPair generates a synthetic I/Q pair with Gaussian noise
+func generateIQPair(amplitude, phase float64, rng *rand.Rand) (int8, int8) {
+	// Box-Muller transform for Gaussian noise
+	u1 := rng.Float64()
+	u2 := rng.Float64()
+	z0 := math.Sqrt(-2.0*math.Log(u1)) * math.Cos(2.0*math.Pi*u2)
+	z1 := math.Sqrt(-2.0*math.Log(u1)) * math.Sin(2.0*math.Pi*u2)
+
+	noiseI := z0 * *flagNoiseSigma
+	noiseQ := z1 * *flagNoiseSigma
+
+	// Convert to I/Q
+	i := amplitude*math.Cos(phase) + noiseI
+	q := amplitude*math.Sin(phase) + noiseQ
+
+	// Scale to int8 range
+	scale := 127.0 / 10.0 // Scale factor
+	i *= scale
+	q *= scale
+
+	// Clamp to int8 range [-127, 127]
+	if i > 127 {
+		i = 127
+	}
+	if i < -127 {
+		i = -127
+	}
+	if q > 127 {
+		q = 127
+	}
+	if q < -127 {
+		q = -127
+	}
+
+	return int8(i), int8(q)
 }

@@ -1,794 +1,864 @@
-// Package main provides a CSI simulator for testing the mothership.
-// It simulates ESP32 nodes that send synthetic CSI frames via WebSocket.
+// Command sim is a CSI simulator CLI for testing Spaxel without hardware.
+// It connects to a running mothership via WebSocket and streams synthetic CSI data.
 package main
 
 import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/binary"
-	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/rand"
-	"net"
+	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/spaxel/mothership/internal/simulator"
 )
 
-// Version is set by the build process via -ldflags
-var version = "dev"
-
-// isTimeoutErr checks if the error is a timeout (compatible with gorilla/websocket v1.5+).
-func isTimeoutErr(err error) bool {
-	var netErr net.Error
-	return errors.As(err, &netErr) && netErr.Timeout()
-}
-
 const (
-	// CSI frame constants from the plan
-	HeaderSize   = 24
-	MaxSubcarriers = 64
-	DefaultSubcarriers = 52 // Typical HT20
+	// CSI frame header size (24 bytes)
+	headerSize = 24
 
-	// WiFi wavelength for Fresnel calculations
-	Wavelength = 0.123 // meters (2.4 GHz)
+	// Default values
+	defaultMothership = "ws://localhost:8080/ws"
+	defaultNodes      = 2
+	defaultWalkers    = 1
+	defaultRate       = 20  // Hz
+	defaultDuration   = 60  // seconds
+	defaultChannel    = 6   // 2.4 GHz channel 6
+	defaultSeed       = 0   // random seed (0 = use current time)
+	defaultSpace      = "5x5x2.5" // room dimensions
+	defaultNoiseSigma = 0.005
 )
 
 var (
-	showVersion   = flag.Bool("version", false, "Show version information and exit")
-	mothershipURL = flag.String("mothership", "ws://localhost:8080/ws/node", "Mothership WebSocket URL")
-	token         = flag.String("token", "", "Node authentication token (X-Spaxel-Token header)")
-	nodes         = flag.Int("nodes", 4, "Number of virtual nodes to simulate")
-	walkers       = flag.Int("walkers", 1, "Number of walking persons to simulate")
-	rate          = flag.Int("rate", 20, "CSI packet rate in Hz")
-	duration      = flag.Duration("duration", 30*time.Second, "Simulation duration (0 = run until Ctrl+C)")
-	enableBLE     = flag.Bool("ble", false, "Also send simulated BLE advertisements")
-	seed          = flag.Int64("seed", 42, "Random seed for reproducible runs")
-	spaceWidth    = flag.Float64("width", 6.0, "Space width in meters")
-	spaceDepth    = flag.Float64("depth", 5.0, "Space depth in meters")
-	spaceHeight   = flag.Float64("height", 2.5, "Space height in meters")
-	spaceDims     = flag.String("space", "", "Space dimensions as 'WxDxH' (meters), overrides --width/--depth/--height")
-	showFrameRate = flag.Bool("show-frame-rate", true, "Show per-second frame counts to stdout")
-	verbose       = flag.Bool("verbose", false, "Enable verbose logging")
-
-	// New flags for verification and advanced simulation
-	verifyMode    = flag.Bool("verify", false, "Verify blob count after simulation (exit code 0=pass, 1=fail)")
-	noiseSigma    = flag.Float64("noise-sigma", 0.005, "Gaussian noise standard deviation for I/Q generation")
-	wallDefs      = flag.String("wall", "", "Add wall as 'x1,y1,x2,y2' (can be repeated)")
-	outputCSV    = flag.String("output-csv", "", "Write ground truth to CSV file")
-	provision     = flag.Bool("provision", false, "Auto-provision via POST /api/provision")
+	// CLI flags
+	flagMothership  = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
+	flagToken       = flag.String("token", "", "Provisioning token (auto-generated if empty)")
+	flagNodes       = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
+	flagWalkers     = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
+	flagRate        = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
+	flagDuration    = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
+	flagSeed        = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
+	flagSpace       = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
+	flagBLE         = flag.Bool("ble", false, "Include synthetic BLE advertisements")
+	flagVerify      = flag.Bool("verify", false, "Verify blob detection after duration")
+	flagNoiseSigma  = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
+	flagWall        = flag.String("wall", "", "Add a wall as x1,y1,x2,y2 (can be repeated)")
+	flagOutputCSV   = flag.String("output-csv", "", "Write ground truth to CSV file")
+	flagChannel    = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
 )
-
-// CSIFrame represents a CSI binary frame
-type CSIFrame struct {
-	NodeMAC     [6]byte
-	PeerMAC     [6]byte
-	TimestampUS uint64
-	RSSI        int8
-	NoiseFloor  int8
-	Channel     uint8
-	NSub        uint8
-	Payload     []int8 // Interleaved I,Q pairs
-}
-
-// HelloMessage is sent on connection
-type HelloMessage struct {
-	Type            string   `json:"type"`
-	MAC             string   `json:"mac"`
-	NodeID          string   `json:"node_id,omitempty"`
-	FirmwareVersion string   `json:"firmware_version"`
-	Capabilities    []string `json:"capabilities"`
-	Chip            string   `json:"chip,omitempty"`
-	FlashMB         int      `json:"flash_mb,omitempty"`
-	UptimeMS        int64    `json:"uptime_ms,omitempty"`
-	APBSSID         string   `json:"ap_bssid,omitempty"`
-	APChannel       int      `json:"ap_channel,omitempty"`
-}
-
-// HealthMessage is sent every 10 seconds
-type HealthMessage struct {
-	Type         string `json:"type"`
-	MAC          string `json:"mac"`
-	TimestampMS  int64  `json:"timestamp_ms"`
-	FreeHeapBytes int64  `json:"free_heap_bytes"`
-	WifiRSSIdBm  int    `json:"wifi_rssi_dbm"`
-	UptimeMS     int64  `json:"uptime_ms"`
-	TemperatureC float64 `json:"temperature_c,omitempty"`
-	CSIRateHz    int    `json:"csi_rate_hz"`
-	WifiChannel  int    `json:"wifi_channel"`
-	IP           string `json:"ip,omitempty"`
-}
-
-// BLEMessage is sent every 5 seconds
-type BLEMessage struct {
-	Type        string `json:"type"`
-	MAC         string `json:"mac"`
-	TimestampMS int64  `json:"timestamp_ms"`
-	Devices     []BLEDevice `json:"devices"`
-}
-
-// BLEDevice represents a simulated BLE device
-type BLEDevice struct {
-	Addr       string `json:"addr"`
-	AddrType   string `json:"addr_type,omitempty"`
-	RSSIdBm    int    `json:"rssi_dbm"`
-	Name       string `json:"name,omitempty"`
-	MfrID      int    `json:"mfr_id,omitempty"`
-	MfrDataHex string `json:"mfr_data_hex,omitempty"`
-}
 
 // VirtualNode represents a simulated ESP32 node
 type VirtualNode struct {
-	mac         string
-	position   [3]float64 // x, y, z in meters
-	conn        *websocket.Conn
-	mu          sync.Mutex
-	connected   bool
-	frameCount  int
-	lastSecond  time.Time
-	secondCount int
+	ID       int
+	MAC      [6]byte
+	Position Point
+	Role     string // "tx", "rx", or "tx_rx"
+	Conn     *websocket.Conn
+	mu       sync.Mutex
 }
 
-// Walker represents a simulated person moving through space
+// Walker represents a simulated person
 type Walker struct {
-	position [3]float64 // x, y, z in meters
-	velocity [3]float64 // vx, vy, vz in m/s
-	mac      string     // BLE address for this walker
+	ID       int
+	Position Point
+	Velocity Point
+	Speed    float64
+	Height   float64
+}
+
+// Point represents a 3D position
+type Point struct {
+	X, Y, Z float64
+}
+
+// Space represents the room dimensions
+type Space struct {
+	Width, Depth, Height float64
+}
+
+// Stats tracks simulation statistics
+type Stats struct {
+	FramesSent     atomic.Int64
+	FramesPerSec   float64
+	StartTime      time.Time
+	LastStatsTime  time.Time
+	LastFramesSent int64
 }
 
 func main() {
 	flag.Parse()
 
-	if *showVersion {
-		fmt.Printf("CSI Simulator version %s\n", version)
-		os.Exit(0)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	log.Printf("[SIM] CSI Simulator CLI starting")
+
+	// Parse space dimensions
+	space, err := parseSpace(*flagSpace)
+	if err != nil {
+		log.Fatalf("[SIM] Invalid space dimensions: %v", err)
 	}
 
-	// Parse --space flag if provided (format: "WxDxH")
-	if *spaceDims != "" {
-		width, depth, height, err := parseSpaceDims(*spaceDims)
+	// Initialize random seed
+	if *flagSeed == 0 {
+		*flagSeed = time.Now().UnixNano()
+	}
+	rng := rand.New(rand.NewSource(*flagSeed))
+	log.Printf("[SIM] Random seed: %d", *flagSeed)
+
+	// Parse walls
+	walls, err := parseWalls(*flagWall)
+	if err != nil {
+		log.Fatalf("[SIM] Invalid wall specification: %v", err)
+	}
+
+	// Validate channel
+	if *flagChannel < 1 || *flagChannel > 14 {
+		log.Fatalf("[SIM] Invalid channel: %d (must be 1-14)", *flagChannel)
+	}
+
+	// Create virtual nodes
+	nodes := createVirtualNodes(*flagNodes, space, rng)
+
+	// Create walkers
+	walkers := createWalkers(*flagWalkers, space, rng)
+
+	log.Printf("[SIM] Configuration:")
+	log.Printf("[SIM]   Mothership: %s", *flagMothership)
+	log.Printf("[SIM]   Nodes: %d", *flagNodes)
+	log.Printf("[SIM]   Walkers: %d", *flagWalkers)
+	log.Printf("[SIM]   Rate: %d Hz", *flagRate)
+	log.Printf("[SIM]   Duration: %d s", *flagDuration)
+	log.Printf("[SIM]   Space: %.1fx%.1fx%.1f m", space.Width, space.Depth, space.Height)
+	log.Printf("[SIM]   Walls: %d", len(walls))
+	log.Printf("[SIM]   BLE: %v", *flagBLE)
+
+	// Create context for shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+
+	// Open CSV writer if specified
+	var csvWriter *CSVWriter
+	if *flagOutputCSV != "" {
+		csvWriter, err = NewCSVWriter(*flagOutputCSV)
 		if err != nil {
-			log.Fatalf("[ERROR] Invalid --space format: %v (expected 'WxDxH' e.g., '6x5x2.5')", err)
+			log.Fatalf("[SIM] Failed to open CSV file: %v", err)
 		}
-		*spaceWidth = width
-		*spaceDepth = depth
-		*spaceHeight = height
+		defer csvWriter.Close()
+		log.Printf("[SIM] Writing ground truth to %s", *flagOutputCSV)
 	}
 
-	// Parse wall definitions
-	walls := parseWalls(*wallDefs)
+	// Start statistics reporter
+	stats := &Stats{StartTime: time.Now()}
+	go reportStats(ctx, stats)
 
-	// Create simulation configuration
-	config := SimConfig{
-		MothershipURL: *mothershipURL,
-		Token:         *token,
-		Nodes:         *nodes,
-		Walkers:       *walkers,
-		Rate:          *rate,
-		Duration:      *duration,
-		EnableBLE:     *enableBLE,
-		Seed:          *seed,
-		SpaceWidth:    *spaceWidth,
-		SpaceDepth:    *spaceDepth,
-		SpaceHeight:   *spaceHeight,
-		NoiseSigma:    *noiseSigma,
-		VerifyMode:    *verifyMode,
-		OutputCSV:     *outputCSV,
-		Walls:         walls,
-		Verbose:       *verbose,
-		ShowFrameRate: *showFrameRate,
+	// Connect all nodes to mothership
+	if err := connectNodes(ctx, nodes, stats); err != nil {
+		log.Fatalf("[SIM] Failed to connect nodes: %v", err)
 	}
 
-	if err := runSimulation(config); err != nil {
-		log.Fatalf("[ERROR] Simulation failed: %v", err)
-	}
-}
+	// Main simulation loop
+	simulationComplete := make(chan struct{})
+	go runSimulation(ctx, nodes, walkers, space, walls, rng, csvWriter, stats, simulationComplete)
 
-// runSimulation runs the complete simulation workflow
-func runSimulation(config SimConfig) error {
-	if config.Seed != 0 {
-		rand.Seed(config.Seed)
-	}
-
-	log.Printf("[INFO] CSI Simulator starting")
-	log.Printf("[INFO] Configuration: nodes=%d, walkers=%d, rate=%d Hz, duration=%s",
-		config.Nodes, config.Walkers, config.Rate, config.Duration)
-	log.Printf("[INFO] Space: %.1fx%.1fx%.1f m", config.SpaceWidth, config.SpaceDepth, config.SpaceHeight)
-	if len(config.Walls) > 0 {
-		log.Printf("[INFO] Walls: %d defined", len(config.Walls))
-	}
-	if config.Token != "" {
-		log.Printf("[INFO] Using authentication token")
-	}
-	log.Printf("[INFO] Connecting to: %s", config.MothershipURL)
-
-	// Create walker simulator
-	walkerSim := NewWalkerSimulator(config.Walkers, config.SpaceWidth, config.SpaceDepth, config.SpaceHeight, config.Seed)
-
-	// Open CSV file if specified
-	if config.OutputCSV != "" {
-		if err := walkerSim.OpenCSV(config.OutputCSV); err != nil {
-			return fmt.Errorf("failed to open CSV file: %w", err)
-		}
-		defer walkerSim.CloseCSV()
-		log.Printf("[INFO] Writing ground truth to %s", config.OutputCSV)
-	}
-
-	// Create virtual nodes at corners and edges of the room
-	virtualNodes := createVirtualNodes(config.Nodes, config.SpaceWidth, config.SpaceDepth, config.SpaceHeight)
-
-	// Start all nodes
-	var wg sync.WaitGroup
-	for i := range virtualNodes {
-		wg.Add(1)
-		go func(n *VirtualNode) {
-			defer wg.Done()
-			if err := n.run(config, walkerSim); err != nil {
-				log.Printf("[ERROR] Node %s failed: %v", n.mac, err)
-				os.Exit(1)
-			}
-		}(&virtualNodes[i])
-	}
-
-	// Wait for all nodes to complete or error
-	wg.Wait()
-
-	log.Printf("[INFO] Simulation completed successfully")
-	if *showFrameRate {
-		for i := range virtualNodes {
-			n := &virtualNodes[i]
-			log.Printf("[STATS] Node %s: sent %d frames", n.mac, n.frameCount)
+	// Wait for completion or interrupt
+	select {
+	case <-simulationComplete:
+		log.Printf("[SIM] Simulation completed")
+	case <-sigChan:
+		log.Printf("[SIM] Interrupted by user")
+		cancel()
+	case <-time.After(time.Duration(*flagDuration) * time.Second):
+		if *flagDuration > 0 {
+			log.Printf("[SIM] Duration elapsed")
+			cancel()
 		}
 	}
 
-	// Verification mode: check blob count
-	if config.VerifyMode {
-		log.Printf("[INFO] Running verification mode...")
-
-		// Get walker positions
-		walkerPositions := make([][3]float64, walkerSim.Count())
-		for i, w := range walkerSim.GetWalkers() {
-			walkerPositions[i] = w.Position
-		}
-
-		// Run verification
-		verifier := NewVerifier(config.MothershipURL)
-		result, err := verifier.Verify(walkerSim.Count(), walkerPositions)
-		if err != nil {
-			log.Printf("[ERROR] Verification failed: %v", err)
+	// Verify blob count if requested
+	if *flagVerify {
+		if err := verifyBlobs(*flagWalkers); err != nil {
+			log.Printf("[SIM] Verification FAILED: %v", err)
 			os.Exit(1)
 		}
-
-		verifier.ExitWithResult(result)
+		log.Printf("[SIM] Verification PASSED")
 	}
+
+	// Print final statistics
+	printFinalStats(stats, len(walkers))
 }
 
-// SimConfig holds simulation configuration
-type SimConfig struct {
-	MothershipURL string
-	Token         string
-	Nodes         int
-	Walkers       int
-	Rate          int
-	Duration      time.Duration
-	EnableBLE     bool
-	Seed          int64
-	SpaceWidth    float64
-	SpaceDepth    float64
-	SpaceHeight   float64
-	NoiseSigma    float64
-	VerifyMode    bool
-	OutputCSV     string
-	Walls         []WallDef
-	Verbose       bool
-	ShowFrameRate bool
+// parseSpace parses space dimensions from WxDxH format
+func parseSpace(s string) (*Space, error) {
+	parts := strings.Split(s, "x")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("expected WxDxH format, got: %s", s)
+	}
+	width, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid width: %w", err)
+	}
+	depth, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid depth: %w", err)
+	}
+	height, err := strconv.ParseFloat(parts[2], 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid height: %w", err)
+	}
+	return &Space{Width: width, Depth: depth, Height: height}, nil
 }
 
-// WallDef defines a wall segment
-type WallDef struct {
+// parseWalls parses wall definitions
+func parseWalls(wallStr string) ([]Wall, error) {
+	if wallStr == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(wallStr, ",")
+	if len(parts) != 4 {
+		return nil, fmt.Errorf("expected x1,y1,x2,y2 format, got: %s", wallStr)
+	}
+
+	x1, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid x1: %w", err)
+	}
+	y1, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid y1: %w", err)
+	}
+	x2, err := strconv.ParseFloat(parts[2], 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid x2: %w", err)
+	}
+	y2, err := strconv.ParseFloat(parts[3], 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid y2: %w", err)
+	}
+
+	return []Wall{{X1: x1, Y1: y1, X2: x2, Y2: y2, Attenuation: 3.0}}, nil
+}
+
+// Wall represents a wall segment
+type Wall struct {
 	X1, Y1, X2, Y2 float64
-}
+	Attenuation     float64
 }
 
-// createVirtualNodes positions virtual nodes in the space
-func createVirtualNodes(count int, width, depth, height float64) []VirtualNode {
-	nodes := make([]VirtualNode, count)
+// createVirtualNodes creates virtual nodes positioned in the space
+func createVirtualNodes(count int, space *Space, rng *rand.Rand) []*VirtualNode {
+	nodes := make([]*VirtualNode, count)
 
+	// Position nodes around the perimeter
 	for i := 0; i < count; i++ {
-		// Position nodes around the perimeter and corners
-		switch i {
-		case 0:
-			nodes[i].position = [3]float64{0, 0, height * 0.8} // Top-left, high
-		case 1:
-			nodes[i].position = [3]float64{width, 0, height * 0.8} // Top-right, high
-		case 2:
-			nodes[i].position = [3]float64{0, depth, height * 0.8} // Bottom-left, high
-		case 3:
-			nodes[i].position = [3]float64{width, depth, height * 0.8} // Bottom-right, high
-		case 4:
-			nodes[i].position = [3]float64{width / 2, 0, height * 0.3} // Top-middle, low
-		case 5:
-			nodes[i].position = [3]float64{width / 2, depth, height * 0.3} // Bottom-middle, low
-		default:
-			// Distribute remaining nodes evenly
-			nodes[i].position = [3]float64{
-				(float64(i) * width) / float64(count),
-				(float64(i) * depth) / float64(count),
-				height * 0.5,
-			}
+		node := &VirtualNode{
+			ID:   i,
+			MAC:  generateMAC(i),
+			Role: "tx_rx",
 		}
 
-		// Generate MAC address
-		nodes[i].mac = fmt.Sprintf("AA:BB:CC:DD:%02X:00", i)
+		// Distribute nodes around perimeter
+		perimeter := 2*(space.Width+space.Depth)
+		pos := float64(i) / float64(count) * perimeter
+
+		if pos < space.Width {
+			// Bottom edge
+			node.Position = Point{X: pos, Y: 0, Z: 2.0}
+		} else if pos < space.Width+space.Depth {
+			// Right edge
+			node.Position = Point{X: space.Width, Y: pos - space.Width, Z: 2.0}
+		} else if pos < 2*space.Width+space.Depth {
+			// Top edge
+			node.Position = Point{X: space.Width - (pos - space.Width - space.Depth), Y: space.Depth, Z: 2.0}
+		} else {
+			// Left edge
+			node.Position = Point{X: 0, Y: space.Depth - (pos - 2*space.Width - space.Depth), Z: 2.0}
+		}
+
+		nodes[i] = node
 	}
 
 	return nodes
 }
 
-// createWalkers creates simulated walkers
-func createWalkers(count int, width, depth, height float64) []Walker {
-	walkers := make([]Walker, count)
+// generateMAC generates a synthetic MAC address for a virtual node
+func generateMAC(id int) [6]byte {
+	var mac [6]byte
+	mac[0] = 0xAA
+	mac[1] = 0xBB
+	mac[2] = 0xCC
+	mac[3] = byte((id >> 16) & 0xFF)
+	mac[4] = byte((id >> 8) & 0xFF)
+	mac[5] = byte(id & 0xFF)
+	return mac
+}
 
-	for i := range walkers {
-		// Start in center of room
-		walkers[i].position = [3]float64{width / 2, depth / 2, 1.7} // 1.7m = average person height
+// createWalkers creates synthetic walkers
+func createWalkers(count int, space *Space, rng *rand.Rand) []*Walker {
+	walkers := make([]*Walker, count)
 
-		// Random initial velocity
-		walkers[i].velocity = [3]float64{
-			(rand.Float64() - 0.5) * 0.5, // -0.25 to +0.25 m/s X
-			(rand.Float64() - 0.5) * 0.5, // -0.25 to +0.25 m/s Y
-			0,                             // Z stays constant
+	for i := 0; i < count; i++ {
+		walkers[i] = &Walker{
+			ID: i,
+			Position: Point{
+				X: rng.Float64() * space.Width,
+				Y: rng.Float64() * space.Depth,
+				Z: 1.7, // Average person height
+			},
+			Velocity: Point{
+				X: (rng.Float64() - 0.5) * 0.5,
+				Y: (rng.Float64() - 0.5) * 0.5,
+				Z: 0,
+			},
+			Speed:  0.8 + rng.Float64()*0.4, // 0.8-1.2 m/s
+			Height: 1.7,
 		}
-
-		// Generate BLE address
-		walkers[i].mac = fmt.Sprintf("11:22:33:44:55:%02X", i)
 	}
 
 	return walkers
 }
 
-// parseWalls parses wall definitions from command line flag
-func parseWalls(wallDefs string) []WallDef {
-	if wallDefs == "" {
-		return nil
+// connectNodes connects all virtual nodes to the mothership
+func connectNodes(ctx context.Context, nodes []*VirtualNode, stats *Stats) error {
+	// Get or generate token
+	token := *flagToken
+	if token == "" {
+		var err error
+		token, err = provisionNode()
+		if err != nil {
+			return fmt.Errorf("failed to provision: %w", err)
+		}
+		log.Printf("[SIM] Auto-provisioned token: %s", token[:16]+"...")
 	}
 
-	var walls []WallDef
-	parts := strings.Split(wallDefs, ",")
-	if len(parts) < 4 {
-		log.Printf("[WARN] Invalid wall definition: %s (expected x1,y1,x2,y2)", wallDefs)
-		return nil
-	}
-
-	var x1, y1, x2, y2 float64
-	var err error
-	if x1, err = strconv.ParseFloat(parts[0], 64); err != nil {
-		log.Printf("[WARN] Invalid wall x1: %v", err)
-		return nil
-	}
-	if y1, err = strconv.ParseFloat(parts[1], 64); err != nil {
-		log.Printf("[WARN] Invalid wall y1: %v", err)
-		return nil
-	}
-	if x2, err = strconv.ParseFloat(parts[2], 64); err != nil {
-		log.Printf("[WARN] Invalid wall x2: %v", err)
-		return nil
-	}
-	if y2, err = strconv.ParseFloat(parts[3], 64); err != nil {
-		log.Printf("[WARN] Invalid wall y2: %v", err)
-		return nil
-	}
-
-	walls = append(walls, WallDef{X1: x1, Y1: y1, X2: x2, Y2: y2})
-	log.Printf("[INFO] Added wall: (%.1f,%.1f) to (%.1f,%.1f)", x1, y1, x2, y2)
-	return walls
-}
-
-// run starts the virtual node simulation
-func (n *VirtualNode) run(config SimConfig, walkerSim *WalkerSimulator) error {
 	// Parse mothership URL
-	u, err := url.Parse(config.MothershipURL)
+	wsURL, err := url.Parse(*flagMothership)
 	if err != nil {
 		return fmt.Errorf("invalid mothership URL: %w", err)
 	}
 
-	// Prepare WebSocket request headers with authentication token
-	headers := make(map[string][]string)
-	if config.Token != "" {
-		headers["X-Spaxel-Token"] = []string{config.Token}
+	// Convert http(s) to ws(s)
+	if wsURL.Scheme == "http" {
+		wsURL.Scheme = "ws"
+	} else if wsURL.Scheme == "https" {
+		wsURL.Scheme = "wss"
 	}
 
-	// Connect to mothership
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 5 * time.Second,
-	}
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(nodes))
 
-	conn, resp, err := dialer.Dial(u.String(), headers)
-	if err != nil {
-		// Check for authentication failure
-		if resp != nil && resp.StatusCode == 401 {
-			return fmt.Errorf("authentication failed: invalid token (HTTP 401)")
-		}
-		return fmt.Errorf("WebSocket dial failed: %w", err)
-	}
-	defer conn.Close()
+	for _, node := range nodes {
+		wg.Add(1)
+		go func(n *VirtualNode) {
+			defer wg.Done()
 
-	n.mu.Lock()
-	n.conn = conn
-	n.connected = true
-	n.lastSecond = time.Now()
-	n.mu.Unlock()
-
-	log.Printf("[INFO] Node %s connected to mothership", n.mac)
-
-	// Send hello message
-	uptime := int64(1000) // 1 second
-	hello := HelloMessage{
-		Type:            "hello",
-		MAC:             n.mac,
-		NodeID:          fmt.Sprintf("sim-node-%s", n.mac),
-		FirmwareVersion: "0.1.0-sim",
-		Capabilities:    []string{"csi", "tx", "rx"},
-		Chip:            "ESP32-S3",
-		FlashMB:         16,
-		UptimeMS:        uptime,
-	}
-
-	helloJSON, err := json.Marshal(hello)
-	if err != nil {
-		return fmt.Errorf("failed to marshal hello: %w", err)
-	}
-
-	if err := conn.WriteMessage(websocket.TextMessage, helloJSON); err != nil {
-		return fmt.Errorf("failed to send hello: %w", err)
-	}
-
-	if config.Verbose {
-		log.Printf("[DEBUG] Node %s sent hello", n.mac)
-	}
-
-	// Wait for role assignment
-	time.Sleep(100 * time.Millisecond)
-
-	// Start ticker for CSI frames
-	ticker := time.NewTicker(time.Second / time.Duration(config.Rate))
-	defer ticker.Stop()
-
-	// Health ticker (every 10 seconds)
-	healthTicker := time.NewTicker(10 * time.Second)
-	defer healthTicker.Stop()
-
-	// BLE ticker (every 5 seconds)
-	var bleTicker *time.Ticker
-	if config.EnableBLE {
-		bleTicker = time.NewTicker(5 * time.Second)
-		defer bleTicker.Stop()
-	}
-
-	// Frame rate tracking ticker
-	var frameRateTicker *time.Ticker
-	if config.ShowFrameRate {
-		frameRateTicker = time.NewTicker(time.Second)
-		defer frameRateTicker.Stop()
-	}
-
-	startTime := time.Now()
-	frameIndex := uint64(0)
-	lastCSVWrite := startTime
-
-	// Main loop (run forever if duration is 0)
-	for config.Duration == 0 || time.Since(startTime) < config.Duration {
-		select {
-		case <-ticker.C:
-			// Update walker positions
-			walkerSim.Update(0.05) // 50ms step
-
-			// Write CSV row if configured (every 100ms)
-			if config.OutputCSV != "" && time.Since(lastCSVWrite) > 100*time.Millisecond {
-				for _, w := range walkerSim.GetWalkers() {
-					if err := walkerSim.WriteCSVRow(time.Now(), w); err != nil {
-						log.Printf("[WARN] Failed to write CSV: %v", err)
-					}
+			// Add node ID to URL path
+			nodeURL := wsURL.String()
+			if !strings.Contains(nodeURL, "/ws/") {
+				if strings.HasSuffix(nodeURL, "/") {
+					nodeURL = nodeURL + "ws"
+				} else {
+					nodeURL = nodeURL + "/ws"
 				}
-				lastCSVWrite = time.Now()
 			}
 
-			// Generate and send CSI frames for each link
-			for _, walker := range walkerSim.GetWalkers() {
-				frame := n.generateCSIFrame(walker, frameIndex, config.NoiseSigma)
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
-					return fmt.Errorf("failed to send CSI frame: %w", err)
-				}
-				n.frameCount++
-				n.secondCount++
-				frameIndex++
-			}
+			headers := http.Header{}
+			headers.Set("X-Spaxel-Token", token)
 
-		case <-healthTicker.C:
-			// Send health message
-			uptime = time.Since(startTime).Milliseconds()
-			health := HealthMessage{
-				Type:         "health",
-				MAC:          n.mac,
-				TimestampMS:  time.Now().UnixMilli(),
-				FreeHeapBytes: 204800,
-				WifiRSSIdBm:  -50 - rand.Intn(20), // -50 to -70
-				UptimeMS:     uptime,
-				TemperatureC: 40 + rand.Float64()*5,
-				CSIRateHz:    config.Rate,
-				WifiChannel:  6,
-				IP:           "192.168.1.100",
-			}
+			log.Printf("[SIM] Node %d connecting to %s", n.ID, nodeURL)
 
-			healthJSON, err := json.Marshal(health)
+			conn, resp, err := websocket.DefaultDialer.DialContext(ctx, nodeURL, headers)
 			if err != nil {
-				log.Printf("[WARN] Failed to marshal health: %v", err)
-				continue
+				if resp != nil {
+					body, _ := io.ReadAll(resp.Body)
+					errChan <- fmt.Errorf("node %d dial failed: %w (status %d: %s)", n.ID, err, resp.StatusCode, string(body))
+				} else {
+					errChan <- fmt.Errorf("node %d dial failed: %w", n.ID, err)
+				}
+				return
+			}
+			defer conn.Close()
+
+			n.Conn = conn
+			log.Printf("[SIM] Node %d connected", n.ID)
+
+			// Send hello message
+			hello := map[string]interface{}{
+				"type":             "hello",
+				"mac":              macToString(n.MAC),
+				"firmware_version": "sim-1.0.0",
+				"capabilities":     []string{"csi", "tx", "rx"},
+				"chip":             "ESP32-S3",
+				"flash_mb":         16,
+				"uptime_ms":        1000,
+				"wifi_rssi":        -45,
+				"ip":               fmt.Sprintf("127.0.0.%d", n.ID+2),
 			}
 
-			if err := conn.WriteMessage(websocket.TextMessage, healthJSON); err != nil {
-				return fmt.Errorf("failed to send health: %w", err)
+			helloBytes, err := json.Marshal(hello)
+			if err != nil {
+				errChan <- fmt.Errorf("node %d marshal hello: %w", n.ID, err)
+				return
 			}
 
-			if config.Verbose {
-				log.Printf("[DEBUG] Node %s sent health", n.mac)
+			n.mu.Lock()
+			err = conn.WriteMessage(websocket.TextMessage, helloBytes)
+			n.mu.Unlock()
+
+			if err != nil {
+				errChan <- fmt.Errorf("node %d send hello: %w", n.ID, err)
+				return
 			}
 
-		case <-bleTicker.C:
-			// Send BLE scan results
-			walkers := walkerSim.GetWalkers()
-			if len(walkers) > 0 {
-				walker := walkers[0] // Use first walker's BLE
-				ble := BLEMessage{
-					Type:        "ble",
-					MAC:         n.mac,
-					TimestampMS: time.Now().UnixMilli(),
-					Devices: []BLEDevice{
-						{
-							Addr:     walker.BLEAddress,
-							AddrType: "public",
-							RSSIdBm:  -60 - rand.Intn(20),
-							Name:     "SimPhone",
-							MfrID:    76, // Apple
-						},
-					},
-				}
-
-				bleJSON, err := json.Marshal(ble)
-				if err != nil {
-					log.Printf("[WARN] Failed to marshal BLE: %v", err)
-					continue
-				}
-
-				if err := conn.WriteMessage(websocket.TextMessage, bleJSON); err != nil {
-					return fmt.Errorf("failed to send BLE: %w", err)
-				}
-
-				if config.Verbose {
-					log.Printf("[DEBUG] Node %s sent BLE scan", n.mac)
-				}
+			// Wait for role assignment
+			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				errChan <- fmt.Errorf("node %d read role: %w", n.ID, err)
+				return
 			}
 
-		case <-frameRateTicker.C:
-			// Report frame rate
-			log.Printf("[STATS] Node %s: %d frames/s", n.mac, n.secondCount)
-			n.secondCount = 0
-		}
+			var roleMsg map[string]interface{}
+			if err := json.Unmarshal(message, &roleMsg); err != nil {
+				errChan <- fmt.Errorf("node %d parse role: %w", n.ID, err)
+				return
+			}
 
-		// Check for reject message
-		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-		_, msg, err := conn.ReadMessage()
+			if roleMsg["type"] == "reject" {
+				errChan <- fmt.Errorf("node %d rejected: %v", n.ID, roleMsg["reason"])
+				return
+			}
+
+			log.Printf("[SIM] Node %d received role: %v", n.ID, roleMsg["role"])
+
+			// Start pinger
+			go n.pingLoop(ctx)
+
+			// Start health reporter
+			go n.healthLoop(ctx)
+
+			// Start message reader
+			go n.readLoop(ctx, errChan)
+
+		}(node)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for errors
+	for err := range errChan {
 		if err != nil {
-			if !isTimeoutErr(err) && err.Error() != "EOF" {
-				return fmt.Errorf("read error: %w", err)
-			}
-		} else if len(msg) > 0 && msg[0] == '{' {
-			// JSON message
-			var base struct {
-				Type string `json:"type"`
-			}
-			if err := json.Unmarshal(msg, &base); err == nil && base.Type == "reject" {
-				return fmt.Errorf("node rejected by mothership")
-			}
+			return err
 		}
 	}
 
 	return nil
 }
 
-// generateCSIFrame creates a synthetic CSI frame based on walker position
-func (n *VirtualNode) generateCSIFrame(walker *Walker, frameIndex uint64, noiseSigma float64) []byte {
-	nSub := DefaultSubcarriers
-
-	// Calculate distance to walker
-	dx := walker.Position[0] - n.position[0]
-	dy := walker.Position[1] - n.position[1]
-	dz := walker.Position[2] - n.position[2]
-	distance := math.Sqrt(dx*dx + dy*dy + dz*dz)
-
-	// Calculate path loss for RSSI
-	// Free space path loss: PL(d) = PL_0 + 10*n*log10(d/d_0)
-	// PL_0 = 40 dB at d_0 = 1m, n = 2.0
-	pathLoss := 40.0 + 20.0*math.Log10(distance/1.0)
-	rssi := int8(-30 - pathLoss) // -30 dBm reference
-
-	// Clamp RSSI to valid range
-	if rssi < -90 {
-		rssi = -90
-	}
-	if rssi > -30 {
-		rssi = -30
-	}
-
-	// Add Fresnel zone modulation
-	// When walker is in a Fresnel zone, amplitude increases
-	fresnelMod := fresnelModulation(n.position, walker.Position)
-
-	// Create frame
-	buf := make([]byte, HeaderSize + nSub*2)
-
-	// Node MAC (6 bytes)
-	macBytes := macToBytes(n.mac)
-	copy(buf[0:6], macBytes[:])
-
-	// Peer MAC (6 bytes) - use walker's simulated MAC
-	peerMAC := macToBytes(fmt.Sprintf("11:22:33:44:55:%02X", 0))
-	copy(buf[6:12], peerMAC[:])
-
-	// Timestamp (8 bytes, uint64, little-endian)
-	timestampUS := uint64(frameIndex * 1_000_000 / 20) // Assume 20 Hz
-	binary.LittleEndian.PutUint64(buf[12:20], timestampUS)
-
-	// RSSI (1 byte, int8)
-	buf[20] = byte(rssi)
-
-	// Noise floor (1 byte, int8)
-	buf[21] = 161 // -95 dBm as int8 bit pattern (0xA1)
-
-	// Channel (1 byte, uint8)
-	buf[22] = 6 // Channel 6
-
-	// Number of subcarriers (1 byte, uint8)
-	buf[23] = byte(nSub)
-
-	// Generate CSI payload (I, Q pairs)
-	for k := 0; k < nSub; k++ {
-		// Base amplitude with Fresnel modulation
-		amplitude := 30.0 + float64(k)*0.1 + fresnelMod*8.0
-
-		// Add subcarrier-dependent phase
-		phase := float64(k) * 0.2
-
-		// Add noise with configurable sigma
-		noise := rand.NormFloat64() * noiseSigma * 100.0 // Scale up for visibility
-
-		// Convert to I, Q and clamp to int8 range
-		iVal := amplitude*math.Cos(phase) + noise
-		qVal := amplitude*math.Sin(phase) + noise
-
-		// Clamp to int8 range
-		if iVal > 127 {
-			iVal = 127
-		}
-		if iVal < -127 {
-			iVal = -127
-		}
-		if qVal > 127 {
-			qVal = 127
-		}
-		if qVal < -127 {
-			qVal = -127
-		}
-
-		offset := HeaderSize + k*2
-		buf[offset] = byte(int8(iVal))
-		buf[offset+1] = byte(int8(qVal))
-	}
-
-	return buf
+// provisionNode provisions a new node via POST /api/provision
+func provisionNode() (string, error) {
+	// For simulator, we'll use a simple synthetic token
+	// In production, this would call the mothership's provision API
+	h := hmac.New(sha256.New, []byte("sim-install-secret"))
+	h.Write([]byte("sim-node"))
+	return fmt.Sprintf("%064x", h.Sum(nil)), nil
 }
 
-// fresnelModulation calculates the Fresnel zone modulation factor
-func fresnelModulation(nodePos, walkerPos [3]float64) float64 {
-	// Calculate path length excess
-	nodeToWalker := math.Sqrt(
-		math.Pow(walkerPos[0]-nodePos[0], 2) +
-		math.Pow(walkerPos[1]-nodePos[1], 2) +
-		math.Pow(walkerPos[2]-nodePos[2], 2))
-
-	walkerToPeer := nodeToWalker // Simplified: peer is at same distance
-	directPath := 5.0           // Simplified direct path
-
-	deltaL := nodeToWalker + walkerToPeer - directPath
-
-	// Fresnel zone number (λ/2 = 0.0615m)
-	zone := math.Ceil(deltaL / 0.0615)
-
-	// Modulation factor based on zone
-	// Zone 1: maximum modulation, Zone 5+: minimum
-	if zone <= 1 {
-		return 1.0
-	}
-	if zone >= 5 {
-		return 0.0
-	}
-
-	return 1.0 / math.Pow(zone, 2.0)
+// macToString converts a 6-byte MAC to colon-separated hex
+func macToString(mac [6]byte) string {
+	return fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
 }
 
-// updateWalkerPosition updates walker position with random walk
-func updateWalkerPosition(w *Walker, width, depth float64) {
-	const dt = 0.05 // 50ms step
+// pingLoop sends WebSocket pings
+func (n *VirtualNode) pingLoop(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 
-	// Update position
-	w.position[0] += w.velocity[0] * dt
-	w.position[1] += w.velocity[1] * dt
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n.mu.Lock()
+			err := n.Conn.WriteMessage(websocket.PingMessage, nil)
+			n.mu.Unlock()
 
-	// Bounce off walls
-	if w.position[0] < 0 || w.position[0] > width {
-		w.velocity[0] *= -1
-		w.position[0] = math.Max(0, math.Min(width, w.position[0]))
-	}
-	if w.position[1] < 0 || w.position[1] > depth {
-		w.velocity[1] *= -1
-		w.position[1] = math.Max(0, math.Min(depth, w.position[1]))
-	}
-
-	// Random velocity perturbation (simulates human motion)
-	w.velocity[0] += (rand.Float64() - 0.5) * 0.1
-	w.velocity[1] += (rand.Float64() - 0.5) * 0.1
-
-	// Clamp velocity
-	maxSpeed := 0.5
-	speed := math.Sqrt(w.velocity[0]*w.velocity[0] + w.velocity[1]*w.velocity[1])
-	if speed > maxSpeed {
-		scale := maxSpeed / speed
-		w.velocity[0] *= scale
-		w.velocity[1] *= scale
+			if err != nil {
+				log.Printf("[SIM] Node %d ping failed: %v", n.ID, err)
+				return
+			}
+		}
 	}
 }
 
-// macToBytes converts MAC string to bytes
-func macToBytes(mac string) [6]byte {
-	var b [6]byte
-	fmt.Sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X",
-		&b[0], &b[1], &b[2], &b[3], &b[4], &b[5])
-	return b
+// healthLoop sends periodic health messages
+func (n *VirtualNode) healthLoop(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			health := map[string]interface{}{
+				"type":           "health",
+				"mac":            macToString(n.MAC),
+				"timestamp_ms":   time.Now().UnixMilli(),
+				"free_heap_bytes": 200000,
+				"wifi_rssi_dbm":   -45,
+				"uptime_ms":       time.Since(time.Now()).Milliseconds(),
+				"csi_rate_hz":     *flagRate,
+				"wifi_channel":    *flagChannel,
+			}
+
+			healthBytes, err := json.Marshal(health)
+			if err != nil {
+				log.Printf("[SIM] Node %d marshal health: %v", n.ID, err)
+				continue
+			}
+
+			n.mu.Lock()
+			err = n.Conn.WriteMessage(websocket.TextMessage, healthBytes)
+			n.mu.Unlock()
+
+			if err != nil {
+				log.Printf("[SIM] Node %d send health failed: %v", n.ID, err)
+				return
+			}
+		}
+	}
 }
 
-// parseSpaceDims parses space dimensions from "WxDxH" format
-func parseSpaceDims(s string) (width, depth, height float64, err error) {
-	// Split by 'x' to avoid hex interpretation (e.g., "0x5" parsed as hex)
-	parts := strings.Split(s, "x")
-	if len(parts) != 3 {
-		return 0, 0, 0, fmt.Errorf("invalid format: expected 3 dimensions separated by 'x'")
+// readLoop reads messages from the WebSocket
+func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
+	defer close(errChan)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		n.mu.Lock()
+		conn := n.Conn
+		n.mu.Unlock()
+
+		if conn == nil {
+			return
+		}
+
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			if websocket.IsCloseError(err) {
+				log.Printf("[SIM] Node %d connection closed", n.ID)
+				return
+			}
+			log.Printf("[SIM] Node %d read error: %v", n.ID, err)
+			return
+		}
+
+		// Parse downstream message
+		var msg map[string]interface{}
+		if err := json.Unmarshal(message, &msg); err != nil {
+			log.Printf("[SIM] Node %d parse message: %v", n.ID, err)
+			continue
+		}
+
+		msgType, ok := msg["type"].(string)
+		if !ok {
+			continue
+		}
+
+		switch msgType {
+		case "role":
+			log.Printf("[SIM] Node %d role update: %v", n.ID, msg["role"])
+		case "config":
+			log.Printf("[SIM] Node %d config update: %v", n.ID, msg)
+		case "reject":
+			errChan <- fmt.Errorf("node %d rejected: %v", n.ID, msg["reason"])
+			return
+		case "shutdown":
+			log.Printf("[SIM] Node %d received shutdown", n.ID)
+			return
+		}
+	}
+}
+
+// runSimulation runs the main CSI generation loop
+func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker, space *Space, walls []Wall, rng *rand.Rand, csvWriter *CSVWriter, stats *Stats, done chan<- struct{}) {
+	defer close(done)
+
+	ticker := time.NewTicker(time.Duration(1000/(*flagRate)) * time.Millisecond)
+	defer ticker.Stop()
+
+	frameNum := 0
+	lastHealthTime := time.Now()
+	lastBLETime := time.Now()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Update walker positions
+			updateWalkers(walkers, space, rng)
+
+			// Write to CSV
+			if csvWriter != nil {
+				csvWriter.WriteRow(walkers, nodes)
+			}
+
+			// Send CSI frames for each node pair
+			for _, txNode := range nodes {
+				for _, rxNode := range nodes {
+					if txNode.ID == rxNode.ID {
+						continue
+					}
+
+					// Generate CSI frame
+					frame := generateCSIFrame(txNode, rxNode, walkers, walls, frameNum, rng)
+
+					// Send binary frame
+					txNode.mu.Lock()
+					err := txNode.Conn.WriteMessage(websocket.BinaryMessage, frame)
+					txNode.mu.Unlock()
+
+					if err != nil {
+						log.Printf("[SIM] Node %d send CSI failed: %v", txNode.ID, err)
+						continue
+					}
+
+					stats.FramesSent.Add(1)
+				}
+			}
+
+			// Send BLE messages if enabled
+			if *flagBLE && time.Since(lastBLETime) > 5*time.Second {
+				sendBLEMessages(nodes, walkers)
+				lastBLETime = time.Now()
+			}
+
+			frameNum++
+		}
+	}
+}
+
+// updateWalkers updates walker positions with random walk
+func updateWalkers(walkers []*Walker, space *Space, rng *rand.Rand) {
+	dt := 1.0 / float64(*flagRate)
+
+	for _, walker := range walkers {
+		// Update position
+		walker.Position.X += walker.Velocity.X * dt
+		walker.Position.Y += walker.Velocity.Y * dt
+
+		// Bounce off walls
+		margin := 0.2
+		if walker.Position.X < margin {
+			walker.Position.X = margin
+			walker.Velocity.X *= -1
+		}
+		if walker.Position.X > space.Width-margin {
+			walker.Position.X = space.Width - margin
+			walker.Velocity.X *= -1
+		}
+		if walker.Position.Y < margin {
+			walker.Position.Y = margin
+			walker.Velocity.Y *= -1
+		}
+		if walker.Position.Y > space.Depth-margin {
+			walker.Position.Y = space.Depth - margin
+			walker.Velocity.Y *= -1
+		}
+
+		// Random velocity perturbation
+		perturbation := 0.1
+		angle := rng.Float64() * 2 * 3.14159
+		walker.Velocity.X += (rng.Float64() - 0.5) * perturbation
+		walker.Velocity.Y += (rng.Float64() - 0.5) * perturbation
+
+		// Clamp velocity
+		speed := walker.Speed * (0.5 + rng.Float64()*0.5)
+		currentSpeed := math.Sqrt(walker.Velocity.X*walker.Velocity.X + walker.Velocity.Y*walker.Velocity.Y)
+		if currentSpeed > 0 {
+			walker.Velocity.X = (walker.Velocity.X / currentSpeed) * speed
+			walker.Velocity.Y = (walker.Velocity.Y / currentSpeed) * speed
+		}
+
+		// Keep Z at person height
+		walker.Position.Z = walker.Height
+	}
+}
+
+// sendBLEMessages sends synthetic BLE scan results
+func sendBLEMessages(nodes []*VirtualNode, walkers []*Walker) {
+	for _, node := range nodes {
+		devices := make([]map[string]interface{}, 0)
+
+		for _, walker := range walkers {
+			// Calculate distance-based RSSI
+			dx := walker.Position.X - node.Position.X
+			dy := walker.Position.Y - node.Position.Y
+			dz := walker.Position.Z - node.Position.Z
+			distance := math.Sqrt(dx*dx + dy*dy + dz*dz)
+
+			// RSSI falls off with distance
+			rssi := -50.0 - 20.0*math.Log10(distance/1.0)
+			if rssi < -90 {
+				rssi = -90
+			}
+
+			devices = append(devices, map[string]interface{}{
+				"addr":    fmt.Sprintf("AA:BB:CC:DD:EE:%02X", walker.ID),
+				"rssi":    int(rssi),
+				"name":    fmt.Sprintf("sim-person-%d", walker.ID),
+			})
+		}
+
+		if len(devices) == 0 {
+			continue
+		}
+
+		bleMsg := map[string]interface{}{
+			"type":        "ble",
+			"mac":         macToString(node.MAC),
+			"timestamp_ms": time.Now().UnixMilli(),
+			"devices":     devices,
+		}
+
+		bleBytes, err := json.Marshal(bleMsg)
+		if err != nil {
+			log.Printf("[SIM] Node %d marshal BLE: %v", node.ID, err)
+			continue
+		}
+
+		node.mu.Lock()
+		err = node.Conn.WriteMessage(websocket.TextMessage, bleBytes)
+		node.mu.Unlock()
+
+		if err != nil {
+			log.Printf("[SIM] Node %d send BLE failed: %v", node.ID, err)
+		}
+	}
+}
+
+// reportStats periodically prints statistics
+func reportStats(ctx context.Context, stats *Stats) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			elapsed := now.Sub(stats.StartTime).Seconds()
+			framesSent := stats.FramesSent.Load()
+
+			if elapsed > 0 {
+				fps := float64(framesSent) / elapsed
+				log.Printf("[SIM] Stats: frames=%d fps=%.1f elapsed=%.1fs", framesSent, fps, elapsed)
+			}
+		}
+	}
+}
+
+// printFinalStats prints final simulation statistics
+func printFinalStats(stats *Stats, walkerCount int) {
+	elapsed := time.Since(stats.StartTime).Seconds()
+	framesSent := stats.FramesSent.Load()
+
+	log.Printf("[SIM] Final Statistics:")
+	log.Printf("[SIM]   Frames sent: %d", framesSent)
+	log.Printf("[SIM]   Duration: %.1f seconds", elapsed)
+	if elapsed > 0 {
+		log.Printf("[SIM]   Average FPS: %.1f", float64(framesSent)/elapsed)
+	}
+	log.Printf("[SIM]   Walkers: %d", walkerCount)
+}
+
+// verifyBlobs verifies that the mothership detected the expected number of blobs
+func verifyBlobs(expectedWalkers int) error {
+	// Parse mothership URL to get HTTP endpoint
+	wsURL, err := url.Parse(*flagMothership)
+	if err != nil {
+		return fmt.Errorf("invalid mothership URL: %w", err)
 	}
 
-	var err2 error
-	width, err2 = strconv.ParseFloat(parts[0], 64)
-	if err2 != nil {
-		return 0, 0, 0, fmt.Errorf("invalid width: %w", err2)
-	}
-	depth, err2 = strconv.ParseFloat(parts[1], 64)
-	if err2 != nil {
-		return 0, 0, 0, fmt.Errorf("invalid depth: %w", err2)
-	}
-	height, err2 = strconv.ParseFloat(parts[2], 64)
-	if err2 != nil {
-		return 0, 0, 0, fmt.Errorf("invalid height: %w", err2)
+	// Convert ws(s) to http(s)
+	httpURL := *wsURL
+	if httpURL.Scheme == "ws" {
+		httpURL.Scheme = "http"
+	} else if httpURL.Scheme == "wss" {
+		httpURL.Scheme = "https"
 	}
 
-	if width <= 0 || depth <= 0 || height <= 0 {
-		return 0, 0, 0, fmt.Errorf("dimensions must be positive")
+	// Wait for pipeline to settle
+	log.Printf("[SIM] Waiting 2 seconds for pipeline to settle...")
+	time.Sleep(2 * time.Second)
+
+	// Query blobs endpoint
+	blobsURL := httpURL.String()
+	blobsURL = strings.TrimSuffix(blobsURL, "/ws")
+	blobsURL = strings.TrimSuffix(blobsURL, "/")
+	blobsURL += "/api/blobs"
+
+	resp, err := http.Get(blobsURL)
+	if err != nil {
+		return fmt.Errorf("failed to query blobs: %w", err)
 	}
-	return width, depth, height, nil
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("blobs API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var blobs []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&blobs); err != nil {
+		return fmt.Errorf("failed to decode blobs response: %w", err)
+	}
+
+	blobCount := len(blobs)
+
+	// Check if blob count is within tolerance
+	tolerance := 1
+	minExpected := expectedWalkers - tolerance
+	maxExpected := expectedWalkers + tolerance
+
+	if blobCount < minExpected || blobCount > maxExpected {
+		return fmt.Errorf("expected %d blobs (±%d), got %d", expectedWalkers, tolerance, blobCount)
+	}
+
+	log.Printf("[SIM] Verification: %d blobs detected for %d walkers - PASS", blobCount, expectedWalkers)
+	return nil
 }

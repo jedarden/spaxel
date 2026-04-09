@@ -173,7 +173,7 @@ func (s *RecordingStore) Scan(fn func(recvTimeNS int64, frame []byte) bool) erro
 			return err
 		}
 		recvTimeNS := int64(binary.LittleEndian.Uint64(hdr[0:8]))
-		frameLen := int64(binary.LittleEndian.Uint64(hdr[8:10]))
+		frameLen := int64(binary.LittleEndian.Uint16(hdr[8:10]))
 		if frameLen > maxFrameBytes {
 			return errors.New("replay: corrupt record during scan")
 		}
@@ -222,7 +222,7 @@ func (s *RecordingStore) ScanRange(fromNS, toNS int64, fn func(recvTimeNS int64,
 			return err
 		}
 		recvTimeNS := int64(binary.LittleEndian.Uint64(hdr[0:8]))
-		frameLen := int64(binary.LittleEndian.Uint64(hdr[8:10]))
+		frameLen := int64(binary.LittleEndian.Uint16(hdr[8:10]))
 		if frameLen > maxFrameBytes {
 			return errors.New("replay: corrupt record during scan")
 		}

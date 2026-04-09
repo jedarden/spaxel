@@ -262,6 +262,118 @@ func (b *Buffer) Retention() time.Duration {
 	return b.retention
 }
 
+// SeekToTimestamp finds the CSI frame closest to the target timestamp.
+// Returns the frame data and its exact timestamp, or an error if no data is available.
+// This is optimized for replay seeking with O(n) scan where n is the number of frames
+// between oldest and target. For a 1-hour segment at 50 Hz, this is at most 180,000 frames.
+func (b *Buffer) SeekToTimestamp(target time.Time) ([]byte, int64, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	targetNS := target.UnixNano()
+
+	if !b.hasData() {
+		return nil, 0, errors.New("recording: no data available")
+	}
+
+	// Find oldest timestamp
+	oldestNS, err := b.oldestTimestamp()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// If target is before oldest data, return oldest frame
+	if targetNS < oldestNS {
+		frame, ts, err := b.readFrameAt(b.oldestPos)
+		if err != nil {
+			return nil, 0, err
+		}
+		return frame, ts, nil
+	}
+
+	// Scan for frame closest to target
+	var closestFrame []byte
+	var closestTimeNS int64
+	minDiff := int64(1 << 62) // Very large value
+
+	found := b.scan(func(recvTimeNS int64, frame []byte) bool {
+		diff := recvTimeNS - targetNS
+		if diff < 0 {
+			diff = -diff
+		}
+
+		if diff < minDiff {
+			minDiff = diff
+			closestFrame = frame
+			closestTimeNS = recvTimeNS
+		}
+
+		// Stop if we've passed the target and are moving away
+		if recvTimeNS > targetNS && minDiff < 100_000_000 { // Within 100ms
+			return false
+		}
+
+		return true
+	})
+
+	if found != nil {
+		return nil, 0, found
+	}
+
+	if closestFrame == nil {
+		return nil, 0, errors.New("recording: no frame found")
+	}
+
+	return closestFrame, closestTimeNS, nil
+}
+
+// readFrameAt reads the frame at the specified file position.
+// Must be called with b.mu held.
+func (b *Buffer) readFrameAt(pos int64) ([]byte, int64, error) {
+	var hdr [10]byte
+	if _, err := b.f.ReadAt(hdr[:], pos); err != nil {
+		return nil, 0, err
+	}
+
+	recvTimeNS := int64(binary.LittleEndian.Uint64(hdr[0:8]))
+	frameLen := int64(binary.LittleEndian.Uint16(hdr[8:10]))
+	if frameLen > maxFrameBytes {
+		return nil, 0, errors.New("recording: corrupt record")
+	}
+
+	frame := make([]byte, frameLen)
+	if _, err := b.f.ReadAt(frame, pos+recordOverhead); err != nil {
+		return nil, 0, err
+	}
+
+	return frame, recvTimeNS, nil
+}
+
+// GetTimestampRange returns the oldest and newest timestamps in the buffer.
+// Useful for determining the valid replay range.
+func (b *Buffer) GetTimestampRange() (oldest, newest time.Time, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if !b.hasData() {
+		return time.Time{}, time.Time{}, errors.New("recording: no data available")
+	}
+
+	oldestNS, err := b.oldestTimestamp()
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+
+	// Scan to find newest timestamp
+	var newestNS int64
+	b.scan(func(recvTimeNS int64, frame []byte) bool {
+		newestNS = recvTimeNS
+		return true // Continue to find absolute newest
+	})
+
+	return time.Unix(0, oldestNS), time.Unix(0, newestNS), nil
+}
+
 // Close closes the underlying file.
 func (b *Buffer) Close() error {
 	b.mu.Lock()
