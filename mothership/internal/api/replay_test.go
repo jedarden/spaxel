@@ -14,21 +14,23 @@ import (
 
 // mockRecordingStore is a mock implementation of RecordingStore for testing.
 type mockRecordingStore struct {
-	stats     Stats
-	scanFunc  func(fn func(recvTimeNS int64, frame []byte) bool) bool
+	stats     replay.Stats
+	scanFunc  func(fn func(recvTimeNS int64, frame []byte) bool) error
 	closed    bool
 	closeErr  error
 }
 
-func (m *mockRecordingStore) Stats() Stats {
+func (m *mockRecordingStore) Stats() replay.Stats {
 	return m.stats
 }
 
-func (m *mockRecordingStore) Scan(fn func(recvTimeNS int64, frame []byte) bool) bool {
+func (m *mockRecordingStore) Scan(fn func(recvTimeNS int64, frame []byte) bool) error {
 	if m.scanFunc != nil {
 		return m.scanFunc(fn)
 	}
-	return true
+	// Default: just call the function once and return nil
+	fn(0, []byte("test"))
+	return nil
 }
 
 func (m *mockRecordingStore) Close() error {
@@ -44,13 +46,13 @@ func newTestReplayHandler(t *testing.T) *ReplayHandler {
 	t.Helper()
 
 	store := &mockRecordingStore{
-		stats: Stats{
+		stats: replay.Stats{
 			HasData:   true,
 			WritePos:  5000,
 			OldestPos: 32,
 			FileSize:  360 * 1024 * 1024,
 		},
-		scanFunc: func(fn func(recvTimeNS int64, frame []byte) bool) bool {
+		scanFunc: func(fn func(recvTimeNS int64, frame []byte) bool) error {
 			// Simulate some frames at different timestamps
 			timestamps := []int64{
 				1710450000000000000, // 2024-03-14 12:00:00
@@ -67,11 +69,11 @@ func newTestReplayHandler(t *testing.T) *ReplayHandler {
 					break
 				}
 			}
-			return true
+			return nil
 		},
 	}
 
-	handler, err := NewReplayHandler("/data/csi_replay.bin", store)
+	handler, err := NewReplayHandler(store)
 	if err != nil {
 		t.Fatalf("NewReplayHandler: %v", err)
 	}
@@ -1036,7 +1038,7 @@ func TestGetReplayPath(t *testing.T) {
 // TestClose tests the Close method.
 func TestClose(t *testing.T) {
 	store := &mockRecordingStore{}
-	handler, err := NewReplayHandler("/data/test.bin", store)
+	handler, err := NewReplayHandler(store)
 	if err != nil {
 		t.Fatalf("NewReplayHandler: %v", err)
 	}
@@ -1054,7 +1056,7 @@ func TestClose(t *testing.T) {
 func TestCloseWithError(t *testing.T) {
 	expectedErr := fmt.Errorf("close failed")
 	store := &mockRecordingStore{closeErr: expectedErr}
-	handler, err := NewReplayHandler("/data/test.bin", store)
+	handler, err := NewReplayHandler(store)
 	if err != nil {
 		t.Fatalf("NewReplayHandler: %v", err)
 	}

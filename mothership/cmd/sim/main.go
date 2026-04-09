@@ -14,11 +14,16 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// Version is set by the build process via -ldflags
+var version = "dev"
 
 // isTimeoutErr checks if the error is a timeout (compatible with gorilla/websocket v1.5+).
 func isTimeoutErr(err error) bool {
@@ -37,7 +42,9 @@ const (
 )
 
 var (
+	showVersion   = flag.Bool("version", false, "Show version information and exit")
 	mothershipURL = flag.String("mothership", "ws://localhost:8080/ws/node", "Mothership WebSocket URL")
+	token         = flag.String("token", "", "Node authentication token (X-Spaxel-Token header)")
 	nodes         = flag.Int("nodes", 4, "Number of virtual nodes to simulate")
 	walkers       = flag.Int("walkers", 1, "Number of walking persons to simulate")
 	rate          = flag.Int("rate", 20, "CSI packet rate in Hz")
@@ -47,6 +54,7 @@ var (
 	spaceWidth    = flag.Float64("width", 6.0, "Space width in meters")
 	spaceDepth    = flag.Float64("depth", 5.0, "Space depth in meters")
 	spaceHeight   = flag.Float64("height", 2.5, "Space height in meters")
+	spaceDims     = flag.String("space", "", "Space dimensions as 'WxDxH' (meters), overrides --width/--depth/--height")
 	showFrameRate = flag.Bool("show-frame-rate", true, "Show per-second frame counts to stdout")
 	verbose       = flag.Bool("verbose", false, "Enable verbose logging")
 )
@@ -131,6 +139,22 @@ type Walker struct {
 func main() {
 	flag.Parse()
 
+	if *showVersion {
+		fmt.Printf("CSI Simulator version %s\n", version)
+		os.Exit(0)
+	}
+
+	// Parse --space flag if provided (format: "WxDxH")
+	if *spaceDims != "" {
+		width, depth, height, err := parseSpaceDims(*spaceDims)
+		if err != nil {
+			log.Fatalf("[ERROR] Invalid --space format: %v (expected 'WxDxH' e.g., '6x5x2.5')", err)
+		}
+		*spaceWidth = width
+		*spaceDepth = depth
+		*spaceHeight = height
+	}
+
 	if *seed != 0 {
 		rand.Seed(*seed)
 	}
@@ -138,6 +162,9 @@ func main() {
 	log.Printf("[INFO] CSI Simulator starting")
 	log.Printf("[INFO] Configuration: nodes=%d, walkers=%d, rate=%d Hz, duration=%s", *nodes, *walkers, *rate, *duration)
 	log.Printf("[INFO] Space: %.1fx%.1fx%.1f m", *spaceWidth, *spaceDepth, *spaceHeight)
+	if *token != "" {
+		log.Printf("[INFO] Using authentication token")
+	}
 	log.Printf("[INFO] Connecting to: %s", *mothershipURL)
 
 	// Create virtual nodes at corners and edges of the room
@@ -236,13 +263,23 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 		return fmt.Errorf("invalid mothership URL: %w", err)
 	}
 
+	// Prepare WebSocket request headers with authentication token
+	headers := make(map[string][]string)
+	if *token != "" {
+		headers["X-Spaxel-Token"] = []string{*token}
+	}
+
 	// Connect to mothership
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 5 * time.Second,
 	}
 
-	conn, _, err := dialer.Dial(u.String(), nil)
+	conn, resp, err := dialer.Dial(u.String(), headers)
 	if err != nil {
+		// Check for authentication failure
+		if resp != nil && resp.StatusCode == 401 {
+			return fmt.Errorf("authentication failed: invalid token (HTTP 401)")
+		}
 		return fmt.Errorf("WebSocket dial failed: %w", err)
 	}
 	defer conn.Close()
@@ -309,8 +346,8 @@ func (n *VirtualNode) run(walkers []Walker, rateHz int, duration time.Duration, 
 	startTime := time.Now()
 	frameIndex := uint64(0)
 
-	// Main loop
-	for time.Since(startTime) < duration {
+	// Main loop (run forever if duration is 0)
+	for duration == 0 || time.Since(startTime) < duration {
 		select {
 		case <-ticker.C:
 			// Update walker positions
@@ -556,4 +593,32 @@ func macToBytes(mac string) [6]byte {
 	fmt.Sscanf(mac, "%02X:%02X:%02X:%02X:%02X:%02X",
 		&b[0], &b[1], &b[2], &b[3], &b[4], &b[5])
 	return b
+}
+
+// parseSpaceDims parses space dimensions from "WxDxH" format
+func parseSpaceDims(s string) (width, depth, height float64, err error) {
+	// Split by 'x' to avoid hex interpretation (e.g., "0x5" parsed as hex)
+	parts := strings.Split(s, "x")
+	if len(parts) != 3 {
+		return 0, 0, 0, fmt.Errorf("invalid format: expected 3 dimensions separated by 'x'")
+	}
+
+	var err2 error
+	width, err2 = strconv.ParseFloat(parts[0], 64)
+	if err2 != nil {
+		return 0, 0, 0, fmt.Errorf("invalid width: %w", err2)
+	}
+	depth, err2 = strconv.ParseFloat(parts[1], 64)
+	if err2 != nil {
+		return 0, 0, 0, fmt.Errorf("invalid depth: %w", err2)
+	}
+	height, err2 = strconv.ParseFloat(parts[2], 64)
+	if err2 != nil {
+		return 0, 0, 0, fmt.Errorf("invalid height: %w", err2)
+	}
+
+	if width <= 0 || depth <= 0 || height <= 0 {
+		return 0, 0, 0, fmt.Errorf("dimensions must be positive")
+	}
+	return width, depth, height, nil
 }

@@ -15,20 +15,38 @@ import (
 	"time"
 
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/localization"
 	"github.com/spaxel/mothership/internal/signal"
 )
+
+// ReplaySession represents an active replay session in the worker.
+type ReplaySession struct {
+	ID        string
+	FromMS    int64
+	ToMS      int64
+	CurrentMS int64
+	Speed     int
+	State     string // playing, paused, stopped
+	Params    map[string]interface{}
+	CreatedAt time.Time
+
+	// Pipeline state for this session
+	baselineState map[string]*signal.BaselineState // per-link baseline
+}
 
 // Worker reads CSI frames from a replay store and processes them.
 type Worker struct {
 	mu       sync.Mutex
-	sessions map[string]*session
+	sessions map[string]*ReplaySession
 	nextID   int
 
-	store      RecordingStore
-	processor  *signal.ProcessorManager
-	broadcaster BlobBroadcaster
-	done       chan struct{}
-	wg         sync.WaitGroup
+	store         RecordingStore
+	processor     *signal.ProcessorManager
+	fusionEngine  *localization.Engine
+	nodePositions map[string]localization.NodePosition // MAC -> position
+	broadcaster   BlobBroadcaster
+	done          chan struct{}
+	wg            sync.WaitGroup
 }
 
 // RecordingStore is the interface to read recorded CSI frames.
@@ -70,25 +88,11 @@ type BlobUpdate struct {
 	Trail              []float64 `json:"trail,omitempty"` // [x,z,x,z,...]
 }
 
-// session represents an active replay session.
-type session struct {
-	ID        string
-	FromMS    int64
-	ToMS      int64
-	CurrentMS int64
-	Speed     int
-	State     string // playing, paused, stopped
-	Params    map[string]interface{}
-	CreatedAt time.Time
-
-	// Pipeline state for this session
-	baselineState map[string]*signal.BaselineState // per-link baseline
-}
 
 // NewWorker creates a new replay worker.
 func NewWorker(store RecordingStore, processor *signal.ProcessorManager, broadcaster BlobBroadcaster) *Worker {
 	return &Worker{
-		sessions:    make(map[string]*session),
+		sessions:    make(map[string]*ReplaySession),
 		store:       store,
 		processor:   processor,
 		broadcaster: broadcaster,
@@ -108,6 +112,30 @@ func (w *Worker) SetProcessorManager(processor *signal.ProcessorManager) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.processor = processor
+}
+
+// SetFusionEngine sets the fusion engine for replay blob generation.
+func (w *Worker) SetFusionEngine(fusionEngine *localization.Engine) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.fusionEngine = fusionEngine
+	if w.nodePositions == nil {
+		w.nodePositions = make(map[string]localization.NodePosition)
+	}
+}
+
+// SetNodePosition updates a node's position for replay fusion.
+func (w *Worker) SetNodePosition(mac string, x, y, z float64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.nodePositions == nil {
+		w.nodePositions = make(map[string]localization.NodePosition)
+	}
+	w.nodePositions[mac] = localization.NodePosition{MAC: mac, X: x, Y: y, Z: z}
+	// Also update fusion engine if available
+	if w.fusionEngine != nil {
+		w.fusionEngine.SetNodePosition(mac, x, z)
+	}
 }
 
 // Start begins the replay worker.
@@ -152,7 +180,7 @@ func (w *Worker) tick() {
 }
 
 // processSession reads and processes frames for a session.
-func (w *Worker) processSession(s *session) {
+func (w *Worker) processSession(s *ReplaySession) {
 	// Read next frame(s) from replay store
 	var frameData []byte
 	var frameTimeNS int64
@@ -206,8 +234,81 @@ func (w *Worker) processSession(s *session) {
 		s.baselineState[linkID] = result.Baseline
 	}
 
-	// Broadcast replay blob update (empty for now - fusion will populate)
-	w.broadcaster.BroadcastReplayBlobs([]BlobUpdate{}, frameTimeNS/1e6)
+	// Run fusion to generate blobs if we have a fusion engine
+	if w.fusionEngine != nil {
+		blobs := w.runFusion()
+		w.broadcaster.BroadcastReplayBlobs(blobs, frameTimeNS/1e6)
+	} else {
+		w.broadcaster.BroadcastReplayBlobs([]BlobUpdate{}, frameTimeNS/1e6)
+	}
+}
+
+// runFusion runs the fusion algorithm on current motion states and generates blob updates.
+func (w *Worker) runFusion() []BlobUpdate {
+	if w.processor == nil || w.fusionEngine == nil {
+		return []BlobUpdate{}
+	}
+
+	// Get motion states from all links
+	motionStates := w.processor.GetAllMotionStates()
+
+	// Convert to fusion LinkMotion format
+	links := make([]localization.LinkMotion, 0, len(motionStates))
+	for _, state := range motionStates {
+		// Parse linkID format "nodeMAC:peerMAC"
+		parts := splitLinkID(state.LinkID)
+		if len(parts) != 2 {
+			continue
+		}
+
+		link := localization.LinkMotion{
+			NodeMAC:     parts[0],
+			PeerMAC:     parts[1],
+			DeltaRMS:    state.SmoothDeltaRMS,
+			Motion:      state.MotionDetected,
+			HealthScore: state.AmbientConfidence,
+		}
+
+		// Use BaselineConf if AmbientConfidence is not available
+		if link.HealthScore == 0 && state.BaselineConf > 0 {
+			link.HealthScore = state.BaselineConf
+		}
+
+		links = append(links, link)
+	}
+
+	// Run fusion
+	result := w.fusionEngine.Fuse(links)
+	if result == nil || len(result.Peaks) == 0 {
+		return []BlobUpdate{}
+	}
+
+	// Convert fusion peaks to BlobUpdate format
+	blobs := make([]BlobUpdate, 0, len(result.Peaks))
+	for i, peak := range result.Peaks {
+		blobs = append(blobs, BlobUpdate{
+			ID:     i + 1,
+			X:      peak[0],
+			Y:      1.2, // Default height (meters above floor)
+			Z:      peak[1],
+			VX:     0,
+			VY:     0,
+			VZ:     0,
+			Weight: peak[2],
+		})
+	}
+
+	return blobs
+}
+
+// splitLinkID splits a link ID in "nodeMAC:peerMAC" format.
+func splitLinkID(linkID string) []string {
+	for i := 0; i < len(linkID); i++ {
+		if linkID[i] == ':' {
+			return []string{linkID[:i], linkID[i+1:]}
+		}
+	}
+	return []string{linkID}
 }
 
 // StartSession creates a new replay session.
@@ -216,7 +317,7 @@ func (w *Worker) StartSession(fromMS, toMS int64, speed int) (string, error) {
 	defer w.mu.Unlock()
 
 	id := w.generateID()
-	s := &session{
+	s := &ReplaySession{
 		ID:        id,
 		FromMS:    fromMS,
 		ToMS:      toMS,
@@ -333,7 +434,7 @@ func (w *Worker) UpdateParams(sessionID string, params map[string]interface{}) e
 }
 
 // GetSession returns a session by ID.
-func (w *Worker) GetSession(sessionID string) (*session, error) {
+func (w *Worker) GetSession(sessionID string) (*ReplaySession, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -346,11 +447,11 @@ func (w *Worker) GetSession(sessionID string) (*session, error) {
 }
 
 // GetAllSessions returns all active sessions.
-func (w *Worker) GetAllSessions() []*session {
+func (w *Worker) GetAllSessions() []*ReplaySession {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	sessions := make([]*session, 0, len(w.sessions))
+	sessions := make([]*ReplaySession, 0, len(w.sessions))
 	for _, s := range w.sessions {
 		sessions = append(sessions, s)
 	}
@@ -364,6 +465,16 @@ func (w *Worker) generateID() string {
 
 func (w *Worker) formatID(n int) string {
 	return "replay-" + time.Now().Format("20060102-150405") + "-" + string(rune('A'+(n%26)))
+}
+
+// GetStoreStats returns statistics about the replay store.
+func (w *Worker) GetStoreStats() Stats {
+	return w.store.Stats()
+}
+
+// GetStore returns the replay store.
+func (w *Worker) GetStore() RecordingStore {
+	return w.store
 }
 
 // Errors

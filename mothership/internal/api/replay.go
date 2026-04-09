@@ -139,15 +139,14 @@ func (h *ReplayHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 
 // scanTimestamps scans the replay store to find oldest and newest timestamps.
 func (h *ReplayHandler) scanTimestamps(oldest, newest *int64) {
-	// Use the worker's store to scan
-	// This is a simplified version - the worker should provide this info
 	stats := h.worker.GetStoreStats()
 	if !stats.HasData {
 		return
 	}
 
-	// Scan for oldest
-	h.worker.GetStore().Scan(func(recvTimeNS int64, frame []byte) bool {
+	// Scan for oldest and newest
+	store := h.worker.GetStore()
+	store.Scan(func(recvTimeNS int64, frame []byte) bool {
 		recvMS := recvTimeNS / 1e6
 		if *oldest == 0 || recvMS < *oldest {
 			*oldest = recvMS
@@ -309,20 +308,12 @@ func (h *ReplayHandler) seek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fromMS := session.CurrentMS() // Use session's FromMS for validation
-	toMS := session.CurrentMS()   // Use session's ToMS for validation
+	fromMS := session.FromMS
+	toMS := session.ToMS
 
-	// Get session's actual bounds from the worker session
 	if targetMS < fromMS || targetMS > toMS {
-		// Try to get the actual session bounds
-		stats := session.GetStats()
-		fromMS = stats.FromMS
-		toMS = stats.ToMS
-
-		if targetMS < fromMS || targetMS > toMS {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timestamp outside session range"})
-			return
-		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timestamp outside session range"})
+		return
 	}
 
 	if err := h.worker.Seek(req.SessionID, targetMS); err != nil {
@@ -527,26 +518,31 @@ func (h *ReplayHandler) getSessionState(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	stats := session.GetStats()
-
 	// Update API layer session state
 	h.mu.Lock()
 	if s, exists := h.sessions[sessionID]; exists {
-		s.CurrentMS = stats.CurrentMS
-		s.State = string(stats.State)
+		s.CurrentMS = session.CurrentMS
+		s.State = session.State
 	}
 	h.mu.Unlock()
+
+	// Calculate progress
+	duration := session.ToMS - session.FromMS
+	progress := 0.0
+	if duration > 0 {
+		progress = float64(session.CurrentMS-session.FromMS) / float64(duration)
+	}
 
 	// Build response with session state and blobs
 	response := map[string]interface{}{
 		"session_id":  sessionID,
-		"current_ms":  stats.CurrentMS,
-		"from_ms":     stats.FromMS,
-		"to_ms":       stats.ToMS,
-		"state":       string(stats.State),
-		"speed":       stats.Speed,
-		"progress":    stats.Progress,
-		"params":      session.Params(),
+		"current_ms":  session.CurrentMS,
+		"from_ms":     session.FromMS,
+		"to_ms":       session.ToMS,
+		"state":       session.State,
+		"speed":       session.Speed,
+		"progress":    progress,
+		"params":      session.Params,
 		"blobs":       []interface{}{}, // TODO: populate with actual blob data
 	}
 
