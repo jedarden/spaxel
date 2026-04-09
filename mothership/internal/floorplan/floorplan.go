@@ -51,6 +51,8 @@ func NewHandler(db *sql.DB, dataDir string) *Handler {
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/floorplan/image", h.uploadImage)
 	r.Get("/api/floorplan/image", h.getImage)
+	// Serve the floor plan image at /floorplan/image.png for direct use by frontend
+	r.Get("/floorplan/image.png", h.getImage)
 	r.Post("/api/floorplan/calibrate", h.calibrate)
 	r.Get("/api/floorplan/calibrate", h.getCalibration)
 	r.Get("/api/floorplan", h.getFloorplan)

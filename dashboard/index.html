@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="css/security.css">
     <link rel="stylesheet" href="css/anomaly.css">
     <link rel="stylesheet" href="css/sleep.css">
+    <link rel="stylesheet" href="css/floorplan.css">
     <style>
         * {
             margin: 0;
@@ -1227,6 +1228,48 @@
             opacity: 1;
         }
 
+        /* ===== Diurnal Chart ===== */
+        #diurnal-chart-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(30, 30, 30, 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #diurnal-chart-container h4 {
+            margin: 0 0 10px 0;
+            color: #ccc;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #diurnal-chart-legend {
+            display: flex;
+            gap: 15px;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        #diurnal-chart {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+
         /* ===== Toast Notifications ===== */
         #toast-container {
             position: fixed;
@@ -2166,9 +2209,7 @@
             <button class="view-btn" id="view-follow"      onclick="Viz3D.setViewPreset('follow')">Follow</button>
             <button id="gdop-toggle-btn" onclick="Placement && Placement.toggleGDOP()">GDOP</button>
             <button id="room-editor-btn" onclick="Placement && Placement.toggleRoomEditor()">Room</button>
-            <button id="floorplan-btn" onclick="document.getElementById('floorplan-input').click()">Floor plan</button>
-            <input id="floorplan-input" type="file" accept="image/*" style="display:none"
-                   onchange="Viz3D.uploadFloorPlan(this.files[0]); this.value=''">
+            <button id="floorplan-btn" onclick="FloorPlanSetup.togglePanel()">Floor plan</button>
         </div>
         <div class="status-item">
             <span>FPS: <strong id="fps-counter">0</strong></span>
@@ -2268,6 +2309,8 @@
     <script src="js/tooltips.js"></script>
     <!-- WebSocket reconnection manager -->
     <script src="js/websocket.js"></script>
+    <!-- Floor plan setup panel -->
+    <script src="js/floorplan-setup.js"></script>
     <!-- Main application -->
     <script src="js/app.js"></script>
     <!-- esp-web-tools for firmware flashing (Web Serial) -->
@@ -2298,6 +2341,8 @@
     <script src="js/automation-builder.js"></script>
     <!-- Sleep Quality Monitoring -->
     <script src="js/sleep.js"></script>
+    <!-- Diurnal Baseline Visualization -->
+    <script src="js/diurnal-chart.js"></script>
 
     <!-- Room editor panel -->
     <div id="room-editor-panel">

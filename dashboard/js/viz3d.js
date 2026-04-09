@@ -104,6 +104,11 @@ const Viz3D = (function () {
         _scene.add(floor);
         _roomObjs.floor = floor;
 
+        // Apply floor plan calibration if texture and calibration data exist
+        if (_floorTex && _floorCalibration.metersPerPixel !== 1) {
+            _applyCalibrationToFloor();
+        }
+
         // ceiling (dim, transparent)
         const ceil = new THREE.Mesh(
             new THREE.PlaneGeometry(w, d),
@@ -158,6 +163,89 @@ const Viz3D = (function () {
             }
             URL.revokeObjectURL(url);
         });
+    }
+
+    // Calibration state for floor plan
+    let _floorCalibration = {
+        metersPerPixel: 1,
+        rotationDeg: 0,
+        ax: 0, ay: 0, bx: 0, by: 0,
+        distanceM: 1
+    };
+
+    /**
+     * Apply floor plan calibration to the ground plane texture.
+     * @param {Object} calibration - Calibration data from API
+     * @param {number} calibration.meters_per_pixel - Scale factor
+     * @param {number} calibration.rotation_deg - Rotation angle in degrees
+     * @param {number} calibration.cal_ax - Point A X coordinate
+     * @param {number} calibration.cal_ay - Point A Y coordinate
+     * @param {number} calibration.cal_bx - Point B X coordinate
+     * @param {number} calibration.cal_by - Point B Y coordinate
+     * @param {number} calibration.distance_m - Real-world distance in meters
+     */
+    function setFloorPlanCalibration(calibration) {
+        if (!calibration) return;
+
+        _floorCalibration = {
+            metersPerPixel: calibration.meters_per_pixel || 1,
+            rotationDeg: calibration.rotation_deg || 0,
+            ax: calibration.cal_ax || 0,
+            ay: calibration.cal_ay || 0,
+            bx: calibration.cal_bx || 0,
+            by: calibration.cal_by || 0,
+            distanceM: calibration.distance_m || 1
+        };
+
+        // Apply calibration to floor texture if floor exists
+        if (_roomObjs.floor && _floorTex) {
+            _applyCalibrationToFloor();
+        }
+    }
+
+    /**
+     * Apply stored calibration to the floor mesh.
+     * Uses texture transformation matrix to scale and rotate.
+     */
+    function _applyCalibrationToFloor() {
+        if (!_roomObjs.floor || !_floorTex) return;
+
+        const floor = _roomObjs.floor;
+        const tex = _floorTex;
+
+        // Enable texture transformation
+        tex.matrixAutoUpdate = false;
+
+        // Calculate texture scale based on room dimensions vs image dimensions
+        // Default room size if not set
+        const roomWidth = _room ? _room.width : 10;
+        const roomDepth = _room ? _room.depth : 10;
+
+        // Calculate how many meters the image covers at current scale
+        const imageWidthMeters = tex.image.width * _floorCalibration.metersPerPixel;
+        const imageHeightMeters = tex.image.height * _floorCalibration.metersPerPixel;
+
+        // Scale texture to fit room
+        const scaleX = roomWidth / imageWidthMeters;
+        const scaleY = roomDepth / imageHeightMeters;
+
+        // Build transformation matrix: center -> rotate -> scale -> center back
+        tex.matrix.setUvTransform(
+            0.5, 0.5,           // center
+            scaleX, scaleY,     // scale
+            _floorCalibration.rotationDeg * Math.PI / 180,  // rotation
+            0, 0                // translation
+        );
+
+        floor.material.needsUpdate = true;
+    }
+
+    /**
+     * Get current floor plan calibration state.
+     * @returns {Object} Current calibration data
+     */
+    function getFloorPlanCalibration() {
+        return _floorCalibration;
     }
 
     // ── node meshes ───────────────────────────────────────────────────────────
@@ -2137,6 +2225,8 @@ const Viz3D = (function () {
         handleLinkInactive,
         applyLinks,
         uploadFloorPlan,
+        setFloorPlanCalibration,
+        getFloorPlanCalibration,
         setViewPreset,
         // WebSocket reconnect helpers
         clearAllTrails: clearAllTrails,

@@ -1369,6 +1369,11 @@
             if (link.lastCSI) drawAmplitudeChart(link.lastCSI);
             drawTimeSeries(link.ampHistory || []);
         }
+
+        // Show diurnal baseline chart for this link
+        if (typeof DiurnalChart !== 'undefined' && DiurnalChart.showForLink) {
+            DiurnalChart.showForLink(linkID);
+        }
     }
 
     // ============================================

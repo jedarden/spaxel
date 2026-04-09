@@ -2429,6 +2429,55 @@ func main() {
 		http.Error(w, "link not found", http.StatusNotFound)
 	})
 
+	// Diurnal slot data API - returns 24-hour slot data for polar chart visualization
+	r.Get("/api/diurnal/slots/{linkID}", func(w http.ResponseWriter, r *http.Request) {
+		linkID := chi.URLParam(r, "linkID")
+		processor := pm.GetProcessor(linkID)
+		if processor == nil {
+			http.Error(w, "link not found", http.StatusNotFound)
+			return
+		}
+
+		diurnal := processor.GetDiurnal()
+		if diurnal == nil {
+			http.Error(w, "diurnal data not available", http.StatusNotFound)
+			return
+		}
+
+		// Calculate average amplitude per hour (for variance visualization)
+		slotAmplitudes := make([]float64, 24)
+		slotConfidences := make([]float64, 24)
+		slotSampleCounts := make([]int, 24)
+
+		for h := 0; h < 24; h++ {
+			slot := diurnal.GetSlot(h)
+			if slot != nil && len(slot.Values) > 0 {
+				// Calculate average amplitude for this slot
+				sum := 0.0
+				for _, v := range slot.Values {
+					sum += v
+				}
+				slotAmplitudes[h] = sum / float64(len(slot.Values))
+				slotSampleCounts[h] = slot.SampleCount
+			}
+			slotConfidences[h] = diurnal.GetSlotConfidence(h)
+		}
+
+		writeJSON(w, map[string]interface{}{
+			"link_id":            linkID,
+			"current_hour":        time.Now().Hour(),
+			"current_minute":      time.Now().Minute(),
+			"is_ready":            diurnal.IsReady(),
+			"is_learning":         diurnal.IsLearning(),
+			"learning_progress":   diurnal.GetLearningProgress(),
+			"overall_confidence":  diurnal.GetOverallConfidence(),
+			"slot_amplitudes":     slotAmplitudes,
+			"slot_confidences":    slotConfidences,
+			"slot_sample_counts":  slotSampleCounts,
+			"created_at":          diurnal.GetCreatedAt(),
+		})
+	})
+
 	// Link health API - returns all links with health scores and details
 	r.Get("/api/links", func(w http.ResponseWriter, r *http.Request) {
 		links := ingestSrv.GetAllLinksWithHealth()

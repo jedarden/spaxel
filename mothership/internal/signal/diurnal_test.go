@@ -189,41 +189,43 @@ func TestDiurnalBaseline_HourSlotSelection(t *testing.T) {
 }
 
 // TestDiurnalBaseline_CrossfadeAtHalfHour tests crossfade at half-hour
-// Spec: produces correct blend of two adjacent slots
+// Spec: after 15 min, use diurnal slot exclusively (no more crossfade)
 func TestDiurnalBaseline_CrossfadeAtHalfHour(t *testing.T) {
 	db := NewDiurnalBaseline("test", 64)
 
 	loc := time.Now().Location()
-	// Test at 13:30:00
+	// Test at 13:30:00 (30 minutes into the hour, past the 15-min crossfade window)
 	t1330 := time.Date(2024, 1, 15, 13, 30, 0, 0, loc)
 
-	// Fill slots 13 and 14 with different values
+	// Fill slot 13 with values
 	db.mu.Lock()
 	for i := 0; i < 64; i++ {
 		db.slots[13].Values[i] = 1.0
-		db.slots[14].Values[i] = 0.0
 	}
 	db.slots[13].SampleCount = DiurnalMinSamples
-	db.slots[14].SampleCount = DiurnalMinSamples
 	db.mu.Unlock()
 
 	emaBaseline := make([]float64, 64)
+	for i := range emaBaseline {
+		emaBaseline[i] = 0.5 // EMA baseline value
+	}
+
 	result, frac, ready := db.GetActiveBaselineAt(t1330, emaBaseline)
 
 	if !ready {
-		t.Fatal("Should be ready with populated slots")
+		t.Fatal("Should be ready with populated slot")
 	}
 
-	// At 13:30:00, frac = 30/60 = 0.5
-	if math.Abs(frac-0.5) > 0.01 {
-		t.Errorf("frac at half-hour = %f, want 0.5", frac)
+	// After 15 minutes, frac should be 1.0 (diurnal slot only)
+	if math.Abs(frac-1.0) > 0.01 {
+		t.Errorf("frac at half-hour = %f, want 1.0", frac)
 	}
 
-	// Result should be 50% slot 13 + 50% slot 14 = 0.5
+	// Result should be exactly the diurnal slot value (1.0), not blended with EMA
 	for k := 0; k < 64; k++ {
-		expected := 0.5*1.0 + 0.5*0.0
+		expected := 1.0
 		if math.Abs(result[k]-expected) > 0.01 {
-			t.Errorf("result[%d] = %f, want 0.5", k, result[k])
+			t.Errorf("result[%d] = %f, want 1.0", k, result[k])
 		}
 	}
 }
@@ -817,5 +819,143 @@ func TestDiurnalManager_LinkCount(t *testing.T) {
 	dm.GetOrCreate("link2")
 	if dm.LinkCount() != 2 {
 		t.Errorf("LinkCount = %d, want 2", dm.LinkCount())
+	}
+}
+
+// TestDiurnalBaseline_CrossfadeAtHourBoundary tests crossfade at hour boundaries (±60s)
+// Spec: Baseline correctly crossfades at hour boundaries (±60s)
+func TestDiurnalBaseline_CrossfadeAtHourBoundary(t *testing.T) {
+	db := NewDiurnalBaseline("test", 64)
+
+	loc := time.Now().Location()
+
+	// Set up EMA baseline value
+	emaBaseline := make([]float64, 64)
+	for i := range emaBaseline {
+		emaBaseline[i] = 0.5 // EMA baseline value
+	}
+
+	// Fill slot 13 with values
+	db.mu.Lock()
+	for i := 0; i < 64; i++ {
+		db.slots[13].Values[i] = 1.0 // Hour 13 slot value
+	}
+	db.slots[13].SampleCount = DiurnalMinSamples
+	db.mu.Unlock()
+
+	// Test at 13:00:00 (start of hour 13, in crossfade window)
+	t1300 := time.Date(2024, 1, 15, 13, 0, 0, 0, loc)
+	result1300, frac1300, ready1300 := db.GetActiveBaselineAt(t1300, emaBaseline)
+
+	if !ready1300 {
+		t.Fatal("Should be ready with populated slot")
+	}
+
+	// At 13:00:00, crossfade weight should be 0 (start of 15-min crossfade)
+	if math.Abs(frac1300-0.0) > 0.001 {
+		t.Errorf("frac at 13:00:00 = %f, want 0.0", frac1300)
+	}
+
+	// At 13:00:00, result should be all EMA (0.5)
+	for k := 0; k < 64; k++ {
+		if math.Abs(result1300[k]-0.5) > 0.01 {
+			t.Errorf("result[%d] at 13:00:00 = %f, want 0.5", k, result1300[k])
+		}
+	}
+
+	// Test at 13:15:00 (end of crossfade window)
+	t1315 := time.Date(2024, 1, 15, 13, 15, 0, 0, loc)
+	result1315, frac1315, ready1315 := db.GetActiveBaselineAt(t1315, emaBaseline)
+
+	if !ready1315 {
+		t.Fatal("Should be ready at end of crossfade")
+	}
+
+	// At 13:15:00, crossfade weight should be 1.0 (diurnal only)
+	if math.Abs(frac1315-1.0) > 0.001 {
+		t.Errorf("frac at 13:15:00 = %f, want 1.0", frac1315)
+	}
+
+	// At 13:15:00, result should be exactly the diurnal slot value (1.0)
+	for k := 0; k < 64; k++ {
+		if math.Abs(result1315[k]-1.0) > 0.01 {
+			t.Errorf("result[%d] at 13:15:00 = %f, want 1.0", k, result1315[k])
+		}
+	}
+
+	// Test at 13:07:30 (midway through crossfade)
+	t1330 := time.Date(2024, 1, 15, 13, 7, 30, 0, loc)
+	result1330, frac1330, ready1330 := db.GetActiveBaselineAt(t1330, emaBaseline)
+
+	if !ready1330 {
+		t.Fatal("Should be ready during crossfade")
+	}
+
+	// At 13:07:30 (450 seconds into hour / 900 seconds = 0.5)
+	expectedFrac := 0.5
+	if math.Abs(frac1330-expectedFrac) > 0.01 {
+		t.Errorf("frac at 13:07:30 = %f, want %f", frac1330, expectedFrac)
+	}
+
+	// Result should be 50% EMA (0.5) + 50% diurnal (1.0) = 0.75
+	expectedResult := 0.5*0.5 + 0.5*1.0
+	for k := 0; k < 64; k++ {
+		if math.Abs(result1330[k]-expectedResult) > 0.01 {
+			t.Errorf("result[%d] at 13:07:30 = %f, want %f", k, result1330[k], expectedResult)
+		}
+	}
+
+	t.Logf("Crossfade test: 13:00=%.4f, 13:07:30=%.4f, 13:15=%.4f",
+		result1300[0], result1330[0], result1315[0])
+}
+
+// TestDiurnalBaseline_Crossfade15MinuteWindow tests the 15-minute crossfade window
+// Spec: crossfade over first 15 min of each hour from EMA to diurnal slot
+func TestDiurnalBaseline_Crossfade15MinuteWindow(t *testing.T) {
+	db := NewDiurnalBaseline("test", 64)
+
+	loc := time.Now().Location()
+
+	// Set up EMA baseline value
+	emaBaseline := make([]float64, 64)
+	for i := range emaBaseline {
+		emaBaseline[i] = 0.5 // EMA baseline value
+	}
+
+	// Fill slot 13 with diurnal values
+	db.mu.Lock()
+	for i := 0; i < 64; i++ {
+		db.slots[13].Values[i] = 1.0 // Diurnal slot value
+	}
+	db.slots[13].SampleCount = DiurnalMinSamples
+	db.mu.Unlock()
+
+	// Test progression across the first 15 minutes of hour 13
+	testMinutes := []int{0, 5, 10, 15, 16, 30, 45}
+	// expectedFracs: 0 at start, 1/3 at 5 min, 2/3 at 10 min, 1 at 15 min, then 1 for rest
+	expectedFracs := []float64{0.0, 1.0/3.0, 2.0/3.0, 1.0, 1.0, 1.0, 1.0}
+
+	for i, minute := range testMinutes {
+		testTime := time.Date(2024, 1, 15, 13, minute, 0, 0, loc)
+		result, frac, ready := db.GetActiveBaselineAt(testTime, emaBaseline)
+
+		if !ready {
+			t.Fatalf("Should be ready at 13:%02d", minute)
+		}
+
+		expectedFrac := expectedFracs[i]
+		if math.Abs(frac-expectedFrac) > 0.01 {
+			t.Errorf("frac at 13:%02d = %f, want %f", minute, frac, expectedFrac)
+		}
+
+		// Verify the result matches the crossfade formula: (1-frac)*EMA + frac*diurnal
+		expectedResult := (1-expectedFrac)*0.5 + expectedFrac*1.0
+		for k := 0; k < 64; k++ {
+			if math.Abs(result[k]-expectedResult) > 0.01 {
+				t.Errorf("result[%d] at 13:%02d = %f, want ~%f", k, minute, result[k], expectedResult)
+			}
+		}
+
+		t.Logf("13:%02d: frac=%.3f, result[0]=%.4f (expected %.4f)", minute, frac, result[0], expectedResult)
 	}
 }

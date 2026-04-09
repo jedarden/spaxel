@@ -10,7 +10,7 @@ import (
 // Diurnal configuration constants
 const (
 	DiurnalSlots        = 24 // One slot per hour
-	DiurnalMinSamples   = 100 // Minimum samples per slot (spec requirement)
+	DiurnalMinSamples   = 300 // Minimum samples per slot (spec requirement: >= 300 samples/slot to mark ready)
 	DiurnalLearningDays = 7   // Days before diurnal baseline activates
 
 	// DiurnalUpdateAlpha is the slow EMA coefficient for slot updates
@@ -20,6 +20,9 @@ const (
 
 	// Confidence staleness threshold (days)
 	DiurnalStaleDays = 3
+
+	// DiurnalCrossfadeMinutes is the duration of the EMA-to-diurnal crossfade at hour boundaries
+	DiurnalCrossfadeMinutes = 15 // Crossfade over first 15 minutes of each hour
 )
 
 // Confidence weights for composite score
@@ -112,8 +115,8 @@ func (db *DiurnalBaseline) GetActiveBaseline(emaBaseline []float64) ([]float64, 
 }
 
 // GetActiveBaselineAt returns the blended baseline for a specific timestamp
-// This is the core crossfade algorithm: B_eff = (1 - frac) * B_slot[h] + frac * B_slot[(h+1) % 24]
-// Uses linear interpolation between current hour and next hour slots
+// Spec: crossfade over first 15 min of each hour from EMA to diurnal slot; after 15 min use diurnal exclusively
+// Returns: blendedBaseline, crossfadeWeight (0-1), diurnalReady
 func (db *DiurnalBaseline) GetActiveBaselineAt(t time.Time, emaBaseline []float64) ([]float64, float64, bool) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -122,30 +125,41 @@ func (db *DiurnalBaseline) GetActiveBaselineAt(t time.Time, emaBaseline []float6
 	minute := t.Minute()
 	second := t.Second()
 
-	// Calculate fractional hour: frac = (minute + second/60) / 60
-	frac := (float64(minute) + float64(second)/60.0) / 60.0
-
+	// Get the current hour's slot
 	currentSlot := db.slots[hour]
-	nextSlot := db.slots[(hour+1)%DiurnalSlots]
 
-	// Check if both slots have enough samples for diurnal to be used
-	slotsReady := currentSlot.SampleCount >= DiurnalMinSamples && nextSlot.SampleCount >= DiurnalMinSamples
+	// Check if the current slot has enough samples for diurnal to be used
+	slotReady := currentSlot.SampleCount >= DiurnalMinSamples
 
-	// If diurnal not ready, fall back to EMA baseline
-	if !slotsReady || len(emaBaseline) != db.nSub {
+	// If diurnal slot not ready, fall back to EMA baseline
+	if !slotReady || len(emaBaseline) != db.nSub {
 		result := make([]float64, db.nSub)
 		copy(result, emaBaseline)
 		return result, 0.0, false
 	}
 
-	// Apply crossfade between adjacent hourly slots
-	// B_eff = (1 - frac) * B_slot[h] + frac * B_slot[(h+1) % 24]
-	result := make([]float64, db.nSub)
-	for k := 0; k < db.nSub && k < len(currentSlot.Values) && k < len(nextSlot.Values); k++ {
-		result[k] = (1-frac)*currentSlot.Values[k] + frac*nextSlot.Values[k]
+	// Calculate seconds into the current hour
+	secondsIntoHour := minute*60 + second
+	crossfadeDuration := DiurnalCrossfadeMinutes * 60 // 15 minutes = 900 seconds
+
+	var crossfadeWeight float64
+	if secondsIntoHour < crossfadeDuration {
+		// First 15 minutes: linear crossfade from EMA to diurnal slot
+		// crossfadeWeight = 0 at hour start, = 1 at 15 minutes
+		crossfadeWeight = float64(secondsIntoHour) / float64(crossfadeDuration)
+
+		// B_eff = (1 - weight) * EMA + weight * diurnal_slot
+		result := make([]float64, db.nSub)
+		for k := 0; k < db.nSub && k < len(currentSlot.Values) && k < len(emaBaseline); k++ {
+			result[k] = (1-crossfadeWeight)*emaBaseline[k] + crossfadeWeight*currentSlot.Values[k]
+		}
+		return result, crossfadeWeight, true
 	}
 
-	return result, frac, true
+	// After 15 minutes: use diurnal slot exclusively
+	result := make([]float64, db.nSub)
+	copy(result, currentSlot.Values)
+	return result, 1.0, true
 }
 
 // GetActiveBaselineCosine returns the blended baseline using cosine crossfade
@@ -155,6 +169,7 @@ func (db *DiurnalBaseline) GetActiveBaselineCosine(emaBaseline []float64) ([]flo
 }
 
 // GetActiveBaselineCosineAt returns cosine-crossfaded baseline for a specific timestamp
+// Uses cosine interpolation over the first 15 minutes for smoother transition: frac_smooth = (1 - cos(pi * frac)) / 2
 func (db *DiurnalBaseline) GetActiveBaselineCosineAt(t time.Time, emaBaseline []float64) ([]float64, float64, bool) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -163,29 +178,42 @@ func (db *DiurnalBaseline) GetActiveBaselineCosineAt(t time.Time, emaBaseline []
 	minute := t.Minute()
 	second := t.Second()
 
-	// Calculate fractional hour
-	frac := (float64(minute) + float64(second)/60.0) / 60.0
-
+	// Get the current hour's slot
 	currentSlot := db.slots[hour]
-	nextSlot := db.slots[(hour+1)%DiurnalSlots]
 
-	slotsReady := currentSlot.SampleCount >= DiurnalMinSamples && nextSlot.SampleCount >= DiurnalMinSamples
+	// Check if the current slot has enough samples for diurnal to be used
+	slotReady := currentSlot.SampleCount >= DiurnalMinSamples
 
-	if !slotsReady || len(emaBaseline) != db.nSub {
+	// If diurnal slot not ready, fall back to EMA baseline
+	if !slotReady || len(emaBaseline) != db.nSub {
 		result := make([]float64, db.nSub)
 		copy(result, emaBaseline)
 		return result, 0.0, false
 	}
 
-	// Apply cosine crossfade: frac_smooth = (1 - cos(pi * frac)) / 2
-	fracSmooth := (1 - math.Cos(math.Pi*frac)) / 2
+	// Calculate seconds into the current hour
+	secondsIntoHour := minute*60 + second
+	crossfadeDuration := DiurnalCrossfadeMinutes * 60 // 15 minutes = 900 seconds
 
-	result := make([]float64, db.nSub)
-	for k := 0; k < db.nSub && k < len(currentSlot.Values) && k < len(nextSlot.Values); k++ {
-		result[k] = (1-fracSmooth)*currentSlot.Values[k] + fracSmooth*nextSlot.Values[k]
+	var crossfadeWeight float64
+	if secondsIntoHour < crossfadeDuration {
+		// First 15 minutes: cosine crossfade from EMA to diurnal slot
+		// frac goes from 0 to 1 over the crossfade period
+		frac := float64(secondsIntoHour) / float64(crossfadeDuration)
+		crossfadeWeight = (1 - math.Cos(math.Pi*frac)) / 2
+
+		// B_eff = (1 - weight) * EMA + weight * diurnal_slot
+		result := make([]float64, db.nSub)
+		for k := 0; k < db.nSub && k < len(currentSlot.Values) && k < len(emaBaseline); k++ {
+			result[k] = (1-crossfadeWeight)*emaBaseline[k] + crossfadeWeight*currentSlot.Values[k]
+		}
+		return result, crossfadeWeight, true
 	}
 
-	return result, fracSmooth, true
+	// After 15 minutes: use diurnal slot exclusively
+	result := make([]float64, db.nSub)
+	copy(result, currentSlot.Values)
+	return result, 1.0, true
 }
 
 // GetSlotConfidence returns the confidence level for a specific hour's slot
