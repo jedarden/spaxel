@@ -4,6 +4,7 @@ package fleet
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -623,5 +624,5 @@ func formatDegradationWarning(offlineMAC string, pctBefore, pctAfter float64) st
 
 // formatWarning formats a warning message
 func formatWarning(format string, args ...interface{}) string {
-	return format // Simple implementation - could use fmt.Sprintf for actual formatting
+	return fmt.Sprintf(format, args...)
 }
