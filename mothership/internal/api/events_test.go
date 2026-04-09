@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // testEventsHandler creates a handler backed by a temp SQLite DB.
@@ -693,6 +695,114 @@ func TestGetEvent_Found(t *testing.T) {
 	}
 	if ev.Severity != "warning" {
 		t.Errorf("severity = %q, want warning", ev.Severity)
+	}
+}
+
+func TestGetEvent_NotFound(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	// Use chi URLParam to simulate routing
+	req := httptest.NewRequest("GET", "/api/events/999999", nil)
+	// chi.URLParam reads from a context value set by chi router
+	// We need to simulate this by setting up a chi router
+	r := chi.NewRouter()
+	e := &EventsHandler{db: h.db}
+	r.Get("/api/events/{id}", e.getEvent)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "event not found" {
+		t.Errorf("error = %q, want 'event not found'", resp["error"])
+	}
+}
+
+func TestGetEvent_InvalidID(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Get("/api/events/{id}", e.getEvent)
+
+	// Test with non-numeric ID
+	req := httptest.NewRequest("GET", "/api/events/invalid", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "invalid event id" {
+		t.Errorf("error = %q, want 'invalid event id'", resp["error"])
+	}
+}
+
+func TestGetEvent_HTTPHandler_Found(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	ts := time.Now()
+	h.LogEvent("detection", ts, "Kitchen", "Alice", 42, `{"key":"val"}`, "warning")
+
+	// Get the event via list to find its ID
+	req := httptest.NewRequest("GET", "/api/events?limit=1", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var listResp eventsResponse
+	json.NewDecoder(w.Body).Decode(&listResp)
+	if len(listResp.Events) == 0 {
+		t.Fatal("no events returned")
+	}
+	eventID := listResp.Events[0].ID
+
+	// Test the actual HTTP handler
+	e := &EventsHandler{db: h.db}
+	r := chi.NewRouter()
+	r.Get("/api/events/{id}", e.getEvent)
+
+	req = httptest.NewRequest("GET", "/api/events/"+strconv.FormatInt(eventID, 10), nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+
+	var ev Event
+	json.NewDecoder(w.Body).Decode(&ev)
+
+	if ev.ID != eventID {
+		t.Errorf("id = %d, want %d", ev.ID, eventID)
+	}
+	if ev.Type != "detection" {
+		t.Errorf("type = %q, want detection", ev.Type)
+	}
+	if ev.Zone != "Kitchen" {
+		t.Errorf("zone = %q, want Kitchen", ev.Zone)
+	}
+	if ev.Person != "Alice" {
+		t.Errorf("person = %q, want Alice", ev.Person)
+	}
+	if ev.BlobID != 42 {
+		t.Errorf("blob_id = %d, want 42", ev.BlobID)
+	}
+	if ev.Severity != "warning" {
+		t.Errorf("severity = %q, want warning", ev.Severity)
+	}
+	if ev.DetailJSON != `{"key":"val"}` {
+		t.Errorf("detail_json = %q, want '{\"key\":\"val\"}'", ev.DetailJSON)
 	}
 }
 
