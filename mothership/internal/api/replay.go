@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/localization"
 	"github.com/spaxel/mothership/internal/replay"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 )
@@ -61,6 +62,19 @@ func (h *ReplayHandler) SetBlobBroadcaster(broadcaster replay.BlobBroadcaster) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.worker.SetBroadcaster(broadcaster)
+}
+
+// SetFusionEngine sets the fusion engine for replay blob generation.
+func (h *ReplayHandler) SetFusionEngine(fusionEngine interface{}) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Type assertion to fusion engine interface
+	if engine, ok := fusionEngine.(interface {
+		Fuse(links []localization.LinkMotion) *localization.FusionResult
+		SetNodePosition(mac string, x, y, z float64)
+	}); ok {
+		h.worker.SetFusionEngine(engine)
+	}
 }
 
 // Start the replay worker.

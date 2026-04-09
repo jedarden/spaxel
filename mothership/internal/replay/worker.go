@@ -34,6 +34,12 @@ type ReplaySession struct {
 	baselineState map[string]*signal.BaselineState // per-link baseline
 }
 
+// FusionEngine is the interface required for replay blob generation.
+type FusionEngine interface {
+	Fuse(links []localization.LinkMotion) *localization.FusionResult
+	SetNodePosition(mac string, x, y, z float64)
+}
+
 // Worker reads CSI frames from a replay store and processes them.
 type Worker struct {
 	mu       sync.Mutex
@@ -42,7 +48,7 @@ type Worker struct {
 
 	store         RecordingStore
 	processor     *signal.ProcessorManager
-	fusionEngine  *localization.Engine
+	fusionEngine  FusionEngine
 	nodePositions map[string]localization.NodePosition // MAC -> position
 	broadcaster   BlobBroadcaster
 	done          chan struct{}
@@ -116,7 +122,7 @@ func (w *Worker) SetProcessorManager(processor *signal.ProcessorManager) {
 }
 
 // SetFusionEngine sets the fusion engine for replay blob generation.
-func (w *Worker) SetFusionEngine(fusionEngine *localization.Engine) {
+func (w *Worker) SetFusionEngine(fusionEngine FusionEngine) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.fusionEngine = fusionEngine

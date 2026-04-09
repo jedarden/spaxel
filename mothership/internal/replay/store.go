@@ -173,9 +173,73 @@ func (s *RecordingStore) Scan(fn func(recvTimeNS int64, frame []byte) bool) erro
 			return err
 		}
 		recvTimeNS := int64(binary.LittleEndian.Uint64(hdr[0:8]))
-		frameLen := int64(binary.LittleEndian.Uint16(hdr[8:10]))
+		frameLen := int64(binary.LittleEndian.Uint64(hdr[8:10]))
 		if frameLen > maxFrameBytes {
 			return errors.New("replay: corrupt record during scan")
+		}
+
+		frame := make([]byte, frameLen)
+		if _, err := s.f.ReadAt(frame, pos+recordOverhead); err != nil {
+			return err
+		}
+
+		if !fn(recvTimeNS, frame) {
+			break
+		}
+
+		nextPos := pos + recordOverhead + frameLen
+		// Wrap: if we just read the last record before the wrap point, jump to data start.
+		if s.wrapPos != 0 && nextPos >= s.wrapPos {
+			nextPos = headerSize
+		}
+		pos = nextPos
+	}
+	return nil
+}
+
+// ScanRange reads records within a time range [fromNS, toNS], calling fn for each.
+// fn receives the receive timestamp (Unix nanoseconds) and the raw frame bytes.
+// Returning false from fn stops the scan early.
+// The store is held under lock for the entire scan — callers must not call
+// Append or other mutating methods from within fn.
+func (s *RecordingStore) ScanRange(fromNS, toNS int64, fn func(recvTimeNS int64, frame []byte) bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.hasData() {
+		return nil
+	}
+
+	pos := s.oldestPos
+	for {
+		if pos == s.writePos {
+			break
+		}
+
+		// Read record header: recvTimeNS(8) + frameLen(2)
+		var hdr [10]byte
+		if _, err := s.f.ReadAt(hdr[:], pos); err != nil {
+			return err
+		}
+		recvTimeNS := int64(binary.LittleEndian.Uint64(hdr[0:8]))
+		frameLen := int64(binary.LittleEndian.Uint64(hdr[8:10]))
+		if frameLen > maxFrameBytes {
+			return errors.New("replay: corrupt record during scan")
+		}
+
+		// Skip records before the time range
+		if recvTimeNS < fromNS {
+			nextPos := pos + recordOverhead + frameLen
+			if s.wrapPos != 0 && nextPos >= s.wrapPos {
+				nextPos = headerSize
+			}
+			pos = nextPos
+			continue
+		}
+
+		// Stop if we've passed the time range
+		if recvTimeNS > toNS {
+			break
 		}
 
 		frame := make([]byte, frameLen)
