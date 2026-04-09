@@ -16,6 +16,9 @@ type NodeStateNotifier interface {
 	SendRoleToMAC(mac, role, passiveBSSID string)
 	// SendConfigToMAC sends a rate config to a connected node.
 	SendConfigToMAC(mac string, rateHz int, varianceThreshold float64)
+	// SendIdentifyToMAC sends an LED blink command to a connected node.
+	// Returns false if the node is not connected.
+	SendIdentifyToMAC(mac string, durationMS int) bool
 	// GetConnectedMACs returns the MACs of currently-connected nodes.
 	GetConnectedMACs() []string
 }
@@ -201,6 +204,18 @@ func (m *Manager) OverrideRole(mac, role string) error {
 	}
 	m.broadcastRegistry()
 	return nil
+}
+
+// IdentifyNode sends an LED blink command to a node for identification.
+// Returns true if the command was sent successfully, false if the node is not connected.
+func (m *Manager) IdentifyNode(mac string, durationMS int) bool {
+	m.mu.RLock()
+	notifier := m.notifier
+	m.mu.RUnlock()
+	if notifier == nil {
+		return false
+	}
+	return notifier.SendIdentifyToMAC(mac, durationMS)
 }
 
 // ─── Role Assignment ────────────────────────────────────────────────────────

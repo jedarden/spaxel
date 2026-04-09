@@ -1080,6 +1080,9 @@
             // Firmware version display (shortened)
             const fwDisplay = node.firmware ? '<span class="node-fw">' + escapeHtml(node.firmware) + '</span>' : '';
 
+            // Identify button (only for online nodes)
+            const identifyBtn = isOnline ? `<button class="node-identify-btn" onclick="identifyNode('${mac}'); event.stopPropagation();" title="Identify (blink LED)">⚡</button>` : '';
+
             html += `
                 <div class="node-item" data-mac="${mac}">
                     <span class="node-mac">${mac}</span>
@@ -1089,6 +1092,7 @@
                     <span class="node-status ${statusClass}">
                         ${statusLabel}
                     </span>
+                    ${identifyBtn}
                 </div>
             `;
         });
@@ -1105,6 +1109,30 @@
     function escapeHtml(s) {
         if (!s) return '';
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Identify node by blinking its LED
+    function identifyNode(mac, durationMs) {
+        const payload = durationMs ? JSON.stringify({ duration_ms: durationMs }) : JSON.stringify({});
+
+        fetch(`/api/nodes/${mac}/identify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Identify failed: ' + res.status);
+            }
+            return res.json();
+        })
+        .then(data => {
+            showToast(`Identify command sent to ${mac}`, 'success');
+        })
+        .catch(err => {
+            console.error('[Identify] Error:', err);
+            showToast(`Failed to identify ${mac}: ${err.message}`, 'error');
+        });
     }
 
     function updatePresenceIndicator() {
@@ -1644,6 +1672,8 @@
     // Crowd Flow Visualization Controls
     // Global wrappers for HTML onchange handlers -> Viz3D module
     // ============================================
+    window.identifyNode = identifyNode;
+
     window.toggleFlowLayer = function(visible) {
         Viz3D.setFlowLayerVisible(visible);
     };
