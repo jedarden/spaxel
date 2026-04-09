@@ -489,6 +489,27 @@ func main() {
 	defer sleepMonitor.Stop()
 	log.Printf("[INFO] Sleep quality monitor started (window: 22:00-07:00, report at 07:00)")
 
+	// Phase 6: Morning summary broadcast checker
+	// Periodically checks if morning summary should be pushed to dashboard
+	go func() {
+		ticker := time.NewTicker(60 * time.Second) // Check every minute
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if ok, summary := sleepMonitor.ShouldPushMorningSummary(); ok {
+					if dashboardHub != nil {
+						dashboardHub.BroadcastMorningSummary(summary)
+						log.Printf("[INFO] Morning summary broadcast: link=%s date=%s score=%.0f",
+							summary["link_id"], summary["session_date"], summary["overall_score"])
+					}
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	// Phase 6: Prediction module for presence prediction
 	var predictionStore *prediction.ModelStore
 	var predictionHistory *prediction.HistoryUpdater
@@ -2897,6 +2918,14 @@ func main() {
 		learningHandler := learning.NewHandler(feedbackStore, feedbackProcessor, accuracyComputer)
 		learningHandler.RegisterRoutes(r)
 	}
+
+	// Phase 8: Simple feedback API for timeline
+	feedbackHandler := api.NewFeedbackHandler(eventsHandler)
+	if learningHandler != nil {
+		feedbackHandler.SetLearningHandler(learningHandler)
+	}
+	feedbackHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Feedback API registered at /api/feedback")
 
 	// Phase 6: Detection explainability API
 	explainabilityHandler = explainability.NewHandler()

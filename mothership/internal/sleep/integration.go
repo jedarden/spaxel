@@ -497,7 +497,7 @@ func (m *Monitor) ShouldPushMorningSummary() (bool, map[string]interface{}) {
 						"breathing_anomaly":        report.Metrics.BreathingAnomaly,
 						"breathing_anomaly_count":  report.Metrics.BreathingAnomalyCount,
 						"quiet_time_pct":           report.Metrics.QuietTimePct,
-						"motion_events":            report.Metrics.MotionEventCount,
+						"motion_events":            report.Metrics.MotionEvents,
 						"restless_periods":         report.Metrics.RestlessPeriods,
 						"motion_score":             report.Metrics.MotionScore,
 						"interruptions":            report.Metrics.Interruptions,

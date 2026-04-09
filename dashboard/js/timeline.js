@@ -376,6 +376,15 @@
 			});
 		});
 
+		// Explainability button
+		eventEl.querySelectorAll('.timeline-explain-btn').forEach(function(btn) {
+			btn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				const blobId = btn.dataset.blobId;
+				handleExplainability(blobId, eventEl);
+			});
+		});
+
 		// Seek button
 		eventEl.querySelectorAll('.timeline-seek-btn').forEach(function(btn) {
 			btn.addEventListener('click', function(e) {
@@ -437,8 +446,20 @@
 		const severityClass = event.severity === 'alert' || event.severity === 'critical' ? ' severity-critical' : '';
 		const newClass = isNew ? ' new-event' : '';
 
+		// Check if this event has a blob_id for explainability
+		const hasBlobId = event.blob_id !== undefined && event.blob_id !== null && event.blob_id !== 0;
+		const explainabilityBtn = hasBlobId ? `
+			<button class="timeline-explain-btn" data-blob-id="${event.blob_id}" title="Why is this here?">
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="12" cy="12" r="10"></circle>
+					<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+					<line x1="12" y1="17" x2="12.01" y2="17"></line>
+				</svg>
+			</button>
+		` : '';
+
 		return `
-			<div class="timeline-event timeline-${event.type}${severityClass}${newClass}" data-type="${event.type}" data-id="${event.id}" data-timestamp="${event.timestamp_ms}">
+			<div class="timeline-event timeline-${event.type}${severityClass}${newClass}" data-type="${event.type}" data-id="${event.id}" data-timestamp="${event.timestamp_ms}" data-blob-id="${event.blob_id || ''}">
 				<div class="timeline-event-icon">${info.icon}</div>
 				<div class="timeline-event-content">
 					<div class="timeline-event-header">
@@ -453,6 +474,7 @@
 				<div class="timeline-event-actions">
 					<button class="timeline-feedback-btn positive" data-action="correct" title="Correct">👍</button>
 					<button class="timeline-feedback-btn negative" data-action="incorrect" title="Incorrect">👎</button>
+					${explainabilityBtn}
 					<button class="timeline-seek-btn" title="Jump to this moment">
 						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -526,6 +548,16 @@
 			});
 		});
 
+		// Explainability buttons
+		elements.eventsList.querySelectorAll('.timeline-explain-btn').forEach(function(btn) {
+			btn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				const blobId = btn.dataset.blobId;
+				const entry = btn.closest('.timeline-event');
+				handleExplainability(blobId, entry);
+			});
+		});
+
 		// Seek button
 		elements.eventsList.querySelectorAll('.timeline-seek-btn').forEach(function(btn) {
 			btn.addEventListener('click', function(e) {
@@ -543,6 +575,26 @@
 				handleSeek(timestamp, this);
 			});
 		});
+	}
+
+	// ============================================
+	// Explainability Handler
+	// ============================================
+	function handleExplainability(blobId, entryElement) {
+		console.log('[Timeline] Explainability requested for blob:', blobId);
+
+		// Open explainability overlay
+		if (window.Explainability) {
+			window.Explainability.explain(blobId);
+		} else if (window.Viz3D && window.Viz3D.explainBlob) {
+			// Fallback to Viz3D's explainBlob if Explainability module not loaded
+			window.Viz3D.explainBlob(blobId);
+		} else {
+			console.error('[Timeline] Explainability module not available');
+			if (window.SpaxelApp && SpaxelApp.showToast) {
+				SpaxelApp.showToast('Explainability not available', 'warning');
+			}
+		}
 	}
 
 	// ============================================
@@ -607,15 +659,64 @@
 		const targetDate = new Date(timestamp);
 		const iso8601 = targetDate.toISOString();
 
-		// For now, just navigate to replay mode
-		// Full replay implementation would seek to the specific timestamp
-		if (window.SpaxelRouter) {
-			SpaxelRouter.navigate('replay');
-		}
+		// Create a replay window around the event timestamp
+		const windowMs = CONFIG.replaySeekWindowSec * 1000;
+		const fromDate = new Date(timestamp - windowMs);
+		const toDate = new Date(timestamp + windowMs);
 
-		if (window.SpaxelApp && SpaxelApp.showToast) {
-			SpaxelApp.showToast('Replay mode: seeking to ' + formatTimestamp(timestamp), 'info');
-		}
+		// Create replay session
+		const startPayload = {
+			from_iso8601: fromDate.toISOString(),
+			to_iso8601: toDate.toISOString(),
+			speed: 1
+		};
+
+		fetch('/api/replay/start', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(startPayload)
+		})
+			.then(function(res) {
+				if (!res.ok) {
+					throw new Error('Failed to start replay session');
+				}
+				return res.json();
+			})
+			.then(function(data) {
+				const sessionId = data.session_id;
+
+				// Seek to the specific timestamp
+				return fetch('/api/replay/seek', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						session_id: sessionId,
+						timestamp_iso8601: iso8601
+					})
+				});
+			})
+			.then(function(res) {
+				if (!res.ok) {
+					throw new Error('Failed to seek in replay');
+				}
+				return res.json();
+			})
+			.then(function(data) {
+				// Navigate to replay mode
+				if (window.SpaxelRouter) {
+					SpaxelRouter.navigate('replay');
+				}
+
+				if (window.SpaxelApp && SpaxelApp.showToast) {
+					SpaxelApp.showToast('Replay mode: viewing ' + formatTimestamp(timestamp), 'info');
+				}
+			})
+			.catch(function(err) {
+				console.error('[Timeline] Replay seek failed:', err);
+				if (window.SpaxelApp && SpaxelApp.showToast) {
+					SpaxelApp.showToast('Failed to jump to replay: ' + err.message, 'warning');
+				}
+			});
 	}
 
 	// ============================================
