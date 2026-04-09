@@ -125,6 +125,20 @@
     }
 
     // ============================================
+    // Helpers
+    // ============================================
+
+    function escapeHtml(s) {
+        if (!s) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // ============================================
     // UI Rendering
     // ============================================
 
@@ -135,14 +149,20 @@
         const banner = document.createElement('div');
         banner.id = 'ap-detection-banner';
         banner.className = 'ap-detection-banner';
+
+        // Build the router description with manufacturer if available
+        let routerDesc = 'your router';
+        if (ap.manufacturer) {
+            routerDesc = 'your router (' + escapeHtml(ap.manufacturer) + ')';
+        }
+
         banner.innerHTML = `
             <div class="ap-detection-content">
                 <div class="ap-detection-icon">📡</div>
                 <div class="ap-detection-message">
                     <div class="ap-detection-title">Router Detected!</div>
                     <div class="ap-detection-subtitle">
-                        I detected your router (${ap.ap_bssid || 'Unknown'})${ap.ap_channel ? ' on channel ' + ap.channel : ''}.
-                        Place it on the floor plan to improve accuracy.
+                        I detected ${routerDesc}. Place it on the floor plan to improve accuracy.
                     </div>
                 </div>
                 <div class="ap-detection-actions">
