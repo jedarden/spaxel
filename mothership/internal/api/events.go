@@ -24,10 +24,11 @@ const (
 
 // EventsHandler manages the events timeline.
 type EventsHandler struct {
-	mu     sync.RWMutex
-	db     *sql.DB
-	hub    DashboardHub
-	ownsDB bool
+	mu             sync.RWMutex
+	db             *sql.DB
+	hub            DashboardHub
+	ownsDB         bool
+	feedbackHandler any // FeedbackHandler for POST /api/events/{id}/feedback
 }
 
 // DashboardHub is the interface for broadcasting to dashboard clients.
@@ -80,6 +81,13 @@ func (e *EventsHandler) SetHub(hub DashboardHub) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.hub = hub
+}
+
+// SetFeedbackHandler sets the feedback handler for event feedback endpoints.
+func (e *EventsHandler) SetFeedbackHandler(handler any) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.feedbackHandler = handler
 }
 
 // NewEventsHandler creates a new events handler backed by a SQLite file at dbPath.
@@ -184,12 +192,15 @@ func isValidEventType(t string) bool {
 // GET /api/events — paginated event list with FTS5 search and keyset cursor pagination.
 //
 //	Query params: limit (default 50, max 500), before (timestamp_ms cursor),
-//	after (ISO8601), type, zone, person, q (FTS5 query), mode (expert|simple).
+//	since (ISO8601), until (ISO8601), type, zone_id, person_id, q (FTS5 query), mode (expert|simple).
 //
 // GET /api/events/{id} — single event by ID.
+//
+// POST /api/events/{id}/feedback — submit feedback for an event.
 func (e *EventsHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/events", e.listEvents)
 	r.Get("/api/events/{id}", e.getEvent)
+	r.Post("/api/events/{id}/feedback", e.postEventFeedback)
 }
 
 // eventsResponse is the JSON response for GET /api/events.
@@ -257,9 +268,19 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	eventType := r.URL.Query().Get("type")
 	zone := r.URL.Query().Get("zone")
+	zoneID := r.URL.Query().Get("zone_id")
+	if zoneID != "" && zone == "" {
+		zone = zoneID
+	}
 	person := r.URL.Query().Get("person")
+	personID := r.URL.Query().Get("person_id")
+	if personID != "" && person == "" {
+		person = personID
+	}
 	afterStr := r.URL.Query().Get("after")
-	mode := r.URL.Query().Get("mode") // "expert" or "simple" (default: simple)
+	sinceStr := r.URL.Query().Get("since") // Alias for after
+	untilStr := r.URL.Query().Get("until") // Upper bound timestamp
+	mode := r.URL.Query().Get("mode")      // "expert" or "simple" (default: simple)
 
 	// Validate event type
 	if eventType != "" && !isValidEventType(eventType) {
@@ -267,15 +288,30 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate after timestamp
+	// Validate after/since timestamp (prefer since if both provided)
 	var afterTS int64
-	if afterStr != "" {
-		t, err := time.Parse(time.RFC3339, afterStr)
+	timeStr := afterStr
+	if sinceStr != "" {
+		timeStr = sinceStr
+	}
+	if timeStr != "" {
+		t, err := time.Parse(time.RFC3339, timeStr)
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid after timestamp")
+			writeJSONError(w, http.StatusBadRequest, "invalid since/after timestamp")
 			return
 		}
 		afterTS = t.UnixNano() / 1e6
+	}
+
+	// Validate until timestamp (upper bound)
+	var untilTS int64
+	if untilStr != "" {
+		t, err := time.Parse(time.RFC3339, untilStr)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid until timestamp")
+			return
+		}
+		untilTS = t.UnixNano() / 1e6
 	}
 
 	// In simple mode, filter out system-only event types
@@ -347,6 +383,10 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		whereSQL += " AND " + p + "timestamp_ms >= ?"
 		whereArgs = append(whereArgs, afterTS)
 	}
+	if untilTS > 0 {
+		whereSQL += " AND " + p + "timestamp_ms <= ?"
+		whereArgs = append(whereArgs, untilTS)
+	}
 
 	// COUNT for total_filtered
 	countSQL := "SELECT COUNT(*) FROM " + fromTable + " WHERE " + whereSQL
@@ -363,6 +403,7 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		dataWhere += " AND " + p + "timestamp_ms < ?"
 		dataArgs = append(dataArgs, beforeTS)
 	}
+	// untilTS is already included in the base WHERE clause via whereArgs
 
 	dataSQL := "SELECT " + selectCols + " FROM " + fromTable +
 		" WHERE " + dataWhere +
@@ -429,4 +470,75 @@ func (e *EventsHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, event)
+}
+
+// postEventFeedback handles POST /api/events/{id}/feedback
+// It delegates to the feedback module after validating the event exists.
+func (e *EventsHandler) postEventFeedback(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	eventID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid event id")
+		return
+	}
+
+	// Verify the event exists
+	var exists bool
+	err = e.db.QueryRow("SELECT EXISTS(SELECT 1 FROM events WHERE id = ?)", eventID).Scan(&exists)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to query event")
+		return
+	}
+	if !exists {
+		writeJSONError(w, http.StatusNotFound, "event not found")
+		return
+	}
+
+	// Decode request body
+	var req FeedbackRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Set the event ID from the URL path
+	req.EventID = eventID
+
+	// Validate feedback type
+	if req.Type != "correct" && req.Type != "incorrect" && req.Type != "missed" {
+		writeJSONError(w, http.StatusBadRequest, "invalid feedback type: must be 'correct', 'incorrect', or 'missed'")
+		return
+	}
+
+	// Delegate to feedback handler if available
+	if e.feedbackHandler != nil {
+		// Use the feedback handler to process the request
+		type submitter interface {
+			SubmitFeedback(w http.ResponseWriter, r *http.Request, req FeedbackRequest)
+		}
+		if fh, ok := e.feedbackHandler.(submitter); ok {
+			fh.SubmitFeedback(w, r, req)
+			return
+		}
+	}
+
+	// Fallback: log a feedback event
+	_ = e.LogEvent("feedback", time.Now(), "", "", 0,
+		fmt.Sprintf(`{"event_id":%d,"type":"%s","blob_id":%d}`, eventID, req.Type, req.BlobID), "info")
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":     true,
+		"message": "Feedback recorded",
+	})
+}
+
+// FeedbackRequest represents a feedback submission for an event.
+type FeedbackRequest struct {
+	Type     string `json:"type"`     // "correct" or "incorrect"
+	BlobID   int    `json:"blob_id"`  // Optional: blob ID being rated
+	Position *struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+		Z float64 `json:"z"`
+	} `json:"position,omitempty"` // For "missed" feedback
 }

@@ -1,11 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -912,5 +914,184 @@ func TestFTSRebuildOnStartup(t *testing.T) {
 
 	if resp.TotalFiltered != 10 {
 		t.Errorf("after rebuild: total_filtered = %d, want 10", resp.TotalFiltered)
+	}
+}
+
+// --- Tests for since/until query parameters ---
+
+func TestListEvents_SinceParameter(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 10)
+
+	// Filter using since parameter (alias for after)
+	sinceTime := base.Add(4 * time.Second).Format(time.RFC3339)
+	req := httptest.NewRequest("GET", "/api/events?since="+sinceTime+"&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	if resp.TotalFiltered != 6 { // events 4..9
+		t.Errorf("total_filtered = %d, want 6", resp.TotalFiltered)
+	}
+	for _, ev := range resp.Events {
+		if ev.Timestamp < base.Add(4*time.Second).UnixNano()/1e6 {
+			t.Errorf("event ts %d before since time", ev.Timestamp)
+		}
+	}
+}
+
+func TestListEvents_UntilParameter(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 10)
+
+	// Filter using until parameter (upper bound)
+	untilTime := base.Add(5 * time.Second).Format(time.RFC3339)
+	req := httptest.NewRequest("GET", "/api/events?until="+untilTime+"&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	if resp.TotalFiltered != 6 { // events 0..5
+		t.Errorf("total_filtered = %d, want 6", resp.TotalFiltered)
+	}
+	for _, ev := range resp.Events {
+		if ev.Timestamp > base.Add(5*time.Second).UnixNano()/1e6 {
+			t.Errorf("event ts %d after until time", ev.Timestamp)
+		}
+	}
+}
+
+func TestListEvents_SinceAndUntil(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 10)
+
+	// Filter using both since and until
+	sinceTime := base.Add(2 * time.Second).Format(time.RFC3339)
+	untilTime := base.Add(7 * time.Second).Format(time.RFC3339)
+	req := httptest.NewRequest("GET", "/api/events?since="+sinceTime+"&until="+untilTime+"&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	if resp.TotalFiltered != 6 { // events 2..7
+		t.Errorf("total_filtered = %d, want 6", resp.TotalFiltered)
+	}
+}
+
+func TestListEvents_InvalidUntil(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	req := httptest.NewRequest("GET", "/api/events?until=not-a-date", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+// --- Tests for person_id and zone_id parameter aliases ---
+
+func TestListEvents_PersonIDAlias(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 100)
+
+	// Filter using person_id parameter (alias for person)
+	req := httptest.NewRequest("GET", "/api/events?person_id=Alice&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	for _, ev := range resp.Events {
+		if ev.Person != "Alice" {
+			t.Errorf("event person = %q, want Alice", ev.Person)
+		}
+	}
+}
+
+func TestListEvents_ZoneIDAlias(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 100)
+
+	// Filter using zone_id parameter (alias for zone)
+	req := httptest.NewRequest("GET", "/api/events?zone_id=Kitchen&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	for _, ev := range resp.Events {
+		if ev.Zone != "Kitchen" {
+			t.Errorf("event zone = %q, want Kitchen", ev.Zone)
+		}
+	}
+}
+
+func TestListEvents_ZoneTakesPrecedence(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 10)
+
+	// When both zone and zone_id are provided, zone_id should take precedence
+	req := httptest.NewRequest("GET", "/api/events?zone=Hallway&zone_id=Kitchen&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	for _, ev := range resp.Events {
+		if ev.Zone != "Kitchen" {
+			t.Errorf("event zone = %q, want Kitchen (zone_id should take precedence)", ev.Zone)
+		}
+	}
+}
+
+func TestListEvents_PersonIDTakesPrecedence(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 10)
+
+	// When both person and person_id are provided, person_id should take precedence
+	req := httptest.NewRequest("GET", "/api/events?person=Bob&person_id=Alice&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	for _, ev := range resp.Events {
+		if ev.Person != "Alice" {
+			t.Errorf("event person = %q, want Alice (person_id should take precedence)", ev.Person)
+		}
 	}
 }

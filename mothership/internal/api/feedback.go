@@ -126,3 +126,59 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 		"message": "Feedback recorded",
 	})
 }
+
+// SubmitFeedback is called by the events handler to process feedback for a specific event.
+func (h *FeedbackHandler) SubmitFeedback(w http.ResponseWriter, r *http.Request, req FeedbackRequest) {
+	// Validate feedback type
+	if req.Type != "correct" && req.Type != "incorrect" && req.Type != "missed" {
+		writeJSONError(w, http.StatusBadRequest, "invalid feedback type: must be 'correct', 'incorrect', or 'missed'")
+		return
+	}
+
+	// Get event details for logging
+	var zone, person string
+	var detailJSON string
+
+	// Create detail JSON for the event
+	details := make(map[string]interface{})
+	details["original_event_id"] = req.EventID
+	details["feedback"] = req.Type
+	if req.Position != nil {
+		details["position"] = req.Position
+	}
+
+	detailBytes, _ := json.Marshal(details)
+	detailJSON = string(detailBytes)
+
+	// Log feedback event
+	if h.eventsHandler != nil {
+		eventType := "feedback_confirmed"
+		if req.Type == "incorrect" {
+			eventType = "feedback_corrected"
+		} else if req.Type == "missed" {
+			eventType = "missed_detection"
+		}
+		_ = h.eventsHandler.LogEvent(eventType, time.Now(), zone, person, req.BlobID, detailJSON, "info")
+	}
+
+	// If learning handler is available, process the feedback
+	if h.learningHandler != nil {
+		type processor interface {
+			ProcessFeedback(feedbackType string, eventID int64, blobID int, positionJSON string) error
+		}
+		if p, ok := h.learningHandler.(processor); ok {
+			var positionJSON string
+			if req.Position != nil {
+				positionBytes, _ := json.Marshal(req.Position)
+				positionJSON = string(positionBytes)
+			}
+			_ = p.ProcessFeedback(req.Type, req.EventID, req.BlobID, positionJSON)
+		}
+	}
+
+	// Return success response
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":     true,
+		"message": "Feedback recorded",
+	})
+}

@@ -2687,23 +2687,71 @@
                 Timeline
                 <span id="timeline-count" class="timeline-count"></span>
             </h2>
-            <div class="timeline-filters">
-                <select id="timeline-filter-type" class="timeline-filter-select">
-                    <option value="">All Types</option>
-                </select>
-                <select id="timeline-filter-zone" class="timeline-filter-select">
-                    <option value="">All Zones</option>
-                </select>
-                <select id="timeline-filter-person" class="timeline-filter-select">
-                    <option value="">All People</option>
-                </select>
-                <select id="timeline-filter-time" class="timeline-filter-select">
-                    <option value="">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="7d">Last 7 days</option>
-                    <option value="30d">Last 30 days</option>
-                </select>
-                <input type="text" id="timeline-filter-search" class="timeline-search" placeholder="Search events...">
+            <button id="timeline-filter-toggle" class="timeline-filter-toggle" title="Toggle filters">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="22 3 2 10 12.79 21 15.41 18.38 19 14.79 22 3 22 3"></polygon>
+                    <path d="M20.41 11.26 12.79 3.64"></path>
+                </svg>
+            </button>
+        </div>
+        <div id="timeline-filter-bar" class="timeline-filter-bar">
+            <div class="timeline-filter-section">
+                <h4 class="timeline-filter-section-title">Categories</h4>
+                <div class="timeline-category-checkboxes">
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-presence" checked>
+                        <span class="timeline-category-label">Presence</span>
+                        <span class="timeline-category-icon">👤</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-zones" checked>
+                        <span class="timeline-category-label">Zones</span>
+                        <span class="timeline-category-icon">🚪</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-alerts" checked>
+                        <span class="timeline-category-label">Alerts</span>
+                        <span class="timeline-category-icon">⚠️</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-system" checked>
+                        <span class="timeline-category-label">System</span>
+                        <span class="timeline-category-icon">⚙️</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-learning" checked>
+                        <span class="timeline-category-label">Learning</span>
+                        <span class="timeline-category-icon">🎓</span>
+                    </label>
+                </div>
+            </div>
+            <div class="timeline-filter-section">
+                <h4 class="timeline-filter-section-title">Filters</h4>
+                <div class="timeline-filter-controls">
+                    <select id="timeline-filter-type" class="timeline-filter-select">
+                        <option value="">All Types</option>
+                    </select>
+                    <select id="timeline-filter-zone" class="timeline-filter-select">
+                        <option value="">All Zones</option>
+                    </select>
+                    <select id="timeline-filter-person" class="timeline-filter-select">
+                        <option value="">All People</option>
+                    </select>
+                    <select id="timeline-filter-time" class="timeline-filter-select">
+                        <option value="">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="7d">Last 7 days</option>
+                        <option value="30d">Last 30 days</option>
+                        <option value="custom">Custom range...</option>
+                    </select>
+                    <input type="text" id="timeline-filter-search" class="timeline-search" placeholder="Search descriptions...">
+                </div>
+                <div id="timeline-custom-date-container" class="timeline-custom-date" style="display: none;">
+                    <input type="date" id="timeline-date-from" class="timeline-date-input">
+                    <span class="timeline-date-separator">to</span>
+                    <input type="date" id="timeline-date-to" class="timeline-date-input">
+                    <button id="timeline-date-apply" class="timeline-date-apply-btn">Apply</button>
+                </div>
             </div>
         </div>
         <div id="timeline-loading" class="timeline-loading" style="display: none;">

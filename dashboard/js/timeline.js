@@ -4,8 +4,8 @@
  * Scrollable chronological event list with filtering and event interaction.
  * Click event → jump to that moment in replay mode.
  * Inline feedback (thumbs up/down) on presence detection events.
+ * Virtualized rendering with IntersectionObserver for 1000+ events.
  */
-
 (function() {
 	'use strict';
 
@@ -19,9 +19,23 @@
 		replaySeekWindowSec: 5, // seconds before/after event timestamp
 		virtualization: {
 			enabled: true,
-			rootMargin: '200px', // load items 200px before they enter viewport
+			bufferSize: 50, // number of extra items to render above/below viewport
+			rootMargin: '400px', // load items 400px before they enter viewport
 			threshold: 0.01 // trigger when 1% of item is visible
-		}
+		},
+		itemHeight: 80, // estimated height of a timeline event item in pixels
+		maxDOMItems: 150 // maximum number of items to keep in DOM at once
+	};
+
+	// ============================================
+	// Event Type Categories
+	// ============================================
+	const EVENT_CATEGORIES = {
+		presence: ['presence_transition', 'stationary_detected', 'detection'],
+		zones: ['zone_entry', 'zone_exit', 'portal_crossing'],
+		alerts: ['fall_alert', 'anomaly', 'security_alert'],
+		system: ['node_online', 'node_offline', 'ota_update', 'baseline_changed', 'system'],
+		learning: ['learning_milestone', 'anomaly_learned']
 	};
 
 	// ============================================
@@ -32,18 +46,41 @@
 		cursor: null,
 		total: 0,
 		filters: {
-			type: null,
+			categories: {
+				presence: true,
+				zones: true,
+				alerts: true,
+				system: true,
+				learning: true
+			},
+			type: null, // specific type filter (overrides categories)
 			zone: null,
 			person: null,
 			after: null, // ISO8601 string
-			q: null
+			until: null, // ISO8601 string
+			q: null // text search query
 		},
 		loading: false,
 		error: null,
 		// Filter options populated from available events
 		availableTypes: new Set(),
 		availableZones: new Set(),
-		availablePersons: new Set()
+		availablePersons: new Set(),
+		// Virtualization state
+		virtualization: {
+			observer: null,
+			visibleIndices: new Set(),
+			renderedIndices: new Set(),
+			firstVisibleIndex: 0,
+			lastVisibleIndex: 0,
+			containerHeight: 0,
+			scrollTop: 0,
+			totalHeight: 0
+		},
+		// Client-side filtered events
+		filteredEvents: [],
+		// All loaded events (for client-side filtering)
+		allLoadedEvents: []
 	};
 
 	// DOM elements
@@ -57,85 +94,113 @@
 			icon: '🚪',
 			color: '#66bb6a',
 			label: 'Entered',
-			description: 'Person entered a zone'
+			description: 'Person entered a zone',
+			category: 'zones'
 		},
 		zone_exit: {
 			icon: '🚶',
 			color: '#ffa726',
 			label: 'Left',
-			description: 'Person exited a zone'
+			description: 'Person exited a zone',
+			category: 'zones'
 		},
 		portal_crossing: {
 			icon: '→',
 			color: '#42a5f5',
 			label: 'Crossed',
-			description: 'Person crossed a portal'
+			description: 'Person crossed a portal',
+			category: 'zones'
 		},
 		presence_transition: {
 			icon: '👤',
 			color: '#ab47bc',
 			label: 'Detected',
-			description: 'Presence detected'
+			description: 'Presence detected',
+			category: 'presence'
 		},
 		stationary_detected: {
 			icon: '💤',
 			color: '#7e57c2',
 			label: 'Stationary',
-			description: 'Stationary person detected'
+			description: 'Stationary person detected',
+			category: 'presence'
+		},
+		detection: {
+			icon: '👁️',
+			color: '#ab47bc',
+			label: 'Detected',
+			description: 'Motion detected',
+			category: 'presence'
 		},
 		anomaly: {
 			icon: '⚠️',
 			color: '#ef5350',
 			label: 'Anomaly',
-			description: 'Unusual activity detected'
+			description: 'Unusual activity detected',
+			category: 'alerts'
 		},
 		security_alert: {
 			icon: '🚨',
 			color: '#d32f2f',
 			label: 'Security',
-			description: 'Security alert'
+			description: 'Security alert',
+			category: 'alerts'
 		},
 		fall_alert: {
 			icon: '🆘',
 			color: '#f44336',
 			label: 'Fall',
-			description: 'Fall detected'
+			description: 'Fall detected',
+			category: 'alerts'
 		},
 		node_online: {
 			icon: '📡',
 			color: '#4caf50',
 			label: 'Online',
-			description: 'Node came online'
+			description: 'Node came online',
+			category: 'system'
 		},
 		node_offline: {
 			icon: '📵',
 			color: '#9e9e9e',
 			label: 'Offline',
-			description: 'Node went offline'
+			description: 'Node went offline',
+			category: 'system'
 		},
 		ota_update: {
 			icon: '⬆️',
 			color: '#2196f3',
 			label: 'Updated',
-			description: 'Firmware updated'
+			description: 'Firmware updated',
+			category: 'system'
 		},
 		baseline_changed: {
 			icon: '📊',
 			color: '#00bcd4',
 			label: 'Baseline',
-			description: 'Baseline updated'
-		},
-		learning_milestone: {
-			icon: '🎓',
-			color: '#9c27b0',
-			label: 'Learned',
-			description: 'System learned patterns'
+			description: 'Baseline updated',
+			category: 'system'
 		},
 		system: {
 			icon: '⚙️',
 			color: '#607d8b',
 			label: 'System',
-			description: 'System event'
+			description: 'System event',
+			category: 'system'
+		},
+		learning_milestone: {
+			icon: '🎓',
+			color: '#9c27b0',
+			label: 'Learned',
+			description: 'System learned patterns',
+			category: 'learning'
+		},
+		anomaly_learned: {
+			icon: '🧠',
+			color: '#9c27b0',
+			label: 'Learned',
+			description: 'Anomaly pattern learned',
+			category: 'learning'
 		}
 	};
 
@@ -147,6 +212,7 @@
 
 		cacheElements();
 		bindEvents();
+		setupVirtualization();
 
 		// Listen for route changes to show/hide timeline
 		if (window.SpaxelRouter) {
@@ -157,6 +223,173 @@
 		if (window.SpaxelApp) {
 			SpaxelApp.registerMessageHandler(handleWebSocketMessage);
 		}
+	}
+
+	// ============================================
+	// Virtualization Setup
+	// ============================================
+	function setupVirtualization() {
+		if (!CONFIG.virtualization.enabled || !elements.eventsList) {
+			return;
+		}
+
+		// Create IntersectionObserver for lazy rendering
+		const observerOptions = {
+			root: elements.eventsList,
+			rootMargin: CONFIG.virtualization.rootMargin,
+			threshold: CONFIG.virtualization.threshold
+		};
+
+		state.virtualization.observer = new IntersectionObserver(function(entries) {
+			handleIntersection(entries);
+		}, observerOptions);
+
+		// Set up scroll listener for virtualization
+		if (elements.eventsList) {
+			elements.eventsList.addEventListener('scroll', onScroll, { passive: true });
+		}
+
+		console.log('[Timeline] Virtualization enabled with IntersectionObserver');
+	}
+
+	// ============================================
+	// Intersection Observer Handler
+	// ============================================
+	function handleIntersection(entries) {
+		entries.forEach(function(entry) {
+			const index = parseInt(entry.target.dataset.index, 10);
+			if (isNaN(index)) return;
+
+			if (entry.isIntersecting) {
+				state.virtualization.visibleIndices.add(index);
+			} else {
+				state.virtualization.visibleIndices.delete(index);
+			}
+		});
+
+		// Update rendered range based on visibility
+		updateRenderedRange();
+	}
+
+	// ============================================
+	// Scroll Handler for Virtualization
+	// ============================================
+	function onScroll() {
+		if (!elements.eventsList) return;
+
+		state.virtualization.scrollTop = elements.eventsList.scrollTop;
+
+		// Update visible range based on scroll position
+		const firstIndex = Math.floor(state.virtualization.scrollTop / CONFIG.itemHeight);
+		const visibleCount = Math.ceil(elements.eventsList.clientHeight / CONFIG.itemHeight);
+		const lastIndex = firstIndex + visibleCount;
+
+		state.virtualization.firstVisibleIndex = Math.max(0, firstIndex - CONFIG.virtualization.bufferSize);
+		state.virtualization.lastVisibleIndex = Math.min(state.filteredEvents.length - 1, lastIndex + CONFIG.virtualization.bufferSize);
+
+		updateRenderedRange();
+	}
+
+	// ============================================
+	// Update Rendered Range
+	// ============================================
+	function updateRenderedRange() {
+		if (!state.filteredEvents.length) return;
+
+		const firstIdx = Math.max(0, state.virtualization.firstVisibleIndex);
+		const lastIdx = Math.min(state.filteredEvents.length - 1, state.virtualization.lastVisibleIndex);
+
+		// Unobserve items that are no longer in range
+		state.virtualization.renderedIndices.forEach(function(index) {
+			if (index < firstIdx || index > lastIdx) {
+				const item = elements.eventsList.querySelector('[data-index="' + index + '"]');
+				if (item && state.virtualization.observer) {
+					state.virtualization.observer.unobserve(item);
+				}
+			}
+		});
+
+		// Create new set of rendered indices
+		const newRenderedIndices = new Set();
+		for (let i = firstIdx; i <= lastIdx; i++) {
+			newRenderedIndices.add(i);
+		}
+
+		// Render new items and observe them
+		const fragment = document.createDocumentFragment();
+		newRenderedIndices.forEach(function(index) {
+			if (!state.virtualization.renderedIndices.has(index)) {
+				const event = state.filteredEvents[index];
+				if (event) {
+					const tempDiv = document.createElement('div');
+					tempDiv.innerHTML = renderEvent(event, false, index);
+					const newEventEl = tempDiv.firstElementChild;
+					if (newEventEl) {
+						newEventEl.dataset.index = index;
+						fragment.appendChild(newEventEl);
+					}
+				}
+			} else {
+				// Keep existing item in rendered set
+				newRenderedIndices.add(index);
+			}
+		});
+
+		if (fragment.children.length > 0) {
+			elements.eventsList.appendChild(fragment);
+
+			// Bind handlers for new items
+			Array.from(fragment.children).forEach(function(item) {
+				bindEventHandlersForElement(item);
+				if (state.virtualization.observer) {
+					state.virtualization.observer.observe(item);
+				}
+			});
+		}
+
+		// Remove items that are no longer in rendered range
+		state.virtualization.renderedIndices.forEach(function(index) {
+			if (!newRenderedIndices.has(index)) {
+				const item = elements.eventsList.querySelector('[data-index="' + index + '"]');
+				if (item) {
+					item.remove();
+				}
+			}
+		});
+
+		state.virtualization.renderedIndices = newRenderedIndices;
+
+		// Update total height for spacer
+		updateVirtualSpacers();
+	}
+
+	// ============================================
+	// Update Virtual Spacers
+	// ============================================
+	function updateVirtualSpacers() {
+		if (!elements.eventsList) return;
+
+		const totalHeight = state.filteredEvents.length * CONFIG.itemHeight;
+		state.virtualization.totalHeight = totalHeight;
+
+		// Add top spacer if needed
+		let topSpacer = elements.eventsList.querySelector('.timeline-spacer-top');
+		if (!topSpacer) {
+			topSpacer = document.createElement('div');
+			topSpacer.className = 'timeline-spacer timeline-spacer-top';
+			elements.eventsList.insertBefore(topSpacer, elements.eventsList.firstChild);
+		}
+		topSpacer.style.height = (state.virtualization.firstVisibleIndex * CONFIG.itemHeight) + 'px';
+
+		// Add bottom spacer if needed
+		let bottomSpacer = elements.eventsList.querySelector('.timeline-spacer-bottom');
+		if (!bottomSpacer) {
+			bottomSpacer = document.createElement('div');
+			bottomSpacer.className = 'timeline-spacer timeline-spacer-bottom';
+			elements.eventsList.appendChild(bottomSpacer);
+		}
+		const remainingHeight = (state.filteredEvents.length - state.virtualization.lastVisibleIndex - 1) * CONFIG.itemHeight;
+		bottomSpacer.style.height = Math.max(0, remainingHeight) + 'px';
 	}
 
 	function cacheElements() {
@@ -172,12 +405,43 @@
 			empty: document.getElementById('timeline-empty'),
 			error: document.getElementById('timeline-error'),
 			loadMore: document.getElementById('timeline-load-more'),
-			loadMoreBtn: document.getElementById('timeline-load-more-btn')
+			loadMoreBtn: document.getElementById('timeline-load-more-btn'),
+			// Category checkboxes
+			categoryPresence: document.getElementById('timeline-category-presence'),
+			categoryZones: document.getElementById('timeline-category-zones'),
+			categoryAlerts: document.getElementById('timeline-category-alerts'),
+			categorySystem: document.getElementById('timeline-category-system'),
+			categoryLearning: document.getElementById('timeline-category-learning'),
+			// Custom date range inputs
+			customDateContainer: document.getElementById('timeline-custom-date-container'),
+			dateFrom: document.getElementById('timeline-date-from'),
+			dateTo: document.getElementById('timeline-date-to'),
+			dateApply: document.getElementById('timeline-date-apply'),
+			// Filter bar toggle
+			filterToggle: document.getElementById('timeline-filter-toggle'),
+			filterBar: document.getElementById('timeline-filter-bar')
 		};
 	}
 
 	function bindEvents() {
-		// Filter changes
+		// Category checkboxes
+		const categoryInputs = [
+			{ el: elements.categoryPresence, key: 'presence' },
+			{ el: elements.categoryZones, key: 'zones' },
+			{ el: elements.categoryAlerts, key: 'alerts' },
+			{ el: elements.categorySystem, key: 'system' },
+			{ el: elements.categoryLearning, key: 'learning' }
+		];
+		categoryInputs.forEach(function(item) {
+			if (item.el) {
+				item.el.addEventListener('change', function() {
+					state.filters.categories[item.key] = item.el.checked;
+					applyClientSideFilters();
+				});
+			}
+		});
+
+		// Filter dropdowns
 		if (elements.filterType) {
 			elements.filterType.addEventListener('change', onFilterChange);
 		}
@@ -188,19 +452,31 @@
 			elements.filterPerson.addEventListener('change', onFilterChange);
 		}
 		if (elements.filterTime) {
-			elements.filterTime.addEventListener('change', onFilterChange);
+			elements.filterTime.addEventListener('change', onTimeFilterChange);
 		}
 		if (elements.filterSearch) {
 			let searchTimeout;
 			elements.filterSearch.addEventListener('input', function() {
 				clearTimeout(searchTimeout);
-				searchTimeout = setTimeout(onFilterChange, CONFIG.debounceMs);
+				searchTimeout = setTimeout(onSearchChange, CONFIG.debounceMs);
 			});
+		}
+
+		// Custom date range
+		if (elements.dateApply) {
+			elements.dateApply.addEventListener('click', applyCustomDateRange);
 		}
 
 		// Load more button
 		if (elements.loadMoreBtn) {
 			elements.loadMoreBtn.addEventListener('click', loadMoreEvents);
+		}
+
+		// Filter bar toggle
+		if (elements.filterToggle) {
+			elements.filterToggle.addEventListener('click', function() {
+				elements.filterBar.classList.toggle('collapsed');
+			});
 		}
 	}
 
@@ -213,8 +489,11 @@
 
 		if (newMode === 'timeline') {
 			// Container is shown by inline script, just load events if needed
-			if (state.events.length === 0) {
+			if (state.allLoadedEvents.length === 0) {
 				loadInitialEvents();
+			} else {
+				// Apply filters to existing events
+				applyClientSideFilters();
 			}
 		}
 	}
@@ -262,17 +541,22 @@
 			})
 			.then(function(data) {
 				if (isInitial) {
-					state.events = [];
-					updateFilterOptions(data.events);
+					state.allLoadedEvents = [];
+					state.filteredEvents = [];
 				}
 
-				state.events = state.events.concat(data.events || []);
+				// Append to all loaded events
+				state.allLoadedEvents = state.allLoadedEvents.concat(data.events || []);
 				state.cursor = data.cursor || null;
-				state.total = data.total || 0;
+				state.total = data.total_filtered || 0;
 
-				renderEvents();
-				updateLoadMoreButton();
+				// Update filter options with new data
 				updateFilterOptions(data.events);
+
+				// Apply client-side filters
+				applyClientSideFilters();
+
+				updateLoadMoreButton();
 			})
 			.catch(function(err) {
 				console.error('[Timeline] Failed to load events:', err);
@@ -285,7 +569,212 @@
 			});
 	}
 
+	// ============================================
+	// Filter Handling
+	// ============================================
+	function onFilterChange() {
+		// Update filter state
+		if (elements.filterType) {
+			const value = elements.filterType.value;
+			if (value) {
+				// If a specific type is selected, clear category filters
+				state.filters.type = value;
+				// Disable category checkboxes when specific type selected
+				disableCategoryCheckboxes(true);
+			} else {
+				state.filters.type = null;
+				disableCategoryCheckboxes(false);
+			}
+		}
+		if (elements.filterZone) {
+			state.filters.zone = elements.filterZone.value || null;
+		}
+		if (elements.filterPerson) {
+			state.filters.person = elements.filterPerson.value || null;
+		}
+
+		// Reload events with new server-side filters
+		loadInitialEvents();
+	}
+
+	function onTimeFilterChange() {
+		if (!elements.filterTime) return;
+
+		const value = elements.filterTime.value;
+
+		// Hide/show custom date container
+		if (elements.customDateContainer) {
+			if (value === 'custom') {
+				elements.customDateContainer.style.display = 'flex';
+			} else {
+				elements.customDateContainer.style.display = 'none';
+			}
+		}
+
+		if (value === 'today') {
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			state.filters.after = today.toISOString();
+			state.filters.until = null;
+		} else if (value === '7d') {
+			const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+			state.filters.after = weekAgo.toISOString();
+			state.filters.until = null;
+		} else if (value === '30d') {
+			const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+			state.filters.after = monthAgo.toISOString();
+			state.filters.until = null;
+		} else if (value === 'custom') {
+			// Wait for user to apply custom range
+			return;
+		} else {
+			state.filters.after = null;
+			state.filters.until = null;
+		}
+
+		// Reload events with new date range
+		loadInitialEvents();
+	}
+
+	function applyCustomDateRange() {
+		if (!elements.dateFrom || !elements.dateTo) return;
+
+		const fromDate = new Date(elements.dateFrom.value);
+		const toDate = new Date(elements.dateTo.value);
+
+		if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+			if (window.SpaxelApp && SpaxelApp.showToast) {
+				SpaxelApp.showToast('Invalid date range', 'warning');
+			}
+			return;
+		}
+
+		// Set to start of from day and end of to day
+		fromDate.setHours(0, 0, 0, 0);
+		toDate.setHours(23, 59, 59, 999);
+
+		state.filters.after = fromDate.toISOString();
+		state.filters.until = toDate.toISOString();
+
+		// Reload events with custom date range
+		loadInitialEvents();
+	}
+
+	function onSearchChange() {
+		if (elements.filterSearch) {
+			state.filters.q = elements.filterSearch.value.trim() || null;
+			applyClientSideFilters();
+		}
+	}
+
+	function disableCategoryCheckboxes(disabled) {
+		const checkboxes = [
+			elements.categoryPresence,
+			elements.categoryZones,
+			elements.categoryAlerts,
+		elements.categorySystem,
+		elements.categoryLearning
+		];
+		checkboxes.forEach(function(cb) {
+			if (cb) {
+				cb.disabled = disabled;
+				if (disabled) {
+					cb.parentElement.style.opacity = '0.5';
+				} else {
+					cb.parentElement.style.opacity = '1';
+				}
+			}
+		});
+	}
+
+	// ============================================
+	// Client-Side Filtering
+	// ============================================
+	function applyClientSideFilters() {
+		// Start with all loaded events
+		let filtered = state.allLoadedEvents.slice();
+
+		// Apply category filters
+		if (!state.filters.type) {
+			const enabledCategories = Object.keys(state.filters.categories).filter(
+				function(cat) { return state.filters.categories[cat]; }
+			);
+
+			const allowedTypes = new Set();
+			enabledCategories.forEach(function(cat) {
+				const types = EVENT_CATEGORIES[cat];
+				if (types) {
+					types.forEach(function(t) { allowedTypes.add(t); });
+				}
+			});
+
+			if (allowedTypes.size > 0) {
+				filtered = filtered.filter(function(event) {
+					return allowedTypes.has(event.type);
+				});
+			}
+		} else {
+			// Specific type filter
+			filtered = filtered.filter(function(event) {
+				return event.type === state.filters.type;
+			});
+		}
+
+		// Apply zone filter
+		if (state.filters.zone) {
+			filtered = filtered.filter(function(event) {
+				return event.zone === state.filters.zone;
+			});
+		}
+
+		// Apply person filter
+		if (state.filters.person) {
+			filtered = filtered.filter(function(event) {
+				return event.person === state.filters.person;
+			});
+		}
+
+		// Apply text search with fuzzy matching
+		if (state.filters.q) {
+			const searchLower = state.filters.q.toLowerCase();
+			filtered = filtered.filter(function(event) {
+				// Search in type, zone, person, and detail_json
+				if (event.type && event.type.toLowerCase().indexOf(searchLower) !== -1) return true;
+				if (event.zone && event.zone.toLowerCase().indexOf(searchLower) !== -1) return true;
+				if (event.person && event.person.toLowerCase().indexOf(searchLower) !== -1) return true;
+
+				// Parse detail_json for additional search
+				if (event.detail_json) {
+					try {
+						const detail = JSON.parse(event.detail_json);
+						const detailStr = JSON.stringify(detail).toLowerCase();
+						if (detailStr.indexOf(searchLower) !== -1) return true;
+
+						// Check description field specifically
+						if (detail.description && detail.description.toLowerCase().indexOf(searchLower) !== -1) {
+							return true;
+						}
+					} catch (e) {
+						// If not JSON, search as string
+						if (event.detail_json.toLowerCase().indexOf(searchLower) !== -1) return true;
+					}
+				}
+
+				return false;
+			});
+		}
+
+		// Sort by timestamp descending
+		filtered.sort(function(a, b) {
+			return b.timestamp_ms - a.timestamp_ms;
+		});
+
+		state.filteredEvents = filtered;
+		renderEvents();
+	}
+
 	function applyFiltersToParams(params) {
+		// Server-side filters
 		if (state.filters.type) {
 			params.set('type', state.filters.type);
 		}
@@ -296,7 +785,10 @@
 			params.set('person', state.filters.person);
 		}
 		if (state.filters.after) {
-			params.set('after', state.filters.after);
+			params.set('since', state.filters.after);
+		}
+		if (state.filters.until) {
+			params.set('until', state.filters.until);
 		}
 		if (state.filters.q) {
 			params.set('q', state.filters.q);
@@ -327,8 +819,8 @@
 			severity: event.severity || 'info'
 		};
 
-		// Add to beginning of events array
-		state.events.unshift(normalizedEvent);
+		// Add to beginning of all loaded events
+		state.allLoadedEvents.unshift(normalizedEvent);
 		state.total++;
 
 		// Update filter options
@@ -342,12 +834,21 @@
 			state.availablePersons.add(normalizedEvent.person);
 		}
 
-		// Prepend to DOM if timeline is visible (no layout shift)
+		// Apply client-side filters to update displayed events
+		applyClientSideFilters();
+
+		// Prepend to DOM if timeline is visible and event passes filters
 		if (elements.container && elements.container.style.display !== 'none' && elements.eventsList) {
+			// Check if event passes current filters
+			const passesFilters = state.filteredEvents.length > 0 &&
+			                      state.filteredEvents[0].id === normalizedEvent.id;
+
+			if (!passesFilters) return; // Don't show if filtered out
+
 			elements.empty.style.display = 'none';
 
 			const tempDiv = document.createElement('div');
-			tempDiv.innerHTML = renderEvent(normalizedEvent, true);
+			tempDiv.innerHTML = renderEvent(normalizedEvent, true, 0);
 			const newEventEl = tempDiv.firstElementChild;
 
 			elements.eventsList.insertBefore(newEventEl, elements.eventsList.firstChild);
@@ -362,7 +863,12 @@
 
 			// Limit DOM elements (keep only most recent 100 in DOM)
 			while (elements.eventsList.children.length > 100) {
-				elements.eventsList.removeChild(elements.eventsList.lastChild);
+				const lastChild = elements.eventsList.lastElementChild;
+				if (lastChild && !lastChild.classList.contains('timeline-spacer')) {
+					elements.eventsList.removeChild(lastChild);
+				} else {
+					break;
+				}
 			}
 
 			updateFilterOptions();
@@ -412,7 +918,7 @@
 	function renderEvents() {
 		if (!elements.eventsList) return;
 
-		if (state.events.length === 0) {
+		if (state.filteredEvents.length === 0) {
 			elements.eventsList.innerHTML = '';
 			if (elements.empty) {
 				elements.empty.style.display = 'block';
@@ -428,10 +934,22 @@
 			elements.error.style.display = 'none';
 		}
 
+		// Use virtualized rendering if enabled
+		if (CONFIG.virtualization.enabled && state.filteredEvents.length > CONFIG.maxDOMItems) {
+			renderVirtualizedEvents();
+		} else {
+			renderAllEvents();
+		}
+	}
+
+	// ============================================
+	// Render All Events (for small datasets)
+	// ============================================
+	function renderAllEvents() {
 		// Build HTML for events
 		let html = '';
-		state.events.forEach(function(event) {
-			html += renderEvent(event);
+		state.filteredEvents.forEach(function(event, index) {
+			html += renderEvent(event, false, index);
 		});
 
 		elements.eventsList.innerHTML = html;
@@ -440,7 +958,29 @@
 		bindEventHandlers();
 	}
 
-	function renderEvent(event, isNew) {
+	// ============================================
+	// Render Virtualized Events (for large datasets)
+	// ============================================
+	function renderVirtualizedEvents() {
+		// Clear existing content
+		elements.eventsList.innerHTML = '';
+
+		// Calculate initial visible range
+		const containerHeight = elements.eventsList.clientHeight || 400;
+		const visibleCount = Math.ceil(containerHeight / CONFIG.itemHeight);
+		const bufferCount = CONFIG.virtualization.bufferSize;
+
+		state.virtualization.firstVisibleIndex = 0;
+		state.virtualization.lastVisibleIndex = Math.min(state.filteredEvents.length - 1, visibleCount + bufferCount * 2);
+
+		// Create spacers
+		updateVirtualSpacers();
+
+		// Render initial batch
+		updateRenderedRange();
+	}
+
+	function renderEvent(event, isNew, index) {
 		const info = eventTypeInfo[event.type] || eventTypeInfo.system;
 		const timeStr = formatTimestamp(event.timestamp_ms);
 		const personStr = event.person ? escapeHtml(event.person) : '';
@@ -463,8 +1003,10 @@
 			</button>
 		` : '';
 
+		const dataIndex = index !== undefined ? ` data-index="${index}"` : '';
+
 		return `
-			<div class="timeline-event timeline-${event.type}${severityClass}${newClass}" data-type="${event.type}" data-id="${event.id}" data-timestamp="${event.timestamp_ms}" data-blob-id="${event.blob_id || ''}">
+			<div class="timeline-event timeline-${event.type}${severityClass}${newClass}" data-type="${event.type}" data-id="${event.id}" data-timestamp="${event.timestamp_ms}" data-blob-id="${event.blob_id || ''}"${dataIndex}>
 				<div class="timeline-event-icon">${info.icon}</div>
 				<div class="timeline-event-content">
 					<div class="timeline-event-header">
@@ -724,51 +1266,13 @@
 			});
 	}
 
-	// ============================================
-	// Filter Handling
-	// ============================================
-	function onFilterChange() {
-		// Update filter state
-		if (elements.filterType) {
-			state.filters.type = elements.filterType.value || null;
-		}
-		if (elements.filterZone) {
-			state.filters.zone = elements.filterZone.value || null;
-		}
-		if (elements.filterPerson) {
-			state.filters.person = elements.filterPerson.value || null;
-		}
-		if (elements.filterTime) {
-			const value = elements.filterTime.value;
-			if (value === 'today') {
-				const today = new Date();
-				today.setHours(0, 0, 0, 0);
-				state.filters.after = today.toISOString();
-			} else if (value === '7d') {
-				const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-				state.filters.after = weekAgo.toISOString();
-			} else if (value === '30d') {
-				const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-				state.filters.after = monthAgo.toISOString();
-			} else {
-				state.filters.after = null;
-			}
-		}
-		if (elements.filterSearch) {
-			state.filters.q = elements.filterSearch.value.trim() || null;
-		}
-
-		// Reload events with new filters
-		loadInitialEvents();
-	}
-
 	function updateFilterOptions(events) {
 		// Extract unique values from events
 		const types = new Set();
 		const zones = new Set();
 		const persons = new Set();
 
-		(events || state.events).forEach(function(event) {
+		(events || state.allLoadedEvents).forEach(function(event) {
 			if (event.type) types.add(event.type);
 			if (event.zone) zones.add(event.zone);
 			if (event.person) persons.add(event.person);
@@ -831,7 +1335,7 @@
 		// Update count display
 		const countEl = document.getElementById('timeline-count');
 		if (countEl) {
-			countEl.textContent = state.events.length + ' events';
+			countEl.textContent = state.filteredEvents.length + ' of ' + state.total + ' events';
 		}
 	}
 
@@ -861,7 +1365,8 @@
 			};
 
 			handleNewEvent(event);
-		}
+		},
+		refresh: loadInitialEvents
 	};
 
 	// Auto-initialize when DOM is ready
