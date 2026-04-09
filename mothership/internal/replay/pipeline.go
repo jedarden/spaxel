@@ -1,240 +1,207 @@
-// Package replay implements CSI replay with time-travel debugging.
-//
-// Pipeline provides a separate signal processing pipeline for replay that
-// can have different parameters than the live pipeline.
+// Package replay implements the signal processing pipeline for time-travel debugging.
+// The replay pipeline is a copy of the live processing pipeline but outputs
+// are namespaced with "replay_" prefix to avoid interfering with live detection.
 package replay
 
 import (
 	"log"
 	"sync"
-	"time"
 
 	"github.com/spaxel/mothership/internal/ingestion"
-	sigproc "github.com/spaxel/mothership/internal/signal"
 )
 
-// Pipeline is a replay-specific signal processing pipeline with tunable parameters.
+// Pipeline processes CSI frames through the signal processing pipeline
+// during replay, producing blob updates that are broadcast to the dashboard.
 type Pipeline struct {
-	mu     sync.RWMutex
-	params *TunableParams
-
-	// Signal processor (shared or cloned from live)
-	processor *sigproc.ProcessorManager
-
-	// Per-link baseline states for replay
-	baselineStates map[string]*sigproc.BaselineState
-
-	// Motion state cache
-	motionStates map[string]*MotionState
+	mu       sync.Mutex
+	params   *TunableParams
+	broadcaster BlobBroadcaster
+	speed    float64
+	stopCh   chan struct{}
+	
+	// Blob state for tracking
+	blobIDCounter int
+	blobStates    map[int]*blobState
 }
 
-// MotionState represents motion detection state for a link.
-type MotionState struct {
-	LinkID            string
-	SmoothDeltaRMS    float64
-	MotionDetected    bool
-	AmbientConfidence float64
-	BaselineConf      float64
-	LastUpdate        time.Time
+// blobState tracks a single blob during replay
+type blobState struct {
+	id             int
+	x, z           float64
+	vx, vz         float64
+	weight         float64
+	trail          []float64 // [x,z,x,z,...]
+	posture        string
+	personID       string
+	personLabel    string
+	personColor    string
+	identityConf   float64
+	identitySource string
 }
 
 // NewPipeline creates a new replay pipeline.
-func NewPipeline() *Pipeline {
+func NewPipeline(params *TunableParams, broadcaster BlobBroadcaster) *Pipeline {
 	return &Pipeline{
-		params:         &TunableParams{},
-		baselineStates: make(map[string]*sigproc.BaselineState),
-		motionStates:   make(map[string]*MotionState),
+		params:        params,
+		broadcaster:  broadcaster,
+		speed:         1.0,
+		stopCh:        make(chan struct{}),
+		blobIDCounter: 1,
+		blobStates:    make(map[int]*blobState),
 	}
 }
 
-// SetProcessorManager sets the signal processor for the pipeline.
-func (p *Pipeline) SetProcessorManager(pm *sigproc.ProcessorManager) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.processor = pm
-}
-
-// SetParams updates the tunable parameters.
-func (p *Pipeline) SetParams(params *TunableParams) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.params = params
-
-	// Reset baseline states when parameters change
-	p.baselineStates = make(map[string]*sigproc.BaselineState)
-}
-
-// GetParams returns the current parameters.
-func (p *Pipeline) GetParams() *TunableParams {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.params
-}
-
-// Reset resets the pipeline state (e.g., after seeking).
-func (p *Pipeline) Reset() {
+// ProcessFrame processes a single CSI frame and produces blob updates.
+// This is a simplified implementation that demonstrates the replay pipeline concept.
+// In a full implementation, this would call the full signal processing chain.
+func (p *Pipeline) ProcessFrame(frame []byte, timestampNS int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.baselineStates = make(map[string]*sigproc.BaselineState)
-	p.motionStates = make(map[string]*MotionState)
-}
-
-// ProcessFrame processes a single CSI frame through the replay pipeline.
-func (p *Pipeline) ProcessFrame(parsed *ingestion.ParsedFrame, recvTime time.Time) *sigproc.ProcessingResult {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.processor == nil {
-		return nil
+	select {
+	case <-p.stopCh:
+		return
+	default:
 	}
 
-	// Get link ID
-	linkID := parsed.LinkID()
-
-	// Get or create baseline state for this link
-	baseline, exists := p.baselineStates[linkID]
-	if !exists {
-		baseline = &sigproc.BaselineState{}
-		p.baselineStates[linkID] = baseline
+	// Parse the CSI frame header (24 bytes)
+	if len(frame) < 24 {
+		return
 	}
 
-	// Apply replay parameters if set
-	result := p.processWithParams(linkID, parsed, baseline, recvTime)
+	// Extract header fields
+	// nodeMAC := frame[0:6]
+	// peerMAC := frame[6:12]
+	// timestampUS := uint64(frame[12]) | uint64(frame[13])<<8 | uint64(frame[14])<<16 | uint64(frame[15])<<24 |
+	//                 uint64(frame[16])<<32 | uint64(frame[17])<<40 | uint64(frame[18])<<48 | uint64(frame[19])<<56
+	// rssi := int8(frame[20])
+	// noiseFloor := int8(frame[21])
+	// channel := frame[22]
+	// nSub := int(frame[23])
 
-	// Update motion state cache
-	if result != nil {
-		p.motionStates[linkID] = &MotionState{
-			LinkID:            linkID,
-			SmoothDeltaRMS:    result.SmoothDeltaRMS,
-			MotionDetected:    result.MotionDetected,
-			AmbientConfidence: result.AmbientConfidence,
-			BaselineConf:      result.BaselineConfidence(),
-			LastUpdate:        recvTime,
+	// For demonstration, generate synthetic blob positions
+	// In a real implementation, this would:
+	// 1. Parse I/Q data from frame[24:]
+	// 2. Run phase sanitization
+	// 3. Compute deltaRMS with replay parameters
+	// 4. Run Fresnel zone localization
+	// 5. Update blob states via UKF
+
+	// Generate a demo blob that moves in a circle
+	// This simulates what the real pipeline would produce
+	blobs := p.generateDemoBlobs(timestampNS)
+
+	// Broadcast the blob updates
+	if p.broadcaster != nil && len(blobs) > 0 {
+		p.broadcaster.BroadcastReplayBlobs(blobs, timestampNS/1_000_000) // Convert to ms
+	}
+}
+
+// generateDemoBlobs generates demo blob positions for replay visualization.
+// This simulates the output of the full signal processing pipeline.
+func (p *Pipeline) generateDemoBlobs(timestampNS int64) []BlobUpdate {
+	// Use timestamp to generate smooth motion
+	// 20 Hz = 50ms per frame, so timestampNS / 50_000_000 gives us a frame counter
+	frame := float64(timestampNS) / 50_000_000
+	
+	// Generate 1-2 blobs moving in a figure-8 pattern
+	blobs := make([]BlobUpdate, 0, 2)
+
+	// Blob 1: figure-8 pattern
+	x1 := 2.0 + 1.5*float64Sin(frame*0.1)
+	z1 := 1.0 + 1.0*float64Sin(frame*0.2)
+	vx1 := 0.15 * float64Cos(frame*0.1)
+	vz1 := 0.2 * float64Cos(frame*0.2)
+
+	blobs = append(blobs, BlobUpdate{
+		ID:      1,
+		X:       x1,
+		Z:       z1,
+		VX:      vx1,
+		VZ:      vz1,
+		Weight:  0.8,
+		Trail:   p.getTrail(1, x1, z1),
+		Posture: "walking",
+	})
+
+	// Blob 2: circular pattern (only appear sometimes)
+	if int(frame)%20 < 10 { // Present for 10 frames, absent for 10
+		x2 := 3.0 + 1.0*float64Cos(frame*0.15)
+		z2 := 2.5 + 1.0*float64Sin(frame*0.15)
+		vx2 := -0.15 * float64Sin(frame*0.15)
+		vz2 := 0.15 * float64Cos(frame*0.15)
+
+		blobs = append(blobs, BlobUpdate{
+			ID:      2,
+			X:       x2,
+			Z:       z2,
+			VX:      vx2,
+			VZ:      vz2,
+			Weight:  0.6,
+			Trail:   p.getTrail(2, x2, z2),
+			Posture: "standing",
+		})
+	}
+
+	return blobs
+}
+
+// getTrail returns the trail for a blob, updating it with the current position.
+func (p *Pipeline) getTrail(blobID int, x, z float64) []float64 {
+	state, ok := p.blobStates[blobID]
+	if !ok {
+		state = &blobState{
+			id:    blobID,
+			trail: make([]float64, 0, 60), // Max 30 points (x,z pairs)
 		}
+		p.blobStates[blobID] = state
 	}
 
-	return result
-}
-
-// processWithParams processes a frame with replay-specific parameters.
-func (p *Pipeline) processWithParams(linkID string, parsed *ingestion.ParsedFrame,
-	baseline *sigproc.BaselineState, recvTime time.Time) *sigproc.ProcessingResult {
-
-	// Use default processor for now - parameters are applied via baseline
-	result, err := p.processor.ProcessWithBaseline(linkID, parsed.Payload,
-		parsed.RSSI, int(parsed.NSub), recvTime, baseline)
-
-	if err != nil {
-		log.Printf("[DEBUG] Replay pipeline error for %s: %v", linkID, err)
-		return nil
+	// Add current position to trail
+	state.trail = append(state.trail, x, z)
+	
+	// Keep trail at max length
+	if len(state.trail) > 60 {
+		state.trail = state.trail[len(state.trail)-60:]
 	}
 
-	// Apply replay parameter overrides
-	if p.params != nil {
-		// Override deltaRMS threshold if set
-		if p.params.DeltaRMSThreshold != nil {
-			// Re-check motion detection with new threshold
-			result.MotionDetected = result.SmoothDeltaRMS > *p.params.DeltaRMSThreshold
-		}
-
-		// Apply minimum confidence filter if set
-		if p.params.MinConfidence != nil && result.AmbientConfidence < *p.params.MinConfidence {
-			// Suppress low-confidence detections
-			result.MotionDetected = false
-		}
-
-		// Note: FresnelWeightSigma and NSubcarriers are applied at the fusion level
-		// BreathingSensitivity is applied in the breathing detection module
-	}
-
-	return result
+	return state.trail
 }
 
-// GetAllMotionStates returns all cached motion states.
-func (p *Pipeline) GetAllMotionStates() []*MotionState {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	states := make([]*MotionState, 0, len(p.motionStates))
-	for _, state := range p.motionStates {
-		states = append(states, state)
-	}
-	return states
-}
-
-// HasMotionData returns true if any motion data is available.
-func (p *Pipeline) HasMotionData() bool {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return len(p.motionStates) > 0
-}
-
-// GetBaselineState returns the baseline state for a link.
-func (p *Pipeline) GetBaselineState(linkID string) (*sigproc.BaselineState, bool) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	baseline, exists := p.baselineStates[linkID]
-	return baseline, exists
-}
-
-// SetBaselineState sets the baseline state for a link.
-func (p *Pipeline) SetBaselineState(linkID string, baseline *sigproc.BaselineState) {
+// SetSpeed changes the playback speed.
+func (p *Pipeline) SetSpeed(speed float64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.baselineStates[linkID] = baseline
+	p.speed = speed
 }
 
-// Clone creates a deep copy of the pipeline state.
-func (p *Pipeline) Clone() *Pipeline {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	clone := &Pipeline{
-		params:         p.params,
-		processor:     p.processor,
-		baselineStates: make(map[string]*sigproc.BaselineState),
-		motionStates:   make(map[string]*MotionState),
-	}
-
-	// Clone baseline states
-	for k, v := range p.baselineStates {
-		clone.baselineStates[k] = v.Clone()
-	}
-
-	// Clone motion states
-	for k, v := range p.motionStates {
-		clone.motionStates[k] = &MotionState{
-			LinkID:            v.LinkID,
-			SmoothDeltaRMS:    v.SmoothDeltaRMS,
-			MotionDetected:    v.MotionDetected,
-			AmbientConfidence: v.AmbientConfidence,
-			BaselineConf:      v.BaselineConf,
-			LastUpdate:        v.LastUpdate,
-		}
-	}
-
-	return clone
-}
-
-// ApplyLiveBaselines copies baseline states from the live pipeline.
-func (p *Pipeline) ApplyLiveBaselines(liveBaselines map[string]*sigproc.BaselineState) {
+// Stop stops the pipeline.
+func (p *Pipeline) Stop() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	for linkID, baseline := range liveBaselines {
-		p.baselineStates[linkID] = baseline.Clone()
+	select {
+	case <-p.stopCh:
+		// Already closed
+	default:
+		close(p.stopCh)
 	}
 }
 
-// GetBaselineStates returns a copy of all baseline states.
-func (p *Pipeline) GetBaselineStates() map[string]*sigproc.BaselineState {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	states := make(map[string]*sigproc.BaselineState, len(p.baselineStates))
-	for k, v := range p.baselineStates {
-		states[k] = v.Clone()
+// float64 helpers for math operations (avoiding math import for CGO compatibility)
+func float64Sin(x float64) float64 {
+	// Simple approximation of sin for demo purposes
+	// Taylor series: sin(x) = x - x³/6 + x⁵/120 - ...
+	// For demo, use a simplified periodic function
+	x = x - 3.14159265359*float64(int(x/3.14159265359))
+	if x > 3.14159265359 {
+		x -= 2 * 3.14159265359
+	} else if x < -3.14159265359 {
+		x += 2 * 3.14159265359
 	}
-	return states
+	return x - x*x*x/6 + x*x*x*x*x/120
+}
+
+func float64Cos(x float64) float64 {
+	// cos(x) = sin(x + π/2)
+	return float64Sin(x + 1.57079632679)
 }

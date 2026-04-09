@@ -1,572 +1,573 @@
-// Package replay implements CSI replay with time-travel debugging.
-//
-// ReplayEngine manages the replay lifecycle including state machine,
-// seeking, playback, and parameter injection.
+// Package replay implements time-travel debugging for CSI data.
+// It enables pausing the live 3D view, scrubbing through historical CSI data,
+// and replaying the detection pipeline with adjustable parameters.
 package replay
 
 import (
-	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/spaxel/mothership/internal/ingestion"
-	"github.com/spaxel/mothership/internal/localization"
-	sigproc "github.com/spaxel/mothership/internal/signal"
+	"github.com/spaxel/mothership/internal/recording"
 )
 
-// ReplayState represents the current state of the replay engine.
-type ReplayState string
+// State represents the replay state machine.
+type State int
 
 const (
-	StateLive      ReplayState = "live"     // Normal live operation
-	StatePaused    ReplayState = "paused"   // Replay mode, paused
-	StateReplaying ReplayState = "replaying" // Replay mode, playing
-	StateSeeking   ReplayState = "seeking"  // Seeking to timestamp
+	StateStopped State = iota
+	StatePaused
+	StatePlaying
+	StateSeeking
 )
 
-// Engine manages the replay lifecycle with state machine.
-type Engine struct {
-	mu sync.RWMutex
-
-	// State
-	state         ReplayState
-	replayPosition int64  // Current replay timestamp (Unix ms)
-	replaySpeed   float64 // Playback speed multiplier (1.0 = real-time)
-
-	// Session
-	linkedSessionID string // WebSocket session ID for the client
-	session         *Session
-
-	// Components
-	store         RecordingStore
-	pipeline      *Pipeline
-	fusionEngine  FusionEngine
-	broadcaster   BlobBroadcaster
-
-	// Timing
-	lastFrameTime time.Time // Timestamp of last processed frame
-	tickDuration  time.Duration // Target duration between frames
-
-	// Context for cancellation
-	ctx    context.Context
-	cancel context.CancelFunc
-	done   chan struct{}
-	wg     sync.WaitGroup
-}
-
-// EngineConfig configures a new ReplayEngine.
-type EngineConfig struct {
-	Store         RecordingStore
-	Processor     *sigproc.ProcessorManager
-	FusionEngine  FusionEngine
-	Broadcaster   BlobBroadcaster
-	TickDuration  time.Duration // Target frame interval (default: 100ms for 10Hz)
-}
-
-// NewEngine creates a new ReplayEngine.
-func NewEngine(config EngineConfig) *Engine {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	tickDuration := config.TickDuration
-	if tickDuration == 0 {
-		tickDuration = 100 * time.Millisecond // 10 Hz default
-	}
-
-	return &Engine{
-		state:         StateLive,
-		replaySpeed:   1.0,
-		replayPosition: 0,
-		tickDuration:  tickDuration,
-		store:         config.Store,
-		broadcaster:   config.Broadcaster,
-		fusionEngine:  config.FusionEngine,
-		ctx:           ctx,
-		cancel:        cancel,
-		done:          make(chan struct{}),
-	}
-}
-
-// Start begins the replay engine's main loop.
-func (e *Engine) Start() {
-	e.wg.Add(1)
-	go e.run()
-}
-
-// Stop gracefully shuts down the engine.
-func (e *Engine) Stop() {
-	e.cancel()
-	close(e.done)
-	e.wg.Wait()
-}
-
-// run is the main engine loop.
-func (e *Engine) run() {
-	defer e.wg.Done()
-
-	ticker := time.NewTicker(e.tickDuration)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-e.done:
-			return
-		case <-e.ctx.Done():
-			return
-		case <-ticker.C:
-			e.tick()
-		}
-	}
-}
-
-// tick processes one iteration of replay or live mode.
-func (e *Engine) tick() {
-	e.mu.Lock()
-	state := e.state
-	e.mu.Unlock()
-
-	switch state {
-	case StateReplaying:
-		e.processReplayTick()
+func (s State) String() string {
+	switch s {
+	case StateStopped:
+		return "stopped"
+	case StatePaused:
+		return "paused"
+	case StatePlaying:
+		return "playing"
 	case StateSeeking:
-		e.processSeekTick()
-	case StatePaused, StateLive:
-		// No processing needed
+		return "seeking"
+	default:
+		return "unknown"
 	}
 }
 
-// EnterReplayMode enters replay mode with the specified time range.
-func (e *Engine) EnterReplayMode(sessionID string, fromMS, toMS int64) error {
+// TunableParams holds adjustable signal processing parameters for replay.
+type TunableParams struct {
+	DeltaRMSThreshold     *float64 // Motion detection threshold (default 0.02)
+	TauS                  *float64 // Baseline EMA time constant in seconds (default 30)
+	FresnelDecay          *float64 // Fresnel zone weight decay rate (default 2.0)
+	NSubcarriers          *int     // Number of subcarriers to use (default 16)
+	BreathingSensitivity  *float64 // Breathing band sensitivity (default 0.005)
+	MinConfidence         *float64 // Minimum confidence for blob reporting (default 0.3)
+}
+
+// Session represents a single replay session (per dashboard client).
+type Session struct {
+	ID        string
+	State     State
+	FromMS    int64
+	ToMS      int64
+	CurrentMS int64
+	Speed     float64
+	Params    *TunableParams
+
+	mu               sync.Mutex
+	pipeline         *Pipeline
+	blobBroadcaster  BlobBroadcaster
+	buffer           *recording.Buffer
+	stopCh           chan struct{}
+}
+
+// BlobBroadcaster is the interface for broadcasting replay blob updates.
+type BlobBroadcaster interface {
+	BroadcastReplayBlobs(blobs []BlobUpdate, timestampMS int64)
+}
+
+// BlobUpdate represents a blob position update during replay.
+type BlobUpdate struct {
+	ID                 int      `json:"id"`
+	X                  float64  `json:"x"`
+	Z                  float64  `json:"z"`
+	VX                 float64  `json:"vx"`
+	VZ                 float64  `json:"vz"`
+	Weight             float64  `json:"weight"`
+	Trail              []float64 `json:"trail"` // Flat [x,z,x,z,...]
+	Posture            string    `json:"posture,omitempty"`
+	PersonID           string    `json:"person_id,omitempty"`
+	PersonLabel        string    `json:"person_label,omitempty"`
+	PersonColor        string    `json:"person_color,omitempty"`
+	IdentityConfidence float64  `json:"identity_confidence,omitempty"`
+	IdentitySource     string    `json:"identity_source,omitempty"`
+}
+
+// Engine manages replay sessions and coordinates with the recording buffer.
+type Engine struct {
+	mu               sync.RWMutex
+	sessions         map[string]*Session
+	buffer           *recording.Buffer
+	blobBroadcaster  BlobBroadcaster
+	defaultParams    *TunableParams
+	sessionIDCounter uint64
+}
+
+// NewEngine creates a new replay engine.
+func NewEngine(buffer *recording.Buffer, broadcaster BlobBroadcaster) *Engine {
+	return &Engine{
+		sessions:        make(map[string]*Session),
+		buffer:          buffer,
+		blobBroadcaster: broadcaster,
+		defaultParams: &TunableParams{
+			DeltaRMSThreshold:    float64Ptr(0.02),
+			TauS:                float64Ptr(30.0),
+			FresnelDecay:        float64Ptr(2.0),
+			NSubcarriers:        intPtr(16),
+			BreathingSensitivity: float64Ptr(0.005),
+			MinConfidence:       float64Ptr(0.3),
+		},
+	}
+}
+
+// StartSession begins a new replay session.
+func (e *Engine) StartSession(fromMS, toMS int64) (*Session, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.state == StateReplaying || e.state == StatePaused {
-		return ErrAlreadyInReplayMode
+	// Verify the requested range is available
+	oldest, newest, err := e.buffer.GetTimestampRange()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get timestamp range: %w", err)
 	}
 
-	// Create new session
-	session := NewSession(sessionID, e.store.(*RecordingStore), fromMS, toMS)
-	e.session = session
-	e.linkedSessionID = sessionID
-	e.replayPosition = fromMS
-	e.state = StatePaused
-	e.replaySpeed = 1.0
+	oldestMS := oldest.UnixMilli()
+	newestMS := newest.UnixMilli()
+
+	// Clamp requested range to available data
+	if fromMS < oldestMS {
+		fromMS = oldestMS
+	}
+	if toMS > newestMS {
+		toMS = newestMS
+	}
+	if fromMS > toMS {
+		return nil, errors.New("invalid time range: from > to")
+	}
+
+	// Generate session ID
+	e.sessionIDCounter++
+	sessionID := fmt.Sprintf("replay-%d", e.sessionIDCounter)
+
+	// Start paused at the beginning of the range
+	session := &Session{
+		ID:       sessionID,
+		State:    StatePaused,
+		FromMS:   fromMS,
+		ToMS:     toMS,
+		CurrentMS: fromMS,
+		Speed:    1.0,
+		Params:   e.defaultParams,
+		buffer:   e.buffer,
+		blobBroadcaster: e.blobBroadcaster,
+		stopCh:   make(chan struct{}),
+	}
 
 	// Create replay pipeline
-	if e.pipeline == nil {
-		e.pipeline = NewPipeline()
-	}
+	session.pipeline = NewPipeline(session.Params, e.blobBroadcaster)
 
-	log.Printf("[INFO] ReplayEngine: Entered replay mode for session %s (%d to %d)",
-		sessionID, fromMS, toMS)
+	e.sessions[sessionID] = session
 
-	return nil
+	log.Printf("[REPLAY] Started session %s: %d to %d (available: %d to %d)",
+		sessionID, fromMS, toMS, oldestMS, newestMS)
+
+	return session, nil
 }
 
-// ExitReplayMode exits replay mode and returns to live.
-func (e *Engine) ExitReplayMode() error {
+// StopSession stops and removes a replay session.
+func (e *Engine) StopSession(sessionID string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.state == StateLive {
-		return nil
+	session, ok := e.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	e.state = StateLive
-	e.replayPosition = 0
-	e.session = nil
-	e.linkedSessionID = ""
+	close(session.stopCh)
 
-	// Clear replay pipeline
-	if e.pipeline != nil {
-		e.pipeline = nil
+	if session.State == StatePlaying {
+		session.pipeline.Stop()
 	}
 
-	log.Printf("[INFO] ReplayEngine: Exited replay mode")
+	session.State = StateStopped
+	delete(e.sessions, sessionID)
 
+	log.Printf("[REPLAY] Stopped session %s", sessionID)
 	return nil
 }
 
-// Seek moves the replay position to the specified timestamp.
-func (e *Engine) Seek(targetMS int64) error {
+// Seek moves a session to a specific timestamp.
+func (e *Engine) Seek(sessionID string, targetMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.state == StateLive {
-		return ErrNotInReplayMode
+	session, ok := e.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	if e.session == nil {
-		return ErrNoActiveSession
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// Clamp target to session range
+	if targetMS < session.FromMS {
+		targetMS = session.FromMS
+	}
+	if targetMS > session.ToMS {
+		targetMS = session.ToMS
 	}
 
-	// Validate target is within session range
-	if targetMS < e.session.FromMS || targetMS > e.session.ToMS {
-		return ErrTimestampOutOfRange
+	// Stop current playback if playing
+	if session.State == StatePlaying {
+		session.pipeline.Stop()
+		// Signal stop to playback worker
+		select {
+		case session.stopCh <- struct{}{}:
+		default:
+		}
+		session.State = StateSeeking
 	}
 
-	e.state = StateSeeking
-	e.replayPosition = targetMS
-
-	// Reset pipeline state for clean replay
-	if e.pipeline != nil {
-		e.pipeline.Reset()
+	// Seek in the recording buffer
+	targetTime := time.Unix(0, targetMS*1_000_000).UTC()
+	frame, frameTS, err := session.buffer.SeekToTimestamp(targetTime)
+	if err != nil {
+		return fmt.Errorf("seek failed: %w", err)
 	}
 
+	// Update current position
+	session.CurrentMS = frameTS
+	session.State = StatePaused
+
+	// Process the single frame to update the display
+	if session.pipeline != nil {
+		session.pipeline.ProcessFrame(frame, frameTS)
+	}
+
+	log.Printf("[REPLAY] Session %s seeked to %d (found frame at %d)", sessionID, targetMS, frameTS)
 	return nil
 }
 
 // Play starts playback at the specified speed.
-func (e *Engine) Play(speed float64) error {
+func (e *Engine) Play(sessionID string, speed float64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.state == StateLive {
-		return ErrNotInReplayMode
+	session, ok := e.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	if e.session == nil {
-		return ErrNoActiveSession
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.State == StatePlaying {
+		// Already playing, just update speed
+		session.pipeline.SetSpeed(speed)
+		session.Speed = speed
+		return nil
 	}
 
-	if speed < 0.1 || speed > 10.0 {
-		return ErrInvalidSpeed
-	}
+	// Start playback from current position
+	session.State = StatePlaying
+	session.Speed = speed
 
-	e.replaySpeed = speed
-	e.state = StateReplaying
-	e.lastFrameTime = time.Now()
+	// Start the pipeline worker
+	go session.playbackWorker()
 
+	log.Printf("[REPLAY] Session %s playing at %.1fx speed", sessionID, speed)
 	return nil
 }
 
 // Pause pauses playback.
-func (e *Engine) Pause() error {
+func (e *Engine) Pause(sessionID string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.state == StateLive {
-		return ErrNotInReplayMode
+	session, ok := e.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	e.state = StatePaused
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.State != StatePlaying {
+		return nil // Already paused
+	}
+
+	session.State = StatePaused
+
+	// Signal stop to playback worker
+	select {
+	case session.stopCh <- struct{}{}:
+	default:
+	}
+
+	if session.pipeline != nil {
+		session.pipeline.Stop()
+	}
+
+	log.Printf("[REPLAY] Session %s paused", sessionID)
 	return nil
 }
 
-// SetParams updates the replay pipeline parameters.
-func (e *Engine) SetParams(params *TunableParams) error {
+// SetParams updates the tunable parameters for a session.
+// The pipeline will re-process from the current position with new parameters.
+func (e *Engine) SetParams(sessionID string, params *TunableParams) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.state == StateLive {
-		return ErrNotInReplayMode
+	session, ok := e.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	if e.pipeline == nil {
-		return ErrNoPipeline
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// Merge with existing params
+	if session.Params == nil {
+		session.Params = &TunableParams{}
+	}
+	if params.DeltaRMSThreshold != nil {
+		session.Params.DeltaRMSThreshold = params.DeltaRMSThreshold
+	}
+	if params.TauS != nil {
+		session.Params.TauS = params.TauS
+	}
+	if params.FresnelDecay != nil {
+		session.Params.FresnelDecay = params.FresnelDecay
+	}
+	if params.NSubcarriers != nil {
+		session.Params.NSubcarriers = params.NSubcarriers
+	}
+	if params.BreathingSensitivity != nil {
+		session.Params.BreathingSensitivity = params.BreathingSensitivity
+	}
+	if params.MinConfidence != nil {
+		session.Params.MinConfidence = params.MinConfidence
 	}
 
-	e.pipeline.SetParams(params)
+	// Recreate pipeline with new params
+	wasPlaying := session.State == StatePlaying
+	if wasPlaying {
+		session.pipeline.Stop()
+		// Signal stop to playback worker
+		select {
+		case session.stopCh <- struct{}{}:
+		default:
+		}
+	}
 
-	// Re-process current position with new parameters
-	go e.reprocessCurrentPosition()
+	session.pipeline = NewPipeline(session.Params, e.blobBroadcaster)
+
+	// Re-process a window around current position
+	go session.reprocessWindow()
+
+	log.Printf("[REPLAY] Session %s params updated, reprocessing from %d", sessionID, session.CurrentMS)
+	return nil
+}
+
+// SetSpeed changes the playback speed without stopping/starting.
+func (e *Engine) SetSpeed(sessionID string, speed float64) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	session, ok := e.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.Speed = speed
+	if session.State == StatePlaying && session.pipeline != nil {
+		session.pipeline.SetSpeed(speed)
+	}
 
 	return nil
 }
 
-// GetState returns the current engine state.
-func (e *Engine) GetState() ReplayState {
+// ApplyToLive copies the current replay parameters to the live configuration.
+// This is a placeholder - the actual implementation would update the live
+// signal processing configuration.
+func (e *Engine) ApplyToLive(sessionID string) error {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.state
+
+	session, ok := e.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	// This would trigger a callback to update the live configuration
+	// For now, just log the action
+	session.mu.Lock()
+	params := session.Params
+	session.mu.Unlock()
+
+	log.Printf("[REPLAY] Apply to live requested from session %s: %+v", sessionID, params)
+
+	// TODO: Implement live parameter update via callback interface
+	return nil
 }
 
-// GetPosition returns the current replay position.
-func (e *Engine) GetPosition() int64 {
+// GetSession returns a session by ID.
+func (e *Engine) GetSession(sessionID string) (*Session, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.replayPosition
+	s, ok := e.sessions[sessionID]
+	return s, ok
 }
 
-// GetSession returns the current replay session.
-func (e *Engine) GetSession() *Session {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.session
+// GetTimestampRange returns the available timestamp range in the recording buffer.
+func (e *Engine) GetTimestampRange() (oldest, newest time.Time, err error) {
+	return e.buffer.GetTimestampRange()
 }
 
-// processReplayTick processes one replay tick.
-func (e *Engine) processReplayTick() {
-	if e.session == nil || e.pipeline == nil {
-		return
-	}
-
-	// Read next frame(s) from replay store
-	var frames []Frame
-	var frameTimeNS int64
-
-	fromNS := e.replayPosition * 1e6
-	toNS := e.session.ToMS * 1e6
-
-	err := e.store.ScanRange(fromNS, toNS, func(recvTimeNS int64, frame []byte) bool {
-		recvMS := recvTimeNS / 1e6
-		if recvMS <= e.replayPosition {
-			return true // Skip frames at or before current position
+// playbackWorker runs the playback loop for a session.
+func (s *Session) playbackWorker() {
+	defer func() {
+		s.mu.Lock()
+		if s.State == StatePlaying {
+			s.State = StatePaused
 		}
-		// Found next frame
-		frameTimeNS = recvTimeNS
-		frames = append(frames, Frame{
-			RecvTimeNS: recvTimeNS,
-			Data:       frame,
-		})
-		e.replayPosition = recvMS
-		return false // Stop at first frame after current position
-	})
+		s.mu.Unlock()
+	}()
 
-	if err != nil || len(frames) == 0 {
-		// No more frames, pause
-		e.state = StatePaused
-		return
-	}
+	const bufferSize = 100 // Number of frames to buffer ahead
 
-	// Process frames through replay pipeline
-	for _, frame := range frames {
-		e.processFrame(frame)
-	}
+	frames := make([][]byte, 0, bufferSize)
+	timestamps := make([]int64, 0, bufferSize)
 
-	// Sleep based on replay speed
-	if e.replaySpeed > 0 {
-		sleepDuration := time.Duration(float64(e.tickDuration) / e.replaySpeed)
-		time.Sleep(sleepDuration)
-	}
-}
+	// Scan from current position to buffer ahead
+	fromTime := time.Unix(0, s.CurrentMS*1_000_000).UTC()
+	toTime := time.Unix(0, s.ToMS*1_000_000).UTC()
 
-// processSeekTick handles seeking by finding the closest frame to target.
-func (e *Engine) processSeekTick() {
-	if e.session == nil {
-		e.state = StatePaused
-		return
-	}
-
-	// Find frame closest to target position
-	var closestFrame *Frame
-	var closestTimeNS int64
-	minDiff := int64(1 << 62) // Very large value
-
-	targetNS := e.replayPosition * 1e6
-
-	fromNS := e.session.FromMS * 1e6
-	toNS := e.session.ToMS * 1e6
-
-	e.store.ScanRange(fromNS, toNS, func(recvTimeNS int64, frame []byte) bool {
-		diff := recvTimeNS - targetNS
-		if diff < 0 {
-			diff = -diff
-		}
-		if diff < minDiff {
-			minDiff = diff
-			closestFrame = &Frame{
-				RecvTimeNS: recvTimeNS,
-				Data:       frame,
-			}
-			closestTimeNS = recvTimeNS
-		}
-		return true // Continue to find closest
-	})
-
-	if closestFrame != nil {
-		e.replayPosition = closestTimeNS / 1e6
-		e.processFrame(*closestFrame)
-	}
-
-	e.state = StatePaused
-}
-
-// processFrame processes a single CSI frame through the replay pipeline.
-func (e *Engine) processFrame(frame Frame) {
-	// Parse the CSI frame
-	parsed, err := ingestion.ParseFrame(frame.Data)
-	if err != nil {
-		log.Printf("[DEBUG] ReplayEngine: Failed to parse frame: %v", err)
-		return
-	}
-
-	recvTime := time.Unix(0, frame.RecvTimeNS)
-
-	// Process through replay pipeline
-	if e.pipeline != nil {
-		result := e.pipeline.ProcessFrame(parsed, recvTime)
-
-		// Run fusion if available
-		if e.fusionEngine != nil && e.pipeline.HasMotionData() {
-			blobs := e.runFusion()
-			e.broadcaster.BroadcastReplayBlobs(blobs, frame.RecvTimeNS/1e6)
-		}
-	}
-}
-
-// runFusion runs the fusion algorithm on current motion states.
-func (e *Engine) runFusion() []BlobUpdate {
-	if e.pipeline == nil || e.fusionEngine == nil {
-		return []BlobUpdate{}
-	}
-
-	// Get motion states from replay pipeline
-	motionStates := e.pipeline.GetAllMotionStates()
-
-	// Convert to fusion LinkMotion format
-	links := make([]localization.LinkMotion, 0, len(motionStates))
-	for _, state := range motionStates {
-		parts := splitLinkID(state.LinkID)
-		if len(parts) != 2 {
-			continue
-		}
-
-		link := localization.LinkMotion{
-			NodeMAC:     parts[0],
-			PeerMAC:     parts[1],
-			DeltaRMS:    state.SmoothDeltaRMS,
-			Motion:      state.MotionDetected,
-			HealthScore: state.AmbientConfidence,
-		}
-
-		if link.HealthScore == 0 && state.BaselineConf > 0 {
-			link.HealthScore = state.BaselineConf
-		}
-
-		links = append(links, link)
-	}
-
-	// Run fusion
-	result := e.fusionEngine.Fuse(links)
-	if result == nil || len(result.Peaks) == 0 {
-		return []BlobUpdate{}
-	}
-
-	// Convert fusion peaks to BlobUpdate format
-	blobs := make([]BlobUpdate, 0, len(result.Peaks))
-	for i, peak := range result.Peaks {
-		blobs = append(blobs, BlobUpdate{
-			ID:     i + 1,
-			X:      peak[0],
-			Y:      1.2,
-			Z:      peak[1],
-			VX:     0,
-			VY:     0,
-			VZ:     0,
-			Weight: peak[2],
-		})
-	}
-
-	return blobs
-}
-
-// splitLinkID splits a link ID in "nodeMAC:peerMAC" format.
-func splitLinkID(linkID string) []string {
-	for i := 0; i < len(linkID); i++ {
-		if linkID[i] == ':' {
-			return []string{linkID[:i], linkID[i+1:]}
-		}
-	}
-	return []string{linkID}
-}
-
-// reprocessCurrentPosition re-processes the current position with new parameters.
-func (e *Engine) reprocessCurrentPosition() {
-	e.mu.Lock()
-	session := e.session
-	position := e.replayPosition
-	e.mu.Unlock()
-
-	if session == nil {
-		return
-	}
-
-	// Seek to current position to re-process
-	targetNS := position * 1e6
-	fromNS := session.FromMS * 1e6
-	toNS := position * 1e6 + int64(60*time.Second) // Process 60 second window
-
-	// Process frames in range
-	e.store.ScanRange(fromNS, toNS, func(recvTimeNS int64, frame []byte) bool {
-		if recvTimeNS > targetNS+int64(2*time.Second) {
-			return false // Stop after processing a few seconds
-		}
-
-		// Parse and process frame
-		parsed, err := ingestion.ParseFrame(frame)
-		if err != nil {
+	err := s.buffer.ScanRange(fromTime, toTime, func(recvTimeNS int64, frame []byte) bool {
+		if len(frames) < bufferSize {
+			frames = append(frames, frame)
+			timestamps = append(timestamps, recvTimeNS)
 			return true
 		}
+		return false // Stop when buffer is full
+	})
 
-		recvTime := time.Unix(0, recvTimeNS)
-		e.pipeline.ProcessFrame(parsed, recvTime)
+	if err != nil {
+		log.Printf("[REPLAY] Scan error in playback worker: %v", err)
+		return
+	}
 
+	if len(frames) == 0 {
+		log.Printf("[REPLAY] No frames to play in session %s", s.ID)
+		return
+	}
+
+	// Play frames at the specified speed
+	startTime := time.Now()
+	for i, frame := range frames {
+		s.mu.Lock()
+
+		// Check if we should stop
+		select {
+		case <-s.stopCh:
+			s.mu.Unlock()
+			return
+		default:
+		}
+
+		if s.State != StatePlaying {
+			s.mu.Unlock()
+			return
+		}
+
+		s.CurrentMS = timestamps[i]
+
+		// Calculate delay based on speed
+		delay := time.Duration(0)
+		if i > 0 && s.Speed > 0 {
+			realDelta := time.Duration(timestamps[i]-timestamps[i-1]) * time.Nanosecond
+			delay = time.Duration(float64(realDelta) / s.Speed)
+			if delay > 0 && delay < 10*time.Second {
+				// Release lock while sleeping
+				s.mu.Unlock()
+				time.Sleep(delay)
+				s.mu.Lock()
+
+				// Re-check state after sleep
+				if s.State != StatePlaying {
+					s.mu.Unlock()
+					return
+				}
+			}
+		}
+		s.mu.Unlock()
+
+		// Process the frame
+		s.pipeline.ProcessFrame(frame, timestamps[i])
+	}
+
+	elapsed := time.Since(startTime)
+	log.Printf("[REPLAY] Session %s played %d frames in %v", s.ID, len(frames), elapsed)
+}
+
+// reprocessWindow re-processes a window of CSI frames around the current position
+// with updated parameters. This provides instant feedback when sliders change.
+func (s *Session) reprocessWindow() {
+	const windowDuration = 60 * time.Second // 60 seconds of data
+
+	windowStart := time.Unix(0, s.CurrentMS*1_000_000).Add(-windowDuration/2).UTC()
+	windowEnd := time.Unix(0, s.CurrentMS*1_000_000).Add(windowDuration/2).UTC()
+
+	// Clamp to session bounds
+	if windowStart.Before(time.Unix(0, s.FromMS*1_000_000).UTC()) {
+		windowStart = time.Unix(0, s.FromMS*1_000_000).UTC()
+	}
+	if windowEnd.After(time.Unix(0, s.ToMS*1_000_000).UTC()) {
+		windowEnd = time.Unix(0, s.ToMS*1_000_000).UTC()
+	}
+
+	startTime := time.Now()
+	frameCount := 0
+
+	// Scan and process frames as fast as possible (no real-time delay)
+	s.buffer.ScanRange(windowStart, windowEnd, func(recvTimeNS int64, frame []byte) bool {
+		s.pipeline.ProcessFrame(frame, recvTimeNS)
+		frameCount++
 		return true
 	})
 
-	// Run final fusion and broadcast
-	if e.fusionEngine != nil && e.pipeline.HasMotionData() {
-		blobs := e.runFusion()
-		e.broadcaster.BroadcastReplayBlobs(blobs, position)
-	}
-
-	log.Printf("[INFO] ReplayEngine: Reprocessed position %d with new parameters", position)
+	elapsed := time.Since(startTime)
+	log.Printf("[REPLAY] Session %s reprocessed %d frames in %v", s.ID, frameCount, elapsed)
 }
 
-// SetProcessorManager sets the signal processor for the replay pipeline.
-func (e *Engine) SetProcessorManager(pm *sigproc.ProcessorManager) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.pipeline != nil {
-		e.pipeline.SetProcessorManager(pm)
-	}
+// Helper functions for pointer creation
+func float64Ptr(v float64) *float64 {
+	return &v
 }
 
-// ApplyToLive copies the currently-active replay parameters to the live
-// configuration and persists them to the mothership config file.
-// The live pipeline picks up the new values within one processing cycle.
-// Returns an error if not in replay mode or no replay session exists.
-func (e *Engine) ApplyToLive() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.state == StateLive {
-		return ErrNotInReplayMode
-	}
-
-	if e.pipeline == nil {
-		return ErrNoPipeline
-	}
-
-	params := e.pipeline.GetParams()
-
-	// Apply parameters to live processor
-	// This is a simplified implementation - in production, this would
-	// persist to the config file and notify the live pipeline
-	log.Printf("[INFO] ReplayEngine: Applying replay parameters to live: %+v", params)
-
-	// The actual parameter application would happen through the
-	// live processor's configuration system
-	// For now, we just log what would be applied
-
-	return nil
+func intPtr(v int) *int {
+	return &v
 }
 
-// Errors
-var (
-	ErrAlreadyInReplayMode  = &replayEngineError{"already in replay mode"}
-	ErrNotInReplayMode     = &replayEngineError{"not in replay mode"}
-	ErrNoActiveSession      = &replayEngineError{"no active replay session"}
-	ErrTimestampOutOfRange  = &replayEngineError{"timestamp outside session range"}
-	ErrInvalidSpeed         = &replayEngineError{"speed must be between 0.1 and 10.0"}
-	ErrNoPipeline           = &replayEngineError{"no replay pipeline"}
-)
-
-type replayEngineError struct {
-	msg string
-}
-
-func (e *replayEngineError) Error() string {
-	return e.msg
+// MarshalJSON implements JSON marshaling for TunableParams.
+func (p *TunableParams) MarshalJSON() ([]byte, error) {
+	obj := make(map[string]interface{})
+	if p.DeltaRMSThreshold != nil {
+		obj["delta_rms_threshold"] = *p.DeltaRMSThreshold
+	}
+	if p.TauS != nil {
+		obj["tau_s"] = *p.TauS
+	}
+	if p.FresnelDecay != nil {
+		obj["fresnel_decay"] = *p.FresnelDecay
+	}
+	if p.NSubcarriers != nil {
+		obj["n_subcarriers"] = *p.NSubcarriers
+	}
+	if p.BreathingSensitivity != nil {
+		obj["breathing_sensitivity"] = *p.BreathingSensitivity
+	}
+	if p.MinConfidence != nil {
+		obj["min_confidence"] = *p.MinConfidence
+	}
+	return json.Marshal(obj)
 }

@@ -124,6 +124,7 @@
                     <input type="range" id="replay-scrubber" class="replay-scrubber"
                            min="0" max="100" step="0.1" value="0"
                            title="Scrub through timeline">
+                    <div id="replay-event-markers" class="replay-event-markers"></div>
                 </div>
 
                 <button id="replay-close-btn" class="replay-btn" title="Exit replay mode">

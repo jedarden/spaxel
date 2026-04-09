@@ -22,6 +22,12 @@ type ReplayHandler struct {
 	sessions        map[string]*_replaySession
 	nextID          int
 	activeSessionID string // Currently active session for dashboard control
+	settingsHandler SettingsPersister // For ApplyToLive functionality
+}
+
+// SettingsPersister is the interface for persisting replay parameters to live settings.
+type SettingsPersister interface {
+	Update(updates map[string]interface{}) error
 }
 
 // _replaySession represents an active replay session (API layer).
@@ -76,6 +82,13 @@ func (h *ReplayHandler) SetFusionEngine(fusionEngine interface{}) {
 	}); ok {
 		h.worker.SetFusionEngine(engine)
 	}
+}
+
+// SetSettingsHandler sets the settings handler for ApplyToLive functionality.
+func (h *ReplayHandler) SetSettingsHandler(settingsHandler SettingsPersister) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.settingsHandler = settingsHandler
 }
 
 // Start the replay worker.
@@ -720,10 +733,16 @@ func (h *ReplayHandler) SetParams(params *replay.TunableParams) error {
 func (h *ReplayHandler) ApplyToLive() error {
 	h.mu.Lock()
 	sessionID := h.activeSessionID
+	settingsHandler := h.settingsHandler
 	h.mu.Unlock()
 
 	if sessionID == "" {
 		return fmt.Errorf("no active replay session")
+	}
+
+	if settingsHandler == nil {
+		log.Printf("[WARN] ApplyToLive: No settings handler configured, parameters not persisted")
+		return fmt.Errorf("settings handler not configured")
 	}
 
 	// Get the current session's parameters
@@ -732,13 +751,60 @@ func (h *ReplayHandler) ApplyToLive() error {
 		return err
 	}
 
-	// Log the parameters that would be applied to live
-	log.Printf("[INFO] ApplyToLive: Would apply replay parameters to live: %+v", session.Params)
+	// Convert replay params to settings format
+	updates := make(map[string]interface{})
 
-	// TODO: Implement actual parameter persistence to live config
-	// This would involve updating the mothership config file and
-	// notifying the live pipeline to reload its parameters
+	// Map replay parameters to live settings
+	if val, ok := session.Params["delta_rms_threshold"]; ok {
+		if f, ok := val.(float64); ok {
+			updates["delta_rms_threshold"] = f
+		}
+	}
+	if val, ok := session.Params["tau_s"]; ok {
+		if f, ok := val.(float64); ok {
+			updates["tau_s"] = f
+		}
+	}
+	if val, ok := session.Params["fresnel_decay"]; ok {
+		if f, ok := val.(float64); ok {
+			updates["fresnel_decay"] = f
+		}
+	}
+	if val, ok := session.Params["fresnel_weight_sigma"]; ok {
+		if f, ok := val.(float64); ok {
+			updates["fresnel_weight_sigma"] = f
+		}
+	}
+	if val, ok := session.Params["min_confidence"]; ok {
+		if f, ok := val.(float64); ok {
+			updates["min_confidence"] = f
+		}
+	}
+	if val, ok := session.Params["breathing_sensitivity"]; ok {
+		if f, ok := val.(float64); ok {
+			updates["breathing_sensitivity"] = f
+		}
+	}
+	if val, ok := session.Params["n_subcarriers"]; ok {
+		if i, ok := val.(int); ok {
+			updates["n_subcarriers"] = i
+		} else if f, ok := val.(float64); ok {
+			updates["n_subcarriers"] = int(f)
+		}
+	}
 
+	if len(updates) == 0 {
+		log.Printf("[INFO] ApplyToLive: No replay parameters to apply")
+		return nil
+	}
+
+	// Persist to settings database
+	if err := settingsHandler.Update(updates); err != nil {
+		log.Printf("[ERROR] ApplyToLive: Failed to persist parameters: %v", err)
+		return fmt.Errorf("failed to persist parameters: %w", err)
+	}
+
+	log.Printf("[INFO] ApplyToLive: Applied replay parameters to live: %+v", updates)
 	return nil
 }
 
