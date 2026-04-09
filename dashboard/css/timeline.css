@@ -645,6 +645,33 @@
   pointer-events: none;
 }
 
+/* Secondary system events (expert mode - greyed out) */
+.timeline-event.secondary {
+  opacity: 0.6;
+  font-size: 0.9em;
+  padding: 8px 12px;
+}
+
+.timeline-event.secondary .timeline-event-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.timeline-event.secondary .timeline-event-title {
+  font-size: 13px;
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.timeline-event.secondary .timeline-event-meta {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+}
+
+.timeline-event.secondary:hover {
+  opacity: 1;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .timeline-header {

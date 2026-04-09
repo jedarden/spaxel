@@ -45,6 +45,7 @@
 		events: [],
 		cursor: null,
 		total: 0,
+		dashboardMode: 'expert', // 'expert' or 'simple' - determines timeline mode
 		filters: {
 			categories: {
 				presence: true,
@@ -487,13 +488,23 @@
 		const container = elements.container;
 		if (!container) return;
 
+		// Determine dashboard mode: expert mode shows all events, simple mode shows person-relevant only
+		// Expert mode is the default for live view, simple mode is for simplified dashboard
+		if (newMode === 'live' || newMode === 'replay' || newMode === 'timeline') {
+			state.dashboardMode = 'expert';
+		} else if (newMode === 'simple' || newMode === 'ambient') {
+			state.dashboardMode = 'simple';
+		} else {
+			state.dashboardMode = 'expert'; // Default to expert
+		}
+
 		if (newMode === 'timeline') {
 			// Container is shown by inline script, just load events if needed
 			if (state.allLoadedEvents.length === 0) {
 				loadInitialEvents();
 			} else {
-				// Apply filters to existing events
-				applyClientSideFilters();
+				// Reload events with new mode
+				loadInitialEvents();
 			}
 		}
 	}
@@ -793,6 +804,8 @@
 		if (state.filters.q) {
 			params.set('q', state.filters.q);
 		}
+		// Add mode parameter based on dashboard mode
+		params.set('mode', state.dashboardMode);
 	}
 
 	// ============================================
@@ -991,6 +1004,12 @@
 		const severityClass = event.severity === 'alert' || event.severity === 'critical' ? ' severity-critical' : '';
 		const newClass = isNew ? ' new-event' : '';
 
+		// Determine if this is a system event (for secondary styling in expert mode)
+		// System events: node_online, node_offline, ota_update, baseline_changed, system, learning_milestone, anomaly_learned
+		const systemEventTypes = ['node_online', 'node_offline', 'ota_update', 'baseline_changed', 'system', 'learning_milestone', 'anomaly_learned'];
+		const isSystemEvent = systemEventTypes.indexOf(event.type) !== -1;
+		const secondaryClass = (state.dashboardMode === 'expert' && isSystemEvent) ? ' secondary' : '';
+
 		// Check if this event has a blob_id for explainability
 		const hasBlobId = event.blob_id !== undefined && event.blob_id !== null && event.blob_id !== 0;
 		const explainabilityBtn = hasBlobId ? `
@@ -1006,7 +1025,7 @@
 		const dataIndex = index !== undefined ? ` data-index="${index}"` : '';
 
 		return `
-			<div class="timeline-event timeline-${event.type}${severityClass}${newClass}" data-type="${event.type}" data-id="${event.id}" data-timestamp="${event.timestamp_ms}" data-blob-id="${event.blob_id || ''}"${dataIndex}>
+			<div class="timeline-event timeline-${event.type}${severityClass}${newClass}${secondaryClass}" data-type="${event.type}" data-id="${event.id}" data-timestamp="${event.timestamp_ms}" data-blob-id="${event.blob_id || ''}"${dataIndex}>
 				<div class="timeline-event-icon">${info.icon}</div>
 				<div class="timeline-event-content">
 					<div class="timeline-event-header">

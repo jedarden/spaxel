@@ -180,9 +180,9 @@ func createEventsSchema(db *sql.DB) error {
 func isValidEventType(t string) bool {
 	switch t {
 	case "detection", "zone_entry", "zone_exit", "portal_crossing",
-		"trigger_fired", "fall_alert", "anomaly", "security_alert",
+		"trigger_fired", "fall_alert", "anomaly", "anomaly_detected", "security_alert",
 		"node_online", "node_offline", "ota_update", "baseline_changed",
-		"system", "learning_milestone":
+		"system", "learning_milestone", "sleep_session_end":
 		return true
 	}
 	return false
