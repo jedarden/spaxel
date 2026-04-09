@@ -1,0 +1,887 @@
+/* Anomaly Detection UI - Alarm Overlay, Acknowledgement Flow, and Security Mode */
+
+/* ── Anomaly Alarm Overlay ────────────────────────────────────────────────────── */
+
+.anomaly-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(220, 38, 38, 0.95);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: anomaly-fade-in 0.3s ease-out;
+}
+
+.anomaly-overlay.hidden {
+    display: none;
+}
+
+@keyframes anomaly-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.anomaly-banner {
+    background: var(--bg-card, #1e1e2e);
+    border: 2px solid var(--color-danger, #dc2626);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: anomaly-slide-up 0.3s ease-out;
+}
+
+@keyframes anomaly-slide-up {
+    from { transform: translateY(50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.anomaly-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    background: var(--color-danger, #dc2626);
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    color: white;
+    animation: anomaly-pulse 1.5s infinite;
+}
+
+@keyframes anomaly-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+    50% { transform: scale(1.1); box-shadow: 0 0 20px 0 rgba(220, 38, 38, 0); }
+}
+
+.anomaly-icon svg {
+    width: 36px;
+    height: 36px;
+}
+
+.anomaly-content {
+    text-align: center;
+    color: var(--text-color, #e0e0e0);
+}
+
+.anomaly-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    color: var(--color-danger, #dc2626);
+}
+
+.anomaly-description {
+    font-size: 16px;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.anomaly-meta {
+    font-size: 13px;
+    color: var(--text-muted, #888);
+    margin-bottom: 20px;
+    font-family: monospace;
+}
+
+.anomaly-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.anomaly-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.anomaly-btn.ack {
+    background: var(--color-success, #22c55e);
+    color: white;
+}
+
+.anomaly-btn.ack:hover {
+    background: #16a34a;
+    transform: scale(1.05);
+}
+
+.anomaly-btn.view {
+    background: var(--color-primary, #3b82f6);
+    color: white;
+}
+
+.anomaly-btn.view:hover {
+    background: #2563eb;
+    transform: scale(1.05);
+}
+
+.anomaly-btn.dismiss {
+    background: var(--bg-card, #2a2a3e);
+    color: var(--text-color, #e0e0e0);
+    border: 1px solid var(--border-color, #444);
+}
+
+.anomaly-btn.dismiss:hover {
+    background: var(--bg-hover, #3a3a4e);
+}
+
+/* ── Feedback Modal ───────────────────────────────────────────────────────────── */
+
+.anomaly-feedback-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.anomaly-feedback-modal.hidden {
+    display: none;
+}
+
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    position: relative;
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 480px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: var(--text-color, #e0e0e0);
+    animation: modal-pop 0.2s ease-out;
+}
+
+@keyframes modal-pop {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.modal-content h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.feedback-anomaly-desc {
+    margin-bottom: 16px;
+    color: var(--text-muted, #888);
+    font-size: 14px;
+}
+
+.feedback-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.feedback-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-card, #1e1e2e);
+    border: 2px solid var(--border-color, #444);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.feedback-btn:hover {
+    background: var(--bg-hover, #2a2a3e);
+}
+
+.feedback-btn.selected {
+    border-color: var(--color-primary, #3b82f6);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.feedback-btn .icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.feedback-btn.expected .icon {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.feedback-btn.intrusion .icon {
+    background: rgba(251, 146, 60, 0.2);
+    color: #fb923c;
+}
+
+.feedback-btn.false-alarm .icon {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+}
+
+.feedback-btn .label {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.feedback-btn .desc {
+    font-size: 12px;
+    color: var(--text-muted, #888);
+}
+
+.feedback-notes {
+    margin-bottom: 16px;
+}
+
+#feedback-notes-input {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    background: var(--bg-input, #2a2a3e);
+    border: 1px solid var(--border-color, #444);
+    border-radius: 8px;
+    color: var(--text-color, #e0e0e0);
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+#feedback-notes-input:focus {
+    outline: none;
+    border-color: var(--color-primary, #3b82f6);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.modal-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.modal-btn.cancel {
+    background: var(--bg-card, #2a2a3e);
+    color: var(--text-color, #e0e0e0);
+}
+
+.modal-btn.cancel:hover {
+    background: var(--bg-hover, #3a3a4e);
+}
+
+.modal-btn.submit {
+    background: var(--color-primary, #3b82f6);
+    color: white;
+}
+
+.modal-btn.submit:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.modal-btn.submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── Learning Banner ──────────────────────────────────────────────────────────── */
+
+#anomaly-learning-banner {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    animation: learning-appear 0.3s ease-out;
+}
+
+#anomaly-learning-banner.hidden {
+    display: none;
+}
+
+@keyframes learning-appear {
+    from { transform: translateX(-50%) translateY(-10px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.learning-icon {
+    color: #a78bfa;
+    font-size: 18px;
+}
+
+.learning-text {
+    font-size: 13px;
+    color: var(--text-color, #e0e0e0);
+}
+
+.learning-progress-bar {
+    width: 120px;
+    height: 6px;
+    background: var(--bg-input, #2a2a3e);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.learning-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #a78bfa, #22c55e);
+    transition: width 0.5s ease-out;
+    border-radius: 3px;
+}
+
+.days-remaining {
+    font-size: 11px;
+    color: var(--text-muted, #888);
+    margin-left: 8px;
+}
+
+/* ── Security Mode Indicator ───────────────────────────────────────────────────── */
+
+#security-mode-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border-color, #333);
+    transition: all 0.3s;
+}
+
+.security-status-indicator.mode-disarmed {
+    background: var(--bg-card, #1e1e2e);
+    border-color: var(--border-color, #333);
+}
+
+.security-status-indicator.mode-armed {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: var(--color-danger, #dc2626);
+    color: var(--color-danger, #dc2626);
+}
+
+.security-status-indicator.mode-alert {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: var(--color-danger, #dc2626);
+    color: var(--color-danger, #dc2626);
+    animation: security-pulse 1s infinite;
+}
+
+@keyframes security-pulse {
+    0%, 100% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.8); }
+}
+
+.security-status-indicator.mode-learning {
+    background: rgba(167, 139, 250, 0.2);
+    border-color: var(--color-secondary, #a78bfa);
+    color: var(--color-secondary, #a78bfa);
+}
+
+.security-status-indicator.mode-ready {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: var(--color-success, #22c55e);
+    color: var(--color-success, #22c55e);
+}
+
+.security-icon {
+    font-size: 14px;
+}
+
+.security-text {
+    font-weight: 600;
+}
+
+.security-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    margin-left: 4px;
+    border-radius: 4px;
+    color: inherit;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.security-toggle-btn:hover {
+    opacity: 1;
+}
+
+/* ── Alert Banner ──────────────────────────────────────────────────────────────────── */
+
+#alert-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1900;
+    background: var(--color-danger, #dc2626);
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    animation: alert-slide-down 0.3s ease-out;
+}
+
+#alert-banner.hidden {
+    display: none;
+}
+
+@keyframes alert-slide-down {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+.alert-banner-icon {
+    font-size: 24px;
+}
+
+.alert-banner-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.alert-banner-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+}
+
+.alert-banner-description {
+    font-size: 14px;
+    opacity: 0.95;
+    margin-bottom: 4px;
+}
+
+.alert-banner-meta {
+    font-size: 12px;
+    opacity: 0.85;
+    display: flex;
+    gap: 12px;
+}
+
+.alert-banner-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.alert-banner-btn {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.alert-banner-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Security Dialog ────────────────────────────────────────────────────────────── */
+
+.security-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: dialog-fade-in 0.2s ease-out;
+}
+
+@keyframes dialog-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.security-dialog-card {
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 440px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: var(--text-color, #e0e0e0);
+    animation: dialog-pop 0.3s ease-out;
+}
+
+.security-dialog-card.arm {
+    border-color: var(--color-danger, #dc2626);
+}
+
+.security-dialog-card.disarm {
+    border-color: var(--color-success, #22c55e);
+}
+
+@keyframes dialog-pop {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.security-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color, #333);
+}
+
+.security-dialog-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.security-dialog-close {
+    background: none;
+    border: none;
+    color: var(--text-muted, #888);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    border-radius: 4px;
+}
+
+.security-dialog-close:hover {
+    background: var(--bg-hover, #333);
+    color: var(--text-color, #e0e0e0);
+}
+
+.security-dialog-content {
+    margin-bottom: 20px;
+}
+
+.security-dialog-prompt {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    color: var(--text-color, #e0e0e0);
+}
+
+.security-dialog-warning {
+    background: rgba(251, 146, 60, 0.1);
+    border: 1px solid rgba(251, 146, 60, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.security-dialog-warning p {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: #fb923c;
+}
+
+.security-dialog-warning p:last-child {
+    margin-bottom: 0;
+}
+
+.security-dialog-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.stat-item {
+    background: var(--bg-input, #2a2a3e);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.stat-item-full {
+    grid-column: 1 / -1;
+}
+
+.stat-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted, #888);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.security-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.security-dialog-btn {
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.security-dialog-btn.cancel {
+    background: var(--bg-card, #2a2a3e);
+    color: var(--text-color, #e0e0e0);
+}
+
+.security-dialog-btn.cancel:hover {
+    background: var(--bg-hover, #3a3a4e);
+}
+
+.security-dialog-btn.arm {
+    background: var(--color-danger, #dc2626);
+    color: white;
+}
+
+.security-dialog-btn.arm:hover {
+    background: #b91c1c;
+}
+
+.security-dialog-btn.disarm {
+    background: var(--color-success, #22c55e);
+    color: white;
+}
+
+.security-dialog-btn.disarm:hover {
+    background: #16a34a;
+}
+
+/* ── Anomaly History ─────────────────────────────────────────────────────────────── */
+
+.anomaly-history-item {
+    padding: 12px 16px;
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.anomaly-history-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.anomaly-history-icon.unusual-hour {
+    background: rgba(251, 146, 60, 0.2);
+    color: #fb923c;
+}
+
+.anomaly-history-icon.unknown-ble {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.anomaly-history-icon.motion-during-away {
+    background: rgba(220, 38, 38, 0.2);
+    color: #dc2626;
+}
+
+.anomaly-history-icon.unusual-dwell {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+}
+
+.anomaly-history-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.anomaly-history-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.anomaly-history-time {
+    font-size: 12px;
+    color: var(--text-muted, #888);
+}
+
+.anomaly-history-score {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.anomaly-history-score.high {
+    background: rgba(220, 38, 38, 0.2);
+    color: #dc2626;
+}
+
+.anomaly-history-score.medium {
+    background: rgba(251, 146, 60, 0.2);
+    color: #fb923c;
+}
+
+.anomaly-history-score.low {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+}
+
+.anomaly-history-feedback {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.anomaly-history-feedback.expected {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.anomaly-history-feedback.intrusion {
+    background: rgba(220, 38, 38, 0.2);
+    color: #dc2626;
+}
+
+.anomaly-history-feedback.false-alarm {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+}
+
+/* ── Zone Pulsing for Active Anomalies (3D View) ─────────────────────────────────── */
+
+.anomaly-zone-pulse {
+    animation: zone-pulse-red 2s infinite;
+}
+
+@keyframes zone-pulse-red {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(220, 38, 38, 0.3);
+        border-color: rgba(220, 38, 38, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(220, 38, 38, 0.6);
+        border-color: rgba(220, 38, 38, 0.8);
+    }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+    .anomaly-banner {
+        padding: 20px;
+        margin: 12px;
+    }
+
+    .anomaly-actions {
+        flex-direction: column;
+    }
+
+    .anomaly-btn {
+        width: 100%;
+    }
+
+    .modal-content {
+        margin: 12px;
+        max-width: calc(100% - 24px);
+    }
+
+    .security-dialog-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .security-dialog-actions {
+        flex-direction: column;
+    }
+
+    .security-dialog-btn {
+        width: 100%;
+    }
+}
+
+/* ── Dark Theme Variables (fallback) ───────────────────────────────────────────── */
+
+:root {
+    --bg-card: #1e1e2e;
+    --bg-panel: #1a1a2e;
+    --bg-hover: #2a2a3e;
+    --bg-active: #3a3a4e;
+    --bg-input: #2a2a3e;
+    --text-color: #e0e0e0;
+    --text-muted: #888;
+    --border-color: #333;
+    --color-primary: #3b82f6;
+    --color-success: #22c55e;
+    --color-danger: #dc2626;
+    --color-secondary: #a78bfa;
+}

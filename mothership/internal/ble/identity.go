@@ -3,6 +3,7 @@ package ble
 import (
 	"log"
 	"math"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -761,4 +762,77 @@ func (m *IdentityMatcher) IsWithinGracePeriod(canonicalAddr string) bool {
 	}
 
 	return m.rotationDetector.IsWithinGracePeriod(canonicalAddr)
+}
+
+// EnrichBlobsWithIdentity adds identity information to a slice of blob pointers.
+// This is used to enrich TrackedBlob from the fusion engine with BLE identity.
+// The blobs slice should contain pointers to TrackedBlob structs that have
+// PersonID, PersonLabel, PersonColor, IdentityConfidence, and IdentitySource fields.
+func (m *IdentityMatcher) EnrichBlobsWithIdentity(blobs interface{}) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Use reflection to handle both *TrackedBlob and *tracking.Blob
+	val := reflect.ValueOf(blobs)
+	if val.Kind() != reflect.Ptr || val.IsNil() {
+		return
+	}
+
+	slice := val.Elem()
+	if slice.Kind() != reflect.Slice {
+		return
+	}
+
+	now := time.Now()
+	for i := 0; i < slice.Len(); i++ {
+		blobElem := slice.Index(i)
+		if blobElem.Kind() != reflect.Ptr || blobElem.IsNil() {
+			continue
+		}
+
+		// Get the ID field
+		idField := blobElem.Elem().FieldByName("ID")
+		if !idField.IsValid() || idField.Kind() != reflect.Int {
+			continue
+		}
+		blobID := int(idField.Int())
+
+		// Try current match first
+		var match *IdentityMatch
+		if m.matches[blobID] != nil {
+			match = m.matches[blobID]
+			if now.Sub(match.Timestamp) >= m.persistenceTime {
+				match = nil
+			}
+		}
+		if match == nil && m.persistentIdent[blobID] != nil {
+			match = m.persistentIdent[blobID]
+			if now.Sub(match.Timestamp) >= m.persistenceTime {
+				match = nil
+			}
+		}
+
+		if match != nil && match.PersonID != "" {
+			// Set identity fields on the blob
+			if personIDField := blobElem.Elem().FieldByName("PersonID"); personIDField.IsValid() {
+				personIDField.SetString(match.PersonID)
+			}
+			if personLabelField := blobElem.Elem().FieldByName("PersonLabel"); personLabelField.IsValid() {
+				personLabelField.SetString(match.PersonName)
+			}
+			if personColorField := blobElem.Elem().FieldByName("PersonColor"); personColorField.IsValid() {
+				personColorField.SetString(match.PersonColor)
+			}
+			if confField := blobElem.Elem().FieldByName("IdentityConfidence"); confField.IsValid() {
+				confField.SetFloat(match.Confidence)
+			}
+			if sourceField := blobElem.Elem().FieldByName("IdentitySource"); sourceField.IsValid() {
+				source := "ble_triangulation"
+				if match.IsBLEOnly {
+					source = "ble_only"
+				}
+				sourceField.SetString(source)
+			}
+		}
+	}
 }

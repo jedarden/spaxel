@@ -62,6 +62,11 @@ func AllMigrations() []Migration {
 			Version:     11,
 			Description: "add FTS5 table and triggers for events search",
 			Up:          migration_011_add_events_fts,
+			{
+				Version:     12,
+				Description: "add crowd flow visualization tables",
+				Up:          migration_012_add_crowd_flow_tables,
+			},
 		},
 	}
 }
@@ -544,6 +549,52 @@ CREATE TRIGGER IF NOT EXISTS events_fts_update AFTER UPDATE ON events BEGIN
 	VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
 END;
 `
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// migration_012_add_crowd_flow_tables adds tables for crowd flow visualization.
+func migration_012_add_crowd_flow_tables(tx *sql.Tx) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS trajectory_segments (
+		id        TEXT PRIMARY KEY,
+		person_id TEXT,
+		from_x    REAL NOT NULL,
+		from_y    REAL NOT NULL,
+		from_z    REAL NOT NULL,
+		to_x      REAL NOT NULL,
+		to_y      REAL NOT NULL,
+		to_z      REAL NOT NULL,
+		speed     REAL NOT NULL,
+		timestamp DATETIME NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_traj_timestamp ON trajectory_segments(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_traj_person ON trajectory_segments(person_id, timestamp);
+
+	CREATE TABLE IF NOT EXISTS dwell_accumulator (
+		grid_x      INTEGER NOT NULL,
+		grid_y      INTEGER NOT NULL,
+		person_id   TEXT,
+		count       INTEGER NOT NULL DEFAULT 1,
+		dwell_ms    INTEGER NOT NULL DEFAULT 100,
+		last_updated DATETIME NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+		PRIMARY KEY (grid_x, grid_y, person_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_dwell_updated ON dwell_accumulator(last_updated);
+
+	CREATE TABLE IF NOT EXISTS detected_corridors (
+		id                TEXT PRIMARY KEY,
+		centroid_x        REAL NOT NULL,
+		centroid_y        REAL NOT NULL,
+		centroid_z        REAL NOT NULL,
+		direction_x       REAL NOT NULL,
+		direction_y       REAL NOT NULL,
+		length_m          REAL NOT NULL,
+		width_m           REAL NOT NULL,
+		cell_count        INTEGER NOT NULL,
+		last_computed     DATETIME NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+	);
+	`
 	_, err := tx.Exec(schema)
 	return err
 }

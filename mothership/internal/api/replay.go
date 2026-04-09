@@ -24,7 +24,7 @@ type ReplayHandler struct {
 // RecordingStore is the interface to the CSI recording store.
 type RecordingStore interface {
 	Stats() Stats
-	Scan(fn func(recvTimeNS int64, frame []byte) bool) bool
+	Scan(fn func(recvTimeNS int64, frame []byte) bool) error
 	Close() error
 }
 

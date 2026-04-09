@@ -1,8 +1,12 @@
-// Package analytics provides crowd flow visualization and analysis.
+// Package analytics accumulates and analyzes crowd flow data
+// for movement pattern visualization and dwell hotspot detection.
 package analytics
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -11,471 +15,785 @@ import (
 )
 
 const (
-	// GridCellSize is the size of each grid cell in metres (0.25m resolution)
-	GridCellSize = 0.25
-	// MinMovementThreshold is the minimum movement (in metres) to record a trajectory segment
-	MinMovementThreshold = 0.2
-	// StationarySpeedThreshold is the speed below which a track is considered stationary (m/s)
-	StationarySpeedThreshold = 0.1
-	// DefaultRetentionDays is the default retention period for trajectory data
-	DefaultRetentionDays = 90
-	// MinSegmentsForFlow is the minimum segments required to render a flow arrow
-	MinSegmentsForFlow = 5
-	// MinDwellSamples is the minimum dwell samples required to render a hotspot
-	MinDwellSamples = 10
-	// CorridorMinSegments is the minimum segments for a cell to be a corridor candidate
-	CorridorMinSegments = 10
-	// CorridorMaxAngularVariance is the maximum angular variance for corridor classification
-	CorridorMaxAngularVariance = 0.3
+	// Trajectory sampling thresholds
+	minMovementDistance = 0.2 // meters - only record segment if track moved > 0.2m
+	dwellSpeedThreshold  = 0.1 // m/s - speed below which counts as "dwell"
+	dwellPruneDays       = 90  // days - prune dwell data older than this
+	flowPruneDays        = 90  // days - prune trajectory segments older than this
+
+	// Flow computation cache duration
+	flowCacheMaxAge = 5 * time.Minute
+
+	// Grid resolution (should match fusion grid)
+	defaultGridCellM = 0.25 // meters
+
+	// Corridor detection thresholds
+	corridorMinSegments  = 10
+	corridorMaxVariance   = 0.3
+	corridorMinCellCount  = 3
+	corridorRecomputeHours = 168 // 7 days
 )
 
-// TrajectorySegment represents a single movement segment.
+// TrajectorySegment represents a single movement segment for a tracked person.
 type TrajectorySegment struct {
 	ID        string    `json:"id"`
-	PersonID  string    `json:"person_id"`
-	FromX     float64   `json:"from_x"`
-	FromZ     float64   `json:"from_z"` // Ground plane (Y=0)
-	ToX       float64   `json:"to_x"`
-	ToZ       float64   `json:"to_z"`
-	Speed     float64   `json:"speed"`
+	PersonID  string    `json:"person_id,omitempty"`
+	FromXYZ   [3]float64 `json:"from_xyz"`
+	ToXYZ     [3]float64 `json:"to_xyz"`
+	Speed     float64   `json:"speed"`      // m/s at this step
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// DwellAccumulatorKey identifies a dwell accumulator entry.
-type DwellAccumulatorKey struct {
-	GridX    int
-	GridZ    int
-	PersonID string
-}
-
-// DwellAccumulator represents accumulated dwell time at a location.
+// DwellAccumulator tracks stationary time per grid cell.
 type DwellAccumulator struct {
 	GridX       int       `json:"grid_x"`
-	GridZ       int       `json:"grid_z"`
-	PersonID    string    `json:"person_id"`
-	Count       int       `json:"count"`
+	GridY       int       `json:"grid_y"`
+	PersonID    string    `json:"person_id,omitempty"`
+	Count       int       `json:"count"`      // number of stationary observations
+	DwellMs     int64     `json:"dwell_ms"`    // total dwell time in milliseconds
 	LastUpdated time.Time `json:"last_updated"`
+}
+
+// FlowCell represents flow data for a single grid cell.
+type FlowCell struct {
+	GridX        int     `json:"grid_x"`
+	GridY        int     `json:"grid_y"`
+	VX           float64 `json:"vx"`           // average X velocity component
+	VY           float64 `json:"vy"`           // average Y velocity component
+	SegmentCount int     `json:"segment_count"`
+}
+
+// FlowMap is the computed flow map for a grid.
+type FlowMap struct {
+	Cells        []FlowCell `json:"cells"`
+	CellSizeM    float64    `json:"cell_size_m"`
+	ComputedAt   time.Time  `json:"computed_at"`
+	SegmentCount int        `json:"total_segments"`
+}
+
+// DwellHeatmap represents dwell time per grid cell.
+type DwellHeatmap struct {
+	Cells     []DwellCell `json:"cells"`
+	CellSizeM float64     `json:"cell_size_m"`
+	MaxCount  int         `json:"max_count"`
+	ComputedAt time.Time  `json:"computed_at"`
+	PersonID  string      `json:"person_id,omitempty"` // if filtered
+}
+
+// DwellCell represents dwell data for a single cell in the heatmap.
+type DwellCell struct {
+	GridX      int     `json:"grid_x"`
+	GridY      int     `json:"grid_y"`
+	Count      int     `json:"count"`
+	Normalized float64 `json:"normalized"` // 0-1 after normalization
 }
 
 // DetectedCorridor represents a detected corridor region.
 type DetectedCorridor struct {
 	ID                string    `json:"id"`
-	CentroidX         float64   `json:"centroid_x"`
-	CentroidZ         float64   `json:"centroid_z"`
-	DominantDirX      float64   `json:"dominant_dir_x"`
-	DominantDirZ      float64   `json:"dominant_dir_z"`
+	CentroidXYZ       [3]float64 `json:"centroid_xyz"`
+	DominantDirection [2]float64 `json:"dominant_direction_xy"` // normalized vector
 	LengthM           float64   `json:"length_m"`
 	WidthM            float64   `json:"width_m"`
 	CellCount         int       `json:"cell_count"`
 	LastComputed      time.Time `json:"last_computed"`
 }
 
-// FlowCell represents aggregated flow data for a grid cell.
-type FlowCell struct {
-	GridX       int     `json:"grid_x"`
-	GridZ       int     `json:"grid_z"`
-	VectorX     float64 `json:"vector_x"`
-	VectorZ     float64 `json:"vector_z"`
-	SegmentCount int    `json:"segment_count"`
+// cachedFlowMap holds a cached flow map with its creation time.
+type cachedFlowMap struct {
+	flowMap  *FlowMap
+	cachedAt time.Time
+	dirty    bool
 }
 
-// FlowMap is the computed flow map output.
-type FlowMap struct {
-	Cells      []FlowCell `json:"cells"`
-	GridSize   float64    `json:"grid_size"`
-	ComputedAt time.Time  `json:"computed_at"`
-}
-
-// DwellHeatmapCell represents a cell in the dwell heatmap.
-type DwellHeatmapCell struct {
-	GridX     int     `json:"grid_x"`
-	GridZ     int     `json:"grid_z"`
-	Count     int     `json:"count"`
-	Normalized float64 `json:"normalized"`
-}
-
-// DwellHeatmap is the computed dwell heatmap output.
-type DwellHeatmap struct {
-	Cells      []DwellHeatmapCell `json:"cells"`
-	ComputedAt time.Time          `json:"computed_at"`
-}
-
-// TrackUpdate represents a track update from the tracker.
-type TrackUpdate struct {
-	ID       int
-	X, Y, Z  float64
-	VX, VY, VZ float64
-	PersonID string
-}
-
-// FlowAccumulator accumulates trajectory data for flow visualization.
+// FlowAccumulator subscribes to TrackManager updates and accumulates trajectory data.
 type FlowAccumulator struct {
-	mu          sync.RWMutex
-	db          *sql.DB
-	dbPath      string
-	retentionDays int
+	mu      sync.RWMutex
+	db      *sql.DB
+	cellSizeM float64
+	flowCache *cachedFlowMap
+	lastPrune time.Time
 
-	// In-memory tracking of last waypoint per track
-	lastWaypoints map[int]*waypoint
+	// In-memory accumulator for batch writes
+	trajectoryBuffer []TrajectorySegment
+	dwellBuffer      []DwellAccumulator
+	maxBufferSize    int
 
-	// Cache for computed flow map
-	flowCache     *FlowMap
-	flowCacheTime time.Time
-	flowDirty     bool
-
-	// Cache for computed dwell heatmap
-	dwellCache     *DwellHeatmap
-	dwellCacheTime time.Time
-	dwellDirty     bool
+	// Track last waypoint per track for sampling
+	lastWaypoints map[string][3]float64 // track_id -> last position
 }
 
-type waypoint struct {
-	x, z     float64
-	personID string
-}
-
-// NewFlowAccumulator creates a new FlowAccumulator.
-func NewFlowAccumulator(dbPath string) (*FlowAccumulator, error) {
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return nil, err
+// NewFlowAccumulator creates a new flow accumulator.
+func NewFlowAccumulator(db *sql.DB, cellSizeM float64) *FlowAccumulator {
+	if cellSizeM <= 0 {
+		cellSizeM = defaultGridCellM
 	}
-	db.SetMaxOpenConns(1)
-
-	fa := &FlowAccumulator{
+	return &FlowAccumulator{
 		db:            db,
-		dbPath:        dbPath,
-		retentionDays: DefaultRetentionDays,
-		lastWaypoints: make(map[int]*waypoint),
-		flowDirty:     true,
-		dwellDirty:    true,
+		cellSizeM:     cellSizeM,
+		lastWaypoints: make(map[string][3]float64),
+		maxBufferSize: 100, // flush after 100 segments
+		flowCache:     &cachedFlowMap{dirty: true},
+		lastPrune:     time.Now(),
 	}
-
-	if err := fa.migrate(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	return fa, nil
 }
 
-// Close closes the database connection.
-func (fa *FlowAccumulator) Close() error {
-	return fa.db.Close()
-}
+// InitSchema creates the required database tables if they don't exist.
+func (f *FlowAccumulator) InitSchema() error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS trajectory_segments (
+		id        TEXT PRIMARY KEY,
+		person_id TEXT,
+		from_x    REAL NOT NULL,
+		from_y    REAL NOT NULL,
+		from_z    REAL NOT NULL,
+		to_x      REAL NOT NULL,
+		to_y      REAL NOT NULL,
+		to_z      REAL NOT NULL,
+		speed     REAL NOT NULL,
+		timestamp DATETIME NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_traj_timestamp ON trajectory_segments(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_traj_person ON trajectory_segments(person_id, timestamp);
 
-func (fa *FlowAccumulator) migrate() error {
-	_, err := fa.db.Exec(`
-		CREATE TABLE IF NOT EXISTS trajectory_segments (
-			id TEXT PRIMARY KEY,
-			person_id TEXT NOT NULL DEFAULT '',
-			from_x REAL NOT NULL,
-			from_z REAL NOT NULL,
-			to_x REAL NOT NULL,
-			to_z REAL NOT NULL,
-			speed REAL NOT NULL,
-			timestamp INTEGER NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS idx_trajectory_timestamp ON trajectory_segments(timestamp);
-		CREATE INDEX IF NOT EXISTS idx_trajectory_person ON trajectory_segments(person_id);
-		CREATE INDEX IF NOT EXISTS idx_trajectory_timestamp_person ON trajectory_segments(timestamp, person_id);
+	CREATE TABLE IF NOT EXISTS dwell_accumulator (
+		grid_x      INTEGER NOT NULL,
+		grid_y      INTEGER NOT NULL,
+		person_id   TEXT,
+		count       INTEGER NOT NULL DEFAULT 1,
+		dwell_ms    INTEGER NOT NULL DEFAULT 100,
+		last_updated DATETIME NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+		PRIMARY KEY (grid_x, grid_y, person_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_dwell_updated ON dwell_accumulator(last_updated);
 
-		CREATE TABLE IF NOT EXISTS dwell_accumulator (
-			grid_x INTEGER NOT NULL,
-			grid_z INTEGER NOT NULL,
-			person_id TEXT NOT NULL DEFAULT '',
-			count INTEGER NOT NULL DEFAULT 0,
-			last_updated INTEGER NOT NULL,
-			PRIMARY KEY (grid_x, grid_z, person_id)
-		);
-
-		CREATE TABLE IF NOT EXISTS detected_corridors (
-			id TEXT PRIMARY KEY,
-			centroid_x REAL NOT NULL,
-			centroid_z REAL NOT NULL,
-			dominant_dir_x REAL NOT NULL,
-			dominant_dir_z REAL NOT NULL,
-			length_m REAL NOT NULL,
-			width_m REAL NOT NULL,
-			cell_count INTEGER NOT NULL,
-			last_computed INTEGER NOT NULL
-		);
-	`)
+	CREATE TABLE IF NOT EXISTS detected_corridors (
+		id                TEXT PRIMARY KEY,
+		centroid_x        REAL NOT NULL,
+		centroid_y        REAL NOT NULL,
+		centroid_z        REAL NOT NULL,
+		direction_x       REAL NOT NULL,
+		direction_y       REAL NOT NULL,
+		length_m          REAL NOT NULL,
+		width_m           REAL NOT NULL,
+		cell_count        INTEGER NOT NULL,
+		last_computed     DATETIME NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+	);
+	\`
+	_, err := f.db.Exec(schema)
 	return err
 }
 
-// UpdateTrack processes a track update from the tracker.
-// It records trajectory segments and dwell accumulator updates.
-func (fa *FlowAccumulator) UpdateTrack(update TrackUpdate) {
-	fa.mu.Lock()
-	defer fa.mu.Unlock()
+// AddTrackUpdate processes a track update from the tracker.
+// personID may be empty if identity is unknown.
+func (f *FlowAccumulator) AddTrackUpdate(trackID string, x, y, z, vx, vy, vz float64, personID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 
-	now := time.Now()
-	speed := math.Sqrt(update.VX*update.VX + update.VZ*update.VZ)
-
-	// Project to ground plane (ignore Y)
-	x, z := update.X, update.Z
-
-	// Check if this is a stationary update for dwell accumulation
-	if speed < StationarySpeedThreshold {
-		gridX := int(math.Floor(x / GridCellSize))
-		gridZ := int(math.Floor(z / GridCellSize))
-		fa.recordDwell(gridX, gridZ, update.PersonID, now)
-	}
-
-	// Check for trajectory segment
-	last, exists := fa.lastWaypoints[update.ID]
+	// Check if movement exceeds threshold
+	lastPos, exists := f.lastWaypoints[trackID]
 	if exists {
-		dx := x - last.x
-		dz := z - last.z
-		dist := math.Sqrt(dx*dx + dz*dz)
+		dx := x - lastPos[0]
+		dy := y - lastPos[1]
+		dz := z - lastPos[2]
+		distance := math.Sqrt(dx*dx + dy*dy + dz*dz)
 
-		if dist >= MinMovementThreshold {
+		// Calculate speed
+		speed := math.Sqrt(vx*vx + vy*vy + vz*vz)
+
+		if distance > minMovementDistance {
 			// Record trajectory segment
-			segID := generateSegmentID(update.ID, now)
-			fa.recordSegment(TrajectorySegment{
-				ID:        segID,
-				PersonID:  last.personID,
-				FromX:     last.x,
-				FromZ:     last.z,
-				ToX:       x,
-				ToZ:       z,
+			seg := TrajectorySegment{
+				ID:        generateSegmentID(),
+				PersonID:  personID,
+				FromXYZ:   lastPos,
+				ToXYZ:     [3]float64{x, y, z},
 				Speed:     speed,
-				Timestamp: now,
-			})
+				Timestamp: time.Now(),
+			}
+			f.trajectoryBuffer = append(f.trajectoryBuffer, seg)
+			f.markFlowDirty()
+		}
 
-			// Mark caches as dirty
-			fa.flowDirty = true
+		// Check for dwell (low speed)
+		if speed < dwellSpeedThreshold {
+			gridX := int(math.Floor(x / f.cellSizeM))
+			gridY := int(math.Floor(y / f.cellSizeM))
+			dwell := DwellAccumulator{
+				GridX:       gridX,
+				GridY:       gridY,
+				PersonID:    personID,
+				Count:       1,
+				DwellMs:     100, // 100ms per tick at 10Hz
+				LastUpdated: time.Now(),
+			}
+			f.dwellBuffer = append(f.dwellBuffer, dwell)
 		}
 	}
 
 	// Update last waypoint
-	fa.lastWaypoints[update.ID] = &waypoint{
-		x:        x,
-		z:        z,
-		personID: update.PersonID,
+	f.lastWaypoints[trackID] = [3]float64{x, y, z}
+
+	// Flush buffers if they get too large
+	if len(f.trajectoryBuffer) >= f.maxBufferSize || len(f.dwellBuffer) >= f.maxBufferSize {
+		go f.flushBuffers()
 	}
 }
 
-// RemoveTrack removes a track's waypoint when it disappears.
-func (fa *FlowAccumulator) RemoveTrack(trackID int) {
-	fa.mu.Lock()
-	delete(fa.lastWaypoints, trackID)
-	fa.mu.Unlock()
+// RemoveTrack removes a track from the waypoint registry.
+func (f *FlowAccumulator) RemoveTrack(trackID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.lastWaypoints, trackID)
 }
 
-func (fa *FlowAccumulator) recordSegment(seg TrajectorySegment) {
-	_, err := fa.db.Exec(`
-		INSERT INTO trajectory_segments (id, person_id, from_x, from_z, to_x, to_z, speed, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, seg.ID, seg.PersonID, seg.FromX, seg.FromZ, seg.ToX, seg.ToZ, seg.Speed, seg.Timestamp.UnixNano())
+// markFlowDirty marks the flow cache as dirty.
+func (f *FlowAccumulator) markFlowDirty() {
+	f.flowCache.dirty = true
+}
+
+// flushBuffers writes buffered data to the database.
+func (f *FlowAccumulator) flushBuffers() {
+	f.mu.Lock()
+	buffers := struct {
+		trajectory []TrajectorySegment
+		dwell      []DwellAccumulator
+	}{
+		trajectory: make([]TrajectorySegment, len(f.trajectoryBuffer)),
+		dwell:      make([]DwellAccumulator, len(f.dwellBuffer)),
+	}
+	copy(buffers.trajectory, f.trajectoryBuffer)
+	copy(buffers.dwell, f.dwellBuffer)
+	f.trajectoryBuffer = f.trajectoryBuffer[:0]
+	f.dwellBuffer = f.dwellBuffer[:0]
+	f.mu.Unlock()
+
+	// Flush trajectories
+	if len(buffers.trajectory) > 0 {
+		if err := f.insertTrajectories(buffers.trajectory); err != nil {
+			log.Printf("[WARN] Failed to insert trajectory segments: %v", err)
+		}
+	}
+
+	// Flush dwell data
+	if len(buffers.dwell) > 0 {
+		if err := f.upsertDwell(buffers.dwell); err != nil {
+			log.Printf("[WARN] Failed to upsert dwell data: %v", err)
+		}
+	}
+}
+
+// insertTrajectories inserts trajectory segments into the database.
+func (f *FlowAccumulator) insertTrajectories(segments []TrajectorySegment) error {
+	tx, err := f.db.Begin()
 	if err != nil {
-		// Log but don't fail - we don't want to crash on DB errors
-		return
+		return err
 	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(\`
+		INSERT INTO trajectory_segments (id, person_id, from_x, from_y, from_z, to_x, to_y, to_z, speed, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	\`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	ts := time.Now().UnixNano() / 1e6
+	for _, seg := range segments {
+		var personID interface{} = seg.PersonID
+		if personID == "" {
+			personID = nil
+		}
+		_, err := stmt.Exec(
+			seg.ID,
+			personID,
+			seg.FromXYZ[0], seg.FromXYZ[1], seg.FromXYZ[2],
+			seg.ToXYZ[0], seg.ToXYZ[1], seg.ToXYZ[2],
+			seg.Speed,
+			ts,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
-func (fa *FlowAccumulator) recordDwell(gridX, gridZ int, personID string, now time.Time) {
-	_, err := fa.db.Exec(`
-		INSERT INTO dwell_accumulator (grid_x, grid_z, person_id, count, last_updated)
-		VALUES (?, ?, ?, 1, ?)
-		ON CONFLICT(grid_x, grid_z, person_id) DO UPDATE SET
-			count = count + 1,
+// upsertDwell upserts dwell accumulator data.
+func (f *FlowAccumulator) upsertDwell(dwell []DwellAccumulator) error {
+	tx, err := f.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(\`
+		INSERT INTO dwell_accumulator (grid_x, grid_y, person_id, count, dwell_ms, last_updated)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(grid_x, grid_y, person_id) DO UPDATE SET
+			count = count + excluded.count,
+			dwell_ms = dwell_ms + excluded.dwell_ms,
 			last_updated = excluded.last_updated
-	`, gridX, gridZ, personID, now.UnixNano())
+	\`)
 	if err != nil {
-		return
+		return err
 	}
-	fa.dwellDirty = true
+	defer stmt.Close()
+
+	for _, d := range dwell {
+		var personID interface{} = d.PersonID
+		if personID == "" {
+			personID = nil
+		}
+		_, err := stmt.Exec(d.GridX, d.GridY, personID, d.Count, d.DwellMs,
+			d.LastUpdated.UnixNano()/1e6)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
-// GetFlowMap computes and returns the flow map.
-// Results are cached for 5 minutes or until data changes.
-func (fa *FlowAccumulator) GetFlowMap(personID string, since, until time.Time) (*FlowMap, error) {
-	fa.mu.RLock()
-	defer fa.mu.RUnlock()
+// ComputeFlowMap computes the flow map from trajectory segments.
+// Optionally filters by personID and time range.
+func (f *FlowAccumulator) ComputeFlowMap(personID *string, since, until *time.Time) (*FlowMap, error) {
+	f.mu.RLock()
+	cache := f.flowCache
+	f.mu.RUnlock()
 
-	// Check cache validity (5 minutes)
-	cacheDuration := 5 * time.Minute
-	now := time.Now()
-
-	// If personID filter is set, bypass cache
-	if personID == "" && !fa.flowDirty && fa.flowCache != nil && now.Sub(fa.flowCacheTime) < cacheDuration {
-		return fa.flowCache, nil
+	// For filtered queries, always recompute
+	needsRecompute := cache.dirty || time.Since(cache.cachedAt) > flowCacheMaxAge
+	if personID != nil || since != nil || until != nil {
+		needsRecompute = true
 	}
 
-	// Build query
-	query := `
-		SELECT from_x, from_z, to_x, to_z
+	// Return cached result if valid
+	if !needsRecompute {
+		return cache.flowMap, nil
+	}
+
+	// Build query with filters
+	query := \`
+		SELECT from_x, from_y, from_z, to_x, to_y, to_z
 		FROM trajectory_segments
-		WHERE timestamp >= ? AND timestamp <= ?
-	`
-	args := []interface{}{since.UnixNano(), until.UnixNano()}
+		WHERE 1=1
+	\`
+	args := []interface{}{}
 
-	if personID != "" {
+	if personID != nil && *personID != "" {
 		query += " AND person_id = ?"
-		args = append(args, personID)
+		args = append(args, *personID)
+	}
+	if since != nil {
+		query += " AND timestamp >= ?"
+		args = append(args, since.UnixNano()/1e6)
+	}
+	if until != nil {
+		query += " AND timestamp <= ?"
+		args = append(args, until.UnixNano()/1e6)
 	}
 
-	rows, err := fa.db.Query(query, args...)
+	rows, err := f.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	// Accumulate flow vectors per cell
-	type cellAccumulator struct {
-		vectorX, vectorZ float64
-		count            int
-	}
-	cellMap := make(map[[2]int]*cellAccumulator)
+	cellVectors := make(map[string]struct {
+		vxSum, vySum float64
+		count        int
+	})
 
+	var segmentCount int
 	for rows.Next() {
-		var fromX, fromZ, toX, toZ float64
-		if err := rows.Scan(&fromX, &fromZ, &toX, &toZ); err != nil {
+		var fromX, fromY, fromZ, toX, toY, toZ float64
+		if err := rows.Scan(&fromX, &fromY, &fromZ, &toX, &toY, &toZ); err != nil {
 			continue
 		}
+		segmentCount++
 
-		// Use Bresenham's line algorithm to find cells the segment passes through
+		// Get cells this segment passes through using Bresenham's line algorithm
 		cells := bresenhamLine(
-			int(math.Floor(fromX/GridCellSize)),
-			int(math.Floor(fromZ/GridCellSize)),
-			int(math.Floor(toX/GridCellSize)),
-			int(math.Floor(toZ/GridCellSize)),
+			int(math.Floor(fromX/f.cellSizeM)),
+			int(math.Floor(fromY/f.cellSizeM)),
+			int(math.Floor(toX/f.cellSizeM)),
+			int(math.Floor(toY/f.cellSizeM)),
 		)
 
-		// Accumulate vector contribution for each cell
-		dx := toX - fromX
-		dz := toZ - fromZ
+		// Vector components
+		vx := toX - fromX
+		vy := toY - fromY
 
 		for _, cell := range cells {
-			key := [2]int{cell[0], cell[1]}
-			acc, exists := cellMap[key]
-			if !exists {
-				acc = &cellAccumulator{}
-				cellMap[key] = acc
-			}
-			acc.vectorX += dx
-			acc.vectorZ += dz
-			acc.count++
+			key := cellKey(cell.x, cell.y)
+			v := cellVectors[key]
+			v.vxSum += vx
+			v.vySum += vy
+			v.count++
+			cellVectors[key] = v
 		}
 	}
 
-	// Build flow map
-	flowMap := &FlowMap{
-		Cells:      make([]FlowCell, 0, len(cellMap)),
-		GridSize:   GridCellSize,
-		ComputedAt: now,
-	}
-
-	for key, acc := range cellMap {
-		if acc.count < MinSegmentsForFlow {
+	// Build flow map cells
+	cells := make([]FlowCell, 0, len(cellVectors))
+	for key, v := range cellVectors {
+		if v.count == 0 {
 			continue
 		}
-		flowMap.Cells = append(flowMap.Cells, FlowCell{
-			GridX:        key[0],
-			GridZ:        key[1],
-			VectorX:      acc.vectorX / float64(acc.count),
-			VectorZ:      acc.vectorZ / float64(acc.count),
-			SegmentCount: acc.count,
+		x, y := parseCellKey(key)
+		cells = append(cells, FlowCell{
+			GridX:        x,
+			GridY:        y,
+			VX:           v.vxSum / float64(v.count),
+			VY:           v.vySum / float64(v.count),
+			SegmentCount: v.count,
 		})
 	}
 
-	// Update cache only for unfiltered queries
-	if personID == "" {
-		fa.flowCache = flowMap
-		fa.flowCacheTime = now
-		fa.flowDirty = false
+	flowMap := &FlowMap{
+		Cells:        cells,
+		CellSizeM:    f.cellSizeM,
+		ComputedAt:   time.Now(),
+		SegmentCount: segmentCount,
+	}
+
+	// Update cache (only for unfiltered queries)
+	if personID == nil && since == nil && until == nil {
+		f.mu.Lock()
+		f.flowCache = &cachedFlowMap{
+			flowMap:  flowMap,
+			cachedAt: time.Now(),
+			dirty:    false,
+		}
+		f.mu.Unlock()
 	}
 
 	return flowMap, nil
 }
 
-// GetDwellHeatmap computes and returns the dwell heatmap.
-// Results are cached for 5 minutes or until data changes.
-func (fa *FlowAccumulator) GetDwellHeatmap(personID string) (*DwellHeatmap, error) {
-	fa.mu.RLock()
-	defer fa.mu.RUnlock()
-
-	// Check cache validity (5 minutes)
-	cacheDuration := 5 * time.Minute
-	now := time.Now()
-
-	// If personID filter is set, bypass cache
-	if personID == "" && !fa.dwellDirty && fa.dwellCache != nil && now.Sub(fa.dwellCacheTime) < cacheDuration {
-		return fa.dwellCache, nil
-	}
-
-	// Build query
-	query := "SELECT grid_x, grid_z, count FROM dwell_accumulator"
+// ComputeDwellHeatmap computes a dwell heatmap from dwell accumulator data.
+// Optionally filters by personID.
+func (f *FlowAccumulator) ComputeDwellHeatmap(personID *string) (*DwellHeatmap, error) {
+	query := \`
+		SELECT grid_x, grid_y, SUM(count) as total_count, SUM(dwell_ms) as total_dwell_ms
+		FROM dwell_accumulator
+		WHERE 1=1
+	\`
 	args := []interface{}{}
 
-	if personID != "" {
-		query += " WHERE person_id = ?"
-		args = append(args, personID)
+	if personID != nil && *personID != "" {
+		query += " AND person_id = ?"
+		args = append(args, *personID)
 	}
 
-	rows, err := fa.db.Query(query, args...)
+	query += " GROUP BY grid_x, grid_y"
+
+	rows, err := f.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var cells []DwellHeatmapCell
-	var maxCount int
+	var cells []DwellCell
+	maxCount := 0
 
 	for rows.Next() {
-		var gridX, gridZ, count int
-		if err := rows.Scan(&gridX, &gridZ, &count); err != nil {
+		var gridX, gridY, count int
+		var dwellMs int64
+		if err := rows.Scan(&gridX, &gridY, &count, &dwellMs); err != nil {
 			continue
 		}
-		if count < MinDwellSamples {
-			continue
-		}
-		cells = append(cells, DwellHeatmapCell{
-			GridX: gridX,
-			GridZ: gridZ,
-			Count: count,
-		})
 		if count > maxCount {
 			maxCount = count
 		}
+		cells = append(cells, DwellCell{
+			GridX: gridX,
+			GridY: gridY,
+			Count: count,
+		})
 	}
 
-	// Normalize to [0, 1]
-	heatmap := &DwellHeatmap{
-		Cells:      make([]DwellHeatmapCell, len(cells)),
-		ComputedAt: now,
-	}
-
-	for i, cell := range cells {
-		heatmap.Cells[i] = DwellHeatmapCell{
-			GridX:      cell.GridX,
-			GridZ:      cell.GridZ,
-			Count:      cell.Count,
-			Normalized: float64(cell.Count) / float64(maxCount),
+	// Normalize counts to [0, 1]
+	for i := range cells {
+		if maxCount > 0 {
+			cells[i].Normalized = float64(cells[i].Count) / float64(maxCount)
 		}
 	}
 
-	// Update cache only for unfiltered queries
-	if personID == "" {
-		fa.dwellCache = heatmap
-		fa.dwellCacheTime = now
-		fa.dwellDirty = false
+	heatmap := &DwellHeatmap{
+		Cells:      cells,
+		CellSizeM:  f.cellSizeM,
+		MaxCount:   maxCount,
+		ComputedAt: time.Now(),
+		PersonID:   "",
+	}
+	if personID != nil {
+		heatmap.PersonID = *personID
 	}
 
 	return heatmap, nil
 }
 
-// GetCorridors returns detected corridors.
-func (fa *FlowAccumulator) GetCorridors() ([]DetectedCorridor, error) {
-	fa.mu.RLock()
-	defer fa.mu.RUnlock()
+// DetectCorridors detects corridor regions based on flow data.
+func (f *FlowAccumulator) DetectCorridors() ([]DetectedCorridor, error) {
+	// Get recent flow data
+	flowMap, err := f.ComputeFlowMap(nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
 
-	rows, err := fa.db.Query(`
-		SELECT id, centroid_x, centroid_z, dominant_dir_x, dominant_dir_z, length_m, width_m, cell_count, last_computed
+	// Find corridor cells (high volume, low angular variance)
+	corridorCells := make(map[string]struct {
+		vx, vy        float64
+		angle         float64
+		segmentCount  int
+	})
+
+	for _, cell := range flowMap.Cells {
+		if cell.SegmentCount < corridorMinSegments {
+			continue
+		}
+
+		// Calculate angle
+		angle := math.Atan2(cell.VY, cell.VX)
+
+		key := cellKey(cell.GridX, cell.GridY)
+		corridorCells[key] = struct {
+			vx, vy         float64
+			angle          float64
+			segmentCount   int
+		}{
+			vx:           cell.VX,
+			vy:           cell.VY,
+			angle:        angle,
+			segmentCount: cell.SegmentCount,
+		}
+	}
+
+	// Group adjacent corridor cells into regions
+	regions := f.findConnectedCorridorRegions(corridorCells)
+
+	// Build corridor objects
+	corridors := make([]DetectedCorridor, 0, len(regions))
+	for _, region := range regions {
+		corridor := f.buildCorridorFromRegion(region)
+		corridors = append(corridors, corridor)
+	}
+
+	// Save to database
+	if err := f.saveCorridors(corridors); err != nil {
+		log.Printf("[WARN] Failed to save corridors: %v", err)
+	}
+
+	return corridors, nil
+}
+
+// corridorRegion represents a group of adjacent corridor cells.
+type corridorRegion struct {
+	cells map[string]struct {
+		x, y          int
+		vx, vy        float64
+		angle         float64
+		segmentCount  int
+	}
+}
+
+// findConnectedCorridorRegions groups adjacent corridor cells into regions.
+func (f *FlowAccumulator) findConnectedCorridorRegions(cells map[string]struct {
+	vx, vy        float64
+	angle         float64
+	segmentCount  int
+}) []corridorRegion {
+	visited := make(map[string]bool)
+	regions := []corridorRegion{}
+
+	for key, cell := range cells {
+		if visited[key] {
+			continue
+		}
+
+		// Start a new region with BFS
+		region := corridorRegion{
+			cells: make(map[string]struct {
+				x, y          int
+				vx, vy        float64
+				angle         float64
+				segmentCount  int
+			}),
+		}
+
+		queue := []string{key}
+		for len(queue) > 0 {
+			current := queue[0]
+			queue = queue[1:]
+
+			if visited[current] {
+				continue
+			}
+			visited[current] = true
+
+			x, y := parseCellKey(current)
+			region.cells[current] = struct {
+				x, y          int
+				vx, vy        float64
+				angle         float64
+				segmentCount  int
+			}{
+				x:            x,
+				y:            y,
+				vx:           cell.vx,
+				vy:           cell.vy,
+				angle:        cell.angle,
+				segmentCount: cell.segmentCount,
+			}
+
+			// Check 8 neighbors
+			for dx := -1; dx <= 1; dx++ {
+				for dy := -1; dy <= 1; dy++ {
+					if dx == 0 && dy == 0 {
+						continue
+					}
+					neighborKey := cellKey(x+dx, y+dy)
+					if neighbor, exists := cells[neighborKey]; exists && !visited[neighborKey] {
+						// Check angular variance (should be low for corridors)
+						angleDiff := math.Abs(cell.angle - neighbor.angle)
+						if angleDiff > math.Pi {
+							angleDiff = 2*math.Pi - angleDiff
+						}
+						if angleDiff < corridorMaxVariance {
+							queue = append(queue, neighborKey)
+						}
+					}
+				}
+			}
+		}
+
+		if len(region.cells) >= corridorMinCellCount {
+			regions = append(regions, region)
+		}
+	}
+
+	return regions
+}
+
+// buildCorridorFromRegion creates a DetectedCorridor from a region.
+func (f *FlowAccumulator) buildCorridorFromRegion(region corridorRegion) DetectedCorridor {
+	if len(region.cells) == 0 {
+		return DetectedCorridor{}
+	}
+
+	// Calculate centroid and dominant direction
+	var sumX, sumY, sumZ float64
+	var sumVX, sumVY float64
+	var totalSegments int
+
+	minX, maxX := math.MaxInt32, math.MinInt32
+	minY, maxY := math.MaxInt32, math.MinInt32
+
+	for _, cell := range region.cells {
+		sumX += float64(cell.x) * f.cellSizeM
+		sumY += float64(cell.y) * f.cellSizeM
+		sumZ += 0 // Z is floor-projected
+		sumVX += cell.vx * float64(cell.segmentCount)
+		sumVY += cell.vy * float64(cell.segmentCount)
+		totalSegments += cell.segmentCount
+
+		if cell.x < minX {
+			minX = cell.x
+		}
+		if cell.x > maxX {
+			maxX = cell.x
+		}
+		if cell.y < minY {
+			minY = cell.y
+		}
+		if cell.y > maxY {
+			maxY = cell.y
+		}
+	}
+
+	n := float64(len(region.cells))
+	centroidX := sumX / n
+	centroidY := sumY / n
+
+	// Normalize dominant direction
+	domVX := sumVX / float64(totalSegments)
+	domVY := sumVY / float64(totalSegments)
+	domMag := math.Sqrt(domVX*domVX + domVY*domVY)
+	if domMag > 0 {
+		domVX /= domMag
+		domVY /= domMag
+	}
+
+	// Calculate length and width
+	lengthM := math.Sqrt(float64(maxX-minX)*f.cellSizeM*domVX*domVX +
+		float64(maxY-minY)*f.cellSizeM*domVY*domVY)
+	widthM := math.Sqrt(float64(maxX-minX)*f.cellSizeM*(-domVY)*(-domVY) +
+		float64(maxY-minY)*f.cellSizeM*domVX*domVX)
+
+	return DetectedCorridor{
+		ID:          generateCorridorID(),
+		CentroidXYZ: [3]float64{centroidX, centroidY, 0},
+		DominantDirection: [2]float64{domVX, domVY},
+		LengthM:     lengthM,
+		WidthM:      widthM,
+		CellCount:   len(region.cells),
+		LastComputed: time.Now(),
+	}
+}
+
+// saveCorridors saves detected corridors to the database.
+func (f *FlowAccumulator) saveCorridors(corridors []DetectedCorridor) error {
+	tx, err := f.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Clear old corridors
+	if _, err := tx.Exec("DELETE FROM detected_corridors"); err != nil {
+		return err
+	}
+
+	// Insert new corridors
+	stmt, err := tx.Prepare(\`
+		INSERT INTO detected_corridors (id, centroid_x, centroid_y, centroid_z, direction_x, direction_y, length_m, width_m, cell_count, last_computed)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	\`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	ts := time.Now().UnixNano() / 1e6
+	for _, c := range corridors {
+		_, err := stmt.Exec(
+			c.ID,
+			c.CentroidXYZ[0], c.CentroidXYZ[1], c.CentroidXYZ[2],
+			c.DominantDirection[0], c.DominantDirection[1],
+			c.LengthM, c.WidthM, c.CellCount,
+			ts,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetCorridors retrieves detected corridors from the database.
+func (f *FlowAccumulator) GetCorridors() ([]DetectedCorridor, error) {
+	rows, err := f.db.Query(\`
+		SELECT id, centroid_x, centroid_y, centroid_z, direction_x, direction_y, length_m, width_m, cell_count, last_computed
 		FROM detected_corridors
-	`)
+		ORDER BY cell_count DESC
+	\`)
 	if err != nil {
 		return nil, err
 	}
@@ -484,331 +802,166 @@ func (fa *FlowAccumulator) GetCorridors() ([]DetectedCorridor, error) {
 	var corridors []DetectedCorridor
 	for rows.Next() {
 		var c DetectedCorridor
-		var lastComputed int64
-		if err := rows.Scan(&c.ID, &c.CentroidX, &c.CentroidZ, &c.DominantDirX, &c.DominantDirZ,
-			&c.LengthM, &c.WidthM, &c.CellCount, &lastComputed); err != nil {
+		var lastComputedMs int64
+		err := rows.Scan(
+			&c.ID,
+			&c.CentroidXYZ[0], &c.CentroidXYZ[1], &c.CentroidXYZ[2],
+			&c.DominantDirection[0], &c.DominantDirection[1],
+			&c.LengthM, &c.WidthM, &c.CellCount,
+			&lastComputedMs,
+		)
+		if err != nil {
 			continue
 		}
-		c.LastComputed = time.Unix(0, lastComputed)
+		c.LastComputed = time.Unix(lastComputedMs/1000, (lastComputedMs%1000)*1e6)
 		corridors = append(corridors, c)
 	}
 
 	return corridors, nil
 }
 
-// ComputeCorridors recomputes corridor detection.
-// Should be called periodically (e.g., weekly).
-func (fa *FlowAccumulator) ComputeCorridors() error {
-	fa.mu.Lock()
-	defer fa.mu.Unlock()
+// PruneOldData removes old trajectory and dwell data.
+func (f *FlowAccumulator) PruneOldData() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 
-	// Get all trajectory segments
-	rows, err := fa.db.Query(`SELECT from_x, from_z, to_x, to_z, timestamp FROM trajectory_segments`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	// Build per-cell angle lists for circular variance computation
-	type cellAngles struct {
-		angles []float64
-		vectorsX []float64
-		vectorsZ []float64
-	}
-	cellMap := make(map[[2]int]*cellAngles)
-
-	for rows.Next() {
-		var fromX, fromZ, toX, toZ float64
-		var ts int64
-		if err := rows.Scan(&fromX, &fromZ, &toX, &toZ, &ts); err != nil {
-			continue
-		}
-
-		// Find cells the segment passes through
-		cells := bresenhamLine(
-			int(math.Floor(fromX/GridCellSize)),
-			int(math.Floor(fromZ/GridCellSize)),
-			int(math.Floor(toX/GridCellSize)),
-			int(math.Floor(toZ/GridCellSize)),
-		)
-
-		// Compute angle of this segment
-		angle := math.Atan2(toZ-fromZ, toX-fromX)
-		dx := toX - fromX
-		dz := toZ - fromZ
-
-		for _, cell := range cells {
-			key := [2]int{cell[0], cell[1]}
-			acc, exists := cellMap[key]
-			if !exists {
-				acc = &cellAngles{}
-				cellMap[key] = acc
-			}
-			acc.angles = append(acc.angles, angle)
-			acc.vectorsX = append(acc.vectorsX, dx)
-			acc.vectorsZ = append(acc.vectorsZ, dz)
-		}
-	}
-
-	// Identify corridor candidate cells
-	corridorCells := make(map[[2]int]bool)
-	for key, acc := range cellMap {
-		if len(acc.angles) < CorridorMinSegments {
-			continue
-		}
-		variance := circularVariance(acc.angles)
-		if variance < CorridorMaxAngularVariance {
-			corridorCells[key] = true
-		}
-	}
-
-	// Connected component analysis
-	regions := findConnectedComponents(corridorCells)
-
-	// Build corridor records
 	now := time.Now()
-	var corridors []DetectedCorridor
+	if now.Sub(f.lastPrune) < 24*time.Hour {
+		return nil // Only prune once per day
+	}
+	f.lastPrune = now
 
-	for i, region := range regions {
-		if len(region) < 3 {
-			continue // Skip very small regions
-		}
+	cutoffTs := now.AddDate(0, 0, -flowPruneDays).UnixNano() / 1e6
 
-		// Compute centroid
-		var sumX, sumZ float64
-		for _, cell := range region {
-			sumX += float64(cell[0])
-			sumZ += float64(cell[1])
-		}
-		centroidX := (sumX / float64(len(region)) + 0.5) * GridCellSize
-		centroidZ := (sumZ / float64(len(region)) + 0.5) * GridCellSize
-
-		// Compute dominant direction by averaging vectors
-		var avgVX, avgVZ float64
-		var count int
-		for _, cell := range region {
-			if acc, exists := cellMap[cell]; exists {
-				for j := range acc.vectorsX {
-					avgVX += acc.vectorsX[j]
-					avgVZ += acc.vectorsZ[j]
-					count++
-				}
-			}
-		}
-		if count > 0 {
-			avgVX /= float64(count)
-			avgVZ /= float64(count)
-			// Normalize
-			mag := math.Sqrt(avgVX*avgVX + avgVZ*avgVZ)
-			if mag > 0 {
-				avgVX /= mag
-				avgVZ /= mag
-			}
-		}
-
-		// Compute bounding box for length/width
-		var minX, maxX, minZ, maxZ int
-		first := true
-		for _, cell := range region {
-			if first {
-				minX, maxX, minZ, maxZ = cell[0], cell[0], cell[1], cell[1]
-				first = false
-			} else {
-				if cell[0] < minX { minX = cell[0] }
-				if cell[0] > maxX { maxX = cell[0] }
-				if cell[1] < minZ { minZ = cell[1] }
-				if cell[1] > maxZ { maxZ = cell[1] }
-			}
-		}
-
-		length := float64(maxZ-minZ+1) * GridCellSize
-		width := float64(maxX-minX+1) * GridCellSize
-		if width > length {
-			length, width = width, length
-		}
-
-		corridors = append(corridors, DetectedCorridor{
-			ID:           generateCorridorID(i),
-			CentroidX:    centroidX,
-			CentroidZ:    centroidZ,
-			DominantDirX: avgVX,
-			DominantDirZ: avgVZ,
-			LengthM:      length,
-			WidthM:       width,
-			CellCount:    len(region),
-			LastComputed: now,
-		})
+	// Prune trajectory segments
+	if _, err := f.db.Exec("DELETE FROM trajectory_segments WHERE timestamp < ?", cutoffTs); err != nil {
+		log.Printf("[WARN] Failed to prune trajectory segments: %v", err)
 	}
 
-	// Clear existing corridors and insert new ones
-	tx, err := fa.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec("DELETE FROM detected_corridors"); err != nil {
-		return err
+	// Prune dwell accumulator
+	dwellCutoffTs := now.AddDate(0, 0, -dwellPruneDays).UnixNano() / 1e6
+	if _, err := f.db.Exec("DELETE FROM dwell_accumulator WHERE last_updated < ?", dwellCutoffTs); err != nil {
+		log.Printf("[WARN] Failed to prune dwell accumulator: %v", err)
 	}
 
-	stmt, err := tx.Prepare(`
-		INSERT INTO detected_corridors (id, centroid_x, centroid_z, dominant_dir_x, dominant_dir_z, length_m, width_m, cell_count, last_computed)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for _, c := range corridors {
-		_, err := stmt.Exec(c.ID, c.CentroidX, c.CentroidZ, c.DominantDirX, c.DominantDirZ,
-			c.LengthM, c.WidthM, c.CellCount, c.LastComputed.UnixNano())
-		if err != nil {
-			continue
-		}
-	}
-
-	return tx.Commit()
+	f.markFlowDirty()
+	return nil
 }
 
-// PruneOldSegments removes trajectory segments older than retention period.
-func (fa *FlowAccumulator) PruneOldSegments() error {
-	fa.mu.Lock()
-	defer fa.mu.Unlock()
-
-	cutoff := time.Now().AddDate(0, 0, -fa.retentionDays)
-	_, err := fa.db.Exec(`DELETE FROM trajectory_segments WHERE timestamp < ?`, cutoff.UnixNano())
-	if err == nil {
-		fa.flowDirty = true
-	}
-	return err
+// Flush flushes any buffered data to the database.
+func (f *FlowAccumulator) Flush() error {
+	f.flushBuffers()
+	return nil
 }
 
-// bresenhamLine returns all grid cells a line passes through.
-func bresenhamLine(x0, z0, x1, z1 int) [][2]int {
-	var cells [][2]int
+// Close cleans up resources.
+func (f *FlowAccumulator) Close() error {
+	return f.Flush()
+}
+
+// Helper functions
+
+// cellKey creates a unique key for a grid cell.
+func cellKey(x, y int) string {
+	return fmt.Sprintf("%d,%d", x, y)
+}
+
+// parseCellKey parses a cell key into x, y coordinates.
+func parseCellKey(key string) (x, y int) {
+	_, err := fmt.Sscanf(key, "%d,%d", &x, &y)
+	if err != nil {
+		return 0, 0
+	}
+	return x, y
+}
+
+// generateSegmentID generates a unique segment ID.
+func generateSegmentID() string {
+	return time.Now().Format("20060102150405.000") + "-" + randString(4)
+}
+
+// generateCorridorID generates a unique corridor ID.
+func generateCorridorID() string {
+	return "corridor-" + time.Now().Format("20060102") + "-" + randString(8)
+}
+
+// randString generates a random hex string of length n.
+func randString(n int) string {
+	const chars = "0123456789abcdef"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = chars[time.Now().UnixNano()%16]
+		time.Sleep(time.Nanosecond)
+	}
+	return string(b)
+}
+
+// point represents a 2D grid coordinate.
+type point struct {
+	x, y int
+}
+
+// bresenhamLine implements Bresenham's line algorithm for grid traversal.
+func bresenhamLine(x0, y0, x1, y1 int) []point {
+	points := []point{}
 
 	dx := abs(x1 - x0)
-	dz := abs(z1 - z0)
-	sx := sign(x1 - x0)
-	sz := sign(z1 - z0)
-
-	if dz <= dx {
-		err := 2 * dz - dx
-		for i := 0; i <= dx; i++ {
-			cells = append(cells, [2]int{x0, z0})
-			if err > 0 {
-				z0 += sz
-				err -= 2 * dx
-			}
-			err += 2 * dz
-			x0 += sx
-		}
-	} else {
-		err := 2 * dx - dz
-		for i := 0; i <= dz; i++ {
-			cells = append(cells, [2]int{x0, z0})
-			if err > 0 {
-				x0 += sx
-				err -= 2 * dz
-			}
-			err += 2 * dx
-			z0 += sz
-		}
+	dy := -abs(y1 - y0)
+	sx := 1
+	if x0 > x1 {
+		sx = -1
+	}
+	sy := 1
+	if y0 > y1 {
+		sy = -1
 	}
 
-	return cells
-}
+	err := dx + dy
 
-// circularVariance computes the circular variance of angles.
-// Returns a value in [0, 1] where 0 = all angles aligned, 1 = uniform distribution.
-func circularVariance(angles []float64) float64 {
-	if len(angles) == 0 {
-		return 1.0
-	}
-
-	var sumSin, sumCos float64
-	for _, a := range angles {
-		sumSin += math.Sin(a)
-		sumCos += math.Cos(a)
-	}
-
-	n := float64(len(angles))
-	meanLength := math.Sqrt(sumSin*sumSin+sumCos*sumCos) / n
-
-	// Circular variance = 1 - R where R is mean resultant length
-	return 1.0 - meanLength
-}
-
-// findConnectedComponents finds connected regions of cells using 4-connectivity.
-func findConnectedComponents(cells map[[2]int]bool) [][][2]int {
-	if len(cells) == 0 {
-		return nil
-	}
-
-	visited := make(map[[2]int]bool)
-	var regions [][][2]int
-
-	for cell := range cells {
-		if visited[cell] {
-			continue
+	x, y := x0, y0
+	for {
+		points = append(points, point{x, y})
+		if x == x1 && y == y1 {
+			break
 		}
-
-		// BFS to find connected component
-		var region [][2]int
-		queue := [][2]int{cell}
-		visited[cell] = true
-
-		for len(queue) > 0 {
-			current := queue[0]
-			queue = queue[1:]
-			region = append(region, current)
-
-			// Check 4 neighbors
-			neighbors := [4][2]int{
-				{current[0] - 1, current[1]},
-				{current[0] + 1, current[1]},
-				{current[0], current[1] - 1},
-				{current[0], current[1] + 1},
-			}
-
-			for _, n := range neighbors {
-				if cells[n] && !visited[n] {
-					visited[n] = true
-					queue = append(queue, n)
-				}
-			}
+		e2 := 2 * err
+		if e2 >= dy {
+			err += dy
+			x += sx
 		}
-
-		if len(region) > 0 {
-			regions = append(regions, region)
+		if e2 <= dx {
+			err += dx
+			y += sy
 		}
 	}
 
-	return regions
+	return points
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
+// abs returns the absolute value of an integer.
+func abs(n int) int {
+	if n < 0 {
+		return -n
 	}
-	return x
+	return n
 }
 
-func sign(x int) int {
-	if x < 0 {
-		return -1
-	}
-	if x > 0 {
-		return 1
-	}
-	return 0
+// ToJSON serializes a FlowMap to JSON.
+func (f *FlowMap) ToJSON() ([]byte, error) {
+	return json.Marshal(f)
 }
 
-func generateSegmentID(trackID int, t time.Time) string {
-	return string(rune(trackID)) + "_" + t.Format("20060102150405.000000000")
+// ToJSON serializes a DwellHeatmap to JSON.
+func (d *DwellHeatmap) ToJSON() ([]byte, error) {
+	return json.Marshal(d)
 }
 
-func generateCorridorID(index int) string {
-	return "corridor_" + string(rune('A'+index%26)) + string(rune('0'+index/26))
+// ToJSON serializes a DetectedCorridor to JSON.
+func (d *DetectedCorridor) ToJSON() ([]byte, error) {
+	return json.Marshal(d)
+}
+
+// ToCorridorsJSON serializes a slice of DetectedCorridors to JSON.
+func ToCorridorsJSON(corridors []DetectedCorridor) ([]byte, error) {
+	return json.Marshal(corridors)
 }

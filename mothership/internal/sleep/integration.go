@@ -1,6 +1,7 @@
 package sleep
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -206,8 +207,6 @@ func (m *Monitor) collectSamples() {
 	m.mu.RLock()
 	pm := m.processorMgr
 	analyzer := m.analyzer
-	sleepStartHour := m.sleepStartHour
-	sleepEndHour := m.sleepEndHour
 	zoneMgr := m.zoneMgr
 	m.mu.RUnlock()
 
@@ -216,15 +215,6 @@ func (m *Monitor) collectSamples() {
 	}
 
 	now := time.Now()
-	hour := now.Hour()
-
-	// Check if we're in sleep hours
-	inSleepHours := false
-	if sleepStartHour > sleepEndHour {
-		inSleepHours = hour >= sleepStartHour || hour < sleepEndHour
-	} else {
-		inSleepHours = hour >= sleepStartHour && hour < sleepEndHour
-	}
 
 	// Get all link states
 	states := pm.GetAllMotionStates()

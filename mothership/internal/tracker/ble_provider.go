@@ -1,9 +1,7 @@
 package tracker
 
 import (
-	"time"
-
-	"github.com/jedarden/spaxel/mothership/internal/ble"
+	"github.com/spaxel/mothership/internal/ble"
 )
 
 // IdentityMatcherGetter is the interface expected from the BLE package's IdentityMatcher.
