@@ -333,3 +333,123 @@ func TestIdentifyNodeRequest(t *testing.T) {
 		})
 	}
 }
+
+// ─── System mode endpoint tests ─────────────────────────────────────────────
+
+func TestHandlerGetSystemMode(t *testing.T) {
+	reg := &mockRegistry{
+		nodes: make(map[string]NodeRecord),
+	}
+
+	mgr := &Manager{
+		registry: reg,
+	}
+
+	h := &Handler{mgr: mgr}
+
+	req := httptest.NewRequest("GET", "/api/mode", nil)
+	w := httptest.NewRecorder()
+
+	h.getSystemMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("getSystemMode() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var resp systemModeResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.Mode != "home" {
+		t.Errorf("Expected mode to be home, got %s", resp.Mode)
+	}
+
+	if !resp.AutoAwayConfig.Enabled {
+		t.Errorf("Expected auto-away to be enabled by default")
+	}
+
+	if resp.AutoAwayConfig.AbsenceDurationSec != 900 { // 15 minutes
+		t.Errorf("Expected absence duration to be 900s, got %d", resp.AutoAwayConfig.AbsenceDurationSec)
+	}
+}
+
+func TestHandlerSetSystemMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		requestBody  string
+		wantStatus   int
+		expectedMode string
+	}{
+		{
+			name:         "set to away mode",
+			requestBody:  `{"mode": "away", "reason": "manual"}`,
+			wantStatus:   http.StatusOK,
+			expectedMode: "away",
+		},
+		{
+			name:         "set to home mode",
+			requestBody:  `{"mode": "home", "reason": "manual"}`,
+			wantStatus:   http.StatusOK,
+			expectedMode: "home",
+		},
+		{
+			name:         "set to sleep mode",
+			requestBody:  `{"mode": "sleep", "reason": "night"}`,
+			wantStatus:   http.StatusOK,
+			expectedMode: "sleep",
+		},
+		{
+			name:         "mode defaults reason to manual",
+			requestBody:  `{"mode": "away"}`,
+			wantStatus:   http.StatusOK,
+			expectedMode: "away",
+		},
+		{
+			name:         "invalid mode",
+			requestBody:  `{"mode": "invalid"}`,
+			wantStatus:   http.StatusBadRequest,
+		},
+		{
+			name:         "invalid json",
+			requestBody:  `invalid json`,
+			wantStatus:   http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := &mockRegistry{
+				nodes: make(map[string]NodeRecord),
+			}
+
+			mgr := &Manager{
+				registry: reg,
+			}
+
+			h := &Handler{mgr: mgr}
+
+			req := httptest.NewRequest("POST", "/api/mode", bytes.NewBufferString(tt.requestBody))
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+
+			h.setSystemMode(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("setSystemMode() status = %v, want %v", w.Code, tt.wantStatus)
+			}
+
+			if tt.wantStatus == http.StatusOK {
+				var resp systemModeResponse
+				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+					t.Fatalf("Failed to decode response: %v", err)
+				}
+
+				if resp.Mode != tt.expectedMode {
+					t.Errorf("Expected mode to be %s, got %s", tt.expectedMode, resp.Mode)
+				}
+			}
+		})
+	}
+}

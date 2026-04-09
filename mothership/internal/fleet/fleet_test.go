@@ -387,3 +387,339 @@ func TestManagerPersistenceAcrossRestart(t *testing.T) {
 		t.Errorf("wrong firmware after restart: %q", nodes[0].FirmwareVersion)
 	}
 }
+
+// ─── System mode and auto-away tests ───────────────────────────────────────────
+
+// mockBLEPresenceProvider implements BLEPresenceProvider for testing.
+type mockBLEPresenceProvider struct {
+	registeredDevices map[string]string // MAC -> person_id
+	observations      []BLEObservation
+}
+
+func newMockBLEPresenceProvider() *mockBLEPresenceProvider {
+	return &mockBLEPresenceProvider{
+		registeredDevices: make(map[string]string),
+		observations:      make([]BLEObservation, 0),
+	}
+}
+
+func (m *mockBLEPresenceProvider) GetAllRegisteredDevices() (map[string]string, error) {
+	return m.registeredDevices, nil
+}
+
+func (m *mockBLEPresenceProvider) GetRecentRSSIObservations(mac string, maxAge time.Duration) []BLEObservation {
+	var result []BLEObservation
+	cutoff := time.Now().Add(-maxAge)
+	for _, obs := range m.observations {
+		if obs.DeviceMAC == mac && obs.Timestamp.After(cutoff) {
+			result = append(result, obs)
+		}
+	}
+	return result
+}
+
+// mockPersonNameProvider implements PersonNameProvider for testing.
+type mockPersonNameProvider struct {
+	names map[string]string // person_id -> name
+}
+
+func (m *mockPersonNameProvider) GetPersonName(personID string) string {
+	if name, ok := m.names[personID]; ok {
+		return name
+	}
+	return personID
+}
+
+// mockModeChangeBroadcaster implements ModeChangeBroadcaster for testing.
+type mockModeChangeBroadcaster struct {
+	mu      sync.Mutex
+	events  []events.SystemModeChangeEvent
+}
+
+func (m *mockModeChangeBroadcaster) BroadcastSystemModeChange(event events.SystemModeChangeEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, event)
+}
+
+func (m *mockModeChangeBroadcaster) getEvents() []events.SystemModeChangeEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]events.SystemModeChangeEvent{}, m.events...)
+}
+
+func TestManager_AutoAwayActivates(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	bleProvider := newMockBLEPresenceProvider()
+	bleProvider.registeredDevices["aa:bb:cc:dd:ee:ff"] = "person1"
+	mgr.SetBLEPresenceProvider(bleProvider)
+
+	modeBroadcaster := &mockModeChangeBroadcaster{}
+	mgr.SetModeChangeBroadcaster(modeBroadcaster)
+
+	// Initially in home mode
+	if mgr.GetSystemMode() != events.ModeHome {
+		t.Errorf("Expected initial mode to be home, got %s", mgr.GetSystemMode())
+	}
+
+	// Set all devices as seen long ago (more than 15 minutes ago)
+	mgr.mu.Lock()
+	mgr.lastDeviceSeen["aa:bb:cc:dd:ee:ff"] = time.Now().Add(-20 * time.Minute)
+	mgr.mu.Unlock()
+
+	// Check auto-away - should activate
+	mgr.CheckAutoAway()
+
+	if mgr.GetSystemMode() != events.ModeAway {
+		t.Errorf("Expected mode to be away after auto-away, got %s", mgr.GetSystemMode())
+	}
+
+	events := modeBroadcaster.getEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 mode change event, got %d", len(events))
+	}
+
+	if events[0].NewMode != events.ModeAway {
+		t.Errorf("Expected new mode to be away, got %s", events[0].NewMode)
+	}
+
+	if events[0].Reason != "auto_away" {
+		t.Errorf("Expected reason to be auto_away, got %s", events[0].Reason)
+	}
+}
+
+func TestManager_AutoDisarmTriggers(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	bleProvider := newMockBLEPresenceProvider()
+	bleProvider.registeredDevices["aa:bb:cc:dd:ee:ff"] = "person1"
+	mgr.SetBLEPresenceProvider(bleProvider)
+
+	personProvider := &mockPersonNameProvider{names: map[string]string{"person1": "Alice"}}
+	mgr.SetPersonProvider(personProvider)
+
+	modeBroadcaster := &mockModeChangeBroadcaster{}
+	mgr.SetModeChangeBroadcaster(modeBroadcaster)
+
+	// Set to away mode
+	mgr.mu.Lock()
+	mgr.systemMode = events.ModeAway
+	mgr.mu.Unlock()
+
+	// Simulate BLE observation with strong signal
+	observations := []BLEObservation{
+		{
+			DeviceMAC: "aa:bb:cc:dd:ee:ff",
+			NodeMAC:   "node1",
+			RSSIdBm:   -65, // Stronger than -70 threshold
+			Timestamp: time.Now(),
+		},
+	}
+
+	mgr.ProcessBLEObservations(observations)
+
+	// Should auto-disarm
+	if mgr.GetSystemMode() != events.ModeHome {
+		t.Errorf("Expected mode to be home after auto-disarm, got %s", mgr.GetSystemMode())
+	}
+
+	events := modeBroadcaster.getEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 mode change event, got %d", len(events))
+	}
+
+	if events[0].NewMode != events.ModeHome {
+		t.Errorf("Expected new mode to be home, got %s", events[0].NewMode)
+	}
+
+	if events[0].Reason != "auto_disarm" {
+		t.Errorf("Expected reason to be auto_disarm, got %s", events[0].Reason)
+	}
+
+	if events[0].PersonID != "person1" {
+		t.Errorf("Expected person_id to be person1, got %s", events[0].PersonID)
+	}
+
+	if events[0].PersonName != "Alice" {
+		t.Errorf("Expected person_name to be Alice, got %s", events[0].PersonName)
+	}
+}
+
+func TestManager_AutoAwayDoesNotTriggerWithoutRegisteredDevices(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	bleProvider := newMockBLEPresenceProvider()
+	// No registered devices
+	mgr.SetBLEPresenceProvider(bleProvider)
+
+	modeBroadcaster := &mockModeChangeBroadcaster{}
+	mgr.SetModeChangeBroadcaster(modeBroadcaster)
+
+	// Check auto-away - should NOT activate (no registered devices)
+	mgr.CheckAutoAway()
+
+	if mgr.GetSystemMode() != events.ModeHome {
+		t.Errorf("Expected mode to remain home when no registered devices, got %s", mgr.GetSystemMode())
+	}
+
+	events := modeBroadcaster.getEvents()
+	if len(events) != 0 {
+		t.Errorf("Expected no mode change events when no registered devices, got %d", len(events))
+	}
+}
+
+func TestManager_ManualOverridePausesAutoAway(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	bleProvider := newMockBLEPresenceProvider()
+	bleProvider.registeredDevices["aa:bb:cc:dd:ee:ff"] = "person1"
+	mgr.SetBLEPresenceProvider(bleProvider)
+
+	// Set manual override
+	mgr.SetSystemMode(events.ModeAway, "manual")
+
+	// Verify override is active
+	if !mgr.IsManualOverrideActive() {
+		t.Error("Expected manual override to be active")
+	}
+
+	// Set all devices as seen long ago
+	mgr.mu.Lock()
+	mgr.lastDeviceSeen["aa:bb:cc:dd:ee:ff"] = time.Now().Add(-20 * time.Minute)
+	mgr.mu.Unlock()
+
+	// Check auto-away - should NOT trigger due to manual override
+	initialMode := mgr.GetSystemMode()
+	mgr.CheckAutoAway()
+
+	// Mode should not change (already away, but the point is no auto-away logic ran)
+	if mgr.GetSystemMode() != initialMode {
+		t.Errorf("Expected mode to remain %s with manual override, got %s", initialMode, mgr.GetSystemMode())
+	}
+}
+
+func TestManager_SetSystemMode(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	modeBroadcaster := &mockModeChangeBroadcaster{}
+	mgr.SetModeChangeBroadcaster(modeBroadcaster)
+
+	// Set to away mode
+	err := mgr.SetSystemMode(events.ModeAway, "test")
+	if err != nil {
+		t.Fatalf("Failed to set system mode: %v", err)
+	}
+
+	if mgr.GetSystemMode() != events.ModeAway {
+		t.Errorf("Expected mode to be away, got %s", mgr.GetSystemMode())
+	}
+
+	events := modeBroadcaster.getEvents()
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 mode change event, got %d", len(events))
+	}
+
+	if events[0].NewMode != events.ModeAway {
+		t.Errorf("Expected new mode to be away, got %s", events[0].NewMode)
+	}
+
+	if events[0].Reason != "test" {
+		t.Errorf("Expected reason to be test, got %s", events[0].Reason)
+	}
+}
+
+func TestManager_SetSystemModeSameModeNoOp(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	modeBroadcaster := &mockModeChangeBroadcaster{}
+	mgr.SetModeChangeBroadcaster(modeBroadcaster)
+
+	// Set to home mode (already home)
+	err := mgr.SetSystemMode(events.ModeHome, "test")
+	if err != nil {
+		t.Fatalf("Failed to set system mode: %v", err)
+	}
+
+	// Should not have triggered any events
+	events := modeBroadcaster.getEvents()
+	if len(events) != 0 {
+		t.Errorf("Expected no mode change events when setting to same mode, got %d", len(events))
+	}
+}
+
+func TestManager_AutoDisarmWeakSignalNoTrigger(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	bleProvider := newMockBLEPresenceProvider()
+	bleProvider.registeredDevices["aa:bb:cc:dd:ee:ff"] = "person1"
+	mgr.SetBLEPresenceProvider(bleProvider)
+
+	modeBroadcaster := &mockModeChangeBroadcaster{}
+	mgr.SetModeChangeBroadcaster(modeBroadcaster)
+
+	// Set to away mode
+	mgr.mu.Lock()
+	mgr.systemMode = events.ModeAway
+	mgr.mu.Unlock()
+
+	// Simulate BLE observation with weak signal (below -70 threshold)
+	observations := []BLEObservation{
+		{
+			DeviceMAC: "aa:bb:cc:dd:ee:ff",
+			NodeMAC:   "node1",
+			RSSIdBm:   -75, // Weaker than -70 threshold
+			Timestamp: time.Now(),
+		},
+	}
+
+	mgr.ProcessBLEObservations(observations)
+
+	// Should NOT auto-disarm (signal too weak)
+	if mgr.GetSystemMode() != events.ModeAway {
+		t.Errorf("Expected mode to remain away with weak BLE signal, got %s", mgr.GetSystemMode())
+	}
+
+	events := modeBroadcaster.getEvents()
+	if len(events) != 0 {
+		t.Errorf("Expected no mode change events with weak BLE signal, got %d", len(events))
+	}
+}
+
+func TestManager_AutoDisarmUnregisteredDeviceNoTrigger(t *testing.T) {
+	mgr, _, _ := newTestManager(t)
+
+	bleProvider := newMockBLEPresenceProvider()
+	bleProvider.registeredDevices["aa:bb:cc:dd:ee:ff"] = "person1"
+	mgr.SetBLEPresenceProvider(bleProvider)
+
+	modeBroadcaster := &mockModeChangeBroadcaster{}
+	mgr.SetModeChangeBroadcaster(modeBroadcaster)
+
+	// Set to away mode
+	mgr.mu.Lock()
+	mgr.systemMode = events.ModeAway
+	mgr.mu.Unlock()
+
+	// Simulate BLE observation from unregistered device
+	observations := []BLEObservation{
+		{
+			DeviceMAC: "11:22:33:44:55:66", // Not registered
+			NodeMAC:   "node1",
+			RSSIdBm:   -65,
+			Timestamp: time.Now(),
+		},
+	}
+
+	mgr.ProcessBLEObservations(observations)
+
+	// Should NOT auto-disarm (device not registered)
+	if mgr.GetSystemMode() != events.ModeAway {
+		t.Errorf("Expected mode to remain away with unregistered BLE device, got %s", mgr.GetSystemMode())
+	}
+
+	events := modeBroadcaster.getEvents()
+	if len(events) != 0 {
+		t.Errorf("Expected no mode change events with unregistered BLE device, got %d", len(events))
+	}
+}
