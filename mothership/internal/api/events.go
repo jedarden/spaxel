@@ -315,18 +315,17 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// In simple mode, filter out system-only event types
-	// Simple mode shows: zone_entry, zone_exit, portal_crossing, fall_alert, anomaly, security_alert, learning_milestone
-	// Simple mode hides: node_online, node_offline, ota_update, baseline_changed, system
+	// Simple mode shows only person-relevant events: zone_entry, zone_exit, portal_crossing, fall_alert, anomaly, anomaly_detected, security_alert, sleep_session_end
+	// Simple mode hides: node_online, node_offline, ota_update, baseline_changed, system, learning_milestone, detection, presence_transition, stationary_detected
 	simpleModeTypes := map[string]bool{
 		"zone_entry":        true,
 		"zone_exit":         true,
 		"portal_crossing":   true,
 		"fall_alert":        true,
 		"anomaly":           true,
+		"anomaly_detected":  true,
 		"security_alert":    true,
-		"learning_milestone": true,
-		"presence_transition": true,
-		"stationary_detected": true,
+		"sleep_session_end": true,
 	}
 	isSimpleMode := mode != "expert"
 

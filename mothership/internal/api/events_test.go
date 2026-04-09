@@ -1095,3 +1095,208 @@ func TestListEvents_PersonIDTakesPrecedence(t *testing.T) {
 		}
 	}
 }
+
+// --- Tests for mode parameter (simple vs expert mode) ---
+
+func TestListEvents_SimpleModeFiltersSystemEvents(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	// Insert events with different types
+	eventTypes := []string{
+		"zone_entry", "zone_exit", "portal_crossing", "fall_alert",
+		"anomaly", "security_alert", "sleep_session_end",
+		"node_online", "node_offline", "ota_update", "baseline_changed", "system",
+	}
+	for i, evtType := range eventTypes {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := h.LogEvent(evtType, ts, "Kitchen", "Alice", 0, `{"test":true}`, "info"); err != nil {
+			t.Fatalf("LogEvent %s: %v", evtType, err)
+		}
+	}
+
+	// Simple mode (default) - should exclude system event types
+	req := httptest.NewRequest("GET", "/api/events?mode=simple&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// Should only return user-facing events (zone_entry, zone_exit, portal_crossing, fall_alert, anomaly, security_alert, sleep_session_end)
+	// Should exclude: node_online, node_offline, ota_update, baseline_changed, system
+	for _, ev := range resp.Events {
+		switch ev.Type {
+		case "node_online", "node_offline", "ota_update", "baseline_changed", "system":
+			t.Errorf("simple mode should exclude system event type %q", ev.Type)
+		}
+	}
+
+	// Verify we got some events (non-system ones)
+	if len(resp.Events) == 0 {
+		t.Error("simple mode returned no events, expected non-system events")
+	}
+}
+
+func TestListEvents_ExpertModeShowsAllEvents(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	// Insert events with different types
+	eventTypes := []string{
+		"zone_entry", "node_online", "system", "ota_update",
+	}
+	for i, evtType := range eventTypes {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := h.LogEvent(evtType, ts, "Kitchen", "Alice", 0, `{"test":true}`, "info"); err != nil {
+			t.Fatalf("LogEvent %s: %v", evtType, err)
+		}
+	}
+
+	// Expert mode - should return all events including system types
+	req := httptest.NewRequest("GET", "/api/events?mode=expert&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// Should return all events
+	if resp.TotalFiltered != 4 {
+		t.Errorf("expert mode: total_filtered = %d, want 4 (all events)", resp.TotalFiltered)
+	}
+
+	// Verify we have system events
+	hasSystemEvent := false
+	for _, ev := range resp.Events {
+		if ev.Type == "node_online" || ev.Type == "system" || ev.Type == "ota_update" {
+			hasSystemEvent = true
+			break
+		}
+	}
+	if !hasSystemEvent {
+		t.Error("expert mode should include system events")
+	}
+}
+
+func TestListEvents_DefaultModeIsSimple(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	// Insert system events
+	for i := 0; i < 3; i++ {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := h.LogEvent("system", ts, "", "", 0, `{"test":true}`, "info"); err != nil {
+			t.Fatalf("LogEvent: %v", err)
+		}
+	}
+	// Insert user-facing events
+	for i := 0; i < 2; i++ {
+		ts := base.Add(time.Duration(i+3) * time.Second)
+		if err := h.LogEvent("zone_entry", ts, "Kitchen", "Alice", 0, `{"test":true}`, "info"); err != nil {
+			t.Fatalf("LogEvent: %v", err)
+		}
+	}
+
+	// No mode parameter specified - should default to simple mode
+	req := httptest.NewRequest("GET", "/api/events?limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// Should exclude system events in default (simple) mode
+	for _, ev := range resp.Events {
+		if ev.Type == "system" {
+			t.Error("default mode (simple) should exclude system events")
+		}
+	}
+
+	// Should have the user-facing events
+	if len(resp.Events) != 2 {
+		t.Errorf("default mode: got %d events, want 2 (user-facing only)", len(resp.Events))
+	}
+}
+
+func TestListEvents_ModeWithTypeFilter(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	// Insert events
+	eventTypes := []string{"node_online", "zone_entry", "system"}
+	for i, evtType := range eventTypes {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := h.LogEvent(evtType, ts, "Kitchen", "Alice", 0, `{"test":true}`, "info"); err != nil {
+			t.Fatalf("LogEvent %s: %v", evtType, err)
+		}
+	}
+
+	// Simple mode with explicit type filter for a system type
+	// When type is explicitly specified, simple mode filtering should not override it
+	req := httptest.NewRequest("GET", "/api/events?mode=simple&type=node_online&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// Should return the requested system type even in simple mode when explicitly requested
+	if resp.TotalFiltered != 1 {
+		t.Errorf("simple mode with explicit type: total_filtered = %d, want 1", resp.TotalFiltered)
+	}
+	if len(resp.Events) != 1 || resp.Events[0].Type != "node_online" {
+		t.Error("simple mode with explicit type should return requested system event")
+	}
+}
+
+func TestListEvents_ModeWithCombinedFilters(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	// Insert events with different types, zones, and persons
+	events := []struct {
+		evtType string
+		zone    string
+		person  string
+	}{
+		{"zone_entry", "Kitchen", "Alice"},
+		{"zone_exit", "Kitchen", "Alice"},
+		{"node_online", "", ""},
+		{"system", "", ""},
+		{"detection", "Kitchen", "Bob"},
+		{"detection", "Hallway", "Alice"},
+	}
+	for i, e := range events {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := h.LogEvent(e.evtType, ts, e.zone, e.person, 0, `{"test":true}`, "info"); err != nil {
+			t.Fatalf("LogEvent: %v", err)
+		}
+	}
+
+	// Simple mode with zone and person filters
+	req := httptest.NewRequest("GET", "/api/events?mode=simple&zone=Kitchen&person=Alice&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// Should only return zone_entry and zone_exit for Alice in Kitchen (exclude system events)
+	if resp.TotalFiltered != 2 {
+		t.Errorf("combined filters: total_filtered = %d, want 2", resp.TotalFiltered)
+	}
+	for _, ev := range resp.Events {
+		if ev.Zone != "Kitchen" {
+			t.Errorf("event zone = %q, want Kitchen", ev.Zone)
+		}
+		if ev.Person != "Alice" {
+			t.Errorf("event person = %q, want Alice", ev.Person)
+		}
+	}
+}
