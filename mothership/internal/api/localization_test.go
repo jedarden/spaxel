@@ -1,0 +1,844 @@
+// Package api provides REST API tests for self-improving localization.
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/localization"
+)
+
+func TestLocalizationHandler_getWeights(t *testing.T) {
+	// Create temporary directory
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create components
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/weights
+	req := httptest.NewRequest("GET", "/api/localization/weights", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check fields
+	if _, ok := result["weights"]; !ok {
+		t.Error("Missing weights field")
+	}
+	if _, ok := result["stats"]; !ok {
+		t.Error("Missing stats field")
+	}
+}
+
+func TestLocalizationHandler_getLinkWeight(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/weights/test-link-1
+	req := httptest.NewRequest("GET", "/api/localization/weights/test-link-1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check fields
+	if result["link_id"] != "test-link-1" {
+		t.Errorf("Expected link_id test-link-1, got %v", result["link_id"])
+	}
+	if _, ok := result["weight"]; !ok {
+		t.Error("Missing weight field")
+	}
+	if _, ok := result["sigma"]; !ok {
+		t.Error("Missing sigma field")
+	}
+}
+
+func TestLocalizationHandler_resetWeights(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	// Set some weights first
+	weights := sil.GetWeightLearner().GetLearnedWeights()
+	weights.SetWeights("test-link", 1.5, 0.5)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test POST /api/localization/weights/reset
+	req := httptest.NewRequest("POST", "/api/localization/weights/reset", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if result["status"] != "weights_reset" {
+		t.Errorf("Expected status weights_reset, got %v", result["status"])
+	}
+
+	// Verify weights were reset
+	weight := sil.GetWeightLearner().GetLearnedWeights().GetLinkWeight("test-link")
+	if weight != 1.0 {
+		t.Errorf("Expected weight to be reset to 1.0, got %v", weight)
+	}
+}
+
+func TestLocalizationHandler_getSpatialWeights(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/spatial-weights
+	req := httptest.NewRequest("GET", "/api/localization/spatial-weights", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check fields
+	if _, ok := result["spatial_weights"]; !ok {
+		t.Error("Missing spatial_weights field")
+	}
+	if _, ok := result["stats"]; !ok {
+		t.Error("Missing stats field")
+	}
+}
+
+func TestLocalizationHandler_getSpatialWeightsForZone(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	// Set some weights for testing
+	swLearner.mu.Lock()
+	swLearner.setWeightLocked("link1", 0, 0, 1.5)
+	swLearner.setWeightLocked("link2", 0, 0, 0.8)
+	swLearner.mu.Unlock()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/spatial-weights/zone/0/0
+	req := httptest.NewRequest("GET", "/api/localization/spatial-weights/zone/0/0", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check fields
+	if result["zone_x"] != 0 {
+		t.Errorf("Expected zone_x 0, got %v", result["zone_x"])
+	}
+	if result["zone_y"] != 0 {
+		t.Errorf("Expected zone_y 0, got %v", result["zone_y"])
+	}
+	if _, ok := result["weights"]; !ok {
+		t.Error("Missing weights field")
+	}
+
+	// Verify weights
+	weights, ok := result["weights"].(map[string]interface{})
+	if !ok {
+		t.Fatal("weights is not a map")
+	}
+
+	// Check that our test weights are present
+	if link1Weight, ok := weights["link1"].(float64); !ok || link1Weight != 1.5 {
+		t.Errorf("Expected link1 weight 1.5, got %v", weights["link1"])
+	}
+	if link2Weight, ok := weights["link2"].(float64); !ok || link2Weight != 0.8 {
+		t.Errorf("Expected link2 weight 0.8, got %v", weights["link2"])
+	}
+}
+
+func TestLocalizationHandler_getGroundTruthSamples(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	// Add some test samples
+	for i := 0; i < 5; i++ {
+		sample := localization.GroundTruthSample{
+			Timestamp: time.Now().Add(-time.Duration(i) * time.Minute),
+			PersonID:  "test-person",
+			BLEPosition: localization.Vec3{X: 1.0, Y: 0.0, Z: 1.0},
+			BlobPosition: localization.Vec3{X: 1.0 + float64(i)*0.1, Y: 0.0, Z: 1.0},
+			PositionError: float64(i) * 0.1,
+			PerLinkDeltas: map[string]float64{"link1": 0.5},
+			PerLinkHealth: map[string]float64{"link1": 0.9},
+			BLEConfidence: 0.8,
+			ZoneGridX:     0,
+			ZoneGridY:     0,
+		}
+		if err := gtStore.AddSample(sample); err != nil {
+			t.Fatalf("Failed to add sample: %v", err)
+		}
+	}
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/groundtruth/samples
+	req := httptest.NewRequest("GET", "/api/localization/groundtruth/samples?limit=10", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check fields
+	if _, ok := result["samples"]; !ok {
+		t.Error("Missing samples field")
+	}
+	if _, ok := result["count"]; !ok {
+		t.Error("Missing count field")
+	}
+
+	// Verify we got samples
+	count, ok := result["count"].(int)
+	if !ok || count != 5 {
+		t.Errorf("Expected 5 samples, got %v", result["count"])
+	}
+}
+
+func TestLocalizationHandler_getGroundTruthStats(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	// Add test samples
+	sample := localization.GroundTruthSample{
+		Timestamp:     time.Now(),
+		PersonID:      "test-person",
+		BLEPosition:   localization.Vec3{X: 1.0, Y: 0.0, Z: 1.0},
+		BlobPosition:  localization.Vec3{X: 1.0, Y: 0.0, Z: 1.0},
+		PositionError: 0.1,
+		PerLinkDeltas: map[string]float64{"link1": 0.5},
+		PerLinkHealth: map[string]float64{"link1": 0.9},
+		BLEConfidence: 0.8,
+		ZoneGridX:     0,
+		ZoneGridY:     0,
+	}
+	if err := gtStore.AddSample(sample); err != nil {
+		t.Fatalf("Failed to add sample: %v", err)
+	}
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/groundtruth/stats
+	req := httptest.NewRequest("GET", "/api/localization/groundtruth/stats", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check required fields
+	requiredFields := []string{"total_samples", "today_samples", "by_person", "zone_counts"}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("Missing required field: %s", field)
+		}
+	}
+
+	// Verify total samples
+	total, ok := result["total_samples"].(int)
+	if !ok || total != 1 {
+		t.Errorf("Expected 1 total sample, got %v", result["total_samples"])
+	}
+}
+
+func TestLocalizationHandler_getAccuracyHistory(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/accuracy/history
+	req := httptest.NewRequest("GET", "/api/localization/accuracy/history?weeks=4", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check fields
+	if _, ok := result["records"]; !ok {
+		t.Error("Missing records field")
+	}
+	if _, ok := result["weeks"]; !ok {
+		t.Error("Missing weeks field")
+	}
+}
+
+func TestLocalizationHandler_getLearningProgress(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/learning/progress
+	req := httptest.NewRequest("GET", "/api/localization/learning/progress", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check required fields
+	requiredFields := []string{"progress", "stats"}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("Missing required field: %s", field)
+		}
+	}
+}
+
+func TestLocalizationHandler_getSelfImprovingStatus(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/self-improving/status
+	req := httptest.NewRequest("GET", "/api/localization/self-improving/status", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check required fields
+	requiredFields := []string{
+		"learning_progress", "learned_weights", "improvement_stats",
+		"improvement_history", "ble_observations_count",
+	}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("Missing required field: %s", field)
+		}
+	}
+}
+
+func TestLocalizationHandler_processLearning(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test POST /api/localization/self-improving/process
+	req := httptest.NewRequest("POST", "/api/localization/self-improving/process", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check fields
+	if result["status"] != "learning_processed" {
+		t.Errorf("Expected status learning_processed, got %v", result["status"])
+	}
+	if _, ok := result["timestamp"]; !ok {
+		t.Error("Missing timestamp field")
+	}
+}
+
+func TestLocalizationHandler_getImprovementHistory(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "localization_api_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	gtStore, err := localization.NewGroundTruthStore(
+		filepath.Join(tmpDir, "groundtruth.db"),
+		localization.DefaultGroundTruthStoreConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create ground truth store: %v", err)
+	}
+	defer gtStore.Close()
+
+	swLearner, err := localization.NewSpatialWeightLearner(
+		filepath.Join(tmpDir, "spatial_weights.db"),
+		localization.DefaultSpatialWeightLearnerConfig(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create spatial weight learner: %v", err)
+	}
+	defer swLearner.Close()
+
+	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
+	if err != nil {
+		t.Fatalf("Failed to create weight store: %v", err)
+	}
+	defer wStore.Close()
+
+	config := localization.DefaultSelfImprovingConfig()
+	sil := localization.NewSelfImprovingLocalizer(config)
+
+	handler := NewLocalizationHandler(gtStore, swLearner, sil.GetWeightLearner(), wStore, sil)
+
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	// Test GET /api/localization/learning/history
+	req := httptest.NewRequest("GET", "/api/localization/learning/history", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check required fields
+	if _, ok := result["history"]; !ok {
+		t.Error("Missing history field")
+	}
+	if _, ok := result["stats"]; !ok {
+		t.Error("Missing stats field")
+	}
+}

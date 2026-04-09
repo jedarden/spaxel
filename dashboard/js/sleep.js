@@ -459,8 +459,10 @@
      * @param {Object} msg - { type: 'morning_summary', report: { ... } }
      */
     function handleMorningSummary(msg) {
-        if (msg.report) {
-            showMorningSummary(msg.report);
+        // Backend sends "sleep" field (from BroadcastMorningSummary in hub.go)
+        var report = msg.report || msg.sleep;
+        if (report) {
+            showMorningSummary(report);
         }
     }
 
@@ -495,4 +497,7 @@
         handleSleepStatus: handleSleepStatus,
         fetchSleepData: fetchSleepData
     };
+
+    // Auto-initialize on load
+    init();
 })();

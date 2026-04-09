@@ -145,8 +145,17 @@ func (e *Engine) Fuse(links []LinkMotion) *FusionResult {
 			sigmaMultiplier = learnedWeights.GetLinkSigma(linkID)
 		}
 
-		// Use the sigma-aware version if we have learned sigma
-		if sigmaMultiplier != 0 {
+		// Use the sigma-aware version if we have learned sigma, and apply spatial weights if available
+		if e.spatialWeightLearner != nil {
+			// Create spatial weight function for this link
+			linkID := lm.NodeMAC + "-" + lm.PeerMAC
+			spatialWeightFunc := func(x, z float64) float64 {
+				return e.spatialWeightLearner.GetSpatialWeight(linkID, x, z)
+			}
+
+			// Apply both sigma and spatial weights
+			e.grid.AddLinkInfluenceWithSpatialWeights(posA.X, posA.Z, posB.X, posB.Z, weight, sigmaMultiplier, spatialWeightFunc)
+		} else if sigmaMultiplier != 0 {
 			e.grid.AddLinkInfluenceWithSigma(posA.X, posA.Z, posB.X, posB.Z, weight, sigmaMultiplier)
 		} else {
 			e.grid.AddLinkInfluence(posA.X, posA.Z, posB.X, posB.Z, weight)

@@ -118,6 +118,67 @@ func (g *Grid) AddLinkInfluenceWithSigma(ax, az, bx, bz, weight, sigmaMultiplier
 	}
 }
 
+// AddLinkInfluenceWithSpatialWeights paints Fresnel-zone influence with per-cell spatial weights.
+// spatialWeightFunc is a function that takes (x, z) position and returns a weight multiplier for this link.
+// This enables Fresnel zone weight refinement based on learned spatial patterns.
+func (g *Grid) AddLinkInfluenceWithSpatialWeights(ax, az, bx, bz, weight, sigmaMultiplier float64, spatialWeightFunc func(x, z float64) float64) {
+	if weight <= 0 {
+		return
+	}
+
+	ab := math.Sqrt((bx-ax)*(bx-ax) + (bz-az)*(bz-az))
+	if ab < 0.1 {
+		return // degenerate link
+	}
+
+	// σ is chosen so the first Fresnel zone (excess = λ/2 ≈ 0.062m at 2.4GHz)
+	// maps to ~1σ, giving comfortable spatial spread.  In practice a wider
+	// sigma (0.5m) gives better localisation for indoor multipath.
+	baseSigma := math.Max(ab*0.25, 0.5)
+
+	// Apply learned sigma multiplier
+	sigma := baseSigma
+	if sigmaMultiplier > 0 {
+		sigma = baseSigma * sigmaMultiplier
+		// Clamp to reasonable range
+		if sigma < 0.2 {
+			sigma = 0.2
+		}
+		if sigma > 2.0 {
+			sigma = 2.0
+		}
+	}
+
+	twoSigSq := 2 * sigma * sigma
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for row := 0; row < g.rows; row++ {
+		pz := g.originZ + (float64(row)+0.5)*g.cellSize
+		for col := 0; col < g.cols; col++ {
+			px := g.originX + (float64(col)+0.5)*g.cellSize
+
+			dAP := math.Sqrt((px-ax)*(px-ax) + (pz-az)*(pz-az))
+			dPB := math.Sqrt((px-bx)*(px-bx) + (pz-bz)*(pz-bz))
+			excess := dAP + dPB - ab
+
+			if excess < 0 {
+				excess = 0
+			}
+
+			// Apply spatial weight for this cell position
+			cellWeight := weight
+			if spatialWeightFunc != nil {
+				cellWeight = weight * spatialWeightFunc(px, pz)
+			}
+
+			influence := cellWeight * math.Exp(-(excess * excess) / twoSigSq)
+			g.cells[row*g.cols+col] += influence
+		}
+	}
+}
+
 // Normalize scales the grid so the maximum cell value is 1.0.
 // Returns false if the grid is all zero.
 func (g *Grid) Normalize() bool {
