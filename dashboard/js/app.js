@@ -110,6 +110,23 @@
         controls.maxDistance = 50;
         controls.maxPolarAngle = Math.PI / 2 + 0.3; // Allow slight below-ground view
 
+        // Touch-specific optimizations for mobile
+        controls.rotateSpeed = 0.8;           // Rotation speed
+        controls.zoomSpeed = 1.2;             // Zoom speed for pinch gesture
+        controls.panSpeed = 0.8;              // Pan speed for two-finger drag
+        controls.enablePan = true;            // Enable pan (two-finger drag)
+        controls.enableZoom = true;           // Enable zoom (pinch gesture)
+        controls.enableRotate = true;         // Enable rotate (one-finger drag)
+
+        // Touch gesture configuration
+        // One finger: rotate (orbit)
+        // Two fingers: pan
+        // Pinch: zoom
+        controls.touches = {
+            ONE: THREE.TOUCH.ROTATE,      // One-finger touch rotates the camera
+            TWO: THREE.TOUCH.DOLLY_PAN    // Two-finger touch zooms and pans
+        };
+
         // Grid helper (XZ plane, Y-up)
         gridHelper = new THREE.GridHelper(
             CONFIG.gridWidth,

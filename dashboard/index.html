@@ -38,6 +38,7 @@
         #scene-container {
             width: 100vw;
             height: 100vh;
+            touch-action: none; /* Prevent default touch behaviors for OrbitControls */
         }
 
         /* Status bar at top */
@@ -2181,6 +2182,297 @@
             background: rgba(255, 255, 255, 0.15);
         }
 
+        /* ===== Mobile Menu Toggle Button ===== */
+        #mobile-menu-btn {
+            display: none;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ccc;
+            font-size: 14px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #mobile-menu-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        #mobile-menu-btn svg {
+            width: 18px;
+            height: 18px;
+            vertical-align: middle;
+        }
+
+        /* ===== Mobile Responsive Styles ===== */
+        @media (max-width: 768px) {
+            /* Show mobile menu button */
+            #mobile-menu-btn {
+                display: block;
+                order: -1; /* Move to beginning of status bar */
+            }
+
+            /* Status bar - compact on mobile */
+            #status-bar {
+                height: auto;
+                flex-wrap: wrap;
+                padding: 8px;
+                gap: 8px;
+                font-size: 12px;
+            }
+
+            .status-item {
+                font-size: 11px;
+            }
+
+            /* Hide less important status items on mobile */
+            .status-item:has(#fps-counter),
+            .status-item:has(#link-count) {
+                display: none;
+            }
+
+            /* Node panel - collapsible on mobile */
+            #node-panel {
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: auto;
+                max-height: 50vh;
+                border-radius: 12px 12px 0 0;
+                transform: translateY(calc(100% - 40px));
+                transition: transform 0.3s ease;
+            }
+
+            #node-panel.expanded {
+                transform: translateY(0);
+            }
+
+            /* Chart panel - smaller on mobile */
+            #chart-panel {
+                width: calc(100% - 16px);
+                right: 8px;
+                left: 8px;
+                bottom: 8px;
+                height: 200px;
+            }
+
+            /* Presence panel - hide on mobile (use timeline instead) */
+            #presence-panel {
+                display: none;
+            }
+
+            /* Buttons - smaller on mobile */
+            .view-btn, #gdop-toggle-btn, #fresnel-toggle-btn, #room-editor-btn,
+            #floorplan-btn, #simulator-btn, #pause-live-btn, #ble-btn,
+            #settings-btn, #add-node-btn, #add-virtual-btn {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+
+            /* Detection quality gauge - compact */
+            #detection-quality {
+                padding: 2px 6px;
+            }
+
+            #quality-gauge-container {
+                width: 24px;
+                height: 24px;
+            }
+
+            #quality-value {
+                font-size: 7px;
+            }
+
+            #quality-label {
+                display: none;
+            }
+
+            /* Room editor panel - full width on mobile */
+            #room-editor-panel {
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: auto;
+                border-radius: 12px 12px 0 0;
+                transform: translateY(calc(100% - 40px));
+                transition: transform 0.3s ease;
+            }
+
+            #room-editor-panel.expanded {
+                transform: translateY(0);
+            }
+
+            /* GDOP legend - smaller on mobile */
+            #gdop-legend {
+                left: 8px;
+                bottom: 220px;
+                padding: 8px;
+            }
+
+            #gdop-gradient {
+                width: 100px;
+            }
+
+            /* Toast notifications - full width on mobile */
+            #toast-container {
+                bottom: 220px;
+                left: 8px;
+                right: 8px;
+                transform: none;
+            }
+
+            .toast {
+                font-size: 13px;
+                padding: 10px 16px;
+            }
+
+            /* Wizard - full screen on mobile */
+            #wizard-card {
+                width: 100%;
+                height: 100vh;
+                max-height: 100vh;
+                border-radius: 0;
+                padding: 20px;
+            }
+
+            /* Onboarding illustration - smaller on mobile */
+            .esp32-illustration {
+                max-width: 200px;
+            }
+
+            /* Anomaly banner - smaller on mobile */
+            .anomaly-banner {
+                padding: 16px;
+                margin: 0 8px;
+            }
+
+            /* Replay control bar - compact on mobile */
+            .replay-control-bar {
+                width: calc(100% - 16px);
+                padding: 10px 16px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .replay-info {
+                order: -1;
+                width: 100%;
+                text-align: center;
+                margin-bottom: 8px;
+            }
+
+            /* Timeline - full screen on mobile */
+            #timeline-view {
+                padding: 0;
+            }
+
+            .timeline-header {
+                padding: 12px;
+            }
+
+            .timeline-filter-bar {
+                padding: 12px;
+            }
+
+            /* Simulator panel - full screen on mobile */
+            .simulator-panel {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            /* Briefing card - full width on mobile */
+            #briefing-card {
+                width: calc(100% - 16px);
+                margin: 8px;
+            }
+
+            /* Quick actions - larger touch targets on mobile */
+            .quick-action-item {
+                min-height: 48px;
+                padding: 12px 16px;
+            }
+
+            /* Command palette - full width on mobile */
+            .command-palette-overlay {
+                padding: 8px;
+            }
+
+            .command-palette {
+                max-width: 100%;
+            }
+
+            /* Morning briefing - adjust spacing */
+            #morning-briefing-panel {
+                width: calc(100% - 16px);
+                margin: 8px;
+            }
+        }
+
+        /* Touch device optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            /* Larger touch targets for touch devices */
+            .view-btn, #gdop-toggle-btn, #fresnel-toggle-btn, #room-editor-btn,
+            #floorplan-btn, #simulator-btn, #pause-live-btn, #ble-btn,
+            #settings-btn, #add-node-btn, #add-virtual-btn {
+                min-height: 44px;
+                min-width: 44px;
+                padding: 8px 12px;
+            }
+
+            /* Node items - larger touch targets */
+            .node-item {
+                padding: 12px 8px;
+                min-height: 44px;
+            }
+
+            /* Link items - larger touch targets */
+            .link-item {
+                padding: 10px 8px;
+                min-height: 44px;
+            }
+
+            /* Toast notifications - larger on touch devices */
+            .toast {
+                padding: 14px 20px;
+                font-size: 14px;
+            }
+
+            /* Replay controls - larger touch targets */
+            .replay-btn {
+                width: 44px;
+                height: 44px;
+            }
+
+            /* Timeline events - larger touch targets */
+            .timeline-event-item {
+                padding: 16px;
+            }
+
+            /* Disable hover effects on touch devices */
+            .node-item:hover,
+            .link-item:hover,
+            .view-btn:hover,
+            #gdop-toggle-btn:hover,
+            #fresnel-toggle-btn:hover,
+            .room-field input:hover {
+                background: initial;
+            }
+
+            /* Use active states instead */
+            .node-item:active,
+            .link-item:active,
+            .view-btn:active,
+            #gdop-toggle-btn:active,
+            #fresnel-toggle-btn:active {
+                background: rgba(255, 255, 255, 0.15);
+            }
+        }
+
         /* ===== Replay Control Bar ===== */
         #pause-live-btn {
             background: rgba(255, 193, 7, 0.15);
@@ -2526,6 +2818,13 @@
             <span id="ws-status-text">Disconnected</span>
             <span id="ws-reconnect-spinner"></span>
         </div>
+        <button id="mobile-menu-btn" onclick="toggleMobilePanels()" aria-label="Toggle panels">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
         <div class="status-item">
             <span>Nodes: <strong id="node-count">0</strong></span>
         </div>
@@ -3040,6 +3339,79 @@
         </div>
     </div>
     <script>
+        // Mobile panel toggle functionality
+        function toggleMobilePanels() {
+            var nodePanel = document.getElementById('node-panel');
+            var roomEditor = document.getElementById('room-editor-panel');
+            var chartPanel = document.getElementById('chart-panel');
+
+            // Toggle node panel
+            if (nodePanel) {
+                nodePanel.classList.toggle('expanded');
+            }
+
+            // Toggle room editor panel
+            if (roomEditor) {
+                roomEditor.classList.toggle('expanded');
+            }
+
+            // On mobile, hide chart panel when panels are shown, show when hidden
+            if (chartPanel) {
+                var isExpanded = nodePanel && nodePanel.classList.contains('expanded');
+                chartPanel.style.display = isExpanded ? 'none' : 'block';
+            }
+        }
+
+        // Auto-collapse panels on mobile when clicking outside
+        if (window.matchMedia('(max-width: 768px)').matches) {
+            document.addEventListener('click', function(e) {
+                var nodePanel = document.getElementById('node-panel');
+                var roomEditor = document.getElementById('room-editor-panel');
+                var menuBtn = document.getElementById('mobile-menu-btn');
+
+                // If clicking outside panels and menu button
+                if (menuBtn && !menuBtn.contains(e.target)) {
+                    var clickedInsideNodePanel = nodePanel && nodePanel.contains(e.target);
+                    var clickedInsideRoomEditor = roomEditor && roomEditor.contains(e.target);
+
+                    if (!clickedInsideNodePanel && !clickedInsideRoomEditor) {
+                        if (nodePanel) nodePanel.classList.remove('expanded');
+                        if (roomEditor) roomEditor.classList.remove('expanded');
+                    }
+                }
+            });
+        }
+
+        // Handle touch events on panels to prevent accidental collapse
+        function setupPanelTouchHandlers(panelId) {
+            var panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            var touchStartY = 0;
+
+            panel.addEventListener('touchstart', function(e) {
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+
+            panel.addEventListener('touchmove', function(e) {
+                // Allow scrolling within the panel
+                var currentY = e.touches[0].clientY;
+                var deltaY = currentY - touchStartY;
+
+                // If scrolling down and at top, or scrolling up and at bottom
+                if ((deltaY > 0 && this.scrollTop === 0) ||
+                    (deltaY < 0 && this.scrollTop + this.clientHeight >= this.scrollHeight)) {
+                    // Allow the scroll
+                }
+            }, { passive: true });
+        }
+
+        // Initialize touch handlers for panels when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            setupPanelTouchHandlers('node-panel');
+            setupPanelTouchHandlers('room-editor-panel');
+        });
+
         // Keep view-preset buttons in sync with active state
         ['perspective','topdown','follow'].forEach(function(p) {
             document.getElementById('view-' + p).addEventListener('click', function() {
