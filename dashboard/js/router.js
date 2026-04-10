@@ -17,6 +17,11 @@
             icon: '&#x25A0;',
             description: 'Real-time 3D detection view'
         },
+        simple: {
+            title: 'Simple',
+            icon: '&#x1F3E0;',
+            description: 'Card-based mobile-first UI'
+        },
         timeline: {
             title: 'Timeline',
             icon: '&#x231A;',
@@ -188,10 +193,65 @@
         // Save to localStorage
         localStorage.setItem(STORAGE_KEY, mode);
 
+        // Handle simple mode visibility
+        handleSimpleModeVisibility(mode);
+
         // Trigger mode change handlers
         notifyModeChange(mode, previousMode);
 
         console.log('[Router] Mode changed:', previousMode, '->', mode);
+    }
+
+    /**
+     * Handle simple mode visibility
+     * Hides expert mode UI elements when in simple mode
+     */
+    function handleSimpleModeVisibility(mode) {
+        const isSimple = mode === 'simple';
+        const statusBar = document.getElementById('status-bar');
+        const modeToggleBar = document.getElementById('mode-toggle-bar');
+        const sceneContainer = document.getElementById('scene-container');
+        const simpleHeader = document.getElementById('simple-mode-header');
+        const simpleContent = document.getElementById('simple-mode-content');
+        const simpleQuickActions = document.getElementById('simple-quick-actions');
+
+        if (isSimple) {
+            // Hide expert mode elements
+            if (statusBar) statusBar.style.display = 'none';
+            if (modeToggleBar) modeToggleBar.style.display = 'none';
+            if (sceneContainer) sceneContainer.style.display = 'none';
+
+            // Show simple mode elements
+            if (simpleHeader) simpleHeader.style.display = 'flex';
+            if (simpleContent) simpleContent.style.display = 'block';
+            if (simpleQuickActions) simpleQuickActions.style.display = 'block';
+
+            // Enable simple mode
+            document.body.classList.add('simple-mode');
+
+            // Initialize simple mode if available
+            if (window.SpaxelSimpleMode) {
+                window.SpaxelSimpleMode.enable();
+            }
+        } else {
+            // Show expert mode elements
+            if (statusBar) statusBar.style.display = 'flex';
+            if (modeToggleBar) modeToggleBar.style.display = 'flex';
+            if (sceneContainer) sceneContainer.style.display = 'block';
+
+            // Hide simple mode elements
+            if (simpleHeader) simpleHeader.style.display = 'none';
+            if (simpleContent) simpleContent.style.display = 'none';
+            if (simpleQuickActions) simpleQuickActions.style.display = 'none';
+
+            // Disable simple mode
+            document.body.classList.remove('simple-mode');
+
+            // Disable simple mode module if available
+            if (window.SpaxelSimpleMode) {
+                window.SpaxelSimpleMode.disable();
+            }
+        }
     }
 
     /**
