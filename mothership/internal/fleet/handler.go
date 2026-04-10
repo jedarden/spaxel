@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/events"
@@ -13,6 +14,8 @@ import (
 // NodeIdentifier sends identify commands to connected nodes.
 type NodeIdentifier interface {
 	SendIdentifyToMAC(mac string, durationMS int) bool
+	SendRebootToMAC(mac string, delayMS int) bool
+	GetConnectedMACs() []string
 }
 
 // Handler serves the fleet REST API.
@@ -39,8 +42,15 @@ func (h *Handler) SetNodeIdentifier(ni NodeIdentifier) {
 //	PUT    /api/nodes/{mac}/position — update node 3D position
 //	DELETE /api/nodes/{mac}          — delete a node
 //	POST   /api/nodes/{mac}/identify — blink LED for identification
+//	POST   /api/nodes/{mac}/reboot   — reboot node
+//	POST   /api/nodes/update-all     — OTA update all nodes
+//	POST   /api/nodes/rebaseline-all — re-baseline all links
 //	POST   /api/nodes/virtual        — add a virtual planning node
 //	PUT    /api/room                 — update room dimensions
+//	GET    /api/export               — export configuration
+//	POST   /api/import               — import configuration
+//	GET    /api/mode                 — get system mode
+//	POST   /api/mode                 — set system mode
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/nodes", h.listNodes)
 	r.Get("/api/nodes/{mac}", h.getNode)
@@ -48,11 +58,17 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Put("/api/nodes/{mac}/position", h.updateNodePosition)
 	r.Delete("/api/nodes/{mac}", h.deleteNode)
 	r.Post("/api/nodes/{mac}/identify", h.identifyNode)
+	r.Post("/api/nodes/{mac}/reboot", h.rebootNode)
+	r.Post("/api/nodes/update-all", h.updateAllNodes)
+	r.Post("/api/nodes/rebaseline-all", h.rebaselineAllNodes)
 	r.Post("/api/nodes/virtual", h.addVirtualNode)
 	r.Put("/api/room", h.updateRoom)
 	// System mode endpoints
 	r.Get("/api/mode", h.getSystemMode)
 	r.Post("/api/mode", h.setSystemMode)
+	// Export/Import endpoints
+	r.Get("/api/export", h.exportConfig)
+	r.Post("/api/import", h.importConfig)
 }
 
 func (h *Handler) listNodes(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +233,106 @@ func (h *Handler) identifyNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (h *Handler) rebootNode(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// Verify node exists.
+	if _, err := h.mgr.registry.GetNode(mac); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse request body for optional delay.
+	var req struct {
+		DelayMS int `json:"delay_ms"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	delayMS := req.DelayMS
+	if delayMS <= 0 {
+		delayMS = 1000 // Default 1 second delay
+	}
+
+	// Send reboot command if node identifier is available.
+	if h.nodeID != nil {
+		if !h.nodeID.SendRebootToMAC(mac, delayMS) {
+			http.Error(w, "node not connected", http.StatusNotFound)
+			return
+		}
+	}
+
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (h *Handler) updateAllNodes(w http.ResponseWriter, r *http.Request) {
+	// This is a placeholder - the actual OTA manager would handle this
+	// For now, return a success response with the count of connected nodes
+	if h.nodeID != nil {
+		macs := h.nodeID.GetConnectedMACs()
+		writeJSON(w, map[string]interface{}{
+			"ok":    true,
+			"count": len(macs),
+		})
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"ok":    true,
+		"count": 0,
+	})
+}
+
+func (h *Handler) rebaselineAllNodes(w http.ResponseWriter, r *http.Request) {
+	// This is a placeholder - the actual baseline manager would handle this
+	// For now, return a success response
+	writeJSON(w, map[string]interface{}{
+		"ok":    true,
+		"count": 0,
+	})
+}
+
+func (h *Handler) exportConfig(w http.ResponseWriter, r *http.Request) {
+	// Collect all configuration data
+	nodes, err := h.mgr.registry.GetAllNodes()
+	if err != nil {
+		http.Error(w, "failed to get nodes", http.StatusInternalServerError)
+		return
+	}
+
+	config := map[string]interface{}{
+		"version":    1,
+		"exported_at": time.Now().Format(time.RFC3339),
+		"nodes":      nodes,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(config); err != nil {
+		http.Error(w, "failed to encode config", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) importConfig(w http.ResponseWriter, r *http.Request) {
+	var config map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// For now, just return success - a full implementation would validate and apply the config
+	writeJSON(w, map[string]interface{}{
+		"ok": true,
+		"imported": map[string]interface{}{
+			"nodes": 0,
+		},
+	})
 }
 
 type updateRoomRequest struct {

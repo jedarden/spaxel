@@ -352,6 +352,35 @@ func (s *Server) SendIdentifyToMAC(mac string, durationMS int) bool {
 	return true
 }
 
+// SendRebootToMAC sends a reboot command to a connected node.
+// Returns false if the node is not connected.
+func (s *Server) SendRebootToMAC(mac string, delayMS int) bool {
+	s.mu.RLock()
+	nc, ok := s.connections[mac]
+	s.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	msg := RebootMessage{Type: "reboot", DelayMS: delayMS}
+	data, _ := json.Marshal(msg)
+	nc.writeMu.Lock()
+	nc.Conn.WriteMessage(websocket.TextMessage, data)
+	nc.writeMu.Unlock()
+	log.Printf("[INFO] Sent reboot command to node %s: delay=%dms", mac, delayMS)
+	return true
+}
+
+// GetConnectedMACs returns a list of currently connected node MAC addresses.
+func (s *Server) GetConnectedMACs() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	macs := make([]string, 0, len(s.connections))
+	for mac := range s.connections {
+		macs = append(macs, mac)
+	}
+	return macs
+}
+
 // IsNodeConnected returns true if the node with the given MAC is currently connected.
 func (s *Server) IsNodeConnected(mac string) bool {
 	s.mu.RLock()
