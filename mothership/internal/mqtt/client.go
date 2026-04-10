@@ -16,13 +16,18 @@ import (
 // Config holds MQTT client configuration.
 type Config struct {
 	Broker   string // e.g., "tcp://homeassistant.local:1883"
-	ClientID string // defaults to "spaxel"
+	ClientID string // defaults to "spaxel-{mothership_id}"
 	Username string
 	Password string
+	TLS      bool
 
 	// Home Assistant discovery
 	DiscoveryPrefix string // defaults to "homeassistant"
 	DiscoveryEnabled bool
+
+	// Spaxel-specific
+	MothershipID string // unique ID for this mothership instance
+	TopicPrefix   string // defaults to "spaxel"
 
 	// Connection settings
 	KeepAlive      time.Duration
@@ -88,8 +93,14 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("MQTT broker URL required")
 	}
 
+	if cfg.MothershipID == "" {
+		cfg.MothershipID = "spaxel"
+	}
 	if cfg.ClientID == "" {
-		cfg.ClientID = "spaxel"
+		cfg.ClientID = fmt.Sprintf("spaxel-%s", cfg.MothershipID)
+	}
+	if cfg.TopicPrefix == "" {
+		cfg.TopicPrefix = "spaxel"
 	}
 	if cfg.DiscoveryPrefix == "" {
 		cfg.DiscoveryPrefix = "homeassistant"
@@ -104,10 +115,10 @@ func NewClient(cfg Config) (*Client, error) {
 	c := &Client{
 		config: cfg,
 		spaxelDevice: HomeAssistantDevice{
-			Identifiers:  []string{"spaxel"},
-			Name:         "Spaxel Presence",
+			Identifiers:  []string{fmt.Sprintf("spaxel_%s", cfg.MothershipID)},
+			Name:         "Spaxel",
+			Model:        "Spaxel Presence System",
 			Manufacturer: "Spaxel",
-			Model:        "WiFi CSI Presence Detection",
 		},
 		publishedEntities: make(map[string]bool),
 	}
@@ -116,8 +127,10 @@ func NewClient(cfg Config) (*Client, error) {
 	opts.AddBroker(cfg.Broker)
 	opts.SetClientID(cfg.ClientID)
 	opts.SetKeepAlive(cfg.KeepAlive)
-	opts.SetAutoReconnect(cfg.AutoReconnect)
-	opts.SetCleanSession(true)
+	// Enable auto-reconnect with exponential backoff
+	opts.SetMaxReconnectInterval(2 * time.Minute)
+	opts.SetAutoReconnect(true)
+	opts.SetCleanSession(false) // Use persistent sessions for retained messages
 
 	if cfg.Username != "" {
 		opts.SetUsername(cfg.Username)
@@ -126,6 +139,10 @@ func NewClient(cfg Config) (*Client, error) {
 		opts.SetPassword(cfg.Password)
 	}
 
+	// Set Last Will and Testament for availability
+	lwtTopic := fmt.Sprintf("%s/availability", cfg.TopicPrefix)
+	opts.SetBinaryWill(lwtTopic, []byte("offline"), 1, true)
+
 	opts.OnConnect = func(client mqtt.Client) {
 		c.mu.Lock()
 		c.connected = true
@@ -133,6 +150,11 @@ func NewClient(cfg Config) (*Client, error) {
 		c.mu.Unlock()
 
 		log.Printf("[INFO] MQTT connected to %s", cfg.Broker)
+
+		// Publish online status
+		if err := c.PublishRetained(lwtTopic, []byte("online")); err != nil {
+			log.Printf("[WARN] Failed to publish availability: %v", err)
+		}
 
 		// Publish discovery configs on reconnect
 		if cfg.DiscoveryEnabled {
@@ -495,4 +517,337 @@ func (c *Client) GetBrokerHost() string {
 		return u.Hostname()
 	}
 	return c.config.Broker
+}
+
+// ─── Home Assistant Auto-Discovery Extensions ─────────────────────────────────────
+
+// PublishPersonPresenceDiscovery publishes HA auto-discovery for a person presence binary sensor.
+func (c *Client) PublishPersonPresenceDiscovery(personID, personName string) error {
+	if !c.config.DiscoveryEnabled {
+		return nil
+	}
+
+	entityID := fmt.Sprintf("spaxel_%s_%s_presence", c.config.MothershipID, personID)
+	configTopic := fmt.Sprintf("%s/binary_sensor/%s/config", c.config.DiscoveryPrefix, entityID)
+	stateTopic := fmt.Sprintf("%s/person/%s/presence", c.config.TopicPrefix, personID)
+
+	config := HADiscoveryConfig{
+		Name:       fmt.Sprintf("%s Presence", personName),
+		UniqueID:   entityID,
+		StateTopic: stateTopic,
+		PayloadOn:  "home",
+		PayloadOff: "not_home",
+		DeviceClass: "presence",
+		Device:     c.spaxelDevice,
+	}
+
+	payload, _ := json.Marshal(config)
+	if err := c.PublishRetained(configTopic, payload); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.publishedEntities[entityID] = true
+	c.mu.Unlock()
+
+	log.Printf("[INFO] MQTT: Published person presence discovery for %s", personName)
+	return nil
+}
+
+// PublishZoneOccupancyDiscovery publishes HA auto-discovery for a zone occupancy sensor.
+func (c *Client) PublishZoneOccupancyDiscovery(zoneID, zoneName string) error {
+	if !c.config.DiscoveryEnabled {
+		return nil
+	}
+
+	entityID := fmt.Sprintf("spaxel_%s_zone_%s_occupancy", c.config.MothershipID, zoneID)
+	configTopic := fmt.Sprintf("%s/sensor/%s/config", c.config.DiscoveryPrefix, entityID)
+	stateTopic := fmt.Sprintf("%s/zone/%s/occupancy", c.config.TopicPrefix, zoneID)
+	occupantsTopic := fmt.Sprintf("%s/zone/%s/occupants", c.config.TopicPrefix, zoneID)
+
+	config := HADiscoveryConfig{
+		Name:         fmt.Sprintf("%s Occupancy", zoneName),
+		UniqueID:     entityID,
+		StateTopic:   stateTopic,
+		UnitOfMeasure: "people",
+		JSONAttributesTopic: occupantsTopic,
+		Icon:         "mdi:account-multiple",
+		Device:       c.spaxelDevice,
+	}
+
+	payload, _ := json.Marshal(config)
+	if err := c.PublishRetained(configTopic, payload); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.publishedEntities[entityID] = true
+	c.mu.Unlock()
+
+	log.Printf("[INFO] MQTT: Published zone occupancy discovery for %s", zoneName)
+	return nil
+}
+
+// PublishZoneBinaryDiscovery publishes HA auto-discovery for a zone binary occupancy sensor.
+func (c *Client) PublishZoneBinaryDiscovery(zoneID, zoneName string) error {
+	if !c.config.DiscoveryEnabled {
+		return nil
+	}
+
+	entityID := fmt.Sprintf("spaxel_%s_zone_%s_occupied", c.config.MothershipID, zoneID)
+	configTopic := fmt.Sprintf("%s/binary_sensor/%s/config", c.config.DiscoveryPrefix, entityID)
+	stateTopic := fmt.Sprintf("%s/zone/%s/occupied", c.config.TopicPrefix, zoneID)
+
+	config := HADiscoveryConfig{
+		Name:       fmt.Sprintf("%s Occupied", zoneName),
+		UniqueID:   entityID,
+		StateTopic: stateTopic,
+		PayloadOn:  "ON",
+		PayloadOff: "OFF",
+		DeviceClass: "occupancy",
+		Icon:       "mdi:motion-sensor",
+		Device:     c.spaxelDevice,
+	}
+
+	payload, _ := json.Marshal(config)
+	if err := c.PublishRetained(configTopic, payload); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.publishedEntities[entityID] = true
+	c.mu.Unlock()
+
+	log.Printf("[INFO] MQTT: Published zone binary discovery for %s", zoneName)
+	return nil
+}
+
+// PublishFallDetectionDiscovery publishes HA auto-discovery for fall detection.
+func (c *Client) PublishFallDetectionDiscovery() error {
+	if !c.config.DiscoveryEnabled {
+		return nil
+	}
+
+	entityID := fmt.Sprintf("spaxel_%s_fall_detected", c.config.MothershipID)
+	configTopic := fmt.Sprintf("%s/binary_sensor/%s/config", c.config.DiscoveryPrefix, entityID)
+	stateTopic := fmt.Sprintf("%s/fall_detected", c.config.TopicPrefix)
+
+	config := HADiscoveryConfig{
+		Name:       "Fall Detected",
+		UniqueID:   entityID,
+		StateTopic: stateTopic,
+		ValueTemplate: "{% if value_json.person is defined %}ON{% else %}OFF{% endif %}",
+		DeviceClass: "safety",
+		Icon:       "mdi:human-greeting-proximity",
+		Device:     c.spaxelDevice,
+	}
+
+	payload, _ := json.Marshal(config)
+	if err := c.PublishRetained(configTopic, payload); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.publishedEntities[entityID] = true
+	c.mu.Unlock()
+
+	log.Printf("[INFO] MQTT: Published fall detection discovery")
+	return nil
+}
+
+// PublishSystemHealthDiscovery publishes HA auto-discovery for system health sensor.
+func (c *Client) PublishSystemHealthDiscovery() error {
+	if !c.config.DiscoveryEnabled {
+		return nil
+	}
+
+	entityID := fmt.Sprintf("spaxel_%s_detection_quality", c.config.MothershipID)
+	configTopic := fmt.Sprintf("%s/sensor/%s/config", c.config.DiscoveryPrefix, entityID)
+	stateTopic := fmt.Sprintf("%s/system/health", c.config.TopicPrefix)
+
+	config := HADiscoveryConfig{
+		Name:       "Detection Quality",
+		UniqueID:   entityID,
+		StateTopic: stateTopic,
+		UnitOfMeasure: "%",
+		DeviceClass: "",
+		Icon:       "mdi:gauge",
+		Device:     c.spaxelDevice,
+	}
+
+	payload, _ := json.Marshal(config)
+	if err := c.PublishRetained(configTopic, payload); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.publishedEntities[entityID] = true
+	c.mu.Unlock()
+
+	log.Printf("[INFO] MQTT: Published system health discovery")
+	return nil
+}
+
+// PublishSystemModeDiscovery publishes HA auto-discovery for system mode select.
+func (c *Client) PublishSystemModeDiscovery() error {
+	if !c.config.DiscoveryEnabled {
+		return nil
+	}
+
+	entityID := fmt.Sprintf("spaxel_%s_system_mode", c.config.MothershipID)
+	configTopic := fmt.Sprintf("%s/select/%s/config", c.config.DiscoveryPrefix, entityID)
+	stateTopic := fmt.Sprintf("%s/system/mode", c.config.TopicPrefix)
+	commandTopic := fmt.Sprintf("%s/command/system_mode", c.config.TopicPrefix)
+
+	config := map[string]interface{}{
+		"name": fmt.Sprintf("Spaxel System Mode"),
+		"unique_id": entityID,
+		"state_topic": stateTopic,
+		"command_topic": commandTopic,
+		"options": []string{"home", "away", "sleep"},
+		"device": c.spaxelDevice,
+		"icon": "mdi:home-switch",
+	}
+
+	payload, _ := json.Marshal(config)
+	if err := c.PublishRetained(configTopic, payload); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.publishedEntities[entityID] = true
+	c.mu.Unlock()
+
+	log.Printf("[INFO] MQTT: Published system mode discovery")
+	return nil
+}
+
+// ─── State Publishing ─────────────────────────────────────────────────────────────
+
+// PublishPersonPresence publishes a person's presence state.
+func (c *Client) PublishPersonPresence(personID string, home bool) error {
+	stateTopic := fmt.Sprintf("%s/person/%s/presence", c.config.TopicPrefix, personID)
+
+	payload := "not_home"
+	if home {
+		payload = "home"
+	}
+
+	return c.PublishRetained(stateTopic, []byte(payload))
+}
+
+// PublishZoneOccupancy publishes zone occupancy count.
+func (c *Client) PublishZoneOccupancy(zoneID string, count int) error {
+	stateTopic := fmt.Sprintf("%s/zone/%s/occupancy", c.config.TopicPrefix, zoneID)
+	return c.PublishRetained(stateTopic, []byte(fmt.Sprintf("%d", count)))
+}
+
+// PublishZoneOccupants publishes the list of people in a zone.
+func (c *Client) PublishZoneOccupants(zoneID string, occupants []string) error {
+	stateTopic := fmt.Sprintf("%s/zone/%s/occupants", c.config.TopicPrefix, zoneID)
+
+	payload, err := json.Marshal(occupants)
+	if err != nil {
+		return err
+	}
+
+	return c.PublishRetained(stateTopic, payload)
+}
+
+// PublishZoneOccupied publishes zone occupied binary state.
+func (c *Client) PublishZoneOccupied(zoneID string, occupied bool) error {
+	stateTopic := fmt.Sprintf("%s/zone/%s/occupied", c.config.TopicPrefix, zoneID)
+
+	payload := "OFF"
+	if occupied {
+		payload = "ON"
+	}
+
+	return c.PublishRetained(stateTopic, []byte(payload))
+}
+
+// PublishFallEvent publishes a fall detection event.
+func (c *Client) PublishFallEvent(personID, personLabel, zoneID, zoneName string, timestamp time.Time) error {
+	topic := fmt.Sprintf("%s/fall_detected", c.config.TopicPrefix)
+
+	event := map[string]interface{}{
+		"person_id":    personID,
+		"person_label": personLabel,
+		"zone_id":      zoneID,
+		"zone_name":    zoneName,
+		"timestamp":    timestamp.Format(time.RFC3339),
+	}
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	// Fall events are NOT retained
+	return c.Publish(topic, payload)
+}
+
+// PublishSystemHealth publishes system health metrics.
+func (c *Client) PublishSystemHealth(nodeCount, onlineCount int, detectionQuality float64, mode string) error {
+	topic := fmt.Sprintf("%s/system/health", c.config.TopicPrefix)
+
+	health := map[string]interface{}{
+		"node_count":         nodeCount,
+		"online_count":       onlineCount,
+		"detection_quality":  detectionQuality,
+		"mode":               mode,
+		"timestamp":          time.Now().Format(time.RFC3339),
+	}
+
+	payload, err := json.Marshal(health)
+	if err != nil {
+		return err
+	}
+
+	return c.PublishRetained(topic, payload)
+}
+
+// PublishSystemMode publishes the current system mode.
+func (c *Client) PublishSystemMode(mode string) error {
+	topic := fmt.Sprintf("%s/system/mode", c.config.TopicPrefix)
+	return c.PublishRetained(topic, []byte(mode))
+}
+
+// SubscribeToSystemMode subscribes to system mode command topic.
+func (c *Client) SubscribeToSystemMode(handler func(mode string)) error {
+	topic := fmt.Sprintf("%s/command/system_mode", c.config.TopicPrefix)
+
+	return c.Subscribe(topic, func(_ string, payload []byte) {
+		mode := string(payload)
+		if mode == "home" || mode == "away" || mode == "sleep" {
+			handler(mode)
+		}
+	})
+}
+
+// RemovePersonDiscovery removes a person's HA auto-discovery entity.
+func (c *Client) RemovePersonDiscovery(personID string) error {
+	entityID := fmt.Sprintf("spaxel_%s_%s_presence", c.config.MothershipID, personID)
+	configTopic := fmt.Sprintf("%s/binary_sensor/%s/config", c.config.DiscoveryPrefix, entityID)
+	return c.PublishRetained(configTopic, []byte{})
+}
+
+// RemoveZoneDiscovery removes a zone's HA auto-discovery entities.
+func (c *Client) RemoveZoneDiscovery(zoneID string) error {
+	// Remove occupancy sensor
+	occupancyEntityID := fmt.Sprintf("spaxel_%s_zone_%s_occupancy", c.config.MothershipID, zoneID)
+	occupancyTopic := fmt.Sprintf("%s/sensor/%s/config", c.config.DiscoveryPrefix, occupancyEntityID)
+	c.PublishRetained(occupancyTopic, []byte{})
+
+	// Remove binary sensor
+	binaryEntityID := fmt.Sprintf("spaxel_%s_zone_%s_occupied", c.config.MothershipID, zoneID)
+	binaryTopic := fmt.Sprintf("%s/binary_sensor/%s/config", c.config.DiscoveryPrefix, binaryEntityID)
+	return c.PublishRetained(binaryTopic, []byte{})
+}
+
+// GetMothershipID returns the mothership ID used for this client.
+func (c *Client) GetMothershipID() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.config.MothershipID
 }
