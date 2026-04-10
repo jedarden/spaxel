@@ -2372,6 +2372,14 @@ const Viz3D = (function () {
     }
 
     /**
+     * Get the Three.js scene (for external modules like simulator).
+     * @returns {THREE.Scene} The scene object
+     */
+    function getScene() {
+        return _scene;
+    }
+
+    /**
      * Focus the camera on a specific zone.
      * @param {string} zoneID - The zone ID to focus on
      */

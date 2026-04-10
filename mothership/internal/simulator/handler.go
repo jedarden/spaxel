@@ -35,9 +35,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/simulator/walkers", h.getWalkers)
 	r.Post("/api/simulator/walkers", h.addWalker)
 	r.Delete("/api/simulator/walkers/{id}", h.removeWalker)
+	r.Post("/api/simulator/session", h.createSession)
 	r.Post("/api/simulator/simulate", h.simulate)
 	r.Get("/api/simulator/results", h.getResults)
 	r.Post("/api/simulator/gdop", h.computeGDOP)
+	r.Get("/api/simulator/gdop/heatmap", h.getGDOPHeatmap)
 	r.Get("/api/simulator/status", h.getStatus)
 	r.Post("/api/simulator/subscribe", h.subscribe)
 }
@@ -206,10 +208,29 @@ func (h *Handler) computeGDOP(w http.ResponseWriter, r *http.Request) {
 	// Run simulation to get GDOP map
 	result := engine.RunSimulation()
 
+	// Convert to heatmap format for frontend
+	minX, minY, _, maxX, maxY, _ := req.Space.Bounds()
+	links := GenerateAllLinks(engine.nodes)
+	gdopComp := NewGDOPComputer(links, GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.2,
+	})
+
+	// Compute full 2D GDOP results for heatmap
+	// We only need the floor plane (z=1.0m height for 2D analysis)
+	gdopResults := gdopComp.ComputeAll()
+	heatmapData := gdopComp.ToHeatmapData(gdopResults)
+
 	writeJSON(w, map[string]interface{}{
 		"gdop_map":        result.GDOPMap,
 		"grid_dimensions": result.GridDimensions,
 		"coverage_score":  result.CoverageScore,
+		"gdop_heatmap":    heatmapData,
+		"mean_gdop":       gdopComp.AverageGDOP(gdopResults),
+		"quality_counts":  gdopComp.QualityCounts(gdopResults),
 	})
 }
 
@@ -301,4 +322,96 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 		return
 	}
 	w.Write(data)
+}
+
+// createSession handles POST /api/simulator/session
+// Creates a new simulator session with the given space configuration.
+func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Space *Space `json:"space"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Space == nil {
+		req.Space = DefaultSpace()
+	}
+
+	if err := req.Space.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Update the engine's space
+	h.mu.Lock()
+	h.engine.SetSpace(req.Space)
+	h.mu.Unlock()
+
+	// Generate session ID
+	sessionID := fmt.Sprintf("sim_%d", time.Now().UnixNano())
+
+	writeJSON(w, map[string]interface{}{
+		"session_id": sessionID,
+		"space":      req.Space,
+	})
+}
+
+// getGDOPHeatmap handles GET /api/simulator/gdop/heatmap
+// Returns GDOP heatmap data for the current simulator state.
+func (h *Handler) getGDOPHeatmap(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// Get current nodes and space from engine
+	nodes := h.engine.GetVirtualNodes()
+	space := h.engine.space
+
+	if len(nodes) < 2 {
+		http.Error(w, "Need at least 2 nodes for GDOP computation", http.StatusBadRequest)
+		return
+	}
+
+	// Create links from nodes
+	nodeSet := NewNodeSet()
+	for _, node := range nodes {
+		nodeSet.Add(node)
+	}
+	links := GenerateAllLinks(nodeSet)
+
+	// Get grid bounds from space
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+
+	// Create GDOP computer
+	gdopComp := NewGDOPComputer(links, GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.2, // 20cm cells
+	})
+
+	// Compute GDOP results
+	gdopResults := gdopComp.ComputeAll()
+
+	// Convert to heatmap format
+	heatmapData := gdopComp.ToHeatmapData(gdopResults)
+
+	// Build response
+	response := map[string]interface{}{
+		"gdop_map":         heatmapData.GDOPValues,
+		"grid_dimensions": []int{heatmapData.Width, heatmapData.Depth},
+		"grid_origin":     map[string]float64{"x": heatmapData.OriginX, "y": heatmapData.OriginY},
+		"cell_size_m":     heatmapData.CellSize,
+		"coverage_score":  gdopComp.CoverageScore(gdopResults) / 100.0, // Convert to 0-1
+		"mean_gdop":       gdopComp.AverageGDOP(gdopResults),
+		"quality_counts":  gdopComp.QualityCounts(gdopResults),
+		"qualities":       heatmapData.Qualities,
+		"colors":          heatmapData.Colors,
+		"accuracy_map":    heatmapData.AccuracyMap,
+	}
+
+	writeJSON(w, response)
 }

@@ -76,8 +76,8 @@
     let _renderer = null;
     let _controls = null;
     let _wallMeshes = [];
-    let _nodeMeshes = [];
-    let _walkerMeshes = [];
+    let _nodeMeshes = new Map();
+    let _walkerMeshes = new Map();
     let _gdopMesh = null;
 
     // ============================================
@@ -207,6 +207,32 @@
                             <input type="checkbox" id="sim-show-gdop"> Show GDOP Overlay
                         </label>
                         <button id="sim-update-gdop" class="sim-btn">Update GDOP</button>
+                    </div>
+                    <div id="sim-gdop-legend" class="sim-gdop-legend" style="display: none;">
+                        <div class="gdop-legend-item">
+                            <span class="gdop-legend-color" style="background-color: #22c65e;"></span>
+                            <span class="gdop-legend-label">Excellent (GDOP &lt; 2)</span>
+                        </div>
+                        <div class="gdop-legend-item">
+                            <span class="gdop-legend-color" style="background-color: #ffc107;"></span>
+                            <span class="gdop-legend-label">Good (GDOP 2-4)</span>
+                        </div>
+                        <div class="gdop-legend-item">
+                            <span class="gdop-legend-color" style="background-color: #ff9200;"></span>
+                            <span class="gdop-legend-label">Fair (GDOP 4-8)</span>
+                        </div>
+                        <div class="gdop-legend-item">
+                            <span class="gdop-legend-color" style="background-color: #dc3545;"></span>
+                            <span class="gdop-legend-label">Poor (GDOP &gt; 8)</span>
+                        </div>
+                        <div class="gdop-legend-item">
+                            <span class="gdop-legend-color" style="background-color: #505050;"></span>
+                            <span class="gdop-legend-label">No Coverage</span>
+                        </div>
+                        <div class="gdop-stats" id="sim-gdop-stats">
+                            <span class="gdop-stat-item">Coverage: <strong id="sim-gdop-coverage">--</strong></span>
+                            <span class="gdop-stat-item">Mean GDOP: <strong id="sim-gdop-mean">--</strong></span>
+                        </div>
                     </div>
                 </div>
 
@@ -629,13 +655,9 @@
         }
 
         try {
-            const response = await fetch('/api/simulator/gdop', {
-                method: 'POST',
+            const response = await fetch('/api/simulator/gdop/heatmap', {
+                method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    nodes: state.nodes,
-                    space: state.space,
-                }),
             });
 
             if (!response.ok) throw new Error('Failed to compute GDOP');
@@ -653,7 +675,10 @@
     function renderGDOP(data) {
         clearGDOPMesh();
 
-        if (!data.gdop_map) return;
+        if (!data.gdop_map || !data.grid_dimensions) {
+            console.warn('[Simulate] Invalid GDOP data');
+            return;
+        }
 
         // Create texture from GDOP data
         const canvas = document.createElement('canvas');
@@ -663,27 +688,43 @@
         const ctx = canvas.getContext('2d');
 
         const imageData = ctx.createImageData(size, size);
-        const gridWidth = data.gdop_map.length;
-        const gridHeight = data.gdop_map[0]?.length || 0;
+
+        // Grid dimensions from backend: [width_cells, depth_cells]
+        const gridWidth = data.grid_dimensions[0];
+        const gridDepth = data.grid_dimensions[1];
+
+        // gdop_map is a 1D flattened array: [x + y * width]
+        // We render the 2D floor plane
 
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
+                // Map pixel to grid cell
                 const gridX = Math.floor((x / size) * gridWidth);
-                const gridY = Math.floor((y / size) * gridHeight);
-                const gdop = data.gdop_map[gridX]?.[gridY] || 10;
+                const gridY = Math.floor((y / size) * gridDepth);
 
-                // Color based on GDOP quality
+                // Calculate index in flattened array
+                const idx = gridY * gridWidth + gridX;
+
+                // Get GDOP value (9999 = infinity)
+                const gdop = data.gdop_map[idx] !== undefined ? data.gdop_map[idx] : 9999;
+
+                // Color based on GDOP quality (matching Go GDOPColorMap)
+                // GDOP < 2: excellent (#22c65e = 34, 197, 94)
+                // GDOP 2-4: good (#ffc107 = 255, 193, 7)
+                // GDOP 4-8: fair (#ff9200 = 255, 146, 0)
+                // GDOP > 8: poor (#dc3545 = 220, 53, 69)
+                // Infinity: none (#505050 = 80, 80, 80)
                 let color;
-                if (gdop < 2) {
-                    color = { r: 76, g: 175, b: 80 }; // Excellent - green
-                } else if (gdop < 4) {
-                    color = { r: 139, g: 195, b: 74 }; // Good - light green
-                } else if (gdop < 6) {
-                    color = { r: 255, g: 235, b: 59 }; // Fair - yellow
-                } else if (gdop < 8) {
-                    color = { r: 255, g: 152, b: 0 }; // Poor - orange
+                if (gdop >= 9999) {
+                    color = { r: 80, g: 80, b: 80 }; // None - gray
+                } else if (gdop < 2.0) {
+                    color = { r: 34, g: 197, b: 94 }; // Excellent - green
+                } else if (gdop < 4.0) {
+                    color = { r: 255, g: 193, b: 7 }; // Good - yellow
+                } else if (gdop < 8.0) {
+                    color = { r: 255, g: 146, b: 0 }; // Fair - orange
                 } else {
-                    color = { r: 244, g: 67, b: 54 }; // None - red
+                    color = { r: 220, g: 53, b: 69 }; // Poor - red
                 }
 
                 const i = (y * size + x) * 4;
@@ -697,11 +738,13 @@
         ctx.putImageData(imageData, 0, 0);
 
         const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
         const material = new THREE.MeshBasicMaterial({
             map: texture,
             transparent: true,
             opacity: 0.7,
             side: THREE.DoubleSide,
+            depthWrite: false,
         });
 
         const geometry = new THREE.PlaneGeometry(state.space.width, state.space.depth);
@@ -714,6 +757,60 @@
             const scene = window.Viz3D.getScene?.();
             if (scene) scene.add(_gdopMesh);
         }
+
+        // Update GDOP stats in legend
+        const legendEl = document.getElementById('sim-gdop-legend');
+        if (legendEl) {
+            legendEl.style.display = 'block';
+        }
+
+        const coverageEl = document.getElementById('sim-gdop-coverage');
+        const meanEl = document.getElementById('sim-gdop-mean');
+
+        if (data.coverage_score !== undefined) {
+            const coveragePercent = (data.coverage_score * 100).toFixed(1);
+            if (coverageEl) {
+                coverageEl.textContent = coveragePercent + '%';
+            }
+            console.log('[Simulate] Coverage score:', coveragePercent + '%');
+        }
+
+        if (data.mean_gdop !== undefined) {
+            const meanGDOP = data.mean_gdop < 9999 ? data.mean_gdop.toFixed(2) : '∞';
+            if (meanEl) {
+                meanEl.textContent = meanGDOP;
+            }
+            console.log('[Simulate] Mean GDOP:', meanGDOP);
+        }
+
+        // Update quality counts if available
+        if (data.quality_counts) {
+            console.log('[Simulate] Quality distribution:', data.quality_counts);
+
+            // Update legend items with counts
+            const qualityLabels = {
+                'excellent': 'Excellent (GDOP < 2)',
+                'good': 'Good (GDOP 2-4)',
+                'fair': 'Fair (GDOP 4-8)',
+                'poor': 'Poor (GDOP > 8)',
+                'none': 'No Coverage'
+            };
+
+            const legendItems = document.querySelectorAll('.gdop-legend-item');
+            legendItems.forEach(item => {
+                const label = item.querySelector('.gdop-legend-label');
+                if (label) {
+                    const labelText = label.textContent.split(':')[0];
+                    for (const [quality, fullName] of Object.entries(qualityLabels)) {
+                        if (fullName.includes(labelText) || labelText.includes(quality.charAt(0).toUpperCase() + quality.slice(1))) {
+                            const count = data.quality_counts[quality] || 0;
+                            label.textContent = `${fullName}: ${count} cells`;
+                            break;
+                        }
+                    }
+                }
+            });
+        }
     }
 
     function clearGDOPMesh() {
@@ -723,6 +820,12 @@
             _gdopMesh.geometry.dispose();
             _gdopMesh.material.dispose();
             _gdopMesh = null;
+        }
+
+        // Hide the legend when GDOP is cleared
+        const legendEl = document.getElementById('sim-gdop-legend');
+        if (legendEl) {
+            legendEl.style.display = 'none';
         }
     }
 

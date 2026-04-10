@@ -3214,3 +3214,60 @@
 .sim-shopping-item strong {
     color: #4fc3f7;
 }
+
+/* ============================================
+   GDOP Legend Styles
+   ============================================ */
+
+.sim-gdop-legend {
+    margin-top: 15px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+}
+
+.gdop-legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #ddd;
+}
+
+.gdop-legend-item:last-child {
+    margin-bottom: 0;
+}
+
+.gdop-legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.gdop-legend-label {
+    flex: 1;
+    color: #ccc;
+}
+
+.gdop-stats {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.gdop-stat-item {
+    font-size: 13px;
+    color: #aaa;
+}
+
+.gdop-stat-item strong {
+    color: #4fc3f7;
+    font-weight: 600;
+}

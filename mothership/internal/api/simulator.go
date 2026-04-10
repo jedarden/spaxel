@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"sync"
@@ -70,6 +71,7 @@ func (h *SimulatorHandler) RegisterRoutes(r chi.Router) {
 		r.Route("/gdop", func(r chi.Router) {
 			r.Post("/compute", h.ComputeGDOP)
 			r.Get("/coverage", h.GetCoverageScore)
+			r.Get("/heatmap", h.GetGDOPHeatmap)
 		})
 
 		// Shopping list
@@ -459,6 +461,65 @@ func (h *SimulatorHandler) GetCoverageScore(w http.ResponseWriter, r *http.Reque
 		"minimum_nodes":    simulator.MinimumNodeCount(space, 4.0),
 		"current_nodes":    nodes.Count(),
 		"average_gdop":     gdopComp.AverageGDOP(results),
+	})
+}
+
+// GetGDOPHeatmap returns GDOP data in a format suitable for heatmap visualization
+func (h *SimulatorHandler) GetGDOPHeatmap(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	space := h.space
+	nodes := h.nodes
+	h.mu.RUnlock()
+
+	if nodes.Count() < 2 {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"gdop_map":         []float64{},
+			"grid_dimensions": []int{0, 0, 0},
+			"coverage_percent": 0,
+			"error":            "need at least 2 nodes",
+		})
+		return
+	}
+
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+	links := simulator.GenerateAllLinks(nodes)
+
+	config := simulator.GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.2,
+	}
+	gdopComp := simulator.NewGDOPComputer(links, config)
+	results := gdopComp.ComputeAll()
+
+	// Convert results to heatmap format
+	depth := len(results)
+	width := 0
+	if depth > 0 {
+		width = len(results[0])
+	}
+
+	// Flatten GDOP values into 1D array (row-major order)
+	gdopMap := make([]float64, width*depth)
+	for y := 0; y < depth; y++ {
+		for x := 0; x < width; x++ {
+			idx := y*width + x
+			if math.IsInf(results[y][x].GDOP, 0) {
+				gdopMap[idx] = 9999.0 // Use 9999 to represent infinity
+			} else {
+				gdopMap[idx] = results[y][x].GDOP
+			}
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"gdop_map":         gdopMap,
+		"grid_dimensions": []int{width, depth, 1}, // 2D heatmap, so height = 1
+		"coverage_percent": gdopComp.CoverageScore(results),
+		"average_gdop":     gdopComp.AverageGDOP(results),
+		"quality_counts":   gdopComp.QualityCounts(results),
 	})
 }
 
