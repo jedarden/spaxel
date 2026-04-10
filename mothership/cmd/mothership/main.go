@@ -1991,6 +1991,9 @@ func main() {
 				event.BlobID,
 				personName,
 			)
+
+			// Broadcast zone transition event
+			dashboardHub.BroadcastZoneTransition(event.PortalID, personName, event.FromZone, event.ToZone)
 		})
 
 		// Zone entry callback — broadcast event to dashboard

@@ -34,6 +34,14 @@ const Viz3D = (function () {
     let _ghostLine     = null;  // THREE.Line (dashed, from original to ghost)
     let _ghostNodeMAC  = null;  // MAC of the node being moved
 
+    // Zone and portal rendering state
+    let _zoneMeshes    = new Map();  // zoneID -> { mesh, label, occupantsLabel }
+    let _portalMeshes  = new Map();  // portalID -> { mesh, label, flashEndTime }
+    let _zonesVisible  = true;       // Toggle state for zones layer
+    let _portalsVisible = true;      // Toggle state for portals layer
+    let _currentZones  = new Map();  // zoneID -> zone data
+    let _currentPortals = new Map(); // portalID -> portal data
+
     const BLOB_COLORS  = [0xef5350, 0x66bb6a, 0x42a5f5, 0xffa726, 0xab47bc, 0x26c6da];
     const TRAIL_COLORS = [0xff8a80, 0xa5d6a7, 0x90caf9, 0xffcc80, 0xce93d8, 0x80deea];
 
@@ -74,6 +82,9 @@ const Viz3D = (function () {
 
         // Update anomaly zone pulse
         updateAnomalyPulse(dt);
+
+        // Update portal flash animations
+        updatePortalFlashes(dt);
     }
 
     // ── room bounds ───────────────────────────────────────────────────────────
@@ -1577,6 +1588,82 @@ const Viz3D = (function () {
         if (line) { _scene.remove(line); _linkLines.delete(msg.id); }
     }
 
+    function handleZoneChange(msg) {
+        var zone = msg.zone;
+        if (!zone) return;
+
+        if (msg.action === 'deleted') {
+            var existing = _zoneMeshes.get(zone.id);
+            if (existing) {
+                _scene.remove(existing.mesh);
+                _scene.remove(existing.label);
+                _scene.remove(existing.occupantsLabel);
+                existing.mesh.geometry.dispose();
+                existing.mesh.material.dispose();
+                _zoneMeshes.delete(zone.id);
+            }
+            _currentZones.delete(zone.id);
+        } else {
+            _currentZones.set(zone.id, zone);
+            var existing = _zoneMeshes.get(zone.id);
+            if (!existing) {
+                var zoneMesh = _createZoneMesh(zone);
+                _zoneMeshes.set(zone.id, zoneMesh);
+            } else {
+                // Update existing zone
+                existing.occupantsLabel.visible = zone.count > 0;
+                if (zone.count > 0) {
+                    var peopleText = zone.people && zone.people.length > 0 ? zone.people.join(', ') : zone.count;
+                    _updateTextSprite(existing.occupantsLabel, zone.name + ': ' + peopleText);
+                }
+            }
+        }
+    }
+
+    function handlePortalChange(msg) {
+        var portal = msg.portal;
+        if (!portal) return;
+
+        if (msg.action === 'deleted') {
+            var existing = _portalMeshes.get(portal.id);
+            if (existing) {
+                _scene.remove(existing.mesh);
+                _scene.remove(existing.label);
+                existing.mesh.geometry.dispose();
+                existing.mesh.material.dispose();
+                _portalMeshes.delete(portal.id);
+            }
+            _currentPortals.delete(portal.id);
+        } else {
+            _currentPortals.set(portal.id, portal);
+            var existing = _portalMeshes.get(portal.id);
+            if (!existing) {
+                var portalMesh = _createPortalMesh(portal);
+                _portalMeshes.set(portal.id, portalMesh);
+            }
+        }
+    }
+
+    function handleZoneOccupancy(msg) {
+        var zones = msg.zones || [];
+        zones.forEach(function(zoneOcc) {
+            var zoneMesh = _zoneMeshes.get(zoneOcc.id);
+            if (zoneMesh && zoneOcc.count > 0) {
+                zoneMesh.occupantsLabel.visible = true;
+                var zone = _currentZones.get(zoneOcc.id);
+                var zoneName = zone ? zone.name : zoneOcc.id;
+                _updateTextSprite(zoneMesh.occupantsLabel, zoneName + ': ' + zoneOcc.count);
+            }
+        });
+    }
+
+    function handleZoneTransition(msg) {
+        // Flash the portal to indicate crossing
+        if (msg.portal_id) {
+            flashPortal(msg.portal_id);
+        }
+    }
+
     // ── view presets ──────────────────────────────────────────────────────────
 
     function setViewPreset(preset, blobId) {
@@ -2459,6 +2546,258 @@ const Viz3D = (function () {
         _anomalyZones = [];
     }
 
+    // ── Zone and Portal Rendering ───────────────────────────────────────────────
+
+    /**
+     * Create a zone mesh as a semi-transparent colored cuboid.
+     * @param {Object} zone - Zone data with id, name, x, y, z, w, d, h, color
+     * @returns {Object} { mesh, label, occupantsLabel }
+     */
+    function _createZoneMesh(zone) {
+        var geometry = new THREE.BoxGeometry(zone.w || 4, zone.h || 2.5, zone.d || 3);
+        var color = zone.color ? parseInt(zone.color.replace('#', '0x')) : 0x3b82f6;
+        var material = new THREE.MeshLambertMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.1,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(
+            (zone.x || 0) + (zone.w || 4) / 2,
+            (zone.y || 0) + (zone.h || 2.5) / 2,
+            (zone.z || 0) + (zone.d || 3) / 2
+        );
+        mesh.userData.zoneId = zone.id;
+        mesh.renderOrder = -1;  // Render before other objects
+        _scene.add(mesh);
+
+        // Create zone label (floating text at zone centroid)
+        var label = _createTextSprite(zone.name || zone.id, color);
+        var cx = (zone.x || 0) + (zone.w || 4) / 2;
+        var cy = (zone.y || 0) + (zone.h || 2.5) / 2;
+        var cz = (zone.z || 0) + (zone.d || 3) / 2;
+        label.position.set(cx, cy + 0.5, cz);
+        _scene.add(label);
+
+        // Create occupants label (initially empty)
+        var occupantsLabel = _createTextSprite('', color);
+        occupantsLabel.position.set(cx, cy + 0.2, cz);
+        occupantsLabel.visible = false;
+        _scene.add(occupantsLabel);
+
+        return { mesh: mesh, label: label, occupantsLabel: occupantsLabel };
+    }
+
+    /**
+     * Create a portal mesh as a thin vertical plane.
+     * @param {Object} portal - Portal data with id, name, p1_x, p1_y, p1_z, p2_x, p2_y, p2_z, width, height
+     * @returns {Object} { mesh, label, flashEndTime }
+     */
+    function _createPortalMesh(portal) {
+        var p1 = new THREE.Vector3(portal.p1_x || 0, portal.p1_y || 0, portal.p1_z || 0);
+        var p2 = new THREE.Vector3(portal.p2_x || 0, portal.p2_y || 0, portal.p2_z || 0);
+        var width = portal.width || 1.0;
+        var height = portal.height || 2.1;
+
+        // Calculate portal center
+        var center = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+
+        // Create plane geometry (width x height)
+        var geometry = new THREE.PlaneGeometry(width, height);
+        var material = new THREE.MeshLambertMaterial({
+            color: 0xa855f7,  // Purple
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(center);
+
+        // Calculate orientation (perpendicular to floor, facing along portal normal)
+        // For a vertical plane defined by two floor points, we need the horizontal direction
+        var dx = p2.x - p1.x;
+        var dz = p2.z - p1.z;
+        var angle = Math.atan2(dz, dx);
+        mesh.rotation.y = angle + Math.PI / 2;
+
+        mesh.userData.portalId = portal.id;
+        mesh.renderOrder = -1;
+        _scene.add(mesh);
+
+        // Create portal label at top edge
+        var label = _createTextSprite(portal.name || portal.id, '#a855f7');
+        label.position.set(center.x, center.y + height / 2 + 0.3, center.z);
+        _scene.add(label);
+
+        return { mesh: mesh, label: label, flashEndTime: 0 };
+    }
+
+    /**
+     * Update zones from the snapshot data.
+     * @param {Array} zones - Array of zone objects from snapshot
+     */
+    function updateZones(zones) {
+        if (!zones) return;
+
+        var zoneIDs = new Set();
+        zones.forEach(function(zone) {
+            zoneIDs.add(zone.id);
+            _currentZones.set(zone.id, zone);
+
+            var existing = _zoneMeshes.get(zone.id);
+            if (!existing) {
+                // Create new zone mesh
+                var zoneMesh = _createZoneMesh(zone);
+                _zoneMeshes.set(zone.id, zoneMesh);
+            } else {
+                // Update existing zone
+                existing.occupantsLabel.visible = zone.count > 0;
+                if (zone.count > 0) {
+                    var peopleText = zone.people && zone.people.length > 0 ? zone.people.join(', ') : zone.count;
+                    _updateTextSprite(existing.occupantsLabel, zone.name + ': ' + peopleText);
+                }
+            }
+        });
+
+        // Remove zones that no longer exist
+        _zoneMeshes.forEach(function(zoneMesh, zoneID) {
+            if (!zoneIDs.has(zoneID)) {
+                _scene.remove(zoneMesh.mesh);
+                _scene.remove(zoneMesh.label);
+                _scene.remove(zoneMesh.occupantsLabel);
+                zoneMesh.mesh.geometry.dispose();
+                zoneMesh.mesh.material.dispose();
+                _zoneMeshes.delete(zoneID);
+            }
+        });
+    }
+
+    /**
+     * Update portals from the snapshot data.
+     * @param {Array} portals - Array of portal objects from snapshot
+     */
+    function updatePortals(portals) {
+        if (!portals) return;
+
+        var portalIDs = new Set();
+        portals.forEach(function(portal) {
+            portalIDs.add(portal.id);
+            _currentPortals.set(portal.id, portal);
+
+            var existing = _portalMeshes.get(portal.id);
+            if (!existing) {
+                // Create new portal mesh
+                var portalMesh = _createPortalMesh(portal);
+                _portalMeshes.set(portal.id, portalMesh);
+            }
+        });
+
+        // Remove portals that no longer exist
+        _portalMeshes.forEach(function(portalMesh, portalID) {
+            if (!portalIDs.has(portalID)) {
+                _scene.remove(portalMesh.mesh);
+                _scene.remove(portalMesh.label);
+                portalMesh.mesh.geometry.dispose();
+                portalMesh.mesh.material.dispose();
+                _portalMeshes.delete(portalID);
+            }
+        });
+    }
+
+    /**
+     * Flash a portal to indicate a crossing event.
+     * @param {string} portalId - The portal ID to flash
+     */
+    function flashPortal(portalId) {
+        var portalMesh = _portalMeshes.get(portalId);
+        if (!portalMesh) return;
+
+        // Set flash end time (1 second from now)
+        portalMesh.flashEndTime = Date.now() + 1000;
+    }
+
+    /**
+     * Update portal flash animations.
+     * Called from the main update loop.
+     * @param {number} dt - Delta time in seconds
+     */
+    function updatePortalFlashes(dt) {
+        var now = Date.now();
+        _portalMeshes.forEach(function(portalMesh, portalId) {
+            if (portalMesh.flashEndTime > now) {
+                // Flash animation: increase opacity
+                var progress = (portalMesh.flashEndTime - now) / 1000;  // 1 to 0
+                portalMesh.mesh.material.opacity = 0.3 + progress * 0.7;
+            } else if (portalMesh.mesh.material.opacity !== 0.3) {
+                portalMesh.mesh.material.opacity = 0.3;
+            }
+        });
+    }
+
+    /**
+     * Update the text content of a sprite label.
+     * @param {THREE.Sprite} sprite - The sprite to update
+     * @param {string} text - New text content
+     */
+    function _updateTextSprite(sprite, text) {
+        if (!sprite || !sprite.material || !sprite.material.map) return;
+        var canvas = sprite.material.map.image;
+        var ctx = canvas.getContext('2d');
+        var color = '#4fc3f7';  // Default color
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.beginPath();
+        ctx.roundRect(4, 4, canvas.width - 8, canvas.height - 8, 8);
+        ctx.fill();
+
+        // Draw border
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(4, 4, canvas.width - 8, canvas.height - 8, 8);
+        ctx.stroke();
+
+        // Draw text
+        ctx.fillStyle = color;
+        ctx.font = 'bold 28px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+        sprite.material.map.needsUpdate = true;
+    }
+
+    /**
+     * Toggle zones visibility.
+     * @param {boolean} visible - Whether to show zones
+     */
+    function toggleZonesVisible(visible) {
+        _zonesVisible = visible !== undefined ? visible : !_zonesVisible;
+        _zoneMeshes.forEach(function(zoneMesh) {
+            zoneMesh.mesh.visible = _zonesVisible;
+            zoneMesh.label.visible = _zonesVisible;
+            zoneMesh.occupantsLabel.visible = _zonesVisible && zoneMesh.occupantsLabel.visible;
+        });
+    }
+
+    /**
+     * Toggle portals visibility.
+     * @param {boolean} visible - Whether to show portals
+     */
+    function togglePortalsVisible(visible) {
+        _portalsVisible = visible !== undefined ? visible : !_portalsVisible;
+        _portalMeshes.forEach(function(portalMesh) {
+            portalMesh.mesh.visible = _portalsVisible;
+            portalMesh.label.visible = _portalsVisible;
+        });
+    }
+
     // ── Fresnel zone ellipsoid rendering for explainability ───────────────────────
 
     // Configuration for Fresnel zone visualization
@@ -3089,6 +3428,21 @@ const Viz3D = (function () {
             return meshes;
         },
         nodeMeshes: function() { return Array.from(_nodeMeshes.values()); },
+        // Zone and portal update handlers for WebSocket messages
+        handleZoneUpdate: function(zones) {
+            updateZones(zones);
+        },
+        handlePortalUpdate: function(portals) {
+            updatePortals(portals);
+        },
+        // Zone and portal change handlers for REST API changes
+        handleZoneChange: handleZoneChange,
+        handlePortalChange: handlePortalChange,
+        handleZoneOccupancy: handleZoneOccupancy,
+        handleZoneTransition: handleZoneTransition,
+        flashPortal: flashPortal,
+        toggleZonesVisible: toggleZonesVisible,
+        togglePortalsVisible: togglePortalsVisible,
     };
     // ── Replay Mode Support ─────────────────────────────────────────────────────
     // Store live blob states for replay mode restoration

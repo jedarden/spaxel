@@ -801,6 +801,560 @@ func TestIsReconciled_NoZones(t *testing.T) {
 	}
 }
 
+// --- Crossing Detection Tests ---
+
+func TestCrossingDetection_PlaneCrossing(t *testing.T) {
+	tests := []struct {
+		name           string
+		portal         Portal
+		prevPos        struct{ X, Y, Z float64 }
+		currPos        struct{ X, Y, Z float64 }
+		wantCrossing   bool
+		wantDirection  int // 1 = A->B, -1 = B->A
+	}{
+		{
+			name: "cross from A side to B side",
+			portal: Portal{
+				ID:      "portal_1",
+				ZoneAID: "kitchen",
+				ZoneBID: "hallway",
+				// Vertical plane at x=5, facing -X direction
+				P1X: 5, P1Y: 0, P1Z: 0,
+				P2X: 5, P2Y: 2, P2Z: 0,
+				P3X: 5, P3Y: 0, P3Z: 1,
+				NX:  -1, NY: 0, NZ: 0, // Normal pointing -X (A side is +X)
+			},
+			prevPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
+			currPos:      struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
+			wantCrossing: true,
+			wantDirection: 1, // A->B
+		},
+		{
+			name: "cross from B side to A side",
+			portal: Portal{
+				ID:      "portal_2",
+				ZoneAID: "kitchen",
+				ZoneBID: "hallway",
+				// Vertical plane at x=5, facing -X direction
+				P1X: 5, P1Y: 0, P1Z: 0,
+				P2X: 5, P2Y: 2, P2Z: 0,
+				P3X: 5, P3Y: 0, P3Z: 1,
+				NX:  -1, NY: 0, NZ: 0,
+			},
+			prevPos:      struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
+			currPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
+			wantCrossing: true,
+			wantDirection: -1, // B->A
+		},
+		{
+			name: "no crossing - both positions on same side",
+			portal: Portal{
+				ID:      "portal_3",
+				ZoneAID: "kitchen",
+				ZoneBID: "hallway",
+				P1X: 5, P1Y: 0, P1Z: 0,
+				P2X: 5, P2Y: 2, P2Z: 0,
+				P3X: 5, P3Y: 0, P3Z: 1,
+				NX:  -1, NY: 0, NZ: 0,
+			},
+			prevPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
+			currPos:      struct{ X, Y, Z float64 }{X: 7, Y: 1, Z: 0.5}, // Still A side
+			wantCrossing: false,
+			wantDirection: 0,
+		},
+		{
+			name: "no crossing - movement parallel to plane",
+			portal: Portal{
+				ID:      "portal_4",
+				ZoneAID: "kitchen",
+				ZoneBID: "hallway",
+				// Vertical plane at x=5
+				P1X: 5, P1Y: 0, P1Z: 0,
+				P2X: 5, P2Y: 2, P2Z: 0,
+				P3X: 5, P3Y: 0, P3Z: 1,
+				NX:  -1, NY: 0, NZ: 0,
+			},
+			prevPos:      struct{ X, Y, Z float64 }{X: 4.9, Y: 0, Z: 0}, // Just on B side
+			currPos:      struct{ X, Y, Z float64 }{X: 4.9, Y: 2, Z: 1}, // Still B side, moved in YZ
+			wantCrossing: false,
+			wantDirection: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, cleanup := setupManager(t, time.UTC)
+			defer cleanup()
+
+			// Create zones
+			kitchen := &Zone{
+				ID: "kitchen", Name: "Kitchen",
+				MinX: 5, MinY: 0, MinZ: 0, // Kitchen is on A side (x >= 5)
+				MaxX: 10, MaxY: 3, MaxZ: 3,
+				Enabled: true,
+			}
+			hallway := &Zone{
+				ID: "hallway", Name: "Hallway",
+				MinX: 0, MinY: 0, MinZ: 0, // Hallway is on B side (x <= 5)
+				MaxX: 5, MaxY: 3, MaxZ: 3,
+				Enabled: true,
+			}
+			if err := m.CreateZone(kitchen); err != nil {
+				t.Fatalf("CreateZone kitchen: %v", err)
+			}
+			if err := m.CreateZone(hallway); err != nil {
+				t.Fatalf("CreateZone hallway: %v", err)
+			}
+
+			// Create portal
+			if err := m.CreatePortal(&tt.portal); err != nil {
+				t.Fatalf("CreatePortal: %v", err)
+			}
+
+			// Set up crossing callback
+			var gotCrossing bool
+			var gotDirection int
+			var gotFromZone, gotToZone string
+			m.SetOnCrossing(func(event CrossingEvent) {
+				gotCrossing = true
+				gotDirection = event.Direction
+				gotFromZone = event.FromZone
+				gotToZone = event.ToZone
+			})
+
+			// Set initial position
+			m.UpdateBlobPosition(1, tt.prevPos.X, tt.prevPos.Y, tt.prevPos.Z)
+
+			// Move to current position
+			m.UpdateBlobPosition(1, tt.currPos.X, tt.currPos.Y, tt.currPos.Z)
+
+			if gotCrossing != tt.wantCrossing {
+				t.Errorf("got crossing %v, want %v", gotCrossing, tt.wantCrossing)
+			}
+			if tt.wantCrossing && gotDirection != tt.wantDirection {
+				t.Errorf("got direction %d, want %d", gotDirection, tt.wantDirection)
+			}
+			if tt.wantCrossing {
+				if gotFromZone != tt.portal.ZoneAID && gotFromZone != tt.portal.ZoneBID {
+					t.Errorf("got from_zone %s, want one of {%s, %s}", gotFromZone, tt.portal.ZoneAID, tt.portal.ZoneBID)
+				}
+				if gotToZone != tt.portal.ZoneAID && gotToZone != tt.portal.ZoneBID {
+					t.Errorf("got to_zone %s, want one of {%s, %s}", gotToZone, tt.portal.ZoneAID, tt.portal.ZoneBID)
+				}
+			}
+		})
+	}
+}
+
+func TestCrossingDetection_ParallelMovementWithinTolerance(t *testing.T) {
+	// Test that movement parallel to plane within 0.1m doesn't fire crossing
+	m, cleanup := setupManager(t, time.UTC)
+	defer cleanup()
+
+	// Create zones
+	kitchen := &Zone{
+		ID: "kitchen", Name: "Kitchen",
+		MinX: 5, MinY: 0, MinZ: 0,
+		MaxX: 10, MaxY: 3, MaxZ: 3,
+		Enabled: true,
+	}
+	hallway := &Zone{
+		ID: "hallway", Name: "Hallway",
+		MinX: 0, MinY: 0, MinZ: 0,
+		MaxX: 5, MaxY: 3, MaxZ: 3,
+		Enabled: true,
+	}
+	m.CreateZone(kitchen)
+	m.CreateZone(hallway)
+
+	// Create portal
+	portal := &Portal{
+		ID:      "portal_1",
+		ZoneAID: "kitchen",
+		ZoneBID: "hallway",
+		P1X: 5, P1Y: 0, P1Z: 0,
+		P2X: 5, P2Y: 2, P2Z: 0,
+		P3X: 5, P3Y: 0, P3Z: 1,
+		NX:  -1, NY: 0, NZ: 0,
+	}
+	m.CreatePortal(portal)
+
+	// Set up crossing callback
+	var crossingCount int
+	m.SetOnCrossing(func(event CrossingEvent) {
+		crossingCount++
+	})
+
+	// Move blob parallel to plane at x=4.9 (0.1m from plane)
+	positions := []struct{ X, Y, Z float64 }{
+		{X: 4.9, Y: 0.5, Z: 0.5},
+		{X: 4.9, Y: 1.0, Z: 0.5},
+		{X: 4.9, Y: 1.5, Z: 0.5},
+		{X: 4.9, Y: 2.0, Z: 0.5},
+	}
+
+	for i, pos := range positions {
+		if i == 0 {
+			m.UpdateBlobPosition(1, pos.X, pos.Y, pos.Z)
+		} else {
+			m.UpdateBlobPosition(1, pos.X, pos.Y, pos.Z)
+		}
+	}
+
+	if crossingCount != 0 {
+		t.Errorf("got %d crossings, want 0 (movement parallel to plane within tolerance)", crossingCount)
+	}
+}
+
+func TestCrossingDetection_OutsideWidthBounds(t *testing.T) {
+	// Test that crossing outside portal width doesn't fire
+	m, cleanup := setupManager(t, time.UTC)
+	defer cleanup()
+
+	// Create zones
+	kitchen := &Zone{
+		ID: "kitchen", Name: "Kitchen",
+		MinX: 5, MinY: 0, MinZ: 0,
+		MaxX: 10, MaxY: 3, MaxZ: 5,
+		Enabled: true,
+	}
+	hallway := &Zone{
+		ID: "hallway", Name: "Hallway",
+		MinX: 0, MinY: 0, MinZ: 0,
+		MaxX: 5, MaxY: 3, MaxZ: 5,
+		Enabled: true,
+	}
+	m.CreateZone(kitchen)
+	m.CreateZone(hallway)
+
+	// Create portal with 1m width at z=2
+	portal := &Portal{
+		ID:      "portal_1",
+		ZoneAID: "kitchen",
+		ZoneBID: "hallway",
+		Width:   1.0,
+		Height:  2.1,
+		// Plane at x=5, centered at z=2
+		P1X: 5, P1Y: 0, P1Z: 2,
+		P2X: 5, P2Y: 2.1, P2Z: 2,
+		P3X: 5, P3Y: 0, P3Z: 3,
+		NX:  -1, NY: 0, NZ: 0,
+	}
+	m.CreatePortal(portal)
+
+	// Set up crossing callback
+	var crossingCount int
+	m.SetOnCrossing(func(event CrossingEvent) {
+		crossingCount++
+	})
+
+	// Move blob across plane but far from portal center (z=0 vs z=2)
+	m.UpdateBlobPosition(1, 6, 1, 0) // A side, far from portal
+	m.UpdateBlobPosition(1, 4, 1, 0) // B side, far from portal
+
+	if crossingCount != 0 {
+		t.Errorf("got %d crossings, want 0 (crossing outside portal width bounds)", crossingCount)
+	}
+}
+
+func TestOccupancyCount_WithPortalCrossing(t *testing.T) {
+	// Test: Kitchen starts with 1 occupant, blob crosses portal to Living Room
+	m, cleanup := setupManager(t, time.UTC)
+	defer cleanup()
+
+	// Create zones
+	kitchen := &Zone{
+		ID: "kitchen", Name: "Kitchen",
+		MinX: 5, MinY: 0, MinZ: 0,
+		MaxX: 10, MaxY: 3, MaxZ: 3,
+		Enabled: true,
+	}
+	livingRoom := &Zone{
+		ID: "living_room", Name: "Living Room",
+		MinX: 0, MinY: 0, MinZ: 0,
+		MaxX: 5, MaxY: 3, MaxZ: 3,
+		Enabled: true,
+	}
+	m.CreateZone(kitchen)
+	m.CreateZone(livingRoom)
+
+	// Create portal between them
+	portal := &Portal{
+		ID:      "portal_1",
+		Name:    "Kitchen-LR Door",
+		ZoneAID: "kitchen",
+		ZoneBID: "living_room",
+		P1X: 5, P1Y: 0, P1Z: 0,
+		P2X: 5, P2Y: 2, P2Z: 0,
+		P3X: 5, P3Y: 0, P3Z: 1,
+		NX:  -1, NY: 0, NZ: 0,
+	}
+	m.CreatePortal(portal)
+
+	// Set up crossing and zone transition callbacks
+	var gotCrossing CrossingEvent
+	var gotEntry, gotExit ZoneTransitionEvent
+	m.SetOnCrossing(func(event CrossingEvent) {
+		gotCrossing = event
+	})
+	m.SetOnZoneEntry(func(event ZoneTransitionEvent) {
+		gotEntry = event
+	})
+	m.SetOnZoneExit(func(event ZoneTransitionEvent) {
+		gotExit = event
+	})
+
+	// Initial position: blob in kitchen
+	m.UpdateBlobPosition(1, 7, 1, 1)
+
+	// Check kitchen occupancy
+	kitchenOcc := m.GetZoneOccupancy("kitchen")
+	if kitchenOcc == nil || kitchenOcc.Count != 1 {
+		t.Errorf("kitchen: got count %v, want 1", kitchenOcc)
+	}
+
+	// Move blob to living room (cross portal)
+	m.UpdateBlobPosition(1, 3, 1, 1)
+
+	// Check occupancies after crossing
+	kitchenOcc = m.GetZoneOccupancy("kitchen")
+	if kitchenOcc == nil || kitchenOcc.Count != 0 {
+		t.Errorf("kitchen after crossing: got count %v, want 0", kitchenOcc)
+	}
+
+	lrOcc := m.GetZoneOccupancy("living_room")
+	if lrOcc == nil || lrOcc.Count != 1 {
+		t.Errorf("living_room after crossing: got count %v, want 1", lrOcc)
+	}
+
+	// Verify crossing event
+	if gotCrossing.PortalID != "portal_1" {
+		t.Errorf("got portal_id %s, want portal_1", gotCrossing.PortalID)
+	}
+	if gotCrossing.FromZone != "kitchen" {
+		t.Errorf("got from_zone %s, want kitchen", gotCrossing.FromZone)
+	}
+	if gotCrossing.ToZone != "living_room" {
+		t.Errorf("got to_zone %s, want living_room", gotCrossing.ToZone)
+	}
+
+	// Verify zone transition events
+	if gotEntry.Kind != "zone_entry" {
+		t.Errorf("got entry kind %s, want zone_entry", gotEntry.Kind)
+	}
+	if gotEntry.ZoneID != "living_room" {
+		t.Errorf("got entry zone_id %s, want living_room", gotEntry.ZoneID)
+	}
+	if gotExit.Kind != "zone_exit" {
+		t.Errorf("got exit kind %s, want zone_exit", gotExit.Kind)
+	}
+	if gotExit.ZoneID != "kitchen" {
+		t.Errorf("got exit zone_id %s, want kitchen", gotExit.ZoneID)
+	}
+}
+
+func TestZoneContainment_OnBoundsEdge(t *testing.T) {
+	// Test zone containment with position exactly on bounds_min edge
+	m, cleanup := setupManager(t, time.UTC)
+	defer cleanup()
+
+	zone := &Zone{
+		ID: "test_zone", Name: "Test",
+		MinX: 1.0, MinY: 0.0, MinZ: 2.0,
+		MaxX: 5.0, MaxY: 3.0, MaxZ: 6.0,
+		Enabled: true,
+	}
+	m.CreateZone(zone)
+
+	tests := []struct {
+		name       string
+		pos        struct{ X, Y, Z float64 }
+		wantInZone bool
+	}{
+		{
+			name:       "exactly on MinX edge",
+			pos:        struct{ X, Y, Z float64 }{X: 1.0, Y: 1.5, Z: 3.0},
+			wantInZone: true,
+		},
+		{
+			name:       "exactly on MinY edge",
+			pos:        struct{ X, Y, Z float64 }{X: 2.5, Y: 0.0, Z: 3.0},
+			wantInZone: true,
+		},
+		{
+			name:       "exactly on MinZ edge",
+			pos:        struct{ X, Y, Z float64 }{X: 2.5, Y: 1.5, Z: 2.0},
+			wantInZone: true,
+		},
+		{
+			name:       "exactly on MaxX edge",
+			pos:        struct{ X, Y, Z float64 }{X: 5.0, Y: 1.5, Z: 3.0},
+			wantInZone: true,
+		},
+		{
+			name:       "exactly on MaxY edge",
+			pos:        struct{ X, Y, Z float64 }{X: 2.5, Y: 3.0, Z: 3.0},
+			wantInZone: true,
+		},
+		{
+			name:       "exactly on MaxZ edge",
+			pos:        struct{ X, Y, Z float64 }{X: 2.5, Y: 1.5, Z: 6.0},
+			wantInZone: true,
+		},
+		{
+			name:       "exactly on corner (MinX, MinY, MinZ)",
+			pos:        struct{ X, Y, Z float64 }{X: 1.0, Y: 0.0, Z: 2.0},
+			wantInZone: true,
+		},
+		{
+			name:       "just outside MinX",
+			pos:        struct{ X, Y, Z float64 }{X: 0.99, Y: 1.5, Z: 3.0},
+			wantInZone: false,
+		},
+		{
+			name:       "just outside MaxX",
+			pos:        struct{ X, Y, Z float64 }{X: 5.01, Y: 1.5, Z: 3.0},
+			wantInZone: false,
+		},
+		{
+			name:       "center of zone",
+			pos:        struct{ X, Y, Z float64 }{X: 3.0, Y: 1.5, Z: 4.0},
+			wantInZone: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Update blob position
+			m.UpdateBlobPosition(1, tt.pos.X, tt.pos.Y, tt.pos.Z)
+
+			// Check if blob is in zone
+			blobZone := m.GetBlobZone(1)
+			gotInZone := (blobZone == "test_zone")
+
+			if gotInZone != tt.wantInZone {
+				t.Errorf("got inZone %v, want %v", gotInZone, tt.wantInZone)
+			}
+
+			// Also verify occupancy count
+			occ := m.GetZoneOccupancy("test_zone")
+			if tt.wantInZone {
+				if occ == nil || occ.Count != 1 {
+					t.Errorf("zone occupancy: got %v, want count 1", occ)
+				}
+			} else {
+				if occ != nil && occ.Count > 0 {
+					t.Errorf("zone occupancy: got count %d, want 0 (blob not in zone)", occ.Count)
+				}
+			}
+		})
+	}
+}
+
+func TestZoneTransitionWebSocket_Broadcast(t *testing.T) {
+	// Test that zone_transition WebSocket message is broadcast with correct from_zone and to_zone
+	m, cleanup := setupManager(t, time.UTC)
+	defer cleanup()
+
+	// Create zones
+	kitchen := &Zone{
+		ID: "kitchen", Name: "Kitchen",
+		MinX: 5, MinY: 0, MinZ: 0,
+		MaxX: 10, MaxY: 3, MaxZ: 3,
+		Enabled: true,
+	}
+	livingRoom := &Zone{
+		ID: "living_room", Name: "Living Room",
+		MinX: 0, MinY: 0, MinZ: 0,
+		MaxX: 5, MaxY: 3, MaxZ: 3,
+		Enabled: true,
+	}
+	m.CreateZone(kitchen)
+	m.CreateZone(livingRoom)
+
+	// Create portal
+	portal := &Portal{
+		ID:      "portal_1",
+		Name:    "Kitchen-LR Door",
+		ZoneAID: "kitchen",
+		ZoneBID: "living_room",
+		P1X: 5, P1Y: 0, P1Z: 0,
+		P2X: 5, P2Y: 2, P2Z: 0,
+		P3X: 5, P3Y: 0, P3Z: 1,
+		NX:  -1, NY: 0, NZ: 0,
+	}
+	m.CreatePortal(portal)
+
+	// Set up callbacks to simulate WebSocket broadcast
+	var gotCrossing CrossingEvent
+	var gotEntry ZoneTransitionEvent
+	var gotExit ZoneTransitionEvent
+
+	m.SetOnCrossing(func(event CrossingEvent) {
+		gotCrossing = event
+		// Simulate WebSocket broadcast of zone_transition
+	})
+	m.SetOnZoneEntry(func(event ZoneTransitionEvent) {
+		gotEntry = event
+		// Simulate WebSocket broadcast of zone_entry
+	})
+	m.SetOnZoneExit(func(event ZoneTransitionEvent) {
+		gotExit = event
+		// Simulate WebSocket broadcast of zone_exit
+	})
+
+	// Move blob from kitchen to living room
+	m.UpdateBlobPosition(1, 7, 1, 1) // Kitchen
+	m.UpdateBlobPosition(1, 3, 1, 1) // Living room
+
+	// Verify crossing event has correct from_zone and to_zone
+	if gotCrossing.FromZone != "kitchen" {
+		t.Errorf("crossing from_zone: got %s, want kitchen", gotCrossing.FromZone)
+	}
+	if gotCrossing.ToZone != "living_room" {
+		t.Errorf("crossing to_zone: got %s, want living_room", gotCrossing.ToZone)
+	}
+
+	// Verify zone exit event
+	if gotExit.Kind != "zone_exit" {
+		t.Errorf("exit kind: got %s, want zone_exit", gotExit.Kind)
+	}
+	if gotExit.ZoneID != "kitchen" {
+		t.Errorf("exit zone_id: got %s, want kitchen", gotExit.ZoneID)
+	}
+	if gotExit.ZoneName != "Kitchen" {
+		t.Errorf("exit zone_name: got %s, want Kitchen", gotExit.ZoneName)
+	}
+
+	// Verify zone entry event
+	if gotEntry.Kind != "zone_entry" {
+		t.Errorf("entry kind: got %s, want zone_entry", gotEntry.Kind)
+	}
+	if gotEntry.ZoneID != "living_room" {
+		t.Errorf("entry zone_id: got %s, want living_room", gotEntry.ZoneID)
+	}
+	if gotEntry.ZoneName != "Living Room" {
+		t.Errorf("entry zone_name: got %s, want Living Room", gotEntry.ZoneName)
+	}
+
+	// Verify blob IDs are tracked
+	kitchenOcc := m.GetZoneOccupancy("kitchen")
+	if kitchenOcc == nil || kitchenOcc.Count != 0 {
+		t.Errorf("kitchen occupancy: got count %v, want 0", kitchenOcc)
+	}
+
+	lrOcc := m.GetZoneOccupancy("living_room")
+	if lrOcc == nil || lrOcc.Count != 1 {
+		t.Errorf("living_room occupancy: got count %v, want 1", lrOcc)
+	}
+	if lrOcc != nil && len(lrOcc.BlobIDs) != 1 {
+		t.Errorf("living_room blob IDs: got %v, want [1]", lrOcc.BlobIDs)
+	}
+	if lrOcc != nil && len(lrOcc.BlobIDs) > 0 && lrOcc.BlobIDs[0] != 1 {
+		t.Errorf("living_room blob IDs[0]: got %d, want 1", lrOcc.BlobIDs[0])
+	}
+}
+
 // --- Helper ---
 
 // nowMsSinceMidnight returns a Unix ms timestamp the given duration after midnight today.

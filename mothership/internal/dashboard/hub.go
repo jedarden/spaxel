@@ -1241,3 +1241,38 @@ func (h *Hub) BroadcastNodeOffline(mac string, offlineDuration float64) {
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
 }
+
+// BroadcastZoneOccupancy sends zone occupancy counts to all dashboard clients.
+// Broadcasted after every occupancy change (portal crossing, blob creation/removal).
+func (h *Hub) BroadcastZoneOccupancy(occupancy map[string]ZoneOccupancySnapshot) {
+	// Convert to array format for JSON
+	zones := make([]map[string]interface{}, 0, len(occupancy))
+	for zoneID, occ := range occupancy {
+		zones = append(zones, map[string]interface{}{
+			"id":       zoneID,
+			"count":    occ.Count,
+			"blob_ids": occ.BlobIDs,
+		})
+	}
+	msg := map[string]interface{}{
+		"type":  "zone_occupancy",
+		"zones": zones,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastZoneTransition sends a zone transition event to all dashboard clients.
+// Fired when a blob crosses a portal from one zone to another.
+func (h *Hub) BroadcastZoneTransition(portalID string, personLabel string, fromZone, toZone string) {
+	msg := map[string]interface{}{
+		"type":       "zone_transition",
+		"portal_id":  portalID,
+		"person":     personLabel,
+		"from_zone":  fromZone,
+		"to_zone":    toZone,
+		"timestamp":  time.Now().Format(time.RFC3339),
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}

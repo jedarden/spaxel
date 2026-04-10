@@ -1490,6 +1490,126 @@
         #room-editor-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
         #room-editor-btn.active { background: rgba(79,195,247,0.2); color: #4fc3f7; border-color: #4fc3f7; }
 
+        /* Add Portal button in status bar */
+        #add-portal-btn {
+            background: rgba(255, 167, 38, 0.15);
+            border: 1px solid rgba(255, 167, 38, 0.4);
+            color: #ffa726;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #add-portal-btn:hover {
+            background: rgba(255, 167, 38, 0.25);
+        }
+
+        /* Portal editor button */
+        #portal-editor-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #888;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #portal-editor-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
+        #portal-editor-btn.active { background: rgba(255,167,38,0.2); color: #ffa726; border-color: #ffa726; }
+
+        /* Portal editor panel */
+        #portal-editor-panel {
+            position: fixed;
+            top: 60px;
+            left: 580px;
+            width: 240px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 16px;
+            z-index: 100;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        #portal-editor-panel h3 {
+            font-size: 14px;
+            color: #ffa726;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        #portal-editor-panel .room-field {
+            margin-bottom: 12px;
+        }
+
+        #portal-editor-panel .room-field label {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        #portal-editor-panel .room-field input,
+        #portal-editor-panel .room-field select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            box-sizing: border-box;
+        }
+
+        #portal-editor-panel .room-field input:focus,
+        #portal-editor-panel .room-field select:focus {
+            outline: none;
+            border-color: rgba(255, 167, 38, 0.5);
+        }
+
+        #portal-editor-panel .portal-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        #portal-editor-panel .portal-actions button {
+            flex: 1;
+            background: rgba(79, 195, 247, 0.15);
+            border: 1px solid rgba(79, 195, 247, 0.4);
+            color: #4fc3f7;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.2s;
+        }
+
+        #portal-editor-panel .portal-actions button:hover {
+            background: rgba(79, 195, 247, 0.25);
+        }
+
+        #portal-editor-panel .portal-delete-btn {
+            background: rgba(239, 83, 80, 0.15);
+            border-color: rgba(239, 83, 80, 0.4);
+            color: #ef5350;
+        }
+
+        #portal-editor-panel .portal-delete-btn:hover {
+            background: rgba(239, 83, 80, 0.25);
+        }
+
+        #portal-editor-panel .portal-position-info {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
         /* Simulator button */
         #simulator-btn {
             background: rgba(255,255,255,0.06);
@@ -2868,7 +2988,11 @@
             <button class="view-btn" id="view-follow"      onclick="Viz3D.setViewPreset('follow')">Follow</button>
             <button id="gdop-toggle-btn" onclick="Placement && Placement.toggleGDOP()">GDOP</button>
             <button id="fresnel-toggle-btn" onclick="toggleFresnelZones()">Fresnel</button>
+            <button id="zones-toggle-btn" onclick="Viz3D && Viz3D.toggleZonesVisible()">Zones</button>
+            <button id="portals-toggle-btn" onclick="Viz3D && Viz3D.togglePortalsVisible()">Portals</button>
             <button id="room-editor-btn" onclick="Placement && Placement.toggleRoomEditor()">Room</button>
+            <button id="add-portal-btn" onclick="PortalEditor && PortalEditor.startNewPortal()">+ Add Portal</button>
+            <button id="portal-editor-btn" onclick="PortalEditor && PortalEditor.togglePanel()">Portals</button>
             <button id="floorplan-btn" onclick="FloorPlanSetup.togglePanel()">Floor plan</button>
             <button id="simulator-btn" onclick="Simulate && Simulate.togglePanel()">Simulator</button>
         </div>
@@ -2961,6 +3085,10 @@
     <script src="js/auth.js"></script>
     <!-- 3-D spatial visualisation layer -->
     <script src="js/viz3d.js"></script>
+    <!-- Portal Editor -->
+    <script src="js/portal.js"></script>
+    <!-- Zone Editor -->
+    <script src="js/zone-editor.js"></script>
     <!-- Fresnel zone helper (shared with explainability) -->
     <script src="js/fresnel.js"></script>
     <!-- Node placement, GDOP coverage, room editor -->
@@ -3047,6 +3175,94 @@
             <input type="number" id="room-height" value="2.5" min="1" max="50" step="0.1">
         </div>
         <button id="room-apply-btn" onclick="Placement && Placement.applyRoomFromEditor()">Apply</button>
+    </div>
+
+    <!-- Portal editor panel -->
+    <div id="portal-editor-panel" style="display: none;">
+        <h3>New Portal</h3>
+        <div class="room-field">
+            <label>Name</label>
+            <input type="text" id="portal-name" value="New Portal" placeholder="e.g., Kitchen Door">
+        </div>
+        <div class="room-field">
+            <label>Width <span class="unit">(m)</span></label>
+            <input type="number" id="portal-width" value="0.9" min="0.3" max="5" step="0.05">
+        </div>
+        <div class="room-field">
+            <label>Height <span class="unit">(m)</span></label>
+            <input type="number" id="portal-height" value="2.1" min="1.5" max="5" step="0.1">
+        </div>
+        <div class="room-field">
+            <label>Zone A</label>
+            <select id="portal-zone-a">
+                <option value="">-- Select Zone --</option>
+            </select>
+        </div>
+        <div class="room-field">
+            <label>Zone B</label>
+            <select id="portal-zone-b">
+                <option value="">-- Select Zone --</option>
+            </select>
+        </div>
+        <div class="portal-position-info" id="portal-position-display" style="font-size: 11px; color: #888; margin-bottom: 8px;">
+            Drag portal to position
+        </div>
+        <div class="portal-actions">
+            <button id="portal-save-btn" onclick="PortalEditor && PortalEditor.saveNewPortal()">Save Portal</button>
+            <button id="portal-update-btn" onclick="PortalEditor && PortalEditor.savePortalPosition()" style="display: none;">Update</button>
+            <button id="portal-delete-btn" class="portal-delete-btn" onclick="PortalEditor && PortalEditor.deleteSelectedPortal()" style="display: none;">Delete</button>
+            <button onclick="PortalEditor && PortalEditor.deselectPortal()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Zone editor panel -->
+    <div id="zone-editor-panel" style="display: none;">
+        <h3>New Zone</h3>
+        <div class="room-field">
+            <label>Name</label>
+            <input type="text" id="zone-name" placeholder="Kitchen">
+        </div>
+        <div class="room-field">
+            <label>Position (meters)</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="number" id="zone-x" placeholder="X" step="0.1" style="flex:1">
+                <input type="number" id="zone-y" placeholder="Y" step="0.1" style="flex:1">
+                <input type="number" id="zone-z" placeholder="Z" step="0.1" style="flex:1">
+            </div>
+        </div>
+        <div class="room-field">
+            <label>Size (meters)</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="number" id="zone-w" placeholder="Width" step="0.1" min="0.1" style="flex:1">
+                <input type="number" id="zone-d" placeholder="Depth" step="0.1" min="0.1" style="flex:1">
+                <input type="number" id="zone-h" placeholder="Height" step="0.1" min="0.1" value="2.5" style="flex:1">
+            </div>
+        </div>
+        <div class="room-field">
+            <label>Color</label>
+            <input type="color" id="zone-color" value="#3b82f6">
+        </div>
+        <div class="room-field">
+            <label>Zone Type</label>
+            <select id="zone-type">
+                <option value="general">General</option>
+                <option value="bedroom">Bedroom</option>
+                <option value="kitchen">Kitchen</option>
+                <option value="living">Living Room</option>
+                <option value="office">Office</option>
+                <option value="entry">Entry</option>
+                <option value="bathroom">Bathroom</option>
+            </select>
+        </div>
+        <div class="zone-position-info" style="font-size: 11px; color: #888; margin-bottom: 8px;">
+            Drag zone to position in 3D view
+        </div>
+        <div class="portal-actions">
+            <button id="zone-save-btn" onclick="ZoneEditor && ZoneEditor.saveNewZone()">Save Zone</button>
+            <button id="zone-update-btn" onclick="ZoneEditor.saveZonePosition()" style="display: none;">Update</button>
+            <button id="zone-delete-btn" class="portal-delete-btn" onclick="ZoneEditor.deleteSelectedZone()" style="display: none;">Delete</button>
+            <button onclick="ZoneEditor.deselectZone()">Cancel</button>
+        </div>
     </div>
 
     <!-- Pre-Deployment Simulator Panel -->

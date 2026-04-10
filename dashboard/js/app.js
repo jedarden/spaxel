@@ -164,6 +164,16 @@
             Placement.init(scene, camera, renderer, controls);
         }
 
+        // Initialise zone editor (TransformControls for zones)
+        if (window.ZoneEditor) {
+            ZoneEditor.init(scene, camera, renderer, controls);
+        }
+
+        // Initialise portal editor (TransformControls for portals)
+        if (window.PortalEditor) {
+            PortalEditor.init(scene, camera, renderer, controls);
+        }
+
         console.log('[Spaxel] Scene initialized');
     }
 
@@ -811,6 +821,34 @@
                 }
                 break;
 
+            case 'zone_change':
+                // Zone created, updated, or deleted
+                if (window.Viz3D && Viz3D.handleZoneChange) {
+                    Viz3D.handleZoneChange(msg);
+                }
+                break;
+
+            case 'portal_change':
+                // Portal created, updated, or deleted
+                if (window.Viz3D && Viz3D.handlePortalChange) {
+                    Viz3D.handlePortalChange(msg);
+                }
+                break;
+
+            case 'zone_occupancy':
+                // Zone occupancy counts update
+                if (window.Viz3D && Viz3D.handleZoneOccupancy) {
+                    Viz3D.handleZoneOccupancy(msg);
+                }
+                break;
+
+            case 'zone_transition':
+                // Portal crossing event
+                if (window.Viz3D && Viz3D.handleZoneTransition) {
+                    Viz3D.handleZoneTransition(msg);
+                }
+                break;
+
             default:
                 // Log unhandled types for future debugging
                 console.log('[Spaxel] Unknown message type:', msg.type, msg);
@@ -893,6 +931,13 @@
             }
         }
 
+        // Portals
+        if (msg.portals) {
+            if (window.Viz3D && window.Viz3D.handlePortalUpdate) {
+                Viz3D.handlePortalUpdate(msg.portals);
+            }
+        }
+
         updateNodeList();
         updateLinkList();
         Viz3D.applyLinks(msg.links || []);
@@ -969,6 +1014,13 @@
         if (msg.zones) {
             if (window.Viz3D && window.Viz3D.handleZoneUpdate) {
                 Viz3D.handleZoneUpdate(msg.zones);
+            }
+        }
+
+        // Portals
+        if (msg.portals) {
+            if (window.Viz3D && window.Viz3D.handlePortalUpdate) {
+                Viz3D.handlePortalUpdate(msg.portals);
             }
         }
 
