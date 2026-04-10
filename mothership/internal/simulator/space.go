@@ -244,6 +244,12 @@ func (s *Space) TotalVolume() float64 {
 	return v
 }
 
+// Dimensions returns the overall width, depth, and height of the space
+func (s *Space) Dimensions() (width, depth, height float64) {
+	minX, minY, minZ, maxX, maxY, maxZ := s.Bounds()
+	return maxX - minX, maxY - minY, maxZ - minZ
+}
+
 // GetWalls returns all wall segments from all rooms plus standalone walls
 func (s *Space) GetWalls() []WallSegment {
 	walls := make([]WallSegment, 0, len(s.Walls))

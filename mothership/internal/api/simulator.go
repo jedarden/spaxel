@@ -3,11 +3,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/simulator"
@@ -38,6 +40,7 @@ func (h *SimulatorHandler) RegisterRoutes(r chi.Router) {
 	r.Route("/simulator", func(r chi.Router) {
 		r.Get("/", h.GetState)
 		r.Post("/reset", h.Reset)
+		r.Post("/session", h.CreateSession)
 
 		// Space management
 		r.Route("/space", func(r chi.Router) {
@@ -106,6 +109,37 @@ func (h *SimulatorHandler) Reset(w http.ResponseWriter, r *http.Request) {
 	h.walkers = simulator.NewWalkerSet()
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "reset"})
+}
+
+// CreateSession creates a new simulator session
+func (h *SimulatorHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Space *simulator.Space `json:"space"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Use default space if request body is empty/invalid
+		req.Space = simulator.DefaultSpace()
+	}
+
+	if req.Space == nil {
+		req.Space = simulator.DefaultSpace()
+	}
+
+	// Update the handler's space if provided
+	if req.Space != nil {
+		h.mu.Lock()
+		h.space = req.Space
+		h.mu.Unlock()
+	}
+
+	// Generate session ID
+	sessionID := fmt.Sprintf("sim_%d", time.Now().UnixNano())
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"session_id": sessionID,
+		"space":      h.space,
+	})
 }
 
 // GetSpace returns the current space definition

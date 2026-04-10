@@ -110,6 +110,10 @@ const Placement = (function () {
 
     // ── GDOP overlay ─────────────────────────────────────────────────────────
 
+    // Cache for backend GDOP data
+    var _gdopCache = null;
+    var _gdopPending = false;
+
     function updateGDOPOverlay() {
         var nodes = getNodePositions();
 
@@ -118,32 +122,70 @@ const Placement = (function () {
             return;
         }
 
+        // Fetch GDOP data from backend API (uses angular diversity algorithm)
+        if (!_gdopPending) {
+            _gdopPending = true;
+            fetch('/api/simulator/gdop/heatmap')
+                .then(function (resp) { return resp.json(); })
+                .then(function (data) {
+                    _gdopCache = data;
+                    renderGDOPFromCache();
+                    _gdopPending = false;
+                })
+                .catch(function (e) {
+                    console.error('[Placement] GDOP fetch failed:', e);
+                    _gdopPending = false;
+                });
+        } else if (_gdopCache) {
+            renderGDOPFromCache();
+        }
+    }
+
+    function renderGDOPFromCache() {
+        if (!_gdopCache || !_roomConfig) return;
+
+        var data = _gdopCache;
         var w = _roomConfig.width;
         var d = _roomConfig.depth;
         var ox = _roomConfig.origin_x || 0;
         var oz = _roomConfig.origin_z || 0;
 
+        // Get grid dimensions from backend response
+        var gridWidth = data.grid_dimensions ? data.grid_dimensions[0] : GDOP_RES;
+        var gridDepth = data.grid_dimensions ? data.grid_dimensions[1] : GDOP_RES;
+        var gdopValues = data.gdop_map || [];
+        var colors = data.colors || [];
+
         // Create or reuse DataTexture
         if (!_gdopTexture) {
-            var data = new Uint8Array(GDOP_RES * GDOP_RES * 4);
-            _gdopTexture = new THREE.DataTexture(data, GDOP_RES, GDOP_RES, THREE.RGBAFormat);
+            var texData = new Uint8Array(gridWidth * gridDepth * 4);
+            _gdopTexture = new THREE.DataTexture(texData, gridWidth, gridDepth, THREE.RGBAFormat);
             _gdopTexture.magFilter = THREE.LinearFilter;
             _gdopTexture.minFilter = THREE.LinearFilter;
         }
 
-        var data = _gdopTexture.image.data;
+        var texData = _gdopTexture.image.data;
 
-        for (var iz = 0; iz < GDOP_RES; iz++) {
-            var pz = oz + (iz / (GDOP_RES - 1)) * d;
-            for (var ix = 0; ix < GDOP_RES; ix++) {
-                var px = ox + (ix / (GDOP_RES - 1)) * w;
-                var hdop = computeHDOP(px, pz, nodes);
-                var c = gdopToColor(hdop);
-                var idx = (iz * GDOP_RES + ix) * 4;
-                data[idx]     = c[0];
-                data[idx + 1] = c[1];
-                data[idx + 2] = c[2];
-                data[idx + 3] = c[3];
+        // Use backend-provided colors if available, otherwise compute from GDOP values
+        if (colors.length > 0) {
+            // Backend provides RGB colors
+            for (var i = 0; i < colors.length && i < gridWidth * gridDepth; i++) {
+                var idx = i * 4;
+                texData[idx]     = colors[i][0];
+                texData[idx + 1] = colors[i][1];
+                texData[idx + 2] = colors[i][2];
+                texData[idx + 3] = 150; // Alpha
+            }
+        } else if (gdopValues.length > 0) {
+            // Fallback: compute colors from GDOP values
+            for (var i = 0; i < gdopValues.length && i < gridWidth * gridDepth; i++) {
+                var gdop = gdopValues[i];
+                var c = gdopToColor(gdop);
+                var idx = i * 4;
+                texData[idx]     = c[0];
+                texData[idx + 1] = c[1];
+                texData[idx + 2] = c[2];
+                texData[idx + 3] = c[3];
             }
         }
 
@@ -168,6 +210,20 @@ const Placement = (function () {
         }
 
         _gdopMesh.visible = true;
+
+        // Update coverage score display if available
+        updateCoverageScore(data.coverage_score || data.coverage_percent);
+    }
+
+    function updateCoverageScore(score) {
+        var scoreEl = document.getElementById('gdop-coverage-score');
+        if (scoreEl) {
+            var pct = typeof score === 'number' ? score : 0;
+            scoreEl.textContent = 'Coverage: ' + pct.toFixed(1) + '%';
+
+            // Color-code the score
+            scoreEl.style.color = pct >= 70 ? '#22c65e' : pct >= 50 ? '#ffc107' : '#dc3545';
+        }
     }
 
     function rebuildGDOPIfDirty() {
@@ -211,6 +267,7 @@ const Placement = (function () {
             obj.position.z = Math.max(oz, Math.min(oz + _roomConfig.depth, obj.position.z));
 
             _gdopDirty = true;
+            _gdopCache = null; // Clear cache to force refresh with new node positions
 
             // Update link lines to follow dragged node
             if (Viz3D.rebuildLinkLines) Viz3D.rebuildLinkLines();

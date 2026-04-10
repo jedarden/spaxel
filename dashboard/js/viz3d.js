@@ -2142,15 +2142,7 @@ const Viz3D = (function () {
      * Fetch GDOP heatmap data from API.
      */
     function fetchGDOPData() {
-        fetch('/api/simulator/gdop/compute', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                cell_size: 0.2,
-                max_zone: 3,
-                threshold: 0.02
-            })
-        })
+        fetch('/api/simulator/gdop/heatmap')
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 _gdopData = data;
@@ -2166,21 +2158,39 @@ const Viz3D = (function () {
      * @param {Object} data - GDOP computation results
      */
     function updateGDOPOverlay(data) {
-        if (!data || !data.gdop_heatmap) {
+        if (!data || !data.gdop_map) {
             console.warn('[Viz3D] No GDOP heatmap data in response');
             return;
         }
 
-        var heatmap = data.gdop_heatmap;
-        var width = heatmap.width;
-        var depth = heatmap.depth;
-        var cellSize = heatmap.cell_size;
-        var originX = heatmap.origin_x;
-        var originY = heatmap.origin_y;
+        var gridDimensions = data.grid_dimensions || [0, 0, 0];
+        var width = gridDimensions[0];
+        var depth = gridDimensions[1];
+        var cellSize = 0.2; // Default cell size (not provided by this endpoint)
 
         // Create texture from GDOP data
-        var gdopValues = new Float32Array(heatmap.gdop_values);
-        var colors = new Uint8Array(heatmap.colors.flat());
+        var gdopValues = new Float32Array(data.gdop_map);
+
+        // Generate colors from GDOP values using GDOPColorMap
+        var colors = new Uint8Array(width * depth * 3);
+        for (var i = 0; i < gdopValues.length; i++) {
+            var gdop = gdopValues[i];
+            var color;
+            if (gdop >= 9999) {
+                color = { r: 80, g: 80, b: 80 }; // None - gray
+            } else if (gdop < 2.0) {
+                color = { r: 34, g: 197, b: 94 }; // Excellent - green
+            } else if (gdop < 4.0) {
+                color = { r: 255, g: 193, b: 7 }; // Good - yellow
+            } else if (gdop < 8.0) {
+                color = { r: 255, g: 146, b: 0 }; // Fair - orange
+            } else {
+                color = { r: 220, g: 53, b: 69 }; // Poor - red
+            }
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
+        }
 
         // Create data texture
         if (_gdopTexture) {
@@ -2206,9 +2216,9 @@ const Viz3D = (function () {
             _gdopMesh = new THREE.Mesh(geo, mat);
             _gdopMesh.rotation.x = -Math.PI / 2;
             _gdopMesh.position.set(
-                originX + (width * cellSize) / 2,
+                (width * cellSize) / 2,
                 0.01, // Slightly above floor
-                originY + (depth * cellSize) / 2
+                (depth * cellSize) / 2
             );
             _scene.add(_gdopMesh);
             _gdopMesh.visible = _gdopOverlayVisible;
@@ -2220,17 +2230,17 @@ const Viz3D = (function () {
                 depth * cellSize
             );
             _gdopMesh.position.set(
-                originX + (width * cellSize) / 2,
+                (width * cellSize) / 2,
                 0.01,
-                originY + (depth * cellSize) / 2
+                (depth * cellSize) / 2
             );
             _gdopMesh.material.map = _gdopTexture;
         }
 
         // Update or create legend
-        updateGDOPLegend(data.coverage_score);
+        updateGDOPLegend(data.coverage_percent || data.coverage_score);
 
-        console.log('[Viz3D] GDOP overlay updated:', data.coverage_score.toFixed(1) + '% coverage');
+        console.log('[Viz3D] GDOP overlay updated:', (data.coverage_percent || data.coverage_score || 0).toFixed(1) + '% coverage');
     }
 
     /**

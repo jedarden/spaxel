@@ -234,7 +234,7 @@ func (b *FleetRegistryBridge) OptimizeCoverage(space *Space) (*CoverageOptimizat
 	weakAreas := make([]Point, 0)
 	for row := range results {
 		for col := range results[row] {
-			if results[row][col] > 4 {
+			if results[row][col].GDOP > 4 {
 				// Calculate position from grid indices
 				x := minX + float64(col)*config.CellSize
 				y := minY + float64(row)*config.CellSize

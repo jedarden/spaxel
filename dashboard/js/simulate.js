@@ -443,12 +443,14 @@
         const node = {
             id: id,
             name: 'Node ' + (state.nodes.length + 1),
+            type: 'virtual',
             position: {
                 x: state.space.width / 2,
                 y: 1.0,
                 z: state.space.depth / 2,
             },
             role: 'tx_rx',
+            enabled: true,
         };
 
         state.nodes.push(node);
@@ -537,9 +539,14 @@
     function addWalker() {
         const type = elements.walkerType.value;
         const id = 'walker_' + Date.now();
+
+        // Map frontend type to backend WalkerType
+        const backendType = type === 'path' ? 'path_follow' :
+                            type === 'zone' ? 'node_to_node' : 'random_walk';
+
         const walker = {
             id: id,
-            type: type,
+            type: backendType,
             position: {
                 x: state.space.width / 2,
                 y: 1.0,
@@ -550,19 +557,19 @@
                 y: 0,
                 z: (Math.random() - 0.5) * CONFIG.walkerSpeed,
             },
+            speed: CONFIG.walkerSpeed,
+            height: 1.7,
         };
 
         if (type === 'path') {
             // Create default path
             walker.path = [
-                { x: 2, y: 1, z: 2 },
-                { x: state.space.width - 2, y: 1, z: 2 },
-                { x: state.space.width - 2, y: 1, z: state.space.depth - 2 },
-                { x: 2, y: 1, z: state.space.depth - 2 },
+                { x: 2, y: 1.0, z: 2 },
+                { x: state.space.width - 2, y: 1.0, z: 2 },
+                { x: state.space.width - 2, y: 1.0, z: state.space.depth - 2 },
+                { x: 2, y: 1.0, z: state.space.depth - 2 },
             ];
             walker.path_index = 0;
-        } else if (type === 'zone') {
-            walker.target_zones = [];
         }
 
         state.walkers.push(walker);
@@ -634,6 +641,21 @@
         } catch (err) {
             console.error('[Simulate] Failed to delete walker:', err);
         }
+    }
+
+    // ============================================
+    // Panel Toggle
+    // ============================================
+    function togglePanel() {
+        const panel = document.getElementById('simulator-panel');
+        const btn = document.getElementById('simulator-btn');
+        if (!panel || !btn) return;
+
+        const isVisible = panel.style.display !== 'none';
+        panel.style.display = isVisible ? 'none' : 'block';
+        btn.classList.toggle('active', !isVisible);
+
+        console.log('[Simulate] Panel', isVisible ? 'hidden' : 'shown');
     }
 
     // ============================================
