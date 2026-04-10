@@ -336,7 +336,7 @@
 
             // Fetch morning briefing
             const today = new Date().toISOString().split('T')[0];
-            const briefingResponse = await fetch(`/api/briefings/${today}`);
+            const briefingResponse = await fetch(`/api/briefing?date=${today}`);
             if (briefingResponse.ok) {
                 currentState.briefing = await briefingResponse.json();
             }

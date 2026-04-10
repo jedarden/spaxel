@@ -110,6 +110,133 @@ func (a *securityStateAdapter) IsModelReady() bool {
 	return a.detector.IsModelReady()
 }
 
+// briefingZoneAdapter adapts zones.Manager to implement briefing.ZoneProvider.
+type briefingZoneAdapter struct {
+	mgr *zones.Manager
+}
+
+func (a *briefingZoneAdapter) GetZoneName(id int) string {
+	if a.mgr == nil {
+		return ""
+	}
+	z, err := a.mgr.GetZoneByID(id)
+	if err != nil {
+		return ""
+	}
+	return z.Name
+}
+
+func (a *briefingZoneAdapter) GetZoneOccupancy(zoneID int) int {
+	if a.mgr == nil {
+		return 0
+	}
+	z, err := a.mgr.GetZoneByID(zoneID)
+	if err != nil {
+		return 0
+	}
+	return z.Occupancy
+}
+
+func (a *briefingZoneAdapter) GetPeopleInZone(zoneID int) []string {
+	if a.mgr == nil {
+		return nil
+	}
+	return a.mgr.GetPeopleInZone(zoneID)
+}
+
+// briefingPersonAdapter adapts ble.Registry to implement briefing.PersonProvider.
+type briefingPersonAdapter struct {
+	registry *ble.Registry
+}
+
+func (a *briefingPersonAdapter) GetPeopleHome() []string {
+	if a.registry == nil {
+		return nil
+	}
+	return a.registry.GetPeopleHome()
+}
+
+func (a *briefingPersonAdapter) GetPersonLastSeen(person string) time.Time {
+	if a.registry == nil {
+		return time.Time{}
+	}
+	return a.registry.GetPersonLastSeen(person)
+}
+
+func (a *briefingPersonAdapter) GetPersonZone(person string) string {
+	if a.registry == nil {
+		return ""
+	}
+	return a.registry.GetPersonZone(person)
+}
+
+// briefingPredictionAdapter adapts prediction.Predictor to implement briefing.PredictionProvider.
+type briefingPredictionAdapter struct {
+	predictor *prediction.Predictor
+	store     *prediction.ModelStore
+}
+
+func (a *briefingPredictionAdapter) GetPrediction(person string, horizonMinutes int) (zone string, probability float64, ok bool) {
+	if a.predictor == nil {
+		return "", 0, false
+	}
+	return a.predictor.GetPrediction(person, horizonMinutes)
+}
+
+func (a *briefingPredictionAdapter) GetDaysComplete(person string) int {
+	if a.store == nil {
+		return 0
+	}
+	return a.store.GetDaysComplete(person)
+}
+
+func (a *briefingPredictionAdapter) IsModelReady(person string) bool {
+	if a.store == nil {
+		return false
+	}
+	return a.store.IsModelReady(person)
+}
+
+// briefingHealthAdapter adapts various components to implement briefing.HealthProvider.
+type briefingHealthAdapter struct {
+	healthChecker *health.Checker
+	fleetReg      *fleet.Registry
+	feedbackStore *learning.FeedbackStore
+}
+
+func (a *briefingHealthAdapter) GetDetectionQuality() float64 {
+	if a.healthChecker == nil {
+		return 0
+	}
+	return a.healthChecker.GetAmbientConfidence()
+}
+
+func (a *briefingHealthAdapter) GetNodeCount() (online, total int) {
+	if a.fleetReg == nil {
+		return 0, 0
+	}
+	nodes, err := a.fleetReg.GetAllNodes()
+	if err != nil {
+		return 0, 0
+	}
+	total = len(nodes)
+	for _, n := range nodes {
+		if n.Status == "online" {
+			online++
+		}
+	}
+	return
+}
+
+func (a *briefingHealthAdapter) GetAccuracyDelta() (percent float64, feedbackCount int) {
+	if a.feedbackStore == nil {
+		return 0, 0
+	}
+	// Get accuracy delta for the past 7 days
+	delta, count := a.feedbackStore.GetAccuracyDelta(7 * 24 * time.Hour)
+	return delta * 100, count
+}
+
 // parseLinkID splits a link ID "node_mac:peer_mac" into its two components.
 func parseLinkID(linkID string) []string {
 	i := strings.IndexByte(linkID, ':')
@@ -785,6 +912,37 @@ func main() {
 				automationEngine.SetMQTTClient(mqttClient)
 			}
 		}
+	}
+
+	// Wire up briefing providers after all components are initialized
+	if briefingHandler != nil {
+		var zoneProvider briefing.ZoneProvider
+		if zonesMgr != nil {
+			zoneProvider = &briefingZoneAdapter{mgr: zonesMgr}
+		}
+
+		var personProvider briefing.PersonProvider
+		if bleRegistry != nil {
+			personProvider = &briefingPersonAdapter{registry: bleRegistry}
+		}
+
+		var predictionProvider briefing.PredictionProvider
+		if predictionPredictor != nil && predictionStore != nil {
+			predictionProvider = &briefingPredictionAdapter{
+				predictor: predictionPredictor,
+				store:     predictionStore,
+			}
+		}
+
+		var healthProvider briefing.HealthProvider
+		healthProvider = &briefingHealthAdapter{
+			healthChecker: healthChecker,
+			fleetReg:      fleetReg,
+			feedbackStore: feedbackStore,
+		}
+
+		briefingHandler.SetProviders(zoneProvider, personProvider, predictionProvider, healthProvider)
+		log.Printf("[INFO] Briefing providers wired up")
 	}
 
 	// Phase 5: Self-healing fleet manager with GDOP optimization

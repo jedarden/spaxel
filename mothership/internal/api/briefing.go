@@ -4,6 +4,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -15,8 +16,9 @@ import (
 
 // BriefingHandler manages morning briefing REST endpoints.
 type BriefingHandler struct {
-	generator *briefing.Generator
-	db        *sql.DB
+	generator     *briefing.Generator
+	db            *sql.DB
+	notifyService briefing.NotifyService
 	zoneProvider  briefing.ZoneProvider
 	personProvider briefing.PersonProvider
 	predictionProvider briefing.PredictionProvider
@@ -67,6 +69,11 @@ func (h *BriefingHandler) Close() error {
 		}
 	}
 	return firstErr
+}
+
+// SetNotifyService sets the notification service for sending test notifications.
+func (h *BriefingHandler) SetNotifyService(notifySvc briefing.NotifyService) {
+	h.notifyService = notifySvc
 }
 
 // RegisterRoutes registers the briefing API routes.
@@ -161,13 +168,33 @@ func (h *BriefingHandler) handleGetLatestBriefing(w http.ResponseWriter, r *http
 
 // handleGetSettings returns briefing settings.
 func (h *BriefingHandler) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	// For now, return default settings
-	// TODO: Load from database settings table
+	// Try to load settings from database
+	var settingsJSON sql.NullString
+	err := h.db.QueryRow("SELECT value_json FROM settings WHERE key = 'briefing_config'").Scan(&settingsJSON)
+
 	settings := map[string]interface{}{
-		"enabled":        true,
-		"time":           "07:00",
+		"enabled":           true,
+		"time":              "07:00",
 		"push_notification": true,
-		"auto_generate":  true,
+		"auto_generate":     true,
+	}
+
+	if err == nil && settingsJSON.Valid {
+		var savedConfig map[string]interface{}
+		if err := json.Unmarshal([]byte(settingsJSON.String), &savedConfig); err == nil {
+			if enabled, ok := savedConfig["enabled"].(bool); ok {
+				settings["enabled"] = enabled
+			}
+			if timeStr, ok := savedConfig["time"].(string); ok {
+				settings["time"] = timeStr
+			}
+			if push, ok := savedConfig["push_notification"].(bool); ok {
+				settings["push_notification"] = push
+			}
+			if auto, ok := savedConfig["auto_generate"].(bool); ok {
+				settings["auto_generate"] = auto
+			}
+		}
 	}
 
 	writeJSON(w, settings)
@@ -181,8 +208,39 @@ func (h *BriefingHandler) handleUpdateSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// TODO: Save to database settings table
+	// Validate settings
+	if timeStr, ok := settings["time"].(string); ok {
+		// Validate time format (HH:MM)
+		var h, m int
+		_, err := fmt.Sscanf(timeStr, "%d:%d", &h, &m)
+		if err != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+			http.Error(w, "Invalid time format, use HH:MM", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Save to database settings table
+	settingsJSON, err := json.Marshal(settings)
+	if err != nil {
+		log.Printf("[ERROR] Failed to marshal briefing settings: %v", err)
+		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = h.db.Exec(`
+		INSERT OR REPLACE INTO settings (key, value_json, updated_at)
+		VALUES ('briefing_config', ?, strftime('%s', 'now') * 1000)
+	`, string(settingsJSON))
+	if err != nil {
+		log.Printf("[ERROR] Failed to save briefing settings: %v", err)
+		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
 	log.Printf("[INFO] Briefing settings updated: %+v", settings)
+
+	// Update scheduler config if available
+	// Note: The scheduler will pick up the new config on next check
 
 	writeJSON(w, map[string]string{"status": "ok"})
 }
@@ -198,8 +256,28 @@ func (h *BriefingHandler) handleTestNotification(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// TODO: Send via notification service
-	log.Printf("[INFO] Test briefing notification: %s", b.Content)
+	// Send via notification service if available
+	if h.notifyService != nil {
+		notif := briefing.Notification{
+			Title:     "Morning Briefing (Test)",
+			Body:       b.Content,
+			Priority:  1,
+			Tags:       []string{"briefing", "test"},
+			Timestamp: time.Now(),
+		}
+		if err := h.notifyService.Send(notif); err != nil {
+			log.Printf("[ERROR] Failed to send test notification: %v", err)
+			writeJSON(w, map[string]interface{}{
+				"status":   "error",
+				"error":    err.Error(),
+				"briefing": b,
+			})
+			return
+		}
+		log.Printf("[INFO] Test briefing notification sent")
+	} else {
+		log.Printf("[INFO] Test briefing notification (no notify service): %s", b.Content)
+	}
 
 	writeJSON(w, map[string]interface{}{
 		"status":   "sent",

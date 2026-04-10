@@ -1006,7 +1006,7 @@
 
         // Fetch briefing
         try {
-            const response = await fetch(`/api/briefings/${today}`);
+            const response = await fetch(`/api/briefing?date=${today}`);
             if (response.ok) {
                 const briefing = await response.json();
 
