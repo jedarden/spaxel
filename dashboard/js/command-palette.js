@@ -12,6 +12,7 @@
     // Configuration
     // ============================================
     const STORAGE_KEY_RECENT = 'spaxel_command_recent';
+    const STORAGE_KEY_HINT_DISMISSED = 'spaxel_command_hint_dismissed';
     const MAX_RECENT = 5;
     const MIN_SEARCH_LENGTH = 1;
 
@@ -594,6 +595,23 @@
     // ============================================
 
     /**
+     * Check if command palette should be available
+     */
+    function isAvailable() {
+        // Check if simple mode is active
+        if (window.SpaxelSimpleMode && window.SpaxelSimpleMode.isEnabled()) {
+            return false;
+        }
+
+        // Check if ambient mode is active
+        if (window.SpaxelAmbient && window.SpaxelAmbient.isEnabled()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Toggle command palette open/closed
      */
     function togglePalette() {
@@ -608,6 +626,12 @@
      * Open command palette
      */
     function openPalette() {
+        // Check if command palette is available in current mode
+        if (!isAvailable()) {
+            showToast('Command palette is only available in expert mode', 'info');
+            return;
+        }
+
         createCommandPalette();
 
         const palette = document.getElementById('command-palette');
@@ -841,7 +865,7 @@
         results.forEach(result => {
             if (result.type === 'header') {
                 html += `
-                    <div class="command-header">
+                    <div class="command-category-header">
                         ${result.title}
                     </div>
                 `;
@@ -1268,7 +1292,63 @@
         // Create UI (hidden)
         createCommandPalette();
 
+        // Show keyboard shortcut hint if not dismissed
+        showShortcutHintIfNeeded();
+
         console.log('[Command Palette] Initialized');
+    }
+
+    /**
+     * Show dismissible keyboard shortcut hint
+     */
+    function showShortcutHintIfNeeded() {
+        // Check if already dismissed
+        if (localStorage.getItem(STORAGE_KEY_HINT_DISMISSED)) {
+            return;
+        }
+
+        // Check if expert mode is active
+        if (!isAvailable()) {
+            return;
+        }
+
+        // Create hint element
+        const hint = document.createElement('div');
+        hint.id = 'command-palette-shortcut-hint';
+        hint.className = 'command-shortcut-hint';
+        hint.innerHTML = `
+            <span class="hint-text">Press <kbd>Ctrl</kbd> + <kbd>K</kbd> to open command palette</span>
+            <button class="hint-dismiss" aria-label="Dismiss">&times;</button>
+        `;
+
+        // Add to body
+        document.body.appendChild(hint);
+
+        // Show after a short delay
+        setTimeout(() => {
+            hint.classList.add('visible');
+        }, 1000);
+
+        // Handle dismiss
+        hint.querySelector('.hint-dismiss').addEventListener('click', () => {
+            hint.classList.remove('visible');
+            setTimeout(() => {
+                hint.remove();
+                localStorage.setItem(STORAGE_KEY_HINT_DISMISSED, 'true');
+            }, 300);
+        });
+
+        // Auto-hide after 10 seconds
+        setTimeout(() => {
+            if (hint.parentNode) {
+                hint.classList.remove('visible');
+                setTimeout(() => {
+                    if (hint.parentNode) {
+                        hint.remove();
+                    }
+                }, 300);
+            }
+        }, 10000);
     }
 
     // ============================================
