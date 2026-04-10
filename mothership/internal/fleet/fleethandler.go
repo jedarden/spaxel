@@ -45,11 +45,17 @@ type fleetHealthResponse struct {
 }
 
 type fleetNodeEntry struct {
-	MAC         string  `json:"mac"`
-	Name        string  `json:"name"`
-	Role        string  `json:"role"`
-	HealthScore float64 `json:"health_score"`
-	Online      bool    `json:"online"`
+	MAC            string  `json:"mac"`
+	Name           string  `json:"name"`
+	Role           string  `json:"role"`
+	HealthScore    float64 `json:"health_score"`
+	Online         bool    `json:"online"`
+	PosX           float64 `json:"pos_x"`
+	PosY           float64 `json:"pos_y"`
+	PosZ           float64 `json:"pos_z"`
+	FirmwareVersion string  `json:"firmware_version"`
+	UptimeSeconds  int64   `json:"uptime_seconds"`
+	LastSeenMs     int64   `json:"last_seen_ms"`
 }
 
 func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
@@ -75,12 +81,27 @@ func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
 			role = r
 		}
 		_, online := onlineSet[n.MAC]
+
+		// Calculate uptime: if online, use time since first seen; otherwise, time since went offline
+		var uptimeSeconds int64
+		if online {
+			uptimeSeconds = int64(time.Since(n.FirstSeenAt).Seconds())
+		} else if !n.WentOfflineAt.IsZero() {
+			uptimeSeconds = int64(n.WentOfflineAt.Sub(n.FirstSeenAt).Seconds())
+		}
+
 		entries = append(entries, fleetNodeEntry{
-			MAC:         n.MAC,
-			Name:        n.Name,
-			Role:        role,
-			HealthScore: n.HealthScore,
-			Online:      online,
+			MAC:            n.MAC,
+			Name:           n.Name,
+			Role:           role,
+			HealthScore:    n.HealthScore,
+			Online:         online,
+			PosX:           n.PosX,
+			PosY:           n.PosY,
+			PosZ:           n.PosZ,
+			FirmwareVersion: n.FirmwareVersion,
+			UptimeSeconds:  uptimeSeconds,
+			LastSeenMs:     n.LastSeenAt.UnixMilli(),
 		})
 	}
 

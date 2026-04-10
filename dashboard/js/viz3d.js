@@ -2432,6 +2432,21 @@ const Viz3D = (function () {
     }
 
     /**
+     * Fly the camera to focus on a specific node.
+     * @param {string} mac - Node MAC address
+     */
+    function flyToNode(mac) {
+        var nodeMesh = _nodeMeshes.get(mac);
+        if (!nodeMesh) {
+            console.warn('[Viz3D] Node mesh not found for MAC:', mac);
+            return;
+        }
+
+        var pos = nodeMesh.position;
+        focusOnPosition(pos.x, pos.y, pos.z);
+    }
+
+    /**
      * Clear all anomaly zone overlays.
      */
     function clearAnomalyZones() {
@@ -2947,6 +2962,7 @@ const Viz3D = (function () {
         setAnomalyZones: setAnomalyZones,
         focusOnZone: focusOnZone,
         focusOnPosition: focusOnPosition,
+        flyToNode: flyToNode,
         clearAnomalyZones: clearAnomalyZones,
         // Explainability support API
         forEachRoomObject: function(callback) {

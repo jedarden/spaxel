@@ -57,20 +57,16 @@
     }
 
     function createPanel() {
-        const sidebar = document.querySelector('.sidebar');
-        if (!sidebar) {
-            console.warn('[Fleet] Sidebar not found');
-            return;
-        }
-
         // Check if panel already exists
         if (document.getElementById('fleet-panel')) {
             return;
         }
 
+        // Create the fleet panel container (fixed position panel)
         const panel = document.createElement('div');
         panel.id = 'fleet-panel';
-        panel.className = 'panel';
+        panel.className = 'fleet-health-panel';
+        panel.style.cssText = 'position: fixed; top: 60px; left: 20px; width: 280px; max-height: calc(100vh - 80px); background: rgba(0, 0, 0, 0.8); border-radius: 8px; padding: 12px; z-index: 100; overflow-y: auto; border: 1px solid rgba(255, 255, 255, 0.1);';
         panel.innerHTML = `
             <div class="panel-header">
                 <h3>Fleet Health</h3>
@@ -129,7 +125,7 @@
             </div>
         `;
 
-        sidebar.appendChild(panel);
+        document.body.appendChild(panel);
 
         // Add event handlers
         document.getElementById('fleet-optimise-btn').addEventListener('click', onOptimiseClick);
@@ -508,6 +504,13 @@
                 cursor: not-allowed;
             }
 
+            .fleet-actions-divider {
+                width: 1px;
+                height: 24px;
+                background: rgba(255, 255, 255, 0.15);
+                margin: 0 4px;
+            }
+
             .fleet-table-toolbar {
                 display: flex;
                 justify-content: space-between;
@@ -735,6 +738,24 @@
 
             .fleet-actions-col {
                 white-space: nowrap;
+            }
+
+            .fleet-position-col {
+                font-family: monospace;
+                font-size: 12px;
+                color: #aaa;
+            }
+
+            .position-link {
+                color: #4fc3f7;
+                cursor: pointer;
+                text-decoration: none;
+                transition: color 0.2s;
+            }
+
+            .position-link:hover {
+                color: #29b6f6;
+                text-decoration: underline;
             }
 
             .fleet-action-btn {
@@ -1368,6 +1389,22 @@
                         <button id="fleet-bulk-identify-btn" class="fleet-btn fleet-btn-action" disabled>
                             <span class="icon">&#x26A1;</span> Identify Selected
                         </button>
+                        <button id="fleet-bulk-restart-btn" class="fleet-btn fleet-btn-action" disabled>
+                            <span class="icon">&#x21BB;</span> Restart Selected
+                        </button>
+                        <button id="fleet-update-all-btn" class="fleet-btn fleet-btn-action">
+                            <span class="icon">&#x2191;</span> Update All
+                        </button>
+                        <button id="fleet-rebaseline-all-btn" class="fleet-btn fleet-btn-action">
+                            <span class="icon">&#x267B;</span> Re-baseline All
+                        </button>
+                        <div class="fleet-actions-divider"></div>
+                        <button id="fleet-export-btn" class="fleet-btn fleet-btn-secondary">
+                            <span class="icon">&#x2193;</span> Export
+                        </button>
+                        <button id="fleet-import-btn" class="fleet-btn fleet-btn-secondary">
+                            <span class="icon">&#x2191;</span> Import
+                        </button>
                         <button id="fleet-close-table-btn" class="fleet-btn fleet-btn-secondary">
                             <span class="icon">&times;</span> Close
                         </button>
@@ -1408,6 +1445,7 @@
                                 <th class="sortable" data-sort="mac">MAC Address</th>
                                 <th class="sortable" data-sort="role">Role</th>
                                 <th class="sortable" data-sort="status">Status</th>
+                                <th class="sortable" data-sort="position">Position</th>
                                 <th class="sortable" data-sort="health">Health</th>
                                 <th class="sortable" data-sort="uptime">Uptime</th>
                                 <th class="sortable" data-sort="fw">Firmware</th>
@@ -1416,7 +1454,7 @@
                         </thead>
                         <tbody id="fleet-table-body">
                             <tr>
-                                <td colspan="8" class="fleet-empty-state">Loading...</td>
+                                <td colspan="9" class="fleet-empty-state">Loading...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1439,6 +1477,11 @@
         document.getElementById('fleet-close-table-btn').addEventListener('click', hideFullTableView);
         document.getElementById('fleet-refresh-btn').addEventListener('click', refreshFullTable);
         document.getElementById('fleet-bulk-identify-btn').addEventListener('click', bulkIdentify);
+        document.getElementById('fleet-bulk-restart-btn').addEventListener('click', bulkRestart);
+        document.getElementById('fleet-update-all-btn').addEventListener('click', updateAllNodes);
+        document.getElementById('fleet-rebaseline-all-btn').addEventListener('click', rebaselineAllNodes);
+        document.getElementById('fleet-export-btn').addEventListener('click', exportConfig);
+        document.getElementById('fleet-import-btn').addEventListener('click', importConfig);
         document.getElementById('fleet-select-all').addEventListener('change', toggleSelectAll);
         document.getElementById('fleet-header-select-all').addEventListener('change', toggleSelectAll);
         document.getElementById('fleet-filter-role').addEventListener('change', renderFullTable);
@@ -1520,7 +1563,7 @@
 
         // Render rows
         if (nodes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="fleet-empty-state">No nodes match the current filters</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="fleet-empty-state">No nodes match the current filters</td></tr>';
             return;
         }
 
@@ -1547,6 +1590,11 @@
                 '</td>' +
                 '<td><span class="node-role-badge ' + node.role + '">' + node.role + '</span></td>' +
                 '<td><span class="node-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                '<td class="fleet-position-col">' +
+                '<span class="position-link" data-mac="' + node.mac + '" title="Click to fly to node">' +
+                formatPosition(node.pos_x, node.pos_y, node.pos_z) +
+                '</span>' +
+                '</td>' +
                 '<td>' +
                 '<div class="health-bar-wrapper">' +
                 '<div class="health-bar health-bar-' + healthClass + '" style="width: ' + healthPercent + '%"></div>' +
@@ -1587,6 +1635,16 @@
             });
         });
 
+        // Add position link click handlers
+        tbody.querySelectorAll('.position-link').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var mac = this.dataset.mac;
+                flyToNode(mac);
+            });
+        });
+
         // Add row click handler for selection
         tbody.querySelectorAll('.fleet-row').forEach(function(row) {
             row.addEventListener('dblclick', function() {
@@ -1601,6 +1659,7 @@
             case 'mac': return node.mac || '';
             case 'role': return node.role || '';
             case 'status': return node.online ? 1 : 0;
+            case 'position': return (node.pos_x || 0) + (node.pos_y || 0) + (node.pos_z || 0);
             case 'health': return node.health_score || 0;
             case 'uptime': return node.uptime_seconds || 0;
             case 'fw': return node.firmware_version || '';
@@ -1765,6 +1824,194 @@
         } else {
             return minutes + 'm';
         }
+    }
+
+    function formatPosition(x, y, z) {
+        var px = (x || 0).toFixed(1);
+        var py = (y || 0).toFixed(1);
+        var pz = (z || 0).toFixed(1);
+        return '(' + px + ', ' + py + ', ' + pz + ')';
+    }
+
+    // ============================================
+    // Bulk Actions
+    // ============================================
+    function bulkRestart() {
+        if (selectedNodes.size === 0) return;
+
+        selectedNodes.forEach(function(mac) {
+            restartNode(mac);
+        });
+
+        if (window.SpaxelApp && SpaxelApp.showToast) {
+            SpaxelApp.showToast('Restarting ' + selectedNodes.size + ' nodes', 'info');
+        }
+    }
+
+    function restartNode(mac) {
+        fetch('/api/nodes/' + mac + '/reboot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(function(res) {
+            if (!res.ok) {
+                throw new Error('Restart failed: ' + res.status);
+            }
+            return res.json();
+        })
+        .then(function(data) {
+            if (window.SpaxelApp && window.SpaxelApp.showToast) {
+                window.SpaxelApp.showToast('Restart command sent to ' + mac, 'success');
+            }
+        })
+        .catch(function(err) {
+            console.error('[Fleet] Restart error:', err);
+            if (window.SpaxelApp && window.SpaxelApp.showToast) {
+                window.SpaxelApp.showToast('Failed to restart ' + mac + ': ' + err.message, 'error');
+            }
+        });
+    }
+
+    function updateAllNodes() {
+        if (!confirm('Start OTA update for all nodes? This may take several minutes.')) {
+            return;
+        }
+
+        fetch('/api/nodes/update-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(function(res) {
+            if (!res.ok) {
+                throw new Error('Update all failed: ' + res.status);
+            }
+            return res.json();
+        })
+        .then(function(data) {
+            if (window.SpaxelApp && SpaxelApp.showToast) {
+                SpaxelApp.showToast('OTA update started for ' + (data.count || 0) + ' nodes', 'success');
+            }
+        })
+        .catch(function(err) {
+            console.error('[Fleet] Update all error:', err);
+            if (window.SpaxelApp && SpaxelApp.showToast) {
+                SpaxelApp.showToast('Failed to start OTA update: ' + err.message, 'error');
+            }
+        });
+    }
+
+    function rebaselineAllNodes() {
+        if (!confirm('Re-baseline all links? This requires an empty room for accurate results.')) {
+            return;
+        }
+
+        fetch('/api/nodes/rebaseline-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(function(res) {
+            if (!res.ok) {
+                throw new Error('Re-baseline failed: ' + res.status);
+            }
+            return res.json();
+        })
+        .then(function(data) {
+            if (window.SpaxelApp && SpaxelApp.showToast) {
+                SpaxelApp.showToast('Re-baseline started for ' + (data.count || 0) + ' nodes', 'success');
+            }
+        })
+        .catch(function(err) {
+            console.error('[Fleet] Re-baseline error:', err);
+            if (window.SpaxelApp && SpaxelApp.showToast) {
+                SpaxelApp.showToast('Failed to start re-baseline: ' + err.message, 'error');
+            }
+        });
+    }
+
+    function exportConfig() {
+        fetch('/api/export')
+            .then(function(res) {
+                if (!res.ok) {
+                    throw new Error('Export failed: ' + res.status);
+                }
+                return res.json();
+            })
+            .then(function(data) {
+                var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'spaxel-config-' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                if (window.SpaxelApp && SpaxelApp.showToast) {
+                    SpaxelApp.showToast('Configuration exported successfully', 'success');
+                }
+            })
+            .catch(function(err) {
+                console.error('[Fleet] Export error:', err);
+                if (window.SpaxelApp && SpaxelApp.showToast) {
+                    SpaxelApp.showToast('Failed to export configuration: ' + err.message, 'error');
+                }
+            });
+    }
+
+    function importConfig() {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+
+        input.onchange = function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    var config = JSON.parse(event.target.result);
+
+                    if (!confirm('Import configuration? This will replace all existing nodes, zones, and settings.')) {
+                        return;
+                    }
+
+                    fetch('/api/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(config)
+                    })
+                    .then(function(res) {
+                        if (!res.ok) {
+                            throw new Error('Import failed: ' + res.status);
+                        }
+                        return res.json();
+                    })
+                    .then(function(data) {
+                        if (window.SpaxelApp && SpaxelApp.showToast) {
+                            SpaxelApp.showToast('Configuration imported successfully. Reloading...', 'success');
+                        }
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    })
+                    .catch(function(err) {
+                        console.error('[Fleet] Import error:', err);
+                        if (window.SpaxelApp && SpaxelApp.showToast) {
+                            SpaxelApp.showToast('Failed to import configuration: ' + err.message, 'error');
+                        }
+                    });
+                } catch (err) {
+                    if (window.SpaxelApp && SpaxelApp.showToast) {
+                        SpaxelApp.showToast('Invalid JSON file: ' + err.message, 'error');
+                    }
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        input.click();
     }
 
     // ============================================
