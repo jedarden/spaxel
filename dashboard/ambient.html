@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spaxel Ambient Display</title>
+    <link rel="stylesheet" href="css/ambient.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a2e">
+</head>
+<body class="ambient-mode">
+    <!-- Ambient Container -->
+    <div class="ambient-container" id="ambient-container">
+        <!-- Floor Plan Canvas -->
+        <div class="ambient-floorplan">
+            <canvas id="ambient-canvas" class="ambient-canvas"></canvas>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="ambient-status">
+            <div class="ambient-status-item">
+                <div class="ambient-status-dot online" id="ambient-status-dot"></div>
+                <span id="ambient-status-text">Loading...</span>
+            </div>
+            <div class="ambient-status-item">
+                <span id="ambient-time"></span>
+            </div>
+            <div class="ambient-status-item">
+                <span id="ambient-nodes">0 nodes</span>
+            </div>
+        </div>
+
+        <!-- Alert Overlay -->
+        <div id="ambient-alert" class="ambient-alert hidden">
+            <div class="ambient-alert-icon">&#9888;</div>
+            <div class="ambient-alert-title" id="alert-title">Alert</div>
+            <div class="ambient-alert-message" id="alert-message"></div>
+            <div class="ambient-alert-actions">
+                <button class="ambient-alert-btn primary" id="alert-action-primary">I'm Fine</button>
+                <button class="ambient-alert-btn secondary" id="alert-action-secondary">Dismiss</button>
+            </div>
+        </div>
+
+        <!-- Morning Briefing Overlay -->
+        <div id="ambient-briefing" class="ambient-briefing hidden">
+            <div class="ambient-briefing-content">
+                <div class="ambient-briefing-greeting" id="briefing-greeting">Good morning!</div>
+                <div id="briefing-content"></div>
+                <button class="ambient-briefing-dismiss" id="briefing-dismiss">Got it</button>
+            </div>
+        </div>
+
+        <!-- "All Secure" Message -->
+        <div id="ambient-secure" class="ambient-secure" style="display: none;">
+            <div class="ambient-secure-icon">&#128274;</div>
+            <div class="ambient-secure-text">All secure</div>
+        </div>
+    </div>
+
+    <!-- Authentication (required for WebSocket) -->
+    <script src="js/auth.js"></script>
+    <!-- Ambient Mode -->
+    <script src="js/ambient.js"></script>
+
+    <script>
+        // Override init to auto-enable ambient mode (no hash check needed)
+        (function() {
+            'use strict';
+
+            // Wait for auth to complete
+            document.addEventListener('DOMContentLoaded', function() {
+                // Check authentication first
+                if (window.SpaxelAuth) {
+                    SpaxelAuth.checkStatus().then(function(isAuthenticated) {
+                        if (isAuthenticated) {
+                            // Auto-enable ambient mode
+                            if (window.SpaxelAmbientMode) {
+                                window.SpaxelAmbientMode.enable();
+                            }
+                        } else {
+                            // Redirect to main dashboard for authentication
+                            window.location.href = '/';
+                        }
+                    }).catch(function() {
+                        // On auth error, redirect to main dashboard
+                        window.location.href = '/';
+                    });
+                } else {
+                    // Auth module not loaded, redirect
+                    window.location.href = '/';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

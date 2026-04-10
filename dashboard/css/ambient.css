@@ -1,0 +1,566 @@
+/**
+ * Spaxel Dashboard - Ambient Mode Styles
+ *
+ * Simplified, always-on display mode for wall-mounted tablets.
+ * Time-of-day aware palettes, auto-dim, and calm visualization.
+ */
+
+/* ===== Ambient Mode Layout ===== */
+.ambient-mode {
+    --ambient-bg-morning: #f0f4f8;
+    --ambient-bg-day: #ffffff;
+    --ambient-bg-evening: #fef3e7;
+    --ambient-bg-night: #1a1a2e;
+
+    --ambient-text-morning: #1a365d;
+    --ambient-text-day: #1d1d1f;
+    --ambient-text-evening: #7c2d12;
+    --ambient-text-night: #e0e0e0;
+
+    --ambient-accent-morning: #4299e1;
+    --ambient-accent-day: #0066cc;
+    --ambient-accent-evening: #ed8936;
+    --ambient-accent-night: #4fc3f7;
+
+    --ambient-person-bg-morning: rgba(66, 153, 225, 0.2);
+    --ambient-person-bg-day: rgba(0, 102, 204, 0.2);
+    --ambient-person-bg-evening: rgba(237, 137, 54, 0.2);
+    --ambient-person-bg-night: rgba(79, 195, 247, 0.2);
+}
+
+body.ambient-mode {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    background: var(--ambient-bg-day);
+    color: var(--ambient-text-day);
+    transition: background 1s ease, color 1s ease;
+}
+
+/* Hide all non-ambient elements */
+.ambient-mode #status-bar,
+.ambient-mode #scene-container,
+.ambient-mode #node-panel,
+.ambient-mode #chart-panel,
+.ambient-mode #presence-panel,
+.ambient-mode #room-editor-panel,
+.ambient-mode #gdop-legend,
+.ambient-mode #timeline-view,
+.ambient-mode #mode-toggle-bar,
+.ambient-mode .simulator-panel,
+.ambient-mode .simple-mode-header,
+.ambient-mode .simple-mode-content,
+.ambient-mode .simple-quick-actions,
+.ambient-mode .simple-alert-banner {
+    display: none !important;
+}
+
+/* ===== Ambient Container ===== */
+.ambient-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    transition: opacity 2s ease;
+}
+
+.ambient-container.dimmed {
+    opacity: 0.1;
+}
+
+.ambient-container.alert-active {
+    opacity: 1;
+}
+
+/* ===== Ambient Floor Plan ===== */
+.ambient-floorplan {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-width: 1200px;
+    max-height: 800px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ambient-canvas {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== Ambient Status Line ===== */
+.ambient-status {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 14px;
+    color: var(--ambient-text-day);
+    opacity: 0.7;
+    transition: color 1s ease, opacity 0.5s ease;
+}
+
+.ambient-status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ambient-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ambient-accent-day);
+}
+
+.ambient-status-dot.online {
+    background: #34c759;
+    box-shadow: 0 0 8px #34c759;
+}
+
+.ambient-status-dot.alert {
+    background: #ff3b30;
+    box-shadow: 0 0 8px #ff3b30;
+    animation: pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.2);
+    }
+}
+
+/* ===== Time of Day Themes ===== */
+
+/* Morning (6-10am): bright, cool */
+.ambient-mode.time-morning {
+    background: var(--ambient-bg-morning);
+    color: var(--ambient-text-morning);
+}
+
+.ambient-mode.time-morning .ambient-status {
+    color: var(--ambient-text-morning);
+}
+
+.ambient-mode.time-morning .ambient-person {
+    background: var(--ambient-person-bg-morning);
+    color: var(--ambient-accent-morning);
+}
+
+/* Day (10am-6pm): neutral, clean */
+.ambient-mode.time-day {
+    background: var(--ambient-bg-day);
+    color: var(--ambient-text-day);
+}
+
+.ambient-mode.time-day .ambient-status {
+    color: var(--ambient-text-day);
+}
+
+.ambient-mode.time-day .ambient-person {
+    background: var(--ambient-person-bg-day);
+    color: var(--ambient-accent-day);
+}
+
+/* Evening (6-10pm): warm, amber tones */
+.ambient-mode.time-evening {
+    background: var(--ambient-bg-evening);
+    color: var(--ambient-text-evening);
+}
+
+.ambient-mode.time-evening .ambient-status {
+    color: var(--ambient-text-evening);
+}
+
+.ambient-mode.time-evening .ambient-person {
+    background: var(--ambient-person-bg-evening);
+    color: var(--ambient-accent-evening);
+}
+
+/* Night (10pm-6am): very dim, minimal */
+.ambient-mode.time-night {
+    background: var(--ambient-bg-night);
+    color: var(--ambient-text-night);
+}
+
+.ambient-mode.time-night .ambient-status {
+    color: var(--ambient-text-night);
+    opacity: 0.5;
+}
+
+.ambient-mode.time-night .ambient-person {
+    background: var(--ambient-person-bg-night);
+    color: var(--ambient-accent-night);
+}
+
+.ambient-mode.time-night .ambient-canvas {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== Ambient Person Indicators ===== */
+.ambient-person {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    transition: all 0.5s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.ambient-person::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    background: currentColor;
+    border-radius: 2px;
+    opacity: 0.5;
+}
+
+/* Person colors - consistent per person */
+.ambient-person[data-person-index="0"] { background: #e74c3c; }
+.ambient-person[data-person-index="1"] { background: #3498db; }
+.ambient-person[data-person-index="2"] { background: #2ecc71; }
+.ambient-person[data-person-index="3"] { background: #f39c12; }
+.ambient-person[data-person-index="4"] { background: #9b59b6; }
+.ambient-person[data-person-index="5"] { background: #1abc9c; }
+.ambient-person[data-person-index="6"] { background: #e67e22; }
+.ambient-person[data-person-index="7"] { background: #34495e; }
+
+/* Unknown person */
+.ambient-person.unknown {
+    background: #95a5a6;
+}
+
+/* ===== Ambient Zone Labels ===== */
+.ambient-zone-label {
+    position: absolute;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.ambient-zone-label.occupied {
+    background: rgba(52, 199, 89, 0.9);
+    color: white;
+}
+
+.ambient-zone-label.empty {
+    background: rgba(200, 200, 200, 0.8);
+    color: #555;
+}
+
+.ambient-zone-label .zone-name {
+    font-weight: 600;
+}
+
+.ambient-zone-label .zone-count {
+    font-size: 11px;
+    opacity: 0.8;
+    margin-left: 4px;
+}
+
+/* ===== Ambient Alert Mode ===== */
+.ambient-alert {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(239, 68, 68, 0.95);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    animation: alert-fade-in 0.5s ease-out;
+}
+
+@keyframes alert-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.ambient-alert.hidden {
+    display: none;
+}
+
+.ambient-alert-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    animation: alert-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes alert-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+
+.ambient-alert-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.ambient-alert-message {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 32px;
+    text-align: center;
+    max-width: 500px;
+}
+
+.ambient-alert-actions {
+    display: flex;
+    gap: 16px;
+}
+
+.ambient-alert-btn {
+    padding: 14px 28px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.1s;
+}
+
+.ambient-alert-btn:hover {
+    transform: scale(1.05);
+}
+
+.ambient-alert-btn.primary {
+    background: white;
+    color: #b91c1c;
+}
+
+.ambient-alert-btn.secondary {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ===== Morning Briefing Overlay ===== */
+.ambient-briefing {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: white;
+    animation: briefing-fade-in 1s ease-out;
+}
+
+@keyframes briefing-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.ambient-briefing.hidden {
+    display: none;
+}
+
+.ambient-briefing-content {
+    max-width: 600px;
+    text-align: center;
+}
+
+.ambient-briefing-greeting {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 24px;
+}
+
+.ambient-briefing-section {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    text-align: left;
+}
+
+.ambient-briefing-section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.7;
+    margin-bottom: 4px;
+}
+
+.ambient-briefing-section-value {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.ambient-briefing-dismiss {
+    margin-top: 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.ambient-briefing-dismiss:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* ===== "All Secure" State ===== */
+.ambient-secure {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    opacity: 0.3;
+    transition: opacity 1s ease;
+}
+
+.ambient-secure-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.ambient-secure-text {
+    font-size: 24px;
+    font-weight: 500;
+}
+
+/* ===== Responsive Design ===== */
+@media (max-width: 768px) {
+    .ambient-container {
+        padding: 10px;
+    }
+
+    .ambient-person {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+
+    .ambient-zone-label {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    .ambient-alert-title {
+        font-size: 24px;
+    }
+
+    .ambient-alert-message {
+        font-size: 16px;
+    }
+
+    .ambient-alert-actions {
+        flex-direction: column;
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .ambient-alert-btn {
+        width: 100%;
+    }
+
+    .ambient-briefing-greeting {
+        font-size: 22px;
+    }
+
+    .ambient-briefing-section {
+        padding: 12px 16px;
+    }
+}
+
+/* ===== OLED-Safe Mode ===== */
+@media (display-mode: dark) or (prefers-color-scheme: dark) {
+    .ambient-mode.time-night {
+        background: #000000;
+        color: #333333;
+    }
+
+    .ambient-mode.time-night .ambient-status {
+        opacity: 0.3;
+    }
+}
+
+/* ===== Accessibility ===== */
+.ambient-mode *:focus-visible {
+    outline: 2px solid var(--ambient-accent-day);
+    outline-offset: 2px;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+    .ambient-mode,
+    .ambient-person,
+    .ambient-zone-label,
+    .ambient-status,
+    .ambient-alert,
+    .ambient-briefing {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .ambient-status-dot {
+        animation: none;
+    }
+}

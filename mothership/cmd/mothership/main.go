@@ -37,6 +37,7 @@ import (
 	"github.com/spaxel/mothership/internal/floorplan"
 	"github.com/spaxel/mothership/internal/health"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/briefing"
 	"github.com/spaxel/mothership/internal/learning"
 	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
@@ -3240,6 +3241,22 @@ func main() {
 	go dashboardHub.Run()
 
 	r.HandleFunc("/ws/dashboard", dashboardSrv.HandleDashboardWS)
+
+	// Serve ambient mode page
+	r.Get("/ambient", func(w http.ResponseWriter, r *http.Request) {
+		staticDir := cfg.StaticDir
+		if staticDir == "" {
+			staticDir = findDashboardDir()
+		}
+		if staticDir != "" {
+			ambientPath := filepath.Join(staticDir, "ambient.html")
+			if _, err := os.Stat(ambientPath); err == nil {
+				http.ServeFile(w, r, ambientPath)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
 
 	// Serve dashboard static files
 	staticDir := cfg.StaticDir
