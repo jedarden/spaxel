@@ -28,6 +28,12 @@
         historyLimit: 5
     };
 
+    // Full table view state
+    let isFullTableView = false;
+    let selectedNodes = new Set();
+    let sortColumn = null;
+    let sortDirection = 'asc';
+
     let pollTimer = null;
 
     // ============================================
@@ -68,9 +74,14 @@
         panel.innerHTML = `
             <div class="panel-header">
                 <h3>Fleet Health</h3>
-                <button id="fleet-optimise-btn" class="btn btn-sm" title="Re-optimise roles now">
-                    <span class="icon">&#x21BB;</span> Optimise
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button id="fleet-full-view-btn" class="btn btn-sm" title="Open full table view">
+                        <span class="icon">&#x26F6;</span> Full View
+                    </button>
+                    <button id="fleet-optimise-btn" class="btn btn-sm" title="Re-optimise roles now">
+                        <span class="icon">&#x21BB;</span> Optimise
+                    </button>
+                </div>
             </div>
             <div class="panel-content">
                 <div id="fleet-warning" class="fleet-warning hidden">
@@ -122,6 +133,7 @@
 
         // Add event handlers
         document.getElementById('fleet-optimise-btn').addEventListener('click', onOptimiseClick);
+        document.getElementById('fleet-full-view-btn').addEventListener('click', toggleFullTableView);
         document.getElementById('fleet-warning-dismiss').addEventListener('click', dismissWarning);
         document.getElementById('fleet-simulate-select').addEventListener('change', onSimulateSelect);
 
@@ -397,6 +409,481 @@
                 font-size: 0.75rem;
                 text-align: center;
                 padding: 0.5rem;
+            }
+
+            /* Full Table View Styles */
+            .fleet-table-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.85);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                backdrop-filter: blur(4px);
+            }
+
+            .fleet-table-container {
+                background: #1a1a2e;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+                width: 90vw;
+                max-width: 1200px;
+                max-height: 85vh;
+                display: flex;
+                flex-direction: column;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .fleet-table-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 20px 24px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .fleet-table-header h2 {
+                margin: 0;
+                font-size: 20px;
+                color: #eee;
+            }
+
+            .fleet-table-actions {
+                display: flex;
+                gap: 8px;
+            }
+
+            .fleet-btn {
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                border: none;
+                transition: background 0.2s;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .fleet-btn .icon {
+                font-size: 14px;
+            }
+
+            .fleet-btn-primary {
+                background: #4fc3f7;
+                color: #1a1a2e;
+            }
+
+            .fleet-btn-primary:hover {
+                background: #29b6f6;
+            }
+
+            .fleet-btn-secondary {
+                background: rgba(255, 255, 255, 0.1);
+                color: #ccc;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+            }
+
+            .fleet-btn-secondary:hover {
+                background: rgba(255, 255, 255, 0.15);
+            }
+
+            .fleet-btn-action {
+                background: rgba(76, 175, 80, 0.2);
+                color: #66bb6a;
+                border: 1px solid rgba(76, 175, 80, 0.4);
+            }
+
+            .fleet-btn-action:hover:not(:disabled) {
+                background: rgba(76, 175, 80, 0.3);
+            }
+
+            .fleet-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .fleet-table-toolbar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 16px 24px;
+                background: rgba(0, 0, 0, 0.2);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .fleet-selection-info {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 13px;
+                color: #ccc;
+            }
+
+            .fleet-checkbox {
+                width: 16px;
+                height: 16px;
+                accent-color: #4fc3f7;
+                cursor: pointer;
+            }
+
+            .fleet-filters {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .fleet-select {
+                padding: 6px 10px;
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 4px;
+                color: #ddd;
+                font-size: 12px;
+                cursor: pointer;
+            }
+
+            .fleet-select:focus {
+                outline: none;
+                border-color: #4fc3f7;
+            }
+
+            .fleet-search-input {
+                padding: 6px 10px;
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 4px;
+                color: #ddd;
+                font-size: 12px;
+                width: 180px;
+            }
+
+            .fleet-search-input:focus {
+                outline: none;
+                border-color: #4fc3f7;
+            }
+
+            .fleet-table-wrapper {
+                flex: 1;
+                overflow: auto;
+                padding: 0;
+            }
+
+            .fleet-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+
+            .fleet-table thead {
+                position: sticky;
+                top: 0;
+                background: #1e1e3a;
+                z-index: 1;
+            }
+
+            .fleet-table th {
+                padding: 12px 16px;
+                text-align: left;
+                font-weight: 600;
+                color: #888;
+                text-transform: uppercase;
+                font-size: 11px;
+                letter-spacing: 0.5px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                white-space: nowrap;
+            }
+
+            .fleet-table th.sortable {
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .fleet-table th.sortable:hover {
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+            .fleet-table th.sort-asc::after {
+                content: ' ▲';
+                color: #4fc3f7;
+            }
+
+            .fleet-table th.sort-desc::after {
+                content: ' ▼';
+                color: #4fc3f7;
+            }
+
+            .fleet-table td {
+                padding: 12px 16px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            }
+
+            .fleet-table tbody tr {
+                transition: background 0.2s;
+            }
+
+            .fleet-table tbody tr:hover {
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+            .fleet-table tbody tr.selected {
+                background: rgba(79, 195, 247, 0.15);
+            }
+
+            .fleet-select-col {
+                width: 40px;
+                text-align: center;
+            }
+
+            .fleet-mac-col {
+                font-family: monospace;
+                color: #4fc3f7;
+            }
+
+            .node-mac-full {
+                font-size: 13px;
+            }
+
+            .node-name {
+                font-size: 11px;
+                color: #888;
+                font-family: inherit;
+            }
+
+            .node-role-badge {
+                padding: 3px 8px;
+                border-radius: 3px;
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+
+            .node-role-badge.tx { background: rgba(239, 68, 68, 0.3); color: #fca5a5; }
+            .node-role-badge.rx { background: rgba(59, 130, 246, 0.3); color: #93c5fd; }
+            .node-role-badge.tx_rx { background: rgba(168, 85, 247, 0.3); color: #d8b4fe; }
+            .node-role-badge.passive { background: rgba(107, 114, 128, 0.3); color: #d1d5db; }
+
+            .node-status-badge {
+                padding: 3px 8px;
+                border-radius: 3px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+
+            .node-status-badge.online {
+                background: rgba(76, 175, 80, 0.2);
+                color: #66bb6a;
+            }
+
+            .node-status-badge.offline {
+                background: rgba(244, 67, 54, 0.2);
+                color: #e57373;
+            }
+
+            .health-bar-wrapper {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-width: 100px;
+            }
+
+            .health-bar {
+                height: 6px;
+                border-radius: 3px;
+                background: rgba(255, 255, 255, 0.1);
+                overflow: hidden;
+                flex: 1;
+            }
+
+            .health-bar-good {
+                background: linear-gradient(90deg, #22c55e, #66bb6a);
+            }
+
+            .health-bar-fair {
+                background: linear-gradient(90deg, #eab308, #f59e0b);
+            }
+
+            .health-bar-poor {
+                background: linear-gradient(90deg, #ef4444, #dc2626);
+            }
+
+            .health-text {
+                font-size: 11px;
+                color: #ccc;
+                min-width: 35px;
+                text-align: right;
+            }
+
+            .fleet-uptime-col {
+                font-family: monospace;
+                color: #aaa;
+                font-size: 12px;
+            }
+
+            .fleet-fw-col {
+                font-family: monospace;
+                color: #888;
+                font-size: 11px;
+            }
+
+            .fleet-actions-col {
+                white-space: nowrap;
+            }
+
+            .fleet-action-btn {
+                background: none;
+                border: none;
+                color: #888;
+                cursor: pointer;
+                padding: 4px;
+                font-size: 14px;
+                transition: color 0.2s, background 0.2s;
+                border-radius: 3px;
+            }
+
+            .fleet-action-btn:hover {
+                color: #4fc3f7;
+                background: rgba(79, 195, 247, 0.1);
+            }
+
+            .fleet-empty-state {
+                text-align: center;
+                padding: 40px 20px;
+                color: #666;
+                font-size: 14px;
+            }
+
+            .fleet-table-footer {
+                padding: 16px 24px;
+                background: rgba(0, 0, 0, 0.2);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .fleet-stats-summary {
+                display: flex;
+                gap: 24px;
+                font-size: 13px;
+                color: #888;
+            }
+
+            .fleet-stats-summary strong {
+                color: #ddd;
+            }
+
+            /* Diagnostics Modal */
+            .fleet-diagnostics-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 1100;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                backdrop-filter: blur(4px);
+            }
+
+            .fleet-diagnostics-content {
+                background: #1a1a2e;
+                border-radius: 12px;
+                width: 90%;
+                max-width: 500px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            }
+
+            .fleet-diagnostics-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 16px 20px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .fleet-diagnostics-header h3 {
+                margin: 0;
+                font-size: 16px;
+                color: #eee;
+            }
+
+            .fleet-close-modal {
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 24px;
+                cursor: pointer;
+                padding: 0;
+                width: 28px;
+                height: 28px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 4px;
+            }
+
+            .fleet-close-modal:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: #ccc;
+            }
+
+            .fleet-diagnostics-body {
+                padding: 20px;
+                max-height: 60vh;
+                overflow-y: auto;
+            }
+
+            .diagnostics-section {
+                margin-bottom: 20px;
+            }
+
+            .diagnostics-section:last-child {
+                margin-bottom: 0;
+            }
+
+            .diagnostics-section h4 {
+                margin: 0 0 12px 0;
+                font-size: 13px;
+                color: #888;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .diagnostics-table {
+                width: 100%;
+                font-size: 13px;
+            }
+
+            .diagnostics-table td {
+                padding: 6px 0;
+                color: #ccc;
+            }
+
+            .diagnostics-table td:first-child {
+                color: #888;
+                font-weight: 500;
+                padding-right: 16px;
+            }
+
+            .fleet-diagnostics-actions {
+                display: flex;
+                gap: 8px;
+                padding: 16px 20px;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                background: rgba(0, 0, 0, 0.2);
+            }
+
+            .fleet-diagnostics-actions .fleet-btn {
+                flex: 1;
+                justify-content: center;
             }
         `;
         document.head.appendChild(style);
@@ -853,6 +1340,434 @@
     }
 
     // ============================================
+    // Full Table View
+    // ============================================
+    function toggleFullTableView() {
+        isFullTableView = !isFullTableView;
+
+        if (isFullTableView) {
+            showFullTableView();
+        } else {
+            hideFullTableView();
+        }
+    }
+
+    function showFullTableView() {
+        // Create overlay
+        var overlay = document.createElement('div');
+        overlay.id = 'fleet-table-overlay';
+        overlay.className = 'fleet-table-overlay';
+        overlay.innerHTML = `
+            <div class="fleet-table-container">
+                <div class="fleet-table-header">
+                    <h2>Fleet Management</h2>
+                    <div class="fleet-table-actions">
+                        <button id="fleet-refresh-btn" class="fleet-btn fleet-btn-secondary">
+                            <span class="icon">&#x21BB;</span> Refresh
+                        </button>
+                        <button id="fleet-bulk-identify-btn" class="fleet-btn fleet-btn-action" disabled>
+                            <span class="icon">&#x26A1;</span> Identify Selected
+                        </button>
+                        <button id="fleet-close-table-btn" class="fleet-btn fleet-btn-secondary">
+                            <span class="icon">&times;</span> Close
+                        </button>
+                    </div>
+                </div>
+
+                <div class="fleet-table-toolbar">
+                    <div class="fleet-selection-info">
+                        <input type="checkbox" id="fleet-select-all" class="fleet-checkbox">
+                        <label for="fleet-select-all">
+                            <span id="fleet-selected-count">0</span> of <span id="fleet-total-count">0</span> nodes selected
+                        </label>
+                    </div>
+                    <div class="fleet-filters">
+                        <select id="fleet-filter-role" class="fleet-select">
+                            <option value="">All Roles</option>
+                            <option value="tx">TX Only</option>
+                            <option value="rx">RX Only</option>
+                            <option value="tx_rx">TX/RX</option>
+                            <option value="passive">Passive</option>
+                        </select>
+                        <select id="fleet-filter-status" class="fleet-select">
+                            <option value="">All Status</option>
+                            <option value="online">Online</option>
+                            <option value="offline">Offline</option>
+                        </select>
+                        <input type="text" id="fleet-search" class="fleet-search-input" placeholder="Search MAC or name...">
+                    </div>
+                </div>
+
+                <div class="fleet-table-wrapper">
+                    <table class="fleet-table">
+                        <thead>
+                            <tr>
+                                <th class="fleet-select-col">
+                                    <input type="checkbox" id="fleet-header-select-all" class="fleet-checkbox">
+                                </th>
+                                <th class="sortable" data-sort="mac">MAC Address</th>
+                                <th class="sortable" data-sort="role">Role</th>
+                                <th class="sortable" data-sort="status">Status</th>
+                                <th class="sortable" data-sort="health">Health</th>
+                                <th class="sortable" data-sort="uptime">Uptime</th>
+                                <th class="sortable" data-sort="fw">Firmware</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fleet-table-body">
+                            <tr>
+                                <td colspan="8" class="fleet-empty-state">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="fleet-table-footer">
+                    <div class="fleet-stats-summary">
+                        <span>Total: <strong id="fleet-stat-total">0</strong></span>
+                        <span>Online: <strong id="fleet-stat-online">0</strong></span>
+                        <span>Coverage: <strong id="fleet-stat-coverage">--%</strong></span>
+                        <span>Mean GDOP: <strong id="fleet-stat-gdop">--</strong></span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Add event listeners
+        document.getElementById('fleet-close-table-btn').addEventListener('click', hideFullTableView);
+        document.getElementById('fleet-refresh-btn').addEventListener('click', refreshFullTable);
+        document.getElementById('fleet-bulk-identify-btn').addEventListener('click', bulkIdentify);
+        document.getElementById('fleet-select-all').addEventListener('change', toggleSelectAll);
+        document.getElementById('fleet-header-select-all').addEventListener('change', toggleSelectAll);
+        document.getElementById('fleet-filter-role').addEventListener('change', renderFullTable);
+        document.getElementById('fleet-filter-status').addEventListener('change', renderFullTable);
+        document.getElementById('fleet-search').addEventListener('input', renderFullTable);
+
+        // Add sort handlers
+        overlay.querySelectorAll('th.sortable').forEach(function(th) {
+            th.addEventListener('click', function() {
+                var column = th.dataset.sort;
+                handleSort(column);
+            });
+        });
+
+        // Populate and render
+        renderFullTable();
+    }
+
+    function hideFullTableView() {
+        isFullTableView = false;
+        var overlay = document.getElementById('fleet-table-overlay');
+        if (overlay) {
+            overlay.remove();
+        }
+        selectedNodes.clear();
+    }
+
+    function renderFullTable() {
+        var tbody = document.getElementById('fleet-table-body');
+        if (!tbody) return;
+
+        var filterRole = document.getElementById('fleet-filter-role').value;
+        var filterStatus = document.getElementById('fleet-filter-status').value;
+        var searchTerm = document.getElementById('fleet-search').value.toLowerCase();
+
+        var nodes = Array.from(state.nodes.values());
+
+        // Apply filters
+        nodes = nodes.filter(function(node) {
+            if (filterRole && node.role !== filterRole) return false;
+            if (filterStatus === 'online' && !node.online) return false;
+            if (filterStatus === 'offline' && node.online) return false;
+            if (searchTerm && !node.mac.toLowerCase().includes(searchTerm) &&
+                !(node.name && node.name.toLowerCase().includes(searchTerm))) {
+                return false;
+            }
+            return true;
+        });
+
+        // Apply sort
+        if (sortColumn) {
+            nodes.sort(function(a, b) {
+                var aVal = getNodeSortValue(a, sortColumn);
+                var bVal = getNodeSortValue(b, sortColumn);
+                if (sortDirection === 'asc') {
+                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                } else {
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                }
+            });
+        }
+
+        // Update stats
+        var totalNodes = state.nodes.size;
+        var onlineNodes = Array.from(state.nodes.values()).filter(function(n) { return n.online; }).length;
+
+        document.getElementById('fleet-total-count').textContent = totalNodes;
+        document.getElementById('fleet-selected-count').textContent = selectedNodes.size;
+        document.getElementById('fleet-stat-total').textContent = totalNodes;
+        document.getElementById('fleet-stat-online').textContent = onlineNodes;
+        document.getElementById('fleet-stat-coverage').textContent = (state.coverageScore * 100).toFixed(0) + '%';
+        document.getElementById('fleet-stat-gdop').textContent = state.meanGDOP.toFixed(2);
+
+        // Update bulk button state
+        var bulkBtn = document.getElementById('fleet-bulk-identify-btn');
+        if (bulkBtn) {
+            bulkBtn.disabled = selectedNodes.size === 0;
+        }
+
+        // Render rows
+        if (nodes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="fleet-empty-state">No nodes match the current filters</td></tr>';
+            return;
+        }
+
+        var html = '';
+        nodes.forEach(function(node) {
+            var isSelected = selectedNodes.has(node.mac);
+            var healthScore = node.health_score || 0;
+            var healthPercent = (healthScore * 100).toFixed(0);
+            var healthClass = healthScore > 0.7 ? 'good' : healthScore > 0.4 ? 'fair' : 'poor';
+            var uptime = node.uptime_seconds || 0;
+            var uptimeStr = formatUptime(uptime);
+            var firmware = node.firmware_version || '--';
+            var statusClass = node.online ? 'online' : 'offline';
+            var statusText = node.online ? 'Online' : 'Offline';
+
+            html += '<tr class="fleet-row' + (isSelected ? ' selected' : '') + '" data-mac="' + node.mac + '">' +
+                '<td class="fleet-select-col">' +
+                '<input type="checkbox" class="fleet-checkbox fleet-row-checkbox" ' +
+                (isSelected ? 'checked ' : '') + 'data-mac="' + node.mac + '">' +
+                '</td>' +
+                '<td class="fleet-mac-col">' +
+                '<span class="node-mac-full">' + node.mac + '</span>' +
+                (node.name ? '<br><span class="node-name">' + node.name + '</span>' : '') +
+                '</td>' +
+                '<td><span class="node-role-badge ' + node.role + '">' + node.role + '</span></td>' +
+                '<td><span class="node-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                '<td>' +
+                '<div class="health-bar-wrapper">' +
+                '<div class="health-bar health-bar-' + healthClass + '" style="width: ' + healthPercent + '%"></div>' +
+                '<span class="health-text">' + healthPercent + '%</span>' +
+                '</div>' +
+                '</td>' +
+                '<td class="fleet-uptime-col">' + uptimeStr + '</td>' +
+                '<td class="fleet-fw-col">' + firmware + '</td>' +
+                '<td class="fleet-actions-col">' +
+                '<button class="fleet-action-btn" data-action="flyto" data-mac="' + node.mac + '" title="Fly camera to node">&#x26F6;</button>' +
+                '<button class="fleet-action-btn" data-action="identify" data-mac="' + node.mac + '" title="Identify (blink LED)">&#x26A1;</button>' +
+                '<button class="fleet-action-btn" data-action="diagnostics" data-mac="' + node.mac + '" title="View diagnostics">&#x2699;</button>' +
+                '</td>' +
+                '</tr>';
+        });
+
+        tbody.innerHTML = html;
+
+        // Add row checkbox handlers
+        tbody.querySelectorAll('.fleet-row-checkbox').forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                var mac = this.dataset.mac;
+                if (this.checked) {
+                    selectedNodes.add(mac);
+                } else {
+                    selectedNodes.delete(mac);
+                }
+                renderFullTable(); // Re-render to update selection state
+            });
+        });
+
+        // Add action button handlers
+        tbody.querySelectorAll('.fleet-action-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var action = this.dataset.action;
+                var mac = this.dataset.mac;
+                handleNodeAction(action, mac);
+            });
+        });
+
+        // Add row click handler for selection
+        tbody.querySelectorAll('.fleet-row').forEach(function(row) {
+            row.addEventListener('dblclick', function() {
+                var mac = row.dataset.mac;
+                handleNodeAction('flyto', mac);
+            });
+        });
+    }
+
+    function getNodeSortValue(node, column) {
+        switch (column) {
+            case 'mac': return node.mac || '';
+            case 'role': return node.role || '';
+            case 'status': return node.online ? 1 : 0;
+            case 'health': return node.health_score || 0;
+            case 'uptime': return node.uptime_seconds || 0;
+            case 'fw': return node.firmware_version || '';
+            default: return '';
+        }
+    }
+
+    function handleSort(column) {
+        if (sortColumn === column) {
+            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortColumn = column;
+            sortDirection = 'asc';
+        }
+
+        // Update sort indicators
+        document.querySelectorAll('th.sortable').forEach(function(th) {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.sort === column) {
+                th.classList.add('sort-' + sortDirection);
+            }
+        });
+
+        renderFullTable();
+    }
+
+    function toggleSelectAll(e) {
+        var isChecked = e.target.checked;
+        var filterRole = document.getElementById('fleet-filter-role').value;
+        var filterStatus = document.getElementById('fleet-filter-status').value;
+        var searchTerm = document.getElementById('fleet-search').value.toLowerCase();
+
+        Array.from(state.nodes.values()).forEach(function(node) {
+            // Check if node matches current filters
+            if (filterRole && node.role !== filterRole) return;
+            if (filterStatus === 'online' && !node.online) return;
+            if (filterStatus === 'offline' && node.online) return;
+            if (searchTerm && !node.mac.toLowerCase().includes(searchTerm) &&
+                !(node.name && node.name.toLowerCase().includes(searchTerm))) {
+                return;
+            }
+
+            if (isChecked) {
+                selectedNodes.add(node.mac);
+            } else {
+                selectedNodes.delete(node.mac);
+            }
+        });
+
+        renderFullTable();
+    }
+
+    function handleNodeAction(action, mac) {
+        switch (action) {
+            case 'flyto':
+                flyToNode(mac);
+                break;
+            case 'identify':
+                identifyNode(mac);
+                break;
+            case 'diagnostics':
+                showNodeDiagnostics(mac);
+                break;
+        }
+    }
+
+    function flyToNode(mac) {
+        // Close the table view first
+        hideFullTableView();
+
+        // Use Viz3D to fly camera to the node
+        if (window.Viz3D && Viz3D.flyToNode) {
+            Viz3D.flyToNode(mac);
+        } else if (window.Viz3D && Viz3D.focusOnNode) {
+            Viz3D.focusOnNode(mac);
+        } else {
+            console.warn('[Fleet] No flyToNode method available on Viz3D');
+        }
+    }
+
+    function showNodeDiagnostics(mac) {
+        var node = state.nodes.get(mac);
+        if (!node) return;
+
+        // Create diagnostics modal
+        var modal = document.createElement('div');
+        modal.className = 'fleet-diagnostics-modal';
+        modal.innerHTML = `
+            <div class="fleet-diagnostics-content">
+                <div class="fleet-diagnostics-header">
+                    <h3>Node Diagnostics</h3>
+                    <button class="fleet-close-modal">&times;</button>
+                </div>
+                <div class="fleet-diagnostics-body">
+                    <div class="diagnostics-section">
+                        <h4>Node Information</h4>
+                        <table class="diagnostics-table">
+                            <tr><td>MAC Address:</td><td>${node.mac}</td></tr>
+                            <tr><td>Role:</td><td>${node.role}</td></tr>
+                            <tr><td>Status:</td><td>${node.online ? 'Online' : 'Offline'}</td></tr>
+                            <tr><td>Firmware:</td><td>${node.firmware_version || '--'}</td></tr>
+                            <tr><td>Uptime:</td><td>${formatUptime(node.uptime_seconds || 0)}</td></tr>
+                        </table>
+                    </div>
+                    <div class="diagnostics-section">
+                        <h4>Health Metrics</h4>
+                        <table class="diagnostics-table">
+                            <tr><td>Health Score:</td><td>${((node.health_score || 0) * 100).toFixed(0)}%</td></tr>
+                            <tr><td>Last Seen:</td><td>${new Date((node.last_seen_ms || 0)).toLocaleString()}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="fleet-diagnostics-actions">
+                    <button class="fleet-btn fleet-btn-primary" onclick="FleetPanel.identifyNode('${mac}')">Identify Node</button>
+                    <button class="fleet-btn fleet-btn-secondary" onclick="FleetPanel.flyToNode('${mac}')">Fly to Node</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('.fleet-close-modal').addEventListener('click', function() {
+            modal.remove();
+        });
+
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
+
+    function bulkIdentify() {
+        if (selectedNodes.size === 0) return;
+
+        selectedNodes.forEach(function(mac) {
+            identifyNode(mac, 3000); // 3 second blink
+        });
+
+        if (window.SpaxelApp && SpaxelApp.showToast) {
+            SpaxelApp.showToast('Identifying ' + selectedNodes.size + ' nodes', 'info');
+        }
+    }
+
+    function refreshFullTable() {
+        fetchFleetHealth();
+        fetchFleetHistory();
+        renderFullTable();
+    }
+
+    function formatUptime(seconds) {
+        if (!seconds) return '--';
+
+        var days = Math.floor(seconds / 86400);
+        var hours = Math.floor((seconds % 86400) / 3600);
+        var minutes = Math.floor((seconds % 3600) / 60);
+
+        if (days > 0) {
+            return days + 'd ' + hours + 'h';
+        } else if (hours > 0) {
+            return hours + 'h ' + minutes + 'm';
+        } else {
+            return minutes + 'm';
+        }
+    }
+
+    // ============================================
     // Public API
     // ============================================
     window.FleetPanel = {
@@ -862,7 +1777,11 @@
         showWarning: showWarning,
         dismissWarning: dismissWarning,
         getState: function() { return state; },
-        identifyNode: identifyNode
+        identifyNode: identifyNode,
+        flyToNode: flyToNode,
+        toggleFullTableView: toggleFullTableView,
+        showFullTableView: showFullTableView,
+        hideFullTableView: hideFullTableView
     };
 
     // ============================================

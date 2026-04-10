@@ -1,0 +1,309 @@
+/**
+ * Spaxel Dashboard - Guided Troubleshooting Styles
+ *
+ * Proactive contextual help panel with step-by-step guidance.
+ */
+
+/* ===== Guided Help Container ===== */
+.guided-help-container {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.guided-help-container.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+/* ===== Help Panel ===== */
+.guided-help-panel {
+    background: rgba(30, 30, 58, 0.98);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(79, 195, 247, 0.1);
+    width: 380px;
+    max-width: calc(100vw - 40px);
+    overflow: hidden;
+}
+
+/* ===== Header ===== */
+.help-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, rgba(79, 195, 247, 0.15), rgba(41, 182, 246, 0.1));
+    border-bottom: 1px solid rgba(79, 195, 247, 0.2);
+}
+
+.help-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.help-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.help-title h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #eee;
+    margin: 0;
+}
+
+.help-close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.help-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+}
+
+/* ===== Content ===== */
+.help-content {
+    padding: 20px;
+}
+
+/* Progress Dots */
+.help-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.help-progress-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    transition: all 0.3s ease;
+}
+
+.help-progress-dot.active {
+    background: #4fc3f7;
+    box-shadow: 0 0 8px rgba(79, 195, 247, 0.6);
+    transform: scale(1.3);
+}
+
+.help-progress-dot.completed {
+    background: #66bb6a;
+}
+
+/* Step Content */
+.help-step {
+    margin-bottom: 16px;
+}
+
+.step-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #4fc3f7;
+    margin: 0 0 8px 0;
+}
+
+.step-content {
+    font-size: 14px;
+    color: #ccc;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Dismiss Hint */
+.help-dismiss-hint {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.help-dismiss-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    user-select: none;
+}
+
+.help-dismiss-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #4fc3f7;
+    cursor: pointer;
+}
+
+.help-dismiss-checkbox span {
+    line-height: 1;
+}
+
+/* ===== Actions ===== */
+.help-actions {
+    display: flex;
+    gap: 8px;
+    padding: 16px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.help-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.help-btn:hover {
+    transform: translateY(-1px);
+}
+
+.help-btn:active {
+    transform: translateY(0);
+}
+
+.help-btn-primary {
+    background: #4fc3f7;
+    color: #1a1a2e;
+    margin-left: auto;
+}
+
+.help-btn-primary:hover {
+    background: #29b6f6;
+}
+
+.help-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.help-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.help-btn-action {
+    background: rgba(76, 175, 80, 0.2);
+    color: #66bb6a;
+    border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+.help-btn-action:hover {
+    background: rgba(76, 175, 80, 0.3);
+}
+
+/* ===== Context Help Button ===== */
+.context-help-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(79, 195, 247, 0.2);
+    border: 1px solid rgba(79, 195, 247, 0.4);
+    color: #4fc3f7;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    margin-left: 6px;
+}
+
+.context-help-btn:hover {
+    background: rgba(79, 195, 247, 0.3);
+    border-color: rgba(79, 195, 247, 0.6);
+}
+
+/* ===== Animation ===== */
+@keyframes helpSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes helpPulse {
+    0%, 100% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(79, 195, 247, 0.1);
+    }
+    50% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(79, 195, 247, 0.3);
+    }
+}
+
+.guided-help-container.visible .guided-help-panel {
+    animation: helpSlideIn 0.3s ease-out;
+}
+
+/* ===== Responsive Design ===== */
+@media (max-width: 480px) {
+    .guided-help-container {
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+    }
+
+    .guided-help-panel {
+        width: 100%;
+        max-width: none;
+    }
+
+    .help-actions {
+        flex-wrap: wrap;
+    }
+
+    .help-btn {
+        flex: 1;
+        min-width: calc(50% - 4px);
+    }
+}
+
+/* ===== Accessibility ===== */
+.help-btn:focus-visible,
+.help-close-btn:focus-visible,
+.context-help-btn:focus-visible {
+    outline: 2px solid #4fc3f7;
+    outline-offset: 2px;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+    .guided-help-container,
+    .guided-help-panel,
+    .help-progress-dot,
+    .help-btn {
+        animation: none !important;
+        transition-duration: 0.01ms !important;
+    }
+}

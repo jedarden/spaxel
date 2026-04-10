@@ -2744,6 +2744,160 @@ const Viz3D = (function () {
         return states;
     }
 
+    // ── Follow Camera ───────────────────────────────────────────────────────────
+
+    /**
+     * Set camera to follow a specific blob.
+     * @param {number} blobId - The blob ID to follow, or null to stop following
+     */
+    function setFollowTarget(blobId) {
+        if (blobId === null || blobId === undefined) {
+            _followId = null;
+            return;
+        }
+
+        // Check if blob exists
+        if (!_blobs3D.has(blobId)) {
+            console.warn('[Viz3D] Cannot follow blob', blobId, '- not found');
+            return;
+        }
+
+        _followId = blobId;
+        console.log('[Viz3D] Now following blob', blobId);
+
+        // Show indicator
+        _showFollowIndicator(blobId);
+    }
+
+    /**
+     * Get the current follow target.
+     * @returns {number|null} The blob ID being followed, or null
+     */
+    function getFollowTarget() {
+        return _followId;
+    }
+
+    /**
+     * Show follow mode indicator in UI.
+     */
+    function _showFollowIndicator(blobId) {
+        // Remove existing indicator
+        _removeFollowIndicator();
+
+        // Create indicator
+        const indicator = document.createElement('div');
+        indicator.className = 'follow-mode-indicator';
+        indicator.id = 'follow-indicator';
+
+        // Get blob info
+        const blob = _blobs3D.get(blobId);
+        const personName = blob && blob.personLabel ? blob.personLabel : 'Blob #' + blobId;
+        indicator.textContent = 'Following ' + personName;
+        indicator.style.cursor = 'pointer';
+        indicator.style.pointerEvents = 'auto';
+
+        // Click to stop following
+        indicator.addEventListener('click', function() {
+            setFollowTarget(null);
+            _removeFollowIndicator();
+        });
+
+        document.body.appendChild(indicator);
+
+        // Auto-hide after 5 seconds
+        setTimeout(function() {
+            _removeFollowIndicator();
+        }, 5000);
+    }
+
+    /**
+     * Remove follow mode indicator.
+     */
+    function _removeFollowIndicator() {
+        const indicator = document.getElementById('follow-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+
+    // ── Node Link Highlighting ─────────────────────────────────────────────────────
+
+    /**
+     * Highlight all links connected to a specific node.
+     * @param {string} mac - The node MAC address
+     * @param {boolean} highlight - Whether to highlight (true) or restore (false)
+     * @param {number} color - Optional color hex value (default: 0x4fc3f7)
+     */
+    function highlightNodeLinks(mac, highlight, color) {
+        if (!_linkLines || _linkLines.size === 0) return;
+
+        const highlightColor = color || 0x4fc3f7;
+
+        _linkLines.forEach(function(line, linkID) {
+            // Check if this link involves the specified node
+            if (linkID.includes(mac)) {
+                if (highlight) {
+                    // Store original material state
+                    if (!line.userData.originalState) {
+                        line.userData.originalState = {
+                            opacity: line.material.opacity,
+                            transparent: line.material.transparent,
+                            color: line.material.color ? line.material.color.getHex() : null
+                        };
+
+                    // Apply highlight
+                    line.material.opacity = 1.0;
+                    line.material.transparent = false;
+                    if (line.material.color) {
+                        line.material.color.setHex(highlightColor);
+                    }
+                    if (line.material.emissive) {
+                        line.material.emissive.setHex(highlightColor);
+                        line.material.emissiveIntensity = 0.5;
+                    }
+                    line.material.needsUpdate = true;
+                } else {
+                    // Restore original state
+                    if (line.userData.originalState) {
+                        const orig = line.userData.originalState;
+                        line.material.opacity = orig.opacity;
+                        line.material.transparent = orig.transparent;
+                        if (line.material.color && orig.color !== null) {
+                            line.material.color.setHex(orig.color);
+                        }
+                        if (line.material.emissive) {
+                            line.material.emissiveIntensity = 0;
+                        }
+                        line.material.needsUpdate = true;
+                        delete line.userData.originalState;
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Clear all link highlights.
+     */
+    function clearLinkHighlights() {
+        if (!_linkLines) return;
+        _linkLines.forEach(function(line) {
+            if (line.userData.originalState) {
+                const orig = line.userData.originalState;
+                line.material.opacity = orig.opacity;
+                line.material.transparent = orig.transparent;
+                if (line.material.color && orig.color !== null) {
+                    line.material.color.setHex(orig.color);
+                }
+                if (line.material.emissive) {
+                    line.material.emissiveIntensity = 0;
+                }
+                line.material.needsUpdate = true;
+                delete line.userData.originalState;
+            }
+        });
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
     return {
         init,
@@ -2897,6 +3051,25 @@ const Viz3D = (function () {
         setGDOPOverlayVisible: setGDOPOverlayVisible,
         clearGDOPOverlay: clearGDOPOverlay,
         getGDOPState: getGDOPState,
+        // Follow camera API
+        setFollowTarget: setFollowTarget,
+        getFollowTarget: getFollowTarget,
+        // Node link highlighting API
+        highlightNodeLinks: highlightNodeLinks,
+        clearLinkHighlights: clearLinkHighlights,
+        // Scene and controls access
+        scene: function() { return _scene; },
+        camera: function() { return _camera; },
+        controls: function() { return _controls; },
+        renderer: function() { return _renderer; },
+        blobMeshes: function() {
+            const meshes = [];
+            _blobs3D.forEach(function(obj) {
+                meshes.push(obj.group);
+            });
+            return meshes;
+        },
+        nodeMeshes: function() { return Array.from(_nodeMeshes.values()); },
     };
     // ── Replay Mode Support ─────────────────────────────────────────────────────
     // Store live blob states for replay mode restoration
@@ -3001,4 +3174,49 @@ const Viz3D = (function () {
             applyLocUpdate(blobUpdates);
         }
     }
+
+    // ── Public API ───────────────────────────────────────────────────────────────
+    return {
+        // Core
+        init: init,
+        update: update,
+
+        // Room
+        applyRoom: applyRoom,
+        clearRoom: clearRoom,
+
+        // Nodes
+        applyNodeList: applyNodeList,
+        updateNodePositions: updateNodePositions,
+        getNodeMeshes: function() { return _nodeMeshes; },
+        nodeMeshes: function() { return _nodeMeshes; },  // alias for quick-actions
+
+        // Links
+        applyLinkList: applyLinkList,
+        updateLinkHealth: updateLinkHealth,
+        highlightNodeLinks: highlightNodeLinks,
+        clearLinkHighlights: clearLinkHighlights,
+
+        // Blobs
+        applyLocUpdate: applyLocUpdate,
+        getBlobs3D: function() { return _blobs3D; },
+        blobMeshes: function() { return _blobs3D; },  // alias for quick-actions
+
+        // View presets
+        setViewPreset: setViewPreset,
+        resetView: resetView,
+
+        // Ghost node
+        setGhostNode: setGhostNode,
+        clearGhostNode: clearGhostNode,
+
+        // Replay
+        loadReplaySnapshot: loadReplaySnapshot,
+
+        // Direct access (for advanced integrations)
+        scene: function() { return _scene; },
+        camera: function() { return _camera; },
+        controls: function() { return _controls; },
+        followId: function() { return _followId; }
+    };
 })();

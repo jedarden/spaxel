@@ -1,0 +1,457 @@
+/**
+ * Spaxel Dashboard - Command Palette Styles
+ *
+ * Ctrl+K / Cmd+K universal search and command interface.
+ */
+
+/* ===== Command Palette Container ===== */
+.command-palette {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: none;
+}
+
+.command-palette.visible {
+    display: block;
+}
+
+.command-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ===== Command Container ===== */
+.command-container {
+    position: absolute;
+    top: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 600px;
+    max-height: 70vh;
+    background: var(--command-bg, #1e1e1e);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--command-border, rgba(255, 255, 255, 0.1));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+/* ===== Command Header ===== */
+.command-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid var(--command-border, rgba(255, 255, 255, 0.1));
+}
+
+.command-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.command-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--command-text, #eee);
+    font-size: 16px;
+    font-family: inherit;
+    outline: none;
+}
+
+.command-input::placeholder {
+    color: var(--command-placeholder, #666);
+}
+
+.command-hint {
+    font-size: 11px;
+    color: var(--command-hint, #666);
+    white-space: nowrap;
+}
+
+/* ===== Command Body ===== */
+.command-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 200px;
+}
+
+.command-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.command-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.command-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.command-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ===== Command Results ===== */
+.command-results {
+    padding: 8px 0;
+}
+
+/* Category Headers */
+.command-header {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--command-header, #666);
+    position: sticky;
+    top: 0;
+    background: var(--command-bg, #1e1e1e);
+    z-index: 1;
+}
+
+/* Command Items */
+.command-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    border-left: 2px solid transparent;
+}
+
+.command-item:hover {
+    background: var(--command-hover, rgba(255, 255, 255, 0.05));
+}
+
+.command-item.selected {
+    background: var(--command-selected, rgba(79, 195, 247, 0.15));
+    border-left-color: var(--command-accent, #4fc3f7);
+}
+
+.command-item-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+}
+
+.command-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.command-item-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--command-text, #eee);
+    margin-bottom: 2px;
+}
+
+.command-item-description {
+    font-size: 12px;
+    color: var(--command-description, #888);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.command-item-shortcut {
+    font-size: 11px;
+    font-family: monospace;
+    color: var(--command-shortcut, #666);
+    background: var(--command-shortcut-bg, rgba(255, 255, 255, 0.1));
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+/* Highlight matches in search results */
+.command-item-title mark,
+.command-item-description mark {
+    background: var(--command-mark-bg, rgba(79, 195, 247, 0.3));
+    color: var(--command-mark-text, #4fc3f7);
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+/* ===== Empty State ===== */
+.command-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--command-empty, #666);
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-text {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.empty-hint {
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+/* ===== Command Footer ===== */
+.command-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--command-border, rgba(255, 255, 255, 0.1));
+    background: var(--command-footer-bg, rgba(0, 0, 0, 0.3));
+}
+
+.footer-hints {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--command-hint, #666);
+}
+
+.hint-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hint-item kbd {
+    background: var(--command-kbd-bg, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--command-kbd-border, rgba(255, 255, 255, 0.2));
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 10px;
+    color: var(--command-kbd, #999);
+}
+
+/* ===== Help Modal ===== */
+.command-help-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1001;
+    display: none;
+}
+
+.command-help-modal.visible {
+    display: block;
+}
+
+.help-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.help-container {
+    position: relative;
+    background: var(--command-bg, #1e1e1e);
+    border-radius: 12px;
+    max-width: 600px;
+    max-height: 80vh;
+    margin: 10vh auto;
+    border: 1px solid var(--command-border, rgba(255, 255, 255, 0.1));
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.help-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--command-border, rgba(255, 255, 255, 0.1));
+}
+
+.help-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--command-text, #eee);
+    margin: 0;
+}
+
+.help-close {
+    background: transparent;
+    border: none;
+    color: var(--command-close, #888);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.help-close:hover {
+    color: var(--command-text, #eee);
+}
+
+.help-content {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(80vh - 80px);
+}
+
+.help-content h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--command-text, #eee);
+    margin-top: 20px;
+    margin-bottom: 12px;
+}
+
+.help-content h3:first-child {
+    margin-top: 0;
+}
+
+.help-content p {
+    font-size: 14px;
+    color: var(--command-description, #aaa);
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+
+.help-content ul {
+    margin: 0 0 12px 20px;
+    padding: 0;
+}
+
+.help-content li {
+    font-size: 14px;
+    color: var(--command-description, #aaa);
+    line-height: 1.6;
+    margin-bottom: 6px;
+}
+
+.help-content strong {
+    color: var(--command-text, #eee);
+}
+
+.help-content kbd {
+    background: var(--command-kbd-bg, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--command-kbd-border, rgba(255, 255, 255, 0.2));
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--command-kbd, #999);
+}
+
+/* ===== Responsive Design ===== */
+@media (max-width: 600px) {
+    .command-container {
+        width: 95%;
+        top: 10%;
+        max-height: 75vh;
+    }
+
+    .command-item {
+        padding: 12px 16px;
+    }
+
+    .footer-hints {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .help-container {
+        margin: 5vh auto;
+        max-height: 85vh;
+    }
+}
+
+/* ===== Accessibility ===== */
+.command-item:focus-visible {
+    outline: 2px solid var(--command-accent, #4fc3f7);
+    outline-offset: -2px;
+}
+
+.command-input:focus-visible {
+    outline: none;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+    .command-palette * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ===== Dark/Light Mode Support ===== */
+@media (prefers-color-scheme: light) {
+    .command-palette {
+        --command-bg: #ffffff;
+        --command-text: #1d1d1f;
+        --command-border: rgba(0, 0, 0, 0.1);
+        --command-hover: rgba(0, 0, 0, 0.05);
+        --command-selected: rgba(0, 122, 255, 0.1);
+        --command-accent: #007aff;
+        --command-placeholder: #999;
+        --command-description: #666;
+        --command-header: #999;
+        --command-hint: #666;
+        --command-empty: #999;
+        --command-shortcut: #666;
+        --command-shortcut-bg: rgba(0, 0, 0, 0.05);
+        --command-kbd-bg: rgba(0, 0, 0, 0.05);
+        --command-kbd-border: rgba(0, 0, 0, 0.1);
+        --command-kbd: #666;
+        --command-mark-bg: rgba(0, 122, 255, 0.2);
+        --command-mark-text: #007aff;
+        --command-footer-bg: rgba(0, 0, 0, 0.03);
+        --command-close: #999;
+    }
+}
