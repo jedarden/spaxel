@@ -62,11 +62,16 @@ func AllMigrations() []Migration {
 			Version:     11,
 			Description: "add FTS5 table and triggers for events search",
 			Up:          migration_011_add_events_fts,
-			{
-				Version:     12,
-				Description: "add crowd flow visualization tables",
-				Up:          migration_012_add_crowd_flow_tables,
-			},
+		},
+		{
+			Version:     12,
+			Description: "add crowd flow visualization tables",
+			Up:          migration_012_add_crowd_flow_tables,
+		},
+		{
+			Version:     13,
+			Description: "add person and sections_json columns to briefings table",
+			Up:          migration_013_add_briefing_person_columns,
 		},
 	}
 }
@@ -446,34 +451,34 @@ func migration_006_add_virtual_node_columns(tx *sql.Tx) error {
 // and error_message/error_count columns to the triggers table.
 func migration_007_add_webhook_tables(tx *sql.Tx) error {
 	schema := `
--- Error tracking columns on triggers
-ALTER TABLE triggers ADD COLUMN error_message TEXT DEFAULT '';
-ALTER TABLE triggers ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0;
+	-- Error tracking columns on triggers
+	ALTER TABLE triggers ADD COLUMN error_message TEXT DEFAULT '';
+	ALTER TABLE triggers ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0;
 
--- Trigger blob state persistence across restarts
-CREATE TABLE IF NOT EXISTS trigger_state (
-	trigger_id  INTEGER NOT NULL,
-	blob_id     INTEGER NOT NULL,
-	inside      INTEGER NOT NULL DEFAULT 0,
-	enter_time  INTEGER NOT NULL DEFAULT 0,
-	last_check  INTEGER NOT NULL DEFAULT 0,
-	PRIMARY KEY (trigger_id, blob_id),
-	FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
-);
+	-- Trigger blob state persistence across restarts
+	CREATE TABLE IF NOT EXISTS trigger_state (
+		trigger_id  INTEGER NOT NULL,
+		blob_id     INTEGER NOT NULL,
+		inside      INTEGER NOT NULL DEFAULT 0,
+		enter_time  INTEGER NOT NULL DEFAULT 0,
+		last_check  INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (trigger_id, blob_id),
+		FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
+	);
 
--- Webhook audit log
-CREATE TABLE IF NOT EXISTS webhook_log (
-	id          INTEGER PRIMARY KEY AUTOINCREMENT,
-	trigger_id  INTEGER NOT NULL,
-	fired_at_ms INTEGER NOT NULL,
-	url         TEXT NOT NULL,
-	status_code INTEGER,
-	latency_ms  INTEGER NOT NULL DEFAULT 0,
-	error       TEXT DEFAULT '',
-	FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_webhook_log_trigger ON webhook_log(trigger_id, fired_at_ms DESC);
-`
+	-- Webhook audit log
+	CREATE TABLE IF NOT EXISTS webhook_log (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		trigger_id  INTEGER NOT NULL,
+		fired_at_ms INTEGER NOT NULL,
+		url         TEXT NOT NULL,
+		status_code INTEGER,
+		latency_ms  INTEGER NOT NULL DEFAULT 0,
+		error       TEXT DEFAULT '',
+		FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_webhook_log_trigger ON webhook_log(trigger_id, fired_at_ms DESC);
+	`
 	_, err := tx.Exec(schema)
 	return err
 }
@@ -525,30 +530,30 @@ func migration_010_add_floorplan(tx *sql.Tx) error {
 // migration_011_add_events_fts adds FTS5 full-text search for events.
 func migration_011_add_events_fts(tx *sql.Tx) error {
 	schema := `
--- FTS5 index for natural-language search across event detail
-CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
-	type, zone, person, detail_json,
-	content='events', content_rowid='id'
-);
+	-- FTS5 index for natural-language search across event detail
+	CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+		type, zone, person, detail_json,
+		content='events', content_rowid='id'
+	);
 
--- Triggers to keep events_fts in sync with the events table
-CREATE TRIGGER IF NOT EXISTS events_fts_insert AFTER INSERT ON events BEGIN
-	INSERT INTO events_fts(rowid, type, zone, person, detail_json)
-	VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
-END;
+	-- Triggers to keep events_fts in sync with the events table
+	CREATE TRIGGER IF NOT EXISTS events_fts_insert AFTER INSERT ON events BEGIN
+		INSERT INTO events_fts(rowid, type, zone, person, detail_json)
+		VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
+	END;
 
-CREATE TRIGGER IF NOT EXISTS events_fts_delete AFTER DELETE ON events BEGIN
-	INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
-	VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
-END;
+	CREATE TRIGGER IF NOT EXISTS events_fts_delete AFTER DELETE ON events BEGIN
+		INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
+		VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
+	END;
 
-CREATE TRIGGER IF NOT EXISTS events_fts_update AFTER UPDATE ON events BEGIN
-	INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
-	VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
-	INSERT INTO events_fts(rowid, type, zone, person, detail_json)
-	VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
-END;
-`
+	CREATE TRIGGER IF NOT EXISTS events_fts_update AFTER UPDATE ON events BEGIN
+		INSERT INTO events_fts(events_fts, rowid, type, zone, person, detail_json)
+		VALUES ('delete', old.id, old.type, old.zone, old.person, old.detail_json);
+		INSERT INTO events_fts(rowid, type, zone, person, detail_json)
+		VALUES (new.id, new.type, new.zone, new.person, new.detail_json);
+	END;
+	`
 	_, err := tx.Exec(schema)
 	return err
 }
@@ -597,4 +602,42 @@ func migration_012_add_crowd_flow_tables(tx *sql.Tx) error {
 	`
 	_, err := tx.Exec(schema)
 	return err
+}
+
+// migration_013_add_briefing_person_columns adds person and sections_json columns to briefings table.
+func migration_013_add_briefing_person_columns(tx *sql.Tx) error {
+	// Check if person column already exists
+	var colExists bool
+	err := tx.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'person'
+	`).Scan(&colExists)
+	if err != nil {
+		return err
+	}
+
+	// Add columns if they don't exist
+	if !colExists {
+		_, err = tx.Exec(`ALTER TABLE briefings ADD COLUMN person TEXT`)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add sections_json column for structured briefing data
+	var sectionsColExists bool
+	err = tx.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'sections_json'
+	`).Scan(&sectionsColExists)
+	if err != nil {
+		return err
+	}
+
+	if !sectionsColExists {
+		_, err = tx.Exec(`ALTER TABLE briefings ADD COLUMN sections_json TEXT`)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

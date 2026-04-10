@@ -449,6 +449,16 @@ func main() {
 	sleepHandler := sleep.NewHandler(sleepMonitor)
 	sleepHandler.SetDB(filepath.Join(cfg.DataDir, "spaxel.db"))
 
+	// Morning briefing handler
+	briefingHandler, err := api.NewBriefingHandler(cfg.DataDir)
+	if err != nil {
+		log.Printf("[WARN] Failed to create briefing handler: %v", err)
+		briefingHandler = nil
+	} else {
+		defer briefingHandler.Close()
+		log.Printf("[INFO] Morning briefing handler initialized")
+	}
+
 	sleepMonitor.SetReportCallback(func(linkID string, report *sleep.SleepReport) {
 		// Broadcast sleep report to dashboard
 		msg := map[string]interface{}{
@@ -575,6 +585,55 @@ func main() {
 
 		// Set room config provider for floor plan thumbnails
 		notifyService.SetRoomConfig(&fleetRoomConfigAdapter{reg: fleetReg})
+	}
+
+	// Phase 8: Morning briefing scheduler
+	var briefingScheduler *briefing.Scheduler
+	if briefingHandler != nil {
+		// Create notify adapter
+		var notifyAdapter briefing.NotifyService
+		if notifyService != nil {
+			notifyAdapter = briefing.NewNotifyAdapter(notifyService)
+		}
+
+		// Load briefing settings from database or use defaults
+		schedulerConfig := briefing.SchedulerConfig{
+			Enabled:          true,
+			Time:             "07:00",
+			PushNotification: false,
+			AutoGenerate:     true,
+			Timezone:         cfg.Timezone,
+		}
+
+		// Try to load settings from database
+		if mainDB != nil {
+			var settingsJSON sql.NullString
+			err := mainDB.QueryRow("SELECT value_json FROM settings WHERE key = 'briefing_config'").Scan(&settingsJSON)
+			if err == nil && settingsJSON.Valid {
+				var savedConfig map[string]interface{}
+				if err := json.Unmarshal([]byte(settingsJSON.String), &savedConfig); err == nil {
+					if enabled, ok := savedConfig["enabled"].(bool); ok {
+						schedulerConfig.Enabled = enabled
+					}
+					if timeStr, ok := savedConfig["time"].(string); ok {
+						schedulerConfig.Time = timeStr
+					}
+					if push, ok := savedConfig["push_notification"].(bool); ok {
+						schedulerConfig.PushNotification = push
+					}
+					if auto, ok := savedConfig["auto_generate"].(bool); ok {
+						schedulerConfig.AutoGenerate = auto
+					}
+					log.Printf("[INFO] Loaded briefing settings from database")
+				}
+			}
+		}
+
+		briefingScheduler = briefing.NewScheduler(briefingHandler.GetGenerator(), notifyAdapter, schedulerConfig)
+		briefingScheduler.Start(ctx)
+		defer briefingScheduler.Stop()
+		log.Printf("[INFO] Morning briefing scheduler started (time: %s, push: %v)",
+			schedulerConfig.Time, schedulerConfig.PushNotification)
 	}
 
 	// Phase 6: Self-improving localization system
@@ -3133,6 +3192,48 @@ func main() {
 	sleepHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Sleep quality API registered at /api/sleep/*")
 
+	// Phase 8: Morning briefing REST API
+	if briefingHandler != nil {
+		// Set up providers for briefing generation
+		// Zone provider wraps zones manager
+		var zoneProvider briefing.ZoneProvider
+		if zonesMgr != nil {
+			zoneProvider = &zoneManagerAdapter{zonesMgr: zonesMgr}
+		}
+
+		// Person provider wraps BLE registry and prediction history
+		var personProvider briefing.PersonProvider
+		if bleRegistry != nil && predictionHistory != nil {
+			personProvider = &personProviderAdapter{
+				bleRegistry:       bleRegistry,
+				predictionHistory: predictionHistory,
+			}
+		}
+
+		// Prediction provider wraps predictor
+		var predictionProvider briefing.PredictionProvider
+		if predictionPredictor != nil && predictionAccuracy != nil {
+			predictionProvider = &predictionProviderAdapter{
+				predictor: predictionPredictor,
+				accuracy:  predictionAccuracy,
+			}
+		}
+
+		// Health provider wraps accuracy computer
+		var healthProvider briefing.HealthProvider
+		if accuracyComputer != nil && fleetReg != nil {
+			healthProvider = &healthProviderAdapter{
+				accuracy:   accuracyComputer,
+				fleet:      fleetReg,
+				fusion:     fusionEngine,
+			}
+		}
+
+		briefingHandler.SetProviders(zoneProvider, personProvider, predictionProvider, healthProvider)
+		briefingHandler.RegisterRoutes(r)
+		log.Printf("[INFO] Morning briefing API registered at /api/briefing/*")
+	}
+
 	// Phase 6: Tracked blobs REST API (for testing and external integrations)
 	r.Get("/api/blobs", func(w http.ResponseWriter, r *http.Request) {
 		blobs := pm.GetTrackedBlobs()
@@ -3814,6 +3915,164 @@ func (a *anomalyAlertAdapter) SendEscalation(event events.AnomalyEvent) error {
 		a.notifyService.Send(notif)
 	}
 	return nil
+}
+
+// Briefing provider adapters
+
+type zoneManagerAdapter struct {
+	zonesMgr *zones.Manager
+}
+
+func (z *zoneManagerAdapter) GetZoneName(id int) string {
+	if z.zonesMgr == nil {
+		return ""
+	}
+	zone := z.zonesMgr.GetZone(fmt.Sprintf("%d", id))
+	if zone == nil {
+		return ""
+	}
+	return zone.Name
+}
+
+func (z *zoneManagerAdapter) GetZoneOccupancy(zoneID int) int {
+	if z.zonesMgr == nil {
+		return 0
+	}
+	occ := z.zonesMgr.GetZoneOccupancy(fmt.Sprintf("%d", zoneID))
+	if occ == nil {
+		return 0
+	}
+	return occ.Count
+}
+
+func (z *zoneManagerAdapter) GetPeopleInZone(zoneID int) []string {
+	if z.zonesMgr == nil {
+		return nil
+	}
+	occ := z.zonesMgr.GetZoneOccupancy(fmt.Sprintf("%d", zoneID))
+	if occ == nil {
+		return nil
+	}
+	// Convert blob IDs to person names via BLE registry
+	// For now, return empty slice - the briefing will work without this
+	return []string{}
+}
+
+type personProviderAdapter struct {
+	bleRegistry       *ble.Registry
+	predictionHistory *prediction.HistoryUpdater
+}
+
+func (p *personProviderAdapter) GetPeopleHome() []string {
+	if p.predictionHistory == nil {
+		return nil
+	}
+	zones := p.predictionHistory.GetAllPersonZones()
+	people := make([]string, 0, len(zones))
+	for personID := range zones {
+		people = append(people, personID)
+	}
+	return people
+}
+
+func (p *personProviderAdapter) GetPersonLastSeen(person string) time.Time {
+	if p.predictionHistory == nil {
+		return time.Time{}
+	}
+	_, lastSeen, _, ok := p.predictionHistory.GetPersonZone(person)
+	if !ok {
+		return time.Time{}
+	}
+	return lastSeen
+}
+
+func (p *personProviderAdapter) GetPersonZone(person string) string {
+	if p.predictionHistory == nil {
+		return ""
+	}
+	zoneID, _, _, ok := p.predictionHistory.GetPersonZone(person)
+	if !ok {
+		return ""
+	}
+	return zoneID
+}
+
+type predictionProviderAdapter struct {
+	predictor *prediction.Predictor
+	accuracy  *prediction.AccuracyTracker
+}
+
+func (p *predictionProviderAdapter) GetPrediction(person string, horizonMinutes int) (string, float64, bool) {
+	if p.predictor == nil {
+		return "", 0, false
+	}
+	predictions := p.predictor.GetPredictions()
+	for _, pred := range predictions {
+		if pred.PersonID == person {
+			return pred.ZoneID, pred.Probability, true
+		}
+	}
+	return "", 0, false
+}
+
+func (p *predictionProviderAdapter) GetDaysComplete(person string) int {
+	if p.accuracy == nil {
+		return 0
+	}
+	stats, err := p.accuracy.GetAccuracyStats(person, 15)
+	if err != nil || stats == nil {
+		return 0
+	}
+	return stats.SampleCount
+}
+
+func (p *predictionProviderAdapter) IsModelReady(person string) bool {
+	if p.accuracy == nil {
+		return false
+	}
+	stats, err := p.accuracy.GetAccuracyStats(person, 15)
+	if err != nil || stats == nil {
+		return false
+	}
+	return stats.SampleCount >= prediction.MinimumPredictionsForAccuracy
+}
+
+type healthProviderAdapter struct {
+	accuracy *learning.AccuracyComputer
+	fleet    *fleet.Registry
+	fusion   *fusion.Engine
+}
+
+func (h *healthProviderAdapter) GetDetectionQuality() float64 {
+	if h.fusion == nil {
+		return 0
+	}
+	return h.fusion.GetAmbientConfidence()
+}
+
+func (h *healthProviderAdapter) GetNodeCount() (int, int) {
+	if h.fleet == nil {
+		return 0, 0
+	}
+	nodes, err := h.fleet.GetAllNodes()
+	if err != nil {
+		return 0, 0
+	}
+	online := 0
+	for _, n := range nodes {
+		if n.Status == fleet.NodeStatusOnline {
+			online++
+		}
+	}
+	return online, len(nodes)
+}
+
+func (h *healthProviderAdapter) GetAccuracyDelta() (float64, int) {
+	if h.accuracy == nil {
+		return 0, 0
+	}
+	delta, count := h.accuracy.GetWeeklyDelta()
+	return delta, count
 }
 
 // resolveBlobIdentity returns the display name for a blob via the identity matcher.

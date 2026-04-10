@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="css/ambient.css">
     <link rel="stylesheet" href="css/guided-help.css">
     <link rel="stylesheet" href="css/quick-actions.css">
+    <link rel="stylesheet" href="css/briefing.css">
     <style>
         * {
             margin: 0;
@@ -2729,6 +2730,7 @@
     <script src="js/quick-actions.js"></script>
     <!-- Guided Troubleshooting -->
     <script src="js/guided-help.js"></script>
+    <script src="js/briefing.js"></script>
 
     <!-- Room editor panel -->
     <div id="room-editor-panel">
@@ -3095,5 +3097,58 @@
             ctx.fill();
         })();
     </script>
+
+    <!-- Morning Briefing Card -->
+    <div id="briefing-card">
+        <div class="briefing-header">
+            <div>
+                <div class="briefing-title">Morning Briefing</div>
+                <div class="briefing-date" id="briefing-date-text">Today</div>
+            </div>
+            <button class="briefing-close" id="briefing-close">&times;</button>
+        </div>
+        <div class="briefing-content" id="briefing-content-text">
+            <div class="briefing-loading">
+                <div class="briefing-spinner"></div>
+                <span>Loading briefing...</span>
+            </div>
+        </div>
+        <div class="briefing-actions" id="briefing-actions" style="display: none;">
+            <button class="briefing-btn secondary" id="briefing-refresh">Refresh</button>
+            <button class="briefing-btn primary" id="briefing-dismiss">Got it</button>
+        </div>
+    </div>
+
+    <!-- Briefing Indicator (when dismissed but available) -->
+    <div id="briefing-indicator" title="View morning briefing">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+        </svg>
+    </div>
+
+    <!-- Briefing Settings Panel -->
+    <div id="briefing-settings">
+        <h3>Briefing Settings</h3>
+        <div class="setting-row">
+            <label class="setting-label">Enable morning briefing</label>
+            <div class="setting-toggle active" id="briefing-enabled-toggle"></div>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label">Briefing time</label>
+            <input type="time" class="setting-input" id="briefing-time-input" value="07:00">
+        </div>
+        <div class="setting-row">
+            <label class="setting-label">Push notification</label>
+            <div class="setting-toggle" id="briefing-push-toggle"></div>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label">Auto-generate</label>
+            <div class="setting-toggle active" id="briefing-auto-toggle"></div>
+        </div>
+        <div class="settings-actions">
+            <button class="briefing-btn secondary" id="briefing-settings-cancel">Cancel</button>
+            <button class="briefing-btn primary" id="briefing-settings-save">Save</button>
+        </div>
+    </div>
 </body>
 </html>
