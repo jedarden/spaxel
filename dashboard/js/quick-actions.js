@@ -513,7 +513,7 @@
 
     function markIncorrect(blob) {
         if (window.FeedbackPanel) {
-            window.FeeddownPanel.markIncorrect(blob.id);
+            window.FeedbackPanel.markIncorrect(blob.id);
         } else {
             // Send feedback directly
             fetch('/api/feedback', {

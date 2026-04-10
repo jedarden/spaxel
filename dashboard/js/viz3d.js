@@ -272,6 +272,9 @@ const Viz3D = (function () {
                         new THREE.MeshPhongMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, shininess: 60 })
                     );
                 }
+                // Store MAC in userData for spatial quick actions raycasting
+                m.userData = m.userData || {};
+                m.userData.mac = n.mac;
                 _scene.add(m);
                 _nodeMeshes.set(n.mac, m);
             }
@@ -3200,7 +3203,6 @@ const Viz3D = (function () {
         // Blobs
         applyLocUpdate: applyLocUpdate,
         getBlobs3D: function() { return _blobs3D; },
-        blobMeshes: function() { return _blobs3D; },  // alias for quick-actions
 
         // View presets
         setViewPreset: setViewPreset,
