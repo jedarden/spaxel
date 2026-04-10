@@ -272,6 +272,7 @@ type Manager struct {
 	editTracker        *EditTracker
 	qualityTracker     *ZoneQualityTracker
 	discoveryTracker   *DiscoveryTracker
+	fleetNotifier      *FleetNotifier
 	mu                 sync.RWMutex
 	running            bool
 	ctx                context.Context
@@ -321,6 +322,7 @@ func (m *Manager) Run(ctx context.Context) {
 
 	// Initial check
 	m.checkQuality()
+	m.checkOfflineNodes()
 
 	for {
 		select {
@@ -329,6 +331,7 @@ func (m *Manager) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			m.checkQuality()
+			m.checkOfflineNodes()
 		}
 	}
 }
@@ -373,6 +376,24 @@ func (m *Manager) checkQuality() {
 			log.Printf("[INFO] guidedtroubleshoot: zone %d quality recovered to %.1f%%", zone.ID, zone.Quality)
 		}
 	}
+}
+
+// checkOfflineNodes checks all tracked offline nodes and triggers callbacks.
+func (m *Manager) checkOfflineNodes() {
+	m.mu.RLock()
+	notifier := m.fleetNotifier
+	m.mu.RUnlock()
+
+	if notifier != nil {
+		notifier.CheckOfflineNodes()
+	}
+}
+
+// SetFleetNotifier sets the fleet notifier for tracking node offline events.
+func (m *Manager) SetFleetNotifier(notifier *FleetNotifier) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.fleetNotifier = notifier
 }
 
 // SetOnQualityIssue sets the callback for quality issues.
