@@ -1186,3 +1186,58 @@ func (h *Hub) BroadcastReplayBlobs(blobs []replay.BlobUpdate, timestampMS int64)
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
 }
+
+// BroadcastQualityDrop broadcasts a zone quality degradation event to all dashboard clients.
+// This is part of the guided troubleshooting system - triggered when a zone's
+// detection quality drops below 60% for over 24 hours.
+func (h *Hub) BroadcastQualityDrop(zoneID int, zoneName string, quality float64) {
+	msg := map[string]interface{}{
+		"type":        "quality_drop",
+		"zone_id":     zoneID,
+		"zone_name":   zoneName,
+		"quality":     quality,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastRepeatedEdit broadcasts a repeated settings edit event to all dashboard clients.
+// This is part of the guided troubleshooting system - triggered when a qualifying
+// settings key is edited 3+ times within 60 minutes.
+func (h *Hub) BroadcastRepeatedEdit(key string) {
+	msg := map[string]interface{}{
+		"type":  "repeated_edit",
+		"key":   key,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastCalibrationComplete broadcasts a successful calibration event to all dashboard clients.
+// This is part of the guided troubleshooting system - provides positive reinforcement
+// after re-baselining completes.
+func (h *Hub) BroadcastCalibrationComplete(zoneID int, zoneName string, qualityBefore, qualityAfter float64, linksCalibrated int) {
+	msg := map[string]interface{}{
+		"type":           "calibration_complete",
+		"zone_id":        zoneID,
+		"zone_name":      zoneName,
+		"quality_before": qualityBefore,
+		"quality_after":  qualityAfter,
+		"links":          linksCalibrated,
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
+
+// BroadcastNodeOffline broadcasts a node offline event to all dashboard clients.
+// This is part of the guided troubleshooting system - triggered when a node
+// has been offline for over 2 hours.
+func (h *Hub) BroadcastNodeOffline(mac string, offlineDuration float64) {
+	msg := map[string]interface{}{
+		"type":            "node_offline",
+		"mac":             mac,
+		"offline_minutes": int(offlineDuration),
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}

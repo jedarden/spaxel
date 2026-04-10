@@ -70,6 +70,12 @@
             case 'calibration_complete':
                 handleCalibrationComplete(data);
                 break;
+            case 'quality_drop':
+                handleQualityDrop(data);
+                break;
+            case 'repeated_edit':
+                handleRepeatedEdit(data);
+                break;
         }
     }
 
@@ -265,11 +271,288 @@
     // Calibration Complete
     // ============================================
     function handleCalibrationComplete(data) {
-        // The post-calibration reinforcement card is rendered by the
-        // onboarding wizard itself (onboard.js).  This handler is a
-        // hook for future dashboard-level use (e.g. showing a
-        // notification when calibration completes on a node that was
-        // already on the dashboard).
+        if (!data) return;
+
+        // Show positive reinforcement message
+        showCalibrationReinforcement(data);
+    }
+
+    function showCalibrationReinforcement(data) {
+        var improvement = Math.round((data.quality_after || 0) - (data.quality_before || 0));
+        var improvementText = improvement > 0 ? '+' + improvement : Math.round(improvement);
+        var encouragement = '';
+
+        if (improvement > 20) {
+            encouragement = 'Excellent! That\'s a significant improvement.';
+        } else if (improvement > 10) {
+            encouragement = 'Great progress! Detection is much more reliable now.';
+        } else if (improvement > 0) {
+            encouragement = 'Getting better. The system will continue to refine baseline over time.';
+        } else {
+            encouragement = 'Baseline has been updated. The system needs more data to adapt to this environment.';
+        }
+
+        var card = document.createElement('div');
+        card.className = 'troubleshoot-card troubleshoot-success-card';
+        card.innerHTML =
+            '<div class="troubleshoot-card-header">' +
+                '<span class="troubleshoot-card-icon">\u2714</span>' +
+                '<span><strong>Re-baseline complete</strong></span>' +
+                '<button class="troubleshoot-dismiss" title="Dismiss">&times;</button>' +
+            '</div>' +
+            '<div class="troubleshoot-content">' +
+                '<p class="troubleshoot-success-message">' + encouragement + '</p>' +
+                '<div class="troubleshoot-metrics">' +
+                    '<span>Quality: ' + Math.round(data.quality_after || 0) + '%</span>' +
+                    '<span class="troubleshoot-improvement">' + improvementText + '%</span>' +
+                    '<span>' + (data.links || 0) + ' links calibrated</span>' +
+                '</div>' +
+            '</div>';
+
+        card.querySelector('.troubleshoot-dismiss').addEventListener('click', function() {
+            if (card.parentNode) card.parentNode.removeChild(card);
+        });
+
+        if (state.nodePanelSection) {
+            state.nodePanelSection.appendChild(card);
+        }
+
+        // Auto-dismiss after 10 seconds
+        setTimeout(function() {
+            if (card.parentNode) {
+                card.classList.add('troubleshoot-card-fadeout');
+                setTimeout(function() {
+                    if (card.parentNode) card.parentNode.removeChild(card);
+                }, 500);
+            }
+        }, 10000);
+    }
+
+    // ============================================
+    // Quality Drop Detection
+    // ============================================
+    function handleQualityDrop(data) {
+        if (!data || !data.zone_id) return;
+
+        var key = 'quality_' + data.zone_id;
+        if (state.issues[key]) return;
+
+        state.issues[key] = { state: STATES.NOTIFIED, data: data, element: null };
+        state.issues[key].element = renderQualityDropBanner(data);
+    }
+
+    function renderQualityDropBanner(data) {
+        var banner = document.createElement('div');
+        banner.className = 'troubleshoot-quality-banner';
+        banner.innerHTML =
+            '<div class="troubleshoot-quality-content">' +
+                '<span class="troubleshoot-quality-icon">\u26A0</span>' +
+                '<div class="troubleshoot-quality-text">' +
+                    '<strong>Detection quality has degraded in ' + escapeAttr(data.zone_name || 'this zone') + '</strong><br>' +
+                    '<span class="troubleshoot-quality-detail">Quality has been below 60% for over 24 hours. This may indicate node placement issues or environmental changes.</span>' +
+                '</div>' +
+                '<button class="troubleshoot-action-btn" data-action="diagnose">Diagnose</button>' +
+                '<button class="troubleshoot-dismiss" title="Dismiss">&times;</button>' +
+            '</div>';
+
+        // Diagnose button
+        banner.querySelector('.troubleshoot-action-btn').addEventListener('click', function() {
+            showQualityDiagnostics(data);
+        });
+
+        // Dismiss button
+        banner.querySelector('.troubleshoot-dismiss').addEventListener('click', function() {
+            resolveIssue('quality_' + (data.zone_id || ''));
+            // Also dismiss on server
+            fetch('/api/guided/issues/quality/' + (data.zone_id || '') + '/dismiss', {
+                method: 'POST'
+            }).catch(function(err) {
+                console.error('[Troubleshoot] Failed to dismiss quality issue:', err);
+            });
+        });
+
+        document.body.appendChild(banner);
+        return banner;
+    }
+
+    function showQualityDiagnostics(data) {
+        // Fetch diagnostic steps from the API
+        fetch('/api/guided/issues')
+            .then(function(res) { return res.json(); })
+            .then(function(result) {
+                var issues = result.issues || [];
+                var qualityIssue = issues.find(function(i) { return i.type === 'quality_drop' && i.zone_id === data.zone_id; });
+
+                if (qualityIssue) {
+                    showGuidedDiagnosticsFlow(qualityIssue);
+                }
+            })
+            .catch(function(err) {
+                console.error('[Troubleshoot] Failed to fetch diagnostics:', err);
+            });
+    }
+
+    function showGuidedDiagnosticsFlow(issue) {
+        var modal = document.createElement('div');
+        modal.className = 'troubleshoot-modal-overlay';
+        modal.innerHTML =
+            '<div class="troubleshoot-modal troubleshoot-diagnostics-modal">' +
+                '<h3>Detection Quality Diagnostics</h3>' +
+                '<p class="troubleshoot-diagnostics-intro">Let\'s diagnose the detection quality issue in <strong>' + escapeAttr(issue.zone_name || 'this zone') + '</strong>.</p>' +
+                '<div class="troubleshoot-steps-flow">' +
+                    '<div class="troubleshoot-flow-step" data-step="1">' +
+                        '<div class="troubleshoot-step-number">1</div>' +
+                        '<div class="troubleshoot-step-content">' +
+                            '<h4>Check Node Connectivity</h4>' +
+                            '<p>Verify all nodes in this zone are online and communicating properly.</p>' +
+                            '<div class="troubleshoot-step-actions">' +
+                                '<button class="troubleshoot-step-btn" data-action="connectivity">Check Connectivity</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="troubleshoot-flow-step" data-step="2">' +
+                        '<div class="troubleshoot-step-number">2</div>' +
+                        '<div class="troubleshoot-step-content">' +
+                            '<h4>View Link Health</h4>' +
+                            '<p>Examine the health of sensing links in this zone to identify problematic links.</p>' +
+                            '<div class="troubleshoot-step-actions">' +
+                                '<button class="troubleshoot-step-btn" data-action="link_health">View Link Health</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="troubleshoot-flow-step" data-step="3">' +
+                        '<div class="troubleshoot-step-number">3</div>' +
+                        '<div class="troubleshoot-step-content">' +
+                            '<h4>Re-baseline Links</h4>' +
+                            '<p>If the environment has changed, re-baselining the links may improve detection quality.</p>' +
+                            '<div class="troubleshoot-step-actions">' +
+                                '<button class="troubleshoot-step-btn" data-action="rebaseline">Re-baseline This Zone</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="troubleshoot-flow-step" data-step="4">' +
+                        '<div class="troubleshoot-step-number">4</div>' +
+                        '<div class="troubleshoot-step-content">' +
+                            '<h4>Consider Node Repositioning</h4>' +
+                            '<p>Sometimes moving nodes slightly can dramatically improve coverage.</p>' +
+                            '<div class="troubleshoot-step-actions">' +
+                                '<button class="troubleshoot-step-btn" data-action="reposition">Open 3D Placement View</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<button class="troubleshoot-modal-close wizard-btn wizard-btn-secondary">Close</button>' +
+            '</div>';
+
+        modal.querySelector('.troubleshoot-modal-close').addEventListener('click', function() {
+            if (modal.parentNode) modal.parentNode.removeChild(modal);
+        });
+
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal && modal.parentNode) modal.parentNode.removeChild(modal);
+        });
+
+        // Handle step buttons
+        modal.querySelectorAll('.troubleshoot-step-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var action = this.dataset.action;
+                handleDiagnosticsAction(action, issue.zone_id);
+            });
+        });
+
+        document.body.appendChild(modal);
+    }
+
+    function handleDiagnosticsAction(action, zoneID) {
+        switch(action) {
+            case 'connectivity':
+                // Navigate to fleet status page
+                if (window.SpaxelApp && window.SpaxelApp.navigateTo) {
+                    window.SpaxelApp.navigateTo('fleet');
+                }
+                break;
+            case 'link_health':
+                // Open link health panel
+                if (window.SpaxelApp && window.SpaxelApp.openLinkHealth) {
+                    window.SpaxelApp.openLinkHealth();
+                }
+                break;
+            case 'rebaseline':
+                // Trigger re-baseline for zone
+                fetch('/api/baseline/capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zone_id: zoneID })
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(result) {
+                    if (window.SpaxelApp && window.SpaxelApp.showToast) {
+                        window.SpaxelApp.showToast('Re-baseline started for zone. Please keep the room clear for 60 seconds.', 'info');
+                    }
+                })
+                .catch(function(err) {
+                    console.error('[Troubleshoot] Failed to start re-baseline:', err);
+                });
+                break;
+            case 'reposition':
+                // Open 3D placement view
+                if (window.SpaxelApp && window.SpaxelApp.navigateTo) {
+                    window.SpaxelApp.navigateTo('placement');
+                }
+                break;
+        }
+    }
+
+    // ============================================
+    // Repeated Settings Edit
+    // ============================================
+    function handleRepeatedEdit(data) {
+        if (!data || !data.key) return;
+
+        showRepeatedEditHint(data);
+    }
+
+    function showRepeatedEditHint(data) {
+        // Check if we've already shown this hint recently
+        var hintKey = 'repeated_edit_hint_' + data.key;
+        var lastShown = localStorage.getItem(hintKey);
+        if (lastShown) {
+            var elapsed = Date.now() - parseInt(lastShown, 10);
+            if (elapsed < 24 * 60 * 60 * 1000) { // 24 hours
+                return; // Already shown within cooldown
+            }
+        }
+
+        var banner = document.createElement('div');
+        banner.className = 'troubleshoot-hint-banner';
+        banner.innerHTML =
+            '<div class="troubleshoot-hint-content">' +
+                '<span class="troubleshoot-hint-icon">\u2139</span>' +
+                '<div class="troubleshoot-hint-text">' +
+                    '<strong>Frequent adjustments detected</strong><br>' +
+                    '<span>You\'ve adjusted the detection threshold several times. Would you like me to show you what the system is seeing?</span>' +
+                '</div>' +
+                '<button class="troubleshoot-hint-action" data-action="show">Show me</button>' +
+                '<button class="troubleshoot-dismiss" title="Dismiss">&times;</button>' +
+            '</div>';
+
+        banner.querySelector('.troubleshoot-hint-action').addEventListener('click', function() {
+            // Open time-travel replay with explainability
+            if (window.SpaxelApp && window.SpaxelApp.openTimeTravel) {
+                window.SpaxelApp.openTimeTravel({ with_explainability: true });
+            }
+            // Mark hint as shown
+            localStorage.setItem(hintKey, Date.now().toString());
+            if (banner.parentNode) banner.parentNode.removeChild(banner);
+        });
+
+        banner.querySelector('.troubleshoot-dismiss').addEventListener('click', function() {
+            // Mark hint as shown
+            localStorage.setItem(hintKey, Date.now().toString());
+            if (banner.parentNode) banner.parentNode.removeChild(banner);
+        });
+
+        document.body.appendChild(banner);
     }
 
     // ============================================
@@ -301,6 +584,215 @@
         _STATES: STATES,
         _NO_FRAME_MS: NO_FRAME_MS,
     };
+
+    // ============================================
+    // Public API
+    // ============================================
+    window.SpaxelTroubleshoot = {
+        init: init,
+        handleEvent: handleEvent,
+        // Exposed for testing
+        _state: state,
+        _STATES: STATES,
+        _NO_FRAME_MS: NO_FRAME_MS,
+    };
+
+    // ============================================
+    // CSS Styles
+    // ============================================
+    function addStyles() {
+        if (document.getElementById('troubleshoot-styles')) return;
+
+        var style = document.createElement('style');
+        style.id = 'troubleshoot-styles';
+        style.textContent =
+            '.troubleshoot-card {' +
+                'background: rgba(30, 30, 58, 0.95);' +
+                'border-radius: 8px;' +
+                'box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);' +
+                'margin-bottom: 16px;' +
+                'overflow: hidden;' +
+                'font-size: 13px;' +
+            '}' +
+            '.troubleshoot-success-card {' +
+                'border-left: 3px solid #4caf50;' +
+            '}' +
+            '.troubleshoot-card-fadeout {' +
+                'animation: troubleshootFadeOut 0.5s ease-out forwards;' +
+            '}' +
+            '@keyframes troubleshootFadeOut {' +
+                'to { opacity: 0; max-height: 0; margin: 0; }' +
+            '}' +
+            '.troubleshoot-success-message {' +
+                'color: #81c784;' +
+                'font-weight: 500;' +
+                'margin-bottom: 8px;' +
+            '}' +
+            '.troubleshoot-metrics {' +
+                'display: flex;' +
+                'gap: 16px;' +
+                'font-size: 12px;' +
+                'color: #888;' +
+            '}' +
+            '.troubleshoot-improvement {' +
+                'color: #81c784;' +
+                'font-weight: 500;' +
+            '}' +
+            '.troubleshoot-quality-banner {' +
+                'position: fixed;' +
+                'bottom: 0;' +
+                'left: 0;' +
+                'right: 0;' +
+                'background: rgba(255, 167, 38, 0.15);' +
+                'border-top: 2px solid #ffa726;' +
+                'padding: 12px 20px;' +
+                'display: flex;' +
+                'align-items: center;' +
+                'justify-content: center;' +
+                'gap: 16px;' +
+                'z-index: 150;' +
+                'animation: troubleshootSlideUp 0.3s ease-out;' +
+            '}' +
+            '@keyframes troubleshootSlideUp {' +
+                'from { transform: translateY(100%); }' +
+                'to { transform: translateY(0); }' +
+            '}' +
+            '.troubleshoot-quality-content {' +
+                'display: flex;' +
+                'align-items: center;' +
+                'gap: 12px;' +
+            '}' +
+            '.troubleshoot-quality-icon {' +
+                'font-size: 20px;' +
+            '}' +
+            '.troubleshoot-quality-text {' +
+                'flex: 1;' +
+            '}' +
+            '.troubleshoot-quality-detail {' +
+                'font-size: 12px;' +
+                'color: #aaa;' +
+                'display: block;' +
+                'margin-top: 2px;' +
+            '}' +
+            '.troubleshoot-action-btn {' +
+                'background: #4fc3f7;' +
+                'color: #1a1a2e;' +
+                'border: none;' +
+                'padding: 6px 14px;' +
+                'border-radius: 4px;' +
+                'font-size: 12px;' +
+                'font-weight: 500;' +
+                'cursor: pointer;' +
+            '}' +
+            '.troubleshoot-hint-banner {' +
+                'position: fixed;' +
+                'bottom: 80px;' +
+                'left: 50%;' +
+                'transform: translateX(-50%);' +
+                'background: rgba(33, 150, 243, 0.15);' +
+                'border: 1px solid rgba(33, 150, 243, 0.5);' +
+                'border-radius: 8px;' +
+                'padding: 12px 16px;' +
+                'display: flex;' +
+                'align-items: center;' +
+                'gap: 12px;' +
+                'z-index: 150;' +
+                'max-width: 500px;' +
+                'animation: troubleshootHintSlideUp 0.3s ease-out;' +
+            '}' +
+            '@keyframes troubleshootHintSlideUp {' +
+                'from { transform: translateX(-50%) translateY(100px); opacity: 0; }' +
+                'to { transform: translateX(-50%) translateY(0); opacity: 1; }' +
+            '}' +
+            '.troubleshoot-hint-icon {' +
+                'font-size: 18px;' +
+            '}' +
+            '.troubleshoot-hint-text {' +
+                'flex: 1;' +
+                'font-size: 12px;' +
+            '}' +
+            '.troubleshoot-hint-text strong {' +
+                'display: block;' +
+                'color: #64b5f6;' +
+                'margin-bottom: 2px;' +
+            '}' +
+            '.troubleshoot-hint-action {' +
+                'background: #64b5f6;' +
+                'color: #1a1a2e;' +
+                'border: none;' +
+                'padding: 4px 12px;' +
+                'border-radius: 4px;' +
+                'font-size: 11px;' +
+                'cursor: pointer;' +
+            '}' +
+            '.troubleshoot-diagnostics-modal {' +
+                'max-width: 600px;' +
+                'width: 90%;' +
+            '}' +
+            '.troubleshoot-diagnostics-intro {' +
+                'color: #aaa;' +
+                'font-size: 13px;' +
+                'margin-bottom: 20px;' +
+            '}' +
+            '.troubleshoot-steps-flow {' +
+                'display: flex;' +
+                'flex-direction: column;' +
+                'gap: 16px;' +
+                'margin-bottom: 20px;' +
+            '}' +
+            '.troubleshoot-flow-step {' +
+                'display: flex;' +
+                'gap: 12px;' +
+                'align-items: flex-start;' +
+            '}' +
+            '.troubleshoot-step-number {' +
+                'width: 28px;' +
+                'height: 28px;' +
+                'border-radius: 50%;' +
+                'background: #4fc3f7;' +
+                'color: #1a1a2e;' +
+                'display: flex;' +
+                'align-items: center;' +
+                'justify-content: center;' +
+                'font-weight: 600;' +
+                'flex-shrink: 0;' +
+            '}' +
+            '.troubleshoot-step-content {' +
+                'flex: 1;' +
+            '}' +
+            '.troubleshoot-step-content h4 {' +
+                'margin: 0 0 4px 0;' +
+                'font-size: 14px;' +
+                'color: #eee;' +
+            '}' +
+            '.troubleshoot-step-content p {' +
+                'margin: 0 0 8px 0;' +
+                'font-size: 12px;' +
+                'color: #aaa;' +
+            '}' +
+            '.troubleshoot-step-actions {' +
+                'display: flex;' +
+                'gap: 8px;' +
+            '}' +
+            '.troubleshoot-step-btn {' +
+                'background: rgba(79, 195, 247, 0.2);' +
+                'border: 1px solid rgba(79, 195, 247, 0.5);' +
+                'color: #4fc3f7;' +
+                'padding: 6px 12px;' +
+                'border-radius: 4px;' +
+                'font-size: 11px;' +
+                'cursor: pointer;' +
+                'transition: background 0.2s;' +
+            '}' +
+            '.troubleshoot-step-btn:hover {' +
+                'background: rgba(79, 195, 247, 0.3);' +
+            '}';
+
+        document.head.appendChild(style);
+    }
+
+    // Add styles on init
+    addStyles();
 
     // Auto-init when DOM is ready
     if (document.readyState === 'loading') {

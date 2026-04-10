@@ -185,23 +185,54 @@
          * Send feedback to the API
          */
         sendFeedback: function(eventID, eventType, feedbackType, details) {
+            // Map feedback types to API types
+            var apiType = 'correct';
+            if (feedbackType === this.FeedbackTypes.FALSE_POSITIVE || feedbackType === 'FALSE_POSITIVE') {
+                apiType = 'incorrect';
+            } else if (feedbackType === this.FeedbackTypes.FALSE_NEGATIVE || feedbackType === 'FALSE_NEGATIVE') {
+                apiType = 'missed';
+            } else if (feedbackType === this.FeedbackTypes.TRUE_POSITIVE || feedbackType === 'TRUE_POSITIVE') {
+                apiType = 'correct';
+            }
+
+            // Extract blob_id from details if available
+            var blobID = details && details.blob_id ? details.blob_id : 0;
+
+            // Extract position from details if available
+            var position = null;
+            if (details && (details.position_x !== undefined || details.zone_id !== undefined)) {
+                position = {
+                    x: details.position_x || 0,
+                    y: details.position_y || 0,
+                    z: details.position_z || 0
+                };
+            }
+
             var data = {
-                event_id: eventID || '',
-                event_type: eventType,
-                feedback_type: feedbackType,
-                details: details
+                type: apiType,
+                event_id: eventID || 0,
+                blob_id: blobID
             };
 
-            fetch('/api/learning/feedback', {
+            // Add position if present
+            if (position) {
+                data.position = position;
+            }
+
+            fetch('/api/feedback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             })
             .then(function(res) { return res.json(); })
             .then(function(result) {
-                if (result.success) {
-                    console.log('[Feedback] Submitted:', feedbackType, 'for event', eventID);
-                    if (window.SpaxelApp && window.SpaxelApp.showToast) {
+                if (result.ok) {
+                    console.log('[Feedback] Submitted:', apiType, 'for event', eventID);
+
+                    // Show inline response if provided
+                    if (result.inline_response) {
+                        Feedback.showInlineResponse(result.inline_response);
+                    } else if (window.SpaxelApp && window.SpaxelApp.showToast) {
                         window.SpaxelApp.showToast('Thank you for your feedback!', 'success');
                     }
                 }
@@ -328,6 +359,36 @@
                 .catch(function(err) {
                     console.error('[Feedback] Failed to load zones:', err);
                 });
+        },
+
+        /**
+         * Show inline response message for feedback
+         */
+        showInlineResponse: function(response) {
+            // Create inline response element
+            var inline = document.createElement('div');
+            inline.className = 'feedback-inline-response feedback-inline-' + (response.type || 'info');
+            inline.innerHTML = '\
+                <div class="feedback-inline-header">' + this.escapeHTML(response.title || 'Feedback recorded') + '</div>\
+                <div class="feedback-inline-message">' + this.escapeHTML(response.message || '') + '</div>\
+                <button class="feedback-inline-close" onclick="this.parentElement.remove()">\u00D7</button>\
+            ';
+
+            // Add to timeline or body
+            var timeline = document.querySelector('.timeline-events') || document.body;
+            timeline.insertBefore(inline, timeline.firstChild);
+
+            // Auto-dismiss after 8 seconds
+            setTimeout(function() {
+                if (inline.parentNode) {
+                    inline.classList.add('feedback-inline-fadeout');
+                    setTimeout(function() {
+                        if (inline.parentNode) {
+                            inline.parentNode.removeChild(inline);
+                        }
+                    }, 500);
+                }
+            }, 8000);
         },
 
         /**
@@ -629,6 +690,69 @@
                     background: #4fc3f7;\
                     color: #1a1a2e;\
                     font-weight: 500;\
+                }\
+                .feedback-inline-response {\
+                    position: relative;\
+                    background: rgba(76, 175, 80, 0.1);\
+                    border-left: 3px solid #4caf50;\
+                    border-radius: 4px;\
+                    padding: 12px 16px;\
+                    margin-bottom: 12px;\
+                    animation: feedbackSlideIn 0.3s ease-out;\
+                }\
+                .feedback-inline-info {\
+                    background: rgba(79, 195, 247, 0.1);\
+                    border-left-color: #4fc3f7;\
+                }\
+                .feedback-inline-adjustment {\
+                    background: rgba(255, 167, 38, 0.1);\
+                    border-left-color: #ffa726;\
+                }\
+                .feedback-inline-header {\
+                    font-weight: 600;\
+                    font-size: 13px;\
+                    color: #eee;\
+                    margin-bottom: 4px;\
+                }\
+                .feedback-inline-message {\
+                    font-size: 12px;\
+                    color: #bbb;\
+                    line-height: 1.4;\
+                }\
+                .feedback-inline-close {\
+                    position: absolute;\
+                    top: 8px;\
+                    right: 8px;\
+                    background: none;\
+                    border: none;\
+                    color: #888;\
+                    font-size: 16px;\
+                    cursor: pointer;\
+                    padding: 4px;\
+                }\
+                .feedback-inline-close:hover {\
+                    color: #fff;\
+                }\
+                .feedback-inline-fadeout {\
+                    animation: feedbackFadeOut 0.5s ease-out forwards;\
+                }\
+                @keyframes feedbackSlideIn {\
+                    from {\
+                        opacity: 0;\
+                        transform: translateY(-10px);\
+                    }\
+                    to {\
+                        opacity: 1;\
+                        transform: translateY(0);\
+                    }\
+                }\
+                @keyframes feedbackFadeOut {\
+                    to {\
+                        opacity: 0;\
+                        max-height: 0;\
+                        margin: 0;\
+                        padding: 0;\
+                    }\
                 }';
             document.head.appendChild(style);
         }

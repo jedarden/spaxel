@@ -20,6 +20,11 @@ type SettingsHandler struct {
 	db   *sql.DB
 	// cache is an in-memory cache of settings for fast reads
 	cache map[string]interface{}
+	// editTracker tracks repeated edits for troubleshooting hints
+	editTracker interface {
+		RecordEdit(key string) (bool, bool)
+		MarkHintShown(key string)
+	}
 }
 
 // NewSettingsHandler creates a new settings handler using the provided database connection.
@@ -34,6 +39,16 @@ func NewSettingsHandler(db *sql.DB) *SettingsHandler {
 		log.Printf("[WARN] Failed to load settings: %v", err)
 	}
 	return s
+}
+
+// SetEditTracker sets the edit tracker for monitoring repeated settings changes.
+func (s *SettingsHandler) SetEditTracker(tracker interface {
+	RecordEdit(key string) (bool, bool)
+	MarkHintShown(key string)
+}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.editTracker = tracker
 }
 
 // NewSettingsHandlerWithPath creates a new settings handler by opening a database
@@ -284,14 +299,40 @@ func (s *SettingsHandler) handleUpdateSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Track edits for troubleshooting hints
+	var hintPending bool
+	s.mu.RLock()
+	tracker := s.editTracker
+	s.mu.RUnlock()
+
+	if tracker != nil {
+		for key := range updates {
+			if pending, _ := tracker.RecordEdit(key); pending {
+				hintPending = true
+			}
+		}
+	}
+
 	if err := s.Update(updates); err != nil {
 		log.Printf("[ERROR] Failed to update settings: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update settings"})
 		return
 	}
 
+	// Get updated settings
+	settings := s.Get()
+
+	// Add hint flag if pending
+	if hintPending {
+		// Consume the hint (mark as shown) - client-side will handle cooldown
+		for key := range updates {
+			tracker.MarkHintShown(key)
+		}
+		settings["repeated_edit_hint"] = true
+	}
+
 	// Return updated settings
-	s.handleGetSettings(w, r)
+	writeJSON(w, http.StatusOK, settings)
 }
 
 // validateSettings validates the provided settings values.

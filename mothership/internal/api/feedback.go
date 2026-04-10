@@ -120,11 +120,29 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Return success response
-	writeJSON(w, map[string]interface{}{
+	// Return success response with inline message
+	response := map[string]interface{}{
 		"ok":     true,
 		"message": "Feedback recorded",
-	})
+	}
+
+	// Add inline response based on feedback type
+	switch req.Type {
+	case "incorrect":
+		response["inline_response"] = map[string]interface{}{
+			"type":    "adjustment",
+			"title":   "Adjusting detection threshold",
+			"message": "I've slightly raised the detection threshold for the contributing links. If this keeps happening at this time of day, my hourly baseline will adapt within a few days. You can also adjust sensitivity manually in Settings.",
+		}
+	case "correct":
+		response["inline_response"] = map[string]interface{}{
+			"type":    "confirmation",
+			"title":   "Thanks for confirming!",
+			"message": "This helps improve detection accuracy over time.",
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 // SubmitFeedback is called by the events handler to process feedback for a specific event.

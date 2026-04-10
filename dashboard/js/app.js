@@ -759,6 +759,34 @@
                 }
                 break;
 
+            case 'quality_drop':
+                // Guided troubleshooting: zone quality degraded
+                if (window.SpaxelTroubleshoot) {
+                    window.SpaxelTroubleshoot.handleEvent('quality_drop', msg);
+                }
+                break;
+
+            case 'repeated_edit':
+                // Guided troubleshooting: settings adjusted repeatedly
+                if (window.SpaxelTroubleshoot) {
+                    window.SpaxelTroubleshoot.handleEvent('repeated_edit', msg);
+                }
+                break;
+
+            case 'calibration_complete':
+                // Guided troubleshooting: baseline calibration complete
+                if (window.SpaxelTroubleshoot) {
+                    window.SpaxelTroubleshoot.handleEvent('calibration_complete', msg);
+                }
+                break;
+
+            case 'node_offline':
+                // Guided troubleshooting: node offline for >2 hours
+                if (window.SpaxelTroubleshoot) {
+                    window.SpaxelTroubleshoot.handleEvent('node_disconnected', msg);
+                }
+                break;
+
             case 'replay_update':
                 // Replay blob updates during time-travel debugging
                 if (msg.blobs && Viz3D.updateReplayBlobs) {

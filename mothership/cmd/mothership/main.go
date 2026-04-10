@@ -38,6 +38,7 @@ import (
 	"github.com/spaxel/mothership/internal/health"
 	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/briefing"
+	guidedtroubleshoot "github.com/spaxel/mothership/internal/guidedtroubleshoot"
 	"github.com/spaxel/mothership/internal/learning"
 	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
@@ -262,6 +263,16 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	json.NewEncoder(w).Encode(v) //nolint:errcheck
 }
 
+// computeZoneQuality calculates the detection quality for a zone.
+// This is a simplified version that aggregates link quality metrics.
+func computeZoneQuality(zone zones.Zone, pm *sigproc.ProcessorManager, hc *health.Checker) float64 {
+	if hc != nil {
+		return hc.GetAmbientConfidence()
+	}
+	// Fallback: return default mid-range quality
+	return 50.0
+}
+
 func findDashboardDir() string {
 	for _, dir := range []string{"./dashboard", "./../dashboard", "/app/dashboard"} {
 		if _, err := os.Stat(dir); err == nil {
@@ -413,6 +424,101 @@ func main() {
 	settingsHandler := api.NewSettingsHandler(mainDB)
 	settingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Settings API registered at /api/settings")
+
+	// Guided troubleshooting manager (for proactive contextual help)
+	// Created after healthChecker since it depends on it
+	var guidedMgr *guidedtroubleshoot.Manager
+	guidedMgr = guidedtroubleshoot.NewManager(guidedtroubleshoot.ManagerConfig{
+		CheckInterval: 5 * time.Minute,
+		GetAllZones: func() ([]guidedtroubleshoot.ZoneInfo, error) {
+			if zonesMgr == nil {
+				return nil, nil
+			}
+			zones, err := zonesMgr.GetAllZones()
+			if err != nil {
+				return nil, err
+			}
+			var result []guidedtroubleshoot.ZoneInfo
+			for _, z := range zones {
+				result = append(result, guidedtroubleshoot.ZoneInfo{
+					ID:          z.ID,
+					Name:        z.Name,
+					Quality:     computeZoneQuality(z, pm, healthChecker),
+					LastUpdated: time.Now(),
+				})
+			}
+			return result, nil
+		},
+		GetNodeLastSeen: func(mac string) time.Time {
+			if fleetReg == nil {
+				return time.Time{}
+			}
+			node, err := fleetReg.GetNode(mac)
+			if err != nil {
+				return time.Time{}
+			}
+			return time.Unix(node.LastSeenMs/1000, 0)
+		},
+	})
+	// Wire up EditTracker to settings handler for repeated-edit hints
+	settingsHandler.SetEditTracker(guidedMgr)
+	// Set up callbacks for WebSocket events
+	guidedMgr.SetOnQualityIssue(func(zoneID int, quality float64) {
+		// Send WebSocket event to dashboard
+		msg := map[string]interface{}{
+			"type":     "quality_drop",
+			"zone_id":  zoneID,
+			"quality":  quality,
+		}
+		if zonesMgr != nil {
+			if zone, err := zonesMgr.GetZoneByID(zoneID); err == nil {
+				msg["zone_name"] = zone.Name
+			}
+		}
+		data, _ := json.Marshal(msg)
+		if dashboardHub != nil {
+			dashboardHub.Broadcast(data)
+		}
+	})
+	guidedMgr.SetOnNodeOffline(func(mac string, offlineDuration time.Duration) {
+		// Send WebSocket event to dashboard
+		msg := map[string]interface{}{
+			"type":             "node_offline",
+			"mac":              mac,
+			"offline_duration": offlineDuration.Seconds(),
+		}
+		if fleetReg != nil {
+			if node, err := fleetReg.GetNode(mac); err == nil {
+				msg["name"] = node.Name
+			}
+		}
+		data, _ := json.Marshal(msg)
+		if dashboardHub != nil {
+			dashboardHub.Broadcast(data)
+		}
+	})
+	guidedMgr.SetOnCalibrationComplete(func(zoneID int, qualityBefore, qualityAfter float64) {
+		// Send WebSocket event to dashboard
+		msg := map[string]interface{}{
+			"type":           "calibration_complete",
+			"zone_id":        zoneID,
+			"quality_before":  qualityBefore,
+			"quality_after":   qualityAfter,
+			"links":          0, // TODO: get actual link count
+		}
+		if zonesMgr != nil {
+			if zone, err := zonesMgr.GetZoneByID(zoneID); err == nil {
+				msg["zone_name"] = zone.Name
+			}
+		}
+		data, _ := json.Marshal(msg)
+		if dashboardHub != nil {
+			dashboardHub.Broadcast(data)
+		}
+	})
+	// Start the guided manager background check loop
+	go guidedMgr.Run(ctx)
+	log.Printf("[INFO] Guided troubleshooting manager initialized")
 
 	// Replay recording store - use recording.Buffer wrapped with replay adapter
 	var replayStore api.RecordingStore
@@ -3104,6 +3210,13 @@ func main() {
 	}
 	feedbackHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Feedback API registered at /api/feedback")
+
+	// Phase 8: Guided troubleshooting API
+	guidedHandler := api.NewGuidedHandler(guidedMgr)
+	guidedHandler.SetZonesHandler(zonesMgr)
+	guidedHandler.SetNodesHandler(fleetReg)
+	guidedHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Guided troubleshooting API registered at /api/guided/*")
 
 	// Phase 6: Detection explainability API
 	explainabilityHandler = explainability.NewHandler()
