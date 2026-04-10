@@ -14,7 +14,7 @@ import (
 
 // WalkerSimulator manages simulated walkers
 type WalkerSimulator struct {
-	walkers     []*Walker
+	walkers     []*SimWalker
 	spaceWidth  float64
 	spaceDepth  float64
 	spaceHeight float64
@@ -23,8 +23,8 @@ type WalkerSimulator struct {
 	csvWriter   *csv.Writer
 }
 
-// Walker represents a simulated person moving through space
-type Walker struct {
+// SimWalker represents a simulated person moving through space
+type SimWalker struct {
 	ID           string
 	Position     [3]float64 // x, y, z in meters
 	Velocity     [3]float64 // vx, vy, vz in m/s
@@ -45,9 +45,9 @@ type WalkerPathPoint struct {
 func NewWalkerSimulator(count int, width, depth, height float64, seed int64) *WalkerSimulator {
 	rng := rand.New(rand.NewSource(seed))
 
-	walkers := make([]*Walker, count)
+	walkers := make([]*SimWalker, count)
 	for i := 0; i < count; i++ {
-		walkers[i] = &Walker{
+		walkers[i] = &SimWalker{
 			ID: fmt.Sprintf("walker-%d", i),
 			Position: [3]float64{
 				width/2 + (rng.Float64()-0.5)*width*0.5,
@@ -119,7 +119,7 @@ func (ws *WalkerSimulator) CloseCSV() error {
 }
 
 // WriteCSVRow writes a row to the CSV file
-func (ws *WalkerSimulator) WriteCSVRow(timestamp time.Time, walker *Walker) error {
+func (ws *WalkerSimulator) WriteCSVRow(timestamp time.Time, walker *SimWalker) error {
 	if ws.csvWriter == nil {
 		return nil
 	}
@@ -147,7 +147,7 @@ func (ws *WalkerSimulator) Update(dt float64) {
 }
 
 // updateWalker updates a single walker's position
-func (ws *WalkerSimulator) updateWalker(w *Walker, dt float64) {
+func (ws *WalkerSimulator) updateWalker(w *SimWalker, dt float64) {
 	// If path is defined, follow path
 	if len(w.path) > 0 {
 		ws.followPath(w, dt)
@@ -197,7 +197,7 @@ func (ws *WalkerSimulator) updateWalker(w *Walker, dt float64) {
 }
 
 // followPath makes a walker follow a predefined path
-func (ws *WalkerSimulator) followPath(w *Walker, dt float64) {
+func (ws *WalkerSimulator) followPath(w *SimWalker, dt float64) {
 	if w.pathIndex >= len(w.path) {
 		w.pathIndex = 0 // Loop back to start
 	}
@@ -238,7 +238,7 @@ func (ws *WalkerSimulator) followPath(w *Walker, dt float64) {
 }
 
 // GetWalkers returns all walkers
-func (ws *WalkerSimulator) GetWalkers() []*Walker {
+func (ws *WalkerSimulator) GetWalkers() []*SimWalker {
 	return ws.walkers
 }
 
@@ -256,7 +256,7 @@ func (ws *WalkerSimulator) GetWalkerPositions() []simulator.Point {
 }
 
 // GetWalkerByID returns a walker by ID
-func (ws *WalkerSimulator) GetWalkerByID(id string) *Walker {
+func (ws *WalkerSimulator) GetWalkerByID(id string) *SimWalker {
 	for _, w := range ws.walkers {
 		if w.ID == id {
 			return w
@@ -320,17 +320,17 @@ func (ws *WalkerSimulator) GeneratePerimeterPath() [][3]float64 {
 }
 
 // GetWalkerSpeed returns the current speed of a walker
-func (w *Walker) GetSpeed() float64 {
+func (w *SimWalker) GetSpeed() float64 {
 	return math.Sqrt(w.Velocity[0]*w.Velocity[0] + w.Velocity[1]*w.Velocity[1] + w.Velocity[2]*w.Velocity[2])
 }
 
 // IsMoving returns true if the walker is moving (speed > threshold)
-func (w *Walker) IsMoving() bool {
+func (w *SimWalker) IsMoving() bool {
 	return w.GetSpeed() > 0.01
 }
 
 // GetPositionAsPoint returns walker position as simulator.Point
-func (w *Walker) GetPositionAsPoint() simulator.Point {
+func (w *SimWalker) GetPositionAsPoint() simulator.Point {
 	return simulator.Point{
 		X: w.Position[0],
 		Y: w.Position[1],
@@ -339,21 +339,21 @@ func (w *Walker) GetPositionAsPoint() simulator.Point {
 }
 
 // SetPosition sets the walker's position
-func (w *Walker) SetPosition(x, y, z float64) {
+func (w *SimWalker) SetPosition(x, y, z float64) {
 	w.Position[0] = x
 	w.Position[1] = y
 	w.Position[2] = z
 }
 
 // SetVelocity sets the walker's velocity
-func (w *Walker) SetVelocity(vx, vy, vz float64) {
+func (w *SimWalker) SetVelocity(vx, vy, vz float64) {
 	w.Velocity[0] = vx
 	w.Velocity[1] = vy
 	w.Velocity[2] = vz
 }
 
 // GetDistanceToNode returns distance from walker to a node position
-func (w *Walker) GetDistanceToNode(nodePos [3]float64) float64 {
+func (w *SimWalker) GetDistanceToNode(nodePos [3]float64) float64 {
 	dx := nodePos[0] - w.Position[0]
 	dy := nodePos[1] - w.Position[1]
 	dz := nodePos[2] - w.Position[2]
@@ -361,8 +361,8 @@ func (w *Walker) GetDistanceToNode(nodePos [3]float64) float64 {
 }
 
 // Clone creates a deep copy of the walker
-func (w *Walker) Clone() *Walker {
-	clone := &Walker{
+func (w *SimWalker) Clone() *SimWalker {
+	clone := &SimWalker{
 		ID:         w.ID,
 		Position:   w.Position,
 		Velocity:   w.Velocity,

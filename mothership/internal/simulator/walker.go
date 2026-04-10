@@ -124,7 +124,7 @@ func (w *Walker) updateRandomWalk(dt float64, space *Space) {
 	w.Position.Y += w.Velocity.Y * dt
 
 	// Get space bounds for collision
-	minX, minY, _, maxX, maxY, maxZ := space.Bounds()
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
 
 	// Bounce off walls (with some margin)
 	margin := 0.2 // 20cm margin

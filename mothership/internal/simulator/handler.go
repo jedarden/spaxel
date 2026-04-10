@@ -136,7 +136,7 @@ func (h *Handler) addWalker(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if walker.Type == "" {
-		walker.Type = WalkerTypeRandom
+		walker.Type = WalkerTypeRandomWalk
 	}
 
 	h.engine.AddWalker(&walker)

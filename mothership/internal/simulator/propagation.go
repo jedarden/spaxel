@@ -282,9 +282,6 @@ func (pm *PropagationModel) GenerateCSIFrame(tx, rx, walker Point, frameNum int)
 	freqFading := 0.8 + 0.4*math.Sin(2*math.Pi*float64(k)/16.0)
 	amplitude := math.Pow(10.0, (amplitudeDBm+30)/20.0) * freqFading
 
-		// Add noise to I and Q components
-		noise := rand.New(rand.NewSource(int64(frameNum*64 + k))).Float64() * 0.1
-
 		// Convert to int8 I/Q (range -128 to 127)
 		amplitude = amplitude / 1000.0 // Scale to reasonable int8 range
 		if amplitude > 1.0 {
@@ -297,8 +294,8 @@ func (pm *PropagationModel) GenerateCSIFrame(tx, rx, walker Point, frameNum int)
 		}
 
 		// Add noise
-		subcarriers[k].I += int8((rand.Float64() - 0.5) * 20)
-		subcarriers[k].Q += int8((rand.Float64() - 0.5) * 20)
+		subcarriers[k].I += int8((mrand.Float64() - 0.5) * 20)
+		subcarriers[k].Q += int8((mrand.Float64() - 0.5) * 20)
 	}
 
 	// Generate MAC addresses (simplified)
@@ -414,7 +411,7 @@ func (pm *PropagationModel) ComputeLinkMetrics(link Link, walkerPositions []Poin
 		// Typical WiFi: packet loss increases below -80 dBm
 		if rssiDBm > -80 {
 			receivedCount++
-		} else if rssiDBm > -90 && rand.Float64() > 0.5 {
+		} else if rssiDBm > -90 && mrand.Float64() > 0.5 {
 			receivedCount++
 		}
 	}

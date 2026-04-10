@@ -7,7 +7,6 @@ package simulator
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"sync"
 	"time"
@@ -37,66 +36,13 @@ const (
 	StateComplete SessionState = "complete"
 )
 
-// Space represents the simulated physical space.
-type Space struct {
-	Width  float64 `json:"width"`  // meters
-	Depth  float64 `json:"depth"`  // meters
-	Height float64 `json:"height"` // meters
-	Walls  []Wall  `json:"walls"`
-}
-
-// Wall represents a wall segment that affects signal propagation.
-type Wall struct {
-	X1     float64 `json:"x1"` // start point (meters)
-	Y1     float64 `json:"y1"`
-	X2     float64 `json:"x2"` // end point (meters)
-	Y2     float64 `json:"y2"`
-	Material string `json:"material"` // "drywall", "brick", "concrete", "glass", "metal"
-}
-
-// Wall attenuation values in dB
-var wallAttenuationDB = map[string]float64{
-	"drywall":  3.0,
-	"brick":    10.0,
-	"concrete": 10.0,
-	"glass":    2.0,
-	"metal":    20.0,
-}
-
 // VirtualNode represents a simulated node.
 type VirtualNode struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Position Vector3 `json:"position"` // x, y, z in meters
-	Role     string  `json:"role"`     // "tx", "rx", "tx_rx"
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Position Point  `json:"position"` // x, y, z in meters
+	Role     string `json:"role"`     // "tx", "rx", "tx_rx"
 }
-
-// Vector3 represents a 3D position.
-type Vector3 struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	Z float64 `json:"z"`
-}
-
-// Walker represents a simulated person moving through the space.
-type Walker struct {
-	ID          string    `json:"id"`
-	Type        WalkerType `json:"type"`
-	Position    Vector3    `json:"position"`
-	Velocity    Vector3    `json:"velocity"`
-	Path        []Vector3  `json:"path,omitempty"`        // for path walks
-	PathIndex   int        `json:"path_index,omitempty"`   // current position in path
-	TargetZones []string   `json:"target_zones,omitempty"` // for zone walks
-}
-
-// WalkerType defines the type of walker movement.
-type WalkerType string
-
-const (
-	WalkerTypeRandom WalkerType = "random"
-	WalkerTypePath   WalkerType = "path"
-	WalkerTypeZone   WalkerType = "zone"
-)
 
 // SimulationParams holds simulation parameters.
 type SimulationParams struct {
@@ -282,11 +228,11 @@ func (s *Session) simulationLoop() {
 // updateWalkerPosition updates a single walker's position based on its type.
 func (s *Session) updateWalkerPosition(walker *Walker) {
 	switch walker.Type {
-	case WalkerTypeRandom:
+	case WalkerTypeRandomWalk:
 		s.updateRandomWalker(walker)
-	case WalkerTypePath:
+	case WalkerTypePathFollow:
 		s.updatePathWalker(walker)
-	case WalkerTypeZone:
+	case WalkerTypeNodeToNode:
 		s.updateZoneWalker(walker)
 	}
 }
@@ -311,21 +257,22 @@ func (s *Session) updateRandomWalker(walker *Walker) {
 		walker.Velocity.Y *= scale
 	}
 
-	// Bounce off walls
-	if walker.Position.X < 0 {
-		walker.Position.X = 0
+	// Bounce off walls using space bounds
+	minX, minY, _, maxX, maxY, _ := s.space.Bounds()
+	if walker.Position.X < minX {
+		walker.Position.X = minX
 		walker.Velocity.X *= -1
 	}
-	if walker.Position.X > s.space.Width {
-		walker.Position.X = s.space.Width
+	if walker.Position.X > maxX {
+		walker.Position.X = maxX
 		walker.Velocity.X *= -1
 	}
-	if walker.Position.Y < 0 {
-		walker.Position.Y = 0
+	if walker.Position.Y < minY {
+		walker.Position.Y = minY
 		walker.Velocity.Y *= -1
 	}
-	if walker.Position.Y > s.space.Depth {
-		walker.Position.Y = s.space.Depth
+	if walker.Position.Y > maxY {
+		walker.Position.Y = maxY
 		walker.Velocity.Y *= -1
 	}
 }
@@ -396,8 +343,8 @@ type SessionSnapshot struct {
 
 // WalkerPosition represents a walker's position at a point in time.
 type WalkerPosition struct {
-	ID       string  `json:"id"`
-	Position Vector3 `json:"position"`
+	ID       string `json:"id"`
+	Position Point  `json:"position"`
 }
 
 // randFloat64 returns a random float64 in [0, 1).

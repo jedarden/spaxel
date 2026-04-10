@@ -438,7 +438,7 @@ func (s *VirtualNodeStore) UpdateSpace(space *Space) error {
 	s.space = space
 
 	// Re-validate all node positions are still within bounds
-	for id, state := range s.nodes {
+	for _, state := range s.nodes {
 		minX, minY, minZ, maxX, maxY, maxZ := s.space.Bounds()
 		if state.Position.X < minX || state.Position.X > maxX ||
 			state.Position.Y < minY || state.Position.Y > maxY ||
@@ -666,8 +666,8 @@ type VirtualNodeSummary struct {
 
 // BoundingBox represents the axis-aligned bounding box of all nodes
 type BoundingBox struct {
-	MinX, minY, minZ float64
-	MaxX, maxY, maxZ float64
+	MinX, MinY, MinZ float64
+	MaxX, MaxY, MaxZ float64
 }
 
 // Summary returns a summary of all nodes in the store

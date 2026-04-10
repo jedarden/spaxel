@@ -153,13 +153,18 @@ func (b *FleetRegistryBridge) RemoveFromRegistry(registry RegistryNodeAdapter, n
 
 // virtualMAC generates a MAC address for a virtual node
 func (b *FleetRegistryBridge) virtualMAC(nodeID string) string {
+	// Hash the string nodeID into a uint32 for MAC generation
+	var h uint32
+	for _, c := range []byte(nodeID) {
+		h = h*31 + uint32(c)
+	}
 	// Use a predictable MAC pattern for virtual nodes
-	// Format: VE:EE:II:II:II:II where VE identifies virtual, II is node ID hash
+	// Format: VE:II:II:II:II where II is node ID hash bytes
 	return fmt.Sprintf("VE:%02X:%02X:%02X:%02X",
-		(nodeID>>24)&0xFF,
-		(nodeID>>16)&0xFF,
-		(nodeID>>8)&0xFF,
-		nodeID&0xFF)
+		(h>>24)&0xFF,
+		(h>>16)&0xFF,
+		(h>>8)&0xFF,
+		h&0xFF)
 }
 
 // VirtualNodeID extracts the virtual node ID from a virtual MAC address

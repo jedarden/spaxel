@@ -625,15 +625,6 @@ func OptimizeNodePositions(space *Space, numNodes int, iterations int) *NodeSet 
 	return bestSet
 }
 
-// GenerateShoppingList creates a shopping list for hardware based on simulation results
-type ShoppingList struct {
-	MinimumNodes      int     `json:"minimum_nodes"`
-	RecommendedNodes  int     `json:"recommended_nodes"`
-	ExpectedAccuracy  float64 `json:"expected_accuracy_m"`
-	CoveragePercent   float64 `json:"coverage_percent"`
-	OptimalPositions  []Point `json:"optimal_positions"`
-}
-
 // GenerateShoppingList creates a shopping list from simulation results
 func GenerateShoppingList(space *Space, currentNodes *NodeSet) *ShoppingList {
 	nodes := currentNodes

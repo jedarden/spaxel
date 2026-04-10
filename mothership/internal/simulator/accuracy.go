@@ -204,7 +204,7 @@ func (re *RecommendationEngine) Generate(space *Space, nodes *NodeSet, gdopMap [
 	}
 
 	// Find worst coverage areas
-	minX, minY, minZ, maxX, maxY, maxZ := space.Bounds()
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
 	if len(gdopMap) > 0 {
 		// Find cells with worst GDOP (highest values, excluding infinity)
 		maxGDOP := 0.0
@@ -222,7 +222,7 @@ func (re *RecommendationEngine) Generate(space *Space, nodes *NodeSet, gdopMap [
 			widthCells := int(math.Ceil((maxX - minX) / 0.2))
 			depthCells := int(math.Ceil((maxY - minY) / 0.2))
 
-			z := worstIdx / (widthCells * depthCells)
+			_ = worstIdx / (widthCells * depthCells) // z-layer index, not used in 2D recommendation
 			remainder := worstIdx % (widthCells * depthCells)
 			x := remainder / depthCells
 			y := remainder % depthCells
@@ -298,12 +298,13 @@ func (re *RecommendationEngine) Generate(space *Space, nodes *NodeSet, gdopMap [
 
 // ShoppingList contains hardware recommendations.
 type ShoppingList struct {
-	MinimumNodes      int     `json:"minimum_nodes"`
-	RecommendedNodes  int     `json:"recommended_nodes"`
-	ExpectedAccuracy  float64 `json:"expected_accuracy_m"`
-	CoveragePercent   float64 `json:"coverage_percent"`
-	HardwareList      []string `json:"hardware_list"`
-	AmazonSearchURL   string  `json:"amazon_search_url"`
+	MinimumNodes     int      `json:"minimum_nodes"`
+	RecommendedNodes int      `json:"recommended_nodes"`
+	ExpectedAccuracy float64  `json:"expected_accuracy_m"`
+	CoveragePercent  float64  `json:"coverage_percent"`
+	HardwareList     []string `json:"hardware_list"`
+	AmazonSearchURL  string   `json:"amazon_search_url"`
+	OptimalPositions []Point  `json:"optimal_positions,omitempty"`
 }
 
 // GenerateShoppingListFromResults creates a shopping list from simulation results.

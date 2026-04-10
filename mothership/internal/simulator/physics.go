@@ -175,7 +175,7 @@ func (pm *PhysicsModel) GenerateSubcarrierCSI(tx, rx, walker Point, nSub int, fr
 
 	for k := 0; k < nSub; k++ {
 		// Compute phase at this subcarrier
-		phase := pm.phaseAtSubcarrier(tx, rx, walker, k, frameNum)
+		phase := pm.PhaseAtSubcarrier(tx, rx, walker, k, frameNum)
 
 		// Add subcarrier-dependent amplitude variation
 		// Simulates frequency-selective fading

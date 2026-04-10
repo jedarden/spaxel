@@ -3,11 +3,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -620,7 +618,6 @@ func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker,
 	defer ticker.Stop()
 
 	frameNum := 0
-	lastHealthTime := time.Now()
 	lastBLETime := time.Now()
 
 	for {
@@ -701,7 +698,6 @@ func updateWalkers(walkers []*Walker, space *Space, rng *rand.Rand) {
 
 		// Random velocity perturbation
 		perturbation := 0.1
-		angle := rng.Float64() * 2 * 3.14159
 		walker.Velocity.X += (rng.Float64() - 0.5) * perturbation
 		walker.Velocity.Y += (rng.Float64() - 0.5) * perturbation
 

@@ -314,7 +314,7 @@ func (e *Engine) updateWalkers() {
 		// Record true position
 		walker.TrueHistory = append(walker.TrueHistory, walker.Position)
 
-		if walker.Type == WalkerTypePath && len(walker.Path) > 0 {
+		if walker.Type == WalkerTypePathFollow && len(walker.Path) > 0 {
 			// Follow path
 			target := walker.Path[walker.PathIndex]
 			dx := target.X - walker.Position.X
