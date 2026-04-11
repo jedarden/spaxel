@@ -62,6 +62,7 @@ func (h *Handler) SetNodeIdentifier(ni NodeIdentifier) {
 //	GET    /api/mode                 — get system mode
 //	POST   /api/mode                 — set system mode
 func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/fleet", h.listFleet) // Extended fleet data with computed fields
 	r.Get("/api/nodes", h.listNodes)
 	r.Get("/api/nodes/{mac}", h.getNode)
 	r.Post("/api/nodes/{mac}/role", h.setNodeRole)
@@ -94,6 +95,99 @@ func (h *Handler) listNodes(w http.ResponseWriter, r *http.Request) {
 		nodes = []NodeRecord{}
 	}
 	writeJSON(w, nodes)
+}
+
+// FleetNode represents extended node data for the fleet page.
+type FleetNode struct {
+	MAC             string  `json:"mac"`
+	Name            string  `json:"name"`
+	Label           string  `json:"label"`
+	Role            string  `json:"role"`
+	Status          string  `json:"status"` // "online", "offline", "updating"
+	FirmwareVersion string  `json:"firmware_version"`
+	ChipModel       string  `json:"chip_model"`
+	PosX            float64 `json:"pos_x"`
+	PosY            float64 `json:"pos_y"`
+	PosZ            float64 `json:"pos_z"`
+	Virtual         bool    `json:"virtual"`
+	HealthScore     float64 `json:"health_score"`
+	// Computed fields
+	LastSeenMS    int64   `json:"last_seen_ms"`
+	UptimeSeconds int64   `json:"uptime_seconds"`
+	PacketRate    float64 `json:"packet_rate"`
+	ConfiguredRate int   `json:"configured_rate"`
+	Temperature   float64 `json:"temperature"`
+	OTAInProgress bool    `json:"ota_in_progress"`
+}
+
+// listFleet returns extended node data with computed fields for the fleet page.
+func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
+	nodes, err := h.mgr.registry.GetAllNodes()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if nodes == nil {
+		nodes = []NodeRecord{}
+	}
+
+	// Get connected MACs for status determination
+	var connectedMACs []string
+	if h.nodeID != nil {
+		connectedMACs = h.nodeID.GetConnectedMACs()
+	}
+	connectedSet := make(map[string]bool)
+	for _, mac := range connectedMACs {
+		connectedSet[mac] = true
+	}
+
+	// Convert to FleetNode with computed fields
+	fleetNodes := make([]FleetNode, 0, len(nodes))
+	now := time.Now()
+	for _, node := range nodes {
+		fleetNode := FleetNode{
+			MAC:             node.MAC,
+			Name:            node.Name,
+			Label:           node.Name, // Label is same as name
+			Role:            node.Role,
+			FirmwareVersion: node.FirmwareVersion,
+			ChipModel:       node.ChipModel,
+			PosX:            node.PosX,
+			PosY:            node.PosY,
+			PosZ:            node.PosZ,
+			Virtual:         node.Virtual,
+			HealthScore:     node.HealthScore,
+			LastSeenMS:      node.LastSeenAt.UnixMilli(),
+			ConfiguredRate:  20, // Default configured rate
+			Temperature:     0,  // Not currently tracked
+		}
+
+		// Determine status
+		if connectedSet[node.MAC] {
+			fleetNode.Status = "online"
+		} else if node.WentOfflineAt.IsZero() {
+			// Never seen online or still in initial state
+			fleetNode.Status = "offline"
+		} else {
+			fleetNode.Status = "offline"
+		}
+
+		// Calculate uptime (time since first seen, approximated as last seen - first seen + current session)
+		if !node.FirstSeenAt.IsZero() && !node.LastSeenAt.IsZero() {
+			// Approximate uptime as time since first seen
+			fleetNode.UptimeSeconds = int64(now.Sub(node.FirstSeenAt).Seconds())
+		}
+
+		// Packet rate - would need to be calculated from recent CSI data
+		// For now, use a reasonable default or calculate from health score
+		if fleetNode.Status == "online" && fleetNode.HealthScore > 0 {
+			fleetNode.PacketRate = fleetNode.HealthScore * 20 // Approximate based on health
+		}
+
+		fleetNodes = append(fleetNodes, fleetNode)
+	}
+
+	writeJSON(w, fleetNodes)
 }
 
 func (h *Handler) getNode(w http.ResponseWriter, r *http.Request) {
@@ -511,12 +605,15 @@ func (h *Handler) triggerNodeOTA(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger OTA if manager is available.
 	if h.otaMgr != nil {
-		version := req.Version
-		if version == "" {
-			// Default to latest version
-			version = h.otaMgr.GetLatestVersion()
+		var err error
+		if req.Version != "" {
+			// Send specific version
+			err = h.otaMgr.SendOTAVersion(mac, req.Version)
+		} else {
+			// Send latest/default OTA
+			err = h.otaMgr.SendOTA(mac)
 		}
-		if err := h.otaMgr.SendOTA(mac, version); err != nil {
+		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to trigger OTA: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -525,7 +622,7 @@ func (h *Handler) triggerNodeOTA(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{
 		"ok":           true,
 		"target_mac":   mac,
-		"target_label": node.Label,
+		"target_label": node.Name,
 		"version":      req.Version,
 	})
 }

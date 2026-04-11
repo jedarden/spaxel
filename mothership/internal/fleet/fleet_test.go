@@ -3,6 +3,9 @@ package fleet
 import (
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/spaxel/mothership/internal/events"
 )
 
 // ─── Test doubles ────────────────────────────────────────────────────────────
