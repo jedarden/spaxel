@@ -3,9 +3,9 @@ package webhook
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,9 +43,8 @@ func TestPublishEvent(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Read and store payload
-		buf := new(strings.Builder)
-		buf.ReadFrom(r.Body)
-		receivedPayload = buf.String()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		receivedPayload = string(bodyBytes)
 
 		receivedContentType = r.Header.Get("Content-Type")
 		receivedEventHeader = r.Header.Get("X-Spaxel-Event")
@@ -239,9 +238,8 @@ func TestTestWebhook(t *testing.T) {
 	var receivedPayload string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf := new(strings.Builder)
-		buf.ReadFrom(r.Body)
-		receivedPayload = buf.String()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		receivedPayload = string(bodyBytes)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
