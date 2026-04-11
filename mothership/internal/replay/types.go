@@ -1,289 +1,240 @@
-// Package replay implements time-travel debugging for CSI data.
-// It provides a replay engine that can seek to any point in the recording
-// buffer and replay CSI frames through a separate signal processing pipeline.
+// Package replay provides time-travel debugging capabilities for CSI data.
+//
+// This file contains types shared across the replay package.
 package replay
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"math"
 	"sync"
 	"time"
 )
 
-// State represents the current replay state
-type State int
+// Session represents a time-travel replay session.
+type Session struct {
+	mu           sync.RWMutex
+	id           string
+	fromMS       int64
+	toMS         int64
+	currentMS    int64
+	speed        int
+	state        SessionState
+	params       *TunableParams
+	created_at   int64
+	updated_at   int64
+	ctx          context.Context
+	cancel       context.CancelFunc
+	stopCh       chan struct{}
+}
+
+// SessionState is the playback state of a session.
+type SessionState string
 
 const (
-	StateStopped State = iota
-	StatePaused
-	StatePlaying
-	StateSeeking
+	StatePaused  SessionState = "paused"
+	StatePlaying SessionState = "playing"
+	StateStopped SessionState = "stopped"
 )
 
-func (s State) String() string {
-	switch s {
-	case StateStopped:
-		return "stopped"
-	case StatePaused:
-		return "paused"
-	case StatePlaying:
-		return "playing"
-	case StateSeeking:
-		return "seeking"
-	default:
-		return "unknown"
-	}
-}
-
-// Session represents a single replay session
-type Session struct {
-	ID            string
-	State         State
-	ReplayPos     time.Time
-	ReplaySpeed   float64
-	From          time.Time
-	To            time.Time
-	Params        *TunableParams
-	mu            sync.Mutex
-	blobChan      chan []BlobUpdate
-	done          chan struct{}
-}
-
-// TunableParams holds algorithm parameters that can be tuned during replay
+// TunableParams holds pipeline parameters that can be tuned during replay.
 type TunableParams struct {
-	DeltaRMSThreshold    *float64  // deltaRMS threshold for motion detection
-	TauS                 *float64  // EMA time constant in seconds
-	FresnelDecay         *float64  // Zone decay function exponent
-	FresnelWeightSigma   *float64  // Gaussian sigma for Fresnel zone contribution
-	MinConfidence        *float64  // Minimum confidence for detection
-	BreathingSensitivity *float64  // Breathing band sensitivity multiplier
-	NSubcarriers        *int      // Number of subcarriers to use
+	DeltaRMSThreshold     *float64 `json:"delta_rms_threshold,omitempty"`
+	TauS                  *float64 `json:"tau_s,omitempty"`
+	FresnelDecay          *float64 `json:"fresnel_decay,omitempty"`
+	NSubcarriers          *int     `json:"n_subcarriers,omitempty"`
+	BreathingSensitivity  *float64 `json:"breathing_sensitivity,omitempty"`
+	FresnelWeightSigma    *float64 `json:"fresnel_weight_sigma,omitempty"`
+	MinConfidence         *float64 `json:"min_confidence,omitempty"`
 }
 
-// DefaultTunableParams returns the default parameters
-func DefaultTunableParams() *TunableParams {
-	motionThreshold := 0.02
-	tauS := 30.0
-	fresnelDecay := 2.0
-	fresnelWeightSigma := 0.1
-	minConfidence := 0.3
-	breathingSensitivity := 1.0
-	nSubcarriers := 16
-
-	return &TunableParams{
-		DeltaRMSThreshold:    &motionThreshold,
-		TauS:                 &tauS,
-		FresnelDecay:         &fresnelDecay,
-		FresnelWeightSigma:   &fresnelWeightSigma,
-		MinConfidence:        &minConfidence,
-		BreathingSensitivity: &breathingSensitivity,
-		NSubcarriers:        &nSubcarriers,
+// NewSession creates a new replay session.
+func NewSession(id string, fromMS, toMS int64) *Session {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Session{
+		id:         id,
+		fromMS:     fromMS,
+		toMS:       toMS,
+		currentMS:  fromMS,
+		speed:      1,
+		state:      StatePaused,
+		params:     &TunableParams{},
+		created_at: time.Now().UnixMilli(),
+		updated_at: time.Now().UnixMilli(),
+		ctx:        ctx,
+		cancel:     cancel,
+		stopCh:     make(chan struct{}),
 	}
 }
 
-// BlobUpdate represents a single blob position update from replay
-type BlobUpdate struct {
-	ID                 int       `json:"id"`
-	X                  float64   `json:"x"`
-	Y                  float64   `json:"y"`
-	Z                  float64   `json:"z"`
-	VX                 float64   `json:"vx"`
-	VY                 float64   `json:"vy"`
-	VZ                 float64   `json:"vz"`
-	Weight             float64   `json:"weight"`
-	Trail              []float64 `json:"trail"` // Flat [x,z,x,z,...]
-	Posture            string    `json:"posture,omitempty"`
-	PersonID           string    `json:"person_id,omitempty"`
-	PersonLabel        string    `json:"person_label,omitempty"`
-	PersonColor        string    `json:"person_color,omitempty"`
-	IdentityConfidence float64   `json:"identity_confidence,omitempty"`
-	IdentitySource     string    `json:"identity_source,omitempty"`
+// ID returns the session ID.
+func (s *Session) ID() string {
+	return s.id
 }
 
-// BlobBroadcaster sends replay blob updates to dashboard clients
-type BlobBroadcaster interface {
-	BroadcastReplayBlobs(blobs []BlobUpdate, timestampMS int64)
+// CurrentMS returns the current playback position.
+func (s *Session) CurrentMS() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.currentMS
 }
 
-// FrameReader reads CSI frames from storage
-type FrameReader interface {
-	SeekToTimestamp(target time.Time) ([]byte, int64, error)
-	GetTimestampRange() (oldest, newest time.Time, err error)
-	ReadFrames(from time.Time, to time.Time, callback func(recvTimeNS int64, frame []byte) bool) error
+// State returns the current session state.
+func (s *Session) State() SessionState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.state
 }
 
-// Engine manages replay sessions and coordinates replay operations
-type Engine struct {
-	mu            sync.RWMutex
-	sessions      map[string]*Session
-	frameReader   FrameReader
-	broadcaster   BlobBroadcaster
-	nextSessionID int64
+// Speed returns the current playback speed.
+func (s *Session) Speed() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.speed
 }
 
-// NewEngine creates a new replay engine
-func NewEngine(reader FrameReader, broadcaster BlobBroadcaster) *Engine {
-	return &Engine{
-		sessions:    make(map[string]*Session),
-		frameReader: reader,
-		broadcaster: broadcaster,
-	}
+// Params returns the current tunable parameters.
+func (s *Session) Params() *TunableParams {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.params
 }
 
-// StartSession starts a new replay session
-func (e *Engine) StartSession(from, to time.Time) (*Session, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	// Validate time range
-	oldest, newest, err := e.frameReader.GetTimestampRange()
-	if err != nil {
-		return nil, err
-	}
-
-	if from.Before(oldest) {
-		from = oldest
-	}
-	if to.After(newest) {
-		to = newest
-	}
-	if from.After(to) {
-		from, to = to, from
-	}
-
-	e.nextSessionID++
-	sessionID := generateSessionID(e.nextSessionID)
-
-	sess := &Session{
-		ID:          sessionID,
-		State:       StatePaused,
-		ReplayPos:   from,
-		ReplaySpeed: 1.0,
-		From:        from,
-		To:          to,
-		Params:      DefaultTunableParams(),
-		blobChan:    make(chan []BlobUpdate, 10),
-		done:        make(chan struct{}),
-	}
-
-	e.sessions[sessionID] = sess
-
-	// Start the replay goroutine
-	go sess.run()
-
-	return sess, nil
+// SetParams updates the tunable parameters.
+func (s *Session) SetParams(params *TunableParams) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.params = params
+	s.updated_at = time.Now().UnixMilli()
 }
 
-// GetSession retrieves a session by ID
-func (e *Engine) GetSession(id string) (*Session, bool) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	sess, ok := e.sessions[id]
-	return sess, ok
-}
+// Seek moves the replay position to the target timestamp.
+func (s *Session) Seek(targetMS int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-// StopSession stops and removes a session
-func (e *Engine) StopSession(id string) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	sess, ok := e.sessions[id]
-	if !ok {
-		return ErrSessionNotFound
+	if targetMS < s.fromMS || targetMS > s.toMS {
+		return fmt.Errorf("seek target %d out of range [%d, %d]", targetMS, s.fromMS, s.toMS)
 	}
 
-	close(sess.done)
-	delete(e.sessions, id)
+	s.currentMS = targetMS
+	s.updated_at = time.Now().UnixMilli()
 	return nil
 }
 
-// run is the main replay loop for a session
-func (s *Session) run() {
+// Play starts playback at the specified speed.
+func (s *Session) Play(speed int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if speed < 1 || speed > 5 {
+		return fmt.Errorf("invalid speed: %d (must be 1-5)", speed)
+	}
+
+	s.state = StatePlaying
+	s.speed = speed
+	s.updated_at = time.Now().UnixMilli()
+
+	// Start playback goroutine if not already running
+	go s.playbackLoop()
+
+	return nil
+}
+
+// Pause pauses playback.
+func (s *Session) Pause() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.state = StatePaused
+	s.updated_at = time.Now().UnixMilli()
+	return nil
+}
+
+// Stop stops playback and terminates the session.
+func (s *Session) Stop() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.state = StateStopped
+	s.cancel()
+	close(s.stopCh)
+	s.updated_at = time.Now().UnixMilli()
+	return nil
+}
+
+// playbackLoop is the main playback loop.
+func (s *Session) playbackLoop() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-s.done:
+		case <-s.ctx.Done():
+			return
+		case <-s.stopCh:
 			return
 		case <-ticker.C:
 			s.mu.Lock()
-			if s.State == StatePlaying {
-				// Advance replay position
-				dt := time.Duration(float64(100*time.Millisecond) * s.ReplaySpeed)
-				s.ReplayPos = s.ReplayPos.Add(dt)
-
-				// Check if we've reached the end
-				if s.ReplayPos.After(s.To) {
-					s.State = StatePaused
-					s.ReplayPos = s.To
-				}
+			if s.state != StatePlaying {
+				s.mu.Unlock()
+				continue
 			}
+
+			// Advance position based on speed
+			dt := int64(100 * time.Millisecond.Milliseconds() * int64(s.speed))
+			s.currentMS += dt
+
+			// Check if we've reached the end
+			if s.currentMS >= s.toMS {
+				s.state = StatePaused
+				s.currentMS = s.toMS
+				s.mu.Unlock()
+				return
+			}
+
+			s.updated_at = time.Now().UnixMilli()
 			s.mu.Unlock()
+
+			// Emit frames for the current window
+			s.emitFrames()
 		}
 	}
 }
 
-// Seek moves the replay position to the target time
-func (s *Session) Seek(target time.Time) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.State = StateSeeking
-	s.ReplayPos = target
-	s.State = StatePaused
-
-	return nil
+// emitFrames reads and processes frames for the current position.
+func (s *Session) emitFrames() {
+	// This would read frames from the store and emit them
+	// For now, it's a placeholder
 }
 
-// Play starts playback at the specified speed
-func (s *Session) Play(speed float64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// ToJSON converts the session to JSON for storage.
+func (s *Session) ToJSON() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	s.State = StatePlaying
-	s.ReplaySpeed = speed
+	data := map[string]interface{}{
+		"id":         s.id,
+		"state":      s.state,
+		"from_ms":    s.fromMS,
+		"to_ms":      s.toMS,
+		"current_ms": s.currentMS,
+		"speed":      s.speed,
+		"created_at": s.created_at,
+		"updated_at": s.updated_at,
+	}
 
-	return nil
-}
+	if s.params != nil {
+		data["params"] = s.params
+	}
 
-// Pause pauses playback
-func (s *Session) Pause() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
 
-	s.State = StatePaused
-	return nil
-}
-
-// SetParams updates the tunable parameters
-func (s *Session) SetParams(params *TunableParams) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.Params = params
-	return nil
-}
-
-// SetSpeed updates the replay speed
-func (s *Session) SetSpeed(speed float64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.ReplaySpeed = speed
-	return nil
-}
-
-// GetPosition returns the current replay position
-func (s *Session) GetPosition() time.Time {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.ReplayPos
-}
-
-// GetState returns the current replay state
-func (s *Session) GetState() State {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.State
+	return string(bytes), nil
 }
 
 // Errors
@@ -302,8 +253,38 @@ func (e *ReplayError) Error() string {
 	return e.Message
 }
 
-// generateSessionID generates a unique session ID
-func generateSessionID(n int64) string {
-	// Simple session ID generation
-	return time.Now().Format("20060102-150405") + "-" + string(rune('A'+(n%26)))
+// Helper functions for math operations
+func clamp(v, min, max float64) float64 {
+	return math.Max(min, math.Min(max, v))
+}
+
+func abs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// BlobBroadcaster broadcasts replay blob results to dashboard clients.
+type BlobBroadcaster interface {
+	BroadcastReplayBlobs(blobs []BlobUpdate, timestampMS int64)
+}
+
+// BlobUpdate represents a blob position during replay.
+type BlobUpdate struct {
+	ID                 int       `json:"id"`
+	X                  float64   `json:"x"`
+	Y                  float64   `json:"y"`
+	Z                  float64   `json:"z"`
+	VX                 float64   `json:"vx"`
+	VY                 float64   `json:"vy"`
+	VZ                 float64   `json:"vz"`
+	Weight             float64   `json:"weight"`
+	Posture            string    `json:"posture,omitempty"`
+	PersonID           string    `json:"person_id,omitempty"`
+	PersonLabel        string    `json:"person_label,omitempty"`
+	PersonColor        string    `json:"person_color,omitempty"`
+	IdentityConfidence float64   `json:"identity_confidence,omitempty"`
+	IdentitySource     string    `json:"identity_source,omitempty"`
+	Trail              []float64 `json:"trail,omitempty"` // [x,z,x,z,...]
 }

@@ -91,7 +91,7 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 	}
 
 	// Get event details for logging
-	var eventType, zone, person string
+	var zone, person string
 	var detailJSON string
 
 	if req.EventID > 0 {
@@ -172,8 +172,6 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 
 			// Fetch explainability for this blob
 			// We'll use the blob ID to get the explanation
-			expURL := "/api/explain/" + strconv.Itoa(req.BlobID) + "/at/" + strconv.FormatInt(timestamp, 10)
-
 			// Get explanation from the handler directly
 			if exp := h.getExplainabilityForBlob(req.BlobID, timestamp); exp != nil {
 				// Build explainability response

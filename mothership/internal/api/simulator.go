@@ -412,7 +412,6 @@ func (h *SimulatorHandler) ComputeGDOP(w http.ResponseWriter, r *http.Request) {
 	h.mu.RLock()
 	space := h.space
 	nodes := h.nodes
-	walkers := h.walkers
 	h.mu.RUnlock()
 
 	if nodes.Count() < 2 {

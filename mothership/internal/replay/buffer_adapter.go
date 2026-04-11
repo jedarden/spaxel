@@ -47,6 +47,12 @@ func (a *BufferAdapter) ScanRange(fromNS, toNS int64, fn func(recvTimeNS int64, 
 	return a.buf.ScanRange(from, to, fn)
 }
 
+// Append appends a raw CSI frame to the underlying recording buffer.
+// This implements the ingestion.ReplayAppender interface.
+func (a *BufferAdapter) Append(recvTimeNS int64, rawFrame []byte) error {
+	return a.buf.Append(recvTimeNS, rawFrame)
+}
+
 // Close closes the underlying recording buffer.
 func (a *BufferAdapter) Close() error {
 	return a.buf.Close()

@@ -2,7 +2,6 @@
 package api
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
@@ -322,7 +321,7 @@ func (h *PredictionHandler) getHorizonPredictions(w http.ResponseWriter, r *http
 		}
 	}
 
-	horizon := time.Duration(horizonMin) * time.Minute
+	_ = time.Duration(horizonMin) * time.Minute // horizon variable (unused but kept for context)
 	predictions := h.horizonPredictor.UpdateAllPredictions()
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -368,18 +367,6 @@ func (h *PredictionHandler) getHorizonPrediction(w http.ResponseWriter, r *http.
 	prediction := h.horizonPredictor.PredictAtHorizon(personID, currentZone, horizon)
 
 	writeJSON(w, http.StatusOK, prediction)
-}
-
-// writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v) //nolint:errcheck
-}
-
-// writeJSONError writes a JSON error response.
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]interface{}{"error": message})
 }
 
 // LogPredictionAccuracy logs the current prediction accuracy for monitoring.

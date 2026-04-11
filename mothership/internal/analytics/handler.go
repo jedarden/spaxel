@@ -60,7 +60,11 @@ func (h *Handler) handleGetFlow(w http.ResponseWriter, r *http.Request) {
 		until = time.Now()
 	}
 
-	flowMap, err := h.accumulator.GetFlowMap(personID, since, until)
+	var personIDPtr *string
+	if personID != "" {
+		personIDPtr = &personID
+	}
+	flowMap, err := h.accumulator.ComputeFlowMap(personIDPtr, &since, &until)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -80,7 +84,11 @@ func (h *Handler) handleGetDwell(w http.ResponseWriter, r *http.Request) {
 
 	personID := r.URL.Query().Get("person_id")
 
-	heatmap, err := h.accumulator.GetDwellHeatmap(personID)
+	var personIDPtr *string
+	if personID != "" {
+		personIDPtr = &personID
+	}
+	heatmap, err := h.accumulator.ComputeDwellHeatmap(personIDPtr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

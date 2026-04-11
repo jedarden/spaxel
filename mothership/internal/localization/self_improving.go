@@ -3,6 +3,7 @@ package localization
 
 import (
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -58,11 +59,11 @@ type SelfImprovingLocalizer struct {
 	mu sync.RWMutex
 
 	// Core components
-	engine              *Engine
-	weightLearner       *WeightLearner
-	weightStore         *WeightStore
-	spatialWeightLearner *SpatialWeightLearner
-	groundTruthProvider GroundTruthProvider
+	engine                *Engine
+	weightLearner         *WeightLearner
+	weightStore           *WeightStore
+	spatialWeightLearner  *SpatialWeightLearner
+	groundTruthProvider   GroundTruthSource
 
 	// Configuration
 	config SelfImprovingLocalizerConfig
@@ -93,19 +94,22 @@ func NewSelfImprovingLocalizer(config SelfImprovingLocalizerConfig) *SelfImprovi
 	// Create fusion engine
 	engine := NewEngine(config.RoomWidth, config.RoomDepth, config.OriginX, config.OriginZ)
 
-	// Create weight learner
-	weightLearner := NewWeightLearner(WeightLearnerConfig{
-		LearningRate:         config.LearningRate,
-		Regularization:       config.Regularization,
-		MinZoneSamples:       config.MinZoneSamples,
-		ValidationBatchSize:  config.ValidationBatchSize,
-		ImprovementThreshold: config.ImprovementThreshold,
-		MinWeight:            config.MinWeight,
-		MaxWeight:            config.MaxWeight,
-	})
-
 	// Create BLE ground truth provider
 	groundTruthProvider := NewBLEGroundTruthProvider(config.BLEConfig)
+
+	// Create weight learner with proper config
+	weightLearner := NewWeightLearner(groundTruthProvider, engine, WeightLearnerConfig{
+		LearningRate:        config.LearningRate,
+		MinSamples:          config.MinZoneSamples,
+		MaxErrorDistance:    2.0, // Default max error distance
+		RewardThreshold:     0.5, // Default reward threshold
+		PenaltyThreshold:    1.5, // Default penalty threshold
+		MinWeight:           config.MinWeight,
+		MaxWeight:           config.MaxWeight,
+		SigmaAdjustmentRate: 0.02,
+		MinSigma:            0.5,
+		MaxSigma:            2.0,
+	})
 
 	return &SelfImprovingLocalizer{
 		engine:              engine,
@@ -242,21 +246,40 @@ func (s *SelfImprovingLocalizer) adjustWeights() {
 		s.engine.SetLearnedWeights(weights)
 	}
 
-	// Collect samples for weight adjustment
-	var samples []GroundTruthSample
+	// Get last fusion result
+	lastResult := s.engine.LastResult()
+	if lastResult == nil || len(lastResult.Peaks) == 0 {
+		return // No fusion result available
+	}
+
+	// For each ground truth position, record the prediction
 	for entityID, gtPos := range allGT {
 		if gtPos.Confidence < s.config.MinBLEConfidence {
 			continue
 		}
 
-		// Get corresponding blob position from last fusion
-		lastResult := s.engine.LastResult()
-		if lastResult == nil || len(lastResult.Peaks) == 0 {
-			continue
-		}
+		// Record the prediction with the entity ID
+		// Note: LinkStates not available from FusionResult, passing nil for now
+		s.weightLearner.RecordPrediction(lastResult.Peaks, nil, entityID)
+	}
 
+	// Process learning - this will match predictions with ground truth
+	if err := s.weightLearner.ProcessLearning(); err != nil {
+		log.Printf("[WARN] Failed to process learning: %v", err)
+		return
+	}
+
+	s.sampleCount += len(allGT)
+	s.adjustCount++
+	s.lastAdjust = time.Now()
+
+	log.Printf("[DEBUG] Weight adjustment #%d: processed %d ground truth positions (total: %d)",
+		s.adjustCount, len(allGT), s.sampleCount)
+
+	// Record improvement snapshot
+	var samples []GroundTruthSample
+	for entityID, gtPos := range allGT {
 		// Find nearest peak to ground truth position
-		var nearestPeak *[3]float64
 		minDist := math.MaxFloat64
 		for _, peak := range lastResult.Peaks {
 			dx := peak[0] - gtPos.X
@@ -264,52 +287,18 @@ func (s *SelfImprovingLocalizer) adjustWeights() {
 			dist := math.Sqrt(dx*dx + dz*dz)
 			if dist < minDist {
 				minDist = dist
-				nearestPeak = &[3]float64{peak[0], peak[1], peak[2]}
 			}
 		}
 
-		if nearestPeak == nil || minDist > s.config.MaxBLEBlobDistance {
-			continue // No matching blob
-		}
-
-		// Create sample
-		// Note: We don't have per-link deltas here, so we create a placeholder
 		sample := GroundTruthSample{
 			Timestamp:     time.Now(),
 			PersonID:      entityID,
 			BLEPosition:   Vec3{X: gtPos.X, Y: gtPos.Y, Z: gtPos.Z},
-			BlobPosition:  Vec3{X: nearestPeak[0], Y: nearestPeak[1], Z: nearestPeak[2]},
 			PositionError: minDist,
-			PerLinkDeltas: make(map[string]float64), // Would be filled by actual link data
-			PerLinkHealth: make(map[string]float64),
 			BLEConfidence: gtPos.Confidence,
 		}
-
-		// Compute zone grid
-		sample.ZoneGridX, sample.ZoneGridY = ComputeZoneGrid(gtPos.X, gtPos.Z)
-
 		samples = append(samples, sample)
 	}
-
-	if len(samples) == 0 {
-		return
-	}
-
-	// Process samples through weight learner
-	for _, sample := range samples {
-		if err := s.weightLearner.ProcessSample(sample); err != nil {
-			log.Printf("[WARN] Failed to process sample: %v", err)
-		}
-	}
-
-	s.sampleCount += len(samples)
-	s.adjustCount++
-	s.lastAdjust = time.Now()
-
-	log.Printf("[DEBUG] Weight adjustment #%d: processed %d samples (total: %d)",
-		s.adjustCount, len(samples), s.sampleCount)
-
-	// Record improvement snapshot
 	s.recordImprovementSnapshot(samples)
 
 	// Persist weights if store is available
@@ -439,7 +428,7 @@ func (s *SelfImprovingLocalizer) GetImprovementHistory() []interface{} {
 }
 
 // GetGroundTruthProvider returns the ground truth provider
-func (s *SelfImprovingLocalizer) GetGroundTruthProvider() GroundTruthProvider {
+func (s *SelfImprovingLocalizer) GetGroundTruthProvider() GroundTruthSource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.groundTruthProvider

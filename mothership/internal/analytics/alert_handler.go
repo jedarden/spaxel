@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/spaxel/mothership/internal/events"
-	"github.com/spaxel/mothership/internal/notify"
 )
 
 // NotificationAlertHandler implements AlertHandler using a notification service.
@@ -24,7 +23,11 @@ type NotificationAlertHandler struct {
 // NotificationService is the interface needed from the notify package.
 type NotificationService interface {
 	Send(notif Notification) error
-	GenerateFloorPlanThumbnail(width, height int, blobs []notify.FloorPlanBlob) ([]byte, error)
+	GenerateFloorPlanThumbnail(width, height int, blobs []struct {
+		X, Y, Z   float64
+		Identity  string
+		IsFall    bool
+	}) ([]byte, error)
 }
 
 // Notification represents a notification to send.
@@ -60,7 +63,11 @@ func (h *NotificationAlertHandler) SetEscalationURL(url string) {
 // SendAlert sends an alert notification.
 func (h *NotificationAlertHandler) SendAlert(event events.AnomalyEvent, immediate bool) error {
 	// Generate floor plan thumbnail
-	thumbnail, err := h.notifyService.GenerateFloorPlanThumbnail(400, 300, []notify.FloorPlanBlob{
+	thumbnail, err := h.notifyService.GenerateFloorPlanThumbnail(400, 300, []struct {
+		X, Y, Z   float64
+		Identity  string
+		IsFall    bool
+	}{
 		{
 			X:        event.Position.X,
 			Y:        event.Position.Y,

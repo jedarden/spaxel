@@ -3,7 +3,9 @@ package notifications
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -68,17 +70,67 @@ func TestPushoverSendBasic(t *testing.T) {
 		t.Fatal("No body received")
 	}
 
-	bodyStr := string(receivedBody)
-	if !strings.Contains(bodyStr, "message=") {
-		t.Errorf("Body should contain 'message=', got: %s", bodyStr)
+	// Parse multipart form data to verify fields
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("Failed to parse content type: %v", err)
+	}
+	boundary := params["boundary"]
+
+	reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+	if reader == nil {
+		t.Fatal("Failed to create multipart reader")
 	}
 
-	if !strings.Contains(bodyStr, "token=test-app-token") {
-		t.Errorf("Body should contain 'token=test-app-token', got: %s", bodyStr)
+	foundMessage := false
+	foundToken := false
+	foundUser := false
+
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read part: %v", err)
+		}
+
+		fieldName := part.FormName()
+		if fieldName == "" {
+			continue
+		}
+
+		value, _ := io.ReadAll(part)
+		valueStr := string(value)
+
+		switch fieldName {
+		case "message":
+			foundMessage = true
+			if valueStr != "Test message" {
+				t.Errorf("Message = %s, want 'Test message'", valueStr)
+			}
+		case "token":
+			foundToken = true
+			if valueStr != "test-app-token" {
+				t.Errorf("Token = %s, want 'test-app-token'", valueStr)
+			}
+		case "user":
+			foundUser = true
+			if valueStr != "test-user-key" {
+				t.Errorf("User = %s, want 'test-user-key'", valueStr)
+			}
+		}
+		part.Close()
 	}
 
-	if !strings.Contains(bodyStr, "user=test-user-key") {
-		t.Errorf("Body should contain 'user=test-user-key', got: %s", bodyStr)
+	if !foundMessage {
+		t.Error("Body should contain message field")
+	}
+	if !foundToken {
+		t.Error("Body should contain token field")
+	}
+	if !foundUser {
+		t.Error("Body should contain user field")
 	}
 
 	if !strings.HasPrefix(contentType, "multipart/form-data") {
@@ -89,7 +141,9 @@ func TestPushoverSendBasic(t *testing.T) {
 // TestPushoverSendWithTitle tests sending a message with title.
 func TestPushoverSendWithTitle(t *testing.T) {
 	var receivedBody []byte
+	var contentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -108,9 +162,40 @@ func TestPushoverSendWithTitle(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 
-	bodyStr := string(receivedBody)
-	if !strings.Contains(bodyStr, "title=Test+Title") {
-		t.Errorf("Body should contain 'title=Test+Title', got: %s", bodyStr)
+	// Parse multipart form data to verify title field
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("Failed to parse content type: %v", err)
+	}
+	boundary := params["boundary"]
+
+	reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+	if reader == nil {
+		t.Fatal("Failed to create multipart reader")
+	}
+
+	foundTitle := false
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read part: %v", err)
+		}
+
+		if part.FormName() == "title" {
+			foundTitle = true
+			value, _ := io.ReadAll(part)
+			if string(value) != "Test Title" {
+				t.Errorf("Title = %s, want 'Test Title'", string(value))
+			}
+		}
+		part.Close()
+	}
+
+	if !foundTitle {
+		t.Error("Body should contain title field")
 	}
 }
 
@@ -119,9 +204,11 @@ func TestPushoverSendWithPriority(t *testing.T) {
 	priorities := []int{-2, -1, 0, 1, 2}
 
 	for _, priority := range priorities {
-		t.Run(string(rune('0'+priority+2)), func(t *testing.T) {
+		t.Run(fmt.Sprintf("priority_%d", priority), func(t *testing.T) {
 			var receivedBody []byte
+			var contentType string
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				contentType = r.Header.Get("Content-Type")
 				receivedBody, _ = io.ReadAll(r.Body)
 				w.WriteHeader(http.StatusOK)
 			}))
@@ -141,10 +228,41 @@ func TestPushoverSendWithPriority(t *testing.T) {
 				t.Fatalf("Send() error = %v", err)
 			}
 
-			bodyStr := string(receivedBody)
-			expectedPriority := "priority=" + string(rune('0'+priority))
-			if !strings.Contains(bodyStr, expectedPriority) {
-				t.Errorf("Body should contain '%s', got: %s", expectedPriority, bodyStr)
+			// Parse multipart form data to verify priority field
+			_, params, err := mime.ParseMediaType(contentType)
+			if err != nil {
+				t.Fatalf("Failed to parse content type: %v", err)
+			}
+			boundary := params["boundary"]
+
+			reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+			if reader == nil {
+				t.Fatal("Failed to create multipart reader")
+			}
+
+			foundPriority := false
+			for {
+				part, err := reader.NextPart()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatalf("Failed to read part: %v", err)
+				}
+
+				if part.FormName() == "priority" {
+					foundPriority = true
+					value, _ := io.ReadAll(part)
+					expected := fmt.Sprintf("%d", priority)
+					if string(value) != expected {
+						t.Errorf("Priority = %s, want %s", string(value), expected)
+					}
+				}
+				part.Close()
+			}
+
+			if !foundPriority {
+				t.Error("Body should contain priority field")
 			}
 		})
 	}
@@ -235,7 +353,9 @@ func TestPushoverSendInvalidPNG(t *testing.T) {
 // TestPushoverEmergencySettings tests emergency priority settings.
 func TestPushoverEmergencySettings(t *testing.T) {
 	var receivedBody []byte
+	var contentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -256,17 +376,67 @@ func TestPushoverEmergencySettings(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 
-	bodyStr := string(receivedBody)
-	if !strings.Contains(bodyStr, "priority=2") {
-		t.Errorf("Body should contain 'priority=2', got: %s", bodyStr)
+	// Parse multipart form data to verify emergency settings
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("Failed to parse content type: %v", err)
+	}
+	boundary := params["boundary"]
+
+	reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+	if reader == nil {
+		t.Fatal("Failed to create multipart reader")
 	}
 
-	if !strings.Contains(bodyStr, "retry=60") {
-		t.Errorf("Body should contain 'retry=60', got: %s", bodyStr)
+	foundPriority := false
+	foundRetry := false
+	foundExpire := false
+
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read part: %v", err)
+		}
+
+		fieldName := part.FormName()
+		if fieldName == "" {
+			continue
+		}
+
+		value, _ := io.ReadAll(part)
+		valueStr := string(value)
+
+		switch fieldName {
+		case "priority":
+			foundPriority = true
+			if valueStr != "2" {
+				t.Errorf("Priority = %s, want '2'", valueStr)
+			}
+		case "retry":
+			foundRetry = true
+			if valueStr != "60" {
+				t.Errorf("Retry = %s, want '60'", valueStr)
+			}
+		case "expire":
+			foundExpire = true
+			if valueStr != "3600" {
+				t.Errorf("Expire = %s, want '3600'", valueStr)
+			}
+		}
+		part.Close()
 	}
 
-	if !strings.Contains(bodyStr, "expire=3600") {
-		t.Errorf("Body should contain 'expire=3600', got: %s", bodyStr)
+	if !foundPriority {
+		t.Error("Body should contain priority field")
+	}
+	if !foundRetry {
+		t.Error("Body should contain retry field")
+	}
+	if !foundExpire {
+		t.Error("Body should contain expire field")
 	}
 }
 
@@ -363,7 +533,9 @@ func TestPushoverSetters(t *testing.T) {
 // TestPushoverClientDefaults tests that client defaults are used.
 func TestPushoverClientDefaults(t *testing.T) {
 	var receivedBody []byte
+	var contentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -384,17 +556,67 @@ func TestPushoverClientDefaults(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 
-	bodyStr := string(receivedBody)
-	if !strings.Contains(bodyStr, "title=Default+Title") {
-		t.Errorf("Body should contain default title, got: %s", bodyStr)
+	// Parse multipart form data to verify defaults
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("Failed to parse content type: %v", err)
+	}
+	boundary := params["boundary"]
+
+	reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+	if reader == nil {
+		t.Fatal("Failed to create multipart reader")
 	}
 
-	if !strings.Contains(bodyStr, "device=default-device") {
-		t.Errorf("Body should contain default device, got: %s", bodyStr)
+	foundTitle := false
+	foundDevice := false
+	foundSound := false
+
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read part: %v", err)
+		}
+
+		fieldName := part.FormName()
+		if fieldName == "" {
+			continue
+		}
+
+		value, _ := io.ReadAll(part)
+		valueStr := string(value)
+
+		switch fieldName {
+		case "title":
+			foundTitle = true
+			if valueStr != "Default Title" {
+				t.Errorf("Title = %s, want 'Default Title'", valueStr)
+			}
+		case "device":
+			foundDevice = true
+			if valueStr != "default-device" {
+				t.Errorf("Device = %s, want 'default-device'", valueStr)
+			}
+		case "sound":
+			foundSound = true
+			if valueStr != "alarm" {
+				t.Errorf("Sound = %s, want 'alarm'", valueStr)
+			}
+		}
+		part.Close()
 	}
 
-	if !strings.Contains(bodyStr, "sound=alarm") {
-		t.Errorf("Body should contain default sound, got: %s", bodyStr)
+	if !foundTitle {
+		t.Error("Body should contain title field with default")
+	}
+	if !foundDevice {
+		t.Error("Body should contain device field with default")
+	}
+	if !foundSound {
+		t.Error("Body should contain sound field with default")
 	}
 }
 
@@ -440,7 +662,9 @@ func TestAttachPNGBase64(t *testing.T) {
 // TestPushoverSendWithAllOptions tests sending with all optional fields.
 func TestPushoverSendWithAllOptions(t *testing.T) {
 	var receivedBody []byte
+	var contentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -465,23 +689,62 @@ func TestPushoverSendWithAllOptions(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 
-	bodyStr := string(receivedBody)
+	// Parse multipart form data to verify all fields
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("Failed to parse content type: %v", err)
+	}
+	boundary := params["boundary"]
 
-	fields := map[string]string{
-		"message":    "Full+message",
-		"title":      "Full+Title",
-		"priority":   "1",
-		"device":     "iphone",
-		"url":        "https://example.com",
-		"url_title":  "Example+Site",
-		"sound":      "cosmic",
-		"timestamp":  "1234567890",
+	reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+	if reader == nil {
+		t.Fatal("Failed to create multipart reader")
 	}
 
-	for field, expected := range fields {
-		if !strings.Contains(bodyStr, field+"="+expected) &&
-		   !strings.Contains(bodyStr, field+"="+strings.ReplaceAll(expected, " ", "+")) {
-			t.Errorf("Body should contain '%s=%s', got: %s", field, expected, bodyStr)
+	fields := map[string]string{
+		"message":   "Full message",
+		"title":     "Full Title",
+		"priority":  "1",
+		"device":    "iphone",
+		"url":       "https://example.com",
+		"url_title": "Example Site",
+		"sound":     "cosmic",
+		"timestamp": "1234567890",
+	}
+
+	foundFields := make(map[string]bool)
+
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read part: %v", err)
+		}
+
+		fieldName := part.FormName()
+		if fieldName == "" {
+			part.Close()
+			continue
+		}
+
+		value, _ := io.ReadAll(part)
+		valueStr := string(value)
+
+		if expected, ok := fields[fieldName]; ok {
+			if valueStr != expected {
+				t.Errorf("%s = %s, want %s", fieldName, valueStr, expected)
+			}
+			foundFields[fieldName] = true
+		}
+		part.Close()
+	}
+
+	// Verify all expected fields were found
+	for field := range fields {
+		if !foundFields[field] {
+			t.Errorf("Body should contain %s field", field)
 		}
 	}
 }
@@ -489,7 +752,9 @@ func TestPushoverSendWithAllOptions(t *testing.T) {
 // TestPushoverRetryExpireClamping tests retry and expire clamping.
 func TestPushoverRetryExpireClamping(t *testing.T) {
 	var receivedBody []byte
+	var contentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -510,16 +775,58 @@ func TestPushoverRetryExpireClamping(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 
-	bodyStr := string(receivedBody)
+	// Parse multipart form data to verify clamping
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("Failed to parse content type: %v", err)
+	}
+	boundary := params["boundary"]
 
-	// Retry should be clamped to 30
-	if !strings.Contains(bodyStr, "retry=30") {
-		t.Errorf("Retry should be clamped to 30, got: %s", bodyStr)
+	reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+	if reader == nil {
+		t.Fatal("Failed to create multipart reader")
 	}
 
-	// Expire should be clamped to 10800
-	if !strings.Contains(bodyStr, "expire=10800") {
-		t.Errorf("Expire should be clamped to 10800, got: %s", bodyStr)
+	foundRetry := false
+	foundExpire := false
+
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read part: %v", err)
+		}
+
+		fieldName := part.FormName()
+		if fieldName == "" {
+			continue
+		}
+
+		value, _ := io.ReadAll(part)
+		valueStr := string(value)
+
+		switch fieldName {
+		case "retry":
+			foundRetry = true
+			if valueStr != "30" {
+				t.Errorf("Retry should be clamped to 30, got: %s", valueStr)
+			}
+		case "expire":
+			foundExpire = true
+			if valueStr != "10800" {
+				t.Errorf("Expire should be clamped to 10800, got: %s", valueStr)
+			}
+		}
+		part.Close()
+	}
+
+	if !foundRetry {
+		t.Error("Body should contain retry field")
+	}
+	if !foundExpire {
+		t.Error("Body should contain expire field")
 	}
 }
 
@@ -546,7 +853,9 @@ func TestPushoverEmptyHTTPClient(t *testing.T) {
 // TestPushoverPriorityClamping tests priority clamping.
 func TestPushoverPriorityClamping(t *testing.T) {
 	var receivedBody []byte
+	var contentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType = r.Header.Get("Content-Type")
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -565,10 +874,40 @@ func TestPushoverPriorityClamping(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 
-	bodyStr := string(receivedBody)
-	// Should be clamped to 0 (normal)
-	if !strings.Contains(bodyStr, "priority=0") {
-		t.Errorf("Invalid priority should be clamped to 0, got: %s", bodyStr)
+	// Parse multipart form data to verify priority clamping
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("Failed to parse content type: %v", err)
+	}
+	boundary := params["boundary"]
+
+	reader := multipart.NewReader(bytes.NewReader(receivedBody), boundary)
+	if reader == nil {
+		t.Fatal("Failed to create multipart reader")
+	}
+
+	foundPriority := false
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read part: %v", err)
+		}
+
+		if part.FormName() == "priority" {
+			foundPriority = true
+			value, _ := io.ReadAll(part)
+			if string(value) != "0" {
+				t.Errorf("Invalid priority should be clamped to 0, got: %s", string(value))
+			}
+		}
+		part.Close()
+	}
+
+	if !foundPriority {
+		t.Error("Body should contain priority field")
 	}
 }
 

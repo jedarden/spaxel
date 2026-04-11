@@ -173,9 +173,9 @@ func (s *Server) handleReplayPlay(cmd map[string]interface{}) {
 	if ok {
 		switch v := speedVal.(type) {
 		case float64:
-			speed = speedVal.(float64)
+			speed = v
 		case int:
-			speed = float64(speedVal.(int))
+			speed = float64(v)
 		}
 	}
 
@@ -249,9 +249,9 @@ func (s *Server) handleReplaySetSpeed(cmd map[string]interface{}) {
 	if ok {
 		switch v := speedVal.(type) {
 		case float64:
-			speed = speedVal.(float64)
+			speed = v
 		case int:
-			speed = float64(speedVal.(int))
+			speed = float64(v)
 		}
 	}
 

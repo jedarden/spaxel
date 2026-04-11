@@ -104,7 +104,7 @@ func (h *BriefingHandler) handleGetBriefing(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, b)
+	writeJSON(w, http.StatusOK, b)
 }
 
 // handleGetBriefingByDate returns the briefing for a specific date (RESTful path parameter).
@@ -123,7 +123,7 @@ func (h *BriefingHandler) handleGetBriefingByDate(w http.ResponseWriter, r *http
 		return
 	}
 
-	writeJSON(w, b)
+	writeJSON(w, http.StatusOK, b)
 }
 
 // handleGenerateBriefing generates a new briefing for the given date.
@@ -154,7 +154,7 @@ func (h *BriefingHandler) handleGenerateBriefing(w http.ResponseWriter, r *http.
 		// Still return the briefing even if save failed
 	}
 
-	writeJSON(w, b)
+	writeJSON(w, http.StatusOK, b)
 }
 
 // handleGetLatestBriefing returns the most recent briefing.
@@ -165,7 +165,7 @@ func (h *BriefingHandler) handleGetLatestBriefing(w http.ResponseWriter, r *http
 		return
 	}
 
-	writeJSON(w, b)
+	writeJSON(w, http.StatusOK, b)
 }
 
 // handleGetSettings returns briefing settings.
@@ -199,7 +199,7 @@ func (h *BriefingHandler) handleGetSettings(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	writeJSON(w, settings)
+	writeJSON(w, http.StatusOK, settings)
 }
 
 // handleUpdateSettings updates briefing settings.
@@ -244,7 +244,7 @@ func (h *BriefingHandler) handleUpdateSettings(w http.ResponseWriter, r *http.Re
 	// Update scheduler config if available
 	// Note: The scheduler will pick up the new config on next check
 
-	writeJSON(w, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // handleTestNotification sends a test briefing notification.
@@ -269,7 +269,7 @@ func (h *BriefingHandler) handleTestNotification(w http.ResponseWriter, r *http.
 		}
 		if err := h.notifyService.Send(notif); err != nil {
 			log.Printf("[ERROR] Failed to send test notification: %v", err)
-			writeJSON(w, map[string]interface{}{
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"status":   "error",
 				"error":    err.Error(),
 				"briefing": b,
@@ -281,7 +281,7 @@ func (h *BriefingHandler) handleTestNotification(w http.ResponseWriter, r *http.
 		log.Printf("[INFO] Test briefing notification (no notify service): %s", b.Content)
 	}
 
-	writeJSON(w, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "sent",
 		"briefing": b,
 	})
@@ -303,7 +303,7 @@ func (h *BriefingHandler) handleGetTodayBriefing(w http.ResponseWriter, r *http.
 			}
 			b.Delivered = true
 		}
-		writeJSON(w, b)
+		writeJSON(w, http.StatusOK, b)
 		return
 	}
 
@@ -320,7 +320,7 @@ func (h *BriefingHandler) handleGetTodayBriefing(w http.ResponseWriter, r *http.
 		log.Printf("[ERROR] Failed to save briefing: %v", err)
 	}
 
-	writeJSON(w, b)
+	writeJSON(w, http.StatusOK, b)
 }
 
 // handleAcknowledgeBriefing marks a briefing as acknowledged by the user.
@@ -340,7 +340,7 @@ func (h *BriefingHandler) handleAcknowledgeBriefing(w http.ResponseWriter, r *ht
 
 	log.Printf("[INFO] Briefing %s acknowledged", id)
 
-	writeJSON(w, map[string]string{"status": "acknowledged"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "acknowledged"})
 }
 
 // GetGenerator returns the underlying briefing generator.

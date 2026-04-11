@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -30,6 +31,7 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/db"
 	"github.com/spaxel/mothership/internal/diagnostics"
+	"github.com/spaxel/mothership/internal/eventbus"
 	"github.com/spaxel/mothership/internal/events"
 	"github.com/spaxel/mothership/internal/explainability"
 	"github.com/spaxel/mothership/internal/falldetect"
@@ -56,6 +58,7 @@ import (
 	"github.com/spaxel/mothership/internal/sleep"
 	"github.com/spaxel/mothership/internal/startup"
 	"github.com/spaxel/mothership/internal/volume"
+	"github.com/spaxel/mothership/internal/webhook"
 	"github.com/spaxel/mothership/internal/zones"
 )
 
@@ -121,8 +124,8 @@ func (a *briefingZoneAdapter) GetZoneName(id int) string {
 	if a.mgr == nil {
 		return ""
 	}
-	z, err := a.mgr.GetZoneByID(id)
-	if err != nil {
+	z := a.mgr.GetZone(strconv.Itoa(id))
+	if z == nil {
 		return ""
 	}
 	return z.Name
@@ -132,18 +135,16 @@ func (a *briefingZoneAdapter) GetZoneOccupancy(zoneID int) int {
 	if a.mgr == nil {
 		return 0
 	}
-	z, err := a.mgr.GetZoneByID(zoneID)
-	if err != nil {
+	occ := a.mgr.GetZoneOccupancy(strconv.Itoa(zoneID))
+	if occ == nil {
 		return 0
 	}
-	return z.Occupancy
+	return occ.Count
 }
 
 func (a *briefingZoneAdapter) GetPeopleInZone(zoneID int) []string {
-	if a.mgr == nil {
-		return nil
-	}
-	return a.mgr.GetPeopleInZone(zoneID)
+	// zones.Manager doesn't track people by name - return empty
+	return nil
 }
 
 // briefingPersonAdapter adapts ble.Registry to implement briefing.PersonProvider.
@@ -155,21 +156,26 @@ func (a *briefingPersonAdapter) GetPeopleHome() []string {
 	if a.registry == nil {
 		return nil
 	}
-	return a.registry.GetPeopleHome()
+	// Return all known person names from the registry
+	people, err := a.registry.GetPeople()
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(people))
+	for _, p := range people {
+		names = append(names, p.Name)
+	}
+	return names
 }
 
 func (a *briefingPersonAdapter) GetPersonLastSeen(person string) time.Time {
-	if a.registry == nil {
-		return time.Time{}
-	}
-	return a.registry.GetPersonLastSeen(person)
+	// ble.Registry doesn't expose per-person last-seen; return zero time
+	return time.Time{}
 }
 
 func (a *briefingPersonAdapter) GetPersonZone(person string) string {
-	if a.registry == nil {
-		return ""
-	}
-	return a.registry.GetPersonZone(person)
+	// ble.Registry doesn't track person zone; return empty
+	return ""
 }
 
 // briefingPredictionAdapter adapts prediction.Predictor to implement briefing.PredictionProvider.
@@ -179,24 +185,18 @@ type briefingPredictionAdapter struct {
 }
 
 func (a *briefingPredictionAdapter) GetPrediction(person string, horizonMinutes int) (zone string, probability float64, ok bool) {
-	if a.predictor == nil {
-		return "", 0, false
-	}
-	return a.predictor.GetPrediction(person, horizonMinutes)
+	// prediction.Predictor doesn't expose per-person predictions at this time
+	return "", 0, false
 }
 
 func (a *briefingPredictionAdapter) GetDaysComplete(person string) int {
-	if a.store == nil {
-		return 0
-	}
-	return a.store.GetDaysComplete(person)
+	// prediction.ModelStore doesn't expose per-person days complete
+	return 0
 }
 
 func (a *briefingPredictionAdapter) IsModelReady(person string) bool {
-	if a.store == nil {
-		return false
-	}
-	return a.store.IsModelReady(person)
+	// prediction.ModelStore doesn't expose IsModelReady
+	return false
 }
 
 // briefingHealthAdapter adapts various components to implement briefing.HealthProvider.
@@ -207,10 +207,8 @@ type briefingHealthAdapter struct {
 }
 
 func (a *briefingHealthAdapter) GetDetectionQuality() float64 {
-	if a.healthChecker == nil {
-		return 0
-	}
-	return a.healthChecker.GetAmbientConfidence()
+	// health.Checker doesn't expose ambient confidence; return default
+	return 0
 }
 
 func (a *briefingHealthAdapter) GetNodeCount() (online, total int) {
@@ -223,7 +221,7 @@ func (a *briefingHealthAdapter) GetNodeCount() (online, total int) {
 	}
 	total = len(nodes)
 	for _, n := range nodes {
-		if n.Status == "online" {
+		if n.WentOfflineAt.IsZero() {
 			online++
 		}
 	}
@@ -231,12 +229,13 @@ func (a *briefingHealthAdapter) GetNodeCount() (online, total int) {
 }
 
 func (a *briefingHealthAdapter) GetAccuracyDelta() (percent float64, feedbackCount int) {
-	if a.feedbackStore == nil {
-		return 0, 0
-	}
-	// Get accuracy delta for the past 7 days
-	delta, count := a.feedbackStore.GetAccuracyDelta(7 * 24 * time.Hour)
-	return delta * 100, count
+	// learning.FeedbackStore doesn't expose GetAccuracyDelta
+	return 0, 0
+}
+
+func (a *briefingHealthAdapter) GetNodeOfflineDuration(mac string) time.Duration {
+	// fleet.Registry doesn't expose per-node offline duration
+	return 0
 }
 
 // parseLinkID splits a link ID "node_mac:peer_mac" into its two components.
@@ -267,10 +266,7 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 // computeZoneQuality calculates the detection quality for a zone.
 // This is a simplified version that aggregates link quality metrics.
 func computeZoneQuality(zone zones.Zone, pm *sigproc.ProcessorManager, hc *health.Checker) float64 {
-	if hc != nil {
-		return hc.GetAmbientConfidence()
-	}
-	// Fallback: return default mid-range quality
+	// health.Checker doesn't expose ambient confidence; return default mid-range quality
 	return 50.0
 }
 
@@ -338,6 +334,91 @@ func (a *gdopCalculatorAdapter) GDOPMap(positions []fleet.NodePosition) ([]float
 		}
 	}
 	return a.engine.GDOPMap(locPositions)
+}
+
+// mqttClientAdapter wraps *mqtt.Client to satisfy the api.MQTTClient interface.
+// The api.MQTTClient interface uses interface{} for config types to avoid import cycles.
+type mqttClientAdapter struct {
+	client *mqtt.Client
+}
+
+func (a *mqttClientAdapter) IsConnected() bool { return a.client.IsConnected() }
+func (a *mqttClientAdapter) GetMothershipID() string { return a.client.GetMothershipID() }
+func (a *mqttClientAdapter) GetConfig() interface{} { return a.client.GetConfig() }
+func (a *mqttClientAdapter) Reconnect(ctx context.Context) error { return a.client.Reconnect(ctx) }
+func (a *mqttClientAdapter) PublishDiscoveryNow() error { return a.client.PublishDiscoveryNow() }
+func (a *mqttClientAdapter) PublishPersonPresenceDiscovery(personID, personName string) error {
+	return a.client.PublishPersonPresenceDiscovery(personID, personName)
+}
+func (a *mqttClientAdapter) PublishZoneOccupancyDiscovery(zoneID, zoneName string) error {
+	return a.client.PublishZoneOccupancyDiscovery(zoneID, zoneName)
+}
+func (a *mqttClientAdapter) PublishZoneBinaryDiscovery(zoneID, zoneName string) error {
+	return a.client.PublishZoneBinaryDiscovery(zoneID, zoneName)
+}
+func (a *mqttClientAdapter) PublishFallDetectionDiscovery() error {
+	return a.client.PublishFallDetectionDiscovery()
+}
+func (a *mqttClientAdapter) PublishSystemHealthDiscovery() error {
+	return a.client.PublishSystemHealthDiscovery()
+}
+func (a *mqttClientAdapter) PublishSystemModeDiscovery() error {
+	return a.client.PublishSystemModeDiscovery()
+}
+func (a *mqttClientAdapter) RemovePersonDiscovery(personID string) error {
+	return a.client.RemovePersonDiscovery(personID)
+}
+func (a *mqttClientAdapter) RemoveZoneDiscovery(zoneID string) error {
+	return a.client.RemoveZoneDiscovery(zoneID)
+}
+func (a *mqttClientAdapter) UpdateConfig(ctx context.Context, cfg interface{}) error {
+	// Convert map[string]interface{} to mqtt.Config fields
+	m, ok := cfg.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	current := a.client.GetConfig()
+	if v, ok := m["broker"].(string); ok {
+		current.Broker = v
+	}
+	if v, ok := m["username"].(string); ok {
+		current.Username = v
+	}
+	if v, ok := m["password"].(string); ok {
+		current.Password = v
+	}
+	if v, ok := m["tls"].(bool); ok {
+		current.TLS = v
+	}
+	if v, ok := m["discovery_prefix"].(string); ok {
+		current.DiscoveryPrefix = v
+	}
+	if v, ok := m["mothership_id"].(string); ok {
+		current.MothershipID = v
+	}
+	return a.client.UpdateConfig(ctx, current)
+}
+
+// webhookPublisherAdapter wraps *webhook.Publisher to satisfy the api.WebhookPublisher interface.
+type webhookPublisherAdapter struct {
+	publisher *webhook.Publisher
+}
+
+func (a *webhookPublisherAdapter) GetConfig() interface{} { return a.publisher.GetConfig() }
+func (a *webhookPublisherAdapter) TestWebhook() error     { return a.publisher.TestWebhook() }
+func (a *webhookPublisherAdapter) UpdateConfig(cfg interface{}) {
+	m, ok := cfg.(map[string]interface{})
+	if !ok {
+		return
+	}
+	current := a.publisher.GetConfig()
+	if v, ok := m["url"].(string); ok {
+		current.URL = v
+	}
+	if v, ok := m["enabled"].(bool); ok {
+		current.Enabled = v
+	}
+	a.publisher.UpdateConfig(current)
 }
 
 func main() {
@@ -426,6 +507,12 @@ func main() {
 	settingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Settings API registered at /api/settings")
 
+	// Phase 6: Integration Settings REST API (MQTT + system webhook)
+	// Note: mqttClient and webhookPublisher are wired below after they are initialized.
+	integrationSettingsHandler := api.NewIntegrationSettingsHandler(mainDB, "")
+	integrationSettingsHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Integration settings API registered at /api/settings/integration")
+
 	// Phase 6: Feature discovery notifications
 	// Notifier manages one-time feature discovery notifications with quiet hours support
 	featureNotifier, err := featurehelp.NewNotifier(mainDB)
@@ -464,7 +551,7 @@ func main() {
 	var guidedMgr *guidedtroubleshoot.Manager
 
 	// Replay recording store - use recording.Buffer wrapped with replay adapter
-	var replayStore api.RecordingStore
+	var replayStore replay.FrameReader
 	var recordingBuf *recording.Buffer
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		log.Printf("[WARN] Failed to create data dir %s: %v", cfg.DataDir, err)
@@ -491,10 +578,7 @@ func main() {
 		if err != nil {
 			log.Printf("[WARN] Failed to create replay handler: %v", err)
 		} else {
-			// Wire up replay worker with signal processor and blob broadcaster
-			replayHandler.SetProcessorManager(pm)
-			replayHandler.SetBlobBroadcaster(dashboardHub)
-			replayHandler.Start()
+			// Note: SetBlobBroadcaster and Start are called later after dashboardHub is initialized.
 			defer replayHandler.Stop()
 			replayHandler.RegisterRoutes(r)
 			log.Printf("[INFO] Replay REST API registered at /api/replay/*")
@@ -568,7 +652,7 @@ func main() {
 	}
 
 	// Phase 5: Flow analytics accumulator
-	flowAccumulator, err := analytics.NewFlowAccumulator(filepath.Join(cfg.DataDir, "analytics.db"))
+	flowAccumulator, err := analytics.NewFlowAccumulatorFromPath(filepath.Join(cfg.DataDir, "analytics.db"))
 	if err != nil {
 		log.Printf("[WARN] Failed to open analytics database: %v", err)
 	} else {
@@ -831,7 +915,7 @@ func main() {
 		}
 	}
 
-	silConfig := localization.DefaultSelfImprovingConfig()
+	silConfig := localization.DefaultSelfImprovingLocalizerConfig()
 	silConfig.RoomWidth = roomWidth
 	silConfig.RoomDepth = roomDepth
 	silConfig.OriginX = originX
@@ -860,7 +944,7 @@ func main() {
 	if fleetReg != nil {
 		nodes, _ := fleetReg.GetAllNodes()
 		for _, node := range nodes {
-			selfImprovingLocalizer.SetNodePosition(node.MAC, node.PosX, node.PosZ)
+			selfImprovingLocalizer.SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ)
 		}
 	}
 
@@ -959,8 +1043,68 @@ func main() {
 
 				// Wire MQTT to automation engine
 				automationEngine.SetMQTTClient(mqttClient)
+
+				// Start MQTT event publisher for HA integration
+				mqttEventPublisher := mqtt.NewEventPublisher(mqttClient)
+				mqttEventPublisher.Start()
+				defer mqttEventPublisher.Stop()
+
+				// Subscribe to system mode commands from MQTT
+				if err := mqttClient.SubscribeToSystemMode(func(mode string) {
+					// Handle system mode change from MQTT (e.g., from HA)
+					log.Printf("[INFO] System mode change via MQTT: %s", mode)
+					// Publish event to internal event bus
+					eventbus.PublishDefault(eventbus.Event{
+						Type:        eventbus.TypeSystem,
+						TimestampMs: time.Now().UnixMilli(),
+						Severity:    eventbus.SeverityInfo,
+						Detail: map[string]interface{}{
+							"system_mode": mode,
+							"source":      "mqtt",
+						},
+					})
+				}); err != nil {
+					log.Printf("[WARN] Failed to subscribe to system mode commands: %v", err)
+				}
+
+				log.Printf("[INFO] MQTT event publisher started")
 			}
 		}
+	}
+
+	// Phase 6b: System webhook publisher (optional)
+	var webhookPublisher *webhook.Publisher
+	// Load webhook configuration from settings table
+	var webhookURL string
+	var webhookEnabled bool
+	err = mainDB.QueryRow(`SELECT value_json FROM settings WHERE key = 'system_webhook'`).Scan(&webhookURL)
+	if err == nil {
+		// Parse webhook config from JSON
+		var webhookCfg map[string]interface{}
+		json.Unmarshal([]byte(webhookURL), &webhookCfg)
+		if url, ok := webhookCfg["url"].(string); ok {
+			webhookURL = url
+		}
+		if enabled, ok := webhookCfg["enabled"].(bool); ok {
+			webhookEnabled = enabled
+		}
+	}
+	if webhookURL != "" {
+		webhookPublisher = webhook.NewPublisher(webhook.Config{
+			URL:     webhookURL,
+			Enabled: webhookEnabled,
+		})
+		webhookPublisher.Start()
+		log.Printf("[INFO] System webhook publisher started (url=%s, enabled=%v)", webhookURL, webhookEnabled)
+		defer webhookPublisher.Stop()
+	}
+
+	// Wire MQTT and webhook clients to integration settings handler (now that they're initialized)
+	if mqttClient != nil {
+		integrationSettingsHandler.SetMQTTClient(&mqttClientAdapter{client: mqttClient})
+	}
+	if webhookPublisher != nil {
+		integrationSettingsHandler.SetWebhookPublisher(&webhookPublisherAdapter{publisher: webhookPublisher})
 	}
 
 	// Wire up briefing providers after all components are initialized
@@ -1019,7 +1163,6 @@ func main() {
 
 	// Guided troubleshooting manager (for proactive contextual help)
 	// Created after multiNotify since we need to create the FleetNotifier
-	var guidedMgr *guidedtroubleshoot.Manager
 	guidedMgr = guidedtroubleshoot.NewManager(guidedtroubleshoot.ManagerConfig{
 		CheckInterval: 5 * time.Minute,
 		GetAllZones: func() ([]guidedtroubleshoot.ZoneInfo, error) {
@@ -2595,7 +2738,7 @@ func main() {
 			automationEngine.SetZoneProvider(&zoneProviderAdapter{mgr: zonesMgr})
 		}
 		if bleRegistry != nil {
-			automationEngine.SetPersonProvider(&personProviderAdapter{registry: bleRegistry})
+			automationEngine.SetPersonProvider(&automationPersonAdapter{registry: bleRegistry})
 			automationEngine.SetDeviceProvider(&deviceProviderAdapter{registry: bleRegistry})
 		}
 		if mqttClient != nil {
@@ -3556,9 +3699,8 @@ func main() {
 		var healthProvider briefing.HealthProvider
 		if accuracyComputer != nil && fleetReg != nil {
 			healthProvider = &healthProviderAdapter{
-				accuracy:   accuracyComputer,
-				fleet:      fleetReg,
-				fusion:     fusionEngine,
+				accuracy: accuracyComputer,
+				fleet:    fleetReg,
 			}
 		}
 
@@ -3611,6 +3753,7 @@ func main() {
 	otaMgr := ota.NewManager(otaSrv, "http://"+cfg.BindAddr)
 	otaMgr.SetSender(ingestSrv)
 	ingestSrv.SetOTAManager(otaMgr)
+	fleetHandler.SetOTAManager(otaMgr)
 	log.Printf("[INFO] OTA firmware server at %s", firmwareDir)
 
 	// OTA REST API
@@ -4002,11 +4145,11 @@ func (z *zoneProviderAdapter) GetZoneOccupancy(zoneID string) (int, []int) {
 	return occ.Count, occ.BlobIDs
 }
 
-type personProviderAdapter struct {
+type automationPersonAdapter struct {
 	registry *ble.Registry
 }
 
-func (p *personProviderAdapter) GetPerson(id string) (string, string, bool) {
+func (p *automationPersonAdapter) GetPerson(id string) (string, string, bool) {
 	person, err := p.registry.GetPerson(id)
 	if err != nil {
 		return "", "", false
@@ -4405,14 +4548,11 @@ func (p *predictionProviderAdapter) IsModelReady(person string) bool {
 type healthProviderAdapter struct {
 	accuracy *learning.AccuracyComputer
 	fleet    *fleet.Registry
-	fusion   *fusion.Engine
 }
 
 func (h *healthProviderAdapter) GetDetectionQuality() float64 {
-	if h.fusion == nil {
-		return 0
-	}
-	return h.fusion.GetAmbientConfidence()
+	// Detection quality not available at this level; return default
+	return 0
 }
 
 func (h *healthProviderAdapter) GetNodeCount() (int, int) {
@@ -4425,7 +4565,7 @@ func (h *healthProviderAdapter) GetNodeCount() (int, int) {
 	}
 	online := 0
 	for _, n := range nodes {
-		if n.Status == fleet.NodeStatusOnline {
+		if n.WentOfflineAt.IsZero() {
 			online++
 		}
 	}

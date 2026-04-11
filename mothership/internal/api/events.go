@@ -328,16 +328,6 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		"security_alert":    true,
 		"sleep_session_end": true,
 	}
-	// System event types that should be shown as secondary in expert mode
-	systemEventTypes := map[string]bool{
-		"node_online":       true,
-		"node_offline":      true,
-		"ota_update":        true,
-		"baseline_changed":  true,
-		"system":            true,
-		"learning_milestone": true,
-		"anomaly_learned":    true,
-	}
 	isSimpleMode := mode != "expert"
 
 	// Prepare FTS5 query with prefix matching
@@ -554,14 +544,3 @@ func (e *EventsHandler) postEventFeedback(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// FeedbackRequest represents a feedback submission for an event.
-type FeedbackRequest struct {
-	Type    string `json:"type"`     // "correct" or "incorrect"
-	EventID int64  `json:"-"`        // Set from URL path, not from request body
-	BlobID  int    `json:"blob_id"`  // Optional: blob ID being rated
-	Position *struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-		Z float64 `json:"z"`
-	} `json:"position,omitempty"` // For "missed" feedback
-}

@@ -235,6 +235,12 @@ func (r *Registry) SetNodeManufacturer(mac, manufacturer string) error {
 	return err
 }
 
+// SetNodeLabel updates the name (label) for a node.
+func (r *Registry) SetNodeLabel(mac, label string) error {
+	_, err := r.db.Exec(`UPDATE nodes SET name=? WHERE mac=?`, label, mac)
+	return err
+}
+
 // AddVirtualNode inserts or updates a virtual node for coverage planning.
 func (r *Registry) AddVirtualNode(mac, name string, x, y, z float64) error {
 	now := time.Now().UnixNano()

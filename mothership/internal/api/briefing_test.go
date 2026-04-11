@@ -80,10 +80,6 @@ func TestBriefingHandler_GenerateBriefing(t *testing.T) {
 	r := chi.NewRouter()
 	handler.RegisterRoutes(r)
 
-	date := time.Now().Format("2006-01-02")
-	reqBody := map[string]string{"date": date}
-	body, _ := json.Marshal(reqBody)
-
 	req := httptest.NewRequest("POST", "/api/briefing/generate", nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Body = nil // Will be set by NewRequest with body
