@@ -465,7 +465,7 @@ func (m *NotificationManager) createSummary(events []*Event) Event {
 
 	// Build title
 	title := fmt.Sprintf("Activity Update: %d events", len(events))
-	if len(events) >= m.maxBatchSize {
+	if len(events) > m.maxBatchSize {
 		title = fmt.Sprintf("Activity Update: %d+ events", len(events))
 	}
 

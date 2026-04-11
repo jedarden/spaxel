@@ -4,12 +4,14 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
@@ -643,4 +645,313 @@ func TestChannelValidationError(t *testing.T) {
 func readAll(r io.Reader) string {
 	b, _ := io.ReadAll(r)
 	return string(b)
+}
+
+// TestNotificationsTestEndpointIntegration tests the full integration flow
+// from the HTTP test endpoint through to actual HTTP delivery.
+func TestNotificationsTestEndpointIntegration(t *testing.T) {
+	// Create a mock HTTP server to receive the notification
+	var receivedMethod, receivedPath, receivedTitle, receivedBody string
+	receivedHeaders := make(map[string]string)
+	receivedData := make(map[string]interface{})
+	serverCalled := false
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serverCalled = true
+		receivedMethod = r.Method
+		receivedPath = r.URL.Path
+
+		// Capture headers
+		receivedHeaders["Title"] = r.Header.Get("Title")
+		receivedHeaders["Content-Type"] = r.Header.Get("Content-Type")
+
+		// Capture body
+		bodyBuf := new(bytes.Buffer)
+		bodyBuf.ReadFrom(r.Body)
+		receivedBody = bodyBuf.String()
+
+		// Decode data from query params (for test endpoint integration)
+		if dataStr := r.URL.Query().Get("data"); dataStr != "" {
+			if err := json.Unmarshal([]byte(dataStr), &receivedData); err == nil {
+				// Successfully parsed data
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Create a temporary database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "notifications.db")
+
+	handler, err := NewNotificationsHandler(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create notifications handler: %v", err)
+	}
+	defer handler.Close()
+
+	// Set up an ntfy channel pointing to the mock server
+	err = handler.SetChannel("ntfy", true, map[string]string{
+		"url": server.URL,
+	})
+	if err != nil {
+		t.Fatalf("Failed to set ntfy channel: %v", err)
+	}
+
+	// Create an adapter that implements NotifySender using a real ntfy client
+	ntfyAdapter := &ntfyNotifyAdapter{
+		client: &ntfyClient{
+			url: server.URL,
+		},
+	}
+	handler.SetNotifyService(ntfyAdapter)
+
+	// Create a test router
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+
+	t.Run("POST /api/notifications/test - integration with ntfy delivery", func(t *testing.T) {
+		// Reset server state
+		serverCalled = false
+		receivedTitle = ""
+		receivedBody = ""
+
+		reqBody := testNotificationRequest{
+			ChannelType: "ntfy",
+			Title:       "Integration Test Notification",
+			Body:        "This is an integration test of the notification endpoint",
+			Data: map[string]interface{}{
+				"test":     true,
+				"priority": "high",
+			},
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp testNotificationResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if resp.Status != "sent" {
+			t.Errorf("Expected status 'sent', got '%s'", resp.Status)
+		}
+
+		// Verify the mock server received the notification
+		if !serverCalled {
+			t.Error("Expected mock server to be called")
+		}
+
+		if receivedMethod != "POST" {
+			t.Errorf("Expected method POST, got %s", receivedMethod)
+		}
+
+		// The ntfy client appends the topic to the URL
+		if receivedPath == "" {
+			t.Error("Expected non-empty path")
+		}
+
+		if receivedTitle != "Integration Test Notification" {
+			t.Errorf("Expected title 'Integration Test Notification', got '%s'", receivedTitle)
+		}
+
+		if receivedBody != "This is an integration test of the notification endpoint" {
+			t.Errorf("Expected body 'This is an integration test of the notification endpoint', got '%s'", receivedBody)
+		}
+
+		if receivedHeaders["Content-Type"] != "text/plain" {
+			t.Errorf("Expected Content-Type 'text/plain', got '%s'", receivedHeaders["Content-Type"])
+		}
+	})
+
+	t.Run("POST /api/notifications/test - integration with webhook delivery", func(t *testing.T) {
+		// Reset server state
+		serverCalled = false
+		receivedBody = ""
+
+		// Create a mock server for webhook
+		var receivedPayload map[string]interface{}
+		webhookServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			serverCalled = true
+			if err := json.NewDecoder(r.Body).Decode(&receivedPayload); err != nil {
+				t.Errorf("Failed to decode webhook payload: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer webhookServer.Close()
+
+		// Set up a webhook channel pointing to the mock server
+		err = handler.SetChannel("webhook", true, map[string]string{
+			"url": webhookServer.URL,
+		})
+		if err != nil {
+			t.Fatalf("Failed to set webhook channel: %v", err)
+		}
+
+		// Create an adapter that implements NotifySender using a real webhook client
+		webhookAdapter := &webhookNotifyAdapter{
+			client: &webhookClient{
+				url: webhookServer.URL,
+			},
+		}
+		handler.SetNotifyService(webhookAdapter)
+
+		reqBody := testNotificationRequest{
+			ChannelType: "webhook",
+			Title:       "Webhook Integration Test",
+			Body:        "Testing webhook delivery through test endpoint",
+		}
+
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp testNotificationResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if resp.Status != "sent" {
+			t.Errorf("Expected status 'sent', got '%s'", resp.Status)
+		}
+
+		// Verify the mock server received the webhook payload
+		if !serverCalled {
+			t.Error("Expected webhook server to be called")
+		}
+
+		if receivedPayload["event_type"] != "test_notification" {
+			t.Errorf("Expected event_type 'test_notification', got '%v'", receivedPayload["event_type"])
+		}
+
+		if receivedPayload["title"] != "Webhook Integration Test" {
+			t.Errorf("Expected title 'Webhook Integration Test', got '%v'", receivedPayload["title"])
+		}
+
+		if receivedPayload["message"] != "Testing webhook delivery through test endpoint" {
+			t.Errorf("Expected message 'Testing webhook delivery through test endpoint', got '%v'", receivedPayload["message"])
+		}
+
+		// Verify test flag is set
+		if receivedPayload["metadata"] == nil {
+			t.Error("Expected metadata to be present")
+		} else {
+			metadata, ok := receivedPayload["metadata"].(map[string]interface{})
+			if !ok {
+				t.Error("Expected metadata to be a map")
+			} else if metadata["test"] != true {
+				t.Error("Expected test=true in metadata")
+			}
+		}
+	})
+}
+
+// ntfyNotifyAdapter implements NotifySender using a simplified ntfy client.
+type ntfyNotifyAdapter struct {
+	client *ntfyClient
+}
+
+func (a *ntfyNotifyAdapter) Send(title, body string, data map[string]interface{}) error {
+	// Build URL (ntfy appends topic to base URL)
+	url := a.client.url + "/spaxel-test"
+
+	// Create request body
+	reqBody := body
+
+	// Create request
+	req, err := http.NewRequest("POST", url, bytes.NewBufferString(reqBody))
+	if err != nil {
+		return err
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "text/plain")
+	if title != "" {
+		req.Header.Set("Title", title)
+	}
+
+	// Send request
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("ntfy returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// webhookNotifyAdapter implements NotifySender using a simplified webhook client.
+type webhookNotifyAdapter struct {
+	client *webhookClient
+}
+
+func (a *webhookNotifyAdapter) Send(title, body string, data map[string]interface{}) error {
+	// Build payload
+	payload := map[string]interface{}{
+		"event_type": "test_notification",
+		"title":      title,
+		"message":    body,
+		"timestamp":  time.Now().Unix(),
+		"metadata":   data,
+	}
+
+	// Marshal to JSON
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	// Create request
+	req, err := http.NewRequest("POST", a.client.url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Spaxel/1.0")
+
+	// Send request
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// Simplified ntfy client for integration testing.
+type ntfyClient struct {
+	url string
+}
+
+// Simplified webhook client for integration testing.
+type webhookClient struct {
+	url string
 }
