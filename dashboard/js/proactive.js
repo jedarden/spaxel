@@ -315,7 +315,8 @@
      */
     function diagnoseLink(linkID) {
         // Fetch diagnostic results from API
-        fetch(`/api/diagnostics/link/${encodeURIComponent(linkID)}`)
+        // Using the correct endpoint: /api/links/{linkID}/diagnostics
+        fetch(`/api/links/${encodeURIComponent(linkID)}/diagnostics`)
             .then(res => res.json())
             .then(data => {
                 showDiagnosticResults(linkID, data);
@@ -329,7 +330,7 @@
     /**
      * Show diagnostic results in a slide-out panel
      */
-    function showDiagnosticResults(linkID, diagnostic) {
+    function showDiagnosticResults(linkID, response) {
         // Remove existing panel if present
         const existing = document.getElementById('diagnostic-results-panel');
         if (existing) {
@@ -340,8 +341,11 @@
         panel.id = 'diagnostic-results-panel';
         panel.className = 'diagnostic-results-panel';
 
-        const diagnosis = diagnostic.diagnosis || {};
+        // Handle both old format (diagnosis array) and new format (response with diagnosis + health)
+        const diagnosis = response.diagnosis || response[0] || {};
+        const health = response.health || diagnosis.health || null;
         const hasDiagnosis = diagnosis.title !== undefined;
+        const severity = (diagnosis.severity || 'info').toLowerCase();
 
         panel.innerHTML = `
             <div class="diagnostic-panel-header">
@@ -355,10 +359,11 @@
                 </div>
 
                 ${hasDiagnosis ? `
-                    <div class="diagnostic-result diagnostic-severity-${diagnosis.severity.toLowerCase()}">
+                    <div class="diagnostic-result diagnostic-severity-${severity}">
                         <div class="diagnostic-result-title">${diagnosis.title}</div>
                         <div class="diagnostic-result-detail">${diagnosis.detail}</div>
                         ${diagnosis.advice ? `<div class="diagnostic-result-advice"><strong>What to do:</strong> ${diagnosis.advice}</div>` : ''}
+                        ${diagnosis.confidence !== undefined ? `<div class="diagnostic-confidence">Confidence: ${Math.round(diagnosis.confidence * 100)}%</div>` : ''}
                     </div>
                 ` : `
                     <div class="diagnostic-result diagnostic-severity-info">
@@ -367,10 +372,24 @@
                     </div>
                 `}
 
-                <div class="diagnostic-health-metrics">
-                    <h4>Health Metrics</h4>
-                    ${renderHealthMetrics(diagnostic.health)}
-                </div>
+                ${health ? `
+                    <div class="diagnostic-health-metrics">
+                        <h4>Current Health Metrics</h4>
+                        ${renderHealthMetrics(health)}
+                    </div>
+                ` : ''}
+
+                ${response.repositioning ? `
+                    <div class="diagnostic-repositioning">
+                        <h4>Suggested Repositioning</h4>
+                        <p>Move <strong>${response.repositioning.node_mac}</strong> to:</p>
+                        <div class="repositioning-coords">
+                            X: ${response.repositioning.position.x.toFixed(1)}m,
+                            Y: ${response.repositioning.position.y.toFixed(1)}m,
+                            Z: ${response.repositioning.position.z.toFixed(1)}m
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
 
@@ -401,26 +420,39 @@
      */
     function renderHealthMetrics(health) {
         if (!health) {
-            return '<p>No health data available.</p>';
+            return '';
         }
+
+        // Handle both snapshot format and report format
+        const snr = health.snr !== undefined ? health.snr : (health.SNR || 'N/A');
+        const phaseStability = health.phase_stability !== undefined ? health.phase_stability : (health.PhaseStability || 'N/A');
+        const packetRate = health.packet_rate !== undefined ? health.packet_rate : (health.PacketRate || 'N/A');
+        const driftRate = health.drift_rate !== undefined ? health.drift_rate : (health.DriftRate || 'N/A');
+        const compositeScore = health.composite_score !== undefined ? health.composite_score : (health.CompositeScore || 'N/A');
 
         return `
             <div class="health-metric">
                 <span class="metric-label">Packet Rate:</span>
-                <span class="metric-value">${health.packet_rate?.toFixed(1) || 'N/A'} Hz</span>
+                <span class="metric-value">${typeof packetRate === 'number' ? packetRate.toFixed(1) : packetRate} Hz</span>
             </div>
             <div class="health-metric">
                 <span class="metric-label">SNR:</span>
-                <span class="metric-value">${health.snr?.toFixed(2) || 'N/A'}</span>
+                <span class="metric-value">${typeof snr === 'number' ? snr.toFixed(2) : snr}</span>
             </div>
             <div class="health-metric">
                 <span class="metric-label">Phase Stability:</span>
-                <span class="metric-value">${health.phase_stability?.toFixed(2) || 'N/A'}</span>
+                <span class="metric-value">${typeof phaseStability === 'number' ? phaseStability.toFixed(2) : phaseStability}</span>
             </div>
             <div class="health-metric">
                 <span class="metric-label">Drift Rate:</span>
-                <span class="metric-value">${health.drift_rate?.toFixed(4) || 'N/A'}</span>
+                <span class="metric-value">${typeof driftRate === 'number' ? driftRate.toFixed(4) : driftRate}</span>
             </div>
+            ${typeof compositeScore === 'number' ? `
+            <div class="health-metric">
+                <span class="metric-label">Composite Score:</span>
+                <span class="metric-value">${Math.round(compositeScore * 100)}%</span>
+            </div>
+            ` : ''}
         `;
     }
 
@@ -1203,8 +1235,14 @@
      * Fetch diagnostic info for a link at a specific time
      */
     function fetchDiagnosticForLink(linkID, timestamp) {
+        // Using the correct endpoint: /api/diagnostics/link/{linkID}?timestamp={ms}
         return fetch(`/api/diagnostics/link/${encodeURIComponent(linkID)}?timestamp=${timestamp}`)
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                return res.json();
+            })
             .catch(err => {
                 console.error('Failed to fetch diagnostic:', err);
                 return null;
@@ -1535,8 +1573,46 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        .diagnostic-confidence {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 11px;
+            color: #888;
+        }
+
         .diagnostic-health-metrics {
             margin-top: 20px;
+        }
+
+        .diagnostic-repositioning {
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(79, 195, 247, 0.1);
+            border: 1px solid rgba(79, 195, 247, 0.3);
+            border-radius: 6px;
+        }
+
+        .diagnostic-repositioning h4 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            color: #4fc3f7;
+            text-transform: uppercase;
+        }
+
+        .diagnostic-repositioning p {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: #ccc;
+        }
+
+        .repositioning-coords {
+            font-family: monospace;
+            font-size: 12px;
+            color: #4fc3f7;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            border-radius: 4px;
         }
 
         .diagnostic-health-metrics h4 {
