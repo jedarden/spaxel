@@ -78,6 +78,11 @@ func AllMigrations() []Migration {
 			Description: "add id, delivered, acknowledged columns to briefings table",
 			Up:          migration_014_add_briefing_delivery_columns,
 		},
+		{
+			Version:     15,
+			Description: "add feature_notifications table for feature discovery",
+			Up:          migration_015_add_feature_notifications,
+		},
 	}
 }
 
@@ -704,4 +709,18 @@ func migration_014_add_briefing_delivery_columns(tx *sql.Tx) error {
 	}
 
 	return nil
+}
+
+// migration_015_add_feature_notifications adds the feature_notifications table
+// for one-time feature discovery notifications.
+func migration_015_add_feature_notifications(tx *sql.Tx) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS feature_notifications (
+		event_id TEXT PRIMARY KEY,
+		fired_at INTEGER NOT NULL,
+		acknowledged_at INTEGER
+	);
+	`
+	_, err := tx.Exec(schema)
+	return err
 }

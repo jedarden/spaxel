@@ -53,28 +53,12 @@ const (
 )
 
 // NewNotifier creates a new feature notification manager.
+// The feature_notifications table must already exist via migration.
 func NewNotifier(db *sql.DB) (*Notifier, error) {
-	// Ensure the feature_notifications table exists
-	if err := ensureSchema(db); err != nil {
-		return nil, err
-	}
-
 	return &Notifier{
 		db:         db,
 		quietHours: &QuietHours{},
 	}, nil
-}
-
-// ensureSchema creates the feature_notifications table if it doesn't exist.
-func ensureSchema(db *sql.DB) error {
-	query := `
-	CREATE TABLE IF NOT EXISTS feature_notifications (
-		event_id TEXT PRIMARY KEY,
-		fired_at INTEGER NOT NULL,
-		acknowledged_at INTEGER
-	);`
-	_, err := db.Exec(query)
-	return err
 }
 
 // SetQuietHours sets the quiet hours configuration.

@@ -194,15 +194,22 @@ func TestNotifierFireWithAction(t *testing.T) {
 	}
 }
 
-// createTestDB creates an in-memory test database.
+// createTestDB creates an in-memory test database with the feature_notifications schema.
 func createTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
 
-	// Create schema
-	if err := ensureSchema(db); err != nil {
+	// Create the feature_notifications table directly (same as migration_015)
+	schema := `
+	CREATE TABLE IF NOT EXISTS feature_notifications (
+		event_id TEXT PRIMARY KEY,
+		fired_at INTEGER NOT NULL,
+		acknowledged_at INTEGER
+	);
+	`
+	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("Failed to create schema: %v", err)
 	}
 

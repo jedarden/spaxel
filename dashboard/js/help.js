@@ -42,7 +42,7 @@
      */
     async function loadArticles() {
         try {
-            const response = await fetch('/help_articles.json');
+            const response = await fetch('help_articles.json');
             if (!response.ok) {
                 throw new Error('Failed to load help articles');
             }
@@ -121,16 +121,16 @@
      * Add help button to expert mode header
      */
     function addHelpButton() {
-        // Look for expert mode header or status bar
-        const header = document.querySelector('.expert-header, .view-header, .toolbar, #status-bar');
-        if (!header) {
-            // Try again after a delay
-            setTimeout(addHelpButton, 1000);
+        // Check if button already exists
+        if (document.getElementById('help-button')) {
             return;
         }
 
-        // Check if button already exists
-        if (document.getElementById('help-button')) {
+        // Look for the status bar button container (margin-left:auto; gap:6px)
+        const buttonContainer = document.querySelector('#status-bar > div[style*="margin-left:auto"]');
+        if (!buttonContainer) {
+            // Try again after a delay
+            setTimeout(addHelpButton, 500);
             return;
         }
 
@@ -141,7 +141,13 @@
         helpBtn.title = 'Help & Documentation (Ctrl+?)';
         helpBtn.onclick = () => HelpOverlay.open();
 
-        header.appendChild(helpBtn);
+        // Insert before the last status-item (FPS counter)
+        const fpsItem = buttonContainer.parentElement.querySelector('.status-item:last-child');
+        if (fpsItem) {
+            buttonContainer.insertBefore(helpBtn, fpsItem);
+        } else {
+            buttonContainer.appendChild(helpBtn);
+        }
     }
 
     /**
