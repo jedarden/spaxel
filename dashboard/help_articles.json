@@ -257,5 +257,264 @@
     "content": "When a node goes offline, spaxel automatically re-optimizes roles among remaining nodes to maintain the best possible coverage. When the node reconnects, roles are re-optimized again. The dashboard shows before/after coverage comparisons.",
     "category": "Advanced",
     "action": null
+  },
+  {
+    "id": "adaptive-sensing",
+    "title": "What is adaptive sensing rate?",
+    "content": "Spaxel automatically adjusts the CSI capture rate based on activity. Idle links drop to 2 Hz to save bandwidth, while active links run at 20-50 Hz. Motion detection triggers instant ramp-up. This reduces bandwidth by 90%+ during quiet periods.",
+    "category": "Advanced",
+    "action": null
+  },
+  {
+    "id": "breathing-detection",
+    "title": "How does breathing detection work?",
+    "content": "Spaxel analyzes the 0.1-0.5 Hz frequency band in CSI phase data, which corresponds to human breathing. When a person is stationary, the system can detect breathing rate and regularity. This requires at least 7 days of learning for accurate patterns.",
+    "category": "Features",
+    "action": { "label": "View Sleep", "url": "#/sleep" }
+  },
+  {
+    "id": "quick-actions",
+    "title": "What are quick actions?",
+    "content": "Right-click (desktop) or long-press (mobile) on any 3D element to get context-sensitive actions. Available on blobs, nodes, zones, portals, and trigger volumes. Provides quick access to common tasks like diagnostics, identify, reposition, and history.",
+    "category": "Interface",
+    "action": null
+  },
+  {
+    "id": "morning-briefing",
+    "title": "What is the morning briefing?",
+    "content": "The morning briefing is a daily summary card that appears when you first open the dashboard. It includes sleep report, overnight events, system health, and predictions for the day ahead. Also available as a push notification at your configured time.",
+    "category": "Features",
+    "action": null
+  },
+  {
+    "id": "guided-troubleshooting",
+    "title": "What is guided troubleshooting?",
+    "content": "When the system detects issues like degraded quality or repeated setting changes, it proactively offers contextual help. Banners appear with guided flows to diagnose and fix problems. Help is reactive, not proactive - appears only when something seems wrong.",
+    "category": "Interface",
+    "action": null
+  },
+  {
+    "id": "accuracy-trends-detail",
+    "title": "How do I track my accuracy improvements?",
+    "content": "The Accuracy panel tracks median localization error over time using BLE ground truth. It shows how user feedback (thumbs up/down) has improved detection. The trend graph shows weekly progress, helping you see the impact of corrections and node placement changes.",
+    "category": "Advanced",
+    "action": { "label": "View Accuracy", "url": "#/accuracy" }
+  },
+  {
+    "id": "crowd-flow-filters",
+    "title": "How do I use crowd flow filters?",
+    "content": "Use the time filter dropdown to show flow patterns for specific periods: last 24 hours, last 7 days, or morning/evening routines. You can also filter by person to see individual movement patterns. The overlay updates dynamically as you change filters.",
+    "category": "Features",
+    "action": null
+  },
+  {
+    "id": "anomaly-detection",
+    "title": "How does anomaly detection work?",
+    "content": "After 7 days of learning, spaxel builds a statistical model of typical occupancy per zone, per hour. Unusual events (like motion at 3am in the kitchen) are scored and can trigger alerts. Security mode treats all motion as suspicious.",
+    "category": "Features",
+    "action": { "label": "View Security", "url": "#/security" }
+  },
+  {
+    "id": "zone-occupancy",
+    "title": "How is zone occupancy tracked?",
+    "content": "Zone occupancy is tracked via portal crossings (doorways between zones) and blob positions. Portals detect directional crossings, while blob positions provide real-time presence. The system reconciles both sources and recovers after restarts.",
+    "category": "Setup",
+    "action": { "label": "Open Setup", "url": "#/setup" }
+  },
+  {
+    "id": "fresnel-weights",
+    "title": "What are Fresnel zone weights?",
+    "content": "Each link has a learned weight that affects how much it contributes to localization. Links that consistently predict BLE-confirmed positions get higher weights. The system learns these automatically over 2-4 weeks of BLE-carrying occupants.",
+    "category": "Advanced",
+    "action": { "label": "View Accuracy", "url": "#/accuracy" }
+  },
+  {
+    "id": "virtual-nodes",
+    "title": "What are virtual nodes?",
+    "content": "Virtual nodes are simulated nodes for planning coverage without hardware. Place them in the simulator to see how additional nodes would improve detection. Once satisfied, convert virtual nodes to real nodes by onboarding actual hardware.",
+    "category": "Setup",
+    "action": { "label": "Open Simulator", "url": "#/simulator" }
+  },
+  {
+    "id": "baseline-learning",
+    "title": "How does baseline learning work?",
+    "content": "The baseline represents the 'empty room' signal state. An exponential moving average (EMA) continuously adapts, but only when no motion is detected (motion-gated). After 7 days, hourly baselines are learned for diurnal patterns like HVAC cycling.",
+    "category": "Advanced",
+    "action": { "label": "View Settings", "url": "#/settings" }
+  },
+  {
+    "id": "dwell-automations",
+    "title": "How do dwell automations work?",
+    "content": "Dwell automations trigger after someone remains in a zone for a configured duration. Use this for 'couch potato' detection, 'reading in bed' automations, or 'someone in the kitchen' triggers. The timer resets when the person leaves.",
+    "category": "Features",
+    "action": { "label": "View Automations", "url": "#/automations" }
+  },
+  {
+    "id": "count-automations",
+    "title": "How do count automations work?",
+    "content": "Count automations trigger when the number of people in a zone crosses a threshold. Use for 'more than 2 people in living room' or 'kitchen vacant' triggers. Counts are based on detected blobs, so accuracy depends on your system's detection quality.",
+    "category": "Features",
+    "action": { "label": "View Automations", "url": "#/automations" }
+  },
+  {
+    "id": "time-constraints",
+    "title": "How do automation time constraints work?",
+    "content": "Time constraints restrict automations to specific hours. For example, only trigger 'bedroom occupied' between 22:00 and 06:00, or only enable security mode during work hours. Overnight ranges (from > to) are handled correctly.",
+    "category": "Features",
+    "action": { "label": "View Automations", "url": "#/automations" }
+  },
+  {
+    "id": "predicted-enter",
+    "title": "What are predicted enter automations?",
+    "content": "After learning patterns, spaxel can predict zone entries 5-30 minutes in advance. Use 'predicted enter' automations to preemptively trigger actions like 'turn on lights 15 minutes before Alice gets home'. Accuracy improves over time.",
+    "category": "Features",
+    "action": { "label": "View Predictions", "url": "#/predictions" }
+  },
+  {
+    "id": "link-health-details",
+    "title": "What are link health metrics?",
+    "content": "Link health is based on 4 metrics: Packet Delivery Rate (PDR), Signal-to-Noise Ratio (SNR), Phase Stability, and Baseline Drift. Each is scored 0-1 and combined into a composite score. Links below 40% are considered poor and may need attention.",
+    "category": "Advanced",
+    "action": { "label": "View Fleet", "url": "#/fleet" }
+  },
+  {
+    "id": "csi-replay",
+    "title": "What is CSI replay?",
+    "content": "CSI replay stores raw WiFi signal data for up to 48 hours. In time-travel mode, you can replay this data with adjusted algorithm parameters to see how detection would have differed. Great for tuning thresholds and understanding missed detections.",
+    "category": "Advanced",
+    "action": null
+  },
+  {
+    "id": "router-as-tx",
+    "title": "Can I use my existing WiFi router?",
+    "content": "Yes! Enable passive radar mode to use your router as the transmitter. ESP32 nodes operate in receive-only mode. This provides presence detection with just 2 nodes. Your router's BSSID is auto-detected during setup.",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "node-roles",
+    "title": "What are node roles?",
+    "content": "Nodes can be TX (transmit only), RX (receive only), TX/RX (both), or PASSIVE (router RX). The system automatically assigns roles for optimal coverage. TX nodes transmit in time-staggered slots to avoid packet collisions.",
+    "category": "Basics",
+    "action": { "label": "View Fleet", "url": "#/fleet" }
+  },
+  {
+    "id": "captive-portal",
+    "title": "What is the captive portal?",
+    "content": "If WiFi credentials are invalid or the network is gone, nodes start an AP called 'spaxel-XXXX'. Connect to it and enter new WiFi credentials. The node will reconnect and resume normal operation automatically.",
+    "category": "Troubleshooting",
+    "action": null
+  },
+  {
+    "id": "privacy-first",
+    "title": "Is Spaxel privacy-friendly?",
+    "content": "Yes! Spaxel uses WiFi signals, not cameras. No video or images are recorded. Person identification uses anonymized BLE device IDs. All data stays on your local device. You are in complete control of your information.",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "web-serial",
+    "title": "What is Web Serial provisioning?",
+    "content": "Web Serial is a browser API that lets Spaxel flash your ESP32-S3 node directly over USB. No separate software installation needed. Connect the node via USB, click 'Add Node', and follow the guided wizard. Works in Chrome and Edge browsers.",
+    "category": "Setup",
+    "action": { "label": "Add Node", "url": "#/setup/add" }
+  },
+  {
+    "id": "multi-person",
+    "title": "How many people can Spaxel track?",
+    "content": "Spaxel can reliably track 2-3 people. Beyond that, accuracy degrades as Fresnel zones overlap. The system can detect 'more than 2 people' but cannot distinguish individuals without BLE devices. Consider adding more nodes for larger spaces.",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "z-axis-accuracy",
+    "title": "How accurate is height detection?",
+    "content": "Z-axis accuracy is ±1-2 meters with mixed-height node placement. This is enough to distinguish standing from lying down, and detect falls. For better Z accuracy, place nodes at different heights (some low, some high).",
+    "category": "Setup",
+    "action": { "label": "Open Setup", "url": "#/setup" }
+  },
+  {
+    "id": "ota-rollback",
+    "title": "What happens if OTA fails?",
+    "content": "ESP32 has dual OTA partitions. If new firmware fails to connect within 60 seconds, the device automatically rolls back to the previous partition. The dashboard shows a ROLLBACK badge when this occurs.",
+    "category": "Maintenance",
+    "action": { "label": "View Fleet", "url": "#/fleet" }
+  },
+  {
+    "id": "pin-setup",
+    "title": "How do I set up the dashboard PIN?",
+    "content": "On first run, the dashboard shows a PIN setup page. Choose a 4-digit PIN to protect access. The PIN is required on subsequent visits. You can change the PIN from Settings. Never share your PIN with untrusted parties.",
+    "category": "Interface",
+    "action": { "label": "Settings", "url": "#/settings/auth" }
+  },
+  {
+    "id": "crowd-flow-accumulate",
+    "title": "How long is crowd flow data kept?",
+    "content": "Crowd flow data is accumulated in 1-hour, 1-day, and 1-week buckets. The database retains this data indefinitely. Use the time filter to analyze patterns over different periods. High-traffic areas may accumulate more data quickly.",
+    "category": "Features",
+    "action": null
+  },
+  {
+    "id": "keyboard-shortcuts",
+    "title": "What keyboard shortcuts are available?",
+    "content": "Ctrl+K opens the command palette for quick navigation and commands. Ctrl+? opens this help overlay. Escape closes modals and overlays. In replay mode, Space plays/pauses, arrow keys step through frames.",
+    "category": "Interface",
+    "action": null
+  },
+  {
+    "id": "export-full",
+    "title": "What does full backup include?",
+    "content": "The /api/backup endpoint provides a complete backup including the SQLite database, floor plan images, and briefings. This is larger than the config export but includes all historical data. Use this before major changes or when migrating to a new device.",
+    "category": "Maintenance",
+    "action": null
+  },
+  {
+    "id": "weather-storms",
+    "title": "Do storms affect detection?",
+    "content": "Electrical storms can cause RF interference that affects detection. The system's adaptive baseline and diurnal learning help compensate for predictable patterns. After a storm, consider re-baselining if detection quality remains low.",
+    "category": "Troubleshooting",
+    "action": { "label": "Re-baseline", "url": "#/fleet/rebaseline" }
+  },
+  {
+    "id": "performance-requirements",
+    "title": "What are the system requirements?",
+    "content": "Spaxel runs on any device with Docker support. Minimum: 256MB RAM and 1 CPU core for 2 nodes. For 8+ nodes: 512MB RAM and 2 CPU cores recommended. The dashboard works in modern browsers (Chrome, Firefox, Safari, Edge).",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "explainability-use",
+    "title": "When should I use explainability?",
+    "content": "Use explainability when you're curious why a detection occurred or didn't occur. Tap 'Why?' on any blob to see contributing links, signal strength, and confidence. This helps debug missed detections, false positives, and understand system behavior.",
+    "category": "Interface",
+    "action": null
+  },
+  {
+    "id": "simulator-use",
+    "title": "How do I use the pre-deployment simulator?",
+    "content": "Open the simulator panel and add virtual nodes. The simulator shows expected detection quality using GDOP overlays. Walk virtual people through paths to see how they would be detected. This helps determine optimal node placement before buying hardware.",
+    "category": "Setup",
+    "action": { "label": "Open Simulator", "url": "#/simulator" }
+  },
+  {
+    "id": "quiet-hours",
+    "title": "What are quiet hours?",
+    "content": "Quiet hours suppress non-critical notifications during configured times (e.g., sleeping hours). Critical alerts like fall detection are never suppressed. Configure quiet hours per notification channel in Settings.",
+    "category": "Interface",
+    "action": { "label": "Notification Settings", "url": "#/settings/notifications" }
+  },
+  {
+    "id": "daily-summary",
+    "title": "What is the daily summary notification?",
+    "content": "The daily summary is an optional push notification sent at your configured time. It includes home occupancy duration, per-person time at home, and system health status. Helps you stay informed without opening the dashboard.",
+    "category": "Features",
+    "action": { "label": "Notification Settings", "url": "#/settings/notifications" }
+  },
+  {
+    "id": "fingerprints",
+    "title": "What are BLE device fingerprints?",
+    "content": "Some devices rotate their MAC address for privacy. Spaxel uses manufacturer data fingerprints to track these rotating addresses. The identity persists through rotations, though there may be brief gaps during rotation.",
+    "category": "Advanced",
+    "action": { "label": "View People", "url": "#/people" }
   }
 ]

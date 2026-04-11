@@ -6,6 +6,7 @@ package help
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -59,6 +60,75 @@ func NewNotifier(db *sql.DB) (*Notifier, error) {
 		db:         db,
 		quietHours: &QuietHours{},
 	}, nil
+}
+
+// NewNotifierWithQuietHours creates a new feature notification manager with quiet hours configured.
+func NewNotifierWithQuietHours(db *sql.DB, qh *QuietHours) (*Notifier, error) {
+	return &Notifier{
+		db:         db,
+		quietHours: qh,
+	}, nil
+}
+
+// LoadQuietHoursFromSettings loads quiet hours configuration from settings map.
+// Expects settings to contain "quiet_hours_start" and "quiet_hours_end" in "HH:MM" format.
+// Also looks for "quiet_hours_enabled" (bool) and "quiet_hours_days_mask" (int).
+func (n *Notifier) LoadQuietHoursFromSettings(settings map[string]interface{}) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	qh := &QuietHours{}
+
+	// Check if quiet hours are enabled
+	if enabled, ok := settings["quiet_hours_enabled"].(bool); ok {
+		qh.Enabled = enabled
+	} else {
+		// If not explicitly set, enable if start/end times are configured
+		qh.Enabled = false
+	}
+
+	// Parse start time (HH:MM format)
+	if startStr, ok := settings["quiet_hours_start"].(string); ok && startStr != "" {
+		if h, m, err := parseHM(startStr); err == nil {
+			qh.StartHour = h
+			qh.StartMin = m
+			qh.Enabled = true // Enable if start time is set
+		}
+	}
+
+	// Parse end time (HH:MM format)
+	if endStr, ok := settings["quiet_hours_end"].(string); ok && endStr != "" {
+		if h, m, err := parseHM(endStr); err == nil {
+			qh.EndHour = h
+			qh.EndMin = m
+			qh.Enabled = true // Enable if end time is set
+		}
+	}
+
+	// Parse days mask (0-127 bitmask, 0=Sunday)
+	if daysMask, ok := settings["quiet_hours_days_mask"].(int); ok {
+		qh.DaysMask = daysMask
+	}
+	// Also check float64 (JSON numbers)
+	if daysMaskFloat, ok := settings["quiet_hours_days_mask"].(float64); ok {
+		qh.DaysMask = int(daysMaskFloat)
+	}
+
+	n.quietHours = qh
+	return nil
+}
+
+// parseHM parses a time string in "HH:MM" format.
+func parseHM(s string) (hour, min int, err error) {
+	var h, m int
+	_, err = fmt.Sscanf(s, "%d:%d", &h, &m)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid time format: %q", s)
+	}
+	if h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, 0, fmt.Errorf("invalid time values: %q", s)
+	}
+	return h, m, nil
 }
 
 // SetQuietHours sets the quiet hours configuration.

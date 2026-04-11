@@ -1625,6 +1625,21 @@
         #simulator-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
         #simulator-btn.active { background: rgba(156,39,176,0.2); color: #ab47bc; border-color: #ab47bc; }
 
+        /* Help button */
+        #help-btn {
+            background: rgba(79,195,247,0.1);
+            border: 1px solid rgba(79,195,247,0.3);
+            color: #4fc3f7;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            min-width: 32px;
+        }
+        #help-btn:hover { background: rgba(79,195,247,0.2); color: #4fc3f7; }
+
         /* GDOP toggle */
         #gdop-toggle-btn {
             background: rgba(255,255,255,0.06);
@@ -2388,7 +2403,7 @@
             /* Buttons - smaller on mobile */
             .view-btn, #gdop-toggle-btn, #fresnel-toggle-btn, #room-editor-btn,
             #floorplan-btn, #simulator-btn, #pause-live-btn, #ble-btn,
-            #settings-btn, #add-node-btn, #add-virtual-btn {
+            #settings-btn, #add-node-btn, #add-virtual-btn, #help-btn {
                 padding: 4px 8px;
                 font-size: 11px;
             }
@@ -2539,7 +2554,7 @@
             /* Larger touch targets for touch devices */
             .view-btn, #gdop-toggle-btn, #fresnel-toggle-btn, #room-editor-btn,
             #floorplan-btn, #simulator-btn, #pause-live-btn, #ble-btn,
-            #settings-btn, #add-node-btn, #add-virtual-btn {
+            #settings-btn, #add-node-btn, #add-virtual-btn, #help-btn {
                 min-height: 44px;
                 min-width: 44px;
                 padding: 8px 12px;
@@ -2996,6 +3011,7 @@
             <button id="portal-editor-btn" onclick="PortalEditor && PortalEditor.togglePanel()">Portals</button>
             <button id="floorplan-btn" onclick="FloorPlanSetup.togglePanel()">Floor plan</button>
             <button id="simulator-btn" onclick="Simulate && Simulate.togglePanel()">Simulator</button>
+            <button id="help-btn" onclick="HelpOverlay && HelpOverlay.toggle()" title="Help &amp; Documentation (Ctrl+?)">?</button>
         </div>
         <div class="status-item">
             <span>FPS: <strong id="fps-counter">0</strong></span>
