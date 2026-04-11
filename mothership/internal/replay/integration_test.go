@@ -181,7 +181,7 @@ func TestParameterSliderReprocess(t *testing.T) {
 
 	// Create replay session with default threshold
 	store := NewBufferAdapter(buffer)
-	session := NewSession("test-session", store, baseTime/1e6, (baseTime+int64(len(testFrames))*50_000_000/1e6)
+	session := NewSession("test-session", store, baseTime/1e6, (baseTime+int64(len(testFrames))*50_000_000/1e6))
 
 	// Process frames with default threshold (0.02)
 	initialThreshold := 0.02

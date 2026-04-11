@@ -137,31 +137,31 @@ func (p *Publisher) publishEvent(e eventbus.Event) {
 		return
 	}
 
-	// Send to webhook with retry
-	if err := p.sendWithRetry(jsonData); err != nil {
+	// Send to webhook with retry (include event type in header)
+	if err := p.sendWithRetry(jsonData, e.Type); err != nil {
 		log.Printf("[WARN] Failed to send webhook event: %v", err)
 	}
 }
 
 // sendWithRetry sends the payload with a single retry on 5xx errors.
-func (p *Publisher) sendWithRetry(jsonData []byte) error {
+func (p *Publisher) sendWithRetry(jsonData []byte, eventType string) error {
 	p.mu.RLock()
 	url := p.config.URL
 	retryDelay := p.config.RetryDelay
 	p.mu.RUnlock()
 
 	// First attempt
-	if err := p.sendOnce(url, jsonData); err == nil {
+	if err := p.sendOnce(url, jsonData, eventType); err == nil {
 		return nil
 	}
 
 	// Retry on 5xx after delay
 	time.Sleep(retryDelay)
-	return p.sendOnce(url, jsonData)
+	return p.sendOnce(url, jsonData, eventType)
 }
 
 // sendOnce sends a single webhook request.
-func (p *Publisher) sendOnce(url string, jsonData []byte) error {
+func (p *Publisher) sendOnce(url string, jsonData []byte, eventType string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.config.Timeout)
 	defer cancel()
 
@@ -172,7 +172,7 @@ func (p *Publisher) sendOnce(url string, jsonData []byte) error {
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Spaxel-Event", "spaxel-event") // Event type header
+	req.Header.Set("X-Spaxel-Event", eventType) // Event type header
 	req.Header.Set("User-Agent", "Spaxel/1.0")
 
 	resp, err := p.client.Do(req)
@@ -189,7 +189,7 @@ func (p *Publisher) sendOnce(url string, jsonData []byte) error {
 	// Check for 4xx errors (not retryable, but log)
 	if resp.StatusCode >= 400 {
 		log.Printf("[WARN] Webhook returned error status %d for %s event",
-			resp.StatusCode, req.Header.Get("X-Spaxel-Event"))
+			resp.StatusCode, eventType)
 	}
 
 	return nil
@@ -229,7 +229,7 @@ func (p *Publisher) TestWebhook() error {
 		return err
 	}
 
-	return p.sendOnce(url, jsonData)
+	return p.sendOnce(url, jsonData, "test")
 }
 
 // ValidationError represents a webhook configuration validation error.

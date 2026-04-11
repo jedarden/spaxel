@@ -3,6 +3,7 @@ package mqtt
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -22,7 +23,7 @@ type Config struct {
 	TLS      bool
 
 	// Home Assistant discovery
-	DiscoveryPrefix string // defaults to "homeassistant"
+	DiscoveryPrefix  string // defaults to "homeassistant"
 	DiscoveryEnabled bool
 
 	// Spaxel-specific
@@ -30,9 +31,11 @@ type Config struct {
 	TopicPrefix   string // defaults to "spaxel"
 
 	// Connection settings
-	KeepAlive      time.Duration
-	ConnectTimeout time.Duration
-	AutoReconnect  bool
+	KeepAlive       time.Duration
+	ConnectTimeout  time.Duration
+	AutoReconnect   bool
+	ReconnectMin    time.Duration // minimum reconnect delay (default 5s)
+	ReconnectMax    time.Duration // maximum reconnect delay (default 120s)
 }
 
 // HomeAssistantDevice represents a device in HA auto-discovery.
@@ -111,6 +114,12 @@ func NewClient(cfg Config) (*Client, error) {
 	if cfg.ConnectTimeout == 0 {
 		cfg.ConnectTimeout = 10 * time.Second
 	}
+	if cfg.ReconnectMin == 0 {
+		cfg.ReconnectMin = 5 * time.Second
+	}
+	if cfg.ReconnectMax == 0 {
+		cfg.ReconnectMax = 120 * time.Second
+	}
 
 	c := &Client{
 		config: cfg,
@@ -127,8 +136,9 @@ func NewClient(cfg Config) (*Client, error) {
 	opts.AddBroker(cfg.Broker)
 	opts.SetClientID(cfg.ClientID)
 	opts.SetKeepAlive(cfg.KeepAlive)
-	// Enable auto-reconnect with exponential backoff
-	opts.SetMaxReconnectInterval(2 * time.Minute)
+
+	// Enable auto-reconnect with exponential backoff from ReconnectMin to ReconnectMax
+	opts.SetMaxReconnectInterval(cfg.ReconnectMax)
 	opts.SetAutoReconnect(true)
 	opts.SetCleanSession(false) // Use persistent sessions for retained messages
 
@@ -137,6 +147,13 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 	if cfg.Password != "" {
 		opts.SetPassword(cfg.Password)
+	}
+
+	// Configure TLS if enabled
+	if cfg.TLS {
+		opts.SetTLSConfig(&tls.Config{
+			InsecureSkipVerify: true, // Allow self-signed certs
+		})
 	}
 
 	// Set Last Will and Testament for availability
@@ -850,4 +867,163 @@ func (c *Client) GetMothershipID() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.config.MothershipID
+}
+
+// ─── Dynamic Configuration ─────────────────────────────────────────────────────────
+
+// UpdateConfig updates the client configuration and reconnects if the broker changed.
+func (c *Client) UpdateConfig(ctx context.Context, newCfg Config) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Check if broker changed - requires reconnection
+	brokerChanged := c.config.Broker != newCfg.Broker ||
+		c.config.Username != newCfg.Username ||
+		c.config.Password != newCfg.Password ||
+		c.config.TLS != newCfg.TLS
+
+	// Update discovery prefix and mothership ID (don't require reconnect)
+	c.config.DiscoveryPrefix = newCfg.DiscoveryPrefix
+	if newCfg.MothershipID != "" && newCfg.MothershipID != c.config.MothershipID {
+		c.config.MothershipID = newCfg.MothershipID
+		c.spaxelDevice.Identifiers = []string{fmt.Sprintf("spaxel_%s", newCfg.MothershipID)}
+		// Clear published entities since IDs changed
+		c.publishedEntities = make(map[string]bool)
+	}
+
+	if brokerChanged {
+		// Disconnect existing client
+		if c.client != nil && c.client.IsConnected() {
+			c.client.Disconnect(250)
+		}
+		c.connected = false
+
+		// Create new client with updated config
+		c.config.Broker = newCfg.Broker
+		c.config.Username = newCfg.Username
+		c.config.Password = newCfg.Password
+		c.config.TLS = newCfg.TLS
+
+		// Rebuild client options
+		if c.config.ClientID == "" {
+			c.config.ClientID = fmt.Sprintf("spaxel-%s", c.config.MothershipID)
+		}
+		if c.config.TopicPrefix == "" {
+			c.config.TopicPrefix = "spaxel"
+		}
+		if c.config.DiscoveryPrefix == "" {
+			c.config.DiscoveryPrefix = "homeassistant"
+		}
+
+		opts := mqtt.NewClientOptions()
+		opts.AddBroker(c.config.Broker)
+		opts.SetClientID(c.config.ClientID)
+		opts.SetKeepAlive(c.config.KeepAlive)
+		opts.SetMaxReconnectInterval(c.config.ReconnectMax)
+		opts.SetAutoReconnect(true)
+		opts.SetCleanSession(false)
+
+		if c.config.Username != "" {
+			opts.SetUsername(c.config.Username)
+		}
+		if c.config.Password != "" {
+			opts.SetPassword(c.config.Password)
+		}
+
+		if c.config.TLS {
+			opts.SetTLSConfig(&tls.Config{
+				InsecureSkipVerify: true,
+			})
+		}
+
+		lwtTopic := fmt.Sprintf("%s/availability", c.config.TopicPrefix)
+		opts.SetBinaryWill(lwtTopic, []byte("offline"), 1, true)
+
+		// Set up callbacks (copy from NewClient)
+		clientRef := c
+		opts.OnConnect = func(client mqtt.Client) {
+			clientRef.mu.Lock()
+			clientRef.connected = true
+			cb := clientRef.onConnect
+			clientRef.mu.Unlock()
+
+			log.Printf("[INFO] MQTT reconnected to %s", c.config.Broker)
+
+			if err := clientRef.PublishRetained(lwtTopic, []byte("online")); err != nil {
+				log.Printf("[WARN] Failed to publish availability: %v", err)
+			}
+
+			if c.config.DiscoveryEnabled {
+				go clientRef.publishAllDiscoveryConfigs()
+			}
+
+			if cb != nil {
+				go cb()
+			}
+		}
+
+		opts.SetConnectionLostHandler(func(client mqtt.Client, err error) {
+			clientRef.mu.Lock()
+			clientRef.connected = false
+			cb := clientRef.onDisconnect
+			clientRef.mu.Unlock()
+
+			if err != nil {
+				log.Printf("[WARN] MQTT disconnected: %v", err)
+			}
+
+			if cb != nil {
+				go cb()
+			}
+		})
+
+		c.client = mqtt.NewClient(opts)
+
+		// Connect to new broker
+		return c.Connect(ctx)
+	}
+
+	return nil
+}
+
+// Reconnect attempts to reconnect to the MQTT broker.
+func (c *Client) Reconnect(ctx context.Context) error {
+	c.mu.Lock()
+	wasConnected := c.connected
+	c.mu.Unlock()
+
+	if wasConnected {
+		return nil // Already connected
+	}
+
+	return c.Connect(ctx)
+}
+
+// PublishDiscoveryNow publishes all HA discovery configs immediately.
+// Useful for forcing Home Assistant to pick up new entities.
+func (c *Client) PublishDiscoveryNow() error {
+	if !c.config.DiscoveryEnabled {
+		return fmt.Errorf("discovery is not enabled")
+	}
+
+	if !c.IsConnected() {
+		return fmt.Errorf("MQTT not connected")
+	}
+
+	c.publishAllDiscoveryConfigs()
+	return nil
+}
+
+// GetConfig returns the current configuration.
+func (c *Client) GetConfig() Config {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.config
+}
+
+// SetDiscoveryEnabled enables or disables Home Assistant auto-discovery.
+func (c *Client) SetDiscoveryEnabled(enabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.config.DiscoveryEnabled = enabled
 }

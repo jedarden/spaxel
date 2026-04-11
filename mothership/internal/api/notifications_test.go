@@ -664,6 +664,7 @@ func TestNotificationsTestEndpointIntegration(t *testing.T) {
 		// Capture headers
 		receivedHeaders["Title"] = r.Header.Get("Title")
 		receivedHeaders["Content-Type"] = r.Header.Get("Content-Type")
+		receivedTitle = r.Header.Get("Title")
 
 		// Capture body
 		bodyBuf := new(bytes.Buffer)

@@ -2,10 +2,13 @@
 package api
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -13,26 +16,26 @@ import (
 // IntegrationSettingsHandler manages home automation integration settings.
 type IntegrationSettingsHandler struct {
 	mu     sync.RWMutex
-	db     DBWithTX
+	db     *sql.DB
 
 	// MQTT configuration (managed via settings table)
 	mqttClient MQTTClient
 
 	// System webhook publisher
 	webhookPublisher WebhookPublisher
-}
 
-// DBWithTX is the database interface required by the handler.
-type DBWithTX interface {
-	Exec(query string, args ...interface{}) (Result, error)
-	Query(query string, args ...interface{}) (Rows, error)
-	QueryRow(query string, args ...interface{}) Row
+	// Mothership ID for HA entity IDs
+	mothershipID string
 }
 
 // MQTTClient is the interface for MQTT operations.
 type MQTTClient interface {
 	IsConnected() bool
 	GetMothershipID() string
+	GetConfig() interface{}
+	UpdateConfig(ctx context.Context, cfg interface{}) error
+	Reconnect(ctx context.Context) error
+	PublishDiscoveryNow() error
 	PublishPersonPresenceDiscovery(personID, personName string) error
 	PublishZoneOccupancyDiscovery(zoneID, zoneName string) error
 	PublishZoneBinaryDiscovery(zoneID, zoneName string) error
@@ -51,9 +54,10 @@ type WebhookPublisher interface {
 }
 
 // NewIntegrationSettingsHandler creates a new integration settings handler.
-func NewIntegrationSettingsHandler(db DBWithTX) *IntegrationSettingsHandler {
+func NewIntegrationSettingsHandler(db *sql.DB, mothershipID string) *IntegrationSettingsHandler {
 	return &IntegrationSettingsHandler{
-		db: db,
+		db:           db,
+		mothershipID: mothershipID,
 	}
 }
 
@@ -228,33 +232,139 @@ func (h *IntegrationSettingsHandler) handleTest(w http.ResponseWriter, r *http.R
 func (h *IntegrationSettingsHandler) getMQTTConfig() (*mqttConfig, error) {
 	var cfg mqttConfig
 
-	// Get MQTT broker URL from settings (uses environment variable SPAXEL_MQTT_BROKER)
-	// For now, return default since we're using env vars
-	// In a full implementation, this would query the settings table
-	cfg.DiscoveryPrefix = "homeassistant"
+	// Get settings from database
+	var brokerURL, username, discoveryPrefix string
+	var tlsEnabled int
+
+	err := h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'mqtt_broker'`).Scan(&brokerURL)
+	if err != nil {
+		// Return default config if not found
+		cfg.DiscoveryPrefix = "homeassistant"
+		return &cfg, nil
+	}
+
+	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'mqtt_username'`).Scan(&username)
+	if err != nil {
+		username = ""
+	}
+
+	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'mqtt_tls'`).Scan(&tlsEnabled)
+	if err != nil {
+		tlsEnabled = 0
+	}
+
+	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'mqtt_discovery_prefix'`).Scan(&discoveryPrefix)
+	if err != nil {
+		discoveryPrefix = "homeassistant"
+	}
+
+	// Parse JSON strings (remove quotes)
+	if len(brokerURL) > 0 && brokerURL[0] == '"' {
+		brokerURL = brokerURL[1 : len(brokerURL)-1]
+	}
+	if len(username) > 0 && username[0] == '"' {
+		username = username[1 : len(username)-1]
+	}
+	if len(discoveryPrefix) > 0 && discoveryPrefix[0] == '"' {
+		discoveryPrefix = discoveryPrefix[1 : len(discoveryPrefix)-1]
+	}
+
+	cfg.Broker = brokerURL
+	cfg.Username = username
+	cfg.TLS = tlsEnabled != 0
+	cfg.DiscoveryPrefix = discoveryPrefix
+
+	// Set connection status and mothership ID
+	h.mu.RLock()
+	if h.mqttClient != nil {
+		cfg.Connected = h.mqttClient.IsConnected()
+		cfg.MothershipID = h.mqttClient.GetMothershipID()
+	} else {
+		cfg.MothershipID = h.mothershipID
+	}
+	h.mu.RUnlock()
 
 	return &cfg, nil
 }
 
 // updateMQTTSettings updates MQTT configuration.
 func (h *IntegrationSettingsHandler) updateMQTTSettings(cfg *mqttConfig) error {
-	// MQTT settings are primarily managed via environment variables (SPAXEL_MQTT_BROKER, etc.)
-	// Here we just validate the configuration
+	// Validate broker URL format
 	if cfg.Broker != "" {
-		// Validate broker URL format
-		if cfg.Broker[0] != '/' && (len(cfg.Broker) < 6 || cfg.Broker[:3] != "tcp" && cfg.Broker[:4] != "mqtt" && cfg.Broker[:5] != "mqtts") {
+		if len(cfg.Broker) < 6 || (cfg.Broker[:3] != "tcp" && cfg.Broker[:4] != "mqtt" && cfg.Broker[:5] != "mqtts") {
 			return &validationError{Field: "broker", Reason: "invalid URL format (must start with tcp://, mqtt://, or mqtts://)"}
 		}
 	}
 
-	// Note: MQTT broker changes require restart since they're env vars
-	// Discovery prefix can be changed dynamically
-	if cfg.DiscoveryPrefix != "" {
-		// Update discovery prefix in settings
+	// Save broker URL
+	if cfg.Broker != "" {
+		brokerJSON, _ := json.Marshal(cfg.Broker)
 		_, err := h.db.Exec(`INSERT OR REPLACE INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
-			"mqtt_discovery_prefix", `"`+cfg.DiscoveryPrefix+`"`,
-			"strftime('%s', 'now')")
+			"mqtt_broker", string(brokerJSON), "strftime('%s', 'now')")
 		if err != nil {
+			return err
+		}
+	}
+
+	// Save username
+	if cfg.Username != "" {
+		usernameJSON, _ := json.Marshal(cfg.Username)
+		_, err := h.db.Exec(`INSERT OR REPLACE INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
+			"mqtt_username", string(usernameJSON), "strftime('%s', 'now')")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Save password (if provided)
+	if cfg.Password != "" {
+		passwordJSON, _ := json.Marshal(cfg.Password)
+		_, err := h.db.Exec(`INSERT OR REPLACE INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
+			"mqtt_password", string(passwordJSON), "strftime('%s', 'now')")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Save TLS setting
+	tlsJSON, _ := json.Marshal(cfg.TLS)
+	_, err := h.db.Exec(`INSERT OR REPLACE INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
+		"mqtt_tls", string(tlsJSON), "strftime('%s', 'now')")
+	if err != nil {
+		return err
+	}
+
+	// Save discovery prefix
+	if cfg.DiscoveryPrefix != "" {
+		prefixJSON, _ := json.Marshal(cfg.DiscoveryPrefix)
+		_, err := h.db.Exec(`INSERT OR REPLACE INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
+			"mqtt_discovery_prefix", string(prefixJSON), "strftime('%s', 'now')")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update MQTT client if available
+	h.mu.RLock()
+	client := h.mqttClient
+	h.mu.RUnlock()
+
+	if client != nil {
+		// Import mqtt package's Config type
+		mqttCfg := map[string]interface{}{
+			"broker":           cfg.Broker,
+			"username":         cfg.Username,
+			"password":         cfg.Password,
+			"tls":              cfg.TLS,
+			"discovery_prefix": cfg.DiscoveryPrefix,
+			"mothership_id":    h.mothershipID,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := client.UpdateConfig(ctx, mqttCfg); err != nil {
+			log.Printf("[WARN] Failed to update MQTT client config: %v", err)
 			return err
 		}
 	}
@@ -328,12 +438,26 @@ func (h *IntegrationSettingsHandler) testMQTT(w http.ResponseWriter, r *http.Req
 	}
 
 	if !h.mqttClient.IsConnected() {
-		writeJSONError(w, http.StatusServiceUnavailable, "MQTT not connected")
-		return
+		// Try to reconnect
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+
+		if err := h.mqttClient.Reconnect(ctx); err != nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "MQTT connection failed: "+err.Error())
+			return
+		}
 	}
 
 	// Publish discovery messages as a test
-	// In a full implementation, this would publish all entity discoveries
+	_, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	// Publish discovery now
+	if err := h.mqttClient.PublishDiscoveryNow(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to publish discovery: "+err.Error())
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "success",
 		"message": "MQTT connection verified. Discovery messages published.",

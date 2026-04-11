@@ -10,7 +10,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"net/http/httputil"
 )
 
 // TestNewClient validates MQTT client creation.
@@ -145,7 +144,7 @@ func TestTopicGeneration(t *testing.T) {
 		},
 		{
 			name:     "fall detected",
-			topic:    "fall_detected",
+			topic:    "spaxel/fall_detected",
 			expected: "spaxel/fall_detected",
 		},
 	}
@@ -231,7 +230,7 @@ func TestMQTTMessagePayloads(t *testing.T) {
 	}
 
 	// Zone occupants JSON payload
-	occupants := []string(`["Alice", "Bob"]`)
+	occupants := []string{"Alice", "Bob"}
 	occupantsJSON, _ := json.Marshal(occupants)
 
 	var decoded []string
@@ -252,7 +251,7 @@ func TestMQTTClientMock(t *testing.T) {
 
 	// Create a test MQTT broker
 	opts := mqtt.NewClientOptions()
-	opts.SetBroker("tcp://localhost:1883")
+	opts.AddBroker("tcp://localhost:1883")
 	opts.SetClientID("spaxel-test")
 	opts.SetCleanSession(true)
 
@@ -298,12 +297,12 @@ func TestRetainedMessages(t *testing.T) {
 
 	// Create two clients
 	opts1 := mqtt.NewClientOptions()
-	opts1.SetBroker("tcp://localhost:1883")
+	opts1.AddBroker("tcp://localhost:1883")
 	opts1.SetClientID("spaxel-test-publisher")
 	opts1.SetCleanSession(true)
 
 	opts2 := mqtt.NewClientOptions()
-	opts2.SetBroker("tcp://localhost:1883")
+	opts2.AddBroker("tcp://localhost:1883")
 	opts2.SetClientID("spaxel-test-subscriber")
 	opts2.SetCleanSession(true)
 
@@ -388,32 +387,28 @@ func TestGetBrokerHost(t *testing.T) {
 // TestHTTPWebhookClient tests the HTTP webhook client.
 func TestHTTPWebhookClient(t *testing.T) {
 	// Create a test HTTP server
-	var receivedPayload []byte
-	var receivedHeaders http.Header
+	receivedRequest := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify headers
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("Content-Type = %s, want application/json", r.Header.Get("Content-Type"))
 		}
-		if r.Header.Get("X-Spaxel-Event") != "spaxel-event" {
-			t.Errorf("X-Spaxel-Event = %s, want spaxel-event", r.Header.Get("X-Spaxel-Event"))
+		if r.Header.Get("X-Spaxel-Event") != "zone_entry" {
+			t.Errorf("X-Spaxel-Event = %s, want zone_entry", r.Header.Get("X-Spaxel-Event"))
 		}
 
-		// Store payload and headers for verification
-		receivedPayload, _ = httputil.DumpRequest(r, false)
-		receivedHeaders = r.Header.Clone()
-
+		receivedRequest = true
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
 	// Test sending webhook
 	client := &http.Client{Timeout: 5 * time.Second}
-	payload := []byte(`{"event_type":"test","timestamp":"2024-03-15T12:00:00Z"}`)
+	payload := []byte(`{"event_type":"zone_entry","timestamp":"2024-03-15T12:00:00Z"}`)
 
 	req, _ := http.NewRequest("POST", server.URL, strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Spaxel-Event", "spaxel-event")
+	req.Header.Set("X-Spaxel-Event", "zone_entry")
 	req.Header.Set("User-Agent", "Spaxel/1.0")
 
 	resp, err := client.Do(req)
@@ -426,8 +421,8 @@ func TestHTTPWebhookClient(t *testing.T) {
 		t.Errorf("Status = %d, want 200", resp.StatusCode)
 	}
 
-	// Verify payload was received
-	if receivedPayload == nil {
-		t.Error("No payload received")
+	// Verify request was received
+	if !receivedRequest {
+		t.Error("No request received")
 	}
 }
