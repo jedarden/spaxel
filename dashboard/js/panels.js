@@ -337,6 +337,33 @@
 
         modalElement.appendChild(content);
 
+        // Add touch event listeners to prevent propagation to canvas
+        // This prevents OrbitControls from responding to touches on the modal
+        modalElement.addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
+        modalElement.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        }, { passive: false }); // Non-passive to allow preventDefault if needed
+
+        modalElement.addEventListener('touchend', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
+        // Also add to backdrop to prevent canvas touches through backdrop
+        modalBackdrop.addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
+        modalBackdrop.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        }, { passive: false });
+
+        modalBackdrop.addEventListener('touchend', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
         // Modal footer (if buttons requested)
         if (config.showConfirm || config.showCancel) {
             const footer = document.createElement('div');
