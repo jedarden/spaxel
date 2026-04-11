@@ -1010,3 +1010,158 @@ func formatInt(n int) string {
 func formatFloat(f float64, decimals int) string {
 	return fmt.Sprintf("%.[2]*[1]f", f, decimals)
 }
+
+// Tooltip represents a contextual help tooltip for a feature.
+type Tooltip struct {
+	Title       string
+	Description string
+	Direction   string // "top", "bottom", "left", "right"
+}
+
+// GetDiagnosticFor returns diagnostic information for a specific link at a given timestamp.
+// This is used by the post-feedback explanation system to provide root cause analysis
+// for false positive detections.
+func (de *DiagnosticEngine) GetDiagnosticFor(linkID string, timestamp time.Time) *Diagnosis {
+	de.mu.RLock()
+	getHealthHistory := de.getHealthHistory
+	window := de.config.HistoryWindow
+	de.mu.RUnlock()
+
+	if getHealthHistory == nil {
+		return nil
+	}
+
+	// Get health history around the specified timestamp
+	history := getHealthHistory(linkID, window)
+	if len(history) < de.config.MinSamples {
+		// Not enough data - return a generic diagnosis
+		return &Diagnosis{
+			LinkID:           linkID,
+			RuleID:           "insufficient_data",
+			Severity:         SeverityINFO,
+			Title:            "Not enough data for diagnosis",
+			Detail:           "This link hasn't been active long enough to analyze.",
+			Advice:           "Continue normal operation. Diagnostics will be available after more data is collected.",
+			ConfidenceScore:  0.0,
+			Timestamp:        time.Now(),
+		}
+	}
+
+	// Find the snapshot closest to the requested timestamp
+	var closestSnapshot *LinkHealthSnapshot
+	minDiff := time.Duration(1<<63 - 1) // Max duration
+
+	for i := range history {
+		diff := history[i].Timestamp.Sub(timestamp)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff < minDiff {
+			minDiff = diff
+			closestSnapshot = &history[i]
+		}
+	}
+
+	if closestSnapshot == nil {
+		return nil
+	}
+
+	// Check which diagnostic rules would have fired at that time
+	// We'll run a focused diagnostic check around the timestamp
+
+	// Rule: Check for environmental change indicators
+	if closestSnapshot.DriftRate > 0.05 {
+		return &Diagnosis{
+			LinkID:   linkID,
+			RuleID:   "environmental_change",
+			Severity: SeverityINFO,
+			Title:    "Possible environmental change",
+			Detail:   "The baseline for this link has drifted significantly. This could be caused by temperature changes, furniture movement, or new obstructions.",
+			Advice:   "The system is adapting automatically. No action needed unless this persists.",
+			ConfidenceScore: 0.70,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Rule: Check for WiFi congestion indicators
+	if closestSnapshot.PacketRate < 16.0 { // Less than 80% of expected 20 Hz
+		nodeBMAC := extractNodeBMAC(linkID)
+		return &Diagnosis{
+			LinkID:   linkID,
+			RuleID:   "wifi_congestion",
+			Severity: SeverityACTIONABLE,
+			Title:    "Possible WiFi congestion",
+			Detail:   formatWiFiDetail(nodeBMAC, closestSnapshot.PacketRate),
+			Advice:   formatWiFiAdvice(nodeBMAC),
+			RepositioningNodeMAC: nodeBMAC,
+			ConfidenceScore: 0.75,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Rule: Check for phase instability (metal interference)
+	if closestSnapshot.PhaseStability > 0.6 {
+		nodeAMAC := extractNodeAMAC(linkID)
+		return &Diagnosis{
+			LinkID:   linkID,
+			RuleID:   "metal_interference",
+			Severity: SeverityACTIONABLE,
+			Title:    formatMetalTitle(nodeAMAC),
+			Detail:   formatMetalDetail(linkID),
+			Advice:   formatMetalAdvice(nodeAMAC),
+			RepositioningNodeMAC: nodeAMAC,
+			ConfidenceScore: 0.80,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Rule: Check for periodic interference patterns
+	if closestSnapshot.DeltaRMSVariance > 2.0 {
+		nodeAMAC := extractNodeAMAC(linkID)
+		nodeBMAC := extractNodeBMAC(linkID)
+		return &Diagnosis{
+			LinkID:   linkID,
+			RuleID:   "periodic_interference",
+			Severity: SeverityWARNING,
+			Title:    "Possible periodic interference",
+			Detail:   formatInterferenceDetail(nodeAMAC, nodeBMAC, 3),
+			Advice:   formatInterferenceAdvice(nodeAMAC, nodeBMAC),
+			ConfidenceScore: 0.70,
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Default: no specific issue found
+	return &Diagnosis{
+		LinkID:   linkID,
+		RuleID:   "no_issue_detected",
+		Severity: SeverityINFO,
+		Title:    "No specific issue detected",
+		Detail:   "The link health metrics appear normal. The false positive may be due to transient RF interference or a brief environmental change.",
+		Advice:   "This is a rare occurrence. If it happens frequently, consider submitting feedback so the system can learn.",
+		ConfidenceScore: 0.50,
+		Timestamp: time.Now(),
+	}
+}
+
+// GetDiagnosisExplanation returns a plain-language explanation for a diagnosis.
+func (d *Diagnosis) GetDiagnosisExplanation() string {
+	if d == nil {
+		return "No diagnostic information available."
+	}
+
+	explanation := d.Detail
+
+	// Add context-specific advice
+	if d.RuleID == "environmental_change" {
+		explanation += " The system adapts to these changes automatically over time."
+	} else if d.RuleID == "wifi_congestion" {
+		explanation += " Moving the node closer to your WiFi router may help."
+	} else if d.RuleID == "metal_interference" {
+		explanation += " Check for metal objects within 10cm of the node antenna."
+	} else if d.RuleID == "periodic_interference" {
+		explanation += " This pattern often indicates a microwave oven or other 2.4GHz device."
+	}
+
+	return explanation
+}

@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/spaxel/mothership/internal/explainability"
 )
 
 // LinkMotion describes one link's current motion state for 3D fusion.
@@ -323,7 +325,7 @@ func FresnelZoneRadius(linkLength float64) float64 {
 
 // GetGridSnapshot returns a snapshot of the current fusion grid state.
 // This is used by the explainability system to visualize contributing links.
-func (e *Engine) GetGridSnapshot() *GridSnapshot {
+func (e *Engine) GetGridSnapshot() *explainability.GridSnapshot {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -339,7 +341,7 @@ func (e *Engine) GetGridSnapshot() *GridSnapshot {
 	// Get the normalized grid data
 	data := e.grid.Snapshot()
 
-	return &GridSnapshot{
+	return &explainability.GridSnapshot{
 		Width:     width,
 		Depth:     depth,
 		CellSize:  cellSize,

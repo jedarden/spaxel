@@ -543,6 +543,14 @@
         stopEditing,
         deleteVolume,
         setTriggerState,
+        getVolumeMeshes: function() {
+            // Return array of trigger volume meshes for raycasting
+            const meshes = [];
+            _volumes.forEach(function(vol) {
+                meshes.push(vol.mesh);
+            });
+            return meshes;
+        },
         onVolumeCreated,
         onVolumeChanged,
         onVolumeDeleted

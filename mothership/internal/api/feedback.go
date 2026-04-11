@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/diagnostics"
+	"github.com/spaxel/mothership/internal/explainability"
 )
 
 // FeedbackRequest represents a feedback submission from the timeline.
@@ -25,8 +27,10 @@ type FeedbackRequest struct {
 
 // FeedbackHandler handles simple feedback submissions from the UI.
 type FeedbackHandler struct {
-	eventsHandler *EventsHandler
-	learningHandler any // Learning handler with ProcessFeedback method
+	eventsHandler       *EventsHandler
+	learningHandler     any // Learning handler with ProcessFeedback method
+	explainabilityHandler *explainability.Handler
+	diagnosticEngine    *diagnostics.DiagnosticEngine
 }
 
 // NewFeedbackHandler creates a new feedback handler.
@@ -39,6 +43,32 @@ func NewFeedbackHandler(eventsHandler *EventsHandler) *FeedbackHandler {
 // SetLearningHandler sets the learning handler for feedback processing.
 func (h *FeedbackHandler) SetLearningHandler(learningHandler any) {
 	h.learningHandler = learningHandler
+}
+
+// SetExplainabilityHandler sets the explainability handler.
+func (h *FeedbackHandler) SetExplainabilityHandler(eh *explainability.Handler) {
+	h.explainabilityHandler = eh
+}
+
+// SetDiagnosticEngine sets the diagnostic engine for link health analysis.
+func (h *FeedbackHandler) SetDiagnosticEngine(de *diagnostics.DiagnosticEngine) {
+	h.diagnosticEngine = de
+}
+
+// getExplainabilityForBlob retrieves the explainability snapshot for a blob.
+// This is a helper method to avoid circular dependencies.
+func (h *FeedbackHandler) getExplainabilityForBlob(blobID int, timestamp int64) *explainability.BlobExplanation {
+	if h.explainabilityHandler == nil {
+		return nil
+	}
+
+	// The explainability handler has its own mutex, so we can call its method directly
+	// We need to access the blobHistory map which is not exported, so we'll use a workaround
+	// by creating a minimal HTTP request to the internal handler
+
+	// For now, we'll access the handler's internal state through a public method
+	// In production, this would be done through a proper interface
+	return h.explainabilityHandler.GetExplanationForBlob(blobID, timestamp)
 }
 
 // RegisterRoutes registers feedback endpoints.
@@ -129,11 +159,65 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 	// Add inline response based on feedback type
 	switch req.Type {
 	case "incorrect":
-		response["inline_response"] = map[string]interface{}{
+		inlineResp := map[string]interface{}{
 			"type":    "adjustment",
 			"title":   "Adjusting detection threshold",
 			"message": "I've slightly raised the detection threshold for the contributing links. If this keeps happening at this time of day, my hourly baseline will adapt within a few days. You can also adjust sensitivity manually in Settings.",
 		}
+
+		// Add explainability snapshot if available
+		if req.BlobID > 0 && h.explainabilityHandler != nil {
+			// Get current timestamp for the explanation
+			timestamp := time.Now().UnixMilli()
+
+			// Fetch explainability for this blob
+			// We'll use the blob ID to get the explanation
+			expURL := "/api/explain/" + strconv.Itoa(req.BlobID) + "/at/" + strconv.FormatInt(timestamp, 10)
+
+			// Get explanation from the handler directly
+			if exp := h.getExplainabilityForBlob(req.BlobID, timestamp); exp != nil {
+				// Build explainability response
+				explainabilityData := map[string]interface{}{
+					"blob_id":            exp.BlobID,
+					"x":                  exp.X,
+					"y":                  exp.Y,
+					"z":                  exp.Z,
+					"confidence":         exp.Confidence,
+					"timestamp_ms":       exp.Timestamp,
+					"contributing_links": exp.ContributingLinks,
+					"all_links":          exp.AllLinks,
+				}
+
+				// Add diagnostic info for primary contributing link
+				if len(exp.ContributingLinks) > 0 && h.diagnosticEngine != nil {
+					primaryLink := exp.ContributingLinks[0]
+					linkID := primaryLink.LinkID
+					eventTime := time.UnixMilli(timestamp)
+
+					diagnosis := h.diagnosticEngine.GetDiagnosticFor(linkID, eventTime)
+					if diagnosis != nil {
+						diagData := map[string]interface{}{
+							"rule_id":    diagnosis.RuleID,
+							"severity":   diagnosis.Severity,
+							"title":      diagnosis.Title,
+							"detail":     diagnosis.Detail,
+							"advice":     diagnosis.Advice,
+							"confidence": diagnosis.ConfidenceScore,
+						}
+						explainabilityData["diagnosis"] = diagData
+
+						// Update the inline response message with diagnostic context
+						if diagnosis.RuleID != "no_issue_detected" && diagnosis.RuleID != "insufficient_data" {
+							inlineResp["message"] = diagnosis.Detail + " " + diagnosis.Advice
+						}
+					}
+				}
+
+				inlineResp["explainability"] = explainabilityData
+			}
+		}
+
+		response["inline_response"] = inlineResp
 	case "correct":
 		response["inline_response"] = map[string]interface{}{
 			"type":    "confirmation",

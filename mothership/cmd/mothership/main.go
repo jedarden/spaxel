@@ -3242,6 +3242,7 @@ func main() {
 	guidedHandler := api.NewGuidedHandler(guidedMgr)
 	guidedHandler.SetZonesHandler(zonesMgr)
 	guidedHandler.SetNodesHandler(fleetReg)
+	guidedHandler.SetDiagnosticsHandler(diagnosticEngine)
 	guidedHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Guided troubleshooting API registered at /api/guided/*")
 
