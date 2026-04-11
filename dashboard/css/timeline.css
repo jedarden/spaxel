@@ -466,6 +466,11 @@
   --event-color-bg: rgba(255, 107, 107, 0.15);
 }
 
+.timeline-event[data-type="ZoneTransition"] {
+  --event-color: #ffa726;
+  --event-color-bg: rgba(255, 167, 38, 0.15);
+}
+
 .timeline-event[data-type="portal_crossing"] {
   --event-color: #4a9eff;
   --event-color-bg: rgba(74, 158, 255, 0.15);
@@ -476,9 +481,19 @@
   --event-color-bg: rgba(255, 71, 87, 0.15);
 }
 
+.timeline-event[data-type="AnomalyDetected"] {
+  --event-color: #ff4757;
+  --event-color-bg: rgba(255, 71, 87, 0.15);
+}
+
 .timeline-event[data-type="anomaly_detected"] {
   --event-color: #ff4757;
   --event-color-bg: rgba(255, 71, 87, 0.15);
+}
+
+.timeline-event[data-type="FallDetected"] {
+  --event-color: #f44336;
+  --event-color-bg: rgba(244, 67, 54, 0.15);
 }
 
 .timeline-event[data-type="security_alert"] {
@@ -494,6 +509,11 @@
 .timeline-event[data-type="system_event"] {
   --event-color: #747d8c;
   --event-color-bg: rgba(116, 125, 140, 0.15);
+}
+
+.timeline-event[data-type="sleep_session_end"] {
+  --event-color: #4fc3f7;
+  --event-color-bg: rgba(79, 195, 247, 0.15);
 }
 
 /* Loading States */
@@ -756,4 +776,396 @@
 
 .timeline-date-apply-btn:hover {
   background: #3a8ee6;
+}
+
+/* ============================================
+   Sidebar Timeline Panel Styles
+   ============================================ */
+
+/* Main Sidebar Panel Container */
+.sidebar-panel {
+  position: fixed;
+  top: 44px; /* Below status bar */
+  right: 0;
+  width: 320px;
+  height: calc(100vh - 44px);
+  background: var(--bg-secondary, #16162a);
+  border-left: 1px solid var(--border-color, #2a2a4a);
+  display: flex;
+  flex-direction: column;
+  z-index: 60;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-panel.collapsed {
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Panel Header */
+.sidebar-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-tertiary, #1a1a2e);
+  border-bottom: 1px solid var(--border-color, #2a2a4a);
+  flex-shrink: 0;
+}
+
+.sidebar-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.sidebar-panel-title svg {
+  color: var(--accent-color, #4a9eff);
+}
+
+.sidebar-panel-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.sidebar-panel-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #a0a0b0);
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.sidebar-panel-btn:hover {
+  background: var(--bg-primary, #121225);
+  color: var(--text-primary, #e0e0e0);
+}
+
+/* Panel Content */
+.sidebar-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+
+.sidebar-panel-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-panel-content::-webkit-scrollbar-thumb {
+  background: var(--border-color, #2a2a4a);
+  border-radius: 2px;
+}
+
+.sidebar-panel-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted, #666);
+}
+
+/* Timeline Events in Sidebar */
+.sidebar-timeline-events {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Compact Event Card for Sidebar */
+.sidebar-timeline-event {
+  background: var(--bg-primary, #121225);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sidebar-timeline-event::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--event-color, #4a9eff);
+}
+
+.sidebar-timeline-event:hover {
+  border-color: var(--accent-color, #4a9eff);
+  transform: translateX(-2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-timeline-event.severity-critical {
+  border-color: var(--color-critical, #ff4757);
+}
+
+.sidebar-timeline-event.severity-critical::before {
+  background: var(--color-critical, #ff4757);
+}
+
+.sidebar-timeline-event.severity-warning {
+  border-color: var(--color-warning, #ffa502);
+}
+
+.sidebar-timeline-event.severity-warning::before {
+  background: var(--color-warning, #ffa502);
+}
+
+.sidebar-timeline-event.new-event {
+  animation: sidebarEventSlideIn 0.3s ease-out;
+}
+
+@keyframes sidebarEventSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Event Icon */
+.sidebar-timeline-event-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 158, 255, 0.1);
+  border-radius: 4px;
+}
+
+/* Event Content */
+.sidebar-timeline-event-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-timeline-event-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #e0e0e0);
+  line-height: 1.3;
+  margin-bottom: 2px;
+  word-wrap: break-word;
+}
+
+.sidebar-timeline-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+}
+
+.sidebar-timeline-event-time {
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.sidebar-timeline-event-zone {
+  color: var(--accent-color, #4a9eff);
+}
+
+.sidebar-timeline-event-person {
+  color: #81c784;
+}
+
+/* Event Actions */
+.sidebar-timeline-event-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sidebar-timeline-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  padding: 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 12px;
+  min-width: 24px;
+  height: 24px;
+}
+
+.sidebar-timeline-action-btn:hover {
+  background: var(--bg-tertiary, #1a1a2e);
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.sidebar-timeline-action-btn.feedback-positive:hover {
+  background: rgba(76, 175, 80, 0.2);
+  color: #81c784;
+}
+
+.sidebar-timeline-action-btn.feedback-negative:hover {
+  background: rgba(244, 67, 54, 0.2);
+  color: #e57373;
+}
+
+.sidebar-timeline-action-btn.active {
+  background: var(--accent-color, #4a9eff);
+  color: var(--bg-primary, #121225);
+}
+
+/* Feedback Dismissed State */
+.sidebar-timeline-event.feedback-dismissed {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+/* Loading State */
+.sidebar-timeline-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-muted, #888);
+  gap: 12px;
+}
+
+.sidebar-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-color, #2a2a4a);
+  border-top-color: var(--accent-color, #4a9eff);
+  border-radius: 50%;
+  animation: sidebarSpin 0.8s linear infinite;
+}
+
+@keyframes sidebarSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.sidebar-timeline-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted, #888);
+}
+
+.sidebar-timeline-empty svg {
+  color: var(--border-color, #2a2a4a);
+  margin-bottom: 12px;
+}
+
+.sidebar-timeline-empty h3 {
+  font-size: 14px;
+  color: var(--text-secondary, #a0a0b0);
+  margin: 0 0 4px 0;
+}
+
+.sidebar-timeline-empty p {
+  font-size: 12px;
+  margin: 0;
+}
+
+/* Show Button (when panel is collapsed) */
+.sidebar-show-btn {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  background: var(--bg-secondary, #16162a);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 8px;
+  cursor: pointer;
+  z-index: 59;
+  transition: all 0.3s ease;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-show-btn:hover {
+  background: var(--bg-tertiary, #1a1a2e);
+  padding-right: 12px;
+}
+
+.sidebar-show-btn svg {
+  color: var(--text-secondary, #a0a0b0);
+}
+
+.sidebar-show-btn.hidden {
+  transform: translateY(-50%) translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Virtual Spacers */
+.timeline-spacer {
+  flex-shrink: 0;
+}
+
+/* Event Type Colors */
+.sidebar-timeline-event[data-type="zone_entry"] { --event-color: #66bb6a; }
+.sidebar-timeline-event[data-type="zone_exit"] { --event-color: #ffa726; }
+.sidebar-timeline-event[data-type="portal_crossing"] { --event-color: #42a5f5; }
+.sidebar-timeline-event[data-type="detection"] { --event-color: #ab47bc; }
+.sidebar-timeline-event[data-type="presence_transition"] { --event-color: #ab47bc; }
+.sidebar-timeline-event[data-type="stationary_detected"] { --event-color: #7e57c2; }
+.sidebar-timeline-event[data-type="anomaly"] { --event-color: #ef5350; }
+.sidebar-timeline-event[data-type="security_alert"] { --event-color: #d32f2f; }
+.sidebar-timeline-event[data-type="fall_alert"] { --event-color: #f44336; }
+.sidebar-timeline-event[data-type="node_online"] { --event-color: #4caf50; }
+.sidebar-timeline-event[data-type="node_offline"] { --event-color: #9e9e9e; }
+.sidebar-timeline-event[data-type="ota_update"] { --event-color: #2196f3; }
+.sidebar-timeline-event[data-type="baseline_changed"] { --event-color: #00bcd4; }
+.sidebar-timeline-event[data-type="system"] { --event-color: #607d8b; }
+.sidebar-timeline-event[data-type="learning_milestone"] { --event-color: #9c27b0; }
+.sidebar-timeline-event[data-type="anomaly_learned"] { --event-color: #9c27b0; }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .sidebar-panel {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .sidebar-show-btn {
+    display: none; /* Always show panel on mobile, use close button instead */
+  }
+}
+
+/* Secondary System Events (dimmed in expert mode) */
+.sidebar-timeline-event.secondary {
+  opacity: 0.6;
+}
+
+.sidebar-timeline-event.secondary:hover {
+  opacity: 0.9;
 }

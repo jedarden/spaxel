@@ -32,8 +32,8 @@
 	// ============================================
 	const EVENT_CATEGORIES = {
 		presence: ['presence_transition', 'stationary_detected', 'detection'],
-		zones: ['zone_entry', 'zone_exit', 'portal_crossing'],
-		alerts: ['fall_alert', 'anomaly', 'security_alert'],
+		zones: ['zone_entry', 'zone_exit', 'ZoneTransition', 'portal_crossing', 'sleep_session_end'],
+		alerts: ['fall_alert', 'FallDetected', 'anomaly', 'AnomalyDetected', 'security_alert'],
 		system: ['node_online', 'node_offline', 'ota_update', 'baseline_changed', 'system'],
 		learning: ['learning_milestone', 'anomaly_learned']
 	};
@@ -105,11 +105,25 @@
 			description: 'Person exited a zone',
 			category: 'zones'
 		},
+		ZoneTransition: {
+			icon: '🚶',
+			color: '#ffa726',
+			label: 'Moved',
+			description: 'Person moved between zones',
+			category: 'zones'
+		},
 		portal_crossing: {
 			icon: '→',
 			color: '#42a5f5',
 			label: 'Crossed',
 			description: 'Person crossed a portal',
+			category: 'zones'
+		},
+		sleep_session_end: {
+			icon: '🌅',
+			color: '#4fc3f7',
+			label: 'Woke Up',
+			description: 'Sleep session ended',
 			category: 'zones'
 		},
 		presence_transition: {
@@ -133,7 +147,28 @@
 			description: 'Motion detected',
 			category: 'presence'
 		},
+		fall_alert: {
+			icon: '🆘',
+			color: '#f44336',
+			label: 'Fall',
+			description: 'Fall detected',
+			category: 'alerts'
+		},
+		FallDetected: {
+			icon: '🆘',
+			color: '#f44336',
+			label: 'Fall',
+			description: 'Fall detected',
+			category: 'alerts'
+		},
 		anomaly: {
+			icon: '⚠️',
+			color: '#ef5350',
+			label: 'Anomaly',
+			description: 'Unusual activity detected',
+			category: 'alerts'
+		},
+		AnomalyDetected: {
 			icon: '⚠️',
 			color: '#ef5350',
 			label: 'Anomaly',
@@ -145,13 +180,6 @@
 			color: '#d32f2f',
 			label: 'Security',
 			description: 'Security alert',
-			category: 'alerts'
-		},
-		fall_alert: {
-			icon: '🆘',
-			color: '#f44336',
-			label: 'Fall',
-			description: 'Fall detected',
 			category: 'alerts'
 		},
 		node_online: {
@@ -220,9 +248,33 @@
 			SpaxelRouter.onModeChange(onModeChange);
 		}
 
+		// Listen for simple mode changes
+		if (window.SpaxelSimpleModeDetection) {
+			SpaxelSimpleModeDetection.onModeChange(onSimpleModeChange);
+		}
+
 		// Listen for WebSocket event messages
 		if (window.SpaxelApp) {
 			SpaxelApp.registerMessageHandler(handleWebSocketMessage);
+		}
+	}
+
+	// ============================================
+	// Simple Mode Change Handler
+	// ============================================
+	function onSimpleModeChange(newMode, oldMode) {
+		console.log('[Timeline] Simple mode changed from', oldMode, 'to', newMode);
+
+		// Update dashboard mode based on simple mode
+		if (newMode === 'simple') {
+			state.dashboardMode = 'simple';
+		} else {
+			state.dashboardMode = 'expert';
+		}
+
+		// Reload events if timeline is visible
+		if (elements.container && elements.container.style.display !== 'none') {
+			loadInitialEvents();
 		}
 	}
 
@@ -683,8 +735,8 @@
 			elements.categoryPresence,
 			elements.categoryZones,
 			elements.categoryAlerts,
-		elements.categorySystem,
-		elements.categoryLearning
+			elements.categorySystem,
+			elements.categoryLearning
 		];
 		checkboxes.forEach(function(cb) {
 			if (cb) {
