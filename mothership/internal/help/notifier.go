@@ -222,25 +222,50 @@ func (n *Notifier) GetPendingNotifications() ([]FeatureNotification, error) {
 	var notifications []FeatureNotification
 	for rows.Next() {
 		var fn FeatureNotification
+		var firedAt int64
 		var acknowledgedAt sql.NullInt64
-		err := rows.Scan(&fn.EventID, &fn.FiredAt, &acknowledgedAt)
+		err := rows.Scan(&fn.EventID, &firedAt, &acknowledgedAt)
 		if err != nil {
 			continue
 		}
+		fn.FiredAt = time.Unix(firedAt, 0)
 		if acknowledgedAt.Valid {
-			fn.DismissedAt = func() *time.Time {
-				t := time.Unix(acknowledgedAt.Int64, 0)
-				return &t
-			}()
+			t := time.Unix(acknowledgedAt.Int64, 0)
+			fn.DismissedAt = &t
 		}
-		fn.Title = getNotificationTitle(fn.EventID)
-		fn.Message = getNotificationMessage(fn.EventID)
-		fn.ActionLabel = getNotificationActionLabel(fn.EventID)
-		fn.ActionURL = getNotificationActionURL(fn.EventID)
+
+		// Check if this is a person-specific prediction model ready event
+		if isPersonPredictionReadyEvent(fn.EventID) {
+			personID := extractPersonIDFromEvent(fn.EventID)
+			fn.Title = getPersonNotificationTitle(personID, EventPredictionModelReady)
+			fn.Message = getPersonNotificationMessage(personID, EventPredictionModelReady)
+			fn.ActionLabel = "View Predictions"
+			fn.ActionURL = "#/predictions"
+		} else {
+			fn.Title = getNotificationTitle(fn.EventID)
+			fn.Message = getNotificationMessage(fn.EventID)
+			fn.ActionLabel = getNotificationActionLabel(fn.EventID)
+			fn.ActionURL = getNotificationActionURL(fn.EventID)
+		}
 		notifications = append(notifications, fn)
 	}
 
 	return notifications, nil
+}
+
+// isPersonPredictionReadyEvent checks if the event ID is for a person-specific prediction model ready notification.
+func isPersonPredictionReadyEvent(eventID string) bool {
+	prefix := EventPredictionModelReady + "_"
+	return len(eventID) > len(prefix) && eventID[:len(prefix)] == prefix
+}
+
+// extractPersonIDFromEvent extracts the person ID from a person-specific event ID.
+func extractPersonIDFromEvent(eventID string) string {
+	prefix := EventPredictionModelReady + "_"
+	if len(eventID) > len(prefix) && eventID[:len(prefix)] == prefix {
+		return eventID[len(prefix):]
+	}
+	return ""
 }
 
 // AcknowledgeNotification marks a notification as acknowledged.

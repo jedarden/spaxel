@@ -36,6 +36,7 @@ import (
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/floorplan"
 	"github.com/spaxel/mothership/internal/health"
+	featurehelp "github.com/spaxel/mothership/internal/help"
 	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/briefing"
 	guidedtroubleshoot "github.com/spaxel/mothership/internal/guidedtroubleshoot"
@@ -424,6 +425,39 @@ func main() {
 	settingsHandler := api.NewSettingsHandler(mainDB)
 	settingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Settings API registered at /api/settings")
+
+	// Phase 6: Feature discovery notifications
+	// Notifier manages one-time feature discovery notifications with quiet hours support
+	featureNotifier, err := featurehelp.NewNotifier(mainDB)
+	if err != nil {
+		log.Printf("[WARN] Failed to create feature notifier: %v", err)
+	} else {
+		// Load quiet hours from settings
+		settings := settingsHandler.Get()
+		if err := featureNotifier.LoadQuietHoursFromSettings(settings); err != nil {
+			log.Printf("[DEBUG] Failed to load quiet hours for feature notifications: %v", err)
+		}
+
+		// Register feature notification API routes
+		featureNotifier.RegisterRoutes(r)
+		log.Printf("[INFO] Feature discovery notifications API registered at /api/help/*")
+	}
+
+	// Feature monitor checks for feature availability and fires notifications
+	// Checkers functions will be defined later after all components are initialized
+	var featureMonitor *featurehelp.FeatureMonitor
+	if featureNotifier != nil {
+		featureMonitor = featurehelp.NewFeatureMonitor(featurehelp.FeatureMonitorConfig{
+			DB:            mainDB,
+			Notifier:      featureNotifier,
+			CheckInterval: 5 * time.Minute, // Check every 5 minutes
+		})
+
+		// Start the monitor (checkers will be wired below)
+		featureMonitor.Start()
+		defer featureMonitor.Stop()
+		log.Printf("[INFO] Feature discovery monitor started")
+	}
 
 	// Guided troubleshooting manager (for proactive contextual help)
 	// Will be created after fleet manager is initialized
