@@ -545,9 +545,23 @@ func (m *NotificationManager) checkDigestTime() {
 // sendDigest sends the morning digest with all queued notifications.
 func (m *NotificationManager) sendDigest() {
 	m.mu.Lock()
+
+	// Check if already sent today
+	todayDate := time.Now().In(m.location).Format("2006-01-02")
+	if m.digestSentDate == todayDate {
+		m.mu.Unlock()
+		return
+	}
+
+	// Check if there are queued events
+	if len(m.queuedForDigest) == 0 {
+		m.mu.Unlock()
+		return
+	}
+
 	queued := m.queuedForDigest
 	m.queuedForDigest = make([]*Event, 0)
-	m.digestSentDate = time.Now().In(m.location).Format("2006-01-02")
+	m.digestSentDate = todayDate
 	m.mu.Unlock()
 
 	if len(queued) == 0 {
