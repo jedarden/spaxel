@@ -121,8 +121,8 @@
      * Add help button to expert mode header
      */
     function addHelpButton() {
-        // Look for expert mode header
-        const header = document.querySelector('.expert-header, .view-header, .toolbar');
+        // Look for expert mode header or status bar
+        const header = document.querySelector('.expert-header, .view-header, .toolbar, #status-bar');
         if (!header) {
             // Try again after a delay
             setTimeout(addHelpButton, 1000);
