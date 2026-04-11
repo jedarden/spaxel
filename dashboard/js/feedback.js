@@ -368,17 +368,27 @@
             // Create inline response element
             var inline = document.createElement('div');
             inline.className = 'feedback-inline-response feedback-inline-' + (response.type || 'info');
-            inline.innerHTML = '\
+
+            var content = '\
                 <div class="feedback-inline-header">' + this.escapeHTML(response.title || 'Feedback recorded') + '</div>\
                 <div class="feedback-inline-message">' + this.escapeHTML(response.message || '') + '</div>\
-                <button class="feedback-inline-close" onclick="this.parentElement.remove()">\u00D7</button>\
             ';
+
+            // Add explanation section if available (for FALSE_POSITIVE feedback)
+            if (response.explainability && response.type === 'adjustment') {
+                content += this.renderFeedbackExplanation(response.explainability);
+            }
+
+            content += '<button class="feedback-inline-close" onclick="this.parentElement.remove()">\u00D7</button>';
+
+            inline.innerHTML = content;
 
             // Add to timeline or body
             var timeline = document.querySelector('.timeline-events') || document.body;
             timeline.insertBefore(inline, timeline.firstChild);
 
-            // Auto-dismiss after 8 seconds
+            // Auto-dismiss after 15 seconds for explanations (longer to read)
+            var dismissTime = response.explainability ? 15000 : 8000;
             setTimeout(function() {
                 if (inline.parentNode) {
                     inline.classList.add('feedback-inline-fadeout');
@@ -388,7 +398,119 @@
                         }
                     }, 500);
                 }
-            }, 8000);
+            }, dismissTime);
+        },
+
+        /**
+         * Render the feedback explanation for FALSE_POSITIVE detections
+         */
+        renderFeedbackExplanation: function(explainability) {
+            var contributingLinks = explainability.contributing_links || [];
+            var primaryLink = contributingLinks.length > 0 ? contributingLinks[0] : null;
+            var diagnosis = explainability.diagnosis || null;
+
+            var explanationHTML = '\
+                <div class="feedback-explanation">\
+                    <div class="explanation-toggle" onclick="this.classList.toggle(\'expanded\');">\
+                        <span class="explanation-icon">?</span>\
+                        <span class="explanation-label">Why did this happen?</span>\
+                        <span class="explanation-arrow">▼</span>\
+                    </div>\
+                    <div class="explanation-content">\
+            ';
+
+            if (primaryLink) {
+                var linkName = this.formatLinkID(primaryLink.link_id);
+                var deltaRMS = primaryLink.delta_rms ? primaryLink.delta_rms.toFixed(4) : 'N/A';
+                var threshold = 0.02; // Standard threshold
+                var ratio = primaryLink.delta_rms ? (primaryLink.delta_rms / threshold).toFixed(1) : 'N/A';
+                var timestamp = explainability.timestamp_ms ? new Date(explainability.timestamp_ms).toLocaleTimeString() : 'unknown';
+
+                explanationHTML += '\
+                    <p class="explanation-text">\
+                        The system detected motion here because:\
+                        <strong>' + linkName + '</strong>\'s signal (deltaRMS: ' + deltaRMS + ') exceeded the motion threshold by\
+                        <strong>' + ratio + 'x</strong> at ' + timestamp + '.\
+                    </p>\
+                ';
+
+                // Add diagnostic info if available
+                if (diagnosis) {
+                    explanationHTML += '\
+                        <div class="explanation-diagnosis">\
+                            <span class="diagnosis-label">Possible cause:</span>\
+                            <span class="diagnosis-detail">' + this.escapeHTML(diagnosis.detail || diagnosis.title || 'Ambient RF interference') + '</span>\
+                    ';
+
+                    if (diagnosis.advice) {
+                        explanationHTML += '\
+                            <div class="diagnosis-advice">\
+                                <span class="advice-label">What to do:</span>\
+                                <span class="advice-text">' + this.escapeHTML(diagnosis.advice) + '</span>\
+                            </div>\
+                        ';
+                    }
+
+                    explanationHTML += '</div>';
+                } else {
+                    explanationHTML += '\
+                        <p class="explanation-root-cause">\
+                            <strong>Possible cause:</strong> Ambient RF interference or environmental changes.\
+                        </p>\
+                    ';
+                }
+
+                // Add additional contributing links if any
+                if (contributingLinks.length > 1) {
+                    var linkNames = contributingLinks.slice(1).map(function(l) {
+                        return this.formatLinkID(l.link_id);
+                    }.bind(this)).join(', ');
+
+                    explanationHTML += '\
+                        <p class="explanation-additional-links">\
+                            Contributing links: ' + linkNames + '\
+                        </p>\
+                    ';
+                }
+
+                // Add correction note
+                explanationHTML += '\
+                    <p class="explanation-correction">\
+                        <em>We\'ve noted this feedback and will apply corrections to improve future detection accuracy.</em>\
+                    </p>\
+                ';
+            } else {
+                explanationHTML += '\
+                    <p class="explanation-text">\
+                        The system detected motion based on signal patterns across multiple links.\
+                        We\'ve noted this feedback to improve accuracy.\
+                    </p>\
+                ';
+            }
+
+            explanationHTML += '\
+                    </div>\
+                </div>\
+            ';
+
+            return explanationHTML;
+        },
+
+        /**
+         * Format a link ID for display
+         */
+        formatLinkID: function(linkID) {
+            if (!linkID) {
+                return 'Unknown Link';
+            }
+            // Format MAC address pairs nicely
+            var parts = linkID.split(':');
+            if (parts.length === 2) {
+                var mac1 = parts[0].substring(0, 8); // First 8 chars of first MAC
+                var mac2 = parts[1].substring(0, 8); // First 8 chars of second MAC
+                return mac1 + ' → ' + mac2;
+            }
+            return linkID.substring(0, 16) + '...';
         },
 
         /**
@@ -753,6 +875,143 @@
                         margin: 0;\
                         padding: 0;\
                     }\
+                }\
+                .feedback-explanation {\
+                    margin-top: 12px;\
+                    padding-top: 12px;\
+                    border-top: 1px solid rgba(255, 255, 255, 0.1);\
+                }\
+                .explanation-toggle {\
+                    display: flex;\
+                    align-items: center;\
+                    gap: 8px;\
+                    cursor: pointer;\
+                    user-select: none;\
+                    padding: 6px 8px;\
+                    background: rgba(255, 255, 255, 0.05);\
+                    border-radius: 4px;\
+                    transition: background 0.2s;\
+                }\
+                .explanation-toggle:hover {\
+                    background: rgba(255, 255, 255, 0.08);\
+                }\
+                .explanation-icon {\
+                    display: flex;\
+                    align-items: center;\
+                    justify-content: center;\
+                    width: 20px;\
+                    height: 20px;\
+                    background: rgba(79, 195, 247, 0.2);\
+                    color: #4fc3f7;\
+                    border-radius: 50%;\
+                    font-weight: 600;\
+                    font-size: 12px;\
+                }\
+                .explanation-label {\
+                    flex: 1;\
+                    font-size: 12px;\
+                    font-weight: 500;\
+                    color: #4fc3f7;\
+                }\
+                .explanation-arrow {\
+                    font-size: 10px;\
+                    color: #888;\
+                    transition: transform 0.2s;\
+                }\
+                .explanation-toggle.expanded .explanation-arrow {\
+                    transform: rotate(180deg);\
+                }\
+                .explanation-content {\
+                    display: none;\
+                    margin-top: 8px;\
+                    padding: 10px;\
+                    background: rgba(79, 195, 247, 0.05);\
+                    border-radius: 4px;\
+                    font-size: 11px;\
+                }\
+                .explanation-toggle.expanded + .explanation-content {\
+                    display: block;\
+                    animation: explanationSlideIn 0.2s ease-out;\
+                }\
+                @keyframes explanationSlideIn {\
+                    from {\
+                        opacity: 0;\
+                        max-height: 0;\
+                    }\
+                    to {\
+                        opacity: 1;\
+                        max-height: 500px;\
+                    }\
+                }\
+                .explanation-text {\
+                    color: #bbb;\
+                    line-height: 1.4;\
+                    margin: 0 0 8px 0;\
+                }\
+                .explanation-text strong {\
+                    color: #4fc3f7;\
+                    font-weight: 600;\
+                }\
+                .explanation-root-cause {\
+                    color: #bbb;\
+                    line-height: 1.4;\
+                    margin: 0 0 8px 0;\
+                }\
+                .explanation-root-cause strong {\
+                    color: #ffa726;\
+                }\
+                .explanation-diagnosis {\
+                    margin: 8px 0;\
+                    padding: 8px;\
+                    background: rgba(255, 167, 38, 0.08);\
+                    border-left: 2px solid #ffa726;\
+                    border-radius: 3px;\
+                }\
+                .diagnosis-label {\
+                    display: block;\
+                    font-size: 10px;\
+                    text-transform: uppercase;\
+                    color: #ffa726;\
+                    font-weight: 600;\
+                    margin-bottom: 3px;\
+                }\
+                .diagnosis-detail {\
+                    display: block;\
+                    color: #ccc;\
+                    line-height: 1.3;\
+                    margin-bottom: 4px;\
+                }\
+                .diagnosis-advice {\
+                    margin-top: 6px;\
+                    padding-top: 6px;\
+                    border-top: 1px solid rgba(255, 255, 255, 0.1);\
+                }\
+                .advice-label {\
+                    display: block;\
+                    font-size: 10px;\
+                    text-transform: uppercase;\
+                    color: #4caf50;\
+                    font-weight: 600;\
+                    margin-bottom: 2px;\
+                }\
+                .advice-text {\
+                    color: #bbb;\
+                    line-height: 1.3;\
+                }\
+                .explanation-additional-links {\
+                    margin: 8px 0;\
+                    padding-top: 8px;\
+                    border-top: 1px solid rgba(255, 255, 255, 0.1);\
+                    font-size: 10px;\
+                    color: #888;\
+                }\
+                .explanation-correction {\
+                    margin: 8px 0 0 0;\
+                    padding: 6px 8px;\
+                    background: rgba(76, 175, 80, 0.08);\
+                    border-radius: 3px;\
+                    font-size: 10px;\
+                    color: #a5d6a7;\
                 }';
             document.head.appendChild(style);
         }
