@@ -10,7 +10,7 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"httputil "net/http/httputil"
+	"net/http/httputil"
 )
 
 // TestNewClient validates MQTT client creation.
