@@ -154,6 +154,20 @@
         // Handle window resize
         window.addEventListener('resize', onWindowResize);
 
+        // Handle orientation change (mobile devices)
+        window.addEventListener('orientationchange', onOrientationChange);
+
+        // Handle visual viewport resize (iOS Safari specific)
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', function() {
+                // Throttle visual viewport resize events
+                if (orientationChangeTimeout) {
+                    clearTimeout(orientationChangeTimeout);
+                }
+                orientationChangeTimeout = setTimeout(onWindowResize, 50);
+            });
+        }
+
         // Clock for animation mixer delta
         clock = new THREE.Clock();
 
@@ -178,10 +192,75 @@
         console.log('[Spaxel] Scene initialized');
     }
 
+    /**
+     * Get the current viewport dimensions, preferring visualViewport API on iOS Safari.
+     * Falls back to window.innerWidth/Height for browsers that don't support visualViewport.
+     * @returns {Object} {width: number, height: number} Viewport dimensions in pixels
+     */
+    function getViewportDimensions() {
+        // Use visualViewport API on iOS Safari (handles address bar, bottom nav)
+        if (window.visualViewport && window.visualViewport.width > 0) {
+            return {
+                width: window.visualViewport.width,
+                height: window.visualViewport.height
+            };
+        }
+        // Fallback to standard window dimensions
+        return {
+            width: window.innerWidth,
+            height: window.innerHeight
+        };
+    }
+
+    /**
+     * Handle window resize events with iOS Safari visual viewport support.
+     * Updates renderer size, camera aspect ratio, and projection matrix.
+     */
     function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        const dims = getViewportDimensions();
+        const width = dims.width;
+        const height = dims.height;
+
+        // Update camera aspect ratio
+        camera.aspect = width / height;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Update renderer size
+        renderer.setSize(width, height);
+
+        // Update pixel ratio in case it changed (e.g., moving between displays)
+        renderer.setPixelRatio(window.devicePixelRatio || 1);
+    }
+
+    /**
+     * Handle orientation change events.
+     * Debounced to avoid multiple rapid calls during orientation transition.
+     */
+    var orientationChangeTimeout = null;
+
+    function onOrientationChange() {
+        // Clear any pending resize
+        if (orientationChangeTimeout) {
+            clearTimeout(orientationChangeTimeout);
+        }
+
+        // Debounce resize to allow browser to complete orientation transition
+        // iOS Safari visual viewport may take a moment to stabilize
+        orientationChangeTimeout = setTimeout(function() {
+            // Force a full resize after orientation change completes
+            onWindowResize();
+
+            // Additional visual viewport check for iOS Safari
+            if (window.visualViewport) {
+                // iOS Safari: wait for visual viewport to stabilize
+                // The resize event will fire again once it does
+                window.visualViewport.addEventListener('resize', function onViewportResize() {
+                    onWindowResize();
+                    // Remove listener after first callback
+                    window.visualViewport.removeEventListener('resize', onViewportResize);
+                }, { once: true });
+            }
+        }, 100);
     }
 
     function animate() {
