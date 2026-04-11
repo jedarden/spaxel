@@ -499,3 +499,24 @@ func (m *Manager) GetTooltip(featureID string) (Tooltip, bool) {
 func (m *Manager) IsFeatureDiscovered(featureID string) bool {
 	return m.discoveryTracker.IsFeatureDiscovered(featureID)
 }
+
+// RecordEdit records an edit to a settings key and returns (hintPending, repeated).
+// This satisfies the EditTracker interface required by api.SettingsHandler.
+func (m *Manager) RecordEdit(key string) (bool, bool) {
+	return m.editTracker.RecordEdit(key)
+}
+
+// MarkHintShown marks that a hint has been shown for a settings key.
+// This satisfies the EditTracker interface required by api.SettingsHandler.
+func (m *Manager) MarkHintShown(key string) {
+	m.editTracker.MarkHintShown(key)
+}
+
+// GetTooltipAny returns tooltip fields as primitive strings, avoiding cross-package type issues.
+func (m *Manager) GetTooltipAny(featureID string) (title, description, direction string, ok bool) {
+	tooltip, exists := m.discoveryTracker.GetTooltip(featureID)
+	if !exists {
+		return "", "", "", false
+	}
+	return tooltip.Title, tooltip.Description, tooltip.Direction, true
+}

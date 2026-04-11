@@ -10,54 +10,38 @@ import (
 	"github.com/spaxel/mothership/internal/diagnostics"
 )
 
+// GuidedManager is the interface for the guided troubleshooting manager.
+type GuidedManager interface {
+	GetZonesWithPoorQuality() []int
+	MarkQualityBannerShown(zoneID int)
+	TriggerCalibrationComplete(zoneID int, qualityBefore, qualityAfter float64)
+	TriggerNodeOffline(mac string, offlineDuration time.Duration)
+	ShouldShowTooltip(featureID string) bool
+	MarkTooltipShown(featureID string)
+}
+
 // GuidedHandler provides endpoints for proactive contextual help.
 type GuidedHandler struct {
-	guidedMgr interface {
-		GetZonesWithPoorQuality() []int
-		MarkQualityBannerShown(zoneID int)
-		TriggerCalibrationComplete(zoneID int, qualityBefore, qualityAfter float64)
-		TriggerNodeOffline(mac string, offlineDuration float64) // for testing
-		ShouldShowTooltip(featureID string) bool
-		GetTooltip(featureID string) (diagnostics.Tooltip, bool)
-		MarkTooltipShown(featureID string)
-	}
-	zonesHandler interface {
-		GetZone(id int) (map[string]interface{}, error)
-		GetAllZones() ([]map[string]interface{}, error)
-	}
-	nodesHandler interface {
-		GetAllNodes() ([]map[string]interface{}, error)
-	}
+	guidedMgr          GuidedManager
+	zonesHandler        any
+	nodesHandler        any
 	diagnosticsHandler DiagnosticsHandler
 }
 
 // NewGuidedHandler creates a new guided troubleshooting handler.
-func NewGuidedHandler(guidedMgr interface {
-	GetZonesWithPoorQuality() []int
-	MarkQualityBannerShown(zoneID int)
-	TriggerCalibrationComplete(zoneID int, qualityBefore, qualityAfter float64)
-	TriggerNodeOffline(mac string, offlineDuration float64)
-	ShouldShowTooltip(featureID string) bool
-	GetTooltip(featureID string) (diagnostics.Tooltip, bool)
-	MarkTooltipShown(featureID string)
-}) *GuidedHandler {
+func NewGuidedHandler(guidedMgr GuidedManager) *GuidedHandler {
 	return &GuidedHandler{
 		guidedMgr: guidedMgr,
 	}
 }
 
 // SetZonesHandler sets the zones handler for zone information access.
-func (h *GuidedHandler) SetZonesHandler(zonesHandler interface {
-	GetZone(id int) (map[string]interface{}, error)
-	GetAllZones() ([]map[string]interface{}, error)
-}) {
+func (h *GuidedHandler) SetZonesHandler(zonesHandler any) {
 	h.zonesHandler = zonesHandler
 }
 
 // SetNodesHandler sets the nodes handler for node information access.
-func (h *GuidedHandler) SetNodesHandler(nodesHandler interface {
-	GetAllNodes() ([]map[string]interface{}, error)
-}) {
+func (h *GuidedHandler) SetNodesHandler(nodesHandler any) {
 	h.nodesHandler = nodesHandler
 }
 
@@ -478,17 +462,25 @@ func (h *GuidedHandler) handleGetTooltip(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tooltip, exists := h.guidedMgr.GetTooltip(featureID)
-	if !exists {
+	// GetTooltip returns package-specific Tooltip types; use GetTooltipAny for cross-package access.
+	type tooltipGetterAny interface {
+		GetTooltipAny(featureID string) (title, description, direction string, ok bool)
+	}
+	var title, description, direction string
+	found := false
+	if tg, ok := h.guidedMgr.(tooltipGetterAny); ok {
+		title, description, direction, found = tg.GetTooltipAny(featureID)
+	}
+	if !found {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "tooltip not found"})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"show":       true,
-		"title":      tooltip.Title,
-		"description": tooltip.Description,
-		"direction":  tooltip.Direction,
+		"show":        true,
+		"title":       title,
+		"description": description,
+		"direction":   direction,
 	})
 }
 
