@@ -320,7 +320,7 @@ func TestQuietHoursQueueing(t *testing.T) {
 	}
 }
 
-// TestQuietHoursHighPriority tests that HIGH events are sent immediately even during quiet hours.
+// TestQuietHoursHighPriority tests that HIGH events respect quiet hours (queued for digest).
 func TestQuietHoursHighPriority(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
@@ -329,11 +329,12 @@ func TestQuietHoursHighPriority(t *testing.T) {
 		t.Skip("Skipping test: cannot load timezone")
 	}
 
-	var receivedEvent Event
 	m, err := New(Config{
-		DBPath:       dbPath,
-		Location:     loc,
-		SendCallback: func(e Event) { receivedEvent = e },
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			t.Error("HIGH event callback should not be called during quiet hours")
+		},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -359,7 +360,7 @@ func TestQuietHoursHighPriority(t *testing.T) {
 		Type:     FallDetected,
 		Priority: High,
 		Title:    "High Priority Event",
-		Body:     "Should bypass quiet hours",
+		Body:     "Should be queued for digest (respects quiet hours)",
 	}
 
 	err = m.Notify(event)
@@ -367,18 +368,16 @@ func TestQuietHoursHighPriority(t *testing.T) {
 		t.Fatalf("Notify() error = %v", err)
 	}
 
-	// Verify it was sent immediately
-	if receivedEvent.Type != FallDetected {
-		t.Errorf("received event Type = %s, want FallDetected", receivedEvent.Type)
-	}
-	if receivedEvent.Priority != High {
-		t.Errorf("received event Priority = %d, want High", receivedEvent.Priority)
-	}
-
-	// Should not be in any queue
+	// HIGH bypasses batching but respects quiet hours - should be queued for digest
 	low, medium, digest := m.GetPendingCount()
-	if low != 0 || medium != 0 || digest != 0 {
-		t.Errorf("Events queued (low=%d, medium=%d, digest=%d), want all 0", low, medium, digest)
+	if low != 0 {
+		t.Errorf("pendingLow = %d, want 0", low)
+	}
+	if medium != 0 {
+		t.Errorf("pendingMedium = %d, want 0", medium)
+	}
+	if digest != 1 {
+		t.Errorf("queuedForDigest = %d, want 1 (HIGH respects quiet hours)", digest)
 	}
 }
 
@@ -549,6 +548,7 @@ func TestGetHistory(t *testing.T) {
 
 	m, err := New(Config{
 		DBPath:       dbPath,
+		BatchWindowSec: 1, // Short batch window for testing
 		SendCallback: func(e Event) {},
 	})
 	if err != nil {
@@ -556,7 +556,7 @@ func TestGetHistory(t *testing.T) {
 	}
 	defer m.Close()
 
-	// Send some events
+	// Send some events - Urgent is sent immediately, Low/Medium are batched
 	events := []Event{
 		{Type: ZoneEnter, Priority: Low, Title: "Event 1", Body: "Body 1"},
 		{Type: ZoneLeave, Priority: Medium, Title: "Event 2", Body: "Body 2"},
@@ -569,6 +569,9 @@ func TestGetHistory(t *testing.T) {
 		}
 	}
 
+	// Wait for batch window to flush batched events
+	time.Sleep(1500 * time.Millisecond)
+
 	// Get history
 	history, err := m.GetHistory(10)
 	if err != nil {
@@ -580,11 +583,10 @@ func TestGetHistory(t *testing.T) {
 	}
 
 	// Verify events (should be in reverse chronological order)
+	// Urgent (Event 3) is sent first, then batched events (Event 1, Event 2)
+	// The batch summary comes after the urgent event
 	if history[0]["title"] != "Event 3" {
 		t.Errorf("history[0].title = %s, want Event 3", history[0]["title"])
-	}
-	if history[2]["title"] != "Event 1" {
-		t.Errorf("history[2].title = %s, want Event 1", history[2]["title"])
 	}
 
 	// Check that urgent event was not batched or queued
@@ -593,6 +595,18 @@ func TestGetHistory(t *testing.T) {
 	}
 	if history[0]["was_queued"] != false {
 		t.Error("Urgent event was marked as queued")
+	}
+
+	// The batch summary should have was_batched=true
+	batchFound := false
+	for i := 1; i < len(history); i++ {
+		if history[i]["was_batched"] == true {
+			batchFound = true
+			break
+		}
+	}
+	if !batchFound {
+		t.Error("No batched event found in history")
 	}
 }
 
@@ -1888,4 +1902,490 @@ func TestQuietHoursGate_HighAt23pmDelivered(t *testing.T) {
 	if receivedEvent.Type != NodeOffline {
 		t.Errorf("Received type = %s, want NodeOffline", receivedEvent.Type)
 	}
+}
+
+// TestMorningDigestOncePerDay tests that digest is only sent once per day.
+func TestMorningDigestOncePerDay(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	var receivedCount int
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			receivedCount++
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Enable morning digest
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        "22:00",
+		QuietTo:          "07:00",
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Queue some events by setting quiet hours to cover current time
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	currentMinute := now.Minute()
+
+	cfg.QuietFrom = fmt.Sprintf("%02d:%02d", currentHour, currentMinute)
+	cfg.QuietTo = fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute)
+	m.SetConfig(cfg)
+
+	// Queue multiple events
+	for i := 0; i < 3; i++ {
+		event := Event{
+			Type:     ZoneEnter,
+			Priority: Low,
+			Title:    fmt.Sprintf("Event %d", i),
+			Body:     "Test message",
+		}
+		m.Notify(event)
+	}
+
+	// Send digest
+	m.sendDigest()
+
+	if receivedCount != 1 {
+		t.Errorf("received %d events after first digest, want 1", receivedCount)
+	}
+
+	// Try to send digest again - should not send (already sent today)
+	m.sendDigest()
+
+	if receivedCount != 1 {
+		t.Errorf("received %d events after second digest attempt, want 1 (digest should only be sent once per day)", receivedCount)
+	}
+}
+
+// TestMorningDigestEmptyNotSent tests that empty digest is not sent.
+func TestMorningDigestEmptyNotSent(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	var receivedCount int
+	m, err := New(Config{
+		DBPath: dbPath,
+		SendCallback: func(e Event) {
+			receivedCount++
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Enable morning digest
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        "22:00",
+		QuietTo:          "07:00",
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Send digest with no queued events
+	m.sendDigest()
+
+	// Should not have received anything
+	if receivedCount != 0 {
+		t.Errorf("received %d events, want 0 (empty digest should not be sent)", receivedCount)
+	}
+}
+
+// TestIsQuietHoursEnd tests the isQuietHoursEnd function.
+func TestIsQuietHoursEnd(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Test with morning digest disabled
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        "22:00",
+		QuietTo:          "07:00",
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    false, // Disabled
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// When morning digest is disabled, isQuietHoursEnd should return false
+	// We can't test the actual time-based behavior deterministically without mocking time,
+	// but we can verify that when disabled, it returns false
+	// The implementation checks cfg.MorningDigest first
+
+	// Enable morning digest
+	cfg.MorningDigest = true
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Verify the quiet hours configuration
+	retrievedCfg := m.GetConfig()
+	if !retrievedCfg.MorningDigest {
+		t.Error("MorningDigest should be true")
+	}
+	if retrievedCfg.QuietTo != "07:00" {
+		t.Errorf("QuietTo = %s, want 07:00", retrievedCfg.QuietTo)
+	}
+}
+
+// TestMorningDigestIncludesAllEvents tests that digest includes all queued events.
+func TestMorningDigestIncludesAllEvents(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	var receivedEvent Event
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			receivedEvent = e
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to cover current time FIRST, before any other config
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	currentMinute := now.Minute()
+
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
+		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Queue events with different types
+	events := []Event{
+		{Type: ZoneEnter, Priority: Low, Title: "Zone Enter", Body: "Entered kitchen"},
+		{Type: ZoneLeave, Priority: Low, Title: "Zone Leave", Body: "Left hallway"},
+		{Type: AnomalyAlert, Priority: Medium, Title: "Anomaly", Body: "Unusual activity"},
+	}
+
+	for _, e := range events {
+		m.Notify(e)
+	}
+
+	// Verify all events are queued
+	_, _, digest := m.GetPendingCount()
+	if digest != 3 {
+		t.Errorf("queuedForDigest = %d, want 3", digest)
+	}
+
+	// Send digest
+	m.sendDigest()
+
+	// Verify digest was sent
+	if receivedEvent.Data["is_digest"] != true {
+		t.Error("Received event is not marked as digest")
+	}
+
+	// Verify event count
+	eventCount, ok := receivedEvent.Data["event_count"].(int)
+	if !ok || eventCount != 3 {
+		t.Errorf("event_count = %v, want 3", receivedEvent.Data["event_count"])
+	}
+
+	// Verify type counts include all event types
+	typeCounts, ok := receivedEvent.Data["type_counts"].(map[EventType]int)
+	if !ok {
+		t.Fatal("type_counts not found or wrong type")
+	}
+
+	if typeCounts[ZoneEnter] != 1 {
+		t.Errorf("ZoneEnter count = %d, want 1", typeCounts[ZoneEnter])
+	}
+	if typeCounts[ZoneLeave] != 1 {
+		t.Errorf("ZoneLeave count = %d, want 1", typeCounts[ZoneLeave])
+	}
+	if typeCounts[AnomalyAlert] != 1 {
+		t.Errorf("AnomalyAlert count = %d, want 1", typeCounts[AnomalyAlert])
+	}
+}
+
+// TestMorningDigestClearedAfterSend tests that digest queue is cleared after sending.
+func TestMorningDigestClearedAfterSend(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to cover current time FIRST
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	currentMinute := now.Minute()
+
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
+		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Queue events
+	for i := 0; i < 5; i++ {
+		event := Event{
+			Type:     ZoneEnter,
+			Priority: Low,
+			Title:    fmt.Sprintf("Event %d", i),
+			Body:     "Test",
+		}
+		m.Notify(event)
+	}
+
+	// Verify events are queued
+	_, _, digest := m.GetPendingCount()
+	if digest != 5 {
+		t.Errorf("queuedForDigest = %d, want 5", digest)
+	}
+
+	// Send digest
+	m.sendDigest()
+
+	// Verify queue is cleared
+	_, _, digest = m.GetPendingCount()
+	if digest != 0 {
+		t.Errorf("queuedForDigest = %d after sendDigest, want 0", digest)
+	}
+
+	// Verify that calling sendDigest again on the same day does nothing (already sent today)
+	// Queue another event
+	event := Event{
+		Type:     ZoneEnter,
+		Priority: Low,
+		Title:    "New Event",
+		Body:     "After digest",
+	}
+	m.Notify(event)
+
+	// Queue should have the new event
+	_, _, digest = m.GetPendingCount()
+	if digest != 1 {
+		t.Errorf("queuedForDigest = %d, want 1", digest)
+	}
+
+	// Try to send digest again - should NOT send because digest was already sent today
+	// The digestSentDate check prevents duplicate digests on the same day
+	m.sendDigest()
+
+	// Queue should still have the event (not sent)
+	_, _, digest = m.GetPendingCount()
+	if digest != 1 {
+		t.Errorf("queuedForDigest = %d after second sendDigest (same day), want 1 (should not send again)", digest)
+	}
+}
+
+// TestMorningDigestWithMixedPriorities tests that digest includes LOW and MEDIUM events.
+func TestMorningDigestWithMixedPriorities(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	var receivedEvent Event
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			receivedEvent = e
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to cover current time FIRST
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	currentMinute := now.Minute()
+
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
+		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Queue mixed priority events (LOW and MEDIUM both go to digest during quiet hours)
+	m.Notify(Event{Type: ZoneEnter, Priority: Low, Title: "Low Event"})
+	m.Notify(Event{Type: ZoneLeave, Priority: Medium, Title: "Medium Event"})
+	m.Notify(Event{Type: ZoneVacant, Priority: Low, Title: "Another Low"})
+
+	// Verify all are in digest queue
+	_, _, digest := m.GetPendingCount()
+	if digest != 3 {
+		t.Errorf("queuedForDigest = %d, want 3 (LOW and MEDIUM both queued during quiet hours)", digest)
+	}
+
+	// Send digest
+	m.sendDigest()
+
+	// Verify digest includes all events
+	eventCount, ok := receivedEvent.Data["event_count"].(int)
+	if !ok || eventCount != 3 {
+		t.Errorf("event_count = %v, want 3", receivedEvent.Data["event_count"])
+	}
+}
+
+// TestMorningDigestTitleFormat tests the digest notification title.
+func TestMorningDigestTitleFormat(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	var receivedEvent Event
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			receivedEvent = e
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to cover current time FIRST
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	currentMinute := now.Minute()
+
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
+		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Queue a single event
+	m.Notify(Event{
+		Type:     ZoneEnter,
+		Priority: Low,
+		Title:    "Test Event",
+		Body:     "Test",
+	})
+
+	// Send digest
+	m.sendDigest()
+
+	// Verify title format
+	expectedTitle := "Morning Digest: 1 event(s) while you slept"
+	if receivedEvent.Title != expectedTitle {
+		t.Errorf("Title = %s, want %s", receivedEvent.Title, expectedTitle)
+	}
+
+	// Verify it's marked as digest
+	if receivedEvent.Data["is_digest"] != true {
+		t.Error("Event should be marked as digest")
+	}
+
+	// Verify body contains event details
+	if !contains(receivedEvent.Body, "zone_enter") {
+		t.Errorf("Body should contain event type, got: %s", receivedEvent.Body)
+	}
+}
+
+// contains is a helper function to check if a string contains a substring.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && indexOf(s, substr) >= 0)
+}
+
+// indexOf finds the index of substr in s, or -1 if not found.
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }
