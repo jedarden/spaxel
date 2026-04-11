@@ -228,7 +228,7 @@
     // ============================================
     async function fetchFleetData() {
         try {
-            const response = await fetch('/api/nodes');
+            const response = await fetch('/api/fleet');
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
