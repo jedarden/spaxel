@@ -265,6 +265,17 @@
         var worstScore = 1.0;
         var worstID = null;
 
+        // Prepare link data for proactive quality monitoring
+        var linksForProactive = links.map(function(link) {
+            return {
+                link_id: link.link_id,
+                composite_score: link.health_score,
+                quality: link.health_score,
+                health_score: link.health_score,
+                health_details: link.health_details
+            };
+        });
+
         links.forEach(function(link) {
             var score = link.health_score !== undefined ? link.health_score : 0.5;
             totalScore += score;
@@ -280,6 +291,11 @@
         state.worstLinkScore = worstScore;
 
         updateQualityGauge(state.systemHealth, links.length, worstID, worstScore);
+
+        // Dispatch spaxel:update event for proactive quality monitoring
+        window.dispatchEvent(new CustomEvent('spaxel:update', {
+            detail: { links: linksForProactive }
+        }));
 
         // Also update 3D visualization
         if (window.Viz3D && window.Viz3D.updateLinkHealth) {

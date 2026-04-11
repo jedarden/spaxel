@@ -306,6 +306,7 @@ func TestBriefing_GenerateWithAlerts(t *testing.T) {
 
 	// Insert a fall alert event
 	nightStart := time.Date(2024, 3, 14, 18, 0, 0, 0, time.Local)
+	t.Logf("Inserting event at %s (%d)", nightStart, nightStart.UnixMilli())
 	_, err := db.Exec(`
 		INSERT INTO events (timestamp_ms, type, zone, person, severity)
 		VALUES (?, 'fall_alert', 'Bedroom', 'Alice', 'alert')
@@ -313,6 +314,14 @@ func TestBriefing_GenerateWithAlerts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Verify the event was inserted
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM events").Scan(&count)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Events in database: %d", count)
 
 	g, err := NewGenerator(dbPath)
 	if err != nil {
@@ -326,6 +335,7 @@ func TestBriefing_GenerateWithAlerts(t *testing.T) {
 	}
 
 	if !strings.Contains(b.Content, "Fall") {
+		t.Logf("Generated briefing content: %q", b.Content)
 		t.Error("expected content to mention fall alert")
 	}
 }

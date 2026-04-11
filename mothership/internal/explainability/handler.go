@@ -18,6 +18,7 @@ import (
 type Handler struct {
 	mu                   sync.RWMutex
 	blobHistory          map[int]*BlobExplanation  // blobID -> explanation data
+	blobHistoryByTime    map[int64]*BlobExplanation // timestamp -> explanation for feedback lookups
 	linkStates           map[string]*LinkState      // linkID -> link state
 	fusionResult         *FusionResultSnapshot       // latest fusion result
 }
@@ -106,9 +107,10 @@ type GridSnapshot struct {
 // NewHandler creates a new explainability handler.
 func NewHandler() *Handler {
 	return &Handler{
-		blobHistory:   make(map[int]*BlobExplanation),
-		linkStates:    make(map[string]*LinkState),
-		fusionResult: &FusionResultSnapshot{},
+		blobHistory:     make(map[int]*BlobExplanation),
+		blobHistoryByTime: make(map[int64]*BlobExplanation),
+		linkStates:      make(map[string]*LinkState),
+		fusionResult:    &FusionResultSnapshot{},
 	}
 }
 
@@ -138,6 +140,10 @@ func (h *Handler) UpdateBlobs(blobs []BlobSnapshot, links []LinkState, grid *Gri
 			explanation.BLEMatch = bleMatch
 		}
 		h.blobHistory[blob.ID] = explanation
+		// Store by timestamp for feedback lookups
+		timestamp := time.Now().UnixMilli()
+		explanation.Timestamp = timestamp
+		h.blobHistoryByTime[timestamp] = explanation
 	}
 
 	// Clean up old blob history (keep last 100)
@@ -163,6 +169,7 @@ func (h *Handler) UpdateBlobs(blobs []BlobSnapshot, links []LinkState, grid *Gri
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/explain/{blobID}", h.explainBlob)
 	r.Post("/api/explain/refresh", h.refreshData)
+	r.Get("/api/explain/blob/{blobID}/at/{timestamp}", h.explainBlobAtTime)
 }
 
 // explainBlob handles GET /api/explain/{blobID}
@@ -190,6 +197,109 @@ func (h *Handler) explainBlob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, explanation)
+}
+
+// explainBlobAtTime handles GET /api/explain/blob/{blobID}/at/{timestamp}
+// Returns the explainability snapshot for a blob at or near a specific timestamp.
+// This is used by the feedback system to explain why a detection occurred.
+func (h *Handler) explainBlobAtTime(w http.ResponseWriter, r *http.Request) {
+	blobIDStr := chi.URLParam(r, "blobID")
+	blobID, err := strconv.Atoi(blobIDStr)
+	if err != nil {
+		http.Error(w, "Invalid blob ID", http.StatusBadRequest)
+		return
+	}
+
+	timestampStr := chi.URLParam(r, "timestamp")
+	timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid timestamp", http.StatusBadRequest)
+		return
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// First try to get by blob ID directly
+	if explanation, ok := h.blobHistory[blobID]; ok {
+		// Check if the timestamp is close (within 1 minute)
+		if abs64(explanation.Timestamp-timestamp) < 60000 {
+			writeJSON(w, explanation)
+			return
+		}
+	}
+
+	// If not found by blob ID or timestamp mismatch, search by timestamp
+	// Find the closest explanation within 1 minute
+	var closest *BlobExplanation
+	minDiff := int64(60000) // 1 minute
+
+	for _, exp := range h.blobHistoryByTime {
+		diff := abs64(exp.Timestamp - timestamp)
+		if diff < minDiff {
+			minDiff = diff
+			closest = exp
+		}
+	}
+
+	if closest != nil {
+		writeJSON(w, closest)
+		return
+	}
+
+	// Return empty explanation if nothing found
+	explanation := &BlobExplanation{
+		BlobID:     blobID,
+		X:          0,
+		Y:          0,
+		Z:          0,
+		Confidence: 0,
+		Timestamp:  timestamp,
+	}
+	writeJSON(w, explanation)
+}
+
+// abs64 returns the absolute value of an int64.
+func abs64(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// GetExplanationForBlob retrieves the explainability snapshot for a blob at or near a specific timestamp.
+// This is a public method used by other handlers (like feedback) to access explainability data.
+func (h *Handler) GetExplanationForBlob(blobID int, timestamp int64) *BlobExplanation {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// First try to get by blob ID directly
+	if explanation, ok := h.blobHistory[blobID]; ok {
+		// Check if the timestamp is close (within 1 minute)
+		if abs64(explanation.Timestamp-timestamp) < 60000 {
+			return explanation
+		}
+	}
+
+	// If not found by blob ID or timestamp mismatch, search by timestamp
+	// Find the closest explanation within 1 minute
+	var closest *BlobExplanation
+	minDiff := int64(60000) // 1 minute
+
+	for _, exp := range h.blobHistoryByTime {
+		diff := abs64(exp.Timestamp - timestamp)
+		if diff < minDiff {
+			minDiff = diff
+			closest = exp
+		}
+	}
+
+	if closest != nil {
+		return closest
+	}
+
+	// Return nil if nothing found
+	return nil
 }
 
 // refreshData handles POST /api/explain/refresh

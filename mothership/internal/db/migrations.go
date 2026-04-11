@@ -73,6 +73,11 @@ func AllMigrations() []Migration {
 			Description: "add person and sections_json columns to briefings table",
 			Up:          migration_013_add_briefing_person_columns,
 		},
+		{
+			Version:     14,
+			Description: "add id, delivered, acknowledged columns to briefings table",
+			Up:          migration_014_add_briefing_delivery_columns,
+		},
 	}
 }
 
@@ -634,6 +639,65 @@ func migration_013_add_briefing_person_columns(tx *sql.Tx) error {
 
 	if !sectionsColExists {
 		_, err = tx.Exec(`ALTER TABLE briefings ADD COLUMN sections_json TEXT`)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// migration_014_add_briefing_delivery_columns adds id, delivered, acknowledged columns to briefings table.
+func migration_014_add_briefing_delivery_columns(tx *sql.Tx) error {
+	// Add id column (UUID) - primary key replacement
+	// Note: We can't add a PRIMARY KEY to an existing table with data, so we'll add a unique index instead
+	var idColExists bool
+	err := tx.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'id'
+	`).Scan(&idColExists)
+	if err != nil {
+		return err
+	}
+
+	if !idColExists {
+		_, err = tx.Exec(`ALTER TABLE briefings ADD COLUMN id TEXT`)
+		if err != nil {
+			return err
+		}
+		// Create unique index on id
+		_, err = tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_briefings_id ON briefings(id)`)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add delivered column
+	var deliveredColExists bool
+	err = tx.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'delivered'
+	`).Scan(&deliveredColExists)
+	if err != nil {
+		return err
+	}
+
+	if !deliveredColExists {
+		_, err = tx.Exec(`ALTER TABLE briefings ADD COLUMN delivered INTEGER NOT NULL DEFAULT 0`)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add acknowledged column
+	var acknowledgedColExists bool
+	err = tx.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'acknowledged'
+	`).Scan(&acknowledgedColExists)
+	if err != nil {
+		return err
+	}
+
+	if !acknowledgedColExists {
+		_, err = tx.Exec(`ALTER TABLE briefings ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0`)
 		if err != nil {
 			return err
 		}

@@ -1,0 +1,261 @@
+[
+  {
+    "id": "sensing-link",
+    "title": "What is a sensing link?",
+    "content": "A sensing link is the path between two spaxel nodes (one transmitting, one receiving). Motion in the space between them changes the WiFi signal, which spaxel detects. Each link contributes to detecting people in your space.",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "fresnel-zone",
+    "title": "What is the Fresnel zone?",
+    "content": "The Fresnel zone is the region in space where motion has the most impact on the signal between two nodes. Spaxel uses this geometry to estimate where in the room a person is. Zone 1 is the most sensitive area directly between the nodes.",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "csi-technology",
+    "title": "How does CSI detection work?",
+    "content": "CSI (Channel State Information) is data about how WiFi signals travel through space. When a person moves between WiFi devices, they affect the signal. Spaxel analyzes these tiny changes to detect motion and location without cameras.",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "detection-quality",
+    "title": "Why is my detection quality low?",
+    "content": "Low quality usually means interference from other WiFi devices, an obstacle in the sensing zone, or the node is too far from your router. Click \"Diagnose\" on the link in the Fleet Status panel to find the specific cause.",
+    "category": "Troubleshooting",
+    "action": { "label": "View Fleet Status", "url": "#/fleet" }
+  },
+  {
+    "id": "node-offline",
+    "title": "My node shows as offline",
+    "content": "Check that the node is powered (LED should be lit). If it's powered but offline, verify WiFi is working. The node may have disconnected from your network. Try power cycling it by unplugging and replugging.",
+    "category": "Troubleshooting",
+    "action": { "label": "View Fleet Status", "url": "#/fleet" }
+  },
+  {
+    "id": "false-positives",
+    "title": "Why am I getting false detections?",
+    "content": "False detections can be caused by RF interference from microwaves, other WiFi networks, or environmental changes. Use the feedback buttons on detections to help the system learn and reduce false positives over time.",
+    "category": "Troubleshooting",
+    "action": { "label": "View Timeline", "url": "#/timeline" }
+  },
+  {
+    "id": "gdop-coverage",
+    "title": "What is GDOP coverage?",
+    "content": "GDOP (Geometric Dilution of Precision) measures how well your node positions can localize people. Green areas have excellent accuracy, yellow areas are good, red areas may need additional nodes for reliable detection.",
+    "category": "Setup",
+    "action": { "label": "Open Setup", "url": "#/setup" }
+  },
+  {
+    "id": "node-placement",
+    "title": "Where should I place my nodes?",
+    "content": "Place nodes at different heights and around the perimeter of the space you want to monitor. Avoid placing all nodes at the same height. Corners of rooms work well. The coverage painting tool in Setup shows the best positions.",
+    "category": "Setup",
+    "action": { "label": "Open Setup", "url": "#/setup" }
+  },
+  {
+    "id": "add-node",
+    "title": "How do I add a new node?",
+    "content": "Connect your ESP32-S3 node via USB to the device running this dashboard. Click \"Add Node\" and follow the on-screen instructions. The node will be automatically configured and should appear within 2 minutes.",
+    "category": "Setup",
+    "action": { "label": "Add Node", "url": "#/setup/add" }
+  },
+  {
+    "id": "floorplan-calibration",
+    "title": "How do I calibrate my floor plan?",
+    "content": "Upload an image of your floor plan, then click two points that you know the real-world distance between. Enter that distance and the system will scale the image correctly. Drag the calibrated floor plan to position it in your 3D space.",
+    "category": "Setup",
+    "action": { "label": "Open Setup", "url": "#/setup" }
+  },
+  {
+    "id": "automations",
+    "title": "How do automations work?",
+    "content": "Automations trigger actions when specific conditions are met. You can define trigger volumes in 3D space and set conditions like \"when someone enters\", \"when someone dwells for 30 seconds\", or \"when the room becomes vacant\". Actions can send webhooks or MQTT messages.",
+    "category": "Features",
+    "action": { "label": "View Automations", "url": "#/automations" }
+  },
+  {
+    "id": "trigger-volumes",
+    "title": "How do I create a trigger zone?",
+    "content": "In Setup mode, draw a 3D box or cylinder in the scene where you want to detect presence. Choose the condition (enter, leave, dwell, vacant, count) and configure the action. Trigger volumes are shown as translucent shapes in the 3D view.",
+    "category": "Features",
+    "action": { "label": "Open Automations", "url": "#/automations" }
+  },
+  {
+    "id": "fall-detection",
+    "title": "How does fall detection work?",
+    "content": "Fall detection monitors the Z-axis (height) of detected people. A rapid descent to below 0.5m followed by sustained stillness for 10+ seconds triggers a fall alert. This requires nodes at mixed heights for best accuracy.",
+    "category": "Features",
+    "action": null
+  },
+  {
+    "id": "ble-identity",
+    "title": "How does person identification work?",
+    "content": "Spaxel detects BLE signals from phones, watches, and tags. By registering your devices in the People panel, the system can match detected people to specific identities. The closer the device is to the person, the better the match.",
+    "category": "Features",
+    "action": { "label": "View People", "url": "#/people" }
+  },
+  {
+    "id": "register-ble-device",
+    "title": "How do I register a BLE device?",
+    "content": "Go to the People panel and look at the \"Discovered\" section. Devices that have been seen nearby appear here. Click on a device to assign it a label (like \"Alice\"), choose a type and color, and register it.",
+    "category": "Features",
+    "action": { "label": "View People", "url": "#/people" }
+  },
+  {
+    "id": "predictions",
+    "title": "What are presence predictions?",
+    "content": "After 7 days of learning, spaxel predicts where each person will be next. Predictions are based on learned patterns for each person, time of day, and day of week. Predictions appear in the Predictions panel and can be used for automations.",
+    "category": "Features",
+    "action": { "label": "View Predictions", "url": "#/predictions" }
+  },
+  {
+    "id": "sleep-tracking",
+    "title": "How does sleep tracking work?",
+    "content": "Define a bedroom zone and spaxel will analyze breathing patterns and motion during nighttime hours. Sleep reports include duration, onset latency, restlessness, and breathing regularity. Requires 7+ nights of data for accurate patterns.",
+    "category": "Features",
+    "action": { "label": "View Sleep", "url": "#/sleep" }
+  },
+  {
+    "id": "diurnal-baseline",
+    "title": "What is the diurnal baseline?",
+    "content": "The diurnal baseline learns the RF environment for each hour of the day. Some homes have patterns like HVAC cycling that affect WiFi signals. The system adapts to these patterns to reduce false positives during predictable environmental changes.",
+    "category": "Advanced",
+    "action": { "label": "View Settings", "url": "#/settings" }
+  },
+  {
+    "id": "time-travel",
+    "title": "What is time-travel debugging?",
+    "content": "Time-travel lets you rewind and replay past detection events. Pause live view, scrub through history, and adjust algorithm parameters to see how detection would have differed. Great for understanding why something was (or wasn't) detected.",
+    "category": "Advanced",
+    "action": null
+  },
+  {
+    "id": "feedback-learning",
+    "title": "How does feedback improve accuracy?",
+    "content": "When you mark detections as correct or incorrect, spaxel learns from your feedback. True positives reinforce the current settings. False positives slightly raise thresholds and adjust link weights. Over time, this customizes detection to your specific environment.",
+    "category": "Advanced",
+    "action": null
+  },
+  {
+    "id": "security-mode",
+    "title": "What is security mode?",
+    "content": "Security mode enhances sensitivity and treats any motion as suspicious. When armed, all detections trigger alerts. You can arm/disarm manually or via automation. Perfect for when you're away from home.",
+    "category": "Features",
+    "action": null
+  },
+  {
+    "id": "zones",
+    "title": "How do I define zones?",
+    "content": "In Setup mode, draw room boxes to define zones. Zones represent logical areas like \"Kitchen\", \"Living Room\", or \"Bedroom\". Zone occupancy is tracked automatically via portal crossings or blob positions.",
+    "category": "Setup",
+    "action": { "label": "Open Setup", "url": "#/setup" }
+  },
+  {
+    "id": "portals",
+    "title": "What are portals?",
+    "content": "Portals are invisible doorways you draw between zones. They detect directional crossings (e.g., from hallway to kitchen) and maintain accurate room occupancy counts. Draw portals across doorways in the Setup editor.",
+    "category": "Setup",
+    "action": { "label": "Open Setup", "url": "#/setup" }
+  },
+  {
+    "id": "accuracy-trends",
+    "title": "How can I track accuracy over time?",
+    "content": "The Accuracy panel shows how detection accuracy has improved based on your feedback. It tracks the median localization error from BLE ground truth and shows how user corrections have reduced false positives over weeks and months.",
+    "category": "Advanced",
+    "action": { "label": "View Accuracy", "url": "#/accuracy" }
+  },
+  {
+    "id": "rebaseline",
+    "title": "When should I re-baseline?",
+    "content": "Re-baseline after moving nodes, changing furniture, or if you notice consistent false positives. The system suggests re-calibration when environment changes are detected. You can trigger manual re-baselining from the Fleet Status panel.",
+    "category": "Maintenance",
+    "action": { "label": "View Fleet", "url": "#/fleet" }
+  },
+  {
+    "id": "ota-update",
+    "title": "How do I update node firmware?",
+    "content": "When a new firmware version is available, you'll see an \"Update available\" badge on affected nodes. You can update individual nodes or use \"Update All\" for a rolling update. The system automatically updates one node at a time with a 30-second gap between updates.",
+    "category": "Maintenance",
+    "action": { "label": "View Fleet", "url": "#/fleet" }
+  },
+  {
+    "id": "simple-mode",
+    "title": "What is Simple Mode?",
+    "content": "Simple Mode is a card-based interface for household members who don't need the full 3D view. It shows room occupancy, activity feed, and alerts in an easy-to-use format. Toggle between Simple and Expert modes from the toolbar.",
+    "category": "Interface",
+    "action": null
+  },
+  {
+    "id": "ambient-mode",
+    "title": "What is Ambient Mode?",
+    "content": "Ambient Mode is a display-only mode for wall-mounted tablets. It shows a simplified floor plan with colored dots for people and room labels. The display dims when the house is empty and brightens when someone arrives. Access at /ambient on your tablet.",
+    "category": "Interface",
+    "action": null
+  },
+  {
+    "id": "command-palette",
+    "title": "How do I use the command palette?",
+    "content": "Press Ctrl+K (Cmd+K on Mac) to open the command palette. Search for zones, people, nodes, or commands like \"update all nodes\" or \"re-baseline\". It's the fastest way to navigate and control the system.",
+    "category": "Interface",
+    "action": null
+  },
+  {
+    "id": "timeline",
+    "title": "What does the timeline show?",
+    "content": "The timeline shows every event the system has observed: detections, zone transitions, alerts, system events, and more. Tap any event to jump to that moment in time-travel mode. You can filter by person, zone, event type, or search naturally.",
+    "category": "Interface",
+    "action": { "label": "View Timeline", "url": "#/timeline" }
+  },
+  {
+    "id": "explainability",
+    "title": "What is detection explainability?",
+    "content": "Explainability shows exactly why a person was detected at a specific location. Tap \"Why?\" on any detection to see which links contributed, their signal strength, Fresnel zone intersections, and confidence breakdown. Helps you understand and debug detection.",
+    "category": "Advanced",
+    "action": null
+  },
+  {
+    "id": "passive-radar",
+    "title": "What is passive radar mode?",
+    "content": "Passive radar mode uses your existing WiFi router as the transmitter. ESP32 nodes operate in receive-only mode, capturing CSI from router beacons and data traffic. This provides presence detection with just 2 nodes instead of 4+.",
+    "category": "Basics",
+    "action": null
+  },
+  {
+    "id": "crowd-flow",
+    "title": "What is crowd flow visualization?",
+    "content": "Crowd flow aggregates movement patterns over time into directional flow maps. Arrows show common paths, colored dots show where people linger. Use the time filter to see patterns by hour, day, or week. Helps optimize furniture placement and understand space usage.",
+    "category": "Features",
+    "action": null
+  },
+  {
+    "id": "notifications",
+    "title": "How do push notifications work?",
+    "content": "Configure notification channels (Ntfy, Pushover, Gotify, webhooks) in Settings. Notifications include floor plan thumbnails and natural language descriptions. Smart batching combines rapid-fire events. Quiet hours suppress non-critical alerts.",
+    "category": "Interface",
+    "action": { "label": "Notification Settings", "url": "#/settings/notifications" }
+  },
+  {
+    "id": "backup-restore",
+    "title": "How do I backup my data?",
+    "content": "Use the Export button in Settings to download a complete configuration backup. This includes nodes, zones, triggers, BLE registry, and settings. Import on a new installation to restore. For full backups including database, use the /api/backup endpoint.",
+    "category": "Maintenance",
+    "action": { "label": "Export Config", "url": "#/settings/export" }
+  },
+  {
+    "id": "mqtt-integration",
+    "title": "How do I integrate with Home Assistant?",
+    "content": "Configure MQTT broker settings in the Integration panel. Spaxel publishes occupancy, person presence, and alerts to MQTT topics. Home Assistant auto-discovery creates sensors automatically. No additional software needed on the Home Assistant side.",
+    "category": "Integration",
+    "action": { "label": "Integration Settings", "url": "#/settings/integration" }
+  },
+  {
+    "id": "self-healing",
+    "title": "What is self-healing?",
+    "content": "When a node goes offline, spaxel automatically re-optimizes roles among remaining nodes to maintain the best possible coverage. When the node reconnects, roles are re-optimized again. The dashboard shows before/after coverage comparisons.",
+    "category": "Advanced",
+    "action": null
+  }
+]

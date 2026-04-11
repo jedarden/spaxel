@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/diagnostics"
 )
 
 // GuidedHandler provides endpoints for proactive contextual help.
@@ -17,6 +18,9 @@ type GuidedHandler struct {
 		MarkQualityBannerShown(zoneID int)
 		TriggerCalibrationComplete(zoneID int, qualityBefore, qualityAfter float64)
 		TriggerNodeOffline(mac string, offlineDuration float64) // for testing
+		ShouldShowTooltip(featureID string) bool
+		GetTooltip(featureID string) (diagnostics.Tooltip, bool)
+		MarkTooltipShown(featureID string)
 	}
 	zonesHandler interface {
 		GetZone(id int) (map[string]interface{}, error)
@@ -25,6 +29,7 @@ type GuidedHandler struct {
 	nodesHandler interface {
 		GetAllNodes() ([]map[string]interface{}, error)
 	}
+	diagnosticsHandler DiagnosticsHandler
 }
 
 // NewGuidedHandler creates a new guided troubleshooting handler.
@@ -63,6 +68,118 @@ func (h *GuidedHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/guided/node/{mac}/troubleshoot", h.handleGetNodeTroubleshoot)
 	r.Get("/api/guided/tooltip/{featureId}", h.handleGetTooltip)
 	r.Post("/api/guided/tooltip/{featureId}/dismiss", h.handleDismissTooltip)
+
+	// Link diagnostics API for proactive quality prompts
+	r.Get("/api/diagnostics/link/{linkID}", h.handleGetLinkDiagnostics)
+}
+
+// DiagnosticsHandler is the interface for accessing diagnostic information.
+type DiagnosticsHandler interface {
+	GetDiagnoses(linkID string) []diagnostics.Diagnosis
+	GetDiagnosticFor(linkID string, timestamp time.Time) *diagnostics.Diagnosis
+}
+
+// SetDiagnosticsHandler sets the diagnostics handler.
+func (h *GuidedHandler) SetDiagnosticsHandler(dh DiagnosticsHandler) {
+	h.diagnosticsHandler = dh
+}
+
+// handleGetLinkDiagnostics returns diagnostic information for a specific link.
+func (h *GuidedHandler) handleGetLinkDiagnostics(w http.ResponseWriter, r *http.Request) {
+	linkID := chi.URLParam(r, "linkID")
+	if linkID == "" {
+		writeJSONError(w, http.StatusBadRequest, "missing link ID")
+		return
+	}
+
+	// Parse optional timestamp parameter
+	var timestamp time.Time
+	timestampStr := r.URL.Query().Get("timestamp")
+	if timestampStr != "" {
+		if ts, err := time.Parse(time.RFC3339, timestampStr); err == nil {
+			timestamp = ts
+		} else if ms, err := time.Parse(timestampStr, "20060102150405"); err == nil {
+			timestamp = ms
+		}
+	}
+
+	var diagnosis *diagnostics.Diagnosis
+	var diagnoses []diagnostics.Diagnosis
+
+	if h.diagnosticsHandler != nil {
+		if !timestamp.IsZero() {
+			diagnosis = h.diagnosticsHandler.GetDiagnosticFor(linkID, timestamp)
+		}
+		diagnoses = h.diagnosticsHandler.GetDiagnoses(linkID)
+	}
+
+	// Get current link health info
+	health := h.getCurrentLinkHealth(linkID)
+
+	response := map[string]interface{}{
+		"link_id":  linkID,
+		"diagnosis": diagnosis,
+		"diagnoses": diagnoses,
+		"health":   health,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// getCurrentLinkHealth returns the current health snapshot for a link
+func (h *GuidedHandler) getCurrentLinkHealth(linkID string) map[string]interface{} {
+	// Try to get current health from the link weather diagnostics
+	if h.diagnosticsHandler == nil {
+		return nil
+	}
+
+	// Get diagnoses and extract the most recent diagnosis with actionable info
+	diagnoses := h.diagnosticsHandler.GetDiagnoses(linkID)
+	if len(diagnoses) == 0 {
+		return map[string]interface{}{
+			"message": "No diagnostic data available yet. Link needs more observation time.",
+		}
+	}
+
+	// Get the most recent diagnosis
+	mostRecent := diagnoses[0]
+
+	// Build health map with current metrics
+	health := map[string]interface{}{
+		"packet_rate":      20.0, // Default expected rate
+		"snr":              0.5,  // Default SNR
+		"phase_stability":  0.5,  // Default stability
+		"drift_rate":       0.0,  // No drift
+		"composite_score":  mostRecent.ConfidenceScore,
+	}
+
+	// If the diagnosis has specific rule info, we can infer health metrics
+	switch mostRecent.RuleID {
+	case "wifi_congestion_distance":
+		health["packet_rate"] = 12.0 // Low packet rate
+		health["composite_score"] = 0.5
+	case "metal_interference":
+		health["phase_stability"] = 0.7 // High instability
+		health["composite_score"] = 0.4
+	case "environmental_change":
+		health["drift_rate"] = 0.06 // High drift
+		health["composite_score"] = 0.6
+	case "fresnel_blockage", "fresnel_blockage_heuristic":
+		health["composite_score"] = 0.5
+	case "periodic_interference":
+		health["phase_stability"] = 0.6
+		health["composite_score"] = 0.55
+	}
+
+	// Add explanation text
+	if mostRecent.Detail != "" {
+		health["explanation"] = mostRecent.Detail
+	}
+	if mostRecent.Advice != "" {
+		health["advice"] = mostRecent.Advice
+	}
+
+	return health
 }
 
 // handleGetIssues returns all active guided troubleshooting issues.

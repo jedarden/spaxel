@@ -176,10 +176,6 @@ func (g *Generator) Generate(date string, person string) (*Briefing, error) {
 
 	// Calculate time range for "last night" (18:00 yesterday to now)
 	nightStart := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day()-1, 18, 0, 0, 0, time.Local)
-	if dateTime.Hour() < 6 {
-		// If early morning, use the night before
-		nightStart = nightStart.AddDate(0, 0, -1)
-	}
 	nightEnd := dateTime
 
 	// BLOCK 1 — Critical alerts (fall, security)
@@ -273,6 +269,9 @@ func (g *Generator) generateAlertBlock(nightStart, nightEnd time.Time, person st
 		args = append(args, person)
 	}
 	query += ` ORDER BY timestamp_ms ASC LIMIT 5`
+
+	log.Printf("[DEBUG] Alert query: nightStart=%s (%d), nightEnd=%s (%d), person=%s",
+		nightStart, nightStart.UnixMilli(), nightEnd, nightEnd.UnixMilli(), person)
 
 	rows, err := g.db.Query(query, args...)
 	if err != nil {
@@ -581,19 +580,6 @@ func (g *Generator) generateHealthBlock() *Section {
 
 	// Build content with node health details
 	var contentParts []string
-
-	// Main health summary
-	var health string
-	switch {
-	case quality >= 90:
-		health = "Excellent"
-	case quality >= 70:
-		health = "Good"
-	case quality >= 40:
-		health = "Fair"
-	default:
-		health = "Poor"
-	}
 
 	contentParts = append(contentParts, fmt.Sprintf("%d nodes healthy.", online))
 
