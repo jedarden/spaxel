@@ -2,9 +2,7 @@ package simulator
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 )
 
 // Test helper to create a temporary store
@@ -804,7 +802,7 @@ func TestVirtualNodeStore_Close(t *testing.T) {
 	}
 
 	// Operations should fail after close
-	err = store.CreateVirtualNode("node-2", "Should Fail", NewPoint(2.0, 3.0, 1.5))
+	_, err = store.CreateVirtualNode("node-2", "Should Fail", NewPoint(2.0, 3.0, 1.5))
 	if err == nil {
 		t.Error("Expected error when creating node after close")
 	}

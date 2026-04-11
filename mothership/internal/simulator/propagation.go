@@ -486,3 +486,30 @@ func IsInFirstFresnelZone(tx, rx, point Point) bool {
 	return FresnelZoneNumber(tx, rx, point) == 1
 }
 
+// SimulateCSIData simulates CSI data for a set of links and walkers.
+// Returns a map of link IDs to their maximum deltaRMS value across all walkers,
+// but only includes links where deltaRMS is >= threshold.
+func (pm *PropagationModel) SimulateCSIData(links []Link, walkers []*Walker, threshold float64) map[string]float64 {
+	results := make(map[string]float64)
+
+	for _, link := range links {
+		maxDeltaRMS := 0.0
+
+		// Compute deltaRMS for each walker position
+		for _, walker := range walkers {
+			deltaRMS := pm.ComputeLinkActivity(link, walker.Position, threshold)
+			if deltaRMS > maxDeltaRMS {
+				maxDeltaRMS = deltaRMS
+			}
+		}
+
+		// Only include links that meet the threshold
+		if maxDeltaRMS >= threshold {
+			linkID := link.TX.ID + "->" + link.RX.ID
+			results[linkID] = maxDeltaRMS
+		}
+	}
+
+	return results
+}
+

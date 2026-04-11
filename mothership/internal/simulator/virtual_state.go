@@ -117,8 +117,8 @@ func (s *VirtualNodeStore) CreateNode(id, name string, nodeType NodeType, positi
 
 	s.nodes[id] = state
 
-	// Persist to disk
-	if err := s.save(); err != nil {
+	// Persist to disk (mutex already held)
+	if err := s.saveLocked(); err != nil {
 		delete(s.nodes, id)
 		return nil, fmt.Errorf("save node: %w", err)
 	}
@@ -133,19 +133,47 @@ func (s *VirtualNodeStore) CreateVirtualNode(id, name string, position Point) (*
 
 // CreateAPNode creates a new access point node (for passive radar)
 func (s *VirtualNodeStore) CreateAPNode(id, name, bssid string, channel int, position Point) (*VirtualNodeState, error) {
-	state, err := s.CreateNode(id, name, NodeTypeAP, position)
-	if err != nil {
-		return nil, err
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return nil, fmt.Errorf("store is closed")
 	}
 
-	s.mu.Lock()
-	state.Role = RoleTX
-	state.APBSSID = bssid
-	state.APChannel = channel
-	state.UpdatedAt = time.Now()
-	s.mu.Unlock()
+	if _, exists := s.nodes[id]; exists {
+		return nil, fmt.Errorf("node %s already exists", id)
+	}
 
-	if err := s.save(); err != nil {
+	// Validate position is within space bounds
+	minX, minY, minZ, maxX, maxY, maxZ := s.space.Bounds()
+	if position.X < minX || position.X > maxX ||
+		position.Y < minY || position.Y > maxY ||
+		position.Z < minZ || position.Z > maxZ {
+		return nil, fmt.Errorf("position (%f, %f, %f) is outside space bounds [%f, %f, %f] to [%f, %f, %f]",
+			position.X, position.Y, position.Z, minX, minY, minZ, maxX, maxY, maxZ)
+	}
+
+	now := time.Now()
+	state := &VirtualNodeState{
+		ID:        id,
+		Name:      name,
+		Type:      NodeTypeAP,
+		Role:      RoleTX,
+		Position:  position,
+		Enabled:   true,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Metadata:  make(map[string]interface{}),
+		Tags:      make([]string, 0),
+		APBSSID:   bssid,
+		APChannel: channel,
+	}
+
+	s.nodes[id] = state
+
+	// Persist to disk (mutex already held)
+	if err := s.saveLocked(); err != nil {
+		delete(s.nodes, id)
 		return nil, fmt.Errorf("save AP node: %w", err)
 	}
 
@@ -196,7 +224,7 @@ func (s *VirtualNodeStore) UpdateNodePosition(id string, position Point) error {
 	state.Position = position
 	state.UpdatedAt = time.Now()
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // UpdateNodeRole updates a node's role
@@ -216,7 +244,7 @@ func (s *VirtualNodeStore) UpdateNodeRole(id string, role NodeRole) error {
 	state.Role = role
 	state.UpdatedAt = time.Now()
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // SetNodeEnabled enables or disables a node
@@ -236,7 +264,7 @@ func (s *VirtualNodeStore) SetNodeEnabled(id string, enabled bool) error {
 	state.Enabled = enabled
 	state.UpdatedAt = time.Now()
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // UpdateNodeMetadata updates a node's metadata
@@ -256,7 +284,7 @@ func (s *VirtualNodeStore) UpdateNodeMetadata(id string, metadata map[string]int
 	state.Metadata = metadata
 	state.UpdatedAt = time.Now()
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // AddTag adds a tag to a node
@@ -283,7 +311,7 @@ func (s *VirtualNodeStore) AddTag(id, tag string) error {
 	state.Tags = append(state.Tags, tag)
 	state.UpdatedAt = time.Now()
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // RemoveTag removes a tag from a node
@@ -315,7 +343,7 @@ func (s *VirtualNodeStore) RemoveTag(id, tag string) error {
 	state.Tags = newTags
 	state.UpdatedAt = time.Now()
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // DeleteNode removes a node from the store
@@ -333,7 +361,7 @@ func (s *VirtualNodeStore) DeleteNode(id string) error {
 
 	delete(s.nodes, id)
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // ListNodes returns all nodes
@@ -448,7 +476,7 @@ func (s *VirtualNodeStore) UpdateSpace(space *Space) error {
 		}
 	}
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // Clear removes all nodes from the store
@@ -462,7 +490,7 @@ func (s *VirtualNodeStore) Clear() error {
 
 	s.nodes = make(map[string]*VirtualNodeState)
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // ToNodeSet converts the stored nodes to a NodeSet for simulation
@@ -540,7 +568,7 @@ func (s *VirtualNodeStore) ImportFromNodeSet(nodeSet *NodeSet) error {
 		s.nodes[node.ID] = state
 	}
 
-	return s.save()
+	return s.saveLocked()
 }
 
 // Close closes the store and releases resources
