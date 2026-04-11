@@ -174,9 +174,10 @@ func (g *Generator) Generate(date string, person string) (*Briefing, error) {
 		return nil, fmt.Errorf("parse date: %w", err)
 	}
 
-	// Calculate time range for "last night" (18:00 yesterday to now)
+	// Calculate time range for "last night" (previous day 18:00 to current day 06:00)
+	// This covers the overnight period including early morning hours
 	nightStart := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day()-1, 18, 0, 0, 0, time.Local)
-	nightEnd := dateTime
+	nightEnd := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 6, 0, 0, 0, time.Local)
 
 	// BLOCK 1 — Critical alerts (fall, security)
 	if alertSection := g.generateAlertBlock(nightStart, nightEnd, person); alertSection != nil {
@@ -275,6 +276,7 @@ func (g *Generator) generateAlertBlock(nightStart, nightEnd time.Time, person st
 
 	rows, err := g.db.Query(query, args...)
 	if err != nil {
+		log.Printf("[DEBUG] Alert query error: %v", err)
 		return nil
 	}
 	defer rows.Close()
@@ -283,6 +285,7 @@ func (g *Generator) generateAlertBlock(nightStart, nightEnd time.Time, person st
 	for rows.Next() {
 		var eventType, zone, personName, detailJSON, severity string
 		if err := rows.Scan(&eventType, &zone, &personName, &detailJSON, &severity); err != nil {
+			log.Printf("[DEBUG] Scan error: %v", err)
 			continue
 		}
 
@@ -689,8 +692,7 @@ func (g *Generator) generateLearningBlock() *Section {
 // Filters for FallDetected, AnomalyDetected, NodeDisconnected events during quiet hours.
 func (g *Generator) generateOvernightEventsBlock(nightStart, nightEnd time.Time, person string) *Section {
 	// Calculate quiet hours period
-	quietStart := time.Date(nightEnd.Year(), nightEnd.Month(), nightEnd.Day(), g.quietHoursStart, 0, 0, 0, time.Local)
-	quietEnd := time.Date(nightEnd.Year(), nightEnd.Month(), nightEnd.Day()+1, g.quietHoursEnd, 0, 0, 0, time.Local)
+	// Use the passed time range directly (already calculated as 18:00 previous day to 06:00 current day)
 
 	query := `SELECT type, zone, person, detail_json, timestamp_ms, severity
 	           FROM events
@@ -700,7 +702,7 @@ func (g *Generator) generateOvernightEventsBlock(nightStart, nightEnd time.Time,
 	           ORDER BY timestamp_ms ASC
 	           LIMIT 6`
 
-	args := []interface{}{quietStart.UnixMilli(), quietEnd.UnixMilli()}
+	args := []interface{}{nightStart.UnixMilli(), nightEnd.UnixMilli()}
 
 	if person != "" {
 		query += ` AND person = ?`
