@@ -1,0 +1,570 @@
+/**
+ * Spaxel Dashboard - Pre-Deployment Simulator Styles
+ *
+ * Styling for the pre-deployment simulator interface.
+ */
+
+/* ============================================
+   Simulator Panel
+   ============================================ */
+.simulator-panel {
+    position: fixed;
+    top: 44px; /* Below mode toggle bar */
+    right: 0;
+    width: 380px;
+    max-height: calc(100vh - 44px);
+    background: #1a1a1a;
+    border-left: 1px solid #333;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 100;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.simulator-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.simulator-panel::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+.simulator-panel::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+.simulator-panel::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* ============================================
+   Simulator Header
+   ============================================ */
+.simulator-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #333;
+    background: #1a1a1a;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.simulator-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.sim-close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, color 0.2s;
+}
+
+.sim-close-btn:hover {
+    background: #333;
+    color: #fff;
+}
+
+/* ============================================
+   Simulator Sections
+   ============================================ */
+.sim-section {
+    padding: 16px;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.sim-section:last-child {
+    border-bottom: none;
+}
+
+.sim-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ============================================
+   Space Controls
+   ============================================ */
+.sim-space-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sim-space-controls label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: #ccc;
+}
+
+.sim-space-controls input[type="number"] {
+    width: 60px;
+    padding: 4px 8px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+}
+
+.sim-space-controls input[type="number"]:focus {
+    outline: none;
+    border-color: #45b7d1;
+}
+
+/* ============================================
+   Tool Buttons
+   ============================================ */
+.sim-tools {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.sim-tool-btn {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.sim-tool-btn:hover {
+    background: #333;
+    border-color: #555;
+}
+
+.sim-tool-btn.active {
+    background: #45b7d1;
+    border-color: #45b7d1;
+}
+
+.sim-tool-btn.active svg {
+    stroke: #fff;
+}
+
+.sim-tool-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: #888;
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+.sim-btn {
+    padding: 8px 12px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.sim-btn:hover {
+    background: #333;
+    border-color: #555;
+    color: #fff;
+}
+
+.sim-btn-primary {
+    background: #45b7d1;
+    border-color: #45b7d1;
+    color: #fff;
+}
+
+.sim-btn-primary:hover {
+    background: #3aa6c3;
+    border-color: #3aa6c3;
+}
+
+.sim-btn-danger {
+    background: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.sim-btn-danger:hover {
+    background: #c82333;
+    border-color: #c82333;
+}
+
+.sim-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sim-btn:disabled:hover {
+    background: #2a2a2a;
+    border-color: #444;
+}
+
+/* ============================================
+   Item Lists (Nodes/Walkers)
+   ============================================ */
+.sim-items-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 12px;
+}
+
+.sim-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px;
+    background: #2a2a2a;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.sim-item-name {
+    font-size: 13px;
+    color: #fff;
+}
+
+.sim-item-position {
+    font-size: 11px;
+    color: #888;
+    margin-left: 8px;
+}
+
+.sim-item-delete {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+.sim-item-delete:hover {
+    background: rgba(220, 53, 69, 0.1);
+}
+
+/* ============================================
+   Walker Controls
+   ============================================ */
+.sim-walker-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.sim-walker-controls select {
+    flex: 1;
+    padding: 6px 8px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+}
+
+/* ============================================
+   GDOP Legend
+   ============================================ */
+.sim-gdop-legend {
+    margin-top: 12px;
+    padding: 12px;
+    background: #2a2a2a;
+    border-radius: 4px;
+}
+
+.gdop-legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.gdop-legend-item:last-child {
+    margin-bottom: 0;
+}
+
+.gdop-legend-color {
+    width: 24px;
+    height: 12px;
+    border-radius: 2px;
+    margin-right: 8px;
+}
+
+.gdop-legend-label {
+    font-size: 12px;
+    color: #ccc;
+}
+
+.gdop-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #444;
+}
+
+.gdop-stat-item {
+    font-size: 12px;
+    color: #888;
+}
+
+.gdop-stat-item strong {
+    color: #fff;
+    margin-left: 4px;
+}
+
+/* ============================================
+   Simulation Controls
+   ============================================ */
+.sim-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sim-controls button {
+    flex: 1;
+}
+
+/* ============================================
+   Progress Bar
+   ============================================ */
+.sim-progress {
+    margin-top: 12px;
+}
+
+.sim-progress #sim-time {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.sim-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #2a2a2a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.sim-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #45b7d1, #4ecdc4);
+    transition: width 0.1s linear;
+}
+
+/* ============================================
+   Results Section
+   ============================================ */
+.sim-results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-result-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    background: #2a2a2a;
+    border-radius: 4px;
+}
+
+.sim-result-label {
+    font-size: 13px;
+    color: #ccc;
+}
+
+.sim-result-value {
+    font-size: 13px;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* ============================================
+   Recommendations
+   ============================================ */
+.sim-recommendations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sim-recommendation {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px;
+    background: #2a2a2a;
+    border-radius: 4px;
+    border-left: 3px solid #555;
+}
+
+.sim-rec-priority.high {
+    border-left-color: #dc3545;
+}
+
+.sim-rec-priority.medium {
+    border-left-color: #ffc107;
+}
+
+.sim-rec-priority.low {
+    border-left-color: #22c65e;
+}
+
+.sim-rec-text {
+    font-size: 13px;
+    color: #ccc;
+    flex: 1;
+}
+
+/* ============================================
+   Shopping List
+   ============================================ */
+.sim-shopping-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sim-shopping-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    background: #2a2a2a;
+    border-radius: 4px;
+}
+
+.sim-shopping-item span {
+    font-size: 13px;
+    color: #ccc;
+}
+
+.sim-shopping-item strong {
+    color: #45b7d1;
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+.sim-empty-state {
+    text-align: center;
+    padding: 32px 16px;
+    color: #666;
+}
+
+.sim-empty-state svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.sim-empty-state p {
+    font-size: 14px;
+    margin: 0;
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+@media (max-width: 768px) {
+    .simulator-panel {
+        width: 100%;
+        max-height: 50vh;
+    }
+
+    .sim-space-controls {
+        flex-direction: column;
+    }
+
+    .sim-space-controls label {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .sim-space-controls input[type="number"] {
+        width: 70px;
+    }
+
+    .sim-controls {
+        flex-wrap: wrap;
+    }
+
+    .sim-controls button {
+        min-width: calc(50% - 4px);
+    }
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.sim-progress-fill.running {
+    animation: pulse 1s ease-in-out infinite;
+}
+
+/* ============================================
+   Loading State
+   ============================================ */
+.sim-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    color: #888;
+}
+
+.sim-loading::after {
+    content: "";
+    width: 16px;
+    height: 16px;
+    margin-left: 8px;
+    border: 2px solid #45b7d1;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

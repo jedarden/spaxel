@@ -80,16 +80,25 @@
 
         // Handle different message types
         switch (msg.type) {
+            case 'snapshot':
             case 'loc_update':
-            case 'incremental':
-                // Blob/localization updates
+                // Snapshot or localization updates
                 if (msg.blobs) {
+                    const prevBlobs = currentState.blobs || [];
                     currentState.blobs = msg.blobs;
-                    updateRoomCardsFromBlobs(msg.blobs);
+                    updateRoomCardsFromBlobs(msg.blobs, prevBlobs);
                 }
                 if (msg.zones) {
+                    const prevZones = currentState.zones || [];
                     currentState.zones = msg.zones;
-                    updateRoomCards();
+                    updateRoomCards(prevZones);
+                }
+                break;
+
+            case 'zone_transition':
+                // Zone transition events
+                if (msg.person && msg.to_zone) {
+                    addZoneTransitionToFeed(msg);
                 }
                 break;
 
@@ -121,10 +130,57 @@
                 }
                 break;
 
+            case 'morning_summary':
+                // Sleep morning summary
+                if (msg.sleep) {
+                    handleMorningSummary(msg.sleep);
+                }
+                break;
+
             default:
-                // Log unknown message types
-                console.log('[Simple Mode] Unknown message type:', msg.type);
+                // Handle delta messages (no type field)
+                if (msg.zones || msg.blobs) {
+                    if (msg.blobs) {
+                        const prevBlobs = currentState.blobs || [];
+                        currentState.blobs = msg.blobs;
+                        updateRoomCardsFromBlobs(msg.blobs, prevBlobs);
+                    }
+                    if (msg.zones) {
+                        const prevZones = currentState.zones || [];
+                        currentState.zones = msg.zones;
+                        updateRoomCards(prevZones);
+                    }
+                }
+                break;
         }
+    }
+
+    /**
+     * Handle zone transition event
+     */
+    function addZoneTransitionToFeed(transition) {
+        const event = {
+            id: `transition_${transition.timestamp}`,
+            ts: new Date(transition.timestamp).getTime(),
+            kind: 'zone_transition',
+            zone: transition.to_zone,
+            person: transition.person,
+            blob_id: null,
+            detail_json: JSON.stringify({
+                from_zone: transition.from_zone,
+                to_zone: transition.to_zone,
+                portal_id: transition.portal_id
+            })
+        };
+        addEventToFeed(event);
+    }
+
+    /**
+     * Handle morning summary
+     */
+    function handleMorningSummary(summary) {
+        currentState.sleepSummary = summary;
+        renderContent();
     }
 
     /**
@@ -389,8 +445,8 @@
             html += renderMorningBriefing(currentState.briefing);
         }
 
-        // Sleep summary (if available)
-        if (currentState.sleepSummary) {
+        // Sleep summary (only between 6am and 11am on the day after a session)
+        if (currentState.sleepSummary && shouldShowSleepSummary(currentState.sleepSummary)) {
             html += renderSleepSummary(currentState.sleepSummary);
         }
 
@@ -412,6 +468,32 @@
 
         // Attach event listeners
         attachEventListeners();
+    }
+
+    /**
+     * Check if sleep summary should be shown (6am-11am only on the day after session)
+     */
+    function shouldShowSleepSummary(sleep) {
+        if (!sleep || !sleep.date) return false;
+
+        const sleepDate = new Date(sleep.date);
+        const today = new Date();
+        const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+        // Only show if sleep was from yesterday
+        const sleepDateOnly = new Date(sleepDate.getFullYear(), sleepDate.getMonth(), sleepDate.getDate());
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+        // Sleep should be from yesterday
+        if (sleepDateOnly.getTime() !== yesterdayDate.getTime()) {
+            return false;
+        }
+
+        // Check if current time is between 6am and 11am
+        const hour = today.getHours();
+        return hour >= 6 && hour < 11;
     }
 
     /**
@@ -516,7 +598,7 @@
     /**
      * Render room cards
      */
-    function renderRoomCards(zones) {
+    function renderRoomCards(zones, prevZones) {
         if (!zones || zones.length === 0) {
             return `
                 <div class="simple-room-cards">
@@ -526,22 +608,31 @@
                             <span class="room-status empty">Empty</span>
                         </div>
                         <div class="room-activity">
-                            Set up zones in the expert 3D view to see room cards here.
+                            <strong>Get started</strong>: Set up your rooms to see who's home.
+                            <br><a href="/" onclick="event.preventDefault()">Go to setup</a>
                         </div>
                     </div>
                 </div>
             `;
         }
 
+        // Track previous zone state for change detection
+        const prevZoneMap = new Map();
+        if (prevZones) {
+            prevZones.forEach(z => prevZoneMap.set(z.id, z.Count || 0));
+        }
+
         const cards = zones.map(zone => {
             const status = getZoneStatus(zone);
-            const occupants = zone.people || [];
-            const lastActivity = getLastActivityForZone(zone.name);
+            const occupants = zone.People || [];
+            const lastActivity = getLastActivityForZone(zone.Name);
+            const prevOccupancy = prevZoneMap.get(zone.ID) || 0;
+            const occupancyChanged = (zone.Count || 0) !== prevOccupancy;
 
             return `
-                <div class="simple-room-card ${status.class}" data-zone-id="${zone.id}">
+                <div class="simple-room-card ${status.class}${occupancyChanged ? ' pulse' : ''}" data-zone-id="${zone.ID}" data-zone-color="${getZoneColor(zone.Name)}">
                     <div class="room-header">
-                        <span class="room-name">${zone.name}</span>
+                        <span class="room-name">${zone.Name}</span>
                         <span class="room-status ${status.class}">${status.label}</span>
                     </div>
                     ${occupants.length > 0 ? `
@@ -557,7 +648,7 @@
                         ${lastActivity ? lastActivity : 'No recent activity'}
                     </div>
                     <div class="room-timestamp">
-                        ${zone.occupancy_updated_at ? formatTimestamp(zone.occupancy_updated_at) : ''}
+                        ${lastActivity ? '' : ''}
                     </div>
                     <div class="room-expand-hint">
                         Tap for details &#x25BC;
@@ -592,7 +683,41 @@
             `;
         }
 
-        const activityItems = events.slice(0, 10).map(event => {
+        // Filter out system noise events
+        const filteredEvents = events.filter(event => {
+            // Exclude system noise events (node_connected, weight_update, etc.)
+            const noiseEventTypes = [
+                'node_connected',
+                'node_disconnected', // Keep this for now, but could be filtered
+                'weight_update',
+                'baseline_update',
+                'system_maintenance',
+                'csi_rate_change',
+                'node_sync'
+            ];
+            return !noiseEventTypes.includes(event.type);
+        });
+
+        if (filteredEvents.length === 0) {
+            return `
+                <div class="simple-activity-feed">
+                    <div class="feed-header">
+                        <span class="feed-title">Activity</span>
+                        <div class="feed-filter">
+                            <button class="filter-btn active" data-filter="all">All</button>
+                            <button class="filter-btn" data-filter="recent">Recent</button>
+                        </div>
+                    </div>
+                    <div class="feed-empty">
+                        <div class="feed-empty-icon">&#x1F4C5;</div>
+                        <div class="feed-empty-text">No activity yet</div>
+                        <div class="feed-empty-subtext">Events will appear here as Spaxel detects activity</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        const activityItems = filteredEvents.slice(0, 20).map(event => {
             const icon = getActivityIcon(event.type);
             const description = formatEventDescription(event);
 
@@ -907,10 +1032,24 @@
      * Get zone status
      */
     function getZoneStatus(zone) {
-        if (zone.occupancy > 0) {
-            return { class: 'occupied', label: `Occupied (${zone.occupancy})` };
+        const count = zone.Count || 0;
+        if (count > 0) {
+            return { class: 'occupied', label: `Occupied (${count})` };
         }
         return { class: 'empty', label: 'Empty' };
+    }
+
+    /**
+     * Get zone color (consistent color per zone name)
+     */
+    function getZoneColor(zoneName) {
+        // Generate consistent color from zone name
+        let hash = 0;
+        for (let i = 0; i < zoneName.length; i++) {
+            hash = zoneName.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const hue = Math.abs(hash) % 360;
+        return `hsl(${hue}, 70%, 50%)`;
     }
 
     /**
@@ -1138,20 +1277,41 @@
     /**
      * Update room cards from blob data
      */
-    function updateRoomCardsFromBlobs(blobs) {
+    function updateRoomCardsFromBlobs(blobs, prevBlobs) {
         if (!blobs || blobs.length === 0) return;
+
+        // Track zone changes for pulse animation
+        const zoneChanges = new Map();
 
         // Update zone occupancy based on blob positions
         blobs.forEach(blob => {
             const zone = findZoneForPosition(blob.x, blob.y);
             if (zone) {
-                // Update zone occupancy based on blob presence
+                // Check if occupancy changed
+                const prevOccupancy = zone.occupancy || 0;
                 updateZoneOccupancy(zone.id, blob);
+                if (zone.occupancy !== prevOccupancy) {
+                    zoneChanges.set(zone.id, true);
+                }
             }
         });
 
         // Re-render room cards with updated data
-        renderRoomCards(currentState.zones);
+        renderRoomCards(currentState.zones, prevZones);
+
+        // Trigger pulse animation on changed zones
+        zoneChanges.forEach((_, zoneId) => {
+            const card = document.querySelector(`.simple-room-card[data-zone-id="${zoneId}"]`);
+            if (card) {
+                // Remove and re-add animation class to trigger it
+                card.classList.remove('pulse');
+                // Force reflow
+                void card.offsetWidth;
+                card.classList.add('pulse');
+                // Remove animation class after it completes
+                setTimeout(() => card.classList.remove('pulse'), 600);
+            }
+        });
     }
 
     /**
@@ -1159,8 +1319,8 @@
      */
     function findZoneForPosition(x, y) {
         return currentState.zones.find(zone => {
-            return x >= zone.x && x < zone.x + zone.w &&
-                   y >= zone.y && y < zone.y + zone.d;
+            return x >= zone.MinX && x < zone.MinX + zone.SizeX &&
+                   y >= zone.MinY && y < zone.MinY + zone.SizeY;
         });
     }
 
@@ -1168,16 +1328,16 @@
      * Update zone occupancy based on blob
      */
     function updateZoneOccupancy(zoneId, blob) {
-        const zone = currentState.zones.find(z => z.id === zoneId);
+        const zone = currentState.zones.find(z => z.ID === zoneId);
         if (!zone) return;
 
         // Check if this blob is already counted
-        if (!zone.people) zone.people = [];
-        if (!zone.people.includes(blob.person)) {
-            zone.people.push(blob.person || 'Unknown');
+        if (!zone.People) zone.People = [];
+        const personLabel = blob.PersonLabel || blob.PersonID || 'Unknown';
+        if (!zone.People.includes(personLabel)) {
+            zone.People.push(personLabel);
         }
-        zone.occupancy = zone.people.length;
-        zone.occupancy_updated_at = Date.now();
+        zone.Count = zone.People.length;
     }
 
     /**

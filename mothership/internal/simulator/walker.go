@@ -198,7 +198,6 @@ func (w *Walker) updatePathFollow(dt float64) {
 	t := moveDist / dist
 	w.Position.X += dx * t
 	w.Position.Y += dy * t
-	w.Position.Z += dz * t
 
 	// Update velocity vector for consistency
 	w.Velocity.X = (dx / dist) * w.Speed
@@ -224,8 +223,12 @@ func (w *Walker) updateNodeToNode(dt float64, space *Space) {
 	dz := targetPos.Z - w.Position.Z
 	dist := math.Sqrt(dx*dx + dy*dy + dz*dz)
 
+	// Horizontal distance (X/Y only) for arrival detection
+	// Walkers maintain constant height, so we check horizontal proximity
+	horizontalDist := math.Sqrt(dx*dx + dy*dy)
+
 	// Check if we've arrived at the target node
-	if dist < 0.3 { // Within 30cm of node
+	if horizontalDist < 0.3 { // Within 30cm horizontally of node
 		// Wait at node if configured
 		if w.ShouldWait {
 			if w.WaitTimer > 0 {
@@ -251,27 +254,26 @@ func (w *Walker) updateNodeToNode(dt float64, space *Space) {
 
 	// Accelerate/decelerate naturally when starting/stopping
 	maxSpeed := currentSpeed
-	if dist < 1.0 {
+	if horizontalDist < 1.0 {
 		// Slow down when approaching target
-		maxSpeed = currentSpeed * (dist / 1.0)
+		maxSpeed = currentSpeed * (horizontalDist / 1.0)
 		if maxSpeed < 0.1 {
 			maxSpeed = 0.1
 		}
 	}
 
 	moveDist := maxSpeed * dt
-	if moveDist > dist {
-		moveDist = dist
+	if moveDist > horizontalDist {
+		moveDist = horizontalDist
 	}
 
-	t := moveDist / dist
+	t := moveDist / horizontalDist
 	w.Position.X += dx * t
 	w.Position.Y += dy * t
-	w.Position.Z += dz * t
 
 	// Update velocity vector for consistency
-	w.Velocity.X = (dx / dist) * maxSpeed
-	w.Velocity.Y = (dy / dist) * maxSpeed
+	w.Velocity.X = (dx / horizontalDist) * maxSpeed
+	w.Velocity.Y = (dy / horizontalDist) * maxSpeed
 	w.Velocity.Z = (dz / dist) * maxSpeed
 
 	// Keep walker at standing height
@@ -486,14 +488,16 @@ type SimulationTick struct {
 
 // GenerateTicks generates simulation ticks at the given rate for a duration
 func (ws *WalkerSet) GenerateTicks(rateHz int, duration time.Duration, space *Space) <-chan SimulationTick {
-	out := make(chan SimulationTick)
+	// Use buffered channel to avoid race condition where producer
+	// finishes before consumer starts
+	out := make(chan SimulationTick, 100)
 
 	go func() {
 		defer close(out)
 
 		dt := 1.0 / float64(rateHz)
 		start := time.Now()
-		elapsed := time.Duration(0)
+		var elapsed time.Duration
 
 		for elapsed < duration {
 			tick := SimulationTick{
@@ -517,7 +521,7 @@ func (ws *WalkerSet) GenerateTicks(rateHz int, duration time.Duration, space *Sp
 				// Channel full, skip this tick
 			}
 
-			elapsed += time.Duration(float64(time.Second) / float64(rateHz))
+			elapsed += time.Duration(float64(dt) * float64(time.Second))
 		}
 	}()
 

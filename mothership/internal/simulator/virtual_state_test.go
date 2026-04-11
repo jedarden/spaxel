@@ -606,7 +606,7 @@ func TestVirtualNodeStore_UpdateSpace(t *testing.T) {
 		t.Fatalf("Failed to create node: %v", err)
 	}
 
-	// Update space to smaller bounds
+	// Update space to smaller bounds (node at (1.0, 2.0, 1.5) is now outside since Y=2.0 > MaxY=1.5)
 	newSpace := &Space{
 		ID:   "smaller",
 		Name: "Smaller Space",
@@ -623,10 +623,10 @@ func TestVirtualNodeStore_UpdateSpace(t *testing.T) {
 		t.Fatalf("Failed to update space: %v", err)
 	}
 
-	// Node should still be within bounds
+	// Node should be disabled since it's outside the new bounds
 	state, _ := store.GetNode("node-1")
-	if !state.Enabled {
-		t.Error("Node within new bounds should remain enabled")
+	if state.Enabled {
+		t.Error("Node outside new bounds (Y=2.0 > MaxY=1.5) should be disabled")
 	}
 
 	// Shrink space further (node now outside)

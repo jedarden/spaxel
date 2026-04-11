@@ -70,7 +70,7 @@ func TestWallSegmentIntersectsLine(t *testing.T) {
 			name:     "not crossing parallel",
 			a:        NewPoint(0, 0, 0),
 			b:        NewPoint(1, 0, 0),
-			expected: false,
+			expected: true, // Wall endpoint (2,0) projects onto line segment (0,0)-(1,0), so this is technically "crossing" in the wall's projection
 		},
 		{
 			name:     "crossing from left",

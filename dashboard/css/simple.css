@@ -278,10 +278,30 @@ body.simple-mode {
     border-radius: 16px;
     padding: 16px;
     box-shadow: var(--simple-shadow);
-    transition: all 0.3s ease;
+    transition: all 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
     position: relative;
     overflow: hidden;
+}
+
+/* Pulse animation for occupancy changes */
+@keyframes occupancyPulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+}
+
+.simple-room-card.pulse {
+    animation: occupancyPulse 0.6s ease-out;
 }
 
 .simple-room-card:hover {
@@ -1022,6 +1042,45 @@ body.simple-mode {
     .simple-quick-actions {
         background: rgba(44, 44, 46, 0.95);
     }
+}
+
+/* ===== OLED Night Mode (True Black) ===== */
+body.simple-mode.night-mode.oled-night {
+    --simple-bg: #000000;
+    --simple-card-bg: #0a0a0a;
+    --simple-text-primary: #ffffff;
+    --simple-text-secondary: #98989d;
+    --simple-border: #1a1a1a;
+    --simple-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    --simple-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+body.simple-mode.night-mode.oled-night .simple-mode-header {
+    background: rgba(10, 10, 10, 0.95);
+}
+
+body.simple-mode.night-mode.oled-night .simple-quick-actions {
+    background: rgba(10, 10, 10, 0.95);
+}
+
+body.simple-mode.night-mode.oled-night .simple-room-card {
+    background: #0a0a0a;
+}
+
+body.simple-mode.night-mode.oled-night .simple-activity-feed,
+body.simple-mode.night-mode.oled-night .simple-security-toggle {
+    background: #0a0a0a;
+}
+
+/* Zone color accents remain vibrant in night mode */
+body.simple-mode.night-mode.oled-night .simple-room-card::before {
+    /* Zone color accents use original colors, not dimmed */
+}
+
+/* Optimize text rendering for OLED */
+body.simple-mode.night-mode.oled-night {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* ===== Accessibility ===== */

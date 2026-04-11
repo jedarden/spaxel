@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"fmt"
 	"math"
 	"testing"
 )
@@ -19,7 +20,7 @@ func TestPathLoss(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.distance, func(t *testing.T) {
+		t.Run(fmt.Sprintf("distance=%.1f", tt.distance), func(t *testing.T) {
 			loss := pm.PathLoss(tt.distance)
 			// Allow small floating point error
 			if math.Abs(loss-tt.expected) > 1.0 {
@@ -445,7 +446,7 @@ func TestMinimumNodeCount(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.targetGDOP, func(t *testing.T) {
+		t.Run(fmt.Sprintf("targetGDOP=%.1f", tt.targetGDOP), func(t *testing.T) {
 			count := MinimumNodeCount(space, tt.targetGDOP)
 			if count < tt.minNodes {
 				t.Errorf("Expected at least %d nodes, got %d", tt.minNodes, count)
@@ -467,7 +468,7 @@ func TestExpectedAccuracy(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.gdop, func(t *testing.T) {
+		t.Run(fmt.Sprintf("gdop=%.1f", tt.gdop), func(t *testing.T) {
 			accuracy := ExpectedAccuracy(tt.gdop)
 
 			if math.IsInf(tt.gdop, 0) {

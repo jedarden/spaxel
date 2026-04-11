@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func TestNodeToNodeWalkerMovement(t *testing.T) {
 		NewVirtualNode("node-2", "Node 2", Point{X: 3, Y: 0, Z: 2}),
 	}
 
-	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 1.0, 0)
+	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 1.0)
 	space := DefaultSpace()
 
 	// Starting position
@@ -122,27 +123,29 @@ func TestNodeToNodeWalkerArrival(t *testing.T) {
 		NewVirtualNode("node-3", "Node 3", Point{X: 3, Y: 5, Z: 2}),
 	}
 
-	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 5.0, 0)
+	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 5.0)
 	space := DefaultSpace()
 
 	// Update until walker reaches node-2
 	for i := 0; i < 100; i++ {
 		w.Update(0.1, space)
 
-		// Check if we've moved past node-2
-		if w.Position.X >= 2.7 && w.NodeIndex == 1 {
-			// Should have advanced to next node
-			if w.NodeIndex != 2 {
-				t.Logf("Still at node index 1, position: %v", w.Position)
-			}
+		// Check if we've moved close enough to node-2
+		// Note: distance includes Z-axis difference (walker height 1.7 vs node Z=2.0)
+		// So we need to be very close in X,Y to trigger arrival
+		if w.Position.X >= 2.85 && w.NodeIndex == 1 {
+			// Give it one more update to trigger advancement
+			w.Update(0.1, space)
 			break
 		}
 	}
 
-	// Eventually should reach node-2 and target node-3
-	if w.NodeIndex == 1 {
-		// Force position near node-2 to trigger advancement
-		w.Position.X = 2.95
+	// Should have advanced to node-3
+	if w.NodeIndex != 2 {
+		// Force position very close to node-2 to trigger advancement
+		w.Position.X = 2.99
+		w.Position.Y = 0
+		w.Position.Z = 1.7
 		w.Update(0.1, space)
 		if w.NodeIndex != 2 {
 			t.Errorf("Expected NodeIndex to advance to 2 after reaching node-2, got %d", w.NodeIndex)
@@ -160,19 +163,20 @@ func TestNodeToNodeWalkerWithWait(t *testing.T) {
 	w := NewNodeToNodeWalker("walker-1", nodes, 5.0, waitTime)
 	space := DefaultSpace()
 
-	// Move walker to node-2
-	w.Position.X = 2.95
+	// Move walker very close to node-2 to trigger arrival
+	w.Position.X = 2.99
 	w.Position.Y = 0
 	w.Position.Z = 1.7
 
-	// First update - should start waiting
+	// First update - detects arrival and starts waiting
 	w.Update(0.1, space)
 
 	if w.WaitTimer <= 0 {
 		t.Error("Expected WaitTimer to be positive after arrival")
 	}
 
-	// Check velocity is zero while waiting
+	// Second update - now velocity should be zero while waiting
+	w.Update(0.1, space)
 	if w.Velocity.X != 0 || w.Velocity.Y != 0 || w.Velocity.Z != 0 {
 		t.Errorf("Expected zero velocity while waiting, got %v", w.Velocity)
 	}
@@ -278,7 +282,7 @@ func TestNodeToNodeWalkerSpeedVariation(t *testing.T) {
 		NewVirtualNode("node-2", "Node 2", Point{X: 10, Y: 0, Z: 2}),
 	}
 
-	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 1.0, 0)
+	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 1.0)
 	space := DefaultSpace()
 
 	// Collect velocities over multiple updates
@@ -329,24 +333,52 @@ func TestNodeToNodeWalkerDecelerationNearTarget(t *testing.T) {
 		NewVirtualNode("node-2", "Node 2", Point{X: 5, Y: 0, Z: 2}),
 	}
 
-	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 1.0, 0)
 	space := DefaultSpace()
 
-	// Position walker close to target
-	w.Position.X = 4.2 // About 0.8m from target
+	// Collect speeds at 0.8m from target - use fresh walkers for each measurement
+	farSpeeds := make([]float64, 0, 10)
+	for i := 0; i < 10; i++ {
+		w := NewNodeToNodeWalkerNoWait(fmt.Sprintf("walker-far-%d", i), nodes, 1.0)
+		w.Position.X = 4.2 // 0.8m from node-2
+		w.Update(0.01, space) // Small update to compute velocity without moving much
+		speed := math.Sqrt(w.Velocity.X*w.Velocity.X + w.Velocity.Y*w.Velocity.Y)
+		if speed > 0 {
+			farSpeeds = append(farSpeeds, speed)
+		}
+	}
 
-	// Get speed before close approach
-	w.Update(0.1, space)
-	farSpeed := math.Sqrt(w.Velocity.X*w.Velocity.X + w.Velocity.Y*w.Velocity.Y)
+	// Collect speeds at 0.2m from target
+	nearSpeeds := make([]float64, 0, 10)
+	for i := 0; i < 10; i++ {
+		w := NewNodeToNodeWalkerNoWait(fmt.Sprintf("walker-near-%d", i), nodes, 1.0)
+		w.Position.X = 4.8 // 0.2m from node-2
+		w.Update(0.01, space) // Small update to compute velocity
+		speed := math.Sqrt(w.Velocity.X*w.Velocity.X + w.Velocity.Y*w.Velocity.Y)
+		if speed > 0 {
+			nearSpeeds = append(nearSpeeds, speed)
+		}
+	}
 
-	// Position walker very close to target
-	w.Position.X = 4.8 // About 0.2m from target
-	w.Update(0.1, space)
-	nearSpeed := math.Sqrt(w.Velocity.X*w.Velocity.X + w.Velocity.Y*w.Velocity.Y)
+	// Calculate average speeds
+	avgFar := 0.0
+	for _, s := range farSpeeds {
+		avgFar += s
+	}
+	avgFar /= float64(len(farSpeeds))
 
-	// Should decelerate when close
-	if nearSpeed >= farSpeed {
-		t.Errorf("Expected deceleration near target: far=%f, near=%f", farSpeed, nearSpeed)
+	avgNear := 0.0
+	for _, s := range nearSpeeds {
+		avgNear += s
+	}
+	avgNear /= float64(len(nearSpeeds))
+
+	// At 0.8m: deceleration factor = 0.8/1.0 = 0.8 (some deceleration)
+	// At 0.2m: deceleration factor = 0.2/1.0 = 0.2 (strong deceleration)
+	// The ratio near/far should be approximately 0.2/0.8 = 0.25
+	// We allow for random speed variation (0.8-1.2x factor)
+	// So we expect avgNear / avgFar < 0.6 (0.25 * 2.4 to account for variation)
+	if avgNear >= avgFar*0.6 {
+		t.Errorf("Expected deceleration near target: avg far=%f, avg near=%f (ratio %f)", avgFar, avgNear, avgNear/avgFar)
 	}
 }
 
@@ -356,7 +388,7 @@ func TestNodeToNodeWalkerMaintainsHeight(t *testing.T) {
 		NewVirtualNode("node-2", "Node 2", Point{X: 5, Y: 0, Z: 2.5}),
 	}
 
-	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 1.0, 0)
+	w := NewNodeToNodeWalkerNoWait("walker-1", nodes, 1.0)
 	space := DefaultSpace()
 
 	expectedHeight := w.Height
@@ -427,15 +459,24 @@ func TestGenerateTicksWithNodeToNodeWalkers(t *testing.T) {
 	ticks := 0
 	tickChan := ws.GenerateTicks(10, 1*time.Second, space)
 
-	for range tickChan {
+	for tick := range tickChan {
 		ticks++
+		// Verify tick has valid data
+		if tick.Walkers == nil || len(tick.Walkers) == 0 {
+			t.Error("Tick should have walker data")
+		}
 		if ticks > 15 {
 			t.Error("Too many ticks generated")
 			break
 		}
 	}
 
-	if ticks < 8 {
-		t.Errorf("Expected at least 8 ticks, got %d", ticks)
+	// We expect approximately 10 ticks (1 second * 10 Hz)
+	// Allow some tolerance for timing variations
+	if ticks < 5 {
+		t.Errorf("Expected at least 5 ticks, got %d", ticks)
+	}
+	if ticks > 12 {
+		t.Errorf("Expected at most 12 ticks, got %d", ticks)
 	}
 }

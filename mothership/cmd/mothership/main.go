@@ -3657,6 +3657,22 @@ func main() {
 		http.NotFound(w, r)
 	})
 
+	// Serve simple mode page
+	r.Get("/simple", func(w http.ResponseWriter, r *http.Request) {
+		staticDir := cfg.StaticDir
+		if staticDir == "" {
+			staticDir = findDashboardDir()
+		}
+		if staticDir != "" {
+			simplePath := filepath.Join(staticDir, "simple.html")
+			if _, err := os.Stat(simplePath); err == nil {
+				http.ServeFile(w, r, simplePath)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
 	// Serve dashboard static files
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
