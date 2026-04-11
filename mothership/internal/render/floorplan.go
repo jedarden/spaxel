@@ -110,7 +110,7 @@ func NewRenderer(config RenderConfig) *Renderer {
 	if config.RoomDepth == 0 {
 		config.RoomDepth = 10.0
 	}
-	if config.BackgroundColor.A == 0 {
+	if config.BackgroundColor == nil {
 		config.BackgroundColor = color.RGBA{26, 26, 46, 255}
 	}
 
@@ -225,7 +225,6 @@ func (r *Renderer) drawZone(zone Zone, offsetX, offsetY, scale float64) {
 	// Draw zone label (if space permits)
 	if w > 30 && h > 15 {
 		r.dc.SetColor(color.RGBA{255, 255, 255, 200})
-		r.dc.SetFontSize(8)
 
 		// Truncate name if too long
 		label := zone.Name
@@ -301,7 +300,6 @@ func (r *Renderer) drawPerson(person Person, offsetX, offsetY, scale float64) {
 	// Draw name label above circle
 	if person.Name != "" {
 		r.dc.SetColor(color.RGBA{255, 255, 255, 255})
-		r.dc.SetFontSize(8)
 		r.dc.DrawStringAnchored(person.Name, x, y-diameter/2-2, 0.5, 1.0)
 	}
 }
@@ -309,11 +307,10 @@ func (r *Renderer) drawPerson(person Person, offsetX, offsetY, scale float64) {
 // drawEventTitle draws the event title at the bottom.
 func (r *Renderer) drawEventTitle() {
 	r.dc.SetColor(color.RGBA{255, 255, 255, 200})
-	r.dc.SetFontSize(10)
 
 	// Draw at bottom-left with margin
 	margin := 10.0
-	r.dc.DrawStringWrapped(r.config.EventTitle, margin, float64(r.config.Height)-margin-10, 0, float64(r.config.Width)-2*margin, 0, gg.AlignLeft)
+	r.dc.DrawStringWrapped(r.config.EventTitle, margin, float64(r.config.Height)-margin-10, 0, 0, float64(r.config.Width)-2*margin, 1.0, gg.AlignLeft)
 }
 
 // parseColor parses a hex color string or returns a default color.
@@ -329,9 +326,10 @@ func (r *Renderer) parseColor(hex string) color.RGBA {
 	}
 
 	// Try with alpha
-	n, _ = fmt.Sscanf(hex, "#%02x%02x%02x%02x", &rVal, &gVal, &bVal, &n)
+	var aVal uint8
+	n, _ = fmt.Sscanf(hex, "#%02x%02x%02x%02x", &rVal, &gVal, &bVal, &aVal)
 	if n == 4 {
-		return color.RGBA{R: rVal, G: gVal, B: bVal, A: n}
+		return color.RGBA{R: rVal, G: gVal, B: bVal, A: aVal}
 	}
 
 	return color.RGBA{}

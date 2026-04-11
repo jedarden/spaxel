@@ -4,7 +4,6 @@ package notifications
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"

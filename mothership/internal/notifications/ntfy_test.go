@@ -289,7 +289,7 @@ func TestAttachPNGImage(t *testing.T) {
 func TestNtfyMessageAllFields(t *testing.T) {
 	headers := make(map[string]string)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for key := range []string{"Title", "Priority", "Tags", "Click", "Icon", "Delay", "Email", "Attach"} {
+		for _, key := range []string{"Title", "Priority", "Tags", "Click", "Icon", "Delay", "Email", "Attach"} {
 			headers[key] = r.Header.Get(key)
 		}
 		w.WriteHeader(http.StatusOK)
