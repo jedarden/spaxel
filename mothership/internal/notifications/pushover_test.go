@@ -2,7 +2,9 @@ package notifications
 
 import (
 	"bytes"
+	"encoding/base64"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -151,9 +153,8 @@ func TestPushoverSendWithPriority(t *testing.T) {
 // TestPushoverSendWithPNGAttachment tests sending with PNG attachment.
 func TestPushoverSendWithPNGAttachment(t *testing.T) {
 	var receivedBody []byte
-	var contentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		contentType = r.Header.Get("Content-Type")
+		_ = r.Header.Get("Content-Type")
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))

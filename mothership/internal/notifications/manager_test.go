@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -280,7 +281,6 @@ func TestQuietHoursQueueing(t *testing.T) {
 	defer m.Close()
 
 	// Set quiet hours to cover current time
-	now := time.Now().In(loc)
 	cfg := NotificationConfig{
 		Channel:          "default",
 		QuietFrom:        "00:00",
@@ -492,7 +492,7 @@ func TestQuietDaysBitmask(t *testing.T) {
 	}
 
 	// Should be queued (current day is in quiet hours)
-	low, medium, digest := m.GetPendingCount()
+	_, _, digest := m.GetPendingCount()
 	if digest != 1 {
 		t.Errorf("queuedForDigest = %d, want 1 (current day should be in quiet hours)", digest)
 	}
@@ -528,7 +528,7 @@ func TestMediumPriorityBatching(t *testing.T) {
 	}
 
 	// Events should be queued
-	low, medium, _ := m.GetPendingCount()
+	_, medium, _ := m.GetPendingCount()
 	if medium != 2 {
 		t.Errorf("pendingMedium = %d, want 2", medium)
 	}
@@ -537,7 +537,7 @@ func TestMediumPriorityBatching(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond)
 
 	// Should be flushed now
-	low, medium, _ = m.GetPendingCount()
+	_, medium, _ = m.GetPendingCount()
 	if medium != 0 {
 		t.Errorf("pendingMedium = %d, want 0 after flush", medium)
 	}
@@ -1370,7 +1370,7 @@ func TestHighPriorityDuringQuietHours(t *testing.T) {
 	defer m.Close()
 
 	// Set quiet hours
-	now := time.Now().In(loc)
+	_ = time.Now().In(loc)
 	cfg := NotificationConfig{
 		Channel:          "default",
 		QuietFrom:        "00:00",
