@@ -13,6 +13,7 @@
     z-index: 1000;
     transition: background 0.3s ease;
     pointer-events: none;
+    touch-action: none; /* Prevent touch events from reaching the canvas */
 }
 
 .panel-overlay-visible {
@@ -33,6 +34,7 @@
     display: flex;
     flex-direction: column;
     max-width: 90vw;
+    touch-action: auto; /* Allow normal touch interactions within panels */
 }
 
 .panel-sidebar-right {
@@ -103,6 +105,8 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 20px;
+    touch-action: pan-y; /* Allow vertical scrolling, prevent horizontal manipulation */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 /* Panel Content Scrollbar Styling */
