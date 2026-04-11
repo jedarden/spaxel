@@ -112,7 +112,7 @@
 
         // Touch-specific optimizations for mobile
         controls.rotateSpeed = 0.8;           // Rotation speed
-        controls.zoomSpeed = 1.2;             // Zoom speed for pinch gesture
+        controls.zoomSpeed = 1.0;             // Zoom speed for pinch gesture (reduced for better touch accuracy)
         controls.panSpeed = 0.8;              // Pan speed for two-finger drag
         controls.enablePan = true;            // Enable pan (two-finger drag)
         controls.enableZoom = true;           // Enable zoom (pinch gesture)
@@ -120,11 +120,12 @@
 
         // Touch gesture configuration
         // One finger: rotate (orbit)
-        // Two fingers: pan
-        // Pinch: zoom
+        // Two fingers: pinch-to-zoom and pan
+        // Note: Three.js OrbitControls doesn't natively support three-finger pan.
+        // The TWO: DOLLY_PAN configuration provides both pinch zoom and pan functionality.
         controls.touches = {
             ONE: THREE.TOUCH.ROTATE,      // One-finger touch rotates the camera
-            TWO: THREE.TOUCH.DOLLY_PAN    // Two-finger touch zooms and pans
+            TWO: THREE.TOUCH.DOLLY_PAN    // Two-finger touch zooms (pinch) and pans
         };
 
         // Grid helper (XZ plane, Y-up)
@@ -792,6 +793,13 @@
                 // Sleep morning summary (shown once after wake time)
                 if (window.SpaxelSleep && window.SpaxelSleep.handleMorningSummary) {
                     window.SpaxelSleep.handleMorningSummary(msg);
+                }
+                break;
+
+            case 'morning_briefing':
+                // Full morning briefing with sleep, overnight events, system health, predictions
+                if (window.SpaxelBriefing && window.SpaxelBriefing.showBriefing) {
+                    window.SpaxelBriefing.showBriefing(msg.briefing);
                 }
                 break;
 

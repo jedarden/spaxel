@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Spaxel Dashboard</title>
     <link rel="stylesheet" href="css/troubleshoot.css">
     <link rel="stylesheet" href="css/panels.css">
@@ -34,6 +36,11 @@
             background: #1a1a2e;
             color: #eee;
             overflow: hidden;
+            /* iOS Safari safe area support for notched devices */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
         }
 
         #scene-container {
@@ -48,11 +55,12 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 40px;
+            height: 44px; /* Increased to 44px for touch target */
             background: rgba(0, 0, 0, 0.7);
             display: flex;
             align-items: center;
             padding: 0 16px;
+            padding-top: max(0px, env(safe-area-inset-top)); /* iOS notch support */
             gap: 24px;
             z-index: 100;
             font-size: 14px;
@@ -2325,10 +2333,13 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: #ccc;
             font-size: 14px;
-            padding: 4px 10px;
+            padding: 10px; /* 44px touch target (18px icon + 10px padding top/bottom = ~38px, close enough) */
+            min-width: 44px; /* Ensure 44px minimum */
+            min-height: 44px;
             border-radius: 4px;
             cursor: pointer;
             transition: background 0.2s, color 0.2s;
+            order: -1; /* Move to beginning of status bar */
         }
 
         #mobile-menu-btn:hover {
@@ -2337,12 +2348,313 @@
         }
 
         #mobile-menu-btn svg {
-            width: 18px;
-            height: 18px;
+            width: 24px;
+            height: 24px;
             vertical-align: middle;
         }
 
+        /* ===== Hamburger Menu Overlay ===== */
+        #hamburger-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        #hamburger-overlay.visible {
+            display: block;
+            opacity: 1;
+        }
+
+        /* ===== Hamburger Menu Panel ===== */
+        #hamburger-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 320px;
+            max-width: 85vw;
+            background: #1e1e3a;
+            box-shadow: 4px 0 16px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            transform: translateX(-100%);
+            transition: transform 0.2s ease-out;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        #hamburger-menu.visible {
+            transform: translateX(0);
+        }
+
+        #hamburger-menu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: max(16px, env(safe-area-inset-top));
+        }
+
+        #hamburger-menu-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #eee;
+        }
+
+        #hamburger-close-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 10px;
+            min-width: 44px;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #hamburger-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #eee;
+        }
+
+        .hamburger-section {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .hamburger-section h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin: 0 0 12px 0;
+        }
+
+        .hamburger-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 8px; /* 44px minimum touch target */
+            min-height: 44px;
+            color: #ccc;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background 0.2s, color 0.2s;
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .hamburger-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #eee;
+        }
+
+        .hamburger-item svg {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        /* ===== Hamburger Menu Tabs ===== */
+        .hamburger-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-x: auto;
+            scrollbar-width: none; /* Firefox */
+        }
+
+        .hamburger-tabs::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+
+        .hamburger-tab {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 16px;
+            min-width: 70px;
+            min-height: 64px;
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            transition: color 0.2s, background 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .hamburger-tab svg {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 4px;
+        }
+
+        .hamburger-tab span {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .hamburger-tab:hover {
+            color: #ccc;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .hamburger-tab.active {
+            color: #4fc3f7;
+            border-bottom-color: #4fc3f7;
+        }
+
+        /* ===== Hamburger Menu Content Areas ===== */
+        .hamburger-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .hamburger-tab-content {
+            display: none;
+            padding: 0;
+        }
+
+        .hamburger-tab-content.active {
+            display: block;
+        }
+
+        .hamburger-tab-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .hamburger-tab-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #eee;
+            margin: 0;
+        }
+
+        .presence-status {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .presence-status.clear {
+            background: rgba(76, 175, 80, 0.2);
+            color: #81c784;
+        }
+
+        .presence-status.detected {
+            background: rgba(255, 152, 0, 0.2);
+            color: #ffb74d;
+        }
+
+        #hamburger-node-list,
+        #hamburger-link-list,
+        #hamburger-presence-list,
+        #hamburger-timeline-content,
+        #hamburger-device-list {
+            padding: 8px;
+        }
+
+        /* Timeline styles within hamburger menu */
+        #hamburger-timeline-content .timeline-event-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        #hamburger-timeline-content .event-time {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+
+        #hamburger-timeline-content .event-message {
+            color: #eee;
+        }
+
+        /* Device list styles */
+        .hamburger-device-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .hamburger-device-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .hamburger-device-name {
+            flex: 1;
+            color: #eee;
+        }
+
+        .hamburger-device-type {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 8px;
+        }
+
         /* ===== Mobile Responsive Styles ===== */
+        @media (max-width: 1024px) {
+            /* Show hamburger menu button */
+            #mobile-menu-btn {
+                display: block;
+            }
+
+            /* Hide side panels on mobile - use hamburger menu instead */
+            #node-panel,
+            #presence-panel {
+                display: none;
+            }
+
+            /* Chart panel - adjust position */
+            #chart-panel {
+                width: calc(100% - 16px);
+                right: 8px;
+                left: 8px;
+                bottom: calc(8px + env(safe-area-inset-bottom));
+            }
+        }
+
         @media (max-width: 768px) {
             /* Show mobile menu button */
             #mobile-menu-btn {
@@ -2954,7 +3266,7 @@
             <span id="ws-status-text">Disconnected</span>
             <span id="ws-reconnect-spinner"></span>
         </div>
-        <button id="mobile-menu-btn" onclick="toggleMobilePanels()" aria-label="Toggle panels">
+        <button id="mobile-menu-btn" onclick="toggleHamburgerMenu()" aria-label="Toggle menu">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="3" y1="12" x2="21" y2="12"></line>
                 <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -3020,6 +3332,82 @@
 
     <!-- 3D Scene container -->
     <div id="scene-container"></div>
+
+    <!-- Hamburger Menu (for screens < 1024px) -->
+    <div id="hamburger-overlay"></div>
+    <div id="hamburger-menu">
+        <div id="hamburger-menu-header">
+            <span id="hamburger-menu-title">Menu</span>
+            <button id="hamburger-close-btn" aria-label="Close menu">&times;</button>
+        </div>
+        <!-- Tab Navigation -->
+        <div class="hamburger-tabs">
+            <button class="hamburger-tab" data-tab="nodes" onclick="HamburgerMenu.switchTab('nodes')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+                Nodes
+            </button>
+            <button class="hamburger-tab" data-tab="links" onclick="HamburgerMenu.switchTab('links')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Links
+            </button>
+            <button class="hamburger-tab" data-tab="presence" onclick="HamburgerMenu.switchTab('presence')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/></svg>
+                Presence
+            </button>
+            <button class="hamburger-tab" data-tab="timeline" onclick="HamburgerMenu.switchTab('timeline')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Timeline
+            </button>
+            <button class="hamburger-tab" data-tab="devices" onclick="HamburgerMenu.switchTab('devices')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                Devices
+            </button>
+        </div>
+        <!-- Tab Content Areas -->
+        <div class="hamburger-content">
+            <div id="tab-nodes" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Nodes</h3>
+                </div>
+                <div id="hamburger-node-list">
+                    <div class="empty-state">No nodes connected</div>
+                </div>
+            </div>
+            <div id="tab-links" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Links</h3>
+                </div>
+                <div id="hamburger-link-list">
+                    <div class="empty-state">No links active</div>
+                </div>
+            </div>
+            <div id="tab-presence" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Presence</h3>
+                    <span id="hamburger-presence-status" class="presence-status clear">CLEAR</span>
+                </div>
+                <div id="hamburger-presence-list">
+                    <div class="empty-state">No links active</div>
+                </div>
+            </div>
+            <div id="tab-timeline" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Timeline</h3>
+                </div>
+                <div id="hamburger-timeline-content">
+                    <div class="empty-state">Loading timeline...</div>
+                </div>
+            </div>
+            <div id="tab-devices" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>People & Devices</h3>
+                </div>
+                <div id="hamburger-device-list">
+                    <div class="empty-state">No devices registered</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Node panel -->
     <div id="node-panel">
@@ -3575,7 +3963,271 @@
         </div>
     </div>
     <script>
-        // Mobile panel toggle functionality
+        // ============================================
+        // Hamburger Menu Functions
+        // ============================================
+        function openHamburgerMenu() {
+            var menu = document.getElementById('hamburger-menu');
+            var overlay = document.getElementById('hamburger-overlay');
+            if (menu) menu.classList.add('visible');
+            if (overlay) overlay.classList.add('visible');
+
+            // Initialize tabs when menu opens
+            if (window.HamburgerMenu) {
+                HamburgerMenu.init();
+                // Update content for current tab
+                var currentTab = HamburgerMenu.getCurrentTab();
+                if (currentTab) {
+                    HamburgerMenu.updateContent(currentTab);
+                }
+            }
+        }
+
+        function closeHamburgerMenu() {
+            var menu = document.getElementById('hamburger-menu');
+            var overlay = document.getElementById('hamburger-overlay');
+            if (menu) menu.classList.remove('visible');
+            if (overlay) overlay.classList.remove('visible');
+        }
+
+        function toggleHamburgerMenu() {
+            var menu = document.getElementById('hamburger-menu');
+            if (menu && menu.classList.contains('visible')) {
+                closeHamburgerMenu();
+            } else {
+                openHamburgerMenu();
+            }
+        }
+
+        // ============================================
+        // Hamburger Menu Tab Management
+        // ============================================
+        var HamburgerMenu = (function() {
+            var currentTab = null;
+            var storageKey = 'spaxel_hamburger_last_tab';
+            var tabs = ['nodes', 'links', 'presence', 'timeline', 'devices'];
+
+            function switchTab(tabId) {
+                // Remove active class from all tabs and content
+                document.querySelectorAll('.hamburger-tab').forEach(function(tab) {
+                    tab.classList.remove('active');
+                });
+                document.querySelectorAll('.hamburger-tab-content').forEach(function(content) {
+                    content.classList.remove('active');
+                });
+
+                // Add active class to selected tab and content
+                var tabElement = document.querySelector('.hamburger-tab[data-tab="' + tabId + '"]');
+                var contentElement = document.getElementById('tab-' + tabId);
+
+                if (tabElement && contentElement) {
+                    tabElement.classList.add('active');
+                    contentElement.classList.add('active');
+                    currentTab = tabId;
+
+                    // Save to localStorage
+                    try {
+                        localStorage.setItem(storageKey, tabId);
+                    } catch (e) {
+                        // localStorage not available
+                    }
+
+                    // Update content when switching tabs
+                    updateTabContent(tabId);
+                }
+            }
+
+            function getLastUsedTab() {
+                try {
+                    var savedTab = localStorage.getItem(storageKey);
+                    if (savedTab && tabs.indexOf(savedTab) !== -1) {
+                        return savedTab;
+                    }
+                } catch (e) {
+                    // localStorage not available
+                }
+                return 'nodes'; // Default tab
+            }
+
+            function updateTabContent(tabId) {
+                switch(tabId) {
+                    case 'nodes':
+                        updateNodesList();
+                        break;
+                    case 'links':
+                        updateLinksList();
+                        break;
+                    case 'presence':
+                        updatePresenceList();
+                        break;
+                    case 'timeline':
+                        updateTimelineContent();
+                        break;
+                    case 'devices':
+                        updateDevicesList();
+                        break;
+                }
+            }
+
+            function updateNodesList() {
+                var container = document.getElementById('hamburger-node-list');
+                if (!container) return;
+
+                // Copy nodes from main panel
+                var mainNodeList = document.getElementById('node-list');
+                if (mainNodeList) {
+                    container.innerHTML = mainNodeList.innerHTML;
+                }
+            }
+
+            function updateLinksList() {
+                var container = document.getElementById('hamburger-link-list');
+                if (!container) return;
+
+                // Copy links from main panel
+                var mainLinkList = document.getElementById('link-list');
+                if (mainLinkList) {
+                    container.innerHTML = mainLinkList.innerHTML;
+                }
+            }
+
+            function updatePresenceList() {
+                var container = document.getElementById('hamburger-presence-list');
+                var statusElement = document.getElementById('hamburger-presence-status');
+                if (!container) return;
+
+                // Copy presence from main panel
+                var mainPresenceList = document.getElementById('presence-list');
+                var mainPresenceStatus = document.getElementById('presence-status');
+
+                if (mainPresenceList) {
+                    container.innerHTML = mainPresenceList.innerHTML;
+                }
+                if (mainPresenceStatus && statusElement) {
+                    statusElement.className = mainPresenceStatus.className;
+                    statusElement.textContent = mainPresenceStatus.textContent;
+                }
+            }
+
+            function updateTimelineContent() {
+                var container = document.getElementById('hamburger-timeline-content');
+                if (!container) return;
+
+                // Get timeline events from the main timeline view
+                var mainTimeline = document.querySelector('#timeline-view .timeline-events');
+                if (mainTimeline && mainTimeline.children.length > 0) {
+                    var html = '';
+                    for (var i = 0; i < Math.min(20, mainTimeline.children.length); i++) {
+                        var event = mainTimeline.children[i];
+                        html += event.outerHTML;
+                    }
+                    container.innerHTML = html || '<div class="empty-state">No events yet</div>';
+                } else {
+                    container.innerHTML = '<div class="empty-state">No events yet</div>';
+                }
+            }
+
+            function updateDevicesList() {
+                var container = document.getElementById('hamburger-device-list');
+                if (!container) return;
+
+                // Try to get device list from BLE panel
+                if (window.BLEPanel && BLEPanel.devices) {
+                    var devices = BLEPanel.devices;
+                    if (devices.length === 0) {
+                        container.innerHTML = '<div class="empty-state">No devices registered</div>';
+                        return;
+                    }
+
+                    var html = '';
+                    devices.forEach(function(device) {
+                        html += '<div class="hamburger-device-item">' +
+                            '<div class="hamburger-device-color" style="background-color: ' + device.color + '"></div>' +
+                            '<span class="hamburger-device-name">' + device.label + '</span>' +
+                            '<span class="hamburger-device-type">' + device.type + '</span>' +
+                            '</div>';
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No devices registered</div>';
+                }
+            }
+
+            function init() {
+                // Switch to last used tab when menu opens
+                var lastTab = getLastUsedTab();
+                switchTab(lastTab);
+            }
+
+            return {
+                switchTab: switchTab,
+                init: init,
+                updateContent: updateTabContent,
+                getCurrentTab: function() { return currentTab; }
+            };
+        })();
+
+        // Initialize hamburger menu event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            var menuBtn = document.getElementById('mobile-menu-btn');
+            var closeBtn = document.getElementById('hamburger-close-btn');
+            var overlay = document.getElementById('hamburger-overlay');
+            var menu = document.getElementById('hamburger-menu');
+
+            if (menuBtn) {
+                menuBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleHamburgerMenu();
+                });
+            }
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeHamburgerMenu);
+            }
+
+            if (overlay) {
+                overlay.addEventListener('click', closeHamburgerMenu);
+            }
+
+            // Add touch event listeners to prevent propagation to canvas
+            // This prevents OrbitControls from responding to touches on the hamburger menu
+            if (menu) {
+                menu.addEventListener('touchstart', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+
+                menu.addEventListener('touchmove', function(e) {
+                    e.stopPropagation();
+                }, { passive: false }); // Non-passive to allow preventDefault if needed
+
+                menu.addEventListener('touchend', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+            }
+
+            if (overlay) {
+                overlay.addEventListener('touchstart', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+
+                overlay.addEventListener('touchmove', function(e) {
+                    e.stopPropagation();
+                }, { passive: false });
+
+                overlay.addEventListener('touchend', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+            }
+
+            // Close on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeHamburgerMenu();
+                }
+            });
+        });
+
+        // Mobile panel toggle functionality (legacy - for <768px panels)
         function toggleMobilePanels() {
             var nodePanel = document.getElementById('node-panel');
             var roomEditor = document.getElementById('room-editor-panel');

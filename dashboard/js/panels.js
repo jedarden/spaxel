@@ -136,6 +136,33 @@
         sidebarElement.appendChild(header);
         sidebarElement.appendChild(content);
 
+        // Add touch event listeners to prevent propagation to canvas
+        // This prevents OrbitControls from responding to touches on the panel
+        sidebarElement.addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
+        sidebarElement.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        }, { passive: false }); // Non-passive to allow preventDefault if needed
+
+        sidebarElement.addEventListener('touchend', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
+        // Also add to overlay to prevent canvas touches through backdrop
+        sidebarOverlay.addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
+        sidebarOverlay.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        }, { passive: false });
+
+        sidebarOverlay.addEventListener('touchend', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+
         // Add to DOM
         document.body.appendChild(sidebarOverlay);
         document.body.appendChild(sidebarElement);
