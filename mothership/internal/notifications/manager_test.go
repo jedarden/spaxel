@@ -6,6 +6,28 @@ import (
 	"time"
 )
 
+// Helper function to create a manager with quiet hours disabled for testing.
+// This ensures batching tests work regardless of when they run.
+func newTestManagerWithQuietHoursDisabled(cfg Config) (*NotificationManager, error) {
+	m, err := New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	// Disable quiet hours by setting bitmask to 0 (no days)
+	err = m.SetConfig(NotificationConfig{
+		Channel:          "test",
+		QuietFrom:        "00:00",
+		QuietTo:          "00:00",
+		QuietDaysBitmask: 0, // Disabled - no days selected
+		MorningDigest:    false,
+	})
+	if err != nil {
+		m.Close()
+		return nil, err
+	}
+	return m, nil
+}
+
 // TestNewManager tests creating a new notification manager.
 func TestNewManager(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
@@ -140,7 +162,7 @@ func TestNotifyHighImmediate(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	var receivedEvent Event
-	m, err := New(Config{
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
 		DBPath:       dbPath,
 		SendCallback: func(e Event) { receivedEvent = e },
 	})
@@ -171,10 +193,10 @@ func TestBatching(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	var receivedEvents []Event
-	m, err := New(Config{
-		DBPath:       dbPath,
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
+		DBPath:         dbPath,
 		BatchWindowSec: 1, // Short window for testing
-		SendCallback: func(e Event) { receivedEvents = append(receivedEvents, e) },
+		SendCallback:   func(e Event) { receivedEvents = append(receivedEvents, e) },
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -228,7 +250,7 @@ func TestBatchMaxSize(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	var receivedEvents []Event
-	m, err := New(Config{
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
 		DBPath:       dbPath,
 		MaxBatchSize: 3,
 		SendCallback: func(e Event) { receivedEvents = append(receivedEvents, e) },
@@ -502,10 +524,10 @@ func TestMediumPriorityBatching(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	var receivedEvents []Event
-	m, err := New(Config{
-		DBPath:       dbPath,
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
+		DBPath:         dbPath,
 		BatchWindowSec: 1,
-		SendCallback: func(e Event) { receivedEvents = append(receivedEvents, e) },
+		SendCallback:   func(e Event) { receivedEvents = append(receivedEvents, e) },
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -546,10 +568,10 @@ func TestMediumPriorityBatching(t *testing.T) {
 func TestGetHistory(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
-	m, err := New(Config{
-		DBPath:       dbPath,
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
+		DBPath:         dbPath,
 		BatchWindowSec: 1, // Short batch window for testing
-		SendCallback: func(e Event) {},
+		SendCallback:   func(e Event) {},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -706,10 +728,10 @@ func TestSingleEventBatch(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	var receivedEvent Event
-	m, err := New(Config{
-		DBPath:       dbPath,
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
+		DBPath:         dbPath,
 		BatchWindowSec: 1,
-		SendCallback: func(e Event) { receivedEvent = e },
+		SendCallback:   func(e Event) { receivedEvent = e },
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -922,8 +944,8 @@ func TestBatchingThreeLowEvents(t *testing.T) {
 
 	var receivedCount int
 	var receivedEvent Event
-	m, err := New(Config{
-		DBPath:       dbPath,
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
+		DBPath:         dbPath,
 		BatchWindowSec: 10, // 10 second batch window
 		SendCallback: func(e Event) {
 			receivedCount++
@@ -990,8 +1012,8 @@ func TestBatchingUrgentBypassesBatch(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	var receivedEvents []Event
-	m, err := New(Config{
-		DBPath:       dbPath,
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
+		DBPath:         dbPath,
 		BatchWindowSec: 30,
 		SendCallback: func(e Event) {
 			receivedEvents = append(receivedEvents, e)
@@ -1534,10 +1556,10 @@ func TestQuietHoursNotActiveOutsideWindow(t *testing.T) {
 func TestBatchingPrioritySeparation(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
-	m, err := New(Config{
-		DBPath:       dbPath,
+	m, err := newTestManagerWithQuietHoursDisabled(Config{
+		DBPath:         dbPath,
 		BatchWindowSec: 1,
-		SendCallback: func(e Event) {},
+		SendCallback:   func(e Event) {},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)

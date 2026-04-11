@@ -866,6 +866,10 @@ type LinkInfo struct {
 	NodeMAC    string  `json:"node_mac"`
 	PeerMAC    string  `json:"peer_mac"`
 	HealthScore float64 `json:"health_score,omitempty"` // Ambient confidence score (0-1)
+	// Alias fields for frontend compatibility with proactive.js
+	CompositeScore float64 `json:"composite_score,omitempty"` // Alias for HealthScore
+	Quality        float64 `json:"quality,omitempty"`        // Alias for HealthScore
+	LinkID         string  `json:"link_id,omitempty"`         // Alias for ID
 }
 
 // LinkHealthInfo represents a link with health metrics for the API response
@@ -894,6 +898,7 @@ func (s *Server) GetAllLinksInfo() []LinkInfo {
 				ID:      linkID,
 				NodeMAC: linkID[:17],
 				PeerMAC: linkID[18:],
+				LinkID:  linkID, // Alias for frontend
 			}
 
 			// Get health score from processor manager if available
@@ -901,6 +906,9 @@ func (s *Server) GetAllLinksInfo() []LinkInfo {
 				if proc := pm.GetProcessor(linkID); proc != nil {
 					if health := proc.GetHealth(); health != nil {
 						info.HealthScore = health.GetAmbientConfidence()
+						// Populate alias fields for frontend compatibility
+						info.CompositeScore = info.HealthScore
+						info.Quality = info.HealthScore
 					}
 				}
 			}
@@ -1004,6 +1012,46 @@ func (s *Server) GetAllLinksWithHealth() []LinkHealthInfo {
 		result = append(result, info)
 	}
 	return result
+}
+
+// GetLinkWithHealth returns health information for a specific link
+func (s *Server) GetLinkWithHealth(linkID string) *LinkHealthInfo {
+	s.mu.RLock()
+	pm := s.processorMgr
+	s.mu.RUnlock()
+
+	info := &LinkHealthInfo{
+		LinkID: linkID,
+	}
+
+	if len(linkID) >= 35 {
+		info.TXMAC = linkID[:17]
+		info.RXMAC = linkID[18:]
+	}
+
+	if pm != nil {
+		if proc := pm.GetProcessor(linkID); proc != nil {
+			health := proc.GetHealth()
+			if health != nil {
+				info.HealthScore = health.GetAmbientConfidence()
+				info.HealthDetails = health.GetHealthDetails()
+				info.LastUpdated = time.Now()
+			}
+		}
+	}
+
+	// Default health if not available
+	if info.HealthScore == 0 && info.HealthDetails == (signal.HealthDetails{}) {
+		info.HealthScore = 0.5
+		info.HealthDetails = signal.HealthDetails{
+			SNR:           0.5,
+			PhaseStability: 0.5,
+			PacketRate:    0.5,
+			BaselineDrift: 0.5,
+		}
+	}
+
+	return info
 }
 
 // GetAllLinks returns all link IDs that have data

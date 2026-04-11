@@ -2970,8 +2970,32 @@ func main() {
 	// Phase 6: Link diagnostics API
 	r.Get("/api/links/{linkID}/diagnostics", func(w http.ResponseWriter, r *http.Request) {
 		linkID := chi.URLParam(r, "linkID")
+
+		// Get diagnoses for this link
 		diagnoses := diagnosticEngine.GetDiagnoses(linkID)
-		writeJSON(w, diagnoses)
+
+		// Get current health snapshot for this link
+		var healthInfo map[string]interface{}
+		if ingestSrv != nil {
+			linkHealth := ingestSrv.GetLinkWithHealth(linkID)
+			if linkHealth != nil {
+				healthInfo = map[string]interface{}{
+					"snr":             linkHealth.HealthDetails.SNR,
+					"phase_stability": linkHealth.HealthDetails.PhaseStability,
+					"packet_rate":     linkHealth.HealthDetails.PacketRate,
+					"drift_rate":      linkHealth.HealthDetails.BaselineDrift,
+					"composite_score": linkHealth.HealthScore,
+				}
+			}
+		}
+
+		// Build response with diagnosis and health
+		response := map[string]interface{}{
+			"diagnosis": diagnoses,
+			"health":    healthInfo,
+		}
+
+		writeJSON(w, response)
 	})
 
 	r.Get("/api/links/{linkID}/health-history", func(w http.ResponseWriter, r *http.Request) {
@@ -2998,6 +3022,99 @@ func main() {
 	r.Get("/api/diagnostics", func(w http.ResponseWriter, r *http.Request) {
 		allDiagnoses := diagnosticEngine.GetAllDiagnoses()
 		writeJSON(w, allDiagnoses)
+	})
+
+	// GetDiagnosticFor endpoint - returns diagnostic for a specific link at a given time
+	r.Get("/api/diagnostics/link/{linkID}", func(w http.ResponseWriter, r *http.Request) {
+		linkID := chi.URLParam(r, "linkID")
+
+		// Parse optional timestamp parameter
+		var timestamp time.Time
+		timestampStr := r.URL.Query().Get("timestamp")
+		if timestampStr != "" {
+			// Try parsing as Unix milliseconds
+			if ms, err := strconv.ParseInt(timestampStr, 10, 64); err == nil {
+				timestamp = time.Unix(0, ms*1e6)
+			} else {
+				// Try parsing as ISO8601
+				timestamp, err = time.Parse(time.RFC3339, timestampStr)
+				if err != nil {
+					http.Error(w, "invalid timestamp format", http.StatusBadRequest)
+					return
+				}
+			}
+		} else {
+			// Default to now
+			timestamp = time.Now()
+		}
+
+		// Get diagnostic for this link at the specified time
+		diagnosis := diagnosticEngine.GetDiagnosticFor(linkID, timestamp)
+		if diagnosis == nil {
+			http.Error(w, "diagnostic not found", http.StatusNotFound)
+			return
+		}
+
+		// Build response with diagnosis and current health snapshot
+		response := map[string]interface{}{
+			"diagnosis": map[string]interface{}{
+				"link_id":   diagnosis.LinkID,
+				"rule_id":   diagnosis.RuleID,
+				"severity":  string(diagnosis.Severity),
+				"title":     diagnosis.Title,
+				"detail":    diagnosis.Detail,
+				"advice":    diagnosis.Advice,
+				"confidence": diagnosis.ConfidenceScore,
+			},
+		}
+
+		// Add repositioning info if available
+		if diagnosis.RepositioningTarget != nil {
+			response["repositioning"] = map[string]interface{}{
+				"node_mac": diagnosis.RepositioningNodeMAC,
+				"position": map[string]float64{
+					"x": diagnosis.RepositioningTarget.X,
+					"y": diagnosis.RepositioningTarget.Y,
+					"z": diagnosis.RepositioningTarget.Z,
+				},
+			}
+		}
+
+		// Add current health snapshot if available
+		if healthStore != nil {
+			history, err := healthStore.GetHealthHistory(linkID, 1*time.Hour)
+			if err == nil && len(history) > 0 {
+				// Find the snapshot closest to the requested timestamp
+				var closest *diagnostics.LinkHealthSnapshot
+				minDiff := time.Duration(1<<63 - 1)
+
+				for i := range history {
+					diff := history[i].Timestamp.Sub(timestamp)
+					if diff < 0 {
+						diff = -diff
+					}
+					if diff < minDiff {
+						minDiff = diff
+						closest = &history[i]
+					}
+				}
+
+				if closest != nil {
+					response["health"] = map[string]interface{}{
+						"timestamp":         closest.Timestamp.Unix(),
+						"snr":                closest.SNR,
+						"phase_stability":   closest.PhaseStability,
+						"packet_rate":       closest.PacketRate,
+						"drift_rate":        closest.DriftRate,
+						"composite_score":   closest.CompositeScore,
+						"delta_rms_variance": closest.DeltaRMSVariance,
+						"is_quiet_period":    closest.IsQuietPeriod,
+					}
+				}
+			}
+		}
+
+		writeJSON(w, response)
 	})
 
 	// Phase 6: Analytics REST API
