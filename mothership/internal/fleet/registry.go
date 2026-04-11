@@ -12,6 +12,18 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// NodeRegistry is the interface for node registry operations.
+// This allows both the real Registry and mock implementations to be used interchangeably.
+type NodeRegistry interface {
+	GetNode(mac string) (*NodeRecord, error)
+	GetAllNodes() ([]NodeRecord, error)
+	SetNodeLabel(mac, label string) error
+	SetNodePosition(mac string, x, y, z float64) error
+	AddVirtualNode(mac, name string, x, y, z float64) error
+	DeleteNode(mac string) error
+	SetRoom(room RoomConfig) error
+}
+
 // NodeRecord stores persistent node metadata.
 type NodeRecord struct {
 	MAC             string

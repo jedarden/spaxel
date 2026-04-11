@@ -513,7 +513,7 @@ func TestHandlerListFleet(t *testing.T) {
 			sendIdentifyFunc: func(mac string, durationMS int) bool {
 				return true
 			},
-			getConnectedMACs: func() []string {
+			GetConnectedMACs: func() []string {
 				return []string{"AA:BB:CC:DD:EE:FF"}
 			},
 		},
