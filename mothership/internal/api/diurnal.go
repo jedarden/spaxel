@@ -24,6 +24,36 @@ type DiurnalLinkProcessor interface {
 	GetDiurnal() *signal.DiurnalBaseline
 }
 
+// signalProcessorManagerAdapter wraps *signal.ProcessorManager to implement DiurnalProcessorManager.
+type signalProcessorManagerAdapter struct {
+	pm interface {
+		GetDiurnalLearningStatus() []signal.DiurnalLearningStatus
+		GetProcessor(linkID string) *signal.LinkProcessor
+	}
+}
+
+func (a *signalProcessorManagerAdapter) GetDiurnalLearningStatus() []signal.DiurnalLearningStatus {
+	return a.pm.GetDiurnalLearningStatus()
+}
+
+func (a *signalProcessorManagerAdapter) GetProcessor(linkID string) DiurnalLinkProcessor {
+	lp := a.pm.GetProcessor(linkID)
+	if lp == nil {
+		return nil
+	}
+	return lp
+}
+
+// NewDiurnalHandlerFromSignal creates a DiurnalHandler from a *signal.ProcessorManager.
+func NewDiurnalHandlerFromSignal(pm interface {
+	GetDiurnalLearningStatus() []signal.DiurnalLearningStatus
+	GetProcessor(linkID string) *signal.LinkProcessor
+}) *DiurnalHandler {
+	return &DiurnalHandler{
+		pm: &signalProcessorManagerAdapter{pm: pm},
+	}
+}
+
 // NewDiurnalHandler creates a new diurnal API handler.
 func NewDiurnalHandler(pm DiurnalProcessorManager) *DiurnalHandler {
 	return &DiurnalHandler{

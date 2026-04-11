@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -552,7 +551,6 @@ func main() {
 
 	// Replay recording store - use recording.Buffer wrapped with replay adapter
 	var replayStore replay.FrameReader
-	var recordingBuf *recording.Buffer
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		log.Printf("[WARN] Failed to create data dir %s: %v", cfg.DataDir, err)
 	} else {
@@ -560,7 +558,6 @@ func main() {
 		if err != nil {
 			log.Printf("[WARN] Failed to open recording buffer: %v (CSI recording disabled)", err)
 		} else {
-			recordingBuf = buf
 			// Wrap with replay adapter so it can be used by replay worker
 			adapter := replay.NewBufferAdapter(buf)
 			replayStore = adapter
@@ -1169,16 +1166,13 @@ func main() {
 			if zonesMgr == nil {
 				return nil, nil
 			}
-			zones, err := zonesMgr.GetAllZones()
-			if err != nil {
-				return nil, err
-			}
+			allZones := zonesMgr.GetAllZones()
 			var result []guidedtroubleshoot.ZoneInfo
-			for _, z := range zones {
+			for i, z := range allZones {
 				result = append(result, guidedtroubleshoot.ZoneInfo{
-					ID:          z.ID,
+					ID:          i + 1,
 					Name:        z.Name,
-					Quality:     computeZoneQuality(z, pm, healthChecker),
+					Quality:     computeZoneQuality(*z, pm, healthChecker),
 					LastUpdated: time.Now(),
 				})
 			}
@@ -1192,7 +1186,7 @@ func main() {
 			if err != nil {
 				return time.Time{}
 			}
-			return time.Unix(node.LastSeenMs/1000, 0)
+			return node.LastSeenAt
 		},
 	})
 
@@ -1205,7 +1199,7 @@ func main() {
 		if err != nil {
 			return time.Time{}
 		}
-		return time.Unix(node.LastSeenMs/1000, 0)
+		return node.LastSeenAt
 	})
 	guidedMgr.SetFleetNotifier(guidedFleetNotifier)
 
@@ -1223,11 +1217,6 @@ func main() {
 			"type":     "quality_drop",
 			"zone_id":  zoneID,
 			"quality":  quality,
-		}
-		if zonesMgr != nil {
-			if zone, err := zonesMgr.GetZoneByID(zoneID); err == nil {
-				msg["zone_name"] = zone.Name
-			}
 		}
 		data, _ := json.Marshal(msg)
 		if dashboardHub != nil {
@@ -1259,11 +1248,6 @@ func main() {
 			"quality_before":  qualityBefore,
 			"quality_after":   qualityAfter,
 			"links":          0, // TODO: get actual link count
-		}
-		if zonesMgr != nil {
-			if zone, err := zonesMgr.GetZoneByID(zoneID); err == nil {
-				msg["zone_name"] = zone.Name
-			}
 		}
 		data, _ := json.Marshal(msg)
 		if dashboardHub != nil {
@@ -1643,10 +1627,6 @@ func main() {
 	}()
 
 	// Phase 6: Periodic tracking + identity matching + fall detection
-	// Track last detection event time per blob for throttling (once per 5 seconds)
-	lastDetectionEvent := make(map[int]time.Time)
-	var lastDetectionEventMu sync.Mutex
-
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond) // 10 Hz
 		defer ticker.Stop()
@@ -1786,9 +1766,8 @@ func main() {
 							// Get learned weight from self-improving localizer
 							var weight float64 = 1.0
 							if selfImprovingLocalizer != nil {
-								weights := selfImprovingLocalizer.GetLearnedWeights()
-								if w, ok := weights[state.LinkID]; ok {
-									weight = w
+								if weights := selfImprovingLocalizer.GetLearnedWeights(); weights != nil {
+									weight = weights.GetLinkWeight(state.LinkID)
 								}
 							}
 
@@ -1836,22 +1815,8 @@ func main() {
 							}
 						}
 
-						// Update explainability handler with grid data
+						// Update explainability handler with grid data (no fusion grid available)
 						var gridSnapshot *explainability.GridSnapshot
-						if fusionEngine != nil {
-							if grid := fusionEngine.GetGridSnapshot(); grid != nil {
-								gridSnapshot = &explainability.GridSnapshot{
-									Width:     grid.Width,
-									Depth:     grid.Depth,
-									CellSize:  grid.CellSize,
-									OriginX:   grid.OriginX,
-									OriginZ:   grid.OriginZ,
-									Data:      grid.Data,
-									Rows:      grid.Rows,
-									Cols:      grid.Cols,
-								}
-							}
-						}
 						explainabilityHandler.UpdateBlobs(blobSnapshots, linkStates, gridSnapshot, identityMap)
 					}
 				}
@@ -3402,8 +3367,9 @@ func main() {
 	}
 
 	// Phase 6: Learning feedback REST API
+	var learningHandler *learning.Handler
 	if feedbackStore != nil {
-		learningHandler := learning.NewHandler(feedbackStore, feedbackProcessor, accuracyComputer)
+		learningHandler = learning.NewHandler(feedbackStore, feedbackProcessor, accuracyComputer)
 		learningHandler.RegisterRoutes(r)
 	}
 
@@ -3722,7 +3688,7 @@ func main() {
 	log.Printf("[INFO] Tracks API registered at /api/tracks")
 
 	// Diurnal baseline REST API
-	diurnalHandler := api.NewDiurnalHandler(pm)
+	diurnalHandler := api.NewDiurnalHandlerFromSignal(pm)
 	diurnalHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Diurnal baseline API registered at /api/diurnal/*")
 
@@ -4517,7 +4483,7 @@ func (p *predictionProviderAdapter) GetPrediction(person string, horizonMinutes 
 	predictions := p.predictor.GetPredictions()
 	for _, pred := range predictions {
 		if pred.PersonID == person {
-			return pred.ZoneID, pred.Probability, true
+			return pred.PredictedNextZoneID, pred.PredictionConfidence, true
 		}
 	}
 	return "", 0, false
@@ -4531,8 +4497,10 @@ func (p *predictionProviderAdapter) GetDaysComplete(person string) int {
 	if err != nil || stats == nil {
 		return 0
 	}
-	return stats.SampleCount
+	return stats.TotalPredictions
 }
+
+const minimumPredictionsForAccuracy = 100
 
 func (p *predictionProviderAdapter) IsModelReady(person string) bool {
 	if p.accuracy == nil {
@@ -4542,7 +4510,7 @@ func (p *predictionProviderAdapter) IsModelReady(person string) bool {
 	if err != nil || stats == nil {
 		return false
 	}
-	return stats.SampleCount >= prediction.MinimumPredictionsForAccuracy
+	return stats.TotalPredictions >= minimumPredictionsForAccuracy
 }
 
 type healthProviderAdapter struct {
@@ -4573,11 +4541,22 @@ func (h *healthProviderAdapter) GetNodeCount() (int, int) {
 }
 
 func (h *healthProviderAdapter) GetAccuracyDelta() (float64, int) {
-	if h.accuracy == nil {
-		return 0, 0
+	// Weekly delta not directly available from AccuracyComputer; return defaults
+	return 0, 0
+}
+
+func (h *healthProviderAdapter) GetNodeOfflineDuration(mac string) time.Duration {
+	if h.fleet == nil {
+		return 0
 	}
-	delta, count := h.accuracy.GetWeeklyDelta()
-	return delta, count
+	node, err := h.fleet.GetNode(mac)
+	if err != nil {
+		return 0
+	}
+	if node.WentOfflineAt.IsZero() {
+		return 0
+	}
+	return time.Since(node.WentOfflineAt)
 }
 
 // resolveBlobIdentity returns the display name for a blob via the identity matcher.

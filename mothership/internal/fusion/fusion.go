@@ -1,7 +1,6 @@
 package fusion
 
 import (
-	"log"
 	"math"
 	"sync"
 	"time"
@@ -334,7 +333,7 @@ func (e *Engine) GetGridSnapshot() *explainability.GridSnapshot {
 	}
 
 	// Get grid dimensions
-	nx, ny, nz, cellSize, ox, oy, oz := e.grid.Dims()
+	nx, ny, nz, cellSize, ox, _, oz := e.grid.Dims()
 	width := float64(nx) * cellSize
 	depth := float64(nz) * cellSize
 

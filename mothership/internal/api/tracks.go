@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/signal"
 )
 
 // Track represents a tracked person with identity and position.
@@ -25,23 +26,12 @@ type Track struct {
 	Posture            string  `json:"posture,omitempty"`
 }
 
+// TrackedBlob is an alias for signal.TrackedBlob.
+type TrackedBlob = signal.TrackedBlob
+
 // TracksProvider is the interface for getting current tracked blobs.
 type TracksProvider interface {
-	GetTrackedBlobs() []TrackedBlob
-}
-
-// TrackedBlob represents a tracked spatial blob from the fusion engine.
-type TrackedBlob struct {
-	ID                 int
-	X, Y, Z            float64
-	VX, VY, VZ         float64
-	Weight             float64
-	PersonID           string
-	PersonLabel        string
-	PersonColor        string
-	IdentityConfidence float64
-	IdentitySource     string
-	Posture            string
+	GetTrackedBlobs() []signal.TrackedBlob
 }
 
 // TracksHandler manages the tracks REST API.
