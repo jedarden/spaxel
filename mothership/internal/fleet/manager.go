@@ -639,3 +639,10 @@ func (m *Manager) IsSecurityMode() bool {
 	defer m.mu.RUnlock()
 	return m.systemMode == events.ModeAway
 }
+
+// IsManualOverrideActive returns true if a manual mode override is currently active.
+func (m *Manager) IsManualOverrideActive() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return time.Now().Before(m.manualOverrideUntil)
+}

@@ -43,6 +43,17 @@ func (m *mockNotifier) GetConnectedMACs() []string {
 	return append([]string{}, m.connected...)
 }
 
+func (m *mockNotifier) SendIdentifyToMAC(mac string, durationMS int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, c := range m.connected {
+		if c == mac {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *mockNotifier) sentRole(mac string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -478,17 +489,17 @@ func TestManager_AutoAwayActivates(t *testing.T) {
 		t.Errorf("Expected mode to be away after auto-away, got %s", mgr.GetSystemMode())
 	}
 
-	events := modeBroadcaster.getEvents()
-	if len(events) != 1 {
-		t.Fatalf("Expected 1 mode change event, got %d", len(events))
+	modeEvents := modeBroadcaster.getEvents()
+	if len(modeEvents) != 1 {
+		t.Fatalf("Expected 1 mode change event, got %d", len(modeEvents))
 	}
 
-	if events[0].NewMode != events.ModeAway {
-		t.Errorf("Expected new mode to be away, got %s", events[0].NewMode)
+	if modeEvents[0].NewMode != events.ModeAway {
+		t.Errorf("Expected new mode to be away, got %s", modeEvents[0].NewMode)
 	}
 
-	if events[0].Reason != "auto_away" {
-		t.Errorf("Expected reason to be auto_away, got %s", events[0].Reason)
+	if modeEvents[0].Reason != "auto_away" {
+		t.Errorf("Expected reason to be auto_away, got %s", modeEvents[0].Reason)
 	}
 }
 
@@ -527,25 +538,25 @@ func TestManager_AutoDisarmTriggers(t *testing.T) {
 		t.Errorf("Expected mode to be home after auto-disarm, got %s", mgr.GetSystemMode())
 	}
 
-	events := modeBroadcaster.getEvents()
-	if len(events) != 1 {
-		t.Fatalf("Expected 1 mode change event, got %d", len(events))
+	modeEvents := modeBroadcaster.getEvents()
+	if len(modeEvents) != 1 {
+		t.Fatalf("Expected 1 mode change event, got %d", len(modeEvents))
 	}
 
-	if events[0].NewMode != events.ModeHome {
-		t.Errorf("Expected new mode to be home, got %s", events[0].NewMode)
+	if modeEvents[0].NewMode != events.ModeHome {
+		t.Errorf("Expected new mode to be home, got %s", modeEvents[0].NewMode)
 	}
 
-	if events[0].Reason != "auto_disarm" {
-		t.Errorf("Expected reason to be auto_disarm, got %s", events[0].Reason)
+	if modeEvents[0].Reason != "auto_disarm" {
+		t.Errorf("Expected reason to be auto_disarm, got %s", modeEvents[0].Reason)
 	}
 
-	if events[0].PersonID != "person1" {
-		t.Errorf("Expected person_id to be person1, got %s", events[0].PersonID)
+	if modeEvents[0].PersonID != "person1" {
+		t.Errorf("Expected person_id to be person1, got %s", modeEvents[0].PersonID)
 	}
 
-	if events[0].PersonName != "Alice" {
-		t.Errorf("Expected person_name to be Alice, got %s", events[0].PersonName)
+	if modeEvents[0].PersonName != "Alice" {
+		t.Errorf("Expected person_name to be Alice, got %s", modeEvents[0].PersonName)
 	}
 }
 

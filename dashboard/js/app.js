@@ -2095,6 +2095,27 @@
     }
 
     // ============================================
+    // URL Parameter Handling
+    // ============================================
+    function handleURLParameters() {
+        // Parse URL parameters for camera fly-to and other features
+        const params = new URLSearchParams(window.location.search);
+        const highlightMAC = params.get('highlight');
+
+        if (highlightMAC && window.Viz3D && window.Viz3D.flyToNode) {
+            console.log('[Spaxel] Highlight parameter found, flying to node:', highlightMAC);
+            // Wait a bit for scene to fully initialize before flying
+            setTimeout(function() {
+                window.Viz3D.flyToNode(highlightMAC);
+                // Clear the parameter from URL without reloading
+                const url = new URL(window.location);
+                url.searchParams.delete('highlight');
+                window.history.replaceState({}, '', url);
+            }, 500);
+        }
+    }
+
+    // ============================================
     // Initialization
     // ============================================
     function init() {
@@ -2106,6 +2127,9 @@
         startHealthPolling();
         startDiurnalPolling();
         animate();
+
+        // Handle URL parameters after initialization
+        handleURLParameters();
 
         console.log('[Spaxel] Dashboard ready');
     }

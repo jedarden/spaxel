@@ -3683,7 +3683,7 @@ func main() {
 	log.Printf("[INFO] Tracked blobs API registered at /api/blobs")
 
 	// Tracks REST API (BLE-to-blob identity enriched tracked people)
-	tracksHandler := api.NewTracksHandler(pm)
+	tracksHandler := api.NewTracksHandlerFromSignal(pm)
 	tracksHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Tracks API registered at /api/tracks")
 

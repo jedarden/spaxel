@@ -110,7 +110,8 @@ func (h *Handler) handleGetCorridors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, corridors)
+	// Return in format expected by frontend: {corridors: [...]}
+	writeJSON(w, map[string]interface{}{"corridors": corridors})
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
