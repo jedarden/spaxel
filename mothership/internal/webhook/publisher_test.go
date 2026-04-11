@@ -106,8 +106,8 @@ func TestPublishEvent(t *testing.T) {
 	if receivedContentType != "application/json" {
 		t.Errorf("Content-Type = %s, want application/json", receivedContentType)
 	}
-	if receivedEventHeader != "spaxel-event" {
-		t.Errorf("X-Spaxel-Event = %s, want spaxel-event", receivedEventHeader)
+	if receivedEventHeader != "zone_entry" {
+		t.Errorf("X-Spaxel-Event = %s, want zone_entry", receivedEventHeader)
 	}
 }
 

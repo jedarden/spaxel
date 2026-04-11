@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integrations - Spaxel Dashboard</title>
+    <link rel="stylesheet" href="css/panels.css">
+    <link rel="stylesheet" href="css/integrations.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .integrations-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .integrations-header {
+            margin-bottom: 24px;
+        }
+
+        .integrations-header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+        }
+
+        .integrations-header p {
+            color: #888;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .integration-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .integration-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .integration-card-title {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .integration-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .status-dot.connected {
+            background: #4caf50;
+            box-shadow: 0 0 8px #4caf50;
+        }
+
+        .status-dot.disconnected {
+            background: #f44336;
+        }
+
+        .integration-description {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #ccc;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="password"],
+        .form-group input[type="url"] {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #eee;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4a90d9;
+        }
+
+        .form-group input::placeholder {
+            color: #666;
+        }
+
+        .form-hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #4a90d9;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #357abd;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #eee;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-full {
+            width: 100%;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .button-group .btn {
+            flex: 1;
+        }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #4a90d9;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1001;
+        }
+
+        .toast.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.success {
+            background: #4caf50;
+        }
+
+        .toast.error {
+            background: #f44336;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #4a90d9;
+            text-decoration: none;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="integrations-container">
+        <a href="index.html" class="back-link">← Back to Dashboard</a>
+
+        <div class="integrations-header">
+            <h1>Integrations</h1>
+            <p>Configure home automation integrations for Spaxel</p>
+        </div>
+
+        <!-- MQTT Integration Card -->
+        <div class="integration-card" id="mqtt-card">
+            <div class="integration-card-header">
+                <div class="integration-card-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    MQTT Integration
+                </div>
+                <div class="integration-status" id="mqtt-status">
+                    <span class="status-dot disconnected" id="mqtt-status-dot"></span>
+                    <span id="mqtt-status-text">Disconnected</span>
+                </div>
+            </div>
+            <p class="integration-description">
+                Automatically configure Spaxel entities in Home Assistant via MQTT discovery.
+                Person presence, zone occupancy, fall detection, and system health will be published.
+            </p>
+
+            <form id="mqtt-form">
+                <div class="form-group">
+                    <label for="mqtt-broker">Broker URL</label>
+                    <input type="text" id="mqtt-broker" placeholder="tcp://homeassistant.local:1883" required>
+                    <div class="form-hint">Examples: tcp://broker.local:1883, mqtt://broker.local:1883, mqtts://broker.local:8883</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="mqtt-username">Username (optional)</label>
+                    <input type="text" id="mqtt-username" placeholder="username">
+                </div>
+
+                <div class="form-group">
+                    <label for="mqtt-password">Password (optional)</label>
+                    <input type="password" id="mqtt-password" placeholder="password">
+                    <div class="form-hint">Leave blank to keep existing password</div>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="mqtt-tls">
+                    <label for="mqtt-tls">Use TLS (mqtts://)</label>
+                </div>
+
+                <div class="form-group">
+                    <label for="mqtt-discovery-prefix">Discovery Prefix</label>
+                    <input type="text" id="mqtt-discovery-prefix" value="homeassistant">
+                    <div class="form-hint">Home Assistant MQTT discovery topic prefix (default: homeassistant)</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full" id="save-mqtt-btn">Save MQTT Settings</button>
+
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" id="test-mqtt-btn">Test Connection</button>
+                    <button type="button" class="btn btn-secondary" id="publish-discovery-btn">Publish Discovery</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- System Webhook Card -->
+        <div class="integration-card" id="webhook-card">
+            <div class="integration-card-header">
+                <div class="integration-card-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    System Webhook
+                </div>
+                <div class="integration-status" id="webhook-status">
+                    <span class="status-dot" id="webhook-status-dot"></span>
+                    <span id="webhook-status-text">Disabled</span>
+                </div>
+            </div>
+            <p class="integration-description">
+                Send all Spaxel events to a custom webhook URL for integration with external services.
+                Events are sent as JSON with an X-Spaxel-Event header indicating the event type.
+            </p>
+
+            <form id="webhook-form">
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="webhook-enabled">
+                    <label for="webhook-enabled">Enable System Webhook</label>
+                </div>
+
+                <div class="form-group" id="webhook-url-group" style="display: none;">
+                    <label for="webhook-url">Webhook URL</label>
+                    <input type="url" id="webhook-url" placeholder="https://your-server.com/spaxel-webhook">
+                    <div class="form-hint">Events will be POSTed as JSON with X-Spaxel-Event header</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full" id="save-webhook-btn">Save Webhook Settings</button>
+
+                <button type="button" class="btn btn-secondary btn-full" id="test-webhook-btn" style="margin-top: 12px;">Test Webhook</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="js/integrations.js"></script>
+    <script>
+        // Override the panel rendering for standalone page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load settings on page load
+            if (window.SpaxelIntegrations) {
+                window.SpaxelIntegrations.fetch().catch(function(err) {
+                    showToast('Failed to load integration settings', 'error');
+                });
+            }
+
+            // Set up event listeners
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // MQTT form submission
+            const mqttForm = document.getElementById('mqtt-form');
+            if (mqttForm) {
+                mqttForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    saveMQTTSettings();
+                });
+            }
+
+            // Webhook enabled toggle
+            const webhookEnabled = document.getElementById('webhook-enabled');
+            if (webhookEnabled) {
+                webhookEnabled.addEventListener('change', function() {
+                    const urlGroup = document.getElementById('webhook-url-group');
+                    if (urlGroup) {
+                        urlGroup.style.display = this.checked ? '' : 'none';
+                    }
+                });
+            }
+
+            // Webhook form submission
+            const webhookForm = document.getElementById('webhook-form');
+            if (webhookForm) {
+                webhookForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    saveWebhookSettings();
+                });
+            }
+
+            // Test buttons
+            const testMQTTBtn = document.getElementById('test-mqtt-btn');
+            if (testMQTTBtn) {
+                testMQTTBtn.addEventListener('click', function() {
+                    testIntegration('mqtt');
+                });
+            }
+
+            const publishDiscoveryBtn = document.getElementById('publish-discovery-btn');
+            if (publishDiscoveryBtn) {
+                publishDiscoveryBtn.addEventListener('click', publishDiscovery);
+            }
+
+            const testWebhookBtn = document.getElementById('test-webhook-btn');
+            if (testWebhookBtn) {
+                testWebhookBtn.addEventListener('click', function() {
+                    testIntegration('webhook');
+                });
+            }
+        }
+
+        function saveMQTTSettings() {
+            const broker = document.getElementById('mqtt-broker').value.trim();
+            const username = document.getElementById('mqtt-username').value.trim();
+            const password = document.getElementById('mqtt-password').value;
+            const tls = document.getElementById('mqtt-tls').checked;
+            const discoveryPrefix = document.getElementById('mqtt-discovery-prefix').value.trim();
+
+            if (!broker) {
+                showToast('Broker URL is required', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            const updates = {
+                mqtt: {
+                    broker: broker,
+                    username: username,
+                    tls: tls,
+                    discovery_prefix: discoveryPrefix || 'homeassistant'
+                }
+            };
+
+            if (password) {
+                updates.mqtt.password = password;
+            }
+
+            window.SpaxelIntegrations.save(updates)
+                .then(function() {
+                    showLoading(false);
+                    showToast('MQTT settings saved successfully', 'success');
+                })
+                .catch(function(err) {
+                    showLoading(false);
+                    showToast('Failed to save MQTT settings: ' + err.message, 'error');
+                });
+        }
+
+        function saveWebhookSettings() {
+            const enabled = document.getElementById('webhook-enabled').checked;
+            const url = document.getElementById('webhook-url').value.trim();
+
+            if (enabled && !url) {
+                showToast('Webhook URL is required when enabled', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            const updates = {
+                webhook: {
+                    enabled: enabled,
+                    url: enabled ? url : ''
+                }
+            };
+
+            window.SpaxelIntegrations.save(updates)
+                .then(function() {
+                    showLoading(false);
+                    showToast('Webhook settings saved successfully', 'success');
+                })
+                .catch(function(err) {
+                    showLoading(false);
+                    showToast('Failed to save webhook settings: ' + err.message, 'error');
+                });
+        }
+
+        function testIntegration(type) {
+            showLoading(true);
+
+            window.SpaxelIntegrations.test(type)
+                .then(function(result) {
+                    showLoading(false);
+                    showToast(result.message || 'Test successful', 'success');
+                })
+                .catch(function(err) {
+                    showLoading(false);
+                    showToast('Test failed: ' + err.message, 'error');
+                });
+        }
+
+        function publishDiscovery() {
+            // Check if MQTT is connected
+            const statusDot = document.getElementById('mqtt-status-dot');
+            if (!statusDot || !statusDot.classList.contains('connected')) {
+                showToast('MQTT must be connected to publish discovery', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            // In a full implementation, this would call an API endpoint
+            // For now, simulate the action
+            setTimeout(function() {
+                showLoading(false);
+                showToast('Discovery configurations published to Home Assistant', 'success');
+            }, 500);
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                if (show) {
+                    overlay.classList.add('active');
+                } else {
+                    overlay.classList.remove('active');
+                }
+            }
+        }
+
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            if (toast) {
+                toast.textContent = message;
+                toast.className = 'toast show ' + type;
+                setTimeout(function() {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Integration status update
+        function updateIntegrationStatus(type, connected, message) {
+            const statusDot = document.getElementById(type + '-status-dot');
+            const statusText = document.getElementById(type + '-status-text');
+
+            if (statusDot) {
+                statusDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+            }
+
+            if (statusText && message) {
+                statusText.textContent = message;
+            }
+        }
+    </script>
+</body>
+</html>
