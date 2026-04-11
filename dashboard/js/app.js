@@ -27,7 +27,16 @@
         drTsMaxPoints: 100,  // max deltaRMS samples per link
         drThreshold: 0.02,   // DefaultDeltaRMSThreshold
         healthPollIntervalMs: 10000,  // poll /api/links every 10 seconds
-        diurnalPollIntervalMs: 30000  // poll /api/diurnal/status every 30 seconds
+        diurnalPollIntervalMs: 30000,  // poll /api/diurnal/status every 30 seconds
+
+        // Mobile performance settings
+        // Frame rate capping for struggling mobile devices
+        mobileFrameRateCap: 30,         // Target FPS for mobile devices when struggling (30 = cap, 60 = uncapped)
+                                       // Set to 60 to disable initial cap but keep auto-detection
+                                       // Set to 30 to cap mobile devices from the start
+        autoDetectStrugglingDevice: true,  // Auto-detect and cap FPS on struggling mobile devices
+        strugglingDeviceThreshold: 25,   // FPS threshold below which a device is considered "struggling"
+        strugglingDeviceRecoveryThreshold: 40  // FPS threshold to recover from struggling mode
     };
 
     // ============================================
@@ -51,6 +60,7 @@
         lastFrameTime: 0,        // Time of last rendered frame
         fpsHistory: [],          // Recent FPS samples for detecting struggling devices
         strugglingDevice: false, // Auto-detected low performance flag
+        manualFrameRateCap: null // User-specified frame rate cap (null = auto-detect)
         // System health tracking
         systemHealth: 0,
         worstLinkID: null,
@@ -142,6 +152,22 @@
         }
 
         container.appendChild(renderer.domElement);
+
+        // Initialize frame rate cap based on CONFIG
+        // On mobile, optionally cap frame rate to improve performance
+        if (mobile) {
+            const capFPS = CONFIG.mobileFrameRateCap;
+            if (capFPS && capFPS < 60) {
+                state.targetFPS = capFPS;
+                state.minFrameTime = 1000 / capFPS;
+                state.manualFrameRateCap = capFPS;
+                console.log('[Spaxel] Mobile frame rate capped at ' + capFPS + ' FPS (config)');
+            } else {
+                // Still enable auto-detection for mobile even if not initially capped
+                console.log('[Spaxel] Mobile device: frame rate auto-detection enabled (cap at ' +
+                    (CONFIG.mobileFrameRateCap || 30) + ' FPS if struggling)');
+            }
+        }
 
         // OrbitControls
         controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -276,6 +302,16 @@
             PortalEditor.init(scene, camera, renderer, controls);
         }
 
+        // Initialize FXAA post-processing on mobile devices
+        // FXAA is used instead of MSAA on mobile for better performance
+        if (window.SpaxelFXAA) {
+            window.SpaxelFXAA.init(scene, camera, renderer).then(function() {
+                console.log('[Spaxel] FXAA initialization complete, active: ' + window.SpaxelFXAA.isActive());
+            }).catch(function(err) {
+                console.error('[Spaxel] FXAA initialization failed:', err);
+            });
+        }
+
         console.log('[Spaxel] Scene initialized');
     }
 
@@ -318,6 +354,11 @@
         // Update pixel ratio in case it changed (e.g., moving between displays)
         // Use capped pixel ratio for mobile devices
         renderer.setPixelRatio(getPixelRatio());
+
+        // Update FXAA resolution if active
+        if (window.SpaxelFXAA && window.SpaxelFXAA.isActive()) {
+            window.SpaxelFXAA.updateResolution();
+        }
     }
 
     /**
@@ -367,49 +408,107 @@
         controls.update();
         Viz3D.update();
         if (window.Placement) Placement.update();
-        renderer.render(scene, camera);
+        // Use FXAA post-processing on mobile, direct rendering on desktop
+        if (window.SpaxelFXAA && window.SpaxelFXAA.isActive()) {
+            window.SpaxelFXAA.render();
+        } else {
+            renderer.render(scene, camera);
+        }
         updateFPS();
         detectStrugglingDevice();
     }
 
     /**
      * Detect struggling devices by monitoring FPS history.
-     * If consistently below 25 FPS on mobile, cap at 30 FPS.
+     * If consistently below threshold FPS on mobile, cap at 30 FPS.
+     * This helps devices that can't maintain 60 FPS by reducing rendering load.
      */
     function detectStrugglingDevice() {
         if (!isMobile()) return; // Only cap frame rate on mobile
 
-        // Current FPS calculation
-        const fps = Math.round(1000 / (performance.now() - state.lastFrameTime));
+        // Calculate current FPS based on actual frame rendering time
+        // Use the elapsed time since last frame was RENDERED (after frame skipping)
+        const now = performance.now();
+        const elapsed = now - state.lastFrameTime;
+        const currentFPS = elapsed > 0 ? Math.round(1000 / elapsed) : 60;
 
-        // Maintain FPS history (last 30 samples)
-        state.fpsHistory.push(fps);
-        if (state.fpsHistory.length > 30) {
+        // Maintain FPS history (last 60 samples for more stable detection)
+        state.fpsHistory.push(currentFPS);
+        if (state.fpsHistory.length > 60) {
             state.fpsHistory.shift();
         }
 
-        // Check average FPS over history
-        if (state.fpsHistory.length >= 30) {
+        // Only check average FPS after collecting enough samples (1 second at 60fps)
+        if (state.fpsHistory.length >= 60) {
             const avgFPS = state.fpsHistory.reduce((a, b) => a + b, 0) / state.fpsHistory.length;
+            const minFPS = Math.min(...state.fpsHistory);
+            const maxFPS = Math.max(...state.fpsHistory);
 
-            // If consistently below 25 FPS, cap at 30 FPS
-            if (avgFPS < 25 && !state.strugglingDevice) {
-                console.log('[Spaxel] Low FPS detected (' + avgFPS.toFixed(1) + '), capping at 30 FPS');
+            // Check if device is struggling:
+            // 1. Average FPS is below threshold AND
+            // 2. FPS is consistently low (min and max are both low) AND
+            // 3. We're not already in struggling mode
+            const strugglingThreshold = CONFIG.strugglingDeviceThreshold || 25;
+            const recoveryThreshold = CONFIG.strugglingDeviceRecoveryThreshold || 40;
+
+            if (avgFPS < strugglingThreshold && maxFPS < strugglingThreshold + 10 && !state.strugglingDevice) {
+                // Device is struggling - enable performance mode
+                console.log('[Spaxel] Struggling device detected (avg FPS: ' + avgFPS.toFixed(1) + ', min: ' + minFPS + '), capping at 30 FPS');
                 state.strugglingDevice = true;
-                state.targetFPS = 30;
-                state.minFrameTime = 1000 / 30; // ~33.33ms per frame
+                state.targetFPS = CONFIG.mobileFrameRateCap || 30;
+                state.minFrameTime = 1000 / state.targetFPS;
 
-                // Optionally show a toast notification
-                // showToast('Performance mode enabled (30 FPS)', 'info');
+                // Show a toast notification to inform the user
+                showToast('Performance mode enabled (30 FPS)', 'info');
+
+                // Disable expensive visual effects on struggling devices
+                disableExpensiveEffects();
             }
-            // Recover if FPS improves
-            else if (avgFPS > 40 && state.strugglingDevice) {
-                console.log('[Spaxel] FPS improved (' + avgFPS.toFixed(1) + '), restoring 60 FPS');
+            // Recover if FPS improves consistently
+            else if (avgFPS > recoveryThreshold && minFPS > recoveryThreshold - 5 && state.strugglingDevice) {
+                console.log('[Spaxel] Performance improved (avg FPS: ' + avgFPS.toFixed(1) + '), restoring 60 FPS');
                 state.strugglingDevice = false;
-                state.targetFPS = 60;
-                state.minFrameTime = 1000 / 60; // ~16.67ms per frame
+                state.targetFPS = state.manualFrameRateCap || 60;
+                state.minFrameTime = 1000 / state.targetFPS;
+
+                // Re-enable effects that were disabled
+                enableExpensiveEffects();
             }
         }
+    }
+
+    /**
+     * Disable expensive visual effects to improve performance on struggling devices.
+     */
+    function disableExpensiveEffects() {
+        // Reduce trail length
+        if (window.Viz3D && window.Viz3D.setTrailLength) {
+            window.Viz3D.setTrailLength(20); // Reduce from default
+        }
+
+        // Disable Fresnel zone debug overlay if active
+        if (state.fresnelDebugVisible) {
+            toggleFresnelDebugOverlay(false);
+        }
+
+        // Disable crowd flow visualization
+        if (window.Viz3D && window.Viz3D.setFlowLayerVisible) {
+            window.Viz3D.setFlowLayerVisible(false);
+        }
+
+        console.log('[Spaxel] Disabled expensive effects for performance');
+    }
+
+    /**
+     * Re-enable visual effects when performance recovers.
+     */
+    function enableExpensiveEffects() {
+        // Restore trail length
+        if (window.Viz3D && window.Viz3D.setTrailLength) {
+            window.Viz3D.setTrailLength(60); // Restore default
+        }
+
+        console.log('[Spaxel] Re-enabled visual effects');
     }
 
     // ============================================
@@ -2037,7 +2136,69 @@
         refreshNodeList: updateNodeList,
         refreshLinkList: updateLinkList,
         showToast: showToast,
-        registerMessageHandler: registerMessageHandler
+        registerMessageHandler: registerMessageHandler,
+
+        /**
+         * Get the current target frame rate.
+         * @returns {number} Target FPS (60 for desktop, 30-60 for mobile)
+         */
+        getTargetFPS: function() {
+            return state.targetFPS;
+        },
+
+        /**
+         * Get whether the device is currently in struggling mode.
+         * @returns {boolean} True if frame rate is capped due to poor performance
+         */
+        isStrugglingDevice: function() {
+            return state.strugglingDevice;
+        },
+
+        /**
+         * Get the current FPS history for debugging.
+         * @returns {Array<number>} Array of recent FPS samples
+         */
+        getFPSHistory: function() {
+            return state.fpsHistory.slice();
+        },
+
+        /**
+         * Set a manual frame rate cap (overrides auto-detection).
+         * @param {number} fps - Target FPS (30 for struggling mobile, 60 for normal, null to reset)
+         */
+        setFrameRateCap: function(fps) {
+            if (fps === null || fps === undefined) {
+                // Reset to auto-detection
+                state.manualFrameRateCap = null;
+                if (state.strugglingDevice) {
+                    // Keep struggling mode cap
+                    state.targetFPS = CONFIG.mobileFrameRateCap || 30;
+                    state.minFrameTime = 1000 / state.targetFPS;
+                } else {
+                    // Restore to 60 FPS
+                    state.targetFPS = 60;
+                    state.minFrameTime = 1000 / 60;
+                }
+                console.log('[Spaxel] Frame rate cap reset to auto-detection (target: ' + state.targetFPS + ' FPS)');
+            } else if (typeof fps === 'number' && fps > 0 && fps <= 60) {
+                // Set manual cap
+                state.manualFrameRateCap = fps;
+                state.targetFPS = fps;
+                state.minFrameTime = 1000 / fps;
+                console.log('[Spaxel] Frame rate manually capped at ' + fps + ' FPS');
+            } else {
+                console.warn('[Spaxel] Invalid frame rate cap: ' + fps + ' (must be 1-60)');
+            }
+        },
+
+        /**
+         * Enable or disable auto-detection of struggling devices.
+         * @param {boolean} enabled - Whether to enable auto-detection
+         */
+        setAutoDetectStrugglingDevice: function(enabled) {
+            CONFIG.autoDetectStrugglingDevice = enabled;
+            console.log('[Spaxel] Auto-detect struggling device: ' + (enabled ? 'enabled' : 'disabled'));
+        }
     };
 
     // ============================================

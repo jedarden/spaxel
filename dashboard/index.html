@@ -3490,6 +3490,16 @@
     <!-- TransformControls from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 
+    <!-- Import map for Three.js post-processing modules (FXAA for mobile) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+            "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+        }
+    }
+    </script>
+
     <!-- Authentication (must load first) -->
     <script src="js/auth.js"></script>
     <!-- 3-D spatial visualisation layer -->
@@ -3522,6 +3532,8 @@
     <script src="js/websocket.js"></script>
     <!-- Floor plan setup panel -->
     <script src="js/floorplan-setup.js"></script>
+    <!-- FXAA post-processing for mobile devices -->
+    <script type="module" src="js/fxaa.js"></script>
     <!-- Main application -->
     <script src="js/app.js"></script>
     <!-- esp-web-tools for firmware flashing (Web Serial) -->
