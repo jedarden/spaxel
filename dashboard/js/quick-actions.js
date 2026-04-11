@@ -27,22 +27,10 @@
     // Target Types and Actions
     // ============================================
 
+    // Action items for different target types
+    // Dividers are represented by { divider: true }
     const ACTIONS = {
         blob: [
-            {
-                id: 'follow',
-                label: 'Follow Camera',
-                icon: '&#x1F50D;',
-                description: 'Camera tracks this person',
-                action: (blob) => followBlob(blob)
-            },
-            {
-                id: 'why',
-                label: 'Why is this here?',
-                icon: '&#x2753;',
-                description: 'Explain this detection',
-                action: (blob) => explainBlob(blob)
-            },
             {
                 id: 'identify',
                 label: 'Who is this?',
@@ -51,189 +39,208 @@
                 action: (blob) => identifyPerson(blob)
             },
             {
-                id: 'incorrect',
-                label: 'Mark incorrect',
-                icon: '&#x1F44E;',
-                description: 'This is a false positive',
-                action: (blob) => markIncorrect(blob)
+                id: 'follow',
+                label: 'Follow (camera)',
+                icon: '&#x1F50D;',
+                description: 'Camera tracks this person',
+                action: (blob) => followBlob(blob)
             },
             {
                 id: 'track-history',
-                label: 'Track history',
+                label: 'View history',
                 icon: '&#x1F4C5;',
-                description: 'Show this person in timeline',
+                description: 'Jump to timeline for this person',
                 action: (blob) => showBlobHistory(blob)
             },
             {
-                id: 'create-automation',
-                label: 'Create automation',
-                icon: '&#x2699;',
-                description: 'Set up trigger for this person',
-                action: (blob) => createPersonAutomation(blob)
+                id: 'incorrect',
+                label: 'Mark as false positive',
+                icon: '&#x1F44E;',
+                description: 'Report incorrect detection',
+                action: (blob) => markIncorrect(blob)
+            },
+            {
+                id: 'why',
+                label: 'Explain detection',
+                icon: '&#x2753;',
+                description: 'Show why this was detected',
+                action: (blob) => explainBlob(blob)
+            },
+            { divider: true },
+            {
+                id: 'set-unknown',
+                label: 'Set as unknown (anonymous)',
+                icon: '&#x2754;',
+                description: 'Remove identity assignment',
+                action: (blob) => setBlobUnknown(blob)
             }
         ],
         node: [
             {
+                id: 'edit-label',
+                label: 'Edit label',
+                icon: '&#x270F;',
+                description: 'Rename this node',
+                action: (node) => editNodeLabel(node)
+            },
+            {
                 id: 'diagnostics',
-                label: 'Diagnostics',
+                label: 'View health details',
                 icon: '&#x1F4CA;',
                 description: 'View link health and CSI',
                 action: (node) => showNodeDiagnostics(node)
             },
             {
+                id: 'update',
+                label: 'Trigger OTA update',
+                icon: '&#x2B06;',
+                description: 'Update firmware on this node',
+                action: (node) => updateNodeFirmware(node)
+            },
+            {
                 id: 'identify-led',
-                label: 'Blink LED',
+                label: 'Locate node (blink LED)',
                 icon: '&#x1F4A1;',
                 description: 'Blink node LED for 5 seconds',
                 action: (node) => blinkNodeLED(node)
             },
             {
-                id: 'reposition',
-                label: 'Reposition',
-                icon: '&#x274F;',
-                description: 'Enter placement mode',
-                action: (node) => repositionNode(node)
+                id: 'reassign-role',
+                label: 'Re-assign role',
+                icon: '&#x2699;',
+                description: 'Change node role (TX/RX/TX-RX/passive)',
+                action: (node) => reassignNodeRole(node)
             },
-            {
-                id: 'update',
-                label: 'Update Firmware',
-                icon: '&#x2B06;',
-                description: 'Trigger OTA update',
-                action: (node) => updateNodeFirmware(node)
-            },
-            {
-                id: 'show-links',
-                label: 'Show Links',
-                icon: '&#x1F4DE;',
-                description: 'Highlight all links from this node',
-                action: (node) => showNodeLinks(node)
-            },
-            {
-                id: 'disable',
-                label: 'Disable',
-                icon: '&#x1F6AB;',
-                description: 'Take node offline',
-                action: (node) => disableNode(node)
-            },
+            { divider: true },
             {
                 id: 'delete',
-                label: 'Remove',
+                label: 'Remove from fleet',
                 icon: '&#x1F5D1;',
-                description: 'Remove node from fleet',
+                description: 'Disconnect and remove this node',
                 action: (node) => removeNode(node)
             }
         ],
         zone: [
             {
+                id: 'edit-bounds',
+                label: 'Edit zone bounds',
+                icon: '&#x274F;',
+                description: 'Resize zone boundaries',
+                action: (zone) => editZoneBounds(zone)
+            },
+            {
+                id: 'rename',
+                label: 'Rename zone',
+                icon: '&#x270F;',
+                description: 'Change zone name',
+                action: (zone) => renameZone(zone)
+            },
+            {
                 id: 'history',
-                label: 'Zone History',
+                label: 'View occupancy history',
                 icon: '&#x1F4C5;',
                 description: 'View occupancy over time',
                 action: (zone) => showZoneHistory(zone)
             },
             {
-                id: 'edit',
-                label: 'Edit Zone',
-                icon: '&#x270F;',
-                description: 'Resize or rename zone',
-                action: (zone) => editZone(zone)
-            },
-            {
                 id: 'automation',
-                label: 'Create Automation',
+                label: 'Create automation for this zone',
                 icon: '&#x2699;',
                 description: 'Set up trigger for this zone',
                 action: (zone) => createZoneAutomation(zone)
             },
+            { divider: true },
             {
-                id: 'crowd-flow',
-                label: 'Show Crowd Flow',
-                icon: '&#x1F3C1;',
-                description: 'View movement patterns in this zone',
-                action: (zone) => showZoneCrowdFlow(zone)
+                id: 'delete',
+                label: 'Delete zone',
+                icon: '&#x1F5D1;',
+                description: 'Remove this zone',
+                action: (zone) => deleteZone(zone)
             }
         ],
         empty: [
             {
-                id: 'history',
-                label: 'What happened here?',
-                icon: '&#x1F50D;',
-                description: 'View events at this location',
-                action: (pos) => showLocationHistory(pos)
-            },
-            {
-                id: 'coverage',
-                label: 'Coverage Quality',
-                icon: '&#x1F4C9;',
-                description: 'Show detection quality at this point',
-                action: (pos) => showCoverageQuality(pos)
-            },
-            {
-                id: 'add-trigger',
-                label: 'Add Trigger Zone',
-                icon: '&#x2699;',
-                description: 'Create automation trigger here',
-                action: (pos) => addTriggerZone(pos)
-            },
-            {
                 id: 'add-virtual',
-                label: 'Add Virtual Node',
+                label: 'Add virtual node here',
                 icon: '&#x2795;',
-                description: 'Plan optimal node placement',
+                description: 'Place a virtual node at this position',
                 action: (pos) => addVirtualNode(pos)
+            },
+            {
+                id: 'create-zone',
+                label: 'Create zone here',
+                icon: '&#x26F6;',
+                description: 'Start zone creation mode',
+                action: (pos) => createZoneHere(pos)
+            },
+            {
+                id: 'set-home',
+                label: 'Set as home point',
+                icon: '&#x1F3E0;',
+                description: 'Set coordinate origin to this position',
+                action: (pos) => setHomeAsPoint(pos)
+            },
+            {
+                id: 'place-portal',
+                label: 'Place portal here',
+                icon: '&#x1F6AA;',
+                description: 'Start portal creation mode',
+                action: (pos) => placePortalHere(pos)
             }
         ],
         portal: [
             {
+                id: 'edit',
+                label: 'Edit portal',
+                icon: '&#x270F;',
+                description: 'Enter portal edit mode',
+                action: (portal) => editPortal(portal)
+            },
+            {
                 id: 'crossings',
-                label: 'Crossing Log',
+                label: 'View crossing history',
                 icon: '&#x1F4C5;',
                 description: 'View recent crossings',
                 action: (portal) => showPortalCrossings(portal)
             },
+            { divider: true },
             {
-                id: 'edit',
-                label: 'Edit Portal',
-                icon: '&#x270F;',
-                description: 'Reposition or rename',
-                action: (portal) => editPortal(portal)
-            },
-            {
-                id: 'reverse',
-                label: 'Reverse Direction',
-                icon: '&#x21C4;',
-                description: 'Swap zone labels',
-                action: (portal) => reversePortalDirection(portal)
+                id: 'delete',
+                label: 'Delete portal',
+                icon: '&#x1F5D1;',
+                description: 'Remove this portal',
+                action: (portal) => deletePortal(portal)
             }
         ],
         trigger: [
             {
                 id: 'edit',
-                label: 'Edit Trigger',
+                label: 'Edit trigger',
                 icon: '&#x270F;',
-                description: 'Modify trigger settings',
+                description: 'Open automation in builder',
                 action: (trigger) => editTrigger(trigger)
             },
             {
                 id: 'test',
-                label: 'Test',
+                label: 'Test fire',
                 icon: '&#x1F4AF;',
-                description: 'Fire trigger with test event',
+                description: 'Fire automation with test_mode=true',
                 action: (trigger) => testTrigger(trigger)
             },
             {
-                id: 'view-log',
-                label: 'View Log',
-                icon: '&#x1F4C5;',
-                description: 'Show trigger history',
-                action: (trigger) => showTriggerLog(trigger)
-            },
-            {
-                id: 'disable',
-                label: 'Disable',
+                id: 'toggle',
+                label: 'Enable / Disable',
                 icon: '&#x1F6AB;',
-                description: 'Temporarily disable',
-                action: (trigger) => disableTrigger(trigger)
+                description: 'Toggle automation enabled state',
+                action: (trigger) => toggleTrigger(trigger)
+            },
+            { divider: true },
+            {
+                id: 'delete',
+                label: 'Delete trigger volume',
+                icon: '&#x1F5D1;',
+                description: 'Delete volume and associated trigger',
+                action: (trigger) => deleteTrigger(trigger)
             }
         ]
     };
@@ -290,6 +297,7 @@
 
         // Store target
         activeTarget = { type: targetType, data: target };
+        contextMenu = menu;
 
         // Set title based on target type
         const titles = {
@@ -314,17 +322,25 @@
         };
         iconEl.innerHTML = icons[targetType] || '&#x2699;';
 
-        // Populate actions
+        // Populate actions (including dividers)
         const actions = ACTIONS[targetType] || [];
-        bodyEl.innerHTML = actions.map(action => `
-            <div class="context-item" data-action-id="${action.id}">
-                <span class="item-icon">${action.icon}</span>
-                <div class="item-content">
-                    <div class="item-label">${action.label}</div>
-                    <div class="item-description">${action.description}</div>
-                </div>
-            </div>
-        `).join('');
+        let actionHTML = '';
+        actions.forEach(action => {
+            if (action.divider) {
+                actionHTML += '<div class="context-divider"></div>';
+            } else {
+                actionHTML += `
+                    <div class="context-item" data-action-id="${action.id}">
+                        <span class="item-icon">${action.icon}</span>
+                        <div class="item-content">
+                            <div class="item-label">${action.label}</div>
+                            <div class="item-description">${action.description}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        bodyEl.innerHTML = actionHTML;
 
         // Position menu
         positionMenu(x, y);
@@ -335,13 +351,24 @@
         // Show menu
         menu.classList.add('visible');
 
-        // Set up action listeners
+        // Disable OrbitControls while menu is open
+        if (window.Viz3D) {
+            const controls = window.Viz3D.controls ? window.Viz3D.controls() : null;
+            if (controls) {
+                controls.enabled = false;
+            }
+        }
+
+        // Set up action listeners (only for non-divider items)
         bodyEl.querySelectorAll('.context-item').forEach(item => {
             item.addEventListener('click', () => {
                 executeAction(item.dataset.actionId);
                 closeContextMenu();
             });
         });
+
+        // Set up Escape key to dismiss
+        setupEscapeKeyHandler();
     }
 
     /**
@@ -392,6 +419,43 @@
         }
 
         activeTarget = null;
+        contextMenu = null;
+
+        // Re-enable OrbitControls when menu closes
+        if (window.Viz3D) {
+            const controls = window.Viz3D.controls ? window.Viz3D.controls() : null;
+            if (controls) {
+                controls.enabled = true;
+            }
+        }
+
+        // Remove Escape key handler
+        teardownEscapeKeyHandler();
+    }
+
+    /**
+     * Set up Escape key handler for dismissing context menu
+     */
+    let escapeKeyHandler = null;
+
+    function setupEscapeKeyHandler() {
+        // Remove existing handler if any
+        teardownEscapeKeyHandler();
+
+        escapeKeyHandler = function(event) {
+            if (event.key === 'Escape') {
+                closeContextMenu();
+            }
+        };
+
+        document.addEventListener('keydown', escapeKeyHandler);
+    }
+
+    function teardownEscapeKeyHandler() {
+        if (escapeKeyHandler) {
+            document.removeEventListener('keydown', escapeKeyHandler);
+            escapeKeyHandler = null;
+        }
     }
 
     // ============================================
@@ -467,8 +531,64 @@
 
         document.body.appendChild(followIndicator);
 
+        // Set up scroll wheel zoom handler for follow mode
+        setupFollowZoomHandler();
+
         // Also set up ESC key to stop following
         document.addEventListener('keydown', handleFollowEscape);
+    }
+
+    /**
+     * Set up scroll wheel zoom handler for follow mode
+     * Allows zoom adjustment while in follow mode
+     */
+    let followZoomHandler = null;
+
+    function setupFollowZoomHandler() {
+        // Remove existing handler if any
+        teardownFollowZoomHandler();
+
+        followZoomHandler = function(event) {
+            if (!window.Viz3D) return;
+
+            const controls = window.Viz3D.controls ? window.Viz3D.controls() : null;
+            if (!controls) return;
+
+            // Adjust zoom by changing camera distance
+            // Positive delta (scroll up) = zoom in, Negative delta (scroll down) = zoom out
+            const zoomSpeed = 0.001;
+            const zoomFactor = Math.exp(-event.deltaY * zoomSpeed);
+
+            // Get current camera position relative to target
+            const currentDistance = controls.object.position.distanceTo(controls.target);
+
+            // Apply zoom factor with limits
+            const minDistance = 2;  // Minimum 2 meters from target
+            const maxDistance = 20; // Maximum 20 meters from target
+            const newDistance = Math.max(minDistance, Math.min(maxDistance, currentDistance * zoomFactor));
+
+            // Calculate new camera position along the same direction
+            const direction = new THREE.Vector3();
+            controls.object.position.sub(controls.target).normalize().multiplyScalar(newDistance).add(controls.target);
+
+            controls.update();
+        };
+
+        // Attach to canvas
+        const canvas = document.querySelector('#viz-canvas');
+        if (canvas) {
+            canvas.addEventListener('wheel', followZoomHandler, { passive: false });
+        }
+    }
+
+    function teardownFollowZoomHandler() {
+        if (followZoomHandler) {
+            const canvas = document.querySelector('#viz-canvas');
+            if (canvas) {
+                canvas.removeEventListener('wheel', followZoomHandler);
+            }
+            followZoomHandler = null;
+        }
     }
 
     function handleFollowEscape(e) {
@@ -486,6 +606,9 @@
             followIndicator = null;
         }
         document.removeEventListener('keydown', handleFollowEscape);
+
+        // Clean up zoom handler
+        teardownFollowZoomHandler();
     }
 
     function explainBlob(blob) {
@@ -564,6 +687,19 @@
         }
     }
 
+    function setBlobUnknown(blob) {
+        // Remove identity assignment from this blob
+        if (window.SpaxelState) {
+            const blobs = window.SpaxelState.get('blobs');
+            if (blobs && blobs[blob.id]) {
+                blobs[blob.id].person = null;
+                blobs[blob.id].ble_device = null;
+                window.SpaxelState.set('blobs', blob.id, blobs[blob.id]);
+                showToast(`Set blob #${blob.id} as unknown`, 'info');
+            }
+        }
+    }
+
     // ============================================
     // Node Actions
     // ============================================
@@ -604,7 +740,21 @@
     }
 
     async function updateNodeFirmware(node) {
-        const confirmed = confirm(`Update firmware for ${node.name || node.mac}?`);
+        // Check if this is the last online node
+        const isLastOnline = node.isLastOnline || checkIfLastOnline(node);
+
+        let confirmed;
+        if (isLastOnline) {
+            confirmed = confirm(
+                `WARNING: ${node.name || node.mac} is the last online node!\n\n` +
+                `Updating firmware will temporarily disconnect this node.\n` +
+                `This may result in loss of detection coverage.\n\n` +
+                `Continue with OTA update?`
+            );
+        } else {
+            confirmed = confirm(`Update firmware for ${node.name || node.mac}?`);
+        }
+
         if (!confirmed) return;
 
         try {
@@ -621,6 +771,31 @@
             console.error('[Quick Actions] Error updating node:', error);
             showToast('Failed to start update', 'warning');
         }
+    }
+
+    /**
+     * Check if a node is the last online node
+     */
+    function checkIfLastOnline(node) {
+        if (!node || !node.mac) return false;
+
+        if (window.SpaxelState) {
+            const nodes = window.SpaxelState.get('nodes');
+            if (!nodes) return false;
+
+            let onlineCount = 0;
+            for (let mac in nodes) {
+                const n = nodes[mac];
+                if (n && n.status === 'online') {
+                    onlineCount++;
+                }
+            }
+
+            // Check if this is the only online node
+            return onlineCount === 1 && nodes[node.mac] && nodes[node.mac].status === 'online';
+        }
+
+        return false;
     }
 
     function showNodeLinks(node) {
@@ -668,6 +843,102 @@
         showToast('Node removal requires confirmation in Fleet panel', 'info');
     }
 
+    function editNodeLabel(node) {
+        // Open inline edit field for node label
+        const newName = prompt(`Enter new name for ${node.name || node.mac}:`, node.name || '');
+        if (newName === null) return; // User cancelled
+        if (newName.trim() === '') {
+            showToast('Name cannot be empty', 'warning');
+            return;
+        }
+
+        // Update node name via API
+        fetch(`/api/nodes/${node.mac}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName.trim() })
+        })
+        .then(response => {
+            if (response.ok) {
+                showToast(`Node renamed to "${newName.trim()}"`, 'info');
+                // Update state if available
+                if (window.SpaxelState) {
+                    const nodes = window.SpaxelState.get('nodes');
+                    if (nodes && nodes[node.mac]) {
+                        nodes[node.mac].name = newName.trim();
+                        window.SpaxelState.set('nodes', node.mac, nodes[node.mac]);
+                    }
+                }
+            } else {
+                showToast('Failed to rename node', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('[Quick Actions] Error renaming node:', error);
+            showToast('Failed to rename node', 'warning');
+        });
+    }
+
+    function reassignNodeRole(node) {
+        // Open role picker dialog
+        const roles = ['tx', 'rx', 'tx_rx', 'passive', 'idle'];
+        const roleLabels = {
+            'tx': 'TX (Transmitter only)',
+            'rx': 'RX (Receiver only)',
+            'tx_rx': 'TX/RX (Both)',
+            'passive': 'Passive (RX from router)',
+            'idle': 'Idle (Disabled)'
+        };
+
+        const currentRole = node.role || 'tx_rx';
+        let message = 'Select new role for ' + (node.name || node.mac) + ':\n\n';
+        roles.forEach((r, i) => {
+            message += `${i + 1}. ${roleLabels[r]}${r === currentRole ? ' (current)' : ''}\n`;
+        });
+        message += '\nEnter number (1-' + roles.length + '):';
+
+        const choice = prompt(message);
+        if (choice === null) return; // User cancelled
+
+        const choiceNum = parseInt(choice, 10);
+        if (isNaN(choiceNum) || choiceNum < 1 || choiceNum > roles.length) {
+            showToast('Invalid choice', 'warning');
+            return;
+        }
+
+        const newRole = roles[choiceNum - 1];
+        if (newRole === currentRole) {
+            showToast('Role unchanged', 'info');
+            return;
+        }
+
+        // Update node role via API
+        fetch(`/api/nodes/${node.mac}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: newRole })
+        })
+        .then(response => {
+            if (response.ok) {
+                showToast(`Role changed to ${roleLabels[newRole]}`, 'info');
+                // Update state if available
+                if (window.SpaxelState) {
+                    const nodes = window.SpaxelState.get('nodes');
+                    if (nodes && nodes[node.mac]) {
+                        nodes[node.mac].role = newRole;
+                        window.SpaxelState.set('nodes', node.mac, nodes[node.mac]);
+                    }
+                }
+            } else {
+                showToast('Failed to change role', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('[Quick Actions] Error changing role:', error);
+            showToast('Failed to change role', 'warning');
+        });
+    }
+
     // ============================================
     // Zone Actions
     // ============================================
@@ -697,10 +968,46 @@
         }, 100);
     }
 
-    function editZone(zone) {
+    function editZoneBounds(zone) {
         if (window.Placement) {
             window.Placement.editZone(zone.id);
         }
+    }
+
+    function renameZone(zone) {
+        // Inline rename zone
+        const newName = prompt(`Enter new name for zone "${zone.name}":`, zone.name);
+        if (newName === null) return; // User cancelled
+        if (newName.trim() === '') {
+            showToast('Name cannot be empty', 'warning');
+            return;
+        }
+
+        // Update zone name via API
+        fetch(`/api/zones/${zone.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName.trim() })
+        })
+        .then(response => {
+            if (response.ok) {
+                showToast(`Zone renamed to "${newName.trim()}"`, 'info');
+                // Update state if available
+                if (window.SpaxelState) {
+                    const zones = window.SpaxelState.get('zones');
+                    if (zones && zones[zone.id]) {
+                        zones[zone.id].name = newName.trim();
+                        window.SpaxelState.set('zones', zone.id, zones[zone.id]);
+                    }
+                }
+            } else {
+                showToast('Failed to rename zone', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('[Quick Actions] Error renaming zone:', error);
+            showToast('Failed to rename zone', 'warning');
+        });
     }
 
     function createZoneAutomation(zone) {
@@ -715,6 +1022,34 @@
             window.toggleFlowLayer(true);
             // Could filter to just this zone
         }
+    }
+
+    function deleteZone(zone) {
+        const confirmed = confirm(`Delete zone "${zone.name}"? This will remove the zone and all its associated data.`);
+        if (!confirmed) return;
+
+        fetch(`/api/zones/${zone.id}`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (response.ok) {
+                showToast(`Zone "${zone.name}" deleted`, 'info');
+                // Update state if available
+                if (window.SpaxelState) {
+                    const zones = window.SpaxelState.get('zones');
+                    if (zones && zones[zone.id]) {
+                        delete zones[zone.id];
+                        window.SpaxelState.set('zones', zone.id, null);
+                    }
+                }
+            } else {
+                showToast('Failed to delete zone', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('[Quick Actions] Error deleting zone:', error);
+            showToast('Failed to delete zone', 'warning');
+        });
     }
 
     // ============================================
@@ -750,6 +1085,35 @@
         }
     }
 
+    function createZoneHere(pos) {
+        // Start zone creation mode with the clicked position as one corner
+        if (window.ZoneEditor) {
+            window.ZoneEditor.startCreationAt(pos.x, pos.z);
+            showToast('Zone creation mode started. Drag to define zone.', 'info');
+        } else {
+            showToast('Zone editor not available', 'warning');
+        }
+    }
+
+    function setHomeAsPoint(pos) {
+        // Set the coordinate origin to this position
+        const confirmed = confirm(`Set home point to (${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})? This will recenter the floor plan.`);
+        if (!confirmed) return;
+
+        // This would update the coordinate system origin
+        showToast('Set home point - coming soon', 'info');
+    }
+
+    function placePortalHere(pos) {
+        // Start portal creation mode centered at this position
+        if (window.PortalEditor) {
+            window.PortalEditor.startCreationAt(pos.x, pos.z);
+            showToast('Portal creation mode started. Drag to define portal.', 'info');
+        } else {
+            showToast('Portal editor not available', 'warning');
+        }
+    }
+
     // ============================================
     // Portal Actions
     // ============================================
@@ -781,6 +1145,34 @@
         showToast('Reverse portal direction - coming soon', 'info');
     }
 
+    function deletePortal(portal) {
+        const confirmed = confirm(`Delete portal "${portal.name}"? This will remove the portal and all its crossing history.`);
+        if (!confirmed) return;
+
+        fetch(`/api/portals/${portal.id}`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (response.ok) {
+                showToast(`Portal "${portal.name}" deleted`, 'info');
+                // Update state if available
+                if (window.SpaxelState) {
+                    const portals = window.SpaxelState.get('portals');
+                    if (portals && portals[portal.id]) {
+                        delete portals[portal.id];
+                        window.SpaxelState.set('portals', portal.id, null);
+                    }
+                }
+            } else {
+                showToast('Failed to delete portal', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('[Quick Actions] Error deleting portal:', error);
+            showToast('Failed to delete portal', 'warning');
+        });
+    }
+
     // ============================================
     // Trigger Actions
     // ============================================
@@ -806,18 +1198,59 @@
         showBlobHistory(trigger); // Reuse blob history logic
     }
 
-    async function disableTrigger(trigger) {
-        const confirmed = confirm(`Disable "${trigger.name}"?`);
-        if (!confirmed) return;
+    async function toggleTrigger(trigger) {
+        // Toggle the automation's enabled flag
+        const newState = !trigger.enabled;
+        const endpoint = newState ? 'enable' : 'disable';
 
-        fetch(`/api/triggers/${trigger.id}/disable`, { method: 'POST' })
+        fetch(`/api/triggers/${trigger.id}/${endpoint}`, { method: 'POST' })
             .then(response => {
                 if (response.ok) {
-                    showToast(`Disabled "${trigger.name}"`, 'info');
+                    showToast(`Trigger "${trigger.name}" ${newState ? 'enabled' : 'disabled'}`, 'info');
+                    // Update state if available
+                    if (window.SpaxelState) {
+                        const triggers = window.SpaxelState.get('triggers');
+                        if (triggers && triggers[trigger.id]) {
+                            triggers[trigger.id].enabled = newState;
+                            window.SpaxelState.set('triggers', trigger.id, triggers[trigger.id]);
+                        }
+                    }
                 } else {
-                    showToast('Failed to disable trigger', 'warning');
+                    showToast(`Failed to ${newState ? 'enable' : 'disable'} trigger`, 'warning');
                 }
+            })
+            .catch(error => {
+                console.error('[Quick Actions] Error toggling trigger:', error);
+                showToast(`Failed to ${newState ? 'enable' : 'disable'} trigger`, 'warning');
             });
+    }
+
+    function deleteTrigger(trigger) {
+        const confirmed = confirm(`Delete trigger volume "${trigger.name}"? This will delete the volume and its associated automation trigger.`);
+        if (!confirmed) return;
+
+        fetch(`/api/triggers/${trigger.id}`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (response.ok) {
+                showToast(`Trigger "${trigger.name}" deleted`, 'info');
+                // Update state if available
+                if (window.SpaxelState) {
+                    const triggers = window.SpaxelState.get('triggers');
+                    if (triggers && triggers[trigger.id]) {
+                        delete triggers[trigger.id];
+                        window.SpaxelState.set('triggers', trigger.id, null);
+                    }
+                }
+            } else {
+                showToast('Failed to delete trigger', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('[Quick Actions] Error deleting trigger:', error);
+            showToast('Failed to delete trigger', 'warning');
+        });
     }
 
     // ============================================
@@ -860,6 +1293,12 @@
             event.preventDefault();
             event.stopPropagation();
 
+            // If menu is already open, close it and return
+            if (contextMenu && contextMenu.classList.contains('visible')) {
+                closeContextMenu();
+                return;
+            }
+
             // Get mouse position
             const rect = canvas.getBoundingClientRect();
             mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -877,43 +1316,49 @@
             // Raycast
             raycaster.setFromCamera(mouse, camera);
 
-            // Check for blob intersections
+            // Priority order: 1. Track blobs, 2. Node spheres, 3. Zone cuboids, 4. Portal planes, 5. Trigger volumes, 6. Ground plane
+
+            // Check for blob intersections (highest priority - users click on people most often)
             const blobMeshes = window.Viz3D.blobMeshes ? window.Viz3D.blobMeshes() : [];
-            const blobIntersects = raycaster.intersectObjects(blobMeshes, true);
-            if (blobIntersects.length > 0) {
-                // Find the object with blobId in userData
-                for (let i = 0; i < blobIntersects.length; i++) {
-                    let obj = blobIntersects[i].object;
-                    // Walk up parent chain to find group with blobId
-                    while (obj) {
-                        if (obj.userData && obj.userData.blobId) {
-                            const blob = findBlobById(obj.userData.blobId);
-                            if (blob) {
-                                showContextMenu(event.clientX, event.clientY, 'blob', blob);
-                                return;
+            if (blobMeshes && blobMeshes.length > 0) {
+                const blobIntersects = raycaster.intersectObjects(blobMeshes, true);
+                if (blobIntersects.length > 0) {
+                    // Find the object with blobId in userData
+                    for (let i = 0; i < blobIntersects.length; i++) {
+                        let obj = blobIntersects[i].object;
+                        // Walk up parent chain to find group with blobId
+                        while (obj) {
+                            if (obj.userData && obj.userData.blobId) {
+                                const blob = findBlobById(obj.userData.blobId);
+                                if (blob) {
+                                    showContextMenu(event.clientX, event.clientY, 'blob', blob);
+                                    return;
+                                }
                             }
+                            obj = obj.parent;
                         }
-                        obj = obj.parent;
                     }
                 }
             }
 
             // Check for node intersections
             const nodeMeshes = window.Viz3D.nodeMeshes ? window.Viz3D.nodeMeshes() : [];
-            const nodeIntersects = raycaster.intersectObjects(nodeMeshes, true);
-            if (nodeIntersects.length > 0) {
-                // Find the object with mac in userData
-                for (let i = 0; i < nodeIntersects.length; i++) {
-                    let obj = nodeIntersects[i].object;
-                    while (obj) {
-                        if (obj.userData && obj.userData.mac) {
-                            const node = findNodeByMac(obj.userData.mac);
-                            if (node) {
-                                showContextMenu(event.clientX, event.clientY, 'node', node);
-                                return;
+            if (nodeMeshes && nodeMeshes.length > 0) {
+                const nodeIntersects = raycaster.intersectObjects(nodeMeshes, true);
+                if (nodeIntersects.length > 0) {
+                    // Find the object with mac in userData
+                    for (let i = 0; i < nodeIntersects.length; i++) {
+                        let obj = nodeIntersects[i].object;
+                        while (obj) {
+                            if (obj.userData && obj.userData.mac) {
+                                const node = findNodeByMac(obj.userData.mac);
+                                if (node) {
+                                    showContextMenu(event.clientX, event.clientY, 'node', node);
+                                    return;
+                                }
                             }
+                            obj = obj.parent;
                         }
-                        obj = obj.parent;
                     }
                 }
             }
@@ -932,7 +1377,49 @@
                 }
             }
 
-            // Calculate 3D point on ground plane for empty space menu
+            // Check for portal intersections
+            const portalMeshes = window.Viz3D.portalMeshes ? window.Viz3D.portalMeshes() : [];
+            if (portalMeshes && portalMeshes.length > 0) {
+                const portalIntersects = raycaster.intersectObjects(portalMeshes, true);
+                if (portalIntersects.length > 0) {
+                    for (let i = 0; i < portalIntersects.length; i++) {
+                        let obj = portalIntersects[i].object;
+                        while (obj) {
+                            if (obj.userData && obj.userData.portalId) {
+                                const portal = findPortalById(obj.userData.portalId);
+                                if (portal) {
+                                    showContextMenu(event.clientX, event.clientY, 'portal', portal);
+                                    return;
+                                }
+                            }
+                            obj = obj.parent;
+                        }
+                    }
+                }
+            }
+
+            // Check for trigger volume intersections
+            const triggerMeshes = window.Viz3D.triggerMeshes ? window.Viz3D.triggerMeshes() : [];
+            if (triggerMeshes && triggerMeshes.length > 0) {
+                const triggerIntersects = raycaster.intersectObjects(triggerMeshes, true);
+                if (triggerIntersects.length > 0) {
+                    for (let i = 0; i < triggerIntersects.length; i++) {
+                        let obj = triggerIntersects[i].object;
+                        while (obj) {
+                            if (obj.userData && obj.userData.triggerId) {
+                                const trigger = findTriggerById(obj.userData.triggerId);
+                                if (trigger) {
+                                    showContextMenu(event.clientX, event.clientY, 'trigger', trigger);
+                                    return;
+                                }
+                            }
+                            obj = obj.parent;
+                        }
+                    }
+                }
+            }
+
+            // Calculate 3D point on ground plane for empty space menu (always intersects last)
             const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
             const planeIntersect = new THREE.Vector3();
             raycaster.ray.intersectPlane(plane, planeIntersect);
@@ -985,6 +1472,30 @@
             const zones = window.SpaxelState.get('zones');
             if (!zones) return null;
             return zones[id] || null;
+        }
+        return null;
+    }
+
+    /**
+     * Find portal by ID
+     */
+    function findPortalById(id) {
+        if (window.SpaxelState) {
+            const portals = window.SpaxelState.get('portals');
+            if (!portals) return null;
+            return portals[id] || null;
+        }
+        return null;
+    }
+
+    /**
+     * Find trigger by ID
+     */
+    function findTriggerById(id) {
+        if (window.SpaxelState) {
+            const triggers = window.SpaxelState.get('triggers');
+            if (!triggers) return null;
+            return triggers[id] || null;
         }
         return null;
     }
@@ -1275,6 +1786,32 @@
         console.log('[Quick Actions] Initialized');
     }
 
+    /**
+     * Check if a blob was deleted and auto-exit follow mode
+     * This should be called when blobs are updated via WebSocket
+     */
+    function checkBlobDeleted(blobId) {
+        if (followIndicator && window.Viz3D) {
+            const currentFollowId = window.Viz3D.followId ? window.Viz3D.followId() : null;
+            if (currentFollowId === blobId) {
+                // The blob we're following was deleted - exit follow mode
+                console.log('[Quick Actions] Blob being followed was deleted, exiting follow mode');
+                stopFollowing();
+            }
+        }
+    }
+
+    /**
+     * Check if blob status changed to DELETED
+     * @param {number} blobId - Blob ID to check
+     * @param {Object} blobData - Updated blob data
+     */
+    function checkBlobStatus(blobId, blobData) {
+        if (blobData && blobData.status === 'DELETED') {
+            checkBlobDeleted(blobId);
+        }
+    }
+
     // ============================================
     // Public API
     // ============================================
@@ -1283,6 +1820,8 @@
         show: showContextMenu,
         close: closeContextMenu,
         stopFollowing: stopFollowing,
+        checkBlobDeleted: checkBlobDeleted,
+        checkBlobStatus: checkBlobStatus,
         registerAction: (type, action) => {
             if (!ACTIONS[type]) {
                 ACTIONS[type] = [];

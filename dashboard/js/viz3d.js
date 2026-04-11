@@ -3585,6 +3585,26 @@ const Viz3D = (function () {
         // Replay
         loadReplaySnapshot: loadReplaySnapshot,
 
+        // Follow camera mode
+        setFollowTarget: setFollowTarget,
+        getFollowTarget: getFollowTarget,
+
+        // Spatial quick actions support
+        portalMeshes: function() {
+            const meshes = [];
+            _portalMeshes.forEach(function(portalMesh) {
+                meshes.push(portalMesh.mesh);
+            });
+            return meshes;
+        },
+        triggerMeshes: function() {
+            // Get trigger volume meshes from VolumeEditor if available
+            if (window.VolumeEditor && window.VolumeEditor.getVolumeMeshes) {
+                return window.VolumeEditor.getVolumeMeshes();
+            }
+            return [];
+        },
+
         // Direct access (for advanced integrations)
         scene: function() { return _scene; },
         camera: function() { return _camera; },
