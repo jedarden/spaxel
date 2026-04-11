@@ -119,34 +119,19 @@
 
     /**
      * Add help button to expert mode header
+     * Note: The button already exists in HTML (id="help-btn"), this just sets up the click handler
      */
     function addHelpButton() {
-        // Check if button already exists
-        if (document.getElementById('help-button')) {
-            return;
-        }
-
-        // Look for the status bar button container (margin-left:auto; gap:6px)
-        const buttonContainer = document.querySelector('#status-bar > div[style*="margin-left:auto"]');
-        if (!buttonContainer) {
-            // Try again after a delay
-            setTimeout(addHelpButton, 500);
-            return;
-        }
-
-        const helpBtn = document.createElement('button');
-        helpBtn.id = 'help-button';
-        helpBtn.className = 'help-button';
-        helpBtn.innerHTML = '?';
-        helpBtn.title = 'Help & Documentation (Ctrl+?)';
-        helpBtn.onclick = () => HelpOverlay.open();
-
-        // Insert before the last status-item (FPS counter)
-        const fpsItem = buttonContainer.parentElement.querySelector('.status-item:last-child');
-        if (fpsItem) {
-            buttonContainer.insertBefore(helpBtn, fpsItem);
+        // The help button already exists in the HTML with id="help-btn"
+        // Just ensure the click handler is properly set up
+        const existingBtn = document.getElementById('help-btn');
+        if (existingBtn) {
+            // Remove any existing onclick handler and add our own
+            existingBtn.removeAttribute('onclick');
+            existingBtn.addEventListener('click', () => HelpOverlay.toggle());
         } else {
-            buttonContainer.appendChild(helpBtn);
+            // Fallback: try again after a delay if DOM isn't ready
+            setTimeout(addHelpButton, 100);
         }
     }
 
@@ -620,28 +605,7 @@
             font-size: 12px;
         }
 
-        .help-button {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #888;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-left: auto;
-        }
-
-        .help-button:hover {
-            background: rgba(79, 195, 247, 0.2);
-            border-color: #4fc3f7;
-            color: #4fc3f7;
-        }
+        /* Help button styles are in index.html, no need to duplicate here */
 
         /* Mobile responsive */
         @media (max-width: 768px) {
