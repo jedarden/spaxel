@@ -3,7 +3,228 @@
  *
  * Expert mode 3D scene layout with responsive canvas sizing.
  * Handles iOS Safari visual viewport quirks and bottom navigation spacing.
+ *
+ * WCAG 2.1 Touch Target Compliance:
+ * - All interactive elements meet minimum 44x44px touch target size
+ * - Touch targets are expanded using padding or pseudo-elements where needed
  */
+
+/* ===== WCAG 2.1 Touch Target Compliance Utilities ===== */
+
+/* Touch target expansion for small checkboxes */
+.panel-form-checkbox input[type="checkbox"],
+.pattern-checkbox input[type="checkbox"],
+.timeline-category-checkbox input[type="checkbox"],
+.sim-gdop-controls input[type="checkbox"] {
+    /* Ensure checkbox touch area is 44x44px minimum */
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    position: relative;
+}
+
+/* Expand checkbox hit area with pseudo-element */
+.panel-form-checkbox input[type="checkbox"]::before,
+.pattern-checkbox input[type="checkbox"]::before,
+.timeline-category-checkbox input[type="checkbox"]::before,
+.sim-gdop-controls input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+}
+
+/* Expand small toggle switches to 44px height */
+.toggle-switch {
+    min-height: 44px;
+}
+
+.toggle-switch .slider {
+    min-height: 44px;
+    height: 44px;
+}
+
+.toggle-switch .slider:before {
+    width: 36px;
+    height: 36px;
+    top: 4px;
+    left: 4px;
+}
+
+.toggle-switch input:checked + .slider:before {
+    transform: translateX(22px);
+}
+
+/* Expand slider thumb touch area */
+.panel-form-group input[type="range"] {
+    height: 44px; /* Full touch target height */
+    background: transparent;
+    cursor: pointer;
+}
+
+.panel-form-group input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    margin: 19px 0; /* Center track within 44px height */
+}
+
+.panel-form-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 32px;
+    background: #4fc3f7;
+    border-radius: 50%;
+    cursor: pointer;
+    margin-top: -13px; /* Center thumb on track */
+    transition: transform 0.1s;
+}
+
+.panel-form-group input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+.panel-form-group input[type="range"]::-moz-range-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.panel-form-group input[type="range"]::-moz-range-thumb {
+    width: 32px;
+    height: 32px;
+    background: #4fc3f7;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+/* Expand close button touch targets to 44x44px */
+.panel-close,
+.modal-close,
+.panel-modal-close,
+.sim-close-btn {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+    line-height: 44px;
+    padding: 0;
+}
+
+/* Expand context menu items to 44px minimum height */
+.context-item,
+.blob-context-menu-item {
+    min-height: 44px;
+    padding: 12px 16px;
+}
+
+/* Expand link list items to 44px minimum */
+.link-item {
+    min-height: 44px;
+    padding: 12px 16px;
+    font-size: 13px;
+}
+
+/* Ensure all buttons meet 44x44px minimum */
+.panel-btn,
+.modal-btn,
+.btn,
+.sim-btn,
+.alert-banner-btn,
+.timeline-filter-toggle,
+.timeline-load-more-btn,
+.view-btn,
+#floorplan-btn,
+.node-identify-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 20px;
+    font-size: 14px;
+}
+
+/* Small buttons: expand with padding while keeping appearance compact */
+.btn-sm,
+.timeline-feedback-btn,
+.timeline-seek-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 14px 12px; /* Extra vertical padding to reach 44px */
+}
+
+/* Volume tools buttons */
+.volume-tools button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px;
+}
+
+/* Hamburger tabs - ensure 44px minimum */
+.hamburger-tab {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Hamburger items - already 44px, ensure explicit */
+.hamburger-item {
+    min-height: 44px;
+    padding: 12px 16px;
+}
+
+/* Toast dismiss button */
+.toast-dismiss {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+}
+
+/* Mode toggle buttons */
+.mode-toggle-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px;
+}
+
+/* Action items */
+.action-item .action-remove {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 12px 8px;
+    font-size: 14px;
+}
+
+/* Sim item delete button */
+.sim-item-delete {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px;
+}
+
+/* Form controls */
+.panel-form-group input[type="text"],
+.panel-form-group input[type="number"],
+.panel-form-group input[type="password"],
+.panel-form-group input[type="email"],
+.panel-form-group input[type="url"],
+.panel-form-group select,
+.panel-form-group textarea,
+.panel-input,
+.form-control,
+.timeline-filter-select,
+.timeline-search,
+.timeline-date-input {
+    min-height: 44px;
+    padding: 12px 16px;
+}
 
 /* ===== Scene Container (3D Canvas) ===== */
 #scene-container {
