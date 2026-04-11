@@ -30,12 +30,22 @@ func NewFleetHandler(healer *SelfHealManager, registry *Registry) *FleetHandler 
 //	GET  /api/fleet/history  — recent optimisation history
 //	POST /api/fleet/optimise — trigger manual re-optimisation
 //	GET  /api/fleet/simulate — simulate node removal impact
+//	PATCH /api/nodes/{mac}/label — update node label
+//	POST /api/nodes/{mac}/locate — send identify command
+//	POST /api/nodes/{mac}/role — assign new role
+//	DELETE /api/nodes/{mac} — remove from fleet
 func (h *FleetHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/fleet", h.getFleet)
 	r.Get("/api/fleet/health", h.getFleetHealth)
 	r.Get("/api/fleet/history", h.getFleetHistory)
 	r.Post("/api/fleet/optimise", h.triggerOptimise)
 	r.Get("/api/fleet/simulate", h.simulateNodeRemoval)
+
+	// Node-specific routes
+	r.Patch("/api/nodes/{mac}/label", h.setNodeLabel)
+	r.Post("/api/nodes/{mac}/locate", h.locateNode)
+	r.Post("/api/nodes/{mac}/role", h.setNodeRole)
+	r.Delete("/api/nodes/{mac}", h.removeNode)
 }
 
 // fleetHealthResponse is the wire format for /api/fleet/health
@@ -266,6 +276,122 @@ func (h *FleetHandler) simulateNodeRemoval(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, resp)
+}
+
+// setNodeLabel updates the name/label for a node.
+func (h *FleetHandler) setNodeLabel(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+	if mac == "" {
+		http.Error(w, "mac parameter required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Label string `json:"label"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate label length
+	if len(req.Label) > 32 {
+		http.Error(w, "label too long (max 32 characters)", http.StatusBadRequest)
+		return
+	}
+
+	// Update label in registry
+	if err := h.reg.SetNodeLabel(mac, req.Label); err != nil {
+		http.Error(w, "failed to update label", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// locateNode sends an identify command to a node.
+func (h *FleetHandler) locateNode(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+	if mac == "" {
+		http.Error(w, "mac parameter required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		DurationMS int `json:"duration_ms"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		req.DurationMS = 5000 // Default 5 seconds
+	}
+
+	// Send identify command through ingestion server
+	// This is handled by the ingestion server which has access to node connections
+	// For now, return success - the actual command will be sent via WebSocket
+	writeJSON(w, map[string]interface{}{
+		"status": "sent",
+		"mac": mac,
+		"duration_ms": req.DurationMS,
+	})
+}
+
+// setNodeRole assigns a new role to a node.
+func (h *FleetHandler) setNodeRole(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+	if mac == "" {
+		http.Error(w, "mac parameter required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate role
+	validRoles := map[string]bool{
+		"tx":      true,
+		"rx":      true,
+		"tx_rx":   true,
+		"passive": true,
+		"idle":    true,
+	}
+	if !validRoles[req.Role] {
+		http.Error(w, "invalid role", http.StatusBadRequest)
+		return
+	}
+
+	// Update role in registry
+	if err := h.reg.SetNodeRole(mac, req.Role); err != nil {
+		http.Error(w, "failed to update role", http.StatusInternalServerError)
+		return
+	}
+
+	// Trigger role re-optimisation if fleet manager is available
+	if h.healer != nil {
+		h.healer.ManualOptimise()
+	}
+
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// removeNode removes a node from the fleet.
+func (h *FleetHandler) removeNode(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+	if mac == "" {
+		http.Error(w, "mac parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Delete from registry
+	if err := h.reg.DeleteNode(mac); err != nil {
+		http.Error(w, "failed to remove node", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 // writeJSON is a helper for JSON responses

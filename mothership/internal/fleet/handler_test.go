@@ -459,13 +459,9 @@ func TestHandlerSetSystemMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{mgr: mgr}
 
@@ -513,7 +509,7 @@ func TestHandlerListFleet(t *testing.T) {
 			sendIdentifyFunc: func(mac string, durationMS int) bool {
 				return true
 			},
-			GetConnectedMACs: func() []string {
+			getConnectedMACs: func() []string {
 				return []string{"AA:BB:CC:DD:EE:FF"}
 			},
 		},
@@ -677,20 +673,13 @@ func TestHandlerUpdateNodeLabel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 			if tt.nodeExists {
-				reg.nodes[tt.mac] = NodeRecord{
-					MAC:  tt.mac,
-					Name: "Old Label",
-					Role: "rx",
-				}
+				reg.UpsertNode(tt.mac, "1.0.0", "ESP32-S3")
+				reg.SetNodeLabel(tt.mac, "Old Label")
 			}
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{mgr: mgr}
 
@@ -709,8 +698,11 @@ func TestHandlerUpdateNodeLabel(t *testing.T) {
 
 			if tt.wantStatus == http.StatusNoContent {
 				// Verify the label was updated
-				if reg.nodes[tt.mac].Name != tt.expectedLabel {
-					t.Errorf("Expected label to be %s, got %s", tt.expectedLabel, reg.nodes[tt.mac].Name)
+				node, err := reg.GetNode(tt.mac)
+				if err != nil {
+					t.Errorf("Failed to get node: %v", err)
+				} else if node.Name != tt.expectedLabel {
+					t.Errorf("Expected label to be %s, got %s", tt.expectedLabel, node.Name)
 				}
 			}
 		})
@@ -792,20 +784,14 @@ func TestHandlerSetNodeRole(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 			if tt.nodeExists {
-				reg.nodes[tt.mac] = NodeRecord{
-					MAC:  tt.mac,
-					Name: "Test Node",
-					Role: "rx",
-				}
+				reg.UpsertNode(tt.mac, "1.0.0", "ESP32-S3")
+				reg.SetNodeLabel(tt.mac, "Test Node")
+				reg.SetNodeRole(tt.mac, "rx")
 			}
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{mgr: mgr}
 
@@ -850,20 +836,14 @@ func TestHandlerDeleteNode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 			if tt.nodeExists {
-				reg.nodes[tt.mac] = NodeRecord{
-					MAC:  tt.mac,
-					Name: "Test Node",
-					Role: "rx",
-				}
+				reg.UpsertNode(tt.mac, "1.0.0", "ESP32-S3")
+				reg.SetNodeLabel(tt.mac, "Test Node")
+				reg.SetNodeRole(tt.mac, "rx")
 			}
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{mgr: mgr}
 
@@ -937,21 +917,14 @@ func TestHandlerTriggerNodeOTA(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 			if tt.nodeExists {
-				reg.nodes[tt.mac] = NodeRecord{
-					MAC:             tt.mac,
-					Name:            "Test Node",
-					Role:            "rx",
-					FirmwareVersion: "1.0.0",
-				}
+				reg.UpsertNode(tt.mac, "1.0.0", "ESP32-S3")
+				reg.SetNodeLabel(tt.mac, "Test Node")
+				reg.SetNodeRole(tt.mac, "rx")
 			}
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{mgr: mgr}
 			if tt.otaAvailable {
@@ -1046,25 +1019,19 @@ func TestHandlerRebootNode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 			if tt.nodeExists {
-				reg.nodes[tt.mac] = NodeRecord{
-					MAC:  tt.mac,
-					Name: "Test Node",
-					Role: "rx",
-				}
+				reg.UpsertNode(tt.mac, "1.0.0", "ESP32-S3")
+				reg.SetNodeLabel(tt.mac, "Test Node")
+				reg.SetNodeRole(tt.mac, "rx")
 			}
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{
 				mgr: mgr,
 				nodeID: &mockNodeIdentifier{
-					sendIdentifyFunc: func(mac string, delayMS int) bool {
+					sendRebootFunc: func(mac string, delayMS int) bool {
 						return tt.nodeConnected
 					},
 				},
@@ -1117,18 +1084,14 @@ func TestHandlerUpdateAllNodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{
 				mgr: mgr,
 				nodeID: &mockNodeIdentifier{
-					GetConnectedMACs: func() []string {
+					getConnectedMACs: func() []string {
 						return tt.connectedMACs
 					},
 				},
@@ -1163,28 +1126,15 @@ func TestHandlerUpdateAllNodes(t *testing.T) {
 // ─── Export/Import endpoint tests ─────────────────────────────────────────────────
 
 func TestHandlerExportConfig(t *testing.T) {
-	reg := &mockRegistry{
-		nodes: map[string]NodeRecord{
-			"AA:BB:CC:DD:EE:FF": {
-				MAC:             "AA:BB:CC:DD:EE:FF",
-				Name:            "Node 1",
-				Role:            "rx",
-				FirmwareVersion: "1.0.0",
-				ChipModel:       "ESP32-S3",
-			},
-			"11:22:33:44:55:66": {
-				MAC:             "11:22:33:44:55:66",
-				Name:            "Node 2",
-				Role:            "tx",
-				FirmwareVersion: "1.1.0",
-				ChipModel:       "ESP32-S3",
-			},
-		},
-	}
+	reg := newTestRegistry(t)
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Node 1")
+	reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx")
+	reg.UpsertNode("11:22:33:44:55:66", "1.1.0", "ESP32-S3")
+	reg.SetNodeLabel("11:22:33:44:55:66", "Node 2")
+	reg.SetNodeRole("11:22:33:44:55:66", "tx")
 
-	mgr := &Manager{
-		registry: reg,
-	}
+	mgr := NewManager(reg)
 
 	h := &Handler{mgr: mgr}
 
@@ -1253,13 +1203,9 @@ func TestHandlerImportConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{mgr: mgr}
 
@@ -1279,13 +1225,9 @@ func TestHandlerImportConfig(t *testing.T) {
 // ─── Rebaseline endpoint tests ────────────────────────────────────────────────────
 
 func TestHandlerRebaselineAllNodes(t *testing.T) {
-	reg := &mockRegistry{
-		nodes: make(map[string]NodeRecord),
-	}
+	reg := newTestRegistry(t)
 
-	mgr := &Manager{
-		registry: reg,
-	}
+	mgr := NewManager(reg)
 
 	h := &Handler{mgr: mgr}
 
@@ -1345,13 +1287,9 @@ func TestHandlerAddVirtualNode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: make(map[string]NodeRecord),
-			}
+			reg := newTestRegistry(t)
 
-			mgr := &Manager{
-				registry: reg,
-			}
+			mgr := NewManager(reg)
 
 			h := &Handler{mgr: mgr}
 
@@ -1417,24 +1355,15 @@ func TestHandlerUpdateNodePosition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reg := &mockRegistry{
-				nodes: map[string]NodeRecord{
-					"AA:BB:CC:DD:EE:FF": {
-						MAC:  "AA:BB:CC:DD:EE:FF",
-						Name: "Test Node",
-						Role: "rx",
-						PosX: 0,
-						PosY: 0,
-						PosZ: 0,
-					},
-				},
-			}
+				reg := newTestRegistry(t);
+				reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3");
+				reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Test Node");
+				reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx");
+				reg.SetNodePosition("AA:BB:CC:DD:EE:FF", 0, 0, 0);
 
-			mgr := &Manager{
-				registry: reg,
-			}
+				mgr := NewManager(reg);
 
-			h := &Handler{mgr: mgr}
+				h := &Handler{mgr: mgr}
 
 			req := httptest.NewRequest("PUT", "/api/nodes/"+tt.mac+"/position", bytes.NewBufferString(tt.requestBody))
 			req.Header.Set("Content-Type", "application/json")
@@ -1449,15 +1378,17 @@ func TestHandlerUpdateNodePosition(t *testing.T) {
 				t.Errorf("updateNodePosition() status = %v, want %v", w.Code, tt.wantStatus)
 			}
 
-			if tt.wantStatus == http.StatusNoContent {
-				// Verify the position was updated
-				node := reg.nodes[tt.mac]
-				if node.PosX != tt.expectedX || node.PosY != tt.expectedY || node.PosZ != tt.expectedZ {
-					t.Errorf("Expected position to be (%v, %v, %v), got (%v, %v, %v)",
-						tt.expectedX, tt.expectedY, tt.expectedZ,
-						node.PosX, node.PosY, node.PosZ)
+				if tt.wantStatus == http.StatusNoContent {
+					// Verify the position was updated
+					node, err := reg.GetNode(tt.mac)
+					if err != nil {
+						t.Errorf("Failed to get node: %v", err)
+					} else if node.PosX != tt.expectedX || node.PosY != tt.expectedY || node.PosZ != tt.expectedZ {
+						t.Errorf("Expected position to be (%v, %v, %v), got (%v, %v, %v)",
+							tt.expectedX, tt.expectedY, tt.expectedZ,
+							node.PosX, node.PosY, node.PosZ)
+					}
 				}
-			}
 		})
 	}
 }

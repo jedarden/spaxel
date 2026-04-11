@@ -629,17 +629,17 @@ func TestManager_SetSystemMode(t *testing.T) {
 		t.Errorf("Expected mode to be away, got %s", mgr.GetSystemMode())
 	}
 
-	events := modeBroadcaster.getEvents()
-	if len(events) != 1 {
-		t.Fatalf("Expected 1 mode change event, got %d", len(events))
+	modeEvents := modeBroadcaster.getEvents()
+	if len(modeEvents) != 1 {
+		t.Fatalf("Expected 1 mode change event, got %d", len(modeEvents))
 	}
 
-	if events[0].NewMode != events.ModeAway {
-		t.Errorf("Expected new mode to be away, got %s", events[0].NewMode)
+	if modeEvents[0].NewMode != events.ModeAway {
+		t.Errorf("Expected new mode to be away, got %s", modeEvents[0].NewMode)
 	}
 
-	if events[0].Reason != "test" {
-		t.Errorf("Expected reason to be test, got %s", events[0].Reason)
+	if modeEvents[0].Reason != "test" {
+		t.Errorf("Expected reason to be test, got %s", modeEvents[0].Reason)
 	}
 }
 
@@ -656,9 +656,9 @@ func TestManager_SetSystemModeSameModeNoOp(t *testing.T) {
 	}
 
 	// Should not have triggered any events
-	events := modeBroadcaster.getEvents()
-	if len(events) != 0 {
-		t.Errorf("Expected no mode change events when setting to same mode, got %d", len(events))
+	modeEvents := modeBroadcaster.getEvents()
+	if len(modeEvents) != 0 {
+		t.Errorf("Expected no mode change events when setting to same mode, got %d", len(modeEvents))
 	}
 }
 

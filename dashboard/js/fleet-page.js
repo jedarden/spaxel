@@ -1032,12 +1032,103 @@
     }
 
     function showMoreActions(button, mac) {
-        // For now, just show the same actions as the main buttons
-        // This could be expanded to show a dropdown menu
         const node = state.nodes.find(n => n.mac === mac);
         if (!node) return;
 
-        showToast(`More actions for ${node.name || node.label || formatMAC(mac)} coming soon`, 'info');
+        // Remove any existing dropdowns
+        closeAllDropdowns();
+
+        // Create dropdown menu
+        const dropdown = document.createElement('div');
+        dropdown.className = 'dropdown-menu visible';
+        dropdown.id = `dropdown-${mac}`;
+
+        const label = node.name || node.label || formatMAC(mac);
+        dropdown.innerHTML = `
+            <button class="dropdown-item" data-action="role" data-mac="${mac}">
+                <span class="dropdown-icon">&#x2699;</span> Re-assign Role
+            </button>
+            <button class="dropdown-item" data-action="health-history" data-mac="${mac}">
+                <span class="dropdown-icon">&#x2693;</span> View Health History
+            </button>
+            <button class="dropdown-item" data-action="event-history" data-mac="${mac}">
+                <span class="dropdown-icon">&#x1f4c5;</span> View Event History
+            </button>
+            <button class="dropdown-item dropdown-divider"></button>
+            <button class="dropdown-item dropdown-danger" data-action="remove" data-mac="${mac}">
+                <span class="dropdown-icon">&#x1f5d1;</span> Remove from Fleet
+            </button>
+        `;
+
+        // Position the dropdown
+        const buttonRect = button.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = (buttonRect.bottom + 4) + 'px';
+        dropdown.style.right = (window.innerWidth - buttonRect.right) + 'px';
+
+        document.body.appendChild(dropdown);
+
+        // Bind click handlers
+        dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = item.dataset.action;
+                const targetMac = item.dataset.mac;
+                closeAllDropdowns();
+                handleMoreAction(action, targetMac);
+            });
+        });
+
+        // Close dropdown when clicking outside
+        setTimeout(() => {
+            document.addEventListener('click', closeDropdownOnClickOutside);
+        }, 10);
+    }
+
+    function closeDropdownOnClickOutside(e) {
+        if (!e.target.closest('.dropdown-menu') && !e.target.closest('.btn-more')) {
+            closeAllDropdowns();
+            document.removeEventListener('click', closeDropdownOnClickOutside);
+        }
+    }
+
+    function closeAllDropdowns() {
+        document.querySelectorAll('.dropdown-menu').forEach(menu => {
+            menu.remove();
+        });
+    }
+
+    async function handleMoreAction(action, mac) {
+        const node = state.nodes.find(n => n.mac === mac);
+        if (!node) return;
+
+        switch (action) {
+            case 'role':
+                // Clear existing selection and select just this node
+                state.selectedNodes.clear();
+                state.selectedNodes.add(mac);
+                updateBulkActions();
+                showRoleModal();
+                break;
+
+            case 'health-history':
+                showToast(`Health history for ${node.name || node.label || formatMAC(mac)} coming soon`, 'info');
+                // TODO: Implement health history view
+                break;
+
+            case 'event-history':
+                    showToast(`Event history for ${node.name || node.label || formatMAC(mac)} coming soon`, 'info');
+                // TODO: Implement event history view
+                break;
+
+            case 'remove':
+                // Clear existing selection and select just this node
+                state.selectedNodes.clear();
+                state.selectedNodes.add(mac);
+                updateBulkActions();
+                showRemoveModal();
+                break;
+        }
     }
 
     // ============================================
