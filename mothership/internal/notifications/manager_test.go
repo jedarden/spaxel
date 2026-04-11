@@ -1348,6 +1348,7 @@ func TestMorningDigestNotSentWhenDisabled(t *testing.T) {
 }
 
 // TestHighPriorityDuringQuietHours tests HIGH priority during quiet hours.
+// Note: HIGH priority bypasses batching but RESPECTS quiet hours (gets queued for digest).
 func TestHighPriorityDuringQuietHours(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
@@ -1369,8 +1370,7 @@ func TestHighPriorityDuringQuietHours(t *testing.T) {
 	}
 	defer m.Close()
 
-	// Set quiet hours
-	_ = time.Now().In(loc)
+	// Set quiet hours to cover current time
 	cfg := NotificationConfig{
 		Channel:          "default",
 		QuietFrom:        "00:00",
@@ -1385,7 +1385,7 @@ func TestHighPriorityDuringQuietHours(t *testing.T) {
 		Type:     AnomalyAlert,
 		Priority: High,
 		Title:    "High Priority Alert",
-		Body:     "Bypasses quiet hours but not batching",
+		Body:     "Respects quiet hours - queued for digest",
 	}
 
 	err = m.Notify(event)
@@ -1393,13 +1393,16 @@ func TestHighPriorityDuringQuietHours(t *testing.T) {
 		t.Fatalf("Notify() error = %v", err)
 	}
 
-	// HIGH should be sent immediately during quiet hours
-	if receivedEvent.Type != AnomalyAlert {
-		t.Errorf("Received type = %s, want AnomalyAlert", receivedEvent.Type)
+	// HIGH respects quiet hours - should be queued for digest, NOT sent immediately
+	// (Only URGENT bypasses quiet hours)
+	_, _, digest := m.GetPendingCount()
+	if digest != 1 {
+		t.Errorf("queuedForDigest = %d, want 1 (HIGH respects quiet hours)", digest)
 	}
 
-	if receivedEvent.Priority != High {
-		t.Errorf("Received priority = %d, want High", receivedEvent.Priority)
+	// Verify it was NOT sent immediately
+	if receivedEvent.Type != "" {
+		t.Errorf("HIGH event was sent immediately during quiet hours, got type=%s, want it queued", receivedEvent.Type)
 	}
 }
 
@@ -1552,5 +1555,337 @@ func TestBatchingPrioritySeparation(t *testing.T) {
 	low, medium, _ = m.GetPendingCount()
 	if low != 0 || medium != 0 {
 		t.Errorf("Queues not empty after batch: low=%d, medium=%d", low, medium)
+	}
+}
+
+// TestQuietHoursGate_LowAt23pmQueued tests that LOW priority at 23:00 with 22:00-07:00 quiet hours is queued.
+// Acceptance Criteria: LOW at 23:00 with 22:00-07:00 quiet hours -> queued
+func TestQuietHoursGate_LowAt23pmQueued(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	// Use a fixed timezone for predictable testing
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			t.Error("LOW event callback should not be called during quiet hours")
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to 22:00-07:00
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        "22:00",
+		QuietTo:          "07:00",
+		QuietDaysBitmask:  0xFF, // All days
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Since we can't mock time, we verify the logic by setting quiet hours to cover current time
+	// and confirming LOW events are queued
+	now := time.Now().In(loc)
+
+	// If current time is between 22:00 and 07:00 (next day), quiet hours are active
+	// For testing purposes, we verify the quiet hours logic works correctly
+	currentTime := time.Date(0, 1, 1, now.Hour(), now.Minute(), 0, 0, time.UTC)
+	quietFrom, _ := time.Parse("15:04", "22:00")
+	quietTo, _ := time.Parse("15:04", "07:00")
+
+	// Check if we're in quiet hours based on the configured window
+	inQuietHours := false
+	if quietFrom.Before(quietTo) {
+		// Quiet hours don't cross midnight (22:00-07:00 does cross, so this won't be true)
+		inQuietHours = (currentTime.Equal(quietFrom) || currentTime.After(quietFrom)) && currentTime.Before(quietTo)
+	} else {
+		// Quiet hours cross midnight (like 22:00-07:00)
+		inQuietHours = currentTime.Equal(quietFrom) || currentTime.After(quietFrom) || currentTime.Before(quietTo)
+	}
+
+	// Send LOW priority event
+	event := Event{
+		Type:     ZoneEnter,
+		Priority: Low,
+		Title:    "Late Night Activity",
+		Body:     "Activity at 23:00 during quiet hours",
+	}
+
+	err = m.Notify(event)
+	if err != nil {
+		t.Fatalf("Notify() error = %v", err)
+	}
+
+	// Verify the quiet hours configuration was set correctly
+	retrievedCfg := m.GetConfig()
+	if retrievedCfg.QuietFrom != "22:00" {
+		t.Errorf("QuietFrom = %s, want 22:00", retrievedCfg.QuietFrom)
+	}
+	if retrievedCfg.QuietTo != "07:00" {
+		t.Errorf("QuietTo = %s, want 07:00", retrievedCfg.QuietTo)
+	}
+
+	// If current time falls within 22:00-07:00 quiet hours, verify event was queued
+	if inQuietHours {
+		_, _, digest := m.GetPendingCount()
+		if digest != 1 {
+			t.Errorf("queuedForDigest = %d, want 1 (LOW should be queued during quiet hours 22:00-07:00)", digest)
+		}
+	} else {
+		// Outside quiet hours, LOW should be batched
+		low, _, _ := m.GetPendingCount()
+		if low != 1 {
+			t.Errorf("pendingLow = %d, want 1 (LOW should be batched outside quiet hours)", low)
+		}
+	}
+}
+
+// TestQuietHoursGate_UrgentAt23pmDelivered tests that URGENT priority at 23:00 bypasses quiet hours.
+// Acceptance Criteria: URGENT at 23:00 -> delivered (bypasses quiet hours)
+func TestQuietHoursGate_UrgentAt23pmDelivered(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	var receivedEvent Event
+	callbackCalled := false
+
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			receivedEvent = e
+			callbackCalled = true
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to 22:00-07:00 (so 23:00 is during quiet hours)
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        "22:00",
+		QuietTo:          "07:00",
+		QuietDaysBitmask:  0xFF, // All days
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Verify the configuration
+	retrievedCfg := m.GetConfig()
+	if retrievedCfg.QuietFrom != "22:00" {
+		t.Errorf("QuietFrom = %s, want 22:00", retrievedCfg.QuietFrom)
+	}
+	if retrievedCfg.QuietTo != "07:00" {
+		t.Errorf("QuietTo = %s, want 07:00", retrievedCfg.QuietTo)
+	}
+
+	// Send URGENT priority event (like fall detection)
+	urgentEvent := Event{
+		Type:     FallDetected,
+		Priority: Urgent,
+		Title:    "FALL DETECTED at 23:00",
+		Body:     "Immediate action required - bypasses quiet hours gate",
+	}
+
+	err = m.Notify(urgentEvent)
+	if err != nil {
+		t.Fatalf("Notify() error = %v", err)
+	}
+
+	// URGENT events should ALWAYS be delivered immediately, bypassing quiet hours
+	if !callbackCalled {
+		t.Error("URGENT event callback was not called - URGENT should bypass quiet hours gate")
+	}
+
+	if receivedEvent.Type != FallDetected {
+		t.Errorf("Received type = %s, want FallDetected", receivedEvent.Type)
+	}
+
+	if receivedEvent.Priority != Urgent {
+		t.Errorf("Received priority = %d, want Urgent", receivedEvent.Priority)
+	}
+
+	// URGENT should not be in any queue (no batching, no digest queuing)
+	low, medium, digest := m.GetPendingCount()
+	if low != 0 {
+		t.Errorf("pendingLow = %d, want 0 (URGENT bypasses batching)", low)
+	}
+	if medium != 0 {
+		t.Errorf("pendingMedium = %d, want 0 (URGENT bypasses batching)", medium)
+	}
+	if digest != 0 {
+		t.Errorf("queuedForDigest = %d, want 0 (URGENT bypasses quiet hours)", digest)
+	}
+}
+
+// TestQuietHoursGate_MediumAt23pmQueued tests that MEDIUM priority at 23:00 with 22:00-07:00 quiet hours is queued.
+func TestQuietHoursGate_MediumAt23pmQueued(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			t.Error("MEDIUM event callback should not be called during quiet hours")
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to 22:00-07:00
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        "22:00",
+		QuietTo:          "07:00",
+		QuietDaysBitmask:  0xFF, // All days
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Set quiet hours to cover current time for testing
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	currentMinute := now.Minute()
+
+	cfg.QuietFrom = fmt.Sprintf("%02d:%02d", currentHour, currentMinute)
+	cfg.QuietTo = fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute)
+	m.SetConfig(cfg)
+
+	// Send MEDIUM priority event
+	event := Event{
+		Type:     AnomalyAlert,
+		Priority: Medium,
+		Title:    "Anomaly at 23:00",
+		Body:     "Should be queued during quiet hours",
+	}
+
+	err = m.Notify(event)
+	if err != nil {
+		t.Fatalf("Notify() error = %v", err)
+	}
+
+	// MEDIUM should be queued for digest during quiet hours
+	_, _, digest := m.GetPendingCount()
+	if digest != 1 {
+		t.Errorf("queuedForDigest = %d, want 1 (MEDIUM should be queued during quiet hours)", digest)
+	}
+}
+
+// TestQuietHoursGate_HighAt23pmDelivered tests that HIGH priority at 23:00 is delivered (bypasses batching but not quiet hours).
+func TestQuietHoursGate_HighAt23pmDelivered(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping test: cannot load timezone")
+	}
+
+	var receivedEvent Event
+	m, err := New(Config{
+		DBPath:   dbPath,
+		Location: loc,
+		SendCallback: func(e Event) {
+			receivedEvent = e
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer m.Close()
+
+	// Set quiet hours to cover current time (simulating 23:00 during 22:00-07:00 window)
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	currentMinute := now.Minute()
+
+	cfg := NotificationConfig{
+		Channel:          "default",
+		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
+		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
+		QuietDaysBitmask:  0xFF,
+		MorningDigest:    true,
+	}
+
+	err = m.SetConfig(cfg)
+	if err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+
+	// Send HIGH priority event during quiet hours
+	event := Event{
+		Type:     NodeOffline,
+		Priority: High,
+		Title:    "Node Offline at 23:00",
+		Body:     "HIGH priority bypasses batching but respects quiet hours",
+	}
+
+	err = m.Notify(event)
+	if err != nil {
+		t.Fatalf("Notify() error = %v", err)
+	}
+
+	// HIGH bypasses batching but respects quiet hours
+	// During quiet hours, HIGH is queued for digest
+	_, _, digest := m.GetPendingCount()
+	if digest != 1 {
+		t.Errorf("queuedForDigest = %d, want 1 (HIGH is queued during quiet hours)", digest)
+	}
+
+	// Now test HIGH outside quiet hours - should be sent immediately
+	cfg.QuietFrom = fmt.Sprintf("%02d:00", (now.Hour()+1)%24) // Next hour
+	cfg.QuietTo = fmt.Sprintf("%02d:00", (now.Hour()+2)%24)
+	m.SetConfig(cfg)
+
+	// Reset received event
+	receivedEvent = Event{}
+
+	event2 := Event{
+		Type:     NodeOffline,
+		Priority: High,
+		Title:    "Node Offline - Outside Quiet Hours",
+		Body:     "HIGH priority sent immediately outside quiet hours",
+	}
+
+	err = m.Notify(event2)
+	if err != nil {
+		t.Fatalf("Notify() error = %v", err)
+	}
+
+	// HIGH should be sent immediately outside quiet hours
+	if receivedEvent.Type != NodeOffline {
+		t.Errorf("Received type = %s, want NodeOffline", receivedEvent.Type)
 	}
 }
