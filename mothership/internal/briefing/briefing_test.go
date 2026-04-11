@@ -308,8 +308,8 @@ func TestBriefing_GenerateWithAlerts(t *testing.T) {
 	nightStart := time.Date(2024, 3, 14, 18, 0, 0, 0, time.Local)
 	t.Logf("Inserting event at %s (%d)", nightStart, nightStart.UnixMilli())
 	_, err := db.Exec(`
-		INSERT INTO events (timestamp_ms, type, zone, person, severity)
-		VALUES (?, 'fall_alert', 'Bedroom', 'Alice', 'alert')
+		INSERT INTO events (timestamp_ms, type, zone, person, severity, detail_json)
+		VALUES (?, 'fall_alert', 'Bedroom', 'Alice', 'alert', '{}')
 	`, nightStart.UnixMilli())
 	if err != nil {
 		t.Fatal(err)
