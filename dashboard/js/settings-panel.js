@@ -14,7 +14,8 @@
     const settingsState = {
         loading: false,
         saving: false,
-        currentSettings: null
+        currentSettings: null,
+        notificationSettings: null
     };
 
     // ============================================
@@ -28,25 +29,40 @@
         settingsState.loading = true;
         renderContent();
 
-        return fetch('/api/settings')
-            .then(function(res) {
+        // Fetch both main settings and notification settings in parallel
+        return Promise.all([
+            fetch('/api/settings').then(function(res) {
                 if (!res.ok) {
                     throw new Error('Failed to fetch settings: ' + res.status);
                 }
                 return res.json();
+            }),
+            fetch('/api/settings/notifications').then(function(res) {
+                if (!res.ok) {
+                    // If notification settings endpoint fails, return null
+                    console.warn('[SettingsPanel] Failed to fetch notification settings: ' + res.status);
+                    return null;
+                }
+                return res.json();
+            }).catch(function(err) {
+                // Notification settings are optional, log warning but don't fail
+                console.warn('[SettingsPanel] Notification settings not available:', err);
+                return null;
             })
-            .then(function(data) {
-                settingsState.currentSettings = data;
-                settingsState.loading = false;
-                renderContent();
-                return data;
-            })
-            .catch(function(err) {
-                settingsState.loading = false;
-                console.error('[SettingsPanel] Error fetching settings:', err);
-                renderContent();
-                throw err;
-            });
+        ])
+        .then(function(results) {
+            settingsState.currentSettings = results[0];
+            settingsState.notificationSettings = results[1];
+            settingsState.loading = false;
+            renderContent();
+            return results[0];
+        })
+        .catch(function(err) {
+            settingsState.loading = false;
+            console.error('[SettingsPanel] Error fetching settings:', err);
+            renderContent();
+            throw err;
+        });
     }
 
     /**
@@ -219,65 +235,214 @@
     }
 
     function renderNotificationSettings(settings) {
-        const notificationChannels = settings.notification_channels || {};
-        const ntfyEnabled = notificationChannels.ntfy && notificationChannels.ntfy.enabled;
-        const ntfyUrl = notificationChannels.ntfy && notificationChannels.ntfy.config ? (notificationChannels.ntfy.config.url || '') : '';
-        const ntfyToken = notificationChannels.ntfy && notificationChannels.ntfy.config ? (notificationChannels.ntfy.config.token || '') : '';
+        // Get notification settings from separately fetched state
+        const notificationSettings = settingsState.notificationSettings || {};
 
-        const pushoverEnabled = notificationChannels.pushover && notificationChannels.pushover.enabled;
-        const pushoverToken = notificationChannels.pushover && notificationChannels.pushover.config ? (notificationChannels.pushover.config.user_key || '') : '';
-        const pushoverApp = notificationChannels.pushover && notificationChannels.pushover.config ? (notificationChannels.pushover.config.app_token || '') : '';
+        // Channel configuration
+        const channelType = notificationSettings.channel_type || 'none';
+        const channelConfig = notificationSettings.channel_config || {};
+
+        // Quiet hours
+        const quietHoursEnabled = notificationSettings.quiet_hours_enabled || false;
+        const quietHoursStart = notificationSettings.quiet_hours_start || '22:00';
+        const quietHoursEnd = notificationSettings.quiet_hours_end || '07:00';
+        const quietHoursDays = notificationSettings.quiet_hours_days !== undefined ? notificationSettings.quiet_hours_days : 0x7F;
+
+        // Morning digest
+        const morningDigestEnabled = notificationSettings.morning_digest_enabled !== undefined ? notificationSettings.morning_digest_enabled : true;
+        const morningDigestTime = notificationSettings.morning_digest_time || '07:00';
+
+        // Smart batching
+        const smartBatchingEnabled = notificationSettings.smart_batching_enabled !== undefined ? notificationSettings.smart_batching_enabled : true;
+        const smartBatchingWindow = notificationSettings.smart_batching_window || 30;
+
+        // Event types
+        const eventTypes = notificationSettings.event_types || {
+            zone_enter: true,
+            zone_leave: true,
+            zone_vacant: true,
+            fall_detected: true,
+            fall_escalation: true,
+            anomaly_alert: true,
+            node_offline: true,
+            sleep_summary: true
+        };
 
         return `
             <div class="panel-section">
-                <div class="panel-section-header">Notification Channels</div>
+                <div class="panel-section-header">Notifications</div>
 
+                <!-- Delivery Channel Selector -->
                 <div class="panel-form-group">
-                    <label class="panel-form-checkbox">
-                        <input type="checkbox" id="setting-ntfy-enabled" ${ntfyEnabled ? 'checked' : ''}>
-                        <span>Enable Ntfy Notifications</span>
-                    </label>
+                    <label for="notification-channel-type">Delivery Channel</label>
+                    <select id="notification-channel-type" class="panel-select">
+                        <option value="none" ${channelType === 'none' ? 'selected' : ''}>None</option>
+                        <option value="ntfy" ${channelType === 'ntfy' ? 'selected' : ''}>Ntfy</option>
+                        <option value="pushover" ${channelType === 'pushover' ? 'selected' : ''}>Pushover</option>
+                        <option value="webhook" ${channelType === 'webhook' ? 'selected' : ''}>Webhook</option>
+                    </select>
                 </div>
 
-                <div class="panel-form-group" id="ntfy-settings" style="${ntfyEnabled ? '' : 'display: none;'}">
-                    <label for="setting-ntfy-url">Ntfy Topic URL</label>
-                    <input type="url" id="setting-ntfy-url" placeholder="https://ntfy.sh/my-topic" value="${escapeHtml(ntfyUrl)}">
+                <!-- Ntfy Configuration -->
+                <div id="ntfy-config" class="channel-config-group" style="${channelType === 'ntfy' ? '' : 'display: none;'}">
+                    <div class="panel-form-group">
+                        <label for="ntfy-server-url">Server URL</label>
+                        <input type="url" id="ntfy-server-url" class="panel-input"
+                               placeholder="https://ntfy.sh" value="${escapeHtml(channelConfig.url || '')}">
+                    </div>
+                    <div class="panel-form-group">
+                        <label for="ntfy-topic">Topic</label>
+                        <input type="text" id="ntfy-topic" class="panel-input"
+                               placeholder="my-topic" value="${escapeHtml(channelConfig.topic || '')}">
+                    </div>
+                    <div class="panel-form-group">
+                        <label for="ntfy-token">Access Token (optional)</label>
+                        <input type="password" id="ntfy-token" class="panel-input"
+                               placeholder="tk_..." value="${escapeHtml(channelConfig.token || '')}">
+                    </div>
                 </div>
 
-                <div class="panel-form-group" id="ntfy-token-setting" style="${ntfyEnabled ? '' : 'display: none;'}">
-                    <label for="setting-ntfy-token">Access Token (optional)</label>
-                    <input type="password" id="setting-ntfy-token" placeholder="tk_..." value="${escapeHtml(ntfyToken)}">
+                <!-- Pushover Configuration -->
+                <div id="pushover-config" class="channel-config-group" style="${channelType === 'pushover' ? '' : 'display: none;'}">
+                    <div class="panel-form-group">
+                        <label for="pushover-api-key">API Key</label>
+                        <input type="text" id="pushover-api-key" class="panel-input"
+                               placeholder="a..." value="${escapeHtml(channelConfig.api_key || '')}">
+                    </div>
+                </div>
+
+                <!-- Webhook Configuration -->
+                <div id="webhook-config" class="channel-config-group" style="${channelType === 'webhook' ? '' : 'display: none;'}">
+                    <div class="panel-form-group">
+                        <label for="webhook-url">Webhook URL</label>
+                        <input type="url" id="webhook-url" class="panel-input"
+                               placeholder="https://example.com/webhook" value="${escapeHtml(channelConfig.url || '')}">
+                    </div>
                 </div>
 
                 <hr class="panel-divider">
 
+                <!-- Event Type Toggles -->
+                <div class="panel-form-group">
+                    <label>Event Types</label>
+                    <div class="event-type-toggles">
+                        ${renderEventTypeToggle('zone_enter', 'Zone Entry', 'When someone enters a zone', eventTypes.zone_enter)}
+                        ${renderEventTypeToggle('zone_leave', 'Zone Leave', 'When someone leaves a zone', eventTypes.zone_leave)}
+                        ${renderEventTypeToggle('zone_vacant', 'Zone Vacant', 'When a zone becomes empty', eventTypes.zone_vacant)}
+                        ${renderEventTypeToggle('fall_detected', 'Fall Detected', 'When a possible fall is detected', eventTypes.fall_detected)}
+                        ${renderEventTypeToggle('fall_escalation', 'Fall Escalation', 'When fall is unacknowledged', eventTypes.fall_escalation)}
+                        ${renderEventTypeToggle('anomaly_alert', 'Anomaly Alert', 'Unusual activity detected', eventTypes.anomaly_alert)}
+                        ${renderEventTypeToggle('node_offline', 'Node Offline', 'When a node goes offline', eventTypes.node_offline)}
+                        ${renderEventTypeToggle('sleep_summary', 'Sleep Summary', 'Daily sleep quality report', eventTypes.sleep_summary)}
+                    </div>
+                </div>
+
+                <hr class="panel-divider">
+
+                <!-- Quiet Hours -->
                 <div class="panel-form-group">
                     <label class="panel-form-checkbox">
-                        <input type="checkbox" id="setting-pushover-enabled" ${pushoverEnabled ? 'checked' : ''}>
-                        <span>Enable Pushover Notifications</span>
+                        <input type="checkbox" id="quiet-hours-enabled" ${quietHoursEnabled ? 'checked' : ''}>
+                        <span>Enable Quiet Hours</span>
                     </label>
                 </div>
 
-                <div class="panel-form-group" id="pushover-settings" style="${pushoverEnabled ? '' : 'display: none;'}">
-                    <label for="setting-pushover-token">Pushover User Key</label>
-                    <input type="text" id="setting-pushover-token" placeholder="u..." value="${escapeHtml(pushoverToken)}">
+                <div id="quiet-hours-fields" style="${quietHoursEnabled ? '' : 'display: none;'}">
+                    <div class="panel-time-range">
+                        <div class="panel-time-field">
+                            <label for="quiet-hours-start">From</label>
+                            <input type="time" id="quiet-hours-start" class="panel-input" value="${quietHoursStart}">
+                        </div>
+                        <div class="panel-time-field">
+                            <label for="quiet-hours-end">To</label>
+                            <input type="time" id="quiet-hours-end" class="panel-input" value="${quietHoursEnd}">
+                        </div>
+                    </div>
+                    <div class="panel-days-selector">
+                        <label>Active Days</label>
+                        ${renderDayCheckboxes(quietHoursDays)}
+                    </div>
                 </div>
 
-                <div class="panel-form-group" id="pushover-app-setting" style="${pushoverEnabled ? '' : 'display: none;'}">
-                    <label for="setting-pushover-app">Application Token</label>
-                    <input type="text" id="setting-pushover-app" placeholder="a..." value="${escapeHtml(pushoverApp)}">
+                <hr class="panel-divider">
+
+                <!-- Morning Digest -->
+                <div class="panel-form-group">
+                    <label class="panel-form-checkbox">
+                        <input type="checkbox" id="morning-digest-enabled" ${morningDigestEnabled ? 'checked' : ''}>
+                        <span>Morning Digest</span>
+                    </label>
+                    <div class="panel-form-hint">Deliver queued events at wake time</div>
                 </div>
 
+                <div id="morning-digest-fields" style="${morningDigestEnabled ? '' : 'display: none;'}">
+                    <div class="panel-form-group">
+                        <label for="morning-digest-time">Digest Time</label>
+                        <input type="time" id="morning-digest-time" class="panel-input" value="${morningDigestTime}">
+                    </div>
+                </div>
+
+                <hr class="panel-divider">
+
+                <!-- Smart Batching -->
+                <div class="panel-form-group">
+                    <label class="panel-form-checkbox">
+                        <input type="checkbox" id="smart-batching-enabled" ${smartBatchingEnabled ? 'checked' : ''}>
+                        <span>Smart Batching</span>
+                    </label>
+                    <div class="panel-form-hint">Combine multiple events into single notification</div>
+                </div>
+
+                <div id="smart-batching-fields" style="${smartBatchingEnabled ? '' : 'display: none;'}">
+                    <div class="panel-form-group">
+                        <label for="smart-batching-window">Batch Window (seconds)</label>
+                        <input type="number" id="smart-batching-window" class="panel-input"
+                               min="5" max="300" step="5" value="${smartBatchingWindow}">
+                    </div>
+                </div>
+
+                <hr class="panel-divider">
+
+                <!-- Test Button -->
+                <button class="panel-btn panel-btn-secondary panel-btn-full" id="test-notification-btn">
+                    Test Notification
+                </button>
+
+                <!-- Save Button -->
                 <button class="panel-btn panel-btn-primary panel-btn-full" id="save-notification-btn"
                         ${settingsState.saving ? 'disabled' : ''}>
                     ${settingsState.saving ? 'Saving...' : 'Save Notification Settings'}
                 </button>
-
-                <button class="panel-btn panel-btn-secondary panel-btn-full" id="test-notification-btn">
-                    Test Notification
-                </button>
             </div>
         `;
+    }
+
+    function renderEventTypeToggle(id, label, description, checked) {
+        return `
+            <div class="panel-event-type-toggle">
+                <label class="panel-toggle-switch">
+                    <input type="checkbox" class="event-type-checkbox" data-event="${id}" ${checked ? 'checked' : ''}>
+                    <span class="panel-toggle-slider"></span>
+                </label>
+                <div class="panel-event-type-info">
+                    <span class="panel-event-type-label">${label}</span>
+                    <span class="panel-event-type-desc">${description}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderDayCheckboxes(mask) {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        return days.map((day, index) => {
+            const isChecked = (mask & (1 << index)) !== 0;
+            return `
+                <label class="panel-day-checkbox">
+                    <input type="checkbox" class="day-checkbox-input" data-day="${index}" ${isChecked ? 'checked' : ''}>
+                    ${day}
+                </label>
+            `;
+        }).join('');
     }
 
     function renderSystemInfo() {
@@ -367,27 +532,38 @@
             });
         }
 
-        // Ntfy toggle
-        const ntfyEnabled = document.getElementById('setting-ntfy-enabled');
-        const ntfySettings = document.getElementById('ntfy-settings');
-        const ntfyTokenSetting = document.getElementById('ntfy-token-setting');
-        if (ntfyEnabled && ntfySettings && ntfyTokenSetting) {
-            ntfyEnabled.addEventListener('change', function() {
-                const visible = this.checked;
-                ntfySettings.style.display = visible ? '' : 'none';
-                ntfyTokenSetting.style.display = visible ? '' : 'none';
+        // Channel type selector - show/hide relevant config fields
+        const channelTypeSelect = document.getElementById('notification-channel-type');
+        if (channelTypeSelect) {
+            channelTypeSelect.addEventListener('change', function() {
+                updateChannelConfigVisibility(this.value);
             });
         }
 
-        // Pushover toggle
-        const pushoverEnabled = document.getElementById('setting-pushover-enabled');
-        const pushoverSettings = document.getElementById('pushover-settings');
-        const pushoverAppSetting = document.getElementById('pushover-app-setting');
-        if (pushoverEnabled && pushoverSettings && pushoverAppSetting) {
-            pushoverEnabled.addEventListener('change', function() {
-                const visible = this.checked;
-                pushoverSettings.style.display = visible ? '' : 'none';
-                pushoverAppSetting.style.display = visible ? '' : 'none';
+        // Quiet hours toggle
+        const quietHoursEnabled = document.getElementById('quiet-hours-enabled');
+        const quietHoursFields = document.getElementById('quiet-hours-fields');
+        if (quietHoursEnabled && quietHoursFields) {
+            quietHoursEnabled.addEventListener('change', function() {
+                quietHoursFields.style.display = this.checked ? '' : 'none';
+            });
+        }
+
+        // Morning digest toggle
+        const morningDigestEnabled = document.getElementById('morning-digest-enabled');
+        const morningDigestFields = document.getElementById('morning-digest-fields');
+        if (morningDigestEnabled && morningDigestFields) {
+            morningDigestEnabled.addEventListener('change', function() {
+                morningDigestFields.style.display = this.checked ? '' : 'none';
+            });
+        }
+
+        // Smart batching toggle
+        const smartBatchingEnabled = document.getElementById('smart-batching-enabled');
+        const smartBatchingFields = document.getElementById('smart-batching-fields');
+        if (smartBatchingEnabled && smartBatchingFields) {
+            smartBatchingEnabled.addEventListener('change', function() {
+                smartBatchingFields.style.display = this.checked ? '' : 'none';
             });
         }
 
@@ -419,6 +595,33 @@
         const changePinBtn = document.getElementById('change-pin-btn');
         if (changePinBtn) {
             changePinBtn.addEventListener('click', openChangePINModal);
+        }
+    }
+
+    /**
+     * Update channel config visibility based on selected channel type
+     */
+    function updateChannelConfigVisibility(channelType) {
+        const ntfyConfig = document.getElementById('ntfy-config');
+        const pushoverConfig = document.getElementById('pushover-config');
+        const webhookConfig = document.getElementById('webhook-config');
+
+        // Hide all first
+        if (ntfyConfig) ntfyConfig.style.display = 'none';
+        if (pushoverConfig) pushoverConfig.style.display = 'none';
+        if (webhookConfig) webhookConfig.style.display = 'none';
+
+        // Show selected
+        switch (channelType) {
+            case 'ntfy':
+                if (ntfyConfig) ntfyConfig.style.display = '';
+                break;
+            case 'pushover':
+                if (pushoverConfig) pushoverConfig.style.display = '';
+                break;
+            case 'webhook':
+                if (webhookConfig) webhookConfig.style.display = '';
+                break;
         }
     }
 
@@ -465,34 +668,93 @@
      * Save notification settings
      */
     function saveNotificationSettings() {
-        const ntfyEnabled = document.getElementById('setting-ntfy-enabled').checked;
-        const ntfyUrl = document.getElementById('setting-ntfy-url').value;
-        const ntfyToken = document.getElementById('setting-ntfy-token').value;
+        const channelType = document.getElementById('notification-channel-type').value;
+        const channelConfig = {};
 
-        const pushoverEnabled = document.getElementById('setting-pushover-enabled').checked;
-        const pushoverToken = document.getElementById('setting-pushover-token').value;
-        const pushoverApp = document.getElementById('setting-pushover-app').value;
+        // Get channel-specific config
+        switch (channelType) {
+            case 'ntfy':
+                channelConfig.url = document.getElementById('ntfy-server-url').value || null;
+                channelConfig.topic = document.getElementById('ntfy-topic').value || null;
+                channelConfig.token = document.getElementById('ntfy-token').value || null;
+                break;
+            case 'pushover':
+                channelConfig.api_key = document.getElementById('pushover-api-key').value || null;
+                break;
+            case 'webhook':
+                channelConfig.url = document.getElementById('webhook-url').value || null;
+                break;
+        }
 
-        const updates = {
-            notification_channels: {
-                ntfy: {
-                    enabled: ntfyEnabled,
-                    config: {
-                        url: ntfyUrl || null,
-                        token: ntfyToken || null
-                    }
-                },
-                pushover: {
-                    enabled: pushoverEnabled,
-                    config: {
-                        user_key: pushoverToken || null,
-                        app_token: pushoverApp || null
-                    }
-                }
-            }
+        // Get quiet hours settings
+        const quietHoursEnabled = document.getElementById('quiet-hours-enabled').checked;
+        const quietHoursStart = document.getElementById('quiet-hours-start').value;
+        const quietHoursEnd = document.getElementById('quiet-hours-end').value;
+
+        // Get quiet hours days mask
+        let quietHoursDays = 0;
+        document.querySelectorAll('.day-checkbox-input:checked').forEach(function(cb) {
+            quietHoursDays |= (1 << parseInt(cb.dataset.day));
+        });
+
+        // Get morning digest settings
+        const morningDigestEnabled = document.getElementById('morning-digest-enabled').checked;
+        const morningDigestTime = document.getElementById('morning-digest-time').value;
+
+        // Get smart batching settings
+        const smartBatchingEnabled = document.getElementById('smart-batching-enabled').checked;
+        const smartBatchingWindow = parseInt(document.getElementById('smart-batching-window').value);
+
+        // Get event type preferences
+        const eventTypes = {};
+        document.querySelectorAll('.event-type-checkbox:checked').forEach(function(cb) {
+            eventTypes[cb.dataset.event] = true;
+        });
+        document.querySelectorAll('.event-type-checkbox:not(:checked)').forEach(function(cb) {
+            eventTypes[cb.dataset.event] = false;
+        });
+
+        // Build notification settings object
+        const notificationSettings = {
+            channel_type: channelType,
+            channel_config: Object.keys(channelConfig).length > 0 ? channelConfig : null,
+            quiet_hours_enabled: quietHoursEnabled,
+            quiet_hours_start: quietHoursStart,
+            quiet_hours_end: quietHoursEnd,
+            quiet_hours_days: quietHoursDays,
+            morning_digest_enabled: morningDigestEnabled,
+            morning_digest_time: morningDigestTime,
+            smart_batching_enabled: smartBatchingEnabled,
+            smart_batching_window: smartBatchingWindow,
+            event_types: eventTypes
         };
 
-        saveSettings(updates);
+        // Send to API
+        fetch('/api/settings/notifications', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(notificationSettings)
+        })
+        .then(function(res) {
+            if (!res.ok) {
+                return res.json().then(function(err) {
+                    throw new Error(err.error || 'Failed to save notification settings');
+                });
+            }
+            return res.json();
+        })
+        .then(function(data) {
+            // Update local state
+            settingsState.notificationSettings = data;
+            SpaxelPanels.showSuccess('Notification settings saved successfully');
+            renderContent();
+        })
+        .catch(function(err) {
+            console.error('[SettingsPanel] Error saving notification settings:', err);
+            SpaxelPanels.showError('Failed to save notification settings: ' + err.message);
+        });
     }
 
     /**
@@ -501,27 +763,46 @@
     function sendTestNotification() {
         SpaxelPanels.showInfo('Sending test notification...');
 
+        // Get current channel type from settings
+        const channelType = document.getElementById('notification-channel-type').value;
+
+        if (channelType === 'none') {
+            SpaxelPanels.showError('Please configure a notification channel first');
+            return;
+        }
+
         fetch('/api/notifications/test', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                channel_type: 'all'
+                channel_type: channelType,
+                title: 'Spaxel Test Notification',
+                body: 'This is a test notification from Spaxel.',
+                data: { test: true }
             })
         })
         .then(function(res) {
             if (!res.ok) {
-                throw new Error('Failed to send test notification');
+                return res.json().then(function(err) {
+                    throw new Error(err.error || 'Failed to send test notification');
+                });
             }
             return res.json();
         })
         .then(function(data) {
-            SpaxelPanels.showSuccess('Test notification sent!');
+            if (data.status === 'sent') {
+                SpaxelPanels.showSuccess('Test notification sent successfully!');
+            } else if (data.status === 'simulated') {
+                SpaxelPanels.showInfo('Test notification simulated (notification sender not attached)');
+            } else {
+                SpaxelPanels.showSuccess(data.message || 'Test notification processed');
+            }
         })
         .catch(function(err) {
             console.error('[SettingsPanel] Error sending test notification:', err);
-            SpaxelPanels.showError('Failed to send test notification');
+            SpaxelPanels.showError('Failed to send test notification: ' + err.message);
         });
     }
 

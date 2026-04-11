@@ -644,6 +644,28 @@
 
                 // Call feedback module's sendFeedback
                 Feedback.sendFeedback(eventId, event.type, correct ? 'TRUE_POSITIVE' : 'FALSE_POSITIVE', detail);
+
+                // Show visual feedback immediately
+                const feedbackBtns = eventElement.querySelectorAll('.sidebar-timeline-action-btn');
+                feedbackBtns.forEach(function(btn) {
+                    if (btn.dataset.action === action) {
+                        btn.classList.add('active');
+                        setTimeout(function() {
+                            btn.classList.remove('active');
+                        }, 2000);
+                    }
+                });
+
+                // Show toast notification
+                if (window.SpaxelApp && SpaxelApp.showToast) {
+                    const message = correct ? 'Thanks for the feedback!' : 'Thanks — I\'ll adjust my detection.';
+                    SpaxelApp.showToast(message, 'success');
+                }
+
+                // Dismiss entry for incorrect feedback
+                if (!correct) {
+                    eventElement.classList.add('feedback-dismissed');
+                }
             }
         } else {
             // Fallback: direct API call
