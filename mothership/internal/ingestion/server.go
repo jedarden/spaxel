@@ -860,11 +860,12 @@ func (s *Server) GetConnectedNodesInfo() []NodeInfo {
 	return nodes
 }
 
-// LinkInfo represents a link with its endpoints
+// LinkInfo represents a link with its endpoints and health data
 type LinkInfo struct {
-	ID      string `json:"id"`
-	NodeMAC string `json:"node_mac"`
-	PeerMAC string `json:"peer_mac"`
+	ID         string  `json:"id"`
+	NodeMAC    string  `json:"node_mac"`
+	PeerMAC    string  `json:"peer_mac"`
+	HealthScore float64 `json:"health_score,omitempty"` // Ambient confidence score (0-1)
 }
 
 // LinkHealthInfo represents a link with health metrics for the API response
@@ -880,16 +881,31 @@ type LinkHealthInfo struct {
 // GetAllLinksInfo returns detailed info about all active links
 func (s *Server) GetAllLinksInfo() []LinkInfo {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	pm := s.processorMgr
+	s.mu.RUnlock()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	links := make([]LinkInfo, 0, len(s.links))
 	for linkID := range s.links {
 		if len(linkID) >= 35 {
-			links = append(links, LinkInfo{
+			info := LinkInfo{
 				ID:      linkID,
 				NodeMAC: linkID[:17],
 				PeerMAC: linkID[18:],
-			})
+			}
+
+			// Get health score from processor manager if available
+			if pm != nil {
+				if proc := pm.GetProcessor(linkID); proc != nil {
+					if health := proc.GetHealth(); health != nil {
+						info.HealthScore = health.GetAmbientConfidence()
+					}
+				}
+			}
+
+			links = append(links, info)
 		}
 	}
 	return links

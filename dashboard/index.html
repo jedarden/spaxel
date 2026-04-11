@@ -3337,6 +3337,56 @@
     <!-- 3D Scene container -->
     <div id="scene-container"></div>
 
+    <!-- Sidebar Timeline Panel -->
+    <div id="sidebar-timeline-panel" class="sidebar-panel">
+        <div class="sidebar-panel-header">
+            <div class="sidebar-panel-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+                </svg>
+                <span>Activity Timeline</span>
+            </div>
+            <div class="sidebar-panel-actions">
+                <button id="sidebar-timeline-toggle" class="sidebar-panel-btn" title="Toggle panel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+                <button id="sidebar-timeline-close" class="sidebar-panel-btn" title="Close panel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div id="sidebar-timeline-content" class="sidebar-panel-content">
+            <div id="sidebar-timeline-events" class="sidebar-timeline-events">
+                <!-- Events will be rendered here -->
+            </div>
+            <div id="sidebar-timeline-loading" class="sidebar-timeline-loading" style="display: none;">
+                <div class="sidebar-spinner"></div>
+                <span>Loading events...</span>
+            </div>
+            <div id="sidebar-timeline-empty" class="sidebar-timeline-empty" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+                </svg>
+                <h3>No events yet</h3>
+                <p>Events will appear here as Spaxel detects activity.</p>
+            </div>
+            <div id="sidebar-timeline-spacer-top" class="timeline-spacer timeline-spacer-top" style="height: 0px;"></div>
+            <div id="sidebar-timeline-spacer-bottom" class="timeline-spacer timeline-spacer-bottom" style="height: 0px;"></div>
+        </div>
+    </div>
+
+    <!-- Sidebar Timeline Toggle Button (when panel is collapsed) -->
+    <button id="sidebar-timeline-show-btn" class="sidebar-show-btn" title="Show timeline">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+        </svg>
+    </button>
+
     <!-- Hamburger Menu (for screens < 1024px) -->
     <div id="hamburger-overlay"></div>
     <div id="hamburger-menu">
@@ -3562,6 +3612,8 @@
     <script src="js/anomaly.js"></script>
     <!-- Activity Timeline -->
     <script src="js/timeline.js"></script>
+    <!-- Sidebar Timeline Panel -->
+    <script src="js/sidebar-timeline.js"></script>
     <!-- Security Panel -->
     <script src="js/security-panel.js"></script>
     <!-- Detection Explainability -->
