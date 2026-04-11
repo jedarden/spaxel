@@ -272,6 +272,15 @@
     pointer-events: none;
 }
 
+/* Safe area support for toast notifications */
+@supports (padding: max(0px)) {
+    #toast-container {
+        /* Adjust bottom position to account for safe area */
+        bottom: calc(20px + env(safe-area-inset-bottom));
+        right: calc(20px + env(safe-area-inset-right));
+    }
+}
+
 .toast {
     background: #2a2a4a;
     border: 1px solid rgba(255, 255, 255, 0.15);

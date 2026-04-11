@@ -273,6 +273,8 @@ body.simple-mode #scene-container {
     display: block;
     max-width: 100%;
     max-height: 100%;
+    /* Fix iOS Safari passive event listener warnings */
+    touch-action: none;
 }
 
 /* Handle visual viewport resize events (iOS Safari keyboard, address bar) */
@@ -310,6 +312,21 @@ body.simple-mode .simple-quick-actions {
     right: 0;
     height: 56px;
     z-index: 100;
+}
+
+/* Simple mode navigation bar safe area support */
+@supports (padding: max(0px)) {
+    body.simple-mode .simple-quick-actions {
+        /* Add safe area inset for home indicator on iOS */
+        padding-bottom: env(safe-area-inset-bottom);
+        height: calc(56px + env(safe-area-inset-bottom));
+    }
+
+    body.simple-mode #scene-container {
+        /* Adjust height calculation to account for safe area bottom */
+        height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
+        height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
+    }
 }
 
 /* ===== Mode Toggle Bar ===== */

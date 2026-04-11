@@ -304,6 +304,14 @@
     color: #eee;
 }
 
+/* Safe area support for dismiss button */
+@supports (padding: max(0px)) {
+    .spaxel-dismiss-all {
+        /* Adjust bottom position to account for safe area */
+        bottom: calc(20px + env(safe-area-inset-bottom));
+    }
+}
+
 /* ============================================
    Post-Calibration Card (inside wizard)
    ============================================ */
