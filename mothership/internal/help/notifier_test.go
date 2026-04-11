@@ -137,7 +137,7 @@ func TestNotifierContentHelpers(t *testing.T) {
 		{EventWeightUpdateApproved, "Localization accuracy improved", ""},
 		{EventAutomationFirstFired, "Your first automation just ran", ""},
 		{EventPredictionModelReady, "Presence predictions are now available", ""},
-		{"unknown_event", "New Feature Available", "A new feature is now available"},
+		{"unknown_event", "New Feature Available", "A new feature is now available in your Spaxel system."},
 	}
 
 	for _, tt := range tests {
@@ -165,14 +165,15 @@ func TestNotifierFireWithAction(t *testing.T) {
 		t.Fatalf("Failed to create notifier: %v", err)
 	}
 
-	// Fire notification with action
+	// Fire notification with action for a known event type
+	// The implementation uses predefined action labels/URLs for known events
 	eventID := EventDiurnalBaselineActivated
 	fired := notifier.FireNotificationWithAction(
 		eventID,
 		"Diurnal Baseline Ready",
 		"Your system has learned patterns",
-		"View Details",
-		"#/diurnal",
+		"Ignored Label",  // This is ignored for known events
+		"#/ignored",      // This is ignored for known events
 	)
 
 	if !fired {
@@ -185,12 +186,13 @@ func TestNotifierFireWithAction(t *testing.T) {
 		t.Fatalf("Expected 1 notification, got %d", len(notifications))
 	}
 
-	if notifications[0].ActionLabel != "View Details" {
-		t.Errorf("Expected action label 'View Details', got %q", notifications[0].ActionLabel)
+	// Known events use predefined action labels/URLs
+	if notifications[0].ActionLabel != "View Diurnal Baseline" {
+		t.Errorf("Expected action label 'View Diurnal Baseline', got %q", notifications[0].ActionLabel)
 	}
 
-	if notifications[0].ActionURL != "#/diurnal" {
-		t.Errorf("Expected action URL '#/diurnal', got %q", notifications[0].ActionURL)
+	if notifications[0].ActionURL != "#/settings/diurnal" {
+		t.Errorf("Expected action URL '#/settings/diurnal', got %q", notifications[0].ActionURL)
 	}
 }
 
