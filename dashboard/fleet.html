@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Spaxel Fleet Status</title>
+    <link rel="stylesheet" href="css/fleet-page.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a2e">
+</head>
+<body class="fleet-page">
+    <!-- Navigation -->
+    <nav class="fleet-nav">
+        <div class="nav-content">
+            <a href="/" class="nav-logo" title="Back to 3D View">
+                <span class="logo-icon">&#x26F6;</span>
+                <span class="logo-text">Spaxel</span>
+            </a>
+            <div class="nav-title">Fleet Status</div>
+            <div class="nav-actions">
+                <a href="/" class="nav-btn" title="Back to 3D View">
+                    <span class="icon">&#x26F6;</span>
+                    <span class="label">3D View</span>
+                </a>
+                <a href="/simple" class="nav-btn" title="Simple Mode">
+                    <span class="icon">&#x2630;</span>
+                    <span class="label">Simple</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="fleet-header">
+        <div class="header-content">
+            <h1>Fleet Status</h1>
+            <div class="fleet-summary">
+                <span class="summary-item">
+                    <span class="summary-label">Total:</span>
+                    <span class="summary-value" id="fleet-total">0</span>
+                </span>
+                <span class="summary-item">
+                    <span class="summary-label">Online:</span>
+                    <span class="summary-value online" id="fleet-online">0</span>
+                </span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button id="fleet-refresh-btn" class="btn btn-secondary" title="Refresh fleet data">
+                <span class="icon">&#x21BB;</span>
+                <span class="label">Refresh</span>
+            </button>
+            <button id="fleet-update-all-btn" class="btn btn-action" title="Update all nodes to latest firmware">
+                <span class="icon">&#x2191;</span>
+                <span class="label">Update All</span>
+            </button>
+            <button id="fleet-download-btn" class="btn btn-secondary" title="Download CSV report">
+                <span class="icon">&#x2193;</span>
+                <span class="label">Download Report</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Filter and Sort Bar -->
+    <div class="fleet-toolbar" id="fleet-toolbar" style="display: none;">
+        <div class="toolbar-section">
+            <div class="filter-group">
+                <input type="text" id="fleet-search" class="search-input" placeholder="Search by label or MAC...">
+                <select id="filter-status" class="filter-select">
+                    <option value="">All Status</option>
+                    <option value="online">Online</option>
+                    <option value="offline">Offline</option>
+                    <option value="updating">Updating</option>
+                </select>
+                <select id="filter-firmware" class="filter-select">
+                    <option value="">All Firmware</option>
+                    <option value="outdated">Outdated Only</option>
+                </select>
+                <select id="filter-role" class="filter-select" multiple>
+                    <option value="tx">TX</option>
+                    <option value="rx">RX</option>
+                    <option value="tx_rx">TX-RX</option>
+                    <option value="passive">Passive</option>
+                </select>
+            </div>
+            <div class="active-filters" id="active-filters"></div>
+        </div>
+    </div>
+
+    <!-- Bulk Actions Bar (shown when nodes are selected) -->
+    <div class="bulk-actions-bar" id="bulk-actions-bar" style="display: none;">
+        <div class="bulk-content">
+            <span class="bulk-count"><span id="bulk-selected-count">0</span> nodes selected</span>
+            <div class="bulk-buttons">
+                <button id="bulk-ota-btn" class="btn btn-action">Update Selected</button>
+                <button id="bulk-role-btn" class="btn btn-secondary">Re-assign Roles</button>
+                <button id="bulk-remove-btn" class="btn btn-danger">Remove Selected</button>
+                <button id="bulk-clear-btn" class="btn btn-link">Clear Selection</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fleet Table -->
+    <main class="fleet-main">
+        <div class="table-container">
+            <table class="fleet-table" id="fleet-table">
+                <thead>
+                    <tr>
+                        <th class="col-checkbox">
+                            <input type="checkbox" id="select-all-checkbox" class="checkbox">
+                        </th>
+                        <th class="col-label sortable" data-sort="label">
+                            Label
+                        </th>
+                        <th class="col-mac sortable" data-sort="mac">
+                            MAC Address
+                        </th>
+                        <th class="col-status sortable" data-sort="status">
+                            Status
+                        </th>
+                        <th class="col-firmware sortable" data-sort="firmware">
+                            Firmware Version
+                        </th>
+                        <th class="col-uptime sortable" data-sort="uptime">
+                            Uptime
+                        </th>
+                        <th class="col-role sortable" data-sort="role">
+                            Role
+                        </th>
+                        <th class="col-health sortable" data-sort="health">
+                            Signal Health
+                        </th>
+                        <th class="col-packet-rate sortable" data-sort="packetRate">
+                            Packet Rate
+                        </th>
+                        <th class="col-temperature sortable" data-sort="temperature">
+                            Temperature
+                        </th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="fleet-table-body">
+                    <tr class="loading-row">
+                        <td colspan="11">
+                            <div class="loading-spinner"></div>
+                            <span>Loading fleet data...</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="empty-state" style="display: none;">
+            <div class="empty-icon">&#x1F5A5;</div>
+            <h3>No Nodes Found</h3>
+            <p>No nodes match your current filters, or no nodes have been provisioned yet.</p>
+            <a href="/" class="btn btn-primary">Add Your First Node</a>
+        </div>
+    </main>
+
+    <!-- OTA Confirmation Modal -->
+    <div class="modal" id="ota-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Firmware Update</h3>
+                <button class="modal-close" data-modal="ota-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Update <strong id="ota-node-label">Node</strong> from firmware <span id="ota-current-version" class="version-current">v1.0.0</span> to <span id="ota-latest-version" class="version-latest">v1.1.0</span>?</p>
+                <div class="ota-info">
+                    <div class="info-item">
+                        <span class="info-label">Current Version:</span>
+                        <span class="info-value" id="ota-info-current">v1.0.0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Latest Version:</span>
+                        <span class="info-value" id="ota-info-latest">v1.1.0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Node Status:</span>
+                        <span class="info-value" id="ota-info-status">Online</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close" data-modal="ota-modal">Cancel</button>
+                <button class="btn btn-primary" id="ota-confirm-btn">Confirm Update</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Role Assignment Modal -->
+    <div class="modal" id="role-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Re-assign Roles</h3>
+                <button class="modal-close" data-modal="role-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Assign new roles to <strong><span id="role-node-count">0</span> selected nodes</strong>:</p>
+                <div class="role-options">
+                    <label class="role-option">
+                        <input type="radio" name="role-assignment" value="tx">
+                        <span class="role-badge tx">TX</span>
+                        <span class="role-desc">Transmit only</span>
+                    </label>
+                    <label class="role-option">
+                        <input type="radio" name="role-assignment" value="rx">
+                        <span class="role-badge rx">RX</span>
+                        <span class="role-desc">Receive only</span>
+                    </label>
+                    <label class="role-option">
+                        <input type="radio" name="role-assignment" value="tx_rx" checked>
+                        <span class="role-badge tx_rx">TX-RX</span>
+                        <span class="role-desc">Both transmit and receive</span>
+                    </label>
+                    <label class="role-option">
+                        <input type="radio" name="role-assignment" value="passive">
+                        <span class="role-badge passive">Passive</span>
+                        <span class="role-desc">Passive radar mode</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close" data-modal="role-modal">Cancel</button>
+                <button class="btn btn-primary" id="role-confirm-btn">Assign Roles</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Remove Confirmation Modal -->
+    <div class="modal" id="remove-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Remove from Fleet</h3>
+                <button class="modal-close" data-modal="remove-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to remove <strong><span id="remove-node-count">0</span> nodes</strong> from the fleet?</p>
+                <div class="remove-warning" id="remove-node-list"></div>
+                <p class="remove-warning-text">This action cannot be undone. Nodes will be disconnected and archived.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close" data-modal="remove-modal">Cancel</button>
+                <button class="btn btn-danger" id="remove-confirm-btn">Remove Nodes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Authentication -->
+    <script src="js/auth.js"></script>
+    <!-- Fleet Page JavaScript -->
+    <script src="js/fleet-page.js"></script>
+</body>
+</html>

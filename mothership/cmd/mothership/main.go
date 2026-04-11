@@ -3708,6 +3708,22 @@ func main() {
 		http.NotFound(w, r)
 	})
 
+	// Serve fleet status page
+	r.Get("/fleet", func(w http.ResponseWriter, r *http.Request) {
+		staticDir := cfg.StaticDir
+		if staticDir == "" {
+			staticDir = findDashboardDir()
+		}
+		if staticDir != "" {
+			fleetPath := filepath.Join(staticDir, "fleet.html")
+			if _, err := os.Stat(fleetPath); err == nil {
+				http.ServeFile(w, r, fleetPath)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
 	// Serve dashboard static files
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
