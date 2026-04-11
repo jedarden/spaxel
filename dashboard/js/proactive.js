@@ -835,8 +835,8 @@
             const readyCount = diurnalData.filter(d => d.is_ready).length;
             diurnalReady = readyCount > (diurnalData.length / 2); // Majority ready
 
-            // Average learning progress
-            const progressValues = diurnalData.map(d => d.learning_progress || 0).filter(p => p >= 0);
+            // Average learning progress (backend returns 'progress' field, 0-100 range)
+            const progressValues = diurnalData.map(d => (d.progress || 0) / 100).filter(p => p >= 0);
             if (progressValues.length > 0) {
                 learningProgress = progressValues.reduce((a, b) => a + b, 0) / progressValues.length;
             }

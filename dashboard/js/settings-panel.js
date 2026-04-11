@@ -447,6 +447,17 @@
             if (window.SpaxelState) {
                 Object.assign(window.SpaxelState.settings, updates);
             }
+
+            // Track setting changes for proactive assistance
+            if (window.Proactive) {
+                // Track each qualifying setting that changed
+                const qualifyingSettings = ['delta_rms_threshold', 'fresnel_decay', 'n_subcarriers', 'tau_s', 'breathing_sensitivity'];
+                for (const key in updates) {
+                    if (qualifyingSettings.includes(key)) {
+                        window.Proactive.trackSettingChange(key, updates[key]);
+                    }
+                }
+            }
         });
     }
 
