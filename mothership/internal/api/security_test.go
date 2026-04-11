@@ -23,6 +23,7 @@ type mockDetectorProvider struct {
 	activeAnomalies  []*events.AnomalyEvent
 	history          []*events.AnomalyEvent
 	modeChanges      []analytics.SecurityMode
+	systemMode       events.SystemMode
 }
 
 func (m *mockDetectorProvider) GetSecurityMode() analytics.SecurityMode {
@@ -65,6 +66,10 @@ func (m *mockDetectorProvider) CountAnomaliesSince(since time.Time) (int, error)
 		}
 	}
 	return count, nil
+}
+
+func (m *mockDetectorProvider) GetSystemMode() events.SystemMode {
+	return m.systemMode
 }
 
 func TestSecurityHandler_Status(t *testing.T) {
