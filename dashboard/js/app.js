@@ -45,6 +45,12 @@
         lastChartUpdate: 0,
         frameCount: 0,
         lastFpsTime: performance.now(),
+        // Frame rate capping for struggling devices
+        targetFPS: 60,           // Target frame rate (60 for desktop, 30 for struggling mobile)
+        minFrameTime: 1000 / 60, // Minimum time between frames (16.67ms at 60fps)
+        lastFrameTime: 0,        // Time of last rendered frame
+        fpsHistory: [],          // Recent FPS samples for detecting struggling devices
+        strugglingDevice: false, // Auto-detected low performance flag
         // System health tracking
         systemHealth: 0,
         worstLinkID: null,
@@ -75,6 +81,27 @@
     // ============================================
     let scene, camera, renderer, controls, gridHelper, axesHelper, clock;
 
+    /**
+     * Detect if the current device is a mobile device based on screen width.
+     * @returns {boolean} True if screen width < 1024px (mobile)
+     */
+    function isMobile() {
+        return window.innerWidth < 1024;
+    }
+
+    /**
+     * Get the pixel ratio capped at 2.0 for mobile devices.
+     * This prevents excessive rendering on high-DPI mobile displays.
+     * @returns {number} The device pixel ratio, capped at 2.0 for mobile
+     */
+    function getPixelRatio() {
+        const rawRatio = window.devicePixelRatio || 1;
+        if (isMobile()) {
+            return Math.min(rawRatio, 2.0);
+        }
+        return rawRatio;
+    }
+
     function initScene() {
         const container = document.getElementById('scene-container');
 
@@ -95,10 +122,25 @@
             CONFIG.cameraInitial.z
         );
 
-        // Renderer
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+        // Renderer with mobile performance optimizations
+        const mobile = isMobile();
+        const pixelRatio = getPixelRatio();
+
+        renderer = new THREE.WebGLRenderer({
+            antialias: !mobile  // Disable MSAA on mobile to save GPU cycles
+        });
+
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setPixelRatio(pixelRatio);
+
+        // Disable shadow maps on mobile (or cap at 512x512 for very limited use)
+        if (mobile) {
+            renderer.shadowMap.enabled = false;
+        } else {
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
+
         container.appendChild(renderer.domElement);
 
         // OrbitControls
@@ -229,7 +271,8 @@
         renderer.setSize(width, height);
 
         // Update pixel ratio in case it changed (e.g., moving between displays)
-        renderer.setPixelRatio(window.devicePixelRatio || 1);
+        // Use capped pixel ratio for mobile devices
+        renderer.setPixelRatio(getPixelRatio());
     }
 
     /**
@@ -265,11 +308,63 @@
 
     function animate() {
         requestAnimationFrame(animate);
+
+        const now = performance.now();
+        const elapsed = now - state.lastFrameTime;
+
+        // Frame rate capping: skip this frame if not enough time has elapsed
+        if (elapsed < state.minFrameTime) {
+            return; // Skip this frame to maintain target FPS
+        }
+
+        state.lastFrameTime = now;
+
         controls.update();
         Viz3D.update();
         if (window.Placement) Placement.update();
         renderer.render(scene, camera);
         updateFPS();
+        detectStrugglingDevice();
+    }
+
+    /**
+     * Detect struggling devices by monitoring FPS history.
+     * If consistently below 25 FPS on mobile, cap at 30 FPS.
+     */
+    function detectStrugglingDevice() {
+        if (!isMobile()) return; // Only cap frame rate on mobile
+
+        // Current FPS calculation
+        const fps = Math.round(1000 / (performance.now() - state.lastFrameTime));
+
+        // Maintain FPS history (last 30 samples)
+        state.fpsHistory.push(fps);
+        if (state.fpsHistory.length > 30) {
+            state.fpsHistory.shift();
+        }
+
+        // Check average FPS over history
+        if (state.fpsHistory.length >= 30) {
+            const avgFPS = state.fpsHistory.reduce((a, b) => a + b, 0) / state.fpsHistory.length;
+
+            // If consistently below 25 FPS, cap at 30 FPS
+            if (avgFPS < 25 && !state.strugglingDevice) {
+                console.log('[Spaxel] Low FPS detected (' + avgFPS.toFixed(1) + '), capping at 30 FPS');
+                state.strugglingDevice = true;
+                state.targetFPS = 30;
+                state.minFrameTime = 1000 / 30; // ~33.33ms per frame
+
+                // Optionally show a toast notification
+                // showToast('Performance mode enabled (30 FPS)', 'info');
+            }
+            // Recover if FPS improves
+            else if (avgFPS > 40 && state.strugglingDevice) {
+                console.log('[Spaxel] FPS improved (' + avgFPS.toFixed(1) + '), restoring 60 FPS');
+                state.strugglingDevice = false;
+                state.targetFPS = 60;
+                state.minFrameTime = 1000 / 60; // ~16.67ms per frame
+            }
+        }
     }
 
     // ============================================

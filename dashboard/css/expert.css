@@ -423,12 +423,16 @@ body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
 
 /* ===== Safe area insets for notched devices ===== */
 @supports (padding: max(0px)) {
+    body {
+        /* Add safe area insets to body for iOS Safari notch/home indicator */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
     #scene-container {
         /* Use safe-area-inset for devices with notches (iPhone X+) */
-        padding-top: env(safe-area-inset-top);
         padding-left: env(safe-area-inset-left);
         padding-right: env(safe-area-inset-right);
-        padding-bottom: env(safe-area-inset-bottom);
     }
 
     /* Adjust height calculation to account for safe areas */
