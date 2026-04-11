@@ -154,21 +154,107 @@
 
         // Touch-specific optimizations for mobile
         controls.rotateSpeed = 0.8;           // Rotation speed
-        controls.zoomSpeed = 1.0;             // Zoom speed for pinch gesture (reduced for better touch accuracy)
-        controls.panSpeed = 0.8;              // Pan speed for two-finger drag
-        controls.enablePan = true;            // Enable pan (two-finger drag)
+        controls.zoomSpeed = 0.6;             // Zoom speed for pinch gesture (reduced for better touch accuracy)
+        controls.panSpeed = 0.8;              // Pan speed for multi-finger drag
+        controls.enablePan = true;            // Enable pan (two-finger or three-finger drag)
         controls.enableZoom = true;           // Enable zoom (pinch gesture)
         controls.enableRotate = true;         // Enable rotate (one-finger drag)
 
-        // Touch gesture configuration
+        // Touch gesture configuration for OrbitControls
         // One finger: rotate (orbit)
-        // Two fingers: pinch-to-zoom and pan
-        // Note: Three.js OrbitControls doesn't natively support three-finger pan.
-        // The TWO: DOLLY_PAN configuration provides both pinch zoom and pan functionality.
+        // Two fingers: pinch-to-zoom (dolly)
+        // Three fingers: pan (custom implementation below)
+        //
+        // Note: The standard OrbitControls touches configuration is:
+        // - ONE: THREE.TOUCH.ROTATE (one-finger orbit)
+        // - TWO: THREE.TOUCH.DOLLY_PAN (pinch zoom + two-finger pan)
+        //
+        // For better gesture separation on touch devices:
+        // - Two fingers = pinch zoom only (no accidental pan while zooming)
+        // - Three fingers = dedicated pan (more deliberate, less accidental)
         controls.touches = {
             ONE: THREE.TOUCH.ROTATE,      // One-finger touch rotates the camera
-            TWO: THREE.TOUCH.DOLLY_PAN    // Two-finger touch zooms (pinch) and pans
+            TWO: THREE.TOUCH.DOLLY_ROTATE // Two-finger touch zooms (pinch) and rotates
         };
+
+        // Custom three-finger pan implementation
+        // Since OrbitControls doesn't natively support three-finger pan,
+        // we add custom touch event listeners to handle this gesture
+        let threeFingerStartDistance = 0;
+        let threeFingerStartPan = new THREE.Vector2();
+        const element = renderer.domElement;
+
+        element.addEventListener('touchstart', function(event) {
+            if (event.touches.length === 3) {
+                // Calculate initial centroid of three fingers for reference
+                let cx = 0, cy = 0;
+                for (let i = 0; i < 3; i++) {
+                    cx += event.touches[i].clientX;
+                    cy += event.touches[i].clientY;
+                }
+                cx /= 3;
+                cy /= 3;
+                threeFingerStartPan.set(cx, cy);
+
+                // Disable OrbitControls during three-finger pan
+                controls.enabled = false;
+            }
+        }, { passive: false });
+
+        element.addEventListener('touchmove', function(event) {
+            if (event.touches.length === 3) {
+                event.preventDefault(); // Prevent default scroll/zoom behavior
+
+                // Calculate current centroid of three fingers
+                let cx = 0, cy = 0;
+                for (let i = 0; i < 3; i++) {
+                    cx += event.touches[i].clientX;
+                    cy += event.touches[i].clientY;
+                }
+                cx /= 3;
+                cy /= 3;
+
+                // Calculate delta from start position
+                const deltaX = cx - threeFingerStartPan.x;
+                const deltaY = cy - threeFingerStartPan.y;
+
+                // Apply pan manually (matching OrbitControls pan behavior)
+                const offset = new THREE.Vector3();
+                const position = camera.position.clone();
+                offset.copy(position).sub(controls.target);
+                const targetDistance = offset.length() * Math.tan((camera.fov / 2) * Math.PI / 180.0);
+
+                // Pan left/right and up/down based on finger movement
+                const v = new THREE.Vector3();
+                v.setFromMatrixColumn(camera.matrix, 0); // camera X axis
+                v.multiplyScalar(-2 * deltaX * targetDistance / element.clientHeight);
+                offset.add(v);
+
+                v.setFromMatrixColumn(camera.matrix, 1); // camera Y axis
+                v.multiplyScalar(2 * deltaY * targetDistance / element.clientHeight);
+                offset.add(v);
+
+                // Update camera position and controls target
+                position.sub(controls.target);
+                position.add(offset);
+                camera.position.copy(position);
+
+                // Update start position for next move
+                threeFingerStartPan.set(cx, cy);
+            }
+        }, { passive: false });
+
+        element.addEventListener('touchend', function(event) {
+            if (event.touches.length < 3) {
+                // Re-enable OrbitControls when fewer than 3 fingers remain
+                controls.enabled = true;
+            }
+        });
+
+        element.addEventListener('touchcancel', function(event) {
+            // Re-enable OrbitControls on touch cancel
+            controls.enabled = true;
+        });
 
         // Grid helper (XZ plane, Y-up)
         gridHelper = new THREE.GridHelper(
