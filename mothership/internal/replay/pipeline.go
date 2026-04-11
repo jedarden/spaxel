@@ -4,10 +4,7 @@
 package replay
 
 import (
-	"log"
 	"sync"
-
-	"github.com/spaxel/mothership/internal/ingestion"
 )
 
 // Pipeline processes CSI frames through the signal processing pipeline

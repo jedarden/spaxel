@@ -25,11 +25,13 @@ func NewFleetHandler(healer *SelfHealManager, registry *Registry) *FleetHandler 
 
 // RegisterRoutes mounts fleet endpoints on r.
 //
+//	GET  /api/fleet           — all provisioned nodes with full details
 //	GET  /api/fleet/health   — current fleet health status
 //	GET  /api/fleet/history  — recent optimisation history
 //	POST /api/fleet/optimise — trigger manual re-optimisation
 //	GET  /api/fleet/simulate — simulate node removal impact
 func (h *FleetHandler) RegisterRoutes(r chi.Router) {
+	r.Get("/api/fleet", h.getFleet)
 	r.Get("/api/fleet/health", h.getFleetHealth)
 	r.Get("/api/fleet/history", h.getFleetHistory)
 	r.Post("/api/fleet/optimise", h.triggerOptimise)
@@ -113,6 +115,62 @@ func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, resp)
+}
+
+// getFleet returns all provisioned nodes with full details.
+// This is the same as /api/fleet/health but without the health metadata,
+// providing a flat list of nodes for the fleet status page.
+func (h *FleetHandler) getFleet(w http.ResponseWriter, r *http.Request) {
+	nodes, err := h.reg.GetAllNodes()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	roles := h.healer.GetCurrentRoles()
+	onlineSet := make(map[string]struct{})
+	for _, mac := range h.healer.GetOnlineNodes() {
+		onlineSet[mac] = struct{}{}
+	}
+
+	entries := make([]fleetNodeEntry, 0, len(nodes))
+	for _, n := range nodes {
+		if n.Virtual {
+			continue // Skip virtual nodes
+		}
+		role := n.Role
+		if r, ok := roles[n.MAC]; ok {
+			role = r
+		}
+		_, online := onlineSet[n.MAC]
+
+		// Calculate uptime: if online, use time since first seen; otherwise, time since went offline
+		var uptimeSeconds int64
+		if online {
+			uptimeSeconds = int64(time.Since(n.FirstSeenAt).Seconds())
+		} else if !n.WentOfflineAt.IsZero() {
+			uptimeSeconds = int64(n.WentOfflineAt.Sub(n.FirstSeenAt).Seconds())
+		}
+
+		entries = append(entries, fleetNodeEntry{
+			MAC:            n.MAC,
+			Name:           n.Name,
+			Role:           role,
+			HealthScore:    n.HealthScore,
+			Online:         online,
+			PosX:           n.PosX,
+			PosY:           n.PosY,
+			PosZ:           n.PosZ,
+			FirmwareVersion: n.FirmwareVersion,
+			UptimeSeconds:  uptimeSeconds,
+			LastSeenMs:     n.LastSeenAt.UnixMilli(),
+		})
+	}
+
+	if entries == nil {
+		entries = []fleetNodeEntry{}
+	}
+	writeJSON(w, entries)
 }
 
 // fleetHistoryEntry is the wire format for history items

@@ -110,6 +110,7 @@ type cachedFlowMap struct {
 type FlowAccumulator struct {
 	mu      sync.RWMutex
 	db      *sql.DB
+	ownDB   bool // true if this instance opened the db and should close it
 	cellSizeM float64
 	flowCache *cachedFlowMap
 	lastPrune time.Time
@@ -121,6 +122,22 @@ type FlowAccumulator struct {
 
 	// Track last waypoint per track for sampling
 	lastWaypoints map[string][3]float64 // track_id -> last position
+}
+
+// NewFlowAccumulatorFromPath opens a SQLite database at path and creates a new flow accumulator.
+// The caller is responsible for calling Close() to flush pending writes.
+func NewFlowAccumulatorFromPath(path string) (*FlowAccumulator, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, err
+	}
+	fa := NewFlowAccumulator(db, 0)
+	fa.ownDB = true
+	if err := fa.InitSchema(); err != nil {
+		db.Close() //nolint:errcheck
+		return nil, err
+	}
+	return fa, nil
 }
 
 // NewFlowAccumulator creates a new flow accumulator.
@@ -179,7 +196,7 @@ func (f *FlowAccumulator) InitSchema() error {
 		cell_count        INTEGER NOT NULL,
 		last_computed     DATETIME NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
 	);
-	\`
+	`
 	_, err := f.db.Exec(schema)
 	return err
 }
@@ -291,10 +308,10 @@ func (f *FlowAccumulator) insertTrajectories(segments []TrajectorySegment) error
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(\`
+	stmt, err := tx.Prepare(`
 		INSERT INTO trajectory_segments (id, person_id, from_x, from_y, from_z, to_x, to_y, to_z, speed, timestamp)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	\`)
+	`)
 	if err != nil {
 		return err
 	}
@@ -330,14 +347,14 @@ func (f *FlowAccumulator) upsertDwell(dwell []DwellAccumulator) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(\`
+	stmt, err := tx.Prepare(`
 		INSERT INTO dwell_accumulator (grid_x, grid_y, person_id, count, dwell_ms, last_updated)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(grid_x, grid_y, person_id) DO UPDATE SET
 			count = count + excluded.count,
 			dwell_ms = dwell_ms + excluded.dwell_ms,
 			last_updated = excluded.last_updated
-	\`)
+	`)
 	if err != nil {
 		return err
 	}
@@ -377,11 +394,11 @@ func (f *FlowAccumulator) ComputeFlowMap(personID *string, since, until *time.Ti
 	}
 
 	// Build query with filters
-	query := \`
+	query := `
 		SELECT from_x, from_y, from_z, to_x, to_y, to_z
 		FROM trajectory_segments
 		WHERE 1=1
-	\`
+	`
 	args := []interface{}{}
 
 	if personID != nil && *personID != "" {
@@ -479,11 +496,11 @@ func (f *FlowAccumulator) ComputeFlowMap(personID *string, since, until *time.Ti
 // ComputeDwellHeatmap computes a dwell heatmap from dwell accumulator data.
 // Optionally filters by personID.
 func (f *FlowAccumulator) ComputeDwellHeatmap(personID *string) (*DwellHeatmap, error) {
-	query := \`
+	query := `
 		SELECT grid_x, grid_y, SUM(count) as total_count, SUM(dwell_ms) as total_dwell_ms
 		FROM dwell_accumulator
 		WHERE 1=1
-	\`
+	`
 	args := []interface{}{}
 
 	if personID != nil && *personID != "" {
@@ -761,10 +778,10 @@ func (f *FlowAccumulator) saveCorridors(corridors []DetectedCorridor) error {
 	}
 
 	// Insert new corridors
-	stmt, err := tx.Prepare(\`
+	stmt, err := tx.Prepare(`
 		INSERT INTO detected_corridors (id, centroid_x, centroid_y, centroid_z, direction_x, direction_y, length_m, width_m, cell_count, last_computed)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	\`)
+	`)
 	if err != nil {
 		return err
 	}
@@ -789,11 +806,11 @@ func (f *FlowAccumulator) saveCorridors(corridors []DetectedCorridor) error {
 
 // GetCorridors retrieves detected corridors from the database.
 func (f *FlowAccumulator) GetCorridors() ([]DetectedCorridor, error) {
-	rows, err := f.db.Query(\`
+	rows, err := f.db.Query(`
 		SELECT id, centroid_x, centroid_y, centroid_z, direction_x, direction_y, length_m, width_m, cell_count, last_computed
 		FROM detected_corridors
 		ORDER BY cell_count DESC
-	\`)
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -856,7 +873,13 @@ func (f *FlowAccumulator) Flush() error {
 
 // Close cleans up resources.
 func (f *FlowAccumulator) Close() error {
-	return f.Flush()
+	if err := f.Flush(); err != nil {
+		return err
+	}
+	if f.ownDB && f.db != nil {
+		return f.db.Close()
+	}
+	return nil
 }
 
 // Helper functions
@@ -964,4 +987,47 @@ func (d *DetectedCorridor) ToJSON() ([]byte, error) {
 // ToCorridorsJSON serializes a slice of DetectedCorridors to JSON.
 func ToCorridorsJSON(corridors []DetectedCorridor) ([]byte, error) {
 	return json.Marshal(corridors)
+}
+
+// TrackUpdate represents a single track position update for the flow accumulator.
+type TrackUpdate struct {
+	ID       int     `json:"id"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	Z        float64 `json:"z"`
+	VX       float64 `json:"vx"`
+	VY       float64 `json:"vy"`
+	VZ       float64 `json:"vz"`
+	PersonID string  `json:"person_id,omitempty"`
+}
+
+// UpdateTrack processes a track update using the TrackUpdate struct.
+// This is a convenience wrapper around AddTrackUpdate.
+func (f *FlowAccumulator) UpdateTrack(update TrackUpdate) {
+	trackID := fmt.Sprintf("track-%d", update.ID)
+	f.AddTrackUpdate(trackID, update.X, update.Y, update.Z, update.VX, update.VY, update.VZ, update.PersonID)
+}
+
+// GetFlowMap computes the flow map from trajectory segments.
+// Optionally filters by personID and time range.
+// This is a convenience wrapper around ComputeFlowMap that accepts string timestamps.
+func (f *FlowAccumulator) GetFlowMap(personID string, since, until time.Time) (*FlowMap, error) {
+	var personIDPtr *string
+	if personID != "" {
+		personIDPtr = &personID
+	}
+	return f.ComputeFlowMap(personIDPtr, &since, &until)
+}
+
+// PruneOldSegments removes old trajectory and dwell data.
+// This is a convenience wrapper around PruneOldData.
+func (f *FlowAccumulator) PruneOldSegments() error {
+	return f.PruneOldData()
+}
+
+// ComputeCorridors detects corridor regions based on flow data.
+// This is a convenience wrapper around DetectCorridors that returns only the corridors.
+func (f *FlowAccumulator) ComputeCorridors() error {
+	_, err := f.DetectCorridors()
+	return err
 }

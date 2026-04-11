@@ -10,14 +10,16 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/replay"
 )
 
-// mockRecordingStore is a mock implementation of RecordingStore for testing.
+// mockRecordingStore is a mock implementation of FrameReader for testing.
 type mockRecordingStore struct {
-	stats     replay.Stats
-	scanFunc  func(fn func(recvTimeNS int64, frame []byte) bool) error
-	closed    bool
-	closeErr  error
+	stats        replay.Stats
+	scanFunc     func(fn func(recvTimeNS int64, frame []byte) bool) error
+	scanRangeFunc func(fromNS, toNS int64, fn func(recvTimeNS int64, frame []byte) bool) error
+	closed       bool
+	closeErr     error
 }
 
 func (m *mockRecordingStore) Stats() replay.Stats {
@@ -33,6 +35,16 @@ func (m *mockRecordingStore) Scan(fn func(recvTimeNS int64, frame []byte) bool) 
 	return nil
 }
 
+func (m *mockRecordingStore) ScanRange(fromNS, toNS int64, fn func(recvTimeNS int64, frame []byte) bool) error {
+	if m.scanRangeFunc != nil {
+		return m.scanRangeFunc(fromNS, toNS, fn)
+	}
+	// Default: call Scan with the function
+	return m.Scan(func(recvTimeNS int64, frame []byte) bool {
+		return fn(recvTimeNS, frame)
+	})
+}
+
 func (m *mockRecordingStore) Close() error {
 	m.closed = true
 	if m.closeErr != nil {
@@ -42,12 +54,12 @@ func (m *mockRecordingStore) Close() error {
 }
 
 // newTestReplayHandler creates a ReplayHandler with a mock store.
-func newTestReplayHandler(t *testing.T) *ReplayHandler {
+func newTestReplayHandler(t *testing.T, hasData bool) *ReplayHandler {
 	t.Helper()
 
 	store := &mockRecordingStore{
 		stats: replay.Stats{
-			HasData:   true,
+			HasData:   hasData,
 			WritePos:  5000,
 			OldestPos: 32,
 			FileSize:  360 * 1024 * 1024,
@@ -139,8 +151,7 @@ func TestListSessions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newTestReplayHandler(t)
-			handler.store.(*mockRecordingStore).stats.HasData = tt.hasData
+			handler := newTestReplayHandler(t, tt.hasData)
 
 			r := setupReplayRouter(handler)
 			req := httptest.NewRequest("GET", "/api/replay/sessions", nil)
@@ -311,7 +322,7 @@ func TestStartSession(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newTestReplayHandler(t)
+			handler := newTestReplayHandler(t, true)
 			r := setupReplayRouter(handler)
 
 			var body []byte
@@ -431,7 +442,7 @@ func TestStopSession(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newTestReplayHandler(t)
+			handler := newTestReplayHandler(t, true)
 
 			// For the "malformed JSON" test, we need special handling
 			if tt.name == "malformed JSON" {
@@ -594,7 +605,7 @@ func TestSeek(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newTestReplayHandler(t)
+			handler := newTestReplayHandler(t, true)
 			sessionID := tt.setup(handler)
 			if sessionID != "" {
 				tt.body.SessionID = sessionID
@@ -749,7 +760,7 @@ func TestTune(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newTestReplayHandler(t)
+			handler := newTestReplayHandler(t, true)
 
 			// Special handling for malformed JSON test
 			if tt.name == "malformed JSON" {
@@ -795,7 +806,7 @@ func TestTune(t *testing.T) {
 
 // TestReplaySessionLifecycle tests the full lifecycle: start -> tune -> seek -> stop.
 func TestReplaySessionLifecycle(t *testing.T) {
-	handler := newTestReplayHandler(t)
+	handler := newTestReplayHandler(t, true)
 	r := setupReplayRouter(handler)
 
 	pastTime := time.Now().Add(-1 * time.Hour).Format(time.RFC3339Nano)
@@ -907,7 +918,7 @@ func TestReplaySessionLifecycle(t *testing.T) {
 
 // TestMultipleSessions tests managing multiple concurrent replay sessions.
 func TestMultipleSessions(t *testing.T) {
-	handler := newTestReplayHandler(t)
+	handler := newTestReplayHandler(t, true)
 	r := setupReplayRouter(handler)
 
 	pastTime1 := time.Now().Add(-2 * time.Hour).Format(time.RFC3339Nano)
@@ -998,7 +1009,7 @@ func TestMultipleSessions(t *testing.T) {
 
 // TestGetSessions tests the GetSessions method.
 func TestGetSessions(t *testing.T) {
-	handler := newTestReplayHandler(t)
+	handler := newTestReplayHandler(t, true)
 
 	// Initially empty
 	sessions := handler.GetSessions()
@@ -1027,7 +1038,7 @@ func TestGetSessions(t *testing.T) {
 
 // TestGetReplayPath tests the GetReplayPath method.
 func TestGetReplayPath(t *testing.T) {
-	handler := newTestReplayHandler(t)
+	handler := newTestReplayHandler(t, true)
 
 	path := handler.GetReplayPath()
 	if path != "/data/csi_replay.bin" {

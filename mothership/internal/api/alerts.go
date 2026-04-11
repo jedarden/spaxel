@@ -3,12 +3,13 @@
 package api
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/analytics"
+	"github.com/spaxel/mothership/internal/events"
 	"github.com/spaxel/mothership/internal/falldetect"
 	"github.com/spaxel/mothership/internal/fleet"
 )
@@ -145,18 +146,19 @@ func (h *AlertsHandler) handleGetActiveAlerts(w http.ResponseWriter, r *http.Req
 		nodes, err := h.fleetRegistry.GetAllNodes()
 		if err == nil {
 			for _, node := range nodes {
-				if node.Status == "offline" {
+				if !node.WentOfflineAt.IsZero() {
 					alert := Alert{
 						ID:        "node-" + node.MAC,
 						Type:      "node_offline",
 						Severity:  "warning",
 						Title:     "Node offline",
 						Message:   "Node " + node.Name + " went offline",
-						Timestamp: node.LastSeen.Unix() * 1000,
+						Timestamp: node.WentOfflineAt.Unix() * 1000,
 						Data: map[string]interface{}{
-							"mac":   node.MAC,
-							"name":  node.Name,
-							"status": node.Status,
+							"mac":          node.MAC,
+							"name":         node.Name,
+							"status":       "offline",
+							"last_seen_at": node.LastSeenAt,
 						},
 					}
 					alerts = append(alerts, alert)
@@ -173,7 +175,7 @@ func (h *AlertsHandler) handleGetActiveAlerts(w http.ResponseWriter, r *http.Req
 		Count:  len(alerts),
 	}
 
-	writeJSON(w, response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // handleAcknowledgeAlert acknowledges an alert by ID.
@@ -207,7 +209,7 @@ func (h *AlertsHandler) handleAcknowledgeAlert(w http.ResponseWriter, r *http.Re
 		}
 	case "anomaly":
 		if h.anomalyDetector != nil {
-			err = h.anomalyDetector.AcknowledgeAnomaly(id)
+			err = h.anomalyDetector.AcknowledgeAnomaly(id, "", "")
 		} else {
 			log.Printf("[WARN] Anomaly detector not available for acknowledgment")
 		}
@@ -225,7 +227,7 @@ func (h *AlertsHandler) handleAcknowledgeAlert(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	writeJSON(w, map[string]string{"status": "acknowledged", "id": alertID})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "acknowledged", "id": alertID})
 }
 
 // sortAlerts sorts alerts by severity and timestamp.
@@ -272,7 +274,7 @@ func (h *AlertsHandler) formatFallMessage(fall falldetect.FallEvent) string {
 }
 
 // formatAnomalyMessage formats an anomaly into a human-readable message.
-func (h *AlertsHandler) formatAnomalyMessage(anomaly analytics.Anomaly) string {
+func (h *AlertsHandler) formatAnomalyMessage(anomaly *events.AnomalyEvent) string {
 	// Format the anomaly message based on its type and details
 	return "Unusual activity detected"
 }
@@ -315,7 +317,3 @@ func (h *AlertsHandler) handleAcknowledgeAnomaly(w http.ResponseWriter, r *http.
 	// This is handled by the unified handler
 }
 
-func writeJSON(w http.ResponseWriter, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v) //nolint:errcheck
-}

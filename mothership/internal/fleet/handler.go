@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/events"
+	"github.com/spaxel/mothership/internal/ota"
 )
 
 // NodeIdentifier sends identify commands to connected nodes.
@@ -22,11 +24,17 @@ type NodeIdentifier interface {
 type Handler struct {
 	mgr    *Manager
 	nodeID NodeIdentifier
+	otaMgr *ota.Manager
 }
 
 // NewHandler creates a new fleet REST handler backed by mgr.
 func NewHandler(mgr *Manager) *Handler {
 	return &Handler{mgr: mgr}
+}
+
+// SetOTAManager sets the OTA manager for handling firmware updates.
+func (h *Handler) SetOTAManager(mgr *ota.Manager) {
+	h.otaMgr = mgr
 }
 
 // SetNodeIdentifier sets the node identifier for sending identify commands.
@@ -40,9 +48,11 @@ func (h *Handler) SetNodeIdentifier(ni NodeIdentifier) {
 //	GET    /api/nodes/{mac}          — get single node
 //	POST   /api/nodes/{mac}/role     — override node role
 //	PUT    /api/nodes/{mac}/position — update node 3D position
+//	PATCH  /api/nodes/{mac}/label    — update node label
 //	DELETE /api/nodes/{mac}          — delete a node
 //	POST   /api/nodes/{mac}/identify — blink LED for identification
 //	POST   /api/nodes/{mac}/reboot   — reboot node
+//	POST   /api/nodes/{mac}/ota      — trigger OTA update
 //	POST   /api/nodes/update-all     — OTA update all nodes
 //	POST   /api/nodes/rebaseline-all — re-baseline all links
 //	POST   /api/nodes/virtual        — add a virtual planning node
@@ -56,9 +66,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/nodes/{mac}", h.getNode)
 	r.Post("/api/nodes/{mac}/role", h.setNodeRole)
 	r.Put("/api/nodes/{mac}/position", h.updateNodePosition)
+	r.Patch("/api/nodes/{mac}/label", h.updateNodeLabel)
 	r.Delete("/api/nodes/{mac}", h.deleteNode)
 	r.Post("/api/nodes/{mac}/identify", h.identifyNode)
+	r.Post("/api/nodes/{mac}/locate", h.identifyNode) // alias for identify
 	r.Post("/api/nodes/{mac}/reboot", h.rebootNode)
+	r.Post("/api/nodes/{mac}/ota", h.triggerNodeOTA)
 	r.Post("/api/nodes/update-all", h.updateAllNodes)
 	r.Post("/api/nodes/rebaseline-all", h.rebaselineAllNodes)
 	r.Post("/api/nodes/virtual", h.addVirtualNode)
@@ -439,4 +452,80 @@ func (h *Handler) setSystemMode(w http.ResponseWriter, r *http.Request) {
 		Reason: reason,
 	}
 	writeJSON(w, resp)
+}
+
+// ── Label and OTA endpoints ─────────────────────────────────────────────────────
+
+type updateLabelRequest struct {
+	Label string `json:"label"`
+}
+
+func (h *Handler) updateNodeLabel(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// Verify node exists.
+	if _, err := h.mgr.registry.GetNode(mac); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var req updateLabelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.mgr.registry.SetNodeLabel(mac, req.Label); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.mgr.BroadcastRegistry()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type triggerOTARequest struct {
+	Version string `json:"version,omitempty"`
+}
+
+func (h *Handler) triggerNodeOTA(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// Verify node exists.
+	node, err := h.mgr.registry.GetNode(mac)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var req triggerOTARequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Trigger OTA if manager is available.
+	if h.otaMgr != nil {
+		version := req.Version
+		if version == "" {
+			// Default to latest version
+			version = h.otaMgr.GetLatestVersion()
+		}
+		if err := h.otaMgr.SendOTA(mac, version); err != nil {
+			http.Error(w, fmt.Sprintf("failed to trigger OTA: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"ok":           true,
+		"target_mac":   mac,
+		"target_label": node.Label,
+		"version":      req.Version,
+	})
 }

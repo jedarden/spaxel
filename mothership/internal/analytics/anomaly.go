@@ -749,6 +749,7 @@ func (d *Detector) CheckAutoAway() *events.SystemModeChangeEvent {
 // setSystemMode sets the system mode and fires the mode change callback.
 // Must be called while holding the mutex.
 func (d *Detector) setSystemMode(newMode events.SystemMode, reason, personName string) *events.SystemModeChangeEvent {
+	oldSecurityMode := d.securityMode
 	oldMode := d.securityModeToSystemMode(d.securityMode)
 	event := &events.SystemModeChangeEvent{
 		PreviousMode: oldMode,
@@ -775,7 +776,7 @@ func (d *Detector) setSystemMode(newMode events.SystemMode, reason, personName s
 
 	// Broadcast to dashboard
 	if d.onSecurityModeChange != nil {
-		go d.onSecurityModeChange(oldMode, d.securityMode, reason)
+		go d.onSecurityModeChange(oldSecurityMode, d.securityMode, reason)
 	}
 
 	// Persist to database

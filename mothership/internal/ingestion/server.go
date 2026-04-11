@@ -277,11 +277,6 @@ func (s *Server) isChannelOverHalfFull() bool {
 	return len(s.frameGauge) > frameGaugeSize/2
 }
 
-// GetConnectedMACs returns the MACs of currently-connected nodes.
-func (s *Server) GetConnectedMACs() []string {
-	return s.GetConnectedNodes()
-}
-
 // SendConfigToMAC sends a rate config command to a connected node by MAC.
 // varianceThreshold > 0 enables on-device amplitude variance monitoring.
 func (s *Server) SendConfigToMAC(mac string, rateHz int, varianceThreshold float64) {

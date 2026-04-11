@@ -1870,17 +1870,26 @@ const Viz3D = (function () {
      * Fetch flow data from API and update visualization.
      */
     function fetchFlowData() {
-        var since = 0;
-        var now = Date.now() / 1000;
+        var since = null;
+        var now = new Date();
         if (_flowTimeFilter === '7d') {
-            since = now - 7 * 24 * 3600;
+            since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         } else if (_flowTimeFilter === '30d') {
-            since = now - 30 * 24 * 3600;
+            since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         }
 
-        var url = '/api/analytics/flow?since=' + since + '&until=' + now;
+        var url = '/api/analytics/flow';
+        var params = [];
+        if (since) {
+            params.push('since=' + encodeURIComponent(since.toISOString()));
+        }
+        params.push('until=' + encodeURIComponent(now.toISOString()));
         if (_flowPersonFilter) {
-            url += '&person_id=' + encodeURIComponent(_flowPersonFilter);
+            params.push('person_id=' + encodeURIComponent(_flowPersonFilter));
+        }
+
+        if (params.length > 0) {
+            url += '?' + params.join('&');
         }
 
         fetch(url)
@@ -1941,15 +1950,17 @@ const Viz3D = (function () {
 
         if (!_flowData || !_flowData.cells) return;
 
-        var gridSize = _flowData.grid_size || 0.25;
+        var gridSize = _flowData.cell_size_m || 0.25;
 
         _flowData.cells.forEach(function(cell) {
+            // Note: API returns grid_x, grid_y where Y in floor plan = Z in 3D
             var cx = (cell.grid_x + 0.5) * gridSize;
-            var cz = (cell.grid_z + 0.5) * gridSize;
+            var cz = (cell.grid_y + 0.5) * gridSize;
 
-            // Direction vector
-            var dir = new THREE.Vector3(cell.vector_x, 0, cell.vector_z).normalize();
-            var length = Math.min(Math.sqrt(cell.vector_x * cell.vector_x + cell.vector_z * cell.vector_z) * 0.5 + 0.1, 0.4);
+            // Direction vector: API returns vx, vy where Y in floor plan = Z in 3D
+            var dir = new THREE.Vector3(cell.vx, 0, cell.vy).normalize();
+            var magnitude = Math.sqrt(cell.vx * cell.vx + cell.vy * cell.vy);
+            var length = Math.min(magnitude * 0.5 + 0.1, 0.4);
 
             // Color based on segment count (blue to red)
             var intensity = Math.min(cell.segment_count / 50, 1);
@@ -1988,11 +1999,12 @@ const Viz3D = (function () {
 
         if (!_dwellData || !_dwellData.cells) return;
 
-        var gridSize = 0.25; // GridCellSize
+        var gridSize = _dwellData.cell_size_m || 0.25;
 
         _dwellData.cells.forEach(function(cell) {
+            // Note: API returns grid_x, grid_y where Y in floor plan = Z in 3D
             var cx = (cell.grid_x + 0.5) * gridSize;
-            var cz = (cell.grid_z + 0.5) * gridSize;
+            var cz = (cell.grid_y + 0.5) * gridSize;
 
             // Color: blue (low) -> green (mid) -> red (high)
             var normalized = cell.normalized;
@@ -2042,13 +2054,16 @@ const Viz3D = (function () {
 
         _corridorData.forEach(function(corridor) {
             // Create an extruded rectangle for the corridor region
+            // Note: API returns centroid_xyz as [x, y, z] and dominant_direction_xy as [x, y]
             var length = corridor.length_m;
             var width = corridor.width_m;
-            var cx = corridor.centroid_x;
-            var cz = corridor.centroid_z;
+            var centroid = corridor.centroid_xyz || [0, 0, 0];
+            var cx = centroid[0];
+            var cz = centroid[2];  // Z in 3D space
 
-            // Compute rotation from dominant direction
-            var angle = Math.atan2(corridor.dominant_dir_x, corridor.dominant_dir_z);
+            // Compute rotation from dominant direction (x, y in floor plan -> x, z in 3D)
+            var direction = corridor.dominant_direction_xy || [1, 0];
+            var angle = Math.atan2(direction[1], direction[0]);
 
             var geo = new THREE.PlaneGeometry(length, width);
             var mat = new THREE.MeshBasicMaterial({
@@ -2122,6 +2137,33 @@ const Viz3D = (function () {
             personFilter: _flowPersonFilter,
             timeFilter: _flowTimeFilter
         };
+    }
+
+    /**
+     * Set flow data directly (used by crowdflow.js module).
+     * @param {Object} data - Flow map data from API
+     */
+    function setFlowData(data) {
+        _flowData = data;
+        rebuildFlowArrows();
+    }
+
+    /**
+     * Set dwell heatmap data directly (used by crowdflow.js module).
+     * @param {Object} data - Dwell heatmap data from API
+     */
+    function setDwellData(data) {
+        _dwellData = data;
+        rebuildDwellPlanes();
+    }
+
+    /**
+     * Set corridor data directly (used by crowdflow.js module).
+     * @param {Array} data - Corridor data from API
+     */
+    function setCorridorData(data) {
+        _corridorData = data;
+        rebuildCorridorMeshes();
     }
 
     // ── Anomaly Zone Pulsing ─────────────────────────────────────────────────────
@@ -3289,6 +3331,9 @@ const Viz3D = (function () {
         setFlowTimeFilter: setFlowTimeFilter,
         refreshAnalyticsData: refreshAnalyticsData,
         getAnalyticsLayerState: getAnalyticsLayerState,
+        setFlowData: setFlowData,
+        setDwellData: setDwellData,
+        setCorridorData: setCorridorData,
         // Blob feedback API
         initBlobInteraction: initBlobInteraction,
         submitBlobFeedback: submitBlobFeedback,
@@ -3609,6 +3654,57 @@ const Viz3D = (function () {
         scene: function() { return _scene; },
         camera: function() { return _camera; },
         controls: function() { return _controls; },
-        followId: function() { return _followId; }
+        followId: function() { return _followId; },
+
+        // Crowd Flow Visualization
+        setFlowLayerVisible: setFlowLayerVisible,
+        setDwellLayerVisible: setDwellLayerVisible,
+        setCorridorLayerVisible: setCorridorLayerVisible,
+        setFlowTimeFilter: setFlowTimeFilter,
+        setFlowData: setFlowData,
+        setDwellData: setDwellData,
+        setCorridorData: setCorridorData
     };
 })();
+
+// ── Global wrapper functions for HTML event handlers ─────────────────────────────
+
+/**
+ * Toggle flow layer visibility (called from HTML checkbox).
+ * @param {boolean} visible - Whether to show the layer
+ */
+function toggleFlowLayer(visible) {
+    if (window.Viz3D) {
+        window.Viz3D.setFlowLayerVisible(visible);
+    }
+}
+
+/**
+ * Toggle dwell heatmap layer visibility (called from HTML checkbox).
+ * @param {boolean} visible - Whether to show the layer
+ */
+function toggleDwellLayer(visible) {
+    if (window.Viz3D) {
+        window.Viz3D.setDwellLayerVisible(visible);
+    }
+}
+
+/**
+ * Toggle corridor overlay layer visibility (called from HTML checkbox).
+ * @param {boolean} visible - Whether to show the layer
+ */
+function toggleCorridorLayer(visible) {
+    if (window.Viz3D) {
+        window.Viz3D.setCorridorLayerVisible(visible);
+    }
+}
+
+/**
+ * Set time filter for flow data (called from HTML select).
+ * @param {string} timeFilter - '7d', '30d', or 'all'
+ */
+function setFlowTimeFilter(timeFilter) {
+    if (window.Viz3D) {
+        window.Viz3D.setFlowTimeFilter(timeFilter);
+    }
+}

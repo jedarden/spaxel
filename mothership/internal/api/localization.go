@@ -2,7 +2,6 @@
 package api
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
@@ -117,14 +116,8 @@ func (h *LocalizationHandler) resetWeights(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Reset all weights to default
-	weights := h.weightLearner.GetLearnedWeights()
-	weights.mu.Lock()
-	weights.linkWeights = make(map[string]float64)
-	weights.linkSigmas = make(map[string]float64)
-	weights.linkStats = make(map[string]*localization.LinkLearningStats)
-	weights.lastUpdate = time.Now()
-	weights.mu.Unlock()
+	// Reset all weights to default by creating a fresh LearnedWeights
+	weights := localization.NewLearnedWeights()
 
 	// Persist reset
 	if h.weightStore != nil {
@@ -424,14 +417,17 @@ func (h *LocalizationHandler) getSelfImprovingStatus(w http.ResponseWriter, r *h
 	weights := h.selfImprovingLocalizer.GetLearnedWeights()
 	improvementStats := h.selfImprovingLocalizer.GetImprovementStats()
 	improvementHistory := h.selfImprovingLocalizer.GetImprovementHistory()
-	gtStats, _ := h.selfImprovingLocalizer.GetGroundTruthProvider().GetObservationCount()
+	var bleObsCount int
+	if provider, ok := h.selfImprovingLocalizer.GetGroundTruthProvider().(*localization.BLEGroundTruthProvider); ok {
+		bleObsCount = provider.GetObservationCount()
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"learning_progress":       progress,
 		"learned_weights":        weights,
 		"improvement_stats":      improvementStats,
 		"improvement_history":    improvementHistory,
-		"ble_observations_count": gtStats,
+		"ble_observations_count": bleObsCount,
 	})
 }
 

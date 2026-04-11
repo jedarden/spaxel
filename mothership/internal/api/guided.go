@@ -3,7 +3,6 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -38,6 +37,9 @@ func NewGuidedHandler(guidedMgr interface {
 	MarkQualityBannerShown(zoneID int)
 	TriggerCalibrationComplete(zoneID int, qualityBefore, qualityAfter float64)
 	TriggerNodeOffline(mac string, offlineDuration float64)
+	ShouldShowTooltip(featureID string) bool
+	GetTooltip(featureID string) (diagnostics.Tooltip, bool)
+	MarkTooltipShown(featureID string)
 }) *GuidedHandler {
 	return &GuidedHandler{
 		guidedMgr: guidedMgr,
@@ -230,7 +232,7 @@ func (h *GuidedHandler) handleGetIssues(w http.ResponseWriter, r *http.Request) 
 func (h *GuidedHandler) handleDismissQualityIssue(w http.ResponseWriter, r *http.Request) {
 	zoneID := chi.URLParam(r, "zoneId")
 	var zoneIDInt int
-	if _, err := json.Unmarshal([]byte(zoneID), &zoneIDInt); err != nil {
+	if err := json.Unmarshal([]byte(zoneID), &zoneIDInt); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid zone ID")
 		return
 	}
@@ -339,7 +341,7 @@ func (h *GuidedHandler) handleGetNodeTroubleshoot(w http.ResponseWriter, r *http
 	mac := chi.URLParam(r, "mac")
 
 	// Get node info
-	var nodeName, nodeRole, lastSeen string
+	var nodeName, nodeRole string
 	var offlineDuration float64
 
 	if h.nodesHandler != nil {

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/prediction"
 )
 
@@ -312,7 +313,6 @@ func TestLogPredictionAccuracy(t *testing.T) {
 	defer accuracy.Close()
 
 	// Record some predictions
-	now := time.Now()
 	_ = accuracy.RecordPrediction("person1", "zone_a", "zone_b", 0.8, 15*time.Minute)
 	_ = accuracy.RecordPrediction("person1", "zone_a", "zone_b", 0.9, 15*time.Minute)
 

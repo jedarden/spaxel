@@ -19,8 +19,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// MQTTClient interface for MQTT publishing.
-type MQTTClient interface {
+// VolumeMQTTClient interface for MQTT publishing.
+type VolumeMQTTClient interface {
 	Publish(topic string, payload []byte) error
 	IsConnected() bool
 }
@@ -41,7 +41,7 @@ type VolumeTriggersHandler struct {
 	mu          sync.RWMutex
 	store       *volume.Store
 	httpClient  *http.Client
-	mqttClient   MQTTClient
+	mqttClient   VolumeMQTTClient
 	notifyClient NotificationClient
 	wsBroadcaster WSBroadcaster
 }
@@ -119,8 +119,8 @@ func NewVolumeTriggersHandler(dbPath string) (*VolumeTriggersHandler, error) {
 	return h, nil
 }
 
-// SetMQTTClient sets the MQTT client for action execution.
-func (h *VolumeTriggersHandler) SetMQTTClient(client MQTTClient) {
+// SetVolumeMQTTClient sets the MQTT client for action execution.
+func (h *VolumeTriggersHandler) SetVolumeMQTTClient(client VolumeMQTTClient) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.mqttClient = client

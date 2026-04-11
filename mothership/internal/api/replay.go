@@ -42,8 +42,17 @@ type _replaySession struct {
 	CreatedAt string
 }
 
+// SessionInfo represents a public view of a replay session.
+type SessionInfo struct {
+	ID        string `json:"id"`
+	FromMS    int64  `json:"from_ms"`
+	ToMS      int64  `json:"to_ms"`
+	CurrentMS int64  `json:"current_ms"`
+	State     string `json:"state"`
+}
+
 // NewReplayHandler creates a new replay handler.
-func NewReplayHandler(store replay.RecordingStore) (*ReplayHandler, error) {
+func NewReplayHandler(store replay.FrameReader) (*ReplayHandler, error) {
 	// Create replay worker
 	worker := replay.NewWorker(store, nil, nil) // processor and broadcaster set later
 
@@ -51,7 +60,7 @@ func NewReplayHandler(store replay.RecordingStore) (*ReplayHandler, error) {
 		worker:   worker,
 		sessions: make(map[string]*_replaySession),
 		nextID:    1,
-	}
+	}, nil
 }
 
 // SetProcessorManager sets the signal processing pipeline for the replay worker.
@@ -78,7 +87,7 @@ func (h *ReplayHandler) SetFusionEngine(fusionEngine interface{}) {
 	// Type assertion to fusion engine interface
 	if engine, ok := fusionEngine.(interface {
 		Fuse(links []localization.LinkMotion) *localization.FusionResult
-		SetNodePosition(mac string, x, y, z float64)
+		SetNodePosition(mac string, x, z float64)
 	}); ok {
 		h.worker.SetFusionEngine(engine)
 	}
@@ -395,8 +404,7 @@ func (h *ReplayHandler) tune(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.worker.GetSession(req.SessionID)
-	if err != nil {
+	if _, err := h.worker.GetSession(req.SessionID); err != nil {
 		if err.Error() == "session not found" {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
 			return
@@ -618,20 +626,32 @@ func formatTimestamp(ms int64) string {
 	return time.Unix(ms/1000, (ms%1000)*1e6).Format(time.RFC3339Nano)
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
-}
-
 // GetReplayPath returns the path to the CSI replay binary file.
 func (h *ReplayHandler) GetReplayPath() string {
 	return "" // The recording buffer manages the file
 }
 
 // GetStoreStats returns statistics about the replay store.
-func (h *ReplayHandler) GetStoreStats() replay.Stats {
+func (h *ReplayHandler) GetStoreStats() replay.StoreStats {
 	return h.worker.GetStoreStats()
+}
+
+// GetSessions returns a list of all active replay sessions.
+func (h *ReplayHandler) GetSessions() []SessionInfo {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	sessions := make([]SessionInfo, 0, len(h.sessions))
+	for _, s := range h.sessions {
+		sessions = append(sessions, SessionInfo{
+			ID:        s.ID,
+			FromMS:    s.FromMS,
+			ToMS:      s.ToMS,
+			CurrentMS: s.CurrentMS,
+			State:     s.State,
+		})
+	}
+	return sessions
 }
 
 // Seek moves the active replay session to the target timestamp.
