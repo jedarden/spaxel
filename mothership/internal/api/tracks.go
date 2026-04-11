@@ -44,6 +44,26 @@ func NewTracksHandler(provider TracksProvider) *TracksHandler {
 	return &TracksHandler{provider: provider}
 }
 
+// signalProcessorTracksAdapter wraps *signal.ProcessorManager to implement TracksProvider.
+type signalProcessorTracksAdapter struct {
+	pm interface {
+		GetTrackedBlobs() []signal.TrackedBlob
+	}
+}
+
+func (a *signalProcessorTracksAdapter) GetTrackedBlobs() []TrackedBlob {
+	return a.pm.GetTrackedBlobs()
+}
+
+// NewTracksHandlerFromSignal creates a TracksHandler from a *signal.ProcessorManager.
+func NewTracksHandlerFromSignal(pm interface {
+	GetTrackedBlobs() []signal.TrackedBlob
+}) *TracksHandler {
+	return &TracksHandler{
+		provider: &signalProcessorTracksAdapter{pm: pm},
+	}
+}
+
 // RegisterRoutes mounts tracks endpoints on r.
 //
 // GET /api/tracks
