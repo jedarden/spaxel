@@ -30,6 +30,7 @@
     let ws = null;
     let wsReconnectTimer = null;
     let updateTimer = null;
+    let timeOfDayTimer = null;
     let currentState = {
         zones: [],
         blobs: [],
@@ -59,9 +60,6 @@
 
         // Check if we should be in ambient mode
         checkAmbientMode();
-
-        // Set up time-of-day updates
-        startTimeOfDayUpdater();
 
         console.log('[Ambient Mode] Initialized');
     }
@@ -98,8 +96,9 @@
         // Create ambient UI
         createAmbientUI();
 
-        // Set initial time period
+        // Set initial time period and start timer
         updateTimeOfDay();
+        startTimeOfDayUpdater();
 
         // Initialize renderer
         const canvasEl = document.getElementById('ambient-canvas');
@@ -218,7 +217,21 @@
      */
     function startTimeOfDayUpdater() {
         updateTimeOfDay();
-        setInterval(updateTimeOfDay, 60000); // Check every minute
+        timeOfDayTimer = setInterval(updateTimeOfDay, 60000); // Check every minute
+    }
+
+    /**
+     * Stop all timers
+     */
+    function stopUpdates() {
+        if (timeOfDayTimer) {
+            clearInterval(timeOfDayTimer);
+            timeOfDayTimer = null;
+        }
+        if (updateTimer) {
+            clearTimeout(updateTimer);
+            updateTimer = null;
+        }
     }
 
     /**

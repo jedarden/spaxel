@@ -79,9 +79,11 @@ func (h *BriefingHandler) SetNotifyService(notifySvc briefing.NotifyService) {
 // RegisterRoutes registers the briefing API routes.
 func (h *BriefingHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/briefing", h.handleGetBriefing)
+	r.Get("/api/briefing/today", h.handleGetTodayBriefing)
 	r.Get("/api/briefing/{date}", h.handleGetBriefingByDate)
 	r.Post("/api/briefing/generate", h.handleGenerateBriefing)
 	r.Get("/api/briefing/latest", h.handleGetLatestBriefing)
+	r.Post("/api/briefing/{id}/acknowledge", h.handleAcknowledgeBriefing)
 	r.Get("/api/briefing/settings", h.handleGetSettings)
 	r.Patch("/api/briefing/settings", h.handleUpdateSettings)
 	r.Post("/api/briefing/test", h.handleTestNotification)
@@ -283,6 +285,62 @@ func (h *BriefingHandler) handleTestNotification(w http.ResponseWriter, r *http.
 		"status":   "sent",
 		"briefing": b,
 	})
+}
+
+// handleGetTodayBriefing returns today's briefing, generating if needed.
+func (h *BriefingHandler) handleGetTodayBriefing(w http.ResponseWriter, r *http.Request) {
+	today := time.Now().Format("2006-01-02")
+	person := r.URL.Query().Get("person")
+
+	// First try to get existing briefing
+	b, err := h.generator.Get(today, person)
+	if err == nil {
+		// Check if it's marked as delivered
+		if !b.Delivered {
+			// Mark as delivered on first fetch
+			if err := h.generator.MarkDelivered(b.ID); err != nil {
+				log.Printf("[WARN] Failed to mark briefing as delivered: %v", err)
+			}
+			b.Delivered = true
+		}
+		writeJSON(w, b)
+		return
+	}
+
+	// No briefing exists, generate one
+	b, err = h.generator.Generate(today, person)
+	if err != nil {
+		log.Printf("[ERROR] Failed to generate today's briefing: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Save the new briefing
+	if err := h.generator.Save(b); err != nil {
+		log.Printf("[ERROR] Failed to save briefing: %v", err)
+	}
+
+	writeJSON(w, b)
+}
+
+// handleAcknowledgeBriefing marks a briefing as acknowledged by the user.
+func (h *BriefingHandler) handleAcknowledgeBriefing(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "Briefing ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Mark as acknowledged
+	if err := h.generator.MarkAcknowledged(id); err != nil {
+		log.Printf("[ERROR] Failed to acknowledge briefing: %v", err)
+		http.Error(w, "Failed to acknowledge briefing", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] Briefing %s acknowledged", id)
+
+	writeJSON(w, map[string]string{"status": "acknowledged"})
 }
 
 // GetGenerator returns the underlying briefing generator.

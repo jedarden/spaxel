@@ -13,9 +13,9 @@ import (
 
 // mockZoneProvider implements ZoneProvider for testing.
 type mockZoneProvider struct {
-	zones map[int]string
+	zones     map[int]string
 	occupancy map[int]int
-	people map[int][]string
+	people    map[int][]string
 }
 
 func (m *mockZoneProvider) GetZoneName(id int) string {
@@ -69,9 +69,9 @@ func (m *mockPersonProvider) GetPersonZone(person string) string {
 
 // mockPredictionProvider implements PredictionProvider for testing.
 type mockPredictionProvider struct {
-	predictions map[string]mockPrediction
+	predictions  map[string]mockPrediction
 	daysComplete map[string]int
-	modelReady  map[string]bool
+	modelReady   map[string]bool
 }
 
 type mockPrediction struct {
@@ -106,9 +106,9 @@ func (m *mockPredictionProvider) IsModelReady(person string) bool {
 
 // mockHealthProvider implements HealthProvider for testing.
 type mockHealthProvider struct {
-	quality   float64
-	online    int
-	total     int
+	quality       float64
+	online        int
+	total         int
 	accuracyDelta float64
 	feedbackCount int
 }

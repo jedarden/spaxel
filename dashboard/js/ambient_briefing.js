@@ -44,8 +44,7 @@
             // Set up event listeners
             setupEventListeners();
 
-            // Check if we should be listening for first detection
-            checkFirstDetectionToday();
+            // Don't check for first detection during init - it will be checked when needed
 
             console.log('[AmbientBriefing] Initialized');
         },

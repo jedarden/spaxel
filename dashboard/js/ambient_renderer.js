@@ -36,6 +36,7 @@
     let isDimmed = false;
     let alertPulseTimer = null;
     let alertPulseState = false; // for pulsing animation
+    let renderCallCount = 0; // Track number of renderFrame calls (for testing)
 
     // Current state
     let currentState = {
@@ -69,6 +70,14 @@
 
     function _getAlertPulseState() {
         return alertPulseState;
+    }
+
+    function _getRenderCallCount() {
+        return renderCallCount;
+    }
+
+    function _resetRenderCallCount() {
+        renderCallCount = 0;
     }
 
     function _enterDimMode() {
@@ -130,19 +139,16 @@
             // Update target positions for lerp
             if (state.blobs) {
                 state.blobs.forEach(blob => {
-                    targetPositions.set(blob.id, {
+                    const target = {
                         x: blob.x,
                         y: blob.y,
                         z: blob.z || 0
-                    });
+                    };
+                    targetPositions.set(blob.id, target);
 
                     // Initialize current position if this is a new blob
                     if (!currentPositions.has(blob.id)) {
-                        currentPositions.set(blob.id, {
-                            x: blob.x,
-                            y: blob.y,
-                            z: blob.z || 0
-                        });
+                        currentPositions.set(blob.id, { ...target });
                     }
                 });
 
@@ -260,11 +266,27 @@
             console.log('[AmbientRenderer] Destroyed');
         },
 
+        /**
+         * Stop the render loop (for testing)
+         */
+        stopRenderLoop() {
+            stopRenderLoop();
+        },
+
+        /**
+         * Start the render loop (for testing)
+         */
+        startRenderLoop() {
+            startRenderLoop();
+        },
+
         // Testing/internal methods
         _getCurrentState,
         _getCurrentPositions,
         _getTargetPositions,
         _getAlertPulseState,
+        _getRenderCallCount,
+        _resetRenderCallCount,
         _enterDimMode,
         _checkAmbientZonePresence
     };
@@ -316,6 +338,8 @@
 
     function renderFrame() {
         if (!ctx || !canvas) return;
+
+        renderCallCount++; // Track render calls for testing
 
         const width = canvas.width / (window.devicePixelRatio || 1);
         const height = canvas.height / (window.devicePixelRatio || 1);
@@ -570,6 +594,9 @@
                 pos.x = lerp(pos.x, target.x, LERP_FACTOR);
                 pos.y = lerp(pos.y, target.y, LERP_FACTOR);
                 pos.z = lerp(pos.z, target.z, LERP_FACTOR);
+
+                // Update the currentPositions map with the lerped position
+                currentPositions.set(blob.id, { ...pos });
             }
 
             const screenPos = worldToScreen(pos.x, pos.y, bounds);

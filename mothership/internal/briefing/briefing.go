@@ -5,21 +5,28 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
 
 // Generator produces morning briefings from sleep records, events, and system state.
 type Generator struct {
-	db            *sql.DB
-	zoneProvider  ZoneProvider
-	personProvider PersonProvider
+	db                 *sql.DB
+	zoneProvider       ZoneProvider
+	personProvider     PersonProvider
 	predictionProvider PredictionProvider
-	healthProvider   HealthProvider
+	healthProvider     HealthProvider
+	nodeProvider       NodeInfoProvider
+	weatherAPIURL      string // Optional weather API URL
+	quietHoursStart    int    // Hour when quiet hours start (default 22 = 10pm)
+	quietHoursEnd      int    // Hour when quiet hours end (default 6 = 6am)
 }
 
 // ZoneProvider provides zone information.
@@ -48,6 +55,13 @@ type HealthProvider interface {
 	GetDetectionQuality() float64
 	GetNodeCount() (online, total int)
 	GetAccuracyDelta() (percent float64, feedbackCount int)
+	GetNodeOfflineDuration(mac string) time.Duration
+}
+
+// NodeInfoProvider provides node information for system health section.
+type NodeInfoProvider interface {
+	GetNodeName(mac string) string
+	GetAllNodeMACs() []string
 }
 
 // NewGenerator creates a new briefing generator backed by the main DB.
@@ -57,7 +71,38 @@ func NewGenerator(dbPath string) (*Generator, error) {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 	db.SetMaxOpenConns(1)
-	return &Generator{db: db}, nil
+
+	// Check for weather API URL in settings
+	var weatherURL string
+	row := db.QueryRow("SELECT value_json FROM settings WHERE key = 'weather_api_url'")
+	var weatherURLJSON sql.NullString
+	if err := row.Scan(&weatherURLJSON); err == nil && weatherURLJSON.Valid {
+		weatherURL = weatherURLJSON.String
+		// Unwrap if it's JSON
+		if strings.HasPrefix(weatherURL, `"`) {
+			var url string
+			json.Unmarshal([]byte(weatherURL), &url)
+			weatherURL = url
+		}
+	}
+
+	return &Generator{
+		db:              db,
+		weatherAPIURL:   weatherURL,
+		quietHoursStart: 22, // 10pm
+		quietHoursEnd:   6,  // 6am
+	}, nil
+}
+
+// SetQuietHours sets the quiet hours range for overnight events.
+func (g *Generator) SetQuietHours(start, end int) {
+	g.quietHoursStart = start
+	g.quietHoursEnd = end
+}
+
+// SetWeatherAPIURL sets the weather API URL for weather section.
+func (g *Generator) SetWeatherAPIURL(url string) {
+	g.weatherAPIURL = url
 }
 
 // Close closes the DB connection.
@@ -73,20 +118,49 @@ func (g *Generator) SetProviders(z ZoneProvider, p PersonProvider, pr Prediction
 	g.healthProvider = h
 }
 
+// SetNodeInfoProvider sets the node info provider.
+func (g *Generator) SetNodeInfoProvider(n NodeInfoProvider) {
+	g.nodeProvider = n
+}
+
+// DailyBriefing is the primary struct for a morning briefing.
+// Alias for Briefing with additional delivery tracking fields.
+type DailyBriefing = Briefing
+
+// BriefingSectionType defines the type of briefing section.
+type BriefingSectionType string
+
+const (
+	SectionTypeSleep           BriefingSectionType = "sleep"
+	SectionTypeOvernightEvents BriefingSectionType = "overnight_events"
+	SectionTypeSystemHealth    BriefingSectionType = "system_health"
+	SectionTypePredictions     BriefingSectionType = "predictions"
+	SectionTypeWeather         BriefingSectionType = "weather"
+	SectionTypeAlert           BriefingSectionType = "alert"
+	SectionTypePeople          BriefingSectionType = "people"
+	SectionTypeAnomaly         BriefingSectionType = "anomaly"
+	SectionTypeLearning        BriefingSectionType = "learning"
+)
+
 // Briefing holds a generated morning briefing.
 type Briefing struct {
-	Date        string    `json:"date"`
-	Person      string    `json:"person,omitempty"`
-	Content     string    `json:"content"`
-	GeneratedAt int64     `json:"generated_at"`
-	Sections    []Section `json:"sections,omitempty"`
+	ID           string            `json:"id"` // UUID
+	Date         string            `json:"date"`
+	Person       string            `json:"person,omitempty"`
+	Content      string            `json:"content"`
+	GeneratedAt  int64             `json:"generated_at"`
+	Sections     []Section         `json:"sections,omitempty"`
+	Delivered    bool              `json:"delivered"`          // Set true after first push
+	Acknowledged bool              `json:"acknowledged"`       // Set true when user dismisses
+	Metadata     map[string]string `json:"metadata,omitempty"` // Additional metadata
 }
 
 // Section represents a single section of the briefing.
 type Section struct {
-	Type    string `json:"type"`    // "sleep", "people", "anomaly", "health", "prediction", "learning"
-	Content string `json:"content"`
-	Priority int    `json:"priority"` // Higher = shown first
+	Type     BriefingSectionType `json:"type"`
+	Content  string              `json:"content"`
+	Priority int                 `json:"priority"`           // Higher = shown first
+	Severity string              `json:"severity,omitempty"` // For alerts: "info", "warning", "error"
 }
 
 // Generate creates a morning briefing for the given date and person.
@@ -123,9 +197,9 @@ func (g *Generator) Generate(date string, person string) (*Briefing, error) {
 		sections = append(sections, *peopleSection)
 	}
 
-	// BLOCK 4 — Overnight anomalies
-	if anomalySection := g.generateAnomalyBlock(nightStart, nightEnd, person); anomalySection != nil {
-		sections = append(sections, *anomalySection)
+	// BLOCK 4 — Overnight events (replaces anomaly block with more detailed filtering)
+	if overnightSection := g.generateOvernightEventsBlock(nightStart, nightEnd, person); overnightSection != nil {
+		sections = append(sections, *overnightSection)
 	}
 
 	// BLOCK 5 — System health
@@ -133,12 +207,17 @@ func (g *Generator) Generate(date string, person string) (*Briefing, error) {
 		sections = append(sections, *healthSection)
 	}
 
-	// BLOCK 6 — Prediction hint
+	// BLOCK 6 — Weather (optional)
+	if weatherSection := g.generateWeatherBlock(); weatherSection != nil {
+		sections = append(sections, *weatherSection)
+	}
+
+	// BLOCK 7 — Prediction hint
 	if predictionSection := g.generatePredictionBlock(person); predictionSection != nil {
 		sections = append(sections, *predictionSection)
 	}
 
-	// BLOCK 7 — Learning progress
+	// BLOCK 8 — Learning progress
 	if learningSection := g.generateLearningBlock(); learningSection != nil {
 		sections = append(sections, *learningSection)
 	}
@@ -169,11 +248,14 @@ func (g *Generator) Generate(date string, person string) (*Briefing, error) {
 	content := strings.Join(contentParts, "\n\n")
 
 	return &Briefing{
-		Date:        date,
-		Person:      person,
-		Content:     content,
-		GeneratedAt: time.Now().UnixMilli(),
-		Sections:    sections,
+		ID:           uuid.New().String(),
+		Date:         date,
+		Person:       person,
+		Content:      content,
+		GeneratedAt:  time.Now().UnixMilli(),
+		Sections:     sections,
+		Delivered:    false,
+		Acknowledged: false,
 	}, nil
 }
 
@@ -262,26 +344,26 @@ func (g *Generator) generateSleepBlock(date, person string) *Section {
 	defer rows.Close()
 
 	var sleepRecords []struct {
-		Duration         sql.NullInt32
-		OnsetLatency    sql.NullFloat64
-		Restlessness    sql.NullFloat64
-		BreathAvg       sql.NullFloat64
-		BreathReg       sql.NullFloat64
-		BreathAnomaly   sql.NullBool
-		BreathSamples   sql.NullString
-		Person          sql.NullString
+		Duration      sql.NullInt32
+		OnsetLatency  sql.NullFloat64
+		Restlessness  sql.NullFloat64
+		BreathAvg     sql.NullFloat64
+		BreathReg     sql.NullFloat64
+		BreathAnomaly sql.NullBool
+		BreathSamples sql.NullString
+		Person        sql.NullString
 	}
 
 	for rows.Next() {
 		var r struct {
-			Duration         sql.NullInt32
-			OnsetLatency    sql.NullFloat64
-			Restlessness    sql.NullFloat64
-			BreathAvg       sql.NullFloat64
-			BreathReg       sql.NullFloat64
-			BreathAnomaly   sql.NullBool
-			BreathSamples   sql.NullString
-			Person          sql.NullString
+			Duration      sql.NullInt32
+			OnsetLatency  sql.NullFloat64
+			Restlessness  sql.NullFloat64
+			BreathAvg     sql.NullFloat64
+			BreathReg     sql.NullFloat64
+			BreathAnomaly sql.NullBool
+			BreathSamples sql.NullString
+			Person        sql.NullString
 		}
 		if err := rows.Scan(&r.Duration, &r.OnsetLatency, &r.Restlessness,
 			&r.BreathAvg, &r.BreathReg, &r.BreathAnomaly, &r.BreathSamples, &r.Person); err != nil {
@@ -497,11 +579,10 @@ func (g *Generator) generateHealthBlock() *Section {
 	quality := g.healthProvider.GetDetectionQuality()
 	online, total := g.healthProvider.GetNodeCount()
 
-	// Skip if excellent and all nodes online
-	if quality >= 90 && online == total {
-		return nil
-	}
+	// Build content with node health details
+	var contentParts []string
 
+	// Main health summary
 	var health string
 	switch {
 	case quality >= 90:
@@ -514,11 +595,52 @@ func (g *Generator) generateHealthBlock() *Section {
 		health = "Poor"
 	}
 
-	content := fmt.Sprintf("System health: %s (%.0f%%). %d/%d nodes online.",
-		health, quality, online, total)
+	contentParts = append(contentParts, fmt.Sprintf("%d nodes healthy.", online))
+
+	// Check for offline nodes with duration
+	if g.nodeProvider != nil {
+		allMACs := g.nodeProvider.GetAllNodeMACs()
+		for _, mac := range allMACs {
+			// Get offline duration from health provider
+			if g.healthProvider != nil {
+				duration := g.healthProvider.GetNodeOfflineDuration(mac)
+				if duration > 0 {
+					name := g.nodeProvider.GetNodeName(mac)
+					if name == "" {
+						name = mac
+					}
+
+					// Format duration
+					durationH := int(duration.Hours())
+					durationM := int(duration.Minutes()) % 60
+					if durationH > 0 {
+						if durationM > 0 {
+							contentParts = append(contentParts, fmt.Sprintf("Node %s has been offline for %dh %dm.", name, durationH, durationM))
+						} else {
+							contentParts = append(contentParts, fmt.Sprintf("Node %s has been offline for %dh.", name, durationH))
+						}
+					} else if durationM > 0 {
+						contentParts = append(contentParts, fmt.Sprintf("Node %s has been offline for %dmin.", name, durationM))
+					}
+				}
+			}
+		}
+	}
+
+	// Add detection quality if not excellent
+	if quality < 90 {
+		contentParts = append(contentParts, fmt.Sprintf("Detection quality: %.0f%%.", quality))
+	}
+
+	// Skip if everything is healthy
+	if len(contentParts) == 1 && online == total && quality >= 90 {
+		return nil
+	}
+
+	content := strings.Join(contentParts, " ")
 
 	return &Section{
-		Type:     "health",
+		Type:     SectionTypeSystemHealth,
 		Content:  content,
 		Priority: 30,
 	}
@@ -571,9 +693,181 @@ func (g *Generator) generateLearningBlock() *Section {
 	}
 
 	return &Section{
-		Type:     "learning",
+		Type:     SectionTypeLearning,
 		Content:  content,
 		Priority: 20,
+	}
+}
+
+// generateOvernightEventsBlock generates the overnight events section.
+// Filters for FallDetected, AnomalyDetected, NodeDisconnected events during quiet hours.
+func (g *Generator) generateOvernightEventsBlock(nightStart, nightEnd time.Time, person string) *Section {
+	// Calculate quiet hours period
+	quietStart := time.Date(nightEnd.Year(), nightEnd.Month(), nightEnd.Day(), g.quietHoursStart, 0, 0, 0, time.Local)
+	quietEnd := time.Date(nightEnd.Year(), nightEnd.Month(), nightEnd.Day()+1, g.quietHoursEnd, 0, 0, 0, time.Local)
+
+	query := `SELECT type, zone, person, detail_json, timestamp_ms, severity
+	           FROM events
+	           WHERE timestamp_ms >= ? AND timestamp_ms < ?
+		             AND type IN ('fall_alert', 'anomaly', 'node_disconnected')
+		             AND severity IN ('warning', 'alert', 'critical')
+	           ORDER BY timestamp_ms ASC
+	           LIMIT 6`
+
+	args := []interface{}{quietStart.UnixMilli(), quietEnd.UnixMilli()}
+
+	if person != "" {
+		query += ` AND person = ?`
+		args = append(args, person)
+	}
+
+	rows, err := g.db.Query(query, args...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var events []struct {
+		Type       string
+		Zone       string
+		Person     string
+		DetailJSON string
+		Timestamp  int64
+		Severity   string
+		Acked      bool
+	}
+
+	for rows.Next() {
+		var e struct {
+			Type       string
+			Zone       string
+			Person     string
+			DetailJSON string
+			Timestamp  int64
+			Severity   string
+			Acked      bool
+		}
+		if err := rows.Scan(&e.Type, &e.Zone, &e.Person, &e.DetailJSON, &e.Timestamp, &e.Severity); err != nil {
+			continue
+		}
+
+		// Check if acknowledged from detail_json
+		var detail map[string]interface{}
+		if err := json.Unmarshal([]byte(e.DetailJSON), &detail); err == nil {
+			if acked, ok := detail["acknowledged"].(bool); ok {
+				e.Acked = acked
+			}
+		}
+
+		events = append(events, e)
+	}
+
+	if len(events) == 0 {
+		return &Section{
+			Type:     SectionTypeOvernightEvents,
+			Content:  "No incidents overnight.",
+			Priority: 40,
+		}
+	}
+
+	var contentParts []string
+	for i, e := range events {
+		var eventStr strings.Builder
+		timeStr := time.Unix(0, e.Timestamp*1e6).Format("3:04pm")
+
+		switch e.Type {
+		case "fall_alert":
+			eventStr.WriteString(fmt.Sprintf("Possible fall detected at %s", timeStr))
+			if e.Person != "" {
+				eventStr.WriteString(fmt.Sprintf(" for %s", e.Person))
+			}
+			if e.Zone != "" {
+				eventStr.WriteString(fmt.Sprintf(" in %s", e.Zone))
+			}
+			if e.Acked {
+				eventStr.WriteString(" (acknowledged)")
+			}
+
+		case "anomaly":
+			eventStr.WriteString(fmt.Sprintf("Anomaly detected at %s", timeStr))
+			if e.Zone != "" {
+				eventStr.WriteString(fmt.Sprintf(" in %s", e.Zone))
+			}
+			if e.Acked {
+				eventStr.WriteString(" (acknowledged)")
+			}
+
+		case "node_disconnected":
+			eventStr.WriteString(fmt.Sprintf("Node %s went offline at %s", e.Zone, timeStr))
+			// Try to get reconnection time
+			var reconnectTime sql.NullInt64
+			reconnectQuery := `SELECT timestamp_ms FROM events
+			                   WHERE type = 'node_connected' AND zone = ?
+			                   AND timestamp_ms > ? ORDER BY timestamp_ms ASC LIMIT 1`
+			err := g.db.QueryRow(reconnectQuery, e.Zone, e.Timestamp).Scan(&reconnectTime)
+			if err == nil && reconnectTime.Valid {
+				reconnectStr := time.Unix(0, reconnectTime.Int64*1e6).Format("3:04pm")
+				eventStr.WriteString(fmt.Sprintf(" and reconnected at %s", reconnectStr))
+			}
+		}
+
+		contentParts = append(contentParts, eventStr.String())
+
+		// Limit to 5 events
+		if i >= 4 && len(events) > 5 {
+			contentParts = append(contentParts, fmt.Sprintf("...and %d more events.", len(events)-5))
+			break
+		}
+	}
+
+	content := strings.Join(contentParts, ". ")
+	if len(contentParts) > 1 {
+		content += "."
+	}
+
+	return &Section{
+		Type:     SectionTypeOvernightEvents,
+		Content:  content,
+		Priority: 75,
+	}
+}
+
+// generateWeatherBlock generates the optional weather section.
+func (g *Generator) generateWeatherBlock() *Section {
+	if g.weatherAPIURL == "" {
+		return nil
+	}
+
+	// Fetch weather from wttr.in
+	// Format: GET https://wttr.in/{location}?format=%t+%C
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(g.weatherAPIURL)
+	if err != nil {
+		log.Printf("[WARN] Failed to fetch weather: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[WARN] Weather API returned status %d", resp.StatusCode)
+		return nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[WARN] Failed to read weather response: %v", err)
+		return nil
+	}
+
+	weather := strings.TrimSpace(string(body))
+	if weather == "" || weather == "Unknown" {
+		return nil
+	}
+
+	return &Section{
+		Type:     SectionTypeWeather,
+		Content:  fmt.Sprintf("Outside: %s", weather),
+		Priority: 15,
 	}
 }
 
@@ -761,4 +1055,118 @@ func (g *Generator) ShouldGenerate(date string, person string) bool {
 
 	err := g.db.QueryRow(query, args...).Scan(&count)
 	return err == nil && count == 0
+}
+
+// MarkDelivered marks a briefing as delivered.
+func (g *Generator) MarkDelivered(id string) error {
+	// Check if delivered column exists
+	var deliveredColExists bool
+	err := g.db.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'delivered'
+	`).Scan(&deliveredColExists)
+	if err != nil {
+		return fmt.Errorf("check delivered column: %w", err)
+	}
+
+	if !deliveredColExists {
+		// Column doesn't exist yet, skip
+		return nil
+	}
+
+	_, err = g.db.Exec(`UPDATE briefings SET delivered = 1 WHERE id = ?`, id)
+	return err
+}
+
+// MarkAcknowledged marks a briefing as acknowledged by the user.
+func (g *Generator) MarkAcknowledged(id string) error {
+	// Check if acknowledged column exists
+	var acknowledgedColExists bool
+	err := g.db.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'acknowledged'
+	`).Scan(&acknowledgedColExists)
+	if err != nil {
+		return fmt.Errorf("check acknowledged column: %w", err)
+	}
+
+	if !acknowledgedColExists {
+		// Column doesn't exist yet, skip
+		return nil
+	}
+
+	_, err = g.db.Exec(`UPDATE briefings SET acknowledged = 1 WHERE id = ?`, id)
+	return err
+}
+
+// GetTodayBriefing returns today's briefing as a map for the dashboard.
+func (g *Generator) GetTodayBriefing() (map[string]interface{}, error) {
+	today := time.Now().Format("2006-01-02")
+
+	b, err := g.Get(today, "")
+	if err != nil {
+		// No briefing exists, try generating one
+		b, err = g.Generate(today, "")
+		if err != nil {
+			return nil, err
+		}
+		// Save the new briefing
+		if err := g.Save(b); err != nil {
+			log.Printf("[WARN] Failed to save briefing: %v", err)
+		}
+	}
+
+	// Convert to map for JSON marshaling
+	result := map[string]interface{}{
+		"id":           b.ID,
+		"date":         b.Date,
+		"content":      b.Content,
+		"generated_at": b.GeneratedAt,
+		"delivered":    b.Delivered,
+		"acknowledged": b.Acknowledged,
+	}
+
+	if len(b.Sections) > 0 {
+		result["sections"] = b.Sections
+	}
+
+	return result, nil
+}
+
+// ShouldPushBriefing checks if the briefing should be pushed to clients.
+// Returns true if it's after 6am and the briefing hasn't been delivered yet.
+func (g *Generator) ShouldPushBriefing() bool {
+	now := time.Now()
+	hour := now.Hour()
+
+	// Only push after 6am
+	if hour < 6 {
+		return false
+	}
+
+	today := now.Format("2006-01-02")
+
+	// Check if a briefing exists for today
+	var count int
+	err := g.db.QueryRow(`SELECT COUNT(*) FROM briefings WHERE date = ?`, today).Scan(&count)
+	if err != nil || count == 0 {
+		return false
+	}
+
+	// Check if delivered column exists
+	var deliveredColExists bool
+	err = g.db.QueryRow(`
+		SELECT COUNT(*) > 0 FROM pragma_table_info('briefings') WHERE name = 'delivered'
+	`).Scan(&deliveredColExists)
+	if err != nil || !deliveredColExists {
+		// If column doesn't exist, assume not delivered
+		return true
+	}
+
+	// Check if already delivered
+	var delivered int
+	err = g.db.QueryRow(`SELECT delivered FROM briefings WHERE date = ?`, today).Scan(&delivered)
+	if err != nil {
+		return true
+	}
+
+	return delivered == 0
 }

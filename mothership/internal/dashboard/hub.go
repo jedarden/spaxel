@@ -33,6 +33,7 @@ type Hub struct {
 	eventStore      EventStore
 	securityState   SecurityStateProvider
 	sleepState      SleepStateProvider
+	briefingProvider BriefingProvider
 
 	// Pending events buffer — events accumulated between 10 Hz delta ticks.
 	pendingEvents   []map[string]interface{}
@@ -159,6 +160,13 @@ type SleepStateProvider interface {
 	ShouldPushMorningSummary() (bool, map[string]interface{})
 }
 
+// BriefingProvider provides morning briefing functionality.
+type BriefingProvider interface {
+	GetTodayBriefing() (map[string]interface{}, error)
+	MarkDelivered(id string) error
+	ShouldPushBriefing() bool
+}
+
 // ReplayHandler is the interface for replay engine operations.
 type ReplayHandler interface {
 	Seek(targetMS int64) error
@@ -257,6 +265,13 @@ func (h *Hub) SetSleepState(state SleepStateProvider) {
 	h.mu.Unlock()
 }
 
+// SetBriefingProvider sets the briefing provider for morning briefing push.
+func (h *Hub) SetBriefingProvider(provider BriefingProvider) {
+	h.mu.Lock()
+	h.briefingProvider = provider
+	h.mu.Unlock()
+}
+
 // Run starts the hub's main loop.
 // The 10 Hz delta tick replaces the old 5 s state / 500 ms presence broadcasts.
 // BLE scan results are broadcast every 5 s as a separate typed message.
@@ -296,6 +311,9 @@ func (h *Hub) Run() {
 			h.clients[client] = struct{}{}
 			h.mu.Unlock()
 			log.Printf("[INFO] Dashboard client connected (total: %d)", len(h.clients))
+
+			// Push morning briefing on first connection after 6am
+			h.pushBriefingToClient(client)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -1150,6 +1168,54 @@ func (h *Hub) BroadcastMorningSummary(summary map[string]interface{}) {
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
+}
+
+// pushBriefingToClient pushes the morning briefing to a specific client on first connection.
+func (h *Hub) pushBriefingToClient(client *Client) {
+	h.mu.RLock()
+	provider := h.briefingProvider
+	h.mu.RUnlock()
+
+	if provider == nil {
+		return
+	}
+
+	// Check if briefing should be pushed (after 6am and not yet delivered)
+	if !provider.ShouldPushBriefing() {
+		return
+	}
+
+	// Get today's briefing
+	briefing, err := provider.GetTodayBriefing()
+	if err != nil {
+		log.Printf("[WARN] Failed to get today's briefing: %v", err)
+		return
+	}
+
+	// Mark as delivered
+	if id, ok := briefing["id"].(string); ok {
+		if err := provider.MarkDelivered(id); err != nil {
+			log.Printf("[WARN] Failed to mark briefing as delivered: %v", err)
+		}
+	}
+
+	// Send briefing to client
+	msg := map[string]interface{}{
+		"type":     "morning_briefing",
+		"briefing": briefing,
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("[WARN] Failed to marshal briefing: %v", err)
+		return
+	}
+
+	select {
+	case client.send <- data:
+		log.Printf("[INFO] Morning briefing pushed to client")
+	default:
+		log.Printf("[WARN] Briefing dropped for new client (buffer full)")
+	}
 }
 
 // BroadcastReplayBlobs broadcasts replay blob updates to all dashboard clients.

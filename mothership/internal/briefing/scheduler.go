@@ -11,13 +11,13 @@ import (
 
 // Scheduler handles automatic briefing generation and push notifications.
 type Scheduler struct {
-	generator      *Generator
-	notifyService  NotifyService
-	mu             sync.RWMutex
-	config         SchedulerConfig
-	ticker         *time.Ticker
-	stopChan       chan struct{}
-	running        bool
+	generator     *Generator
+	notifyService NotifyService
+	mu            sync.RWMutex
+	config        SchedulerConfig
+	ticker        *time.Ticker
+	stopChan      chan struct{}
+	running       bool
 }
 
 // SchedulerConfig holds scheduling configuration.
@@ -197,7 +197,7 @@ func (s *Scheduler) checkAndGenerate() {
 func (s *Scheduler) sendNotification(b *Briefing) {
 	notification := Notification{
 		Title:     "Morning Briefing",
-		Body:       s.formatNotificationBody(b),
+		Body:      s.formatNotificationBody(b),
 		Priority:  1, // Low priority for morning briefings
 		Tags:      []string{"briefing", "morning"},
 		Timestamp: time.Now(),
