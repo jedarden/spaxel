@@ -520,3 +520,158 @@
     color: #4fc3f7;
     border-bottom-color: #4fc3f7;
 }
+
+/* Panel-specific notification settings styles */
+.panel-select {
+    width: 100%;
+    padding: 10px 12px;
+    background: #2a2a3a;
+    border: 1px solid #3a3a4a;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 14px;
+}
+
+.panel-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: #2a2a3a;
+    border: 1px solid #3a3a4a;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.panel-input:focus,
+.panel-select:focus {
+    outline: none;
+    border-color: #4fc3f7;
+}
+
+.channel-config-group {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #252538;
+    border-radius: 6px;
+}
+
+.panel-time-range {
+    display: flex;
+    gap: 20px;
+}
+
+.panel-time-field {
+    flex: 1;
+}
+
+.panel-time-field label {
+    display: block;
+    color: #aaa;
+    font-size: 0.9em;
+    margin-bottom: 8px;
+}
+
+.panel-days-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.panel-day-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.panel-day-checkbox input {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.panel-event-type-toggle {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background: #252538;
+    border-radius: 6px;
+}
+
+.panel-event-type-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-event-type-label {
+    color: #fff;
+    font-weight: 500;
+}
+
+.panel-event-type-desc {
+    color: #888;
+    font-size: 0.85em;
+}
+
+.panel-toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.panel-toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.panel-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #3a3a4a;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.panel-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #fff;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.panel-toggle-switch input:checked + .panel-toggle-slider {
+    background-color: #4fc3f7;
+}
+
+.panel-toggle-switch input:checked + .panel-toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.panel-form-hint {
+    color: #888;
+    font-size: 0.85em;
+    margin-top: -8px;
+    margin-bottom: 12px;
+}
+
+.event-type-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}

@@ -512,6 +512,11 @@ func main() {
 	integrationSettingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Integration settings API registered at /api/settings/integration")
 
+	// Phase 6: Notification Settings REST API
+	notificationSettingsHandler := api.NewNotificationSettingsHandler(mainDB)
+	notificationSettingsHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Notification settings API registered at /api/settings/notifications")
+
 	// Phase 6: Feature discovery notifications
 	// Notifier manages one-time feature discovery notifications with quiet hours support
 	featureNotifier, err := featurehelp.NewNotifier(mainDB)
@@ -842,6 +847,9 @@ func main() {
 
 		// Set room config provider for floor plan thumbnails
 		notifyService.SetRoomConfig(&fleetRoomConfigAdapter{reg: fleetReg})
+
+		// Wire notification settings handler with notify service for test notifications
+		notificationSettingsHandler.SetNotifyService(&notifySenderAdapter{service: notifyService})
 	}
 
 	// Phase 8: Morning briefing scheduler
@@ -4146,6 +4154,17 @@ func (d *deviceProviderAdapter) GetDevice(mac string) (string, bool) {
 
 type notifySenderAdapter struct {
 	service *notify.Service
+}
+
+func (n *notifySenderAdapter) Send(title, body string, data map[string]interface{}) error {
+	// The notify service sends to all channels
+	notif := notify.Notification{
+		Title:     title,
+		Body:      body,
+		Data:      data,
+		Timestamp: time.Now(),
+	}
+	return n.service.Send(notif)
 }
 
 func (n *notifySenderAdapter) SendViaChannel(channelType string, title, body string, data map[string]interface{}) error {
