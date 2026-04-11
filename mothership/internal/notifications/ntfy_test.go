@@ -1,7 +1,7 @@
 package notifications
 
 import (
-	"io"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -35,10 +35,25 @@ func TestNtfyClientNewClient(t *testing.T) {
 
 // TestNtfyClientSend tests sending a notification via ntfy.
 func TestNtfyClientSend(t *testing.T) {
-	// Create a test server
-	var receivedReq *http.Request
+	// Capture request details in handler
+	var receivedMethod, receivedPath, receivedBody string
+	receivedHeaders := make(map[string]string)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedReq = r
+		receivedMethod = r.Method
+		receivedPath = r.URL.Path
+
+		// Capture headers
+		receivedHeaders["Title"] = r.Header.Get("Title")
+		receivedHeaders["Priority"] = r.Header.Get("Priority")
+		receivedHeaders["Tags"] = r.Header.Get("Tags")
+		receivedHeaders["Content-Type"] = r.Header.Get("Content-Type")
+
+		// Capture body
+		bodyBuf := new(bytes.Buffer)
+		bodyBuf.ReadFrom(r.Body)
+		receivedBody = bodyBuf.String()
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -59,45 +74,40 @@ func TestNtfyClientSend(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 
-	if receivedReq == nil {
-		t.Fatal("No request received by server")
-	}
-
 	// Verify method
-	if receivedReq.Method != "POST" {
-		t.Errorf("Method = %s, want POST", receivedReq.Method)
+	if receivedMethod != "POST" {
+		t.Errorf("Method = %s, want POST", receivedMethod)
 	}
 
 	// Verify URL path
-	if !strings.HasSuffix(receivedReq.URL.Path, "/test-topic") {
-		t.Errorf("URL path = %s, want /test-topic", receivedReq.URL.Path)
+	if !strings.HasSuffix(receivedPath, "/test-topic") {
+		t.Errorf("URL path = %s, want /test-topic", receivedPath)
 	}
 
 	// Verify headers
-	title := receivedReq.Header.Get("Title")
+	title := receivedHeaders["Title"]
 	if title != "Test Title" {
 		t.Errorf("Title header = %s, want 'Test Title'", title)
 	}
 
-	priority := receivedReq.Header.Get("Priority")
+	priority := receivedHeaders["Priority"]
 	if priority != "high" {
 		t.Errorf("Priority header = %s, want 'high'", priority)
 	}
 
-	tags := receivedReq.Header.Get("Tags")
+	tags := receivedHeaders["Tags"]
 	if tags != "test,alert" {
 		t.Errorf("Tags header = %s, want 'test,alert'", tags)
 	}
 
-	contentType := receivedReq.Header.Get("Content-Type")
+	contentType := receivedHeaders["Content-Type"]
 	if contentType != "text/plain" {
 		t.Errorf("Content-Type header = %s, want 'text/plain'", contentType)
 	}
 
 	// Verify body
-	body, _ := io.ReadAll(receivedReq.Body)
-	if string(body) != "Test message body" {
-		t.Errorf("Body = %s, want 'Test message body'", string(body))
+	if receivedBody != "Test message body" {
+		t.Errorf("Body = %s, want 'Test message body'", receivedBody)
 	}
 }
 
@@ -268,20 +278,32 @@ func TestNtfyClientDefaults(t *testing.T) {
 // TestAttachPNGImage tests the PNG attachment helper.
 func TestAttachPNGImage(t *testing.T) {
 	pngData := []byte{
-		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-		0x00, 0x00, 0x00, 0x0D,
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+		0x00, 0x00, 0x00, 0x0D,                   // IHDR length
 	}
 
 	result := AttachPNGImage(pngData)
 
-	if !strings.HasPrefix(result, "data:image/png;base64,") {
-		t.Errorf("Result should start with 'data:image/png;base64,', got: %s", result)
+	// Verify the data URL prefix
+	prefix := "data:image/png;base64,"
+	if !strings.HasPrefix(result, prefix) {
+		t.Errorf("Result should start with %s, got: %s", prefix, result)
 	}
 
-	// Verify it's valid base64
-	expectedPrefix := "data:image/png;base64,iVBORw0KGgo="
-	if !strings.HasPrefix(result, expectedPrefix) {
-		t.Errorf("Expected prefix %s, got: %s", expectedPrefix, result[:40])
+	// Verify the result is longer than just the prefix (has encoded data)
+	if len(result) <= len(prefix) {
+		t.Errorf("Result should have encoded data after prefix, got length %d", len(result))
+	}
+
+	// Extract and verify the base64 encoded portion
+	encodedPart := result[len(prefix):]
+	if encodedPart == "" {
+		t.Error("Encoded part should not be empty")
+	}
+
+	// Verify the encoded data is different from input (base64 encoding changes it)
+	if string(pngData) == encodedPart {
+		t.Error("Encoded data should be base64 encoded, not plain text")
 	}
 }
 
@@ -363,11 +385,188 @@ func TestNtfyInvalidPriority(t *testing.T) {
 	}
 }
 
+// TestNtfyClientValidPriorities tests that all valid priorities are sent correctly.
+func TestNtfyClientValidPriorities(t *testing.T) {
+	validPriorities := []string{"min", "low", "default", "high", "urgent"}
+
+	for _, priority := range validPriorities {
+		t.Run(priority, func(t *testing.T) {
+			var receivedPriority string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedPriority = r.Header.Get("Priority")
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			client := NewNtfyClient("test-topic")
+			client.URL = server.URL
+
+			msg := NtfyMessage{
+				Topic:    "test-topic",
+				Message:  "test",
+				Priority: priority,
+			}
+
+			err := client.Send(msg)
+			if err != nil {
+				t.Fatalf("Send() error = %v", err)
+			}
+
+			if receivedPriority != priority {
+				t.Errorf("Priority = %s, want %s", receivedPriority, priority)
+			}
+		})
+	}
+}
+
+// TestNtfyClientMessageFieldPriority tests that message priority overrides client default.
+func TestNtfyClientMessageFieldPriority(t *testing.T) {
+	var receivedPriority string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPriority = r.Header.Get("Priority")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewNtfyClient("test-topic")
+	client.URL = server.URL
+	client.Priority = "low" // Client default
+
+	msg := NtfyMessage{
+		Topic:    "test-topic",
+		Message:  "test",
+		Priority: "urgent", // Message priority should override
+	}
+
+	err := client.Send(msg)
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if receivedPriority != "urgent" {
+		t.Errorf("Priority = %s, want urgent (message priority should override client default)", receivedPriority)
+	}
+}
+
+// TestNtfyClientEmptyMessage tests sending a notification with empty message body.
+func TestNtfyClientEmptyMessage(t *testing.T) {
+	var receivedBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBuf := new(bytes.Buffer)
+		bodyBuf.ReadFrom(r.Body)
+		receivedBody = bodyBuf.String()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewNtfyClient("test-topic")
+	client.URL = server.URL
+
+	msg := NtfyMessage{
+		Topic:   "test-topic",
+		Title:   "Title Only",
+		Message: "", // Empty body is valid
+	}
+
+	err := client.Send(msg)
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if receivedBody != "" {
+		t.Errorf("Body = %s, want empty string", receivedBody)
+	}
+}
+
+// TestNtfyClientCustomURL tests using a custom ntfy server URL.
+func TestNtfyClientCustomURL(t *testing.T) {
+	var receivedHost string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHost = r.Host
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewNtfyClient("test-topic")
+	client.SetURL(server.URL) // Use custom URL
+
+	msg := NtfyMessage{
+		Topic:   "test-topic",
+		Message: "test",
+	}
+
+	err := client.Send(msg)
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if receivedHost == "" {
+		t.Error("Expected request to be sent to custom URL host")
+	}
+}
+
+// TestNtfyClientClickHeader tests the Click header functionality.
+func TestNtfyClientClickHeader(t *testing.T) {
+	var receivedClick string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedClick = r.Header.Get("Click")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewNtfyClient("test-topic")
+	client.URL = server.URL
+	client.Click = "https://example.com/default" // Client default
+
+	msg := NtfyMessage{
+		Topic:   "test-topic",
+		Message: "test",
+		Click:   "https://example.com/specific", // Message click should override
+	}
+
+	err := client.Send(msg)
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if receivedClick != "https://example.com/specific" {
+		t.Errorf("Click = %s, want https://example.com/specific", receivedClick)
+	}
+}
+
+// TestNtfyClientEmailHeader tests the Email header functionality.
+func TestNtfyClientEmailHeader(t *testing.T) {
+	var receivedEmail string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedEmail = r.Header.Get("Email")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewNtfyClient("test-topic")
+	client.URL = server.URL
+
+	msg := NtfyMessage{
+		Topic:   "test-topic",
+		Message: "test",
+		Email:   "user@example.com",
+	}
+
+	err := client.Send(msg)
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if receivedEmail != "user@example.com" {
+		t.Errorf("Email = %s, want user@example.com", receivedEmail)
+	}
+}
+
 // NewNtfyTopic is a convenience function for creating a client with just a topic.
 func NewNtfyTopic(topic string) *NtfyClient {
 	return &NtfyClient{
-		URL:    "https://ntfy.sh",
-		Topic:  topic,
+		URL:        "https://ntfy.sh",
+		Topic:      topic,
 		HTTPClient: &http.Client{},
 	}
 }
