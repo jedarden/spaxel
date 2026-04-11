@@ -180,9 +180,9 @@ func createEventsSchema(db *sql.DB) error {
 func isValidEventType(t string) bool {
 	switch t {
 	case "detection", "zone_entry", "zone_exit", "portal_crossing",
-		"trigger_fired", "fall_alert", "anomaly", "anomaly_detected", "security_alert",
+		"trigger_fired", "fall_alert", "FallDetected", "anomaly", "AnomalyDetected", "security_alert",
 		"node_online", "node_offline", "ota_update", "baseline_changed",
-		"system", "learning_milestone", "sleep_session_end":
+		"system", "learning_milestone", "sleep_session_end", "ZoneTransition":
 		return true
 	}
 	return false
@@ -316,19 +316,22 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Person-relevant event types for simple mode
-	// Simple mode shows only person-relevant events: zone_entry, zone_exit, portal_crossing, fall_alert, anomaly, anomaly_detected, security_alert, sleep_session_end
+	// Simple mode shows only person-relevant events: zone_entry, zone_exit, ZoneTransition, portal_crossing, fall_alert, FallDetected, anomaly, AnomalyDetected, security_alert, sleep_session_end
 	// Simple mode hides: node_online, node_offline, ota_update, baseline_changed, system, learning_milestone, detection, presence_transition, stationary_detected
 	simpleModeTypes := map[string]bool{
 		"zone_entry":        true,
 		"zone_exit":         true,
+		"ZoneTransition":    true,
 		"portal_crossing":   true,
 		"fall_alert":        true,
+		"FallDetected":      true,
 		"anomaly":           true,
-		"anomaly_detected":  true,
+		"AnomalyDetected":   true,
 		"security_alert":    true,
 		"sleep_session_end": true,
 	}
-	isSimpleMode := mode != "expert"
+	// Default to expert mode when mode parameter is empty or invalid
+	isSimpleMode := mode == "simple"
 
 	// Prepare FTS5 query with prefix matching
 	if q != "" {
