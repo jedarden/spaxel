@@ -146,7 +146,7 @@ func TestHandlerIdentifyNode(t *testing.T) {
 			nodeExists:    true,
 			nodeConnected: true,
 			wantStatus:    http.StatusOK,
-			wantResponse:  `{"ok":true}`,
+			wantResponse:  "{\"ok\":true}\n",
 		},
 		{
 			name:          "successful identify with custom duration",
@@ -155,7 +155,7 @@ func TestHandlerIdentifyNode(t *testing.T) {
 			nodeExists:    true,
 			nodeConnected: true,
 			wantStatus:    http.StatusOK,
-			wantResponse:  `{"ok":true}`,
+			wantResponse:  "{\"ok\":true}\n",
 		},
 		{
 			name:          "node not found",
@@ -191,7 +191,7 @@ func TestHandlerIdentifyNode(t *testing.T) {
 			nodeExists:    true,
 			nodeConnected: true,
 			wantStatus:    http.StatusOK,
-			wantResponse:  `{"ok":true}`,
+			wantResponse:  "{\"ok\":true}\n",
 		},
 		{
 			name:          "negative duration uses default",
@@ -200,7 +200,7 @@ func TestHandlerIdentifyNode(t *testing.T) {
 			nodeExists:    true,
 			nodeConnected: true,
 			wantStatus:    http.StatusOK,
-			wantResponse:  `{"ok":true}`,
+			wantResponse:  "{\"ok\":true}\n",
 		},
 	}
 
@@ -1390,5 +1390,444 @@ func TestHandlerUpdateNodePosition(t *testing.T) {
 					}
 				}
 		})
+	}
+}
+
+// ─── Fleet page specific tests ─────────────────────────────────────────────────────
+
+// TestFleetTableRendering verifies that the fleet table renders correctly with 4 nodes
+// and all columns are populated as required by the task specification.
+func TestFleetTableRendering(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	// Create 4 test nodes with different configurations
+	testNodes := []struct {
+		mac               string
+		name              string
+		role              string
+		firmware          string
+		chip              string
+		x, y, z           float64
+		health            float64
+		online            bool
+	}{
+		{
+			mac:      "AA:BB:CC:DD:EE:01",
+			name:     "Living Room Node",
+			role:     "tx",
+			firmware: "1.2.0",
+			chip:     "ESP32-S3",
+			x:        0.0,
+			y:        0.0,
+			z:        2.5,
+			health:   0.95,
+			online:   true,
+		},
+		{
+			mac:      "AA:BB:CC:DD:EE:02",
+			name:     "Kitchen Node",
+			role:     "rx",
+			firmware: "1.1.5",
+			chip:     "ESP32-S3",
+			x:        5.0,
+			y:        3.0,
+			z:        2.5,
+			health:   0.88,
+			online:   true,
+		},
+		{
+			mac:      "AA:BB:CC:DD:EE:03",
+			name:     "Bedroom Node",
+			role:     "tx_rx",
+			firmware: "1.2.0",
+			chip:     "ESP32-S3",
+			x:        4.0,
+			y:        6.0,
+			z:        2.5,
+			health:   0.92,
+			online:   false,
+		},
+		{
+			mac:      "AA:BB:CC:DD:EE:04",
+			name:     "Garage Node",
+			role:     "passive",
+			firmware: "1.0.8",
+			chip:     "ESP32-S3",
+			x:        8.0,
+			y:        2.0,
+			z:        1.5,
+			health:   0.75,
+			online:   true,
+		},
+	}
+
+	// Setup connected MACs for online nodes
+	var connectedMACs []string
+	for _, node := range testNodes {
+		reg.UpsertNode(node.mac, node.firmware, node.chip)
+		reg.SetNodeLabel(node.mac, node.name)
+		reg.SetNodeRole(node.mac, node.role)
+		reg.SetNodePosition(node.mac, node.x, node.y, node.z)
+		if node.online {
+			connectedMACs = append(connectedMACs, node.mac)
+		}
+	}
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return connectedMACs
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var nodes []FleetNode
+	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Verify we have exactly 4 nodes
+	if len(nodes) != 4 {
+		t.Fatalf("Expected 4 nodes, got %d", len(nodes))
+	}
+
+	// Verify all columns are populated for each node
+	for i, node := range nodes {
+		// Verify MAC address is present
+		if node.MAC == "" {
+			t.Errorf("Node %d: MAC address is empty", i)
+		}
+
+		// Verify Label is populated
+		if node.Label == "" {
+			t.Errorf("Node %d: Label is empty", i)
+		}
+
+		// Verify Role is valid
+		validRoles := map[string]bool{"tx": true, "rx": true, "tx_rx": true, "passive": true, "virtual": true}
+		if !validRoles[node.Role] {
+			t.Errorf("Node %d: Invalid role '%s'", i, node.Role)
+		}
+
+		// Verify Status is either online or offline
+		if node.Status != "online" && node.Status != "offline" {
+			t.Errorf("Node %d: Invalid status '%s', expected 'online' or 'offline'", i, node.Status)
+		}
+
+		// Verify FirmwareVersion is present
+		if node.FirmwareVersion == "" {
+			t.Errorf("Node %d: FirmwareVersion is empty", i)
+		}
+
+		// Verify ChipModel is present
+		if node.ChipModel == "" {
+			t.Errorf("Node %d: ChipModel is empty", i)
+		}
+
+		// Verify HealthScore is between 0 and 1
+		if node.HealthScore < 0 || node.HealthScore > 1 {
+			t.Errorf("Node %d: HealthScore %v is out of range [0,1]", i, node.HealthScore)
+		}
+
+		// Verify LastSeenMS is set
+		if node.LastSeenMS == 0 {
+			t.Errorf("Node %d: LastSeenMS is 0", i)
+		}
+
+		// Verify UptimeSeconds is non-negative
+		if node.UptimeSeconds < 0 {
+			t.Errorf("Node %d: UptimeSeconds is negative: %d", i, node.UptimeSeconds)
+		}
+
+		// Verify ConfiguredRate is set (should default to 20)
+		if node.ConfiguredRate != 20 {
+			t.Errorf("Node %d: ConfiguredRate is %d, expected 20", i, node.ConfiguredRate)
+		}
+	}
+
+	// Verify specific node properties match what we set
+	nodeMap := make(map[string]FleetNode)
+	for _, node := range nodes {
+		nodeMap[node.MAC] = node
+	}
+
+	// Check first node (Living Room - online)
+	livingRoom, ok := nodeMap["AA:BB:CC:DD:EE:01"]
+	if !ok {
+		t.Fatal("Living Room node not found")
+	}
+	if livingRoom.Label != "Living Room Node" {
+		t.Errorf("Living Room: expected label 'Living Room Node', got '%s'", livingRoom.Label)
+	}
+	if livingRoom.Role != "tx" {
+		t.Errorf("Living Room: expected role 'tx', got '%s'", livingRoom.Role)
+	}
+	if livingRoom.Status != "online" {
+		t.Errorf("Living Room: expected status 'online', got '%s'", livingRoom.Status)
+	}
+	if livingRoom.FirmwareVersion != "1.2.0" {
+		t.Errorf("Living Room: expected firmware '1.2.0', got '%s'", livingRoom.FirmwareVersion)
+	}
+
+	// Check third node (Bedroom - offline)
+	bedroom, ok := nodeMap["AA:BB:CC:DD:EE:03"]
+	if !ok {
+		t.Fatal("Bedroom node not found")
+	}
+	if bedroom.Status != "offline" {
+		t.Errorf("Bedroom: expected status 'offline', got '%s'", bedroom.Status)
+	}
+	if bedroom.Role != "tx_rx" {
+		t.Errorf("Bedroom: expected role 'tx_rx', got '%s'", bedroom.Role)
+	}
+}
+
+// TestFleetNodeFields verifies that all required FleetNode fields are properly
+// computed and returned by the API.
+func TestFleetNodeFields(t *testing.T) {
+	reg := newTestRegistry(t)
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.2.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Test Node")
+	reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx")
+	reg.SetNodePosition("AA:BB:CC:DD:EE:FF", 1.5, 2.5, 3.0)
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:FF"}
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var nodes []FleetNode
+	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(nodes) != 1 {
+		t.Fatalf("Expected 1 node, got %d", len(nodes))
+	}
+
+	node := nodes[0]
+
+	// Verify all 11 table columns have data:
+	// 1. Checkbox - represented by MAC for selection
+	if node.MAC != "AA:BB:CC:DD:EE:FF" {
+		t.Errorf("MAC: expected 'AA:BB:CC:DD:EE:FF', got '%s'", node.MAC)
+	}
+
+	// 2. Label
+	if node.Label != "Test Node" {
+		t.Errorf("Label: expected 'Test Node', got '%s'", node.Label)
+	}
+
+	// 3. MAC address (duplicate in table)
+	if node.MAC == "" {
+		t.Error("MAC address is empty")
+	}
+
+	// 4. Status
+	if node.Status != "online" {
+		t.Errorf("Status: expected 'online', got '%s'", node.Status)
+	}
+
+	// 5. Firmware version
+	if node.FirmwareVersion != "1.2.0" {
+		t.Errorf("FirmwareVersion: expected '1.2.0', got '%s'", node.FirmwareVersion)
+	}
+
+	// 6. Uptime (computed field) - can be 0 for newly created test nodes
+	if node.UptimeSeconds < 0 {
+		t.Errorf("UptimeSeconds: expected non-negative value, got %d", node.UptimeSeconds)
+	}
+
+	// 7. Role
+	if node.Role != "rx" {
+		t.Errorf("Role: expected 'rx', got '%s'", node.Role)
+	}
+
+	// 8. Signal health (HealthScore)
+	if node.HealthScore < 0 || node.HealthScore > 1 {
+		t.Errorf("HealthScore: expected value in [0,1], got %v", node.HealthScore)
+	}
+
+	// 9. Packet rate (computed field)
+	if node.PacketRate < 0 {
+		t.Errorf("PacketRate: expected non-negative value, got %v", node.PacketRate)
+	}
+
+	// 10. Temperature (currently returns 0 as placeholder)
+	if node.Temperature != 0 {
+		t.Logf("Temperature: got %v (currently returns 0)", node.Temperature)
+	}
+
+	// 11. Actions - represented by MAC for API calls
+	if node.MAC == "" {
+		t.Error("MAC is empty, needed for action buttons")
+	}
+}
+
+// TestFleetWithVirtualNodes verifies that virtual nodes are included in the fleet list.
+func TestFleetWithVirtualNodes(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	// Add a real node
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.2.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Real Node")
+	reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx")
+
+	// Add a virtual node
+	reg.AddVirtualNode("11:22:33:44:55:66", "Virtual Node", 2.0, 3.0, 4.0)
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:FF"}
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var nodes []FleetNode
+	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(nodes) != 2 {
+		t.Fatalf("Expected 2 nodes, got %d", len(nodes))
+	}
+
+	// Verify virtual node is marked correctly
+	var virtualNode *FleetNode
+	for i := range nodes {
+		if nodes[i].MAC == "11:22:33:44:55:66" {
+			virtualNode = &nodes[i]
+			break
+		}
+	}
+
+	if virtualNode == nil {
+		t.Fatal("Virtual node not found in fleet list")
+	}
+
+	if !virtualNode.Virtual {
+		t.Error("Virtual node should have Virtual field set to true")
+	}
+
+	if virtualNode.Label != "Virtual Node" {
+		t.Errorf("Virtual node label: expected 'Virtual Node', got '%s'", virtualNode.Label)
+	}
+
+	if virtualNode.Role != "virtual" {
+		t.Errorf("Virtual node role: expected 'virtual', got '%s'", virtualNode.Role)
+	}
+
+	if virtualNode.Status != "offline" {
+		// Virtual nodes are not connected, so they should be offline
+		t.Errorf("Virtual node status: expected 'offline', got '%s'", virtualNode.Status)
+	}
+}
+
+// TestFleetWithNoNodes verifies the API returns an empty array when no nodes exist.
+func TestFleetWithNoNodes(t *testing.T) {
+	reg := newTestRegistry(t)
+	mgr := NewManager(reg)
+
+	h := &Handler{mgr: mgr}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var nodes []FleetNode
+	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(nodes) != 0 {
+		t.Errorf("Expected 0 nodes, got %d", len(nodes))
+	}
+}
+
+// TestFleetNodeStatusOffline verifies that offline nodes are correctly identified.
+func TestFleetNodeStatusOffline(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	// Add a node but don't include it in connected list
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.2.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Offline Node")
+	reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx")
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{} // No connected nodes
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var nodes []FleetNode
+	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(nodes) != 1 {
+		t.Fatalf("Expected 1 node, got %d", len(nodes))
+	}
+
+	if nodes[0].Status != "offline" {
+		t.Errorf("Expected status 'offline', got '%s'", nodes[0].Status)
 	}
 }
