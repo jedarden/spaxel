@@ -1342,3 +1342,21 @@ func (h *Hub) BroadcastZoneTransition(portalID string, personLabel string, fromZ
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
 }
+
+// BroadcastOTAProgress broadcasts OTA update progress for a node to all dashboard clients.
+// Called when OTA state changes (pending, downloading, rebooting, verified, failed, rollback).
+func (h *Hub) BroadcastOTAProgress(mac string, state string, progressPct uint8, expectedVersion, previousVersion string, errorMsg string) {
+	msg := map[string]interface{}{
+		"type":              "ota_progress",
+		"mac":               mac,
+		"state":             state,
+		"progress_pct":      progressPct,
+		"expected_version":  expectedVersion,
+		"previous_version":  previousVersion,
+	}
+	if errorMsg != "" {
+		msg["error"] = errorMsg
+	}
+	data, _ := json.Marshal(msg)
+	h.Broadcast(data)
+}
