@@ -460,12 +460,28 @@ func migration_006_add_virtual_node_columns(tx *sql.Tx) error {
 // migration_007_add_webhook_tables adds webhook_log, trigger_state tables
 // and error_message/error_count columns to the triggers table.
 func migration_007_add_webhook_tables(tx *sql.Tx) error {
-	schema := `
-	-- Error tracking columns on triggers
-	ALTER TABLE triggers ADD COLUMN error_message TEXT DEFAULT '';
-	ALTER TABLE triggers ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0;
+	cols := []struct {
+		name string
+		ddl  string
+	}{
+		{"error_message", "ALTER TABLE triggers ADD COLUMN error_message TEXT DEFAULT ''"},
+		{"error_count", "ALTER TABLE triggers ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0"},
+	}
+	for _, c := range cols {
+		var exists bool
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) > 0 FROM pragma_table_info('triggers') WHERE name = ?`, c.name,
+		).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			if _, err := tx.Exec(c.ddl); err != nil {
+				return err
+			}
+		}
+	}
 
-	-- Trigger blob state persistence across restarts
+	_, err := tx.Exec(`
 	CREATE TABLE IF NOT EXISTS trigger_state (
 		trigger_id  INTEGER NOT NULL,
 		blob_id     INTEGER NOT NULL,
@@ -476,7 +492,6 @@ func migration_007_add_webhook_tables(tx *sql.Tx) error {
 		FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
 	);
 
-	-- Webhook audit log
 	CREATE TABLE IF NOT EXISTS webhook_log (
 		id          INTEGER PRIMARY KEY AUTOINCREMENT,
 		trigger_id  INTEGER NOT NULL,
@@ -488,8 +503,7 @@ func migration_007_add_webhook_tables(tx *sql.Tx) error {
 		FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_webhook_log_trigger ON webhook_log(trigger_id, fired_at_ms DESC);
-	`
-	_, err := tx.Exec(schema)
+	`)
 	return err
 }
 
