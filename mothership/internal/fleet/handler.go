@@ -1,10 +1,12 @@
 package fleet
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -141,6 +143,12 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 		connectedSet[mac] = true
 	}
 
+	// Get OTA progress if OTA manager is available
+	var otaProgress map[string]NodeOTAProgress
+	if h.otaMgr != nil {
+		otaProgress = h.otaMgr.GetProgress()
+	}
+
 	// Convert to FleetNode with computed fields
 	fleetNodes := make([]FleetNode, 0, len(nodes))
 	now := time.Now()
@@ -162,14 +170,58 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 			Temperature:     0,  // Not currently tracked
 		}
 
-		// Determine status
-		if connectedSet[node.MAC] {
-			fleetNode.Status = "online"
-		} else if node.WentOfflineAt.IsZero() {
-			// Never seen online or still in initial state
-			fleetNode.Status = "offline"
+		// Determine status - check OTA progress first
+		if otaProgress != nil {
+			if progress, ok := otaProgress[node.MAC]; ok {
+				// Node has OTA progress - determine status from OTA state
+				switch progress.State {
+				case ota.OTAPending, ota.OTADownloading, ota.OTARebooting:
+					fleetNode.Status = "updating"
+					fleetNode.OTAInProgress = true
+				case ota.OTAFailed, ota.OTARollback:
+					// Failed or rollback - show as offline
+					fleetNode.Status = "offline"
+					fleetNode.OTAInProgress = false
+				case ota.OTAVerified:
+					// Verified - check if currently connected
+					if connectedSet[node.MAC] {
+						fleetNode.Status = "online"
+					} else {
+						fleetNode.Status = "offline"
+					}
+					fleetNode.OTAInProgress = false
+				default:
+					// No active OTA - check connection status
+					if connectedSet[node.MAC] {
+						fleetNode.Status = "online"
+					} else {
+						fleetNode.Status = "offline"
+					}
+					fleetNode.OTAInProgress = false
+				}
+			} else {
+				// No OTA progress for this node - check connection status
+				if connectedSet[node.MAC] {
+					fleetNode.Status = "online"
+				} else if node.WentOfflineAt.IsZero() {
+					// Never seen online or still in initial state
+					fleetNode.Status = "offline"
+				} else {
+					fleetNode.Status = "offline"
+				}
+				fleetNode.OTAInProgress = false
+			}
 		} else {
-			fleetNode.Status = "offline"
+			// No OTA manager - check connection status
+			if connectedSet[node.MAC] {
+				fleetNode.Status = "online"
+			} else if node.WentOfflineAt.IsZero() {
+				// Never seen online or still in initial state
+				fleetNode.Status = "offline"
+			} else {
+				fleetNode.Status = "offline"
+			}
+			fleetNode.OTAInProgress = false
 		}
 
 		// Calculate uptime (time since first seen, approximated as last seen - first seen + current session)
@@ -380,20 +432,32 @@ func (h *Handler) rebootNode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateAllNodes(w http.ResponseWriter, r *http.Request) {
-	// This is a placeholder - the actual OTA manager would handle this
-	// For now, return a success response with the count of connected nodes
+	if h.otaMgr == nil {
+		http.Error(w, "OTA manager not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Trigger rolling update with 30-second stagger
+	// The OTA manager will handle the rolling update logic
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+
+		if err := h.otaMgr.SendOTAAll(ctx, 30*time.Second); err != nil {
+			log.Printf("[ERROR] fleet: updateAllNodes failed: %v", err)
+		}
+	}()
+
+	// Return immediately with the count of nodes that will be updated
+	var count int
 	if h.nodeID != nil {
 		macs := h.nodeID.GetConnectedMACs()
-		writeJSON(w, map[string]interface{}{
-			"ok":    true,
-			"count": len(macs),
-		})
-		return
+		count = len(macs)
 	}
 
 	writeJSON(w, map[string]interface{}{
 		"ok":    true,
-		"count": 0,
+		"count": count,
 	})
 }
 
