@@ -59,13 +59,19 @@ type NodeSender interface {
 	GetConnectedMACs() []string
 }
 
+// DashboardBroadcaster can broadcast OTA progress updates to dashboard clients.
+type DashboardBroadcaster interface {
+	BroadcastOTAProgress(mac, state string, progressPct uint8, expectedVersion, previousVersion, errorMsg string)
+}
+
 // Manager orchestrates rolling OTA updates across the fleet.
 type Manager struct {
-	mu       sync.RWMutex
-	server   *Server
-	sender   NodeSender
-	progress map[string]*NodeOTAProgress
-	baseURL  string // e.g. "http://mothership:8080"
+	mu         sync.RWMutex
+	server     *Server
+	sender     NodeSender
+	broadcaster DashboardBroadcaster
+	progress   map[string]*NodeOTAProgress
+	baseURL    string // e.g. "http://mothership:8080"
 }
 
 // NewManager creates an OTA manager.
@@ -82,6 +88,13 @@ func NewManager(srv *Server, baseURL string) *Manager {
 func (m *Manager) SetSender(s NodeSender) {
 	m.mu.Lock()
 	m.sender = s
+	m.mu.Unlock()
+}
+
+// SetDashboardBroadcaster sets the dashboard broadcaster for real-time progress updates.
+func (m *Manager) SetDashboardBroadcaster(b DashboardBroadcaster) {
+	m.mu.Lock()
+	m.broadcaster = b
 	m.mu.Unlock()
 }
 
@@ -135,6 +148,12 @@ func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta) error {
 	p.State = OTAPending
 	p.ExpectedVersion = meta.Version
 	p.UpdatedAt = time.Now()
+
+	// Broadcast pending state to dashboard
+	if m.broadcaster != nil {
+		m.broadcaster.BroadcastOTAProgress(mac, "pending", 0, meta.Version, p.PreviousVersion, "")
+	}
+
 	m.mu.Unlock()
 
 	sender.SendOTAToMAC(mac, url, meta.SHA256, meta.Version)
@@ -222,6 +241,12 @@ func (m *Manager) OnOTAStatus(mac, state string, progressPct uint8, errMsg strin
 		p.Error = errMsg
 	}
 	p.UpdatedAt = time.Now()
+
+	// Broadcast progress to dashboard if broadcaster is set
+	if m.broadcaster != nil {
+		m.broadcaster.BroadcastOTAProgress(mac, p.State.String(), progressPct, p.ExpectedVersion, p.PreviousVersion, errMsg)
+	}
+
 	m.mu.Unlock()
 
 	log.Printf("[INFO] ota: %s status=%s pct=%d err=%q", mac, state, progressPct, errMsg)
@@ -242,12 +267,20 @@ func (m *Manager) OnNodeReconnected(mac, firmwareVersion string) {
 		return
 	}
 
+	var broadcastState string
 	if firmwareVersion == p.ExpectedVersion {
 		p.State = OTAVerified
+		broadcastState = "verified"
 		log.Printf("[INFO] ota: %s verified new firmware %s", mac, firmwareVersion)
 	} else {
 		p.State = OTARollback
+		broadcastState = "rollback"
 		log.Printf("[WARN] ota: %s rolled back to %s (expected %s)", mac, firmwareVersion, p.ExpectedVersion)
 	}
 	p.UpdatedAt = time.Now()
+
+	// Broadcast final state to dashboard
+	if m.broadcaster != nil {
+		m.broadcaster.BroadcastOTAProgress(mac, broadcastState, 100, p.ExpectedVersion, firmwareVersion, "")
+	}
 }
