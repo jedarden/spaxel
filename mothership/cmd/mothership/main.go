@@ -3085,7 +3085,7 @@ func main() {
 			history, err := healthStore.GetHealthHistory(linkID, 1*time.Hour)
 			if err == nil && len(history) > 0 {
 				// Find the snapshot closest to the requested timestamp
-				var closest *diagnostics.LinkHealthSnapshot
+				var closest *sigproc.HealthLogEntry
 				minDiff := time.Duration(1<<63 - 1)
 
 				for i := range history {

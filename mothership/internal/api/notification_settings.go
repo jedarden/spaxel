@@ -132,14 +132,6 @@ type notificationSettingsRequest struct {
 	EventTypes *map[string]bool `json:"event_types,omitempty"`
 }
 
-// testNotificationRequest is the request body for sending a test notification.
-type testNotificationRequest struct {
-	ChannelType string                 `json:"channel_type"` // Optional; if empty, tests current channel
-	Title       string                 `json:"title"`        // Custom title (optional)
-	Body        string                 `json:"body"`         // Custom body (optional)
-	Data        map[string]interface{} `json:"data,omitempty"` // Additional data (optional)
-}
-
 // handleGetSettings handles GET /api/settings/notifications requests.
 func (h *NotificationSettingsHandler) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.getSettings()
@@ -486,33 +478,6 @@ func validateChannelType(channelType string) error {
 	}
 }
 
-// validateChannelConfig validates the channel configuration based on type.
-func validateChannelConfig(channelType string, config map[string]interface{}) error {
-	if channelType == "none" || channelType == "" {
-		return nil
-	}
-
-	switch channelType {
-	case "ntfy":
-		// url is required, topic and token are optional
-		if _, ok := config["url"]; !ok {
-			return &NotificationValidationError{Field: "ntfy.url", Reason: "required field missing"}
-		}
-	case "pushover":
-		// api_key is required (user_key in pushover terminology)
-		if _, ok := config["api_key"]; !ok {
-			return &NotificationValidationError{Field: "pushover.api_key", Reason: "required field missing"}
-		}
-	case "webhook":
-		// url is required
-		if _, ok := config["url"]; !ok {
-			return &NotificationValidationError{Field: "webhook.url", Reason: "required field missing"}
-		}
-	}
-
-	return nil
-}
-
 // validateTimeFormat validates a time string in HH:MM format.
 func validateTimeFormat(timeStr string) error {
 	if len(timeStr) != 5 {
@@ -527,6 +492,7 @@ func validateTimeFormat(timeStr string) error {
 		if c < '0' || c > '9' {
 			return &NotificationValidationError{Reason: "invalid hour (must be 00-23)"}
 		}
+	}
 	for _, c := range minute {
 		if c < '0' || c > '9' {
 			return &NotificationValidationError{Reason: "invalid minute (must be 00-59)"}
@@ -573,14 +539,3 @@ func (e *NotificationValidationError) Error() string {
 	return e.Reason
 }
 
-// writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v) //nolint:errcheck
-}
-
-// writeJSONError writes a JSON error response.
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
