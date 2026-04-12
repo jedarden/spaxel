@@ -2077,8 +2077,342 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Feature Discovery Notifications */
+        .feature-discovery-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 250;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none;
+        }
+
+        .feature-discovery-notification {
+            pointer-events: auto;
+            width: 380px;
+            max-width: calc(100vw - 40px);
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.05));
+            border: 1px solid rgba(76, 175, 80, 0.4);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            animation: featureDiscoverySlideIn 0.4s ease-out;
+            overflow: hidden;
+        }
+
+        @keyframes featureDiscoverySlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        .feature-discovery-dismissed {
+            animation: featureDiscoverySlideOut 0.3s ease-in forwards;
+        }
+
+        @keyframes featureDiscoverySlideOut {
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+                margin-bottom: -100px;
+            }
+        }
+
+        .feature-discovery-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(76, 175, 80, 0.3);
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .feature-discovery-icon {
+            font-size: 20px;
+        }
+
+        .feature-discovery-title {
+            flex: 1;
+            font-weight: 600;
+            font-size: 14px;
+            color: #81c784;
+        }
+
+        .feature-discovery-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+
+        .feature-discovery-close:hover {
+            color: #fff;
+        }
+
+        .feature-discovery-content {
+            padding: 14px 16px;
+        }
+
+        .feature-discovery-content p {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #ddd;
+        }
+
+        .feature-discovery-actions {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            border-top: 1px solid rgba(76, 175, 80, 0.3);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .feature-discovery-btn {
+            flex: 1;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .feature-discovery-primary {
+            background: #4caf50;
+            color: #1a1a2e;
+            font-weight: 500;
+        }
+
+        .feature-discovery-primary:hover {
+            background: #43a047;
+        }
+
+        .feature-discovery-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+        }
+
+        .feature-discovery-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .feature-discovery-sparkle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 16px;
+            animation: sparkle 1.5s ease-in-out infinite;
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
     `;
 
     document.head.appendChild(style);
+
+    // ===== Feature Discovery Notifications =====
+
+    // State for feature notifications
+    let featureNotificationCheckInterval = null;
+    let pendingFeatureNotifications = [];
+    let displayedNotificationIDs = new Set();
+
+    /**
+     * Start polling for feature discovery notifications
+     */
+    function startFeatureNotificationPolling() {
+        // Check every 30 seconds
+        if (featureNotificationCheckInterval) {
+            clearInterval(featureNotificationCheckInterval);
+        }
+
+        // Initial check
+        checkFeatureNotifications();
+
+        featureNotificationCheckInterval = setInterval(() => {
+            checkFeatureNotifications();
+        }, 30000); // 30 seconds
+    }
+
+    /**
+     * Stop polling for feature notifications
+     */
+    function stopFeatureNotificationPolling() {
+        if (featureNotificationCheckInterval) {
+            clearInterval(featureNotificationCheckInterval);
+            featureNotificationCheckInterval = null;
+        }
+    }
+
+    /**
+     * Check for new feature discovery notifications
+     */
+    async function checkFeatureNotifications() {
+        try {
+            const response = await fetch('/api/help/notifications');
+            if (!response.ok) {
+                return;
+            }
+
+            const data = await response.json();
+            const notifications = data.notifications || [];
+
+            // Filter out already displayed notifications
+            const newNotifications = notifications.filter(n => !displayedNotificationIDs.has(n.event_id));
+
+            if (newNotifications.length > 0) {
+                // Show each new notification
+                for (const notification of newNotifications) {
+                    showFeatureNotification(notification);
+                    displayedNotificationIDs.add(notification.event_id);
+                }
+            }
+        } catch (err) {
+            console.error('[FeatureDiscovery] Failed to check notifications:', err);
+        }
+    }
+
+    /**
+     * Show a feature discovery notification card
+     */
+    function showFeatureNotification(notification) {
+        // Create container if it doesn't exist
+        let container = document.querySelector('.feature-discovery-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'feature-discovery-container';
+            document.body.appendChild(container);
+        }
+
+        const card = document.createElement('div');
+        card.className = 'feature-discovery-notification';
+        card.dataset.eventId = notification.event_id;
+
+        const actionButton = notification.action_label ? `
+            <button class="feature-discovery-btn feature-discovery-primary" data-action="${notification.action_url || ''}">
+                ${notification.action_label}
+            </button>
+        ` : '';
+
+        card.innerHTML = `
+            <div class="feature-discovery-sparkle">✨</div>
+            <div class="feature-discovery-header">
+                <span class="feature-discovery-icon">🎉</span>
+                <span class="feature-discovery-title">${notification.title}</span>
+                <button class="feature-discovery-close" onclick="Proactive.dismissFeatureNotification('${notification.event_id}')">&times;</button>
+            </div>
+            <div class="feature-discovery-content">
+                <p>${notification.message}</p>
+            </div>
+            ${actionButton ? `
+                <div class="feature-discovery-actions">
+                    ${actionButton}
+                    <button class="feature-discovery-btn feature-discovery-secondary" onclick="Proactive.dismissFeatureNotification('${notification.event_id}')">
+                        Dismiss
+                    </button>
+                </div>
+            ` : `
+                <div class="feature-discovery-actions">
+                    <button class="feature-discovery-btn feature-discovery-secondary" onclick="Proactive.dismissFeatureNotification('${notification.event_id}')">
+                        Got it
+                    </button>
+                </div>
+            `}
+        `;
+
+        // Add click handler for action button
+        if (notification.action_label && notification.action_url) {
+            const actionBtn = card.querySelector('.feature-discovery-primary');
+            if (actionBtn) {
+                actionBtn.addEventListener('click', () => {
+                    // Navigate to the action URL
+                    if (notification.action_url.startsWith('#')) {
+                        // Internal navigation
+                        if (window.SpaxelRouter) {
+                            window.SpaxelRouter.navigate(notification.action_url.substring(2));
+                        } else {
+                            window.location.hash = notification.action_url;
+                        }
+                    } else {
+                        // External link
+                        window.open(notification.action_url, '_blank');
+                    }
+                    // Dismiss after action
+                    dismissFeatureNotification(notification.event_id);
+                });
+            }
+        }
+
+        container.appendChild(card);
+
+        // Auto-dismiss after 30 seconds if not interacted with
+        setTimeout(() => {
+            if (card.parentNode) {
+                dismissFeatureNotification(notification.event_id);
+            }
+        }, 30000);
+    }
+
+    /**
+     * Dismiss a feature discovery notification
+     */
+    async function dismissFeatureNotification(eventID) {
+        // Remove from UI
+        const card = document.querySelector(`.feature-discovery-notification[data-event-id="${eventID}"]`);
+        if (card) {
+            card.classList.add('feature-discovery-dismissed');
+            setTimeout(() => {
+                if (card.parentNode) {
+                    card.remove();
+                }
+            }, 300);
+        }
+
+        // Acknowledge on server
+        try {
+            await fetch(`/api/help/notifications/${encodeURIComponent(eventID)}/acknowledge`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+        } catch (err) {
+            console.error('[FeatureDiscovery] Failed to acknowledge notification:', err);
+        }
+
+        // Remove from displayed set
+        displayedNotificationIDs.delete(eventID);
+    }
+
+    // Update public API to include feature discovery methods
+    window.Proactive.startFeatureNotificationPolling = startFeatureNotificationPolling;
+    window.Proactive.stopFeatureNotificationPolling = stopFeatureNotificationPolling;
+    window.Proactive.dismissFeatureNotification = dismissFeatureNotification;
+
+    // Start feature notification polling on init
+    const originalInit = window.Proactive.init;
+    window.Proactive.init = function() {
+        if (originalInit) {
+            originalInit.call(this);
+        }
+        startFeatureNotificationPolling();
+    };
 
 })();
