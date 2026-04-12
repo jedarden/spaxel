@@ -144,7 +144,7 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get OTA progress if OTA manager is available
-	var otaProgress map[string]NodeOTAProgress
+	var otaProgress map[string]ota.NodeOTAProgress
 	if h.otaMgr != nil {
 		otaProgress = h.otaMgr.GetProgress()
 	}
