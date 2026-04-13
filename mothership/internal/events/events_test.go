@@ -17,6 +17,9 @@ func openTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
+	// In-memory SQLite databases are per-connection; limit to one connection
+	// so all goroutines share the same in-memory database.
+	db.SetMaxOpenConns(1)
 
 	// Create the schema
 	schema := `

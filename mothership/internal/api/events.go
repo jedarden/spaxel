@@ -270,13 +270,13 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	eventType := r.URL.Query().Get("type")
 	zone := r.URL.Query().Get("zone")
 	zoneID := r.URL.Query().Get("zone_id")
-	if zoneID != "" && zone == "" {
-		zone = zoneID
+	if zoneID != "" {
+		zone = zoneID // zone_id takes precedence over zone
 	}
 	person := r.URL.Query().Get("person")
 	personID := r.URL.Query().Get("person_id")
-	if personID != "" && person == "" {
-		person = personID
+	if personID != "" {
+		person = personID // person_id takes precedence over person
 	}
 	afterStr := r.URL.Query().Get("after")
 	sinceStr := r.URL.Query().Get("since") // Alias for after
@@ -330,7 +330,7 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		"security_alert":    true,
 		"sleep_session_end": true,
 	}
-	// Default to expert mode when mode parameter is empty or invalid
+	// Default to expert mode; switch to simple mode only when explicitly requested
 	isSimpleMode := mode == "simple"
 
 	// Prepare FTS5 query with prefix matching
@@ -399,8 +399,10 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		whereArgs = append(whereArgs, afterTS)
 	}
 	if untilTS > 0 {
-		whereSQL += " AND " + p + "timestamp_ms <= ?"
-		whereArgs = append(whereArgs, untilTS)
+		// Use < untilTS+1000 to include the entire second when the until timestamp
+		// is in second precision (RFC3339 format truncates sub-seconds).
+		whereSQL += " AND " + p + "timestamp_ms < ?"
+		whereArgs = append(whereArgs, untilTS+1000)
 	}
 
 	// COUNT for total_filtered

@@ -16,28 +16,36 @@ const bufferSize = 1000
 
 // StorageSubscriber subscribes to EventBus and persists events to SQLite.
 // It uses a buffered queue with drop-oldest behavior to ensure it never blocks publishers.
+// Shutdown is two-phase: forwarders drain their EventBus channels first, then the worker
+// drains the internal queue. This guarantees in-flight events are not silently dropped.
 type StorageSubscriber struct {
-	db        *sql.DB
-	bus       *EventBus
-	queue     chan EventPayload
-	dropped   int64 // Counter for dropped events
-	dropWarn  int64 // Counter for when we last logged a drop warning
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	mu        sync.Mutex
+	db              *sql.DB
+	bus             *EventBus
+	queue           chan EventPayload
+	dropped         int64 // Counter for dropped events
+	dropWarn        int64 // Counter for when we last logged a drop warning
+	workerCtx       context.Context
+	workerCancel    context.CancelFunc
+	forwarderCtx    context.Context
+	forwarderCancel context.CancelFunc
+	forwarderWg     sync.WaitGroup // tracks forwarder goroutines
+	workerWg        sync.WaitGroup // tracks worker goroutine
+	mu              sync.Mutex
 }
 
 // NewStorageSubscriber creates a new timeline storage subscriber.
 // The subscriber runs in a background goroutine until Stop() is called.
 func NewStorageSubscriber(db *sql.DB, bus *EventBus) *StorageSubscriber {
-	ctx, cancel := context.WithCancel(context.Background())
+	wCtx, wCancel := context.WithCancel(context.Background())
+	fCtx, fCancel := context.WithCancel(context.Background())
 	return &StorageSubscriber{
-		db:     db,
-		bus:    bus,
-		queue:  make(chan EventPayload, bufferSize),
-		ctx:    ctx,
-		cancel: cancel,
+		db:              db,
+		bus:             bus,
+		queue:           make(chan EventPayload, bufferSize),
+		workerCtx:       wCtx,
+		workerCancel:    wCancel,
+		forwarderCtx:    fCtx,
+		forwarderCancel: fCancel,
 	}
 }
 
@@ -70,24 +78,37 @@ func (s *StorageSubscriber) Start() {
 	// Subscribe to each event type and forward to our queue
 	for _, eventType := range eventTypes {
 		ch := s.bus.Subscribe(eventType)
-		s.wg.Add(1)
+		s.forwarderWg.Add(1)
 		go s.forwarder(ch)
 	}
 
 	// Start the storage worker
-	s.wg.Add(1)
+	s.workerWg.Add(1)
 	go s.worker()
 }
 
 // forwarder reads events from a subscriber channel and forwards them to the queue.
 // If the queue is full, it drops the oldest event (drop-oldest behavior).
+// On shutdown (forwarderCtx cancelled), it drains any remaining buffered events from
+// the EventBus channel before exiting so they are not silently lost.
 func (s *StorageSubscriber) forwarder(ch <-chan EventPayload) {
-	defer s.wg.Done()
+	defer s.forwarderWg.Done()
 
 	for {
 		select {
-		case <-s.ctx.Done():
-			return
+		case <-s.forwarderCtx.Done():
+			// Drain remaining events buffered in the EventBus channel before exiting
+			for {
+				select {
+				case payload, ok := <-ch:
+					if !ok {
+						return
+					}
+					s.enqueue(payload)
+				default:
+					return
+				}
+			}
 		case payload, ok := <-ch:
 			if !ok {
 				return
@@ -127,12 +148,12 @@ func (s *StorageSubscriber) enqueue(payload EventPayload) {
 
 // worker processes events from the queue and writes them to SQLite.
 func (s *StorageSubscriber) worker() {
-	defer s.wg.Done()
+	defer s.workerWg.Done()
 
 	for {
 		select {
-		case <-s.ctx.Done():
-			// Drain remaining events before exiting
+		case <-s.workerCtx.Done():
+			// Drain remaining events before exiting (forwarders have already finished)
 			s.drain()
 			return
 		case payload := <-s.queue:
@@ -383,13 +404,17 @@ func (s *StorageSubscriber) drain() {
 }
 
 // Stop gracefully shuts down the storage subscriber.
-// It waits for all queued events to be written to SQLite.
+// It uses two-phase shutdown: first all forwarders are stopped so they can drain
+// their EventBus channels into the internal queue, then the worker is stopped so
+// it can drain the internal queue to SQLite. This ensures no in-flight events are lost.
 func (s *StorageSubscriber) Stop() {
-	// Signal all goroutines to stop
-	s.cancel()
+	// Phase 1: stop forwarders and let them drain their EventBus channels
+	s.forwarderCancel()
+	s.forwarderWg.Wait()
 
-	// Wait for all goroutines to finish
-	s.wg.Wait()
+	// Phase 2: stop worker (it will drain the internal queue)
+	s.workerCancel()
+	s.workerWg.Wait()
 
 	log.Printf("[INFO] Timeline storage stopped (total events dropped: %d)", s.dropped)
 }
