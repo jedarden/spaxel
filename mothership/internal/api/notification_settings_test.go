@@ -239,6 +239,11 @@ func TestNotificationSettingsHandler(t *testing.T) {
 	})
 
 	t.Run("POST /api/notifications/test - no channel configured", func(t *testing.T) {
+		// Reset channel to none to ensure isolation from prior sub-tests
+		resetReq := httptest.NewRequest("PUT", "/api/settings/notifications", strings.NewReader(`{"channel_type":"none"}`))
+		resetReq.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(httptest.NewRecorder(), resetReq)
+
 		reqBody := `{"title": "Test", "body": "Test body"}`
 
 		req := httptest.NewRequest("POST", "/api/notifications/test", strings.NewReader(reqBody))
@@ -309,8 +314,6 @@ func openTestDB(dbPath string) (*sql.DB, error) {
 
 // TestNotificationSettingsValidation tests validation logic.
 func TestNotificationSettingsValidation(t *testing.T) {
-	h := &NotificationSettingsHandler{}
-
 	t.Run("validateChannelType - valid types", func(t *testing.T) {
 		validTypes := []string{"none", "ntfy", "pushover", "webhook"}
 		for _, typ := range validTypes {

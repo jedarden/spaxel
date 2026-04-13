@@ -322,8 +322,9 @@ func (s *Service) isQuietHours() bool {
 }
 
 // Send sends a notification to all enabled channels.
+// URGENT and Critical priority notifications bypass quiet hours.
 func (s *Service) Send(notif Notification) error {
-	if s.isQuietHours() {
+	if s.isQuietHours() && notif.Priority < int(PriorityUrgent) {
 		log.Printf("[DEBUG] Notification suppressed (quiet hours): %s", notif.Title)
 		return nil
 	}
@@ -684,6 +685,27 @@ func (s *Service) GenerateFloorPlanThumbnail(width, height int, blobs []struct {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// GetQuietHours returns the current quiet hours configuration.
+func (s *Service) GetQuietHours() QuietHoursConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.quietHours == nil {
+		return QuietHoursConfig{}
+	}
+	return *s.quietHours
+}
+
+// GetChannels returns a copy of all configured channels.
+func (s *Service) GetChannels() map[string]ChannelConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]ChannelConfig, len(s.channels))
+	for id, cc := range s.channels {
+		out[id] = *cc
+	}
+	return out
 }
 
 // GetHistory returns recent notification history.

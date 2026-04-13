@@ -161,13 +161,9 @@ func (ext *ExtendedService) migrateExtended() error {
 	return err
 }
 
-// getDB returns the database from the base service using reflection or accessor.
+// getDB returns the database from the base service.
 func (ext *ExtendedService) getDB() *sql.DB {
-	// Access the db field from the base Service
-	// Since db is lowercase, we need to use the Service's methods
-	// For now, we'll use a workaround by accessing through the Service
-	type dbGetter interface{ getDB() *sql.DB }
-	return nil // Placeholder - we'll use Service's methods instead
+	return ext.Service.db
 }
 
 func (ext *ExtendedService) loadBatchingConfig() error {
@@ -443,16 +439,19 @@ func (ext *ExtendedService) GenerateFloorPlanThumbnailExtended(width, height int
 		w := int(zone.W * scale)
 		h := int(zone.D * scale)
 
-		zoneColor := color.RGBA{79, 195, 247, 51} // Default blue with 20% opacity
+		// Use NRGBA (non-premultiplied) for semi-transparent colors.
+		// color.RGBA stores premultiplied alpha, which causes overflow artifacts
+		// when the stored R/G/B values exceed the alpha value.
+		zoneColor := color.NRGBA{79, 195, 247, 51} // Default blue with 20% opacity
 		if zone.Highlight {
-			zoneColor = color.RGBA{79, 195, 247, 150} // Brighter for highlight
+			zoneColor = color.NRGBA{79, 195, 247, 150} // Brighter for highlight
 		}
 
 		// Draw zone fill
 		draw.Draw(img, image.Rect(x, y, x+w, y+h), &image.Uniform{zoneColor}, image.Point{}, draw.Over)
 
 		// Draw outline
-		outlineColor := color.RGBA{255, 255, 255, 100}
+		var outlineColor color.Color = color.NRGBA{255, 255, 255, 100}
 		if zone.Highlight {
 			outlineColor = color.RGBA{255, 255, 255, 255}
 		}
