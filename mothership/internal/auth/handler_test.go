@@ -407,17 +407,18 @@ func TestPublicPaths(t *testing.T) {
 		{"/api/auth/status", true},
 		{"/api/auth/setup", true},
 		{"/api/auth/login", true},
+		{"/api/auth/logout", true},
 		{"/api/provision", true},
+		{"/ws/node", true},
 		{"/firmware/spaxel-1.0.0.bin", true},
 		{"/api/settings", false},
 		{"/api/nodes", false},
 		{"/ws/dashboard", false},
-		{"/ws/node", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			result := isPublicPath(tt.path)
+			result := IsPublicPath(tt.path)
 			if result != tt.expected {
 				t.Errorf("isPublicPath(%q) = %v, want %v", tt.path, result, tt.expected)
 			}
@@ -888,7 +889,7 @@ func TestHandler_ChangePIN_Unauthenticated(t *testing.T) {
 
 	// Try to change PIN without authentication (no cookie)
 	changeReqBody := `{"old_pin": "1234", "new_pin": "5678"}`
-	req := httptest.NewRequest("POST", "/api/auth/change-pin", strings.NewReader(changeReqBody))
+	req = httptest.NewRequest("POST", "/api/auth/change-pin", strings.NewReader(changeReqBody))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 
