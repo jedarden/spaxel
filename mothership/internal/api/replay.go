@@ -654,9 +654,9 @@ func (h *ReplayHandler) GetSessions() []SessionInfo {
 	return sessions
 }
 
-// Seek moves the active replay session to the target timestamp.
+// SeekTo moves the active replay session to the target timestamp.
 // Implements dashboard.ReplayHandler interface.
-func (h *ReplayHandler) Seek(targetMS int64) error {
+func (h *ReplayHandler) SeekTo(targetMS int64) error {
 	h.mu.Lock()
 	sessionID := h.activeSessionID
 	h.mu.Unlock()

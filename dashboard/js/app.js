@@ -2544,4 +2544,30 @@
             rebuildFresnelDebugEllipsoids();
         }
     };
+
+    // ============================================================
+    // State exposure for Command Palette (Component 34)
+    // ============================================================
+    /**
+     * Returns a snapshot of the current app state for use by the command palette
+     * and other modules. Read-only view — callers must not mutate returned objects.
+     */
+    window.spaxelGetState = function () {
+        return {
+            nodes:      Array.from(state.nodes.values()),
+            links:      Array.from(state.links.values()),
+            bleDevices: Array.from(state.bleDevices.values())
+        };
+    };
+
+    // Ctrl+K / Cmd+K → Command Palette (expert mode only)
+    document.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            // CommandPaletteManager registers its own handler; let it run.
+            // This listener only acts as a fallback if the manager is not loaded.
+            if (!window.CommandPaletteManager) {
+                e.preventDefault();
+            }
+        }
+    });
 })();

@@ -46,6 +46,12 @@ type Hub struct {
 
 	// Replay handler for time-travel debugging
 	replayHandler ReplayHandler
+
+	// pendingExplainBlobIDs holds blob IDs for which dashboard clients have
+	// requested an ExplainabilitySnapshot via "request_explain" WebSocket messages.
+	// The fusion loop checks this and generates the snapshot on the next tick.
+	pendingExplainMu      sync.Mutex
+	pendingExplainBlobIDs map[int]bool
 }
 
 // snapshotCache holds serialised JSON bytes for each snapshot field,
@@ -169,7 +175,7 @@ type BriefingProvider interface {
 
 // ReplayHandler is the interface for replay engine operations.
 type ReplayHandler interface {
-	Seek(targetMS int64) error
+	SeekTo(targetMS int64) error
 	Play(speed float64) error
 	Pause() error
 	SetParams(params *replay.TunableParams) error
@@ -202,11 +208,57 @@ type Client struct {
 // NewHub creates a new dashboard hub
 func NewHub() *Hub {
 	return &Hub{
-		clients:    make(map[*Client]struct{}),
-		broadcast:  make(chan []byte, 256),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
+		clients:               make(map[*Client]struct{}),
+		broadcast:             make(chan []byte, 256),
+		register:              make(chan *Client),
+		unregister:            make(chan *Client),
+		pendingExplainBlobIDs: make(map[int]bool),
 	}
+}
+
+// RequestExplain records that a dashboard client wants an ExplainabilitySnapshot
+// for the given blobID. The snapshot will be broadcast on the next fusion tick.
+func (h *Hub) RequestExplain(blobID int) {
+	h.pendingExplainMu.Lock()
+	h.pendingExplainBlobIDs[blobID] = true
+	h.pendingExplainMu.Unlock()
+}
+
+// ConsumeExplainRequests returns and clears the set of blob IDs pending explain
+// snapshots. Called by the fusion loop each tick.
+func (h *Hub) ConsumeExplainRequests() []int {
+	h.pendingExplainMu.Lock()
+	defer h.pendingExplainMu.Unlock()
+	if len(h.pendingExplainBlobIDs) == 0 {
+		return nil
+	}
+	ids := make([]int, 0, len(h.pendingExplainBlobIDs))
+	for id := range h.pendingExplainBlobIDs {
+		ids = append(ids, id)
+	}
+	h.pendingExplainBlobIDs = make(map[int]bool)
+	return ids
+}
+
+// BroadcastExplainSnapshot broadcasts a "blob_explain" WebSocket message
+// containing the ExplainabilitySnapshot for a blob.
+//
+// The snapshot is serialised from the provided data map and broadcast to all
+// connected dashboard clients. The message format is:
+//
+//	{"type":"blob_explain","blob_id":N,"snapshot":{...}}
+func (h *Hub) BroadcastExplainSnapshot(blobID int, snapshot interface{}) {
+	msg := map[string]interface{}{
+		"type":     "blob_explain",
+		"blob_id":  blobID,
+		"snapshot": snapshot,
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("[WARN] Failed to marshal blob_explain message: %v", err)
+		return
+	}
+	h.Broadcast(data)
 }
 
 // SetIngestionState sets the ingestion state provider

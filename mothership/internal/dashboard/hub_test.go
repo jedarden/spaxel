@@ -967,3 +967,130 @@ func TestHub_BroadcastTriggerState(t *testing.T) {
 		})
 	}
 }
+
+// ---- ExplainabilitySnapshot WebSocket flow tests ----
+
+// TestHub_RequestExplain_ConsumeExplainRequests verifies that RequestExplain
+// enqueues a blob ID and ConsumeExplainRequests drains the queue.
+func TestHub_RequestExplain_ConsumeExplainRequests(t *testing.T) {
+	hub := NewHub()
+
+	// Initially nothing pending.
+	if ids := hub.ConsumeExplainRequests(); len(ids) != 0 {
+		t.Fatalf("expected empty queue, got %v", ids)
+	}
+
+	// Enqueue a request.
+	hub.RequestExplain(42)
+	ids := hub.ConsumeExplainRequests()
+	if len(ids) != 1 || ids[0] != 42 {
+		t.Fatalf("expected [42], got %v", ids)
+	}
+
+	// Queue should be empty after consuming.
+	if ids2 := hub.ConsumeExplainRequests(); len(ids2) != 0 {
+		t.Fatalf("expected empty queue after consume, got %v", ids2)
+	}
+}
+
+// TestHub_RequestExplain_Deduplicate verifies that duplicate requests for the same
+// blob ID are deduplicated (the ID appears only once per consume cycle).
+func TestHub_RequestExplain_Deduplicate(t *testing.T) {
+	hub := NewHub()
+
+	hub.RequestExplain(7)
+	hub.RequestExplain(7)
+	hub.RequestExplain(7)
+
+	ids := hub.ConsumeExplainRequests()
+	if len(ids) != 1 {
+		t.Fatalf("expected deduplication to 1 entry, got %d: %v", len(ids), ids)
+	}
+	if ids[0] != 7 {
+		t.Fatalf("expected id=7, got %d", ids[0])
+	}
+}
+
+// TestHub_BroadcastExplainSnapshot verifies that BroadcastExplainSnapshot sends a
+// correctly structured "blob_explain" message to all connected clients.
+func TestHub_BroadcastExplainSnapshot(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	client := &Client{
+		hub:  hub,
+		send: make(chan []byte, 20),
+	}
+	hub.Register(client)
+	time.Sleep(10 * time.Millisecond)
+	drainSnapshot(t, client.send) // discard the initial snapshot
+
+	snapshot := map[string]interface{}{
+		"blob_id":       1,
+		"blob_position": [3]float64{3.2, 1.8, 1.0},
+		"fusion_score":  0.87,
+	}
+	hub.BroadcastExplainSnapshot(1, snapshot)
+
+	select {
+	case msg := <-client.send:
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(msg, &parsed); err != nil {
+			t.Fatalf("failed to unmarshal blob_explain message: %v", err)
+		}
+		if parsed["type"] != "blob_explain" {
+			t.Errorf("expected type='blob_explain', got %v", parsed["type"])
+		}
+		blobIDRaw, ok := parsed["blob_id"]
+		if !ok {
+			t.Fatal("missing blob_id field")
+		}
+		switch v := blobIDRaw.(type) {
+		case float64:
+			if int(v) != 1 {
+				t.Errorf("expected blob_id=1, got %v", v)
+			}
+		default:
+			t.Errorf("unexpected blob_id type %T: %v", blobIDRaw, blobIDRaw)
+		}
+		if _, ok := parsed["snapshot"]; !ok {
+			t.Error("missing snapshot field in blob_explain message")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("expected to receive blob_explain broadcast")
+	}
+}
+
+// TestServer_HandleRequestExplain verifies that a "request_explain" WebSocket
+// command enqueues the blob ID in the hub for the next fusion tick.
+func TestServer_HandleRequestExplain(t *testing.T) {
+	hub := NewHub()
+	server := NewServer(hub)
+
+	cmd := []byte(`{"type":"request_explain","blob_id":99}`)
+	server.handleCommand(cmd, nil)
+
+	ids := hub.ConsumeExplainRequests()
+	if len(ids) != 1 || ids[0] != 99 {
+		t.Fatalf("expected [99] after handleRequestExplain, got %v", ids)
+	}
+}
+
+// TestServer_HandleRequestExplain_MissingBlobID verifies graceful handling of a
+// "request_explain" command with a missing or invalid blob_id field.
+func TestServer_HandleRequestExplain_MissingBlobID(t *testing.T) {
+	hub := NewHub()
+	server := NewServer(hub)
+
+	// Missing blob_id — should be silently ignored.
+	server.handleCommand([]byte(`{"type":"request_explain"}`), nil)
+	if ids := hub.ConsumeExplainRequests(); len(ids) != 0 {
+		t.Fatalf("expected no enqueued IDs for missing blob_id, got %v", ids)
+	}
+
+	// blob_id is a string — should also be silently ignored.
+	server.handleCommand([]byte(`{"type":"request_explain","blob_id":"not_a_number"}`), nil)
+	if ids := hub.ConsumeExplainRequests(); len(ids) != 0 {
+		t.Fatalf("expected no enqueued IDs for string blob_id, got %v", ids)
+	}
+}
