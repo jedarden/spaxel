@@ -474,8 +474,8 @@ func main() {
 		log.Fatalf("[FATAL] Failed to create auth handler: %v", err)
 	}
 	defer authHandler.Close()
-	authHandler.RegisterRoutes(&handleFuncAdapter{router: r})
 	r.Use(authHandler.Middleware)
+	authHandler.RegisterRoutes(&handleFuncAdapter{router: r})
 	log.Printf("[INFO] Auth handler registered at /api/auth/* (server-side enforcement enabled)")
 
 	// Create load shedder — single source of truth for load shedding state
