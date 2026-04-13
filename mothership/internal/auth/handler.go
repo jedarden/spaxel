@@ -671,14 +671,16 @@ func (h *Handler) GetInstallSecretForNodes() ([]byte, error) {
 	return h.GetInstallSecret()
 }
 
-// Helper function to check if a path should be excluded from auth
-func isPublicPath(path string) bool {
+// IsPublicPath checks if a path should be excluded from auth.
+func IsPublicPath(path string) bool {
 	publicPaths := []string{
 		"/healthz",
 		"/api/auth/status",
 		"/api/auth/setup",
 		"/api/auth/login",
+		"/api/auth/logout",
 		"/api/provision",
+		"/ws/node",
 	}
 
 	for _, pp := range publicPaths {
@@ -688,9 +690,51 @@ func isPublicPath(path string) bool {
 	}
 
 	// Firmware is served without auth (URL contains SHA256 for integrity)
-	if len(path) > 10 && path[:10] == "/firmware/" {
+	if strings.HasPrefix(path, "/firmware/") {
 		return true
 	}
 
 	return false
+}
+
+// IsPINConfigured returns true if a PIN has been set.
+func (h *Handler) IsPINConfigured() bool {
+	var pinBcrypt sql.NullString
+	err := h.db.QueryRow("SELECT pin_bcrypt FROM auth WHERE id = 1").Scan(&pinBcrypt)
+	return err == nil && pinBcrypt.Valid
+}
+
+// Middleware returns chi-compatible middleware that enforces auth on API and
+// WebSocket routes. Static files pass through so the login page can render.
+// During onboarding (no PIN configured), all requests pass through.
+func (h *Handler) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if IsPublicPath(path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Static files and HTML pages pass through so the login UI renders
+		if !strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/ws/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// During onboarding (no PIN set), allow everything
+		if !h.IsPINConfigured() {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if !h.IsAuthenticated(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "authentication required"})
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

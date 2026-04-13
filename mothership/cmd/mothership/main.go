@@ -475,7 +475,8 @@ func main() {
 	}
 	defer authHandler.Close()
 	authHandler.RegisterRoutes(&handleFuncAdapter{router: r})
-	log.Printf("[INFO] Auth handler registered at /api/auth/*")
+	r.Use(authHandler.Middleware)
+	log.Printf("[INFO] Auth handler registered at /api/auth/* (server-side enforcement enabled)")
 
 	// Create load shedder — single source of truth for load shedding state
 	shedder := loadshed.New()
