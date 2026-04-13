@@ -247,10 +247,10 @@ func (h *NotificationSettingsHandler) getSettings() (*notificationSettingsRespon
 	}
 
 	// Get channel type
-	var channelType string
-	err := h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_channel_type'`).Scan(&channelType)
+	var channelTypeJSON string
+	err := h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_channel_type'`).Scan(&channelTypeJSON)
 	if err == nil {
-		response.ChannelType = channelType
+		json.Unmarshal([]byte(channelTypeJSON), &response.ChannelType) //nolint:errcheck
 	}
 
 	// Get channel config
@@ -271,19 +271,19 @@ func (h *NotificationSettingsHandler) getSettings() (*notificationSettingsRespon
 	}
 
 	// Get quiet hours start
-	var quietStart string
-	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_quiet_hours_start'`).Scan(&quietStart)
+	var quietStartJSON string
+	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_quiet_hours_start'`).Scan(&quietStartJSON)
 	if err == nil {
-		response.QuietHoursStart = quietStart
+		json.Unmarshal([]byte(quietStartJSON), &response.QuietHoursStart) //nolint:errcheck
 	} else {
 		response.QuietHoursStart = "22:00"
 	}
 
 	// Get quiet hours end
-	var quietEnd string
-	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_quiet_hours_end'`).Scan(&quietEnd)
+	var quietEndJSON string
+	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_quiet_hours_end'`).Scan(&quietEndJSON)
 	if err == nil {
-		response.QuietHoursEnd = quietEnd
+		json.Unmarshal([]byte(quietEndJSON), &response.QuietHoursEnd) //nolint:errcheck
 	} else {
 		response.QuietHoursEnd = "07:00"
 	}
@@ -305,10 +305,10 @@ func (h *NotificationSettingsHandler) getSettings() (*notificationSettingsRespon
 	}
 
 	// Get morning digest time
-	var digestTime string
-	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_morning_digest_time'`).Scan(&digestTime)
+	var digestTimeJSON string
+	err = h.db.QueryRow(`SELECT value_json FROM settings WHERE key = 'notification_morning_digest_time'`).Scan(&digestTimeJSON)
 	if err == nil {
-		response.MorningDigestTime = digestTime
+		json.Unmarshal([]byte(digestTimeJSON), &response.MorningDigestTime) //nolint:errcheck
 	}
 
 	// Get smart batching enabled
@@ -497,6 +497,15 @@ func validateTimeFormat(timeStr string) error {
 		if c < '0' || c > '9' {
 			return &NotificationValidationError{Reason: "invalid minute (must be 00-59)"}
 		}
+	}
+	// Validate numeric ranges
+	hourVal := int(hour[0]-'0')*10 + int(hour[1]-'0')
+	minuteVal := int(minute[0]-'0')*10 + int(minute[1]-'0')
+	if hourVal > 23 {
+		return &NotificationValidationError{Reason: "invalid hour (must be 00-23)"}
+	}
+	if minuteVal > 59 {
+		return &NotificationValidationError{Reason: "invalid minute (must be 00-59)"}
 	}
 	return nil
 }
