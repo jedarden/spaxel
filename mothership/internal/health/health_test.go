@@ -72,7 +72,8 @@ func TestHealthCheckDBFailing(t *testing.T) {
 	}
 }
 
-// TestHealthCheckNoNodes tests that health check returns degraded after 5 min with no nodes.
+// TestHealthCheckNoNodes tests that health check stays OK after 5 min with no nodes
+// (zero nodes is valid for headless deployments).
 func TestHealthCheckNoNodes(t *testing.T) {
 	checker := &Checker{
 		startTime: time.Now().Add(-6 * time.Minute), // 6 minutes ago
@@ -88,8 +89,8 @@ func TestHealthCheckNoNodes(t *testing.T) {
 
 	resp := checker.check("1.0.0")
 
-	if resp.Status != "degraded" {
-		t.Errorf("expected status=degraded, got %s", resp.Status)
+	if resp.Status != "ok" {
+		t.Errorf("expected status=ok, got %s", resp.Status)
 	}
 	if resp.Reason != "no nodes connected" {
 		t.Errorf("expected reason='no nodes connected', got %s", resp.Reason)
