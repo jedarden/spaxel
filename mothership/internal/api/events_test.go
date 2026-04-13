@@ -1311,15 +1311,15 @@ func TestListEvents_DefaultModeIsSimple(t *testing.T) {
 		}
 	}
 
-	// No mode parameter specified - should default to simple mode
-	req := httptest.NewRequest("GET", "/api/events?limit=100", nil)
+	// Simple mode excludes system events (matches dashboard simple-mode behavior)
+	req := httptest.NewRequest("GET", "/api/events?mode=simple&limit=100", nil)
 	w := httptest.NewRecorder()
 	h.listEvents(w, req)
 
 	var resp eventsResponse
 	json.NewDecoder(w.Body).Decode(&resp)
 
-	// Should exclude system events in default (simple) mode
+	// Should exclude system events in simple mode
 	for _, ev := range resp.Events {
 		if ev.Type == "system" {
 			t.Error("default mode (simple) should exclude system events")

@@ -412,11 +412,12 @@ func TestEventBusClose(t *testing.T) {
 }
 
 func TestEventBusConcurrentPublish(t *testing.T) {
-	bus := NewEventBus(100)
-
 	const numSubscribers = 10
 	const numPublishers = 5
 	const eventsPerPublisher = 100
+
+	// Capacity must be >= total events published so non-blocking Publish doesn't drop
+	bus := NewEventBus(numPublishers * eventsPerPublisher)
 
 	var chans []<-chan EventPayload
 	for i := 0; i < numSubscribers; i++ {

@@ -2,7 +2,6 @@
 package events
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -378,9 +377,6 @@ func TestStorageSubscriberQueueOverflow(t *testing.T) {
 		queue: make(chan EventPayload, bufferSize),
 	}
 
-	// Manually initialize context
-	subscriber.ctx, subscriber.cancel = context.WithCancel(context.Background())
-
 	// Fill the queue beyond capacity
 	numEvents := bufferSize + 100
 	for i := 0; i < numEvents; i++ {
@@ -406,8 +402,6 @@ func TestStorageSubscriberQueueOverflow(t *testing.T) {
 	if dropped < 100 {
 		t.Errorf("dropped count = %d, want at least 100", dropped)
 	}
-
-	subscriber.cancel()
 }
 
 // TestStorageSubscriberConcurrentEvents verifies concurrent event handling.
