@@ -704,8 +704,32 @@ func (h *Handler) IsPINConfigured() bool {
 	return err == nil && pinBcrypt.Valid
 }
 
-// Middleware returns chi-compatible middleware that enforces auth on API and
-// WebSocket routes. Static files pass through so the login page can render.
+// isStaticAsset returns true for CSS, JS, and image files needed by the login page.
+func isStaticAsset(path string) bool {
+	return strings.HasPrefix(path, "/js/") ||
+		strings.HasPrefix(path, "/css/") ||
+		strings.HasPrefix(path, "/images/") ||
+		strings.HasPrefix(path, "/favicon")
+}
+
+// loginPage is a minimal HTML page containing only the auth overlay.
+// Deleting the overlay reveals a blank page, not the dashboard.
+const loginPage = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spaxel</title>
+<link rel="stylesheet" href="/css/panels.css">
+<style>body{margin:0;background:#1a1a2e;color:#fff;font-family:system-ui,sans-serif}</style>
+</head>
+<body>
+<script src="/js/auth.js"></script>
+</body>
+</html>`
+
+// Middleware returns chi-compatible middleware that enforces auth on all routes.
+// Static assets (JS/CSS) pass through so the login page can render.
 // During onboarding (no PIN configured), all requests pass through.
 func (h *Handler) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -716,8 +740,8 @@ func (h *Handler) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Static files and HTML pages pass through so the login UI renders
-		if !strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/ws/") {
+		// Static assets always pass through (needed by login page)
+		if isStaticAsset(path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -728,13 +752,21 @@ func (h *Handler) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if !h.IsAuthenticated(r) {
+		if h.IsAuthenticated(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Unauthenticated: API/WS get 401, page requests get a login-only page
+		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws/") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]string{"error": "authentication required"})
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, loginPage)
 	})
 }
