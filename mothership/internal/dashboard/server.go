@@ -140,6 +140,8 @@ func (s *Server) handleCommand(data []byte, client *Client) {
 		s.handleReplayApplyToLive(cmd)
 	case "replay_set_speed":
 		s.handleReplaySetSpeed(cmd)
+	case "request_explain":
+		s.handleRequestExplain(cmd)
 	default:
 		// Unknown command type - ignore
 		log.Printf("[DEBUG] Unknown WebSocket command type: %s", cmdType)
@@ -162,7 +164,7 @@ func (s *Server) handleReplaySeek(cmd map[string]interface{}) {
 
 	// Forward to replay handler if available
 	if s.hub.replayHandler != nil {
-		s.hub.replayHandler.Seek(targetMS)
+		s.hub.replayHandler.SeekTo(targetMS)
 	}
 }
 
@@ -303,6 +305,24 @@ func (s *Server) writePump(conn *websocket.Conn, client *Client) {
 			}
 		}
 	}
+}
+
+// handleRequestExplain handles "request_explain" commands from the dashboard.
+// The client sends {"type":"request_explain","blob_id":N} to request that the
+// server emit a "blob_explain" message on the next fusion tick.
+func (s *Server) handleRequestExplain(cmd map[string]interface{}) {
+	var blobID int
+	switch v := cmd["blob_id"].(type) {
+	case float64:
+		blobID = int(v)
+	case int:
+		blobID = v
+	default:
+		log.Printf("[WARN] request_explain: missing or invalid blob_id field")
+		return
+	}
+	s.hub.RequestExplain(blobID)
+	log.Printf("[DEBUG] request_explain queued for blob %d", blobID)
 }
 
 // Hub returns the server's hub for external use

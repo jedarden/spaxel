@@ -130,6 +130,25 @@ const Explainability = (function () {
             html += '    </tbody>' +
                 '  </table>' +
                 '</div>';
+
+            // Motion sparklines: 30-second deltaRMS history per contributing link
+            html += '<div class="explainability-section">' +
+                '  <h3 class="section-title">Signal History (30s)</h3>' +
+                '  <div class="sparklines-container" id="sparklines-container">';
+            data.contributing_links.forEach(function (link) {
+                var safeID = 'sparkline-' + link.link_id.replace(/[^a-zA-Z0-9]/g, '_');
+                html +=
+                    '<div class="sparkline-row">' +
+                    '  <span class="sparkline-label">' + _shortenMAC(link.node_mac) + ':' + _shortenMAC(link.peer_mac) + '</span>' +
+                    '  <canvas class="sparkline-canvas" id="' + safeID + '"' +
+                    '    width="200" height="40"' +
+                    '    data-link-id="' + link.link_id + '"' +
+                    '    data-delta-rms="' + link.delta_rms + '">' +
+                    '  </canvas>' +
+                    '</div>';
+            });
+            html += '  </div>' +
+                '</div>';
         }
 
         // All links (including non-contributing)
@@ -229,6 +248,129 @@ const Explainability = (function () {
             '#ff9800', // zone 5 - deep orange
         ];
         return colors[Math.min(zoneNumber - 1, colors.length - 1)] || '#999';
+    }
+
+    /**
+     * Draw a deltaRMS sparkline on a canvas element.
+     * The right edge represents the detection moment.
+     * A horizontal dashed line shows the motion threshold.
+     *
+     * @param {HTMLCanvasElement} canvas
+     * @param {number[]} points - deltaRMS values over 30 s (oldest first)
+     * @param {number} threshold - motion detection threshold (default 0.02)
+     */
+    function _drawSparkline(canvas, points, threshold) {
+        var ctx = canvas.getContext('2d');
+        var w = canvas.width;
+        var h = canvas.height;
+        threshold = threshold || 0.02;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Background
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, w, h);
+
+        var maxVal = threshold * 2;
+        if (points && points.length > 0) {
+            for (var i = 0; i < points.length; i++) {
+                if (points[i] > maxVal) maxVal = points[i];
+            }
+        }
+        maxVal = maxVal || 0.1;
+
+        // Threshold dashed line
+        var threshY = h - (threshold / maxVal) * (h - 6) - 3;
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = '#ff6b6b';
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(0, threshY);
+        ctx.lineTo(w, threshY);
+        ctx.stroke();
+        ctx.restore();
+
+        if (!points || points.length < 2) {
+            // Single value: draw a flat line at current level
+            var curVal = (points && points.length === 1) ? points[0] : 0;
+            var flatY = h - (curVal / maxVal) * (h - 6) - 3;
+            ctx.strokeStyle = '#4FC3F7';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, flatY);
+            ctx.lineTo(w - 2, flatY);
+            ctx.stroke();
+        } else {
+            var xStep = (w - 2) / (points.length - 1);
+
+            // Fill area under sparkline
+            ctx.fillStyle = 'rgba(79, 195, 247, 0.12)';
+            ctx.beginPath();
+            for (var i = 0; i < points.length; i++) {
+                var x = i * xStep;
+                var y = h - (points[i] / maxVal) * (h - 6) - 3;
+                if (i === 0) ctx.moveTo(x, h);
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo((points.length - 1) * xStep, h);
+            ctx.closePath();
+            ctx.fill();
+
+            // Sparkline
+            ctx.strokeStyle = '#4FC3F7';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (var i = 0; i < points.length; i++) {
+                var x = i * xStep;
+                var y = h - (points[i] / maxVal) * (h - 6) - 3;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        // Detection marker at right edge
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(w - 1, 0);
+        ctx.lineTo(w - 1, h);
+        ctx.stroke();
+    }
+
+    /**
+     * Fetch 30-second deltaRMS history for each contributing link and draw sparklines.
+     * Falls back gracefully if the recordings API is unavailable.
+     *
+     * @param {Array} contributingLinks - Array of link contribution objects
+     */
+    function _fetchAndDrawSparklines(contributingLinks) {
+        if (!contributingLinks || contributingLinks.length === 0) return;
+
+        contributingLinks.forEach(function (link) {
+            var safeID = 'sparkline-' + link.link_id.replace(/[^a-zA-Z0-9]/g, '_');
+            var canvas = document.getElementById(safeID);
+            if (!canvas) return;
+
+            var deltaRMS = link.delta_rms || 0;
+
+            // Try to fetch 30s history from the recordings API
+            fetch('/api/recordings/' + encodeURIComponent(link.link_id) + '/recent?seconds=30')
+                .then(function (resp) {
+                    if (!resp.ok) throw new Error('no data');
+                    return resp.json();
+                })
+                .then(function (data) {
+                    var points = Array.isArray(data.delta_rms) ? data.delta_rms : [deltaRMS];
+                    _drawSparkline(canvas, points, 0.02);
+                })
+                .catch(function () {
+                    // Fallback: render a flat line at the current deltaRMS value
+                    _drawSparkline(canvas, [deltaRMS], 0.02);
+                });
+        });
     }
 
     function toggleSection(header) {

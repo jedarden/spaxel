@@ -400,3 +400,150 @@ func TestEngine_PerformanceTwentyLinks(t *testing.T) {
 		t.Errorf("fusion took %v per call (limit %v)", perFuse, limit)
 	}
 }
+
+// ---- ExplainabilitySnapshot tests ----
+
+// TestExplainabilitySnapshot_ThreeLinks verifies that GenerateExplainabilitySnapshot
+// correctly computes per-link contributions for 3 known links with a blob at a
+// known position.
+func TestExplainabilitySnapshot_ThreeLinks(t *testing.T) {
+	nodePos := map[string]NodePosition{
+		"AA:BB:CC:DD:EE:01": {MAC: "AA:BB:CC:DD:EE:01", X: 0, Y: 1, Z: 0},
+		"AA:BB:CC:DD:EE:02": {MAC: "AA:BB:CC:DD:EE:02", X: 4, Y: 1, Z: 0},
+		"AA:BB:CC:DD:EE:03": {MAC: "AA:BB:CC:DD:EE:03", X: 2, Y: 1, Z: 4},
+	}
+	links := []LinkMotion{
+		{NodeMAC: "AA:BB:CC:DD:EE:01", PeerMAC: "AA:BB:CC:DD:EE:02", DeltaRMS: 0.10, Motion: true, HealthScore: 1.0},
+		{NodeMAC: "AA:BB:CC:DD:EE:02", PeerMAC: "AA:BB:CC:DD:EE:03", DeltaRMS: 0.05, Motion: true, HealthScore: 1.0},
+		{NodeMAC: "AA:BB:CC:DD:EE:01", PeerMAC: "AA:BB:CC:DD:EE:03", DeltaRMS: 0.08, Motion: true, HealthScore: 1.0},
+	}
+	result := &Result{
+		Blobs:     []Blob{{X: 2, Y: 1, Z: 2, Confidence: 0.85}},
+		Timestamp: time.Now(),
+	}
+
+	snap := GenerateExplainabilitySnapshot(result, 0, 1, links, nodePos, nil, 0.125, 0.2)
+	if snap == nil {
+		t.Fatal("expected non-nil snapshot")
+	}
+	if snap.BlobID != 1 {
+		t.Errorf("blob_id: got %d, want 1", snap.BlobID)
+	}
+	if got := [3]float64{snap.BlobPosition[0], snap.BlobPosition[1], snap.BlobPosition[2]}; got != [3]float64{2, 1, 2} {
+		t.Errorf("blob_position: got %v, want [2 1 2]", got)
+	}
+	if len(snap.PerLinkContributions) != 3 {
+		t.Fatalf("expected 3 per-link contributions, got %d", len(snap.PerLinkContributions))
+	}
+	// Verify each contribution has a positive deltaRMS and correct link IDs.
+	for _, c := range snap.PerLinkContributions {
+		if c.DeltaRMS <= 0 {
+			t.Errorf("link %s: DeltaRMS should be > 0, got %f", c.LinkID, c.DeltaRMS)
+		}
+		if c.ZoneNumber < 1 {
+			t.Errorf("link %s: ZoneNumber should be >= 1, got %d", c.LinkID, c.ZoneNumber)
+		}
+		if c.CombinedWeight <= 0 {
+			t.Errorf("link %s: CombinedWeight should be > 0, got %f", c.LinkID, c.CombinedWeight)
+		}
+		// Contributing flag: links with Motion=true and DeltaRMS > 0.02
+		if !c.Contributing {
+			t.Errorf("link %s: Contributing should be true (DeltaRMS=%f, Motion=true)", c.LinkID, c.DeltaRMS)
+		}
+	}
+}
+
+// TestExplainabilitySnapshot_ContributionPctSums verifies that the sum of
+// ContributionPct across all links equals approximately 100%.
+func TestExplainabilitySnapshot_ContributionPctSums(t *testing.T) {
+	nodePos := map[string]NodePosition{
+		"AA:BB:CC:DD:EE:01": {MAC: "AA:BB:CC:DD:EE:01", X: 0, Y: 1, Z: 0},
+		"AA:BB:CC:DD:EE:02": {MAC: "AA:BB:CC:DD:EE:02", X: 4, Y: 1, Z: 0},
+		"AA:BB:CC:DD:EE:03": {MAC: "AA:BB:CC:DD:EE:03", X: 2, Y: 1, Z: 4},
+	}
+	links := []LinkMotion{
+		{NodeMAC: "AA:BB:CC:DD:EE:01", PeerMAC: "AA:BB:CC:DD:EE:02", DeltaRMS: 0.15, Motion: true, HealthScore: 1.0},
+		{NodeMAC: "AA:BB:CC:DD:EE:02", PeerMAC: "AA:BB:CC:DD:EE:03", DeltaRMS: 0.08, Motion: true, HealthScore: 1.0},
+		{NodeMAC: "AA:BB:CC:DD:EE:01", PeerMAC: "AA:BB:CC:DD:EE:03", DeltaRMS: 0.12, Motion: true, HealthScore: 1.0},
+	}
+	result := &Result{
+		Blobs:     []Blob{{X: 2, Y: 1, Z: 2, Confidence: 0.80}},
+		Timestamp: time.Now(),
+	}
+
+	snap := GenerateExplainabilitySnapshot(result, 0, 2, links, nodePos, nil, 0.125, 0.2)
+	if snap == nil {
+		t.Fatal("expected non-nil snapshot")
+	}
+	total := 0.0
+	for _, c := range snap.PerLinkContributions {
+		total += c.ContributionPct
+	}
+	if math.Abs(total-100.0) > 0.01 {
+		t.Errorf("contribution_pct sum = %.4f, want ~100.0", total)
+	}
+}
+
+// TestExplainabilitySnapshot_NilOnInvalidBlob verifies that nil is returned when
+// the blob index is out of bounds.
+func TestExplainabilitySnapshot_NilOnInvalidBlob(t *testing.T) {
+	result := &Result{Blobs: []Blob{{X: 1, Y: 1, Z: 1, Confidence: 0.5}}}
+	if snap := GenerateExplainabilitySnapshot(result, 5, 1, nil, nil, nil, 0.125, 0.2); snap != nil {
+		t.Error("expected nil for out-of-range blob index")
+	}
+	if snap := GenerateExplainabilitySnapshot(nil, 0, 1, nil, nil, nil, 0.125, 0.2); snap != nil {
+		t.Error("expected nil for nil result")
+	}
+}
+
+// TestComputeFresnelEllipsoidAxes verifies the Fresnel ellipsoid geometry for a
+// 4-metre link with 5 GHz WiFi (lambda = 0.06 m).
+//
+// Expected values:
+//
+//	d = 4.0 m
+//	a = (d + lambda/2) / 2 = (4 + 0.03) / 2 = 2.015 m
+//	b = sqrt(a² − (d/2)²) = sqrt(2.015² − 4) = sqrt(0.060225) ≈ 0.245 m
+func TestComputeFresnelEllipsoidAxes(t *testing.T) {
+	tx := NodePosition{X: 0, Y: 0, Z: 0}
+	rx := NodePosition{X: 4, Y: 0, Z: 0}
+	lambda := 0.06 // 5 GHz
+
+	a, b, d := ComputeFresnelEllipsoidAxes(tx, rx, lambda)
+
+	const tol = 0.001
+	if math.Abs(d-4.0) > tol {
+		t.Errorf("d = %f, want 4.000 (±%f)", d, tol)
+	}
+	if math.Abs(a-2.015) > tol {
+		t.Errorf("a = %f, want 2.015 (±%f)", a, tol)
+	}
+	// b = sqrt(2.015^2 - 2^2) = sqrt(0.060225) ≈ 0.2454
+	wantB := math.Sqrt(2.015*2.015 - 2.0*2.0)
+	if math.Abs(b-wantB) > tol {
+		t.Errorf("b = %f, want %f (±%f)", b, wantB, tol)
+	}
+}
+
+// TestComputeFresnelEllipsoidAxes_2_4GHz verifies the geometry for 2.4 GHz WiFi
+// (lambda = 0.125 m) with the same 4-metre link.
+func TestComputeFresnelEllipsoidAxes_2_4GHz(t *testing.T) {
+	tx := NodePosition{X: 0, Y: 0, Z: 0}
+	rx := NodePosition{X: 4, Y: 0, Z: 0}
+	lambda := 0.125
+
+	a, b, d := ComputeFresnelEllipsoidAxes(tx, rx, lambda)
+
+	const tol = 0.001
+	if math.Abs(d-4.0) > tol {
+		t.Errorf("d = %f, want 4.000", d)
+	}
+	wantA := (4.0 + 0.125/2) / 2
+	if math.Abs(a-wantA) > tol {
+		t.Errorf("a = %f, want %f", a, wantA)
+	}
+	wantB := math.Sqrt(wantA*wantA - 2.0*2.0)
+	if math.Abs(b-wantB) > tol {
+		t.Errorf("b = %f, want %f", b, wantB)
+	}
+}
