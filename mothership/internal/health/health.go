@@ -122,9 +122,9 @@ func (c *Checker) check(version string) Response {
 		c.level3Since = time.Time{}
 	}
 
-	// Condition 3: No nodes online after 5 minutes uptime
+	// Condition 3: No nodes online after 5 minutes uptime (informational only,
+	// does not degrade status — zero nodes is valid for headless deployments)
 	if nodesOnline == 0 && uptime > 300 {
-		status = "degraded"
 		if reason == "" {
 			reason = "no nodes connected"
 		}
