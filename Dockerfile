@@ -7,8 +7,10 @@ FROM espressif/idf:v5.2 AS firmware-builder
 WORKDIR /project
 COPY firmware/ ./
 
+# Source export.sh to activate IDF toolchain (entrypoint is not called in build stages)
 # idf.py build produces build/spaxel-firmware.bin
-RUN idf.py build
+SHELL ["/bin/bash", "-c"]
+RUN . $IDF_PATH/export.sh && idf.py build
 
 # Stage 2: Build the Go binary
 FROM golang:1.25-bookworm AS builder
