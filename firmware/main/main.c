@@ -14,6 +14,7 @@
 #include "nvs.h"
 #include "esp_mac.h"
 #include "freertos/task.h"
+#include <string.h>
 
 static const char *TAG = "spaxel";
 

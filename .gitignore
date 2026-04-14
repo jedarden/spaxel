@@ -16,6 +16,8 @@ Thumbs.db
 firmware/build/
 firmware/managed_components/
 firmware/.cache/
+firmware/sdkconfig
+firmware/sdkconfig.old
 
 # Test and coverage
 *.test
