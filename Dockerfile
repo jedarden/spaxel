@@ -7,10 +7,11 @@ FROM espressif/idf:v5.2 AS firmware-builder
 WORKDIR /project
 COPY firmware/ ./
 
-# Source export.sh to activate IDF toolchain (entrypoint is not called in build stages)
+# Source export.sh to activate IDF toolchain (entrypoint is not called in build stages).
+# set-target must be run explicitly before build even when CONFIG_IDF_TARGET is in sdkconfig.defaults.
 # idf.py build produces build/spaxel-firmware.bin
 SHELL ["/bin/bash", "-c"]
-RUN . $IDF_PATH/export.sh && idf.py build
+RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build
 
 # Stage 2: Build the Go binary
 FROM golang:1.25-bookworm AS builder
