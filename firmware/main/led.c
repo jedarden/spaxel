@@ -100,7 +100,6 @@ esp_err_t led_blink_identify(uint32_t duration_ms) {
         2048,
         (void *)(uintptr_t)duration_ms,
         5,  // Priority
-        NULL,
         &s_led_state.task_handle
     );
 

@@ -1,6 +1,7 @@
 #include "wifi.h"
 #include "spaxel.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -12,6 +13,10 @@
 #include "freertos/task.h"
 #include <string.h>
 #include <ctype.h>
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 static const char *TAG = "wifi";
 
@@ -181,7 +186,7 @@ bool wifi_discover_mothership(char *ip_buf, size_t buf_len, uint16_t *port) {
     // Query mDNS for the mothership service
     mdns_result_t *results = NULL;
     esp_err_t err = mdns_query_ptr(SPAXEL_MDNS_SERVICE, SPAXEL_MDNS_PROTO,
-                                    5000, &results);
+                                    5000, 10, &results);
 
     if (err != ESP_OK || results == NULL) {
         ESP_LOGW(TAG, "mDNS query failed or no results");
@@ -308,7 +313,7 @@ static void url_decode(char *dst, const char *src, size_t dst_size) {
         if (src[i] == '+') {
             dst[j++] = ' ';
             i++;
-        } else if (src[i] == '%' && isxdigit(src[i+1]) && isxdigit(src[i+2])) {
+        } else if (src[i] == '%' && isxdigit((unsigned char)src[i+1]) && isxdigit((unsigned char)src[i+2])) {
             char hex[3] = {src[i+1], src[i+2], 0};
             dst[j++] = (char)strtol(hex, NULL, 16);
             i += 3;

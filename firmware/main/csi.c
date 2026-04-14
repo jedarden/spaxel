@@ -8,6 +8,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include <string.h>
+#include <math.h>
 
 static const char *TAG = "csi";
 
@@ -38,11 +39,11 @@ static bool s_passive_filter_enabled = false;
 static void csi_rx_task(void *arg);
 static void csi_tx_task(void *arg);
 static float compute_amplitude_variance(float new_amp);
-static void wifi_csi_cb(void *ctx, esp_wifi_csi_info_t *info);
+static void wifi_csi_cb(void *ctx, wifi_csi_info_t *info);
 
 esp_err_t csi_init(void) {
     // Create CSI queue
-    s_csi_queue = xQueueCreate(SPAXEL_CSI_QUEUE_SIZE, sizeof(esp_wifi_csi_info_t *));
+    s_csi_queue = xQueueCreate(SPAXEL_CSI_QUEUE_SIZE, sizeof(wifi_csi_info_t *));
     if (!s_csi_queue) {
         ESP_LOGE(TAG, "Failed to create CSI queue");
         return ESP_ERR_NO_MEM;
@@ -86,7 +87,7 @@ esp_err_t csi_init(void) {
     return ESP_OK;
 }
 
-static void wifi_csi_cb(void *ctx, esp_wifi_csi_info_t *info) {
+static void wifi_csi_cb(void *ctx, wifi_csi_info_t *info) {
     s_stats.frames_received++;
 
     // Apply passive BSSID filter if enabled
@@ -99,9 +100,9 @@ static void wifi_csi_cb(void *ctx, esp_wifi_csi_info_t *info) {
     }
 
     // Copy CSI info to queue (pointer to heap-allocated copy)
-    esp_wifi_csi_info_t *copy = malloc(sizeof(esp_wifi_csi_info_t));
+    wifi_csi_info_t *copy = malloc(sizeof(wifi_csi_info_t));
     if (copy) {
-        memcpy(copy, info, sizeof(esp_wifi_csi_info_t));
+        memcpy(copy, info, sizeof(wifi_csi_info_t));
         if (xQueueSend(s_csi_queue, &copy, 0) != pdPASS) {
             free(copy);
             s_stats.frames_dropped++;
@@ -112,7 +113,7 @@ static void wifi_csi_cb(void *ctx, esp_wifi_csi_info_t *info) {
 }
 
 static void csi_rx_task(void *arg) {
-    esp_wifi_csi_info_t *info;
+    wifi_csi_info_t *info;
 
     while (1) {
         if (xQueueReceive(s_csi_queue, &info, portMAX_DELAY) == pdPASS) {

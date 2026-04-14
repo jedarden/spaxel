@@ -7,12 +7,14 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
+#include "esp_netif.h"
+#include "driver/temperature_sensor.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "mbedtls/sha256.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semaphore.h"
+#include "freertos/semphr.h"
 #include "cJSON.h"
 #include <string.h>
 #include <strings.h>
@@ -336,8 +338,18 @@ esp_err_t websocket_send_health(void) {
                             esp_timer_get_time() / 1000);
 
     // Temperature (if available)
-    extern float esp_temp_get_celsius(void);
-    cJSON_AddNumberToObject(root, "temperature_c", esp_temp_get_celsius());
+    {
+        float tsens_value = 0.0f;
+        temperature_sensor_handle_t tsens = NULL;
+        temperature_sensor_config_t tsens_cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 50);
+        if (temperature_sensor_install(&tsens_cfg, &tsens) == ESP_OK) {
+            temperature_sensor_enable(tsens);
+            temperature_sensor_get_celsius(tsens, &tsens_value);
+            temperature_sensor_disable(tsens);
+            temperature_sensor_uninstall(tsens);
+        }
+        cJSON_AddNumberToObject(root, "temperature_c", tsens_value);
+    }
 
     cJSON_AddNumberToObject(root, "csi_rate_hz", g_state.packet_rate);
     cJSON_AddNumberToObject(root, "wifi_channel", wifi_get_channel());

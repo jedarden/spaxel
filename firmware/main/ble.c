@@ -7,7 +7,7 @@
 #include "esp_gap_ble_api.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semaphore.h"
+#include "freertos/semphr.h"
 #include "cJSON.h"
 #include <string.h>
 
