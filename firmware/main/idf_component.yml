@@ -1,0 +1,6 @@
+## IDF Component Manager Manifest
+## Declares managed component dependencies for the spaxel main component.
+## mdns was moved out of the built-in ESP-IDF tree in v5.x.
+dependencies:
+  idf: ">=5.0"
+  espressif/mdns: ">=1.3.0"
