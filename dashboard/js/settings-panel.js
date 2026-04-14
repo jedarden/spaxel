@@ -810,18 +810,7 @@
      * Handle logout
      */
     function handleLogout() {
-        if (!window.SpaxelAuth) {
-            console.error('[SettingsPanel] SpaxelAuth not available');
-            return;
-        }
-
-        window.SpaxelAuth.logout().then(function() {
-            // Logout successful - page will reload
-            SpaxelPanels.showSuccess('Logged out successfully');
-        }).catch(function(err) {
-            console.error('[SettingsPanel] Error logging out:', err);
-            SpaxelPanels.showError('Failed to logout');
-        });
+        // Auth is handled by Traefik/Google OAuth — no in-app logout needed
     }
 
     function escapeHtml(text) {

@@ -47,16 +47,6 @@
     async function init() {
         console.log('[FleetPage] Initializing fleet status page');
 
-        // Wait for authentication
-        if (window.SpaxelAuth) {
-            const isAuthenticated = await SpaxelAuth.checkStatus();
-            if (!isAuthenticated) {
-                // Redirect to login
-                window.location.href = '/';
-                return;
-            }
-        }
-
         cacheElements();
         bindEvents();
         await fetchFleetData();
