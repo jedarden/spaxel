@@ -23,7 +23,6 @@ import (
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/analytics"
 	"github.com/spaxel/mothership/internal/api"
-	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/automation"
 	"github.com/spaxel/mothership/internal/ble"
 	appconfig "github.com/spaxel/mothership/internal/config"
@@ -60,15 +59,6 @@ import (
 	"github.com/spaxel/mothership/internal/webhook"
 	"github.com/spaxel/mothership/internal/zones"
 )
-
-// handleFuncAdapter wraps a chi.Mux to satisfy auth.Handler's RegisterRoutes interface.
-type handleFuncAdapter struct {
-	router *chi.Mux
-}
-
-func (a *handleFuncAdapter) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	a.router.HandleFunc(pattern, handler)
-}
 
 // Phase 5: Configuration constants
 const (
@@ -468,15 +458,7 @@ func main() {
 	eventsHandler := api.NewEventsHandlerFromDB(mainDB)
 	log.Printf("[INFO] Events handler initialized (shared DB)")
 
-	// Auth handler for PIN-based authentication and session management
-	authHandler, err := auth.NewHandler(auth.Config{DB: mainDB})
-	if err != nil {
-		log.Fatalf("[FATAL] Failed to create auth handler: %v", err)
-	}
-	defer authHandler.Close()
-	r.Use(authHandler.Middleware)
-	authHandler.RegisterRoutes(&handleFuncAdapter{router: r})
-	log.Printf("[INFO] Auth handler registered at /api/auth/* (server-side enforcement enabled)")
+	// Auth is handled at the Traefik layer (Google OAuth) — no in-app PIN auth.
 
 	// Create load shedder — single source of truth for load shedding state
 	shedder := loadshed.New()
