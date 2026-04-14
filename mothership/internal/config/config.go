@@ -21,8 +21,9 @@ type Config struct {
 	BindAddr string // HTTP bind address (default "0.0.0.0:8080")
 
 	// Paths
-	DataDir   string // Persistent data directory (default "/data")
-	StaticDir string // Dashboard static files directory (default "/dashboard")
+	DataDir         string // Persistent data directory (default "/data")
+	StaticDir       string // Dashboard static files directory (default "/dashboard")
+	SeedFirmwareDir string // Read-only dir with baked-in firmware binaries (default "/firmware")
 
 	// mDNS
 	MDNSName    string // mDNS service name (default "spaxel")
@@ -64,6 +65,10 @@ func Load() (*Config, error) {
 
 	// SPAXEL_STATIC_DIR - string, default '/dashboard'
 	cfg.StaticDir = envOr("SPAXEL_STATIC_DIR", "/dashboard")
+
+	// SPAXEL_SEED_FIRMWARE_DIR - string, default '/firmware'
+	// Directory containing baked-in firmware binaries copied from the image at startup.
+	cfg.SeedFirmwareDir = envOr("SPAXEL_SEED_FIRMWARE_DIR", "/firmware")
 
 	// SPAXEL_MDNS_ENABLED - bool, default true
 	mdnsEnabled := envOr("SPAXEL_MDNS_ENABLED", "true")
@@ -196,6 +201,7 @@ func logConfig(cfg *Config) {
 	log.Printf("[CONFIG] SPAXEL_BIND_ADDR=%s", cfg.BindAddr)
 	log.Printf("[CONFIG] SPAXEL_DATA_DIR=%s", cfg.DataDir)
 	log.Printf("[CONFIG] SPAXEL_STATIC_DIR=%s", cfg.StaticDir)
+	log.Printf("[CONFIG] SPAXEL_SEED_FIRMWARE_DIR=%s", cfg.SeedFirmwareDir)
 	log.Printf("[CONFIG] SPAXEL_MDNS_ENABLED=%t", cfg.MDNSEnabled)
 	log.Printf("[CONFIG] SPAXEL_MDNS_NAME=%s", cfg.MDNSName)
 	log.Printf("[CONFIG] SPAXEL_LOG_LEVEL=%s", cfg.LogLevel)
