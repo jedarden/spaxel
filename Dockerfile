@@ -1,7 +1,16 @@
 # Spaxel Mothership Dockerfile
-# Multi-stage build for minimal production image
+# Multi-stage build: ESP32 firmware → Go binary → minimal runtime image
 
-# Stage 1: Build the Go binary
+# Stage 1: Build ESP32-S3 firmware
+FROM espressif/idf:v5.2 AS firmware-builder
+
+WORKDIR /project
+COPY firmware/ ./
+
+# idf.py build produces build/spaxel-firmware.bin
+RUN idf.py build
+
+# Stage 2: Build the Go binary
 FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
@@ -32,9 +41,11 @@ COPY --from=builder /app/spaxel /spaxel
 # Copy dashboard static files (served from filesystem at runtime)
 COPY dashboard/ /dashboard/
 
-# Create firmware directory (users should mount their own firmware volume)
-# The container will serve firmware binaries for OTA from /firmware/
-VOLUME ["/data", "/firmware"]
+# Bake ESP32 firmware into the image so the mothership can seed it on first run.
+# The mothership copies /firmware/*.bin → /data/firmware/ at startup if not present.
+COPY --from=firmware-builder /project/build/spaxel-firmware.bin /firmware/spaxel-firmware.bin
+
+VOLUME ["/data"]
 
 # Expose HTTP/WebSocket port
 EXPOSE 8080

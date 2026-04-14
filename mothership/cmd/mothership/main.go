@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"io"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -3821,6 +3822,9 @@ func main() {
 	events.StartArchiveScheduler(mainDB, archiveDone)
 	defer close(archiveDone)
 
+	// Seed firmware from image-baked binaries into the persistent data dir on first run
+	seedFirmwareDir(cfg.DataDir, cfg.SeedFirmwareDir)
+
 	// OTA firmware server and manager
 	firmwareDir := filepath.Join(cfg.DataDir, "firmware")
 	otaSrv := ota.NewServer(firmwareDir)
@@ -4688,6 +4692,52 @@ func resolveBlobIdentity(blobID int, matcher *ble.IdentityMatcher) string {
 		return match.DeviceName
 	}
 	return ""
+}
+
+// seedFirmwareDir copies *.bin files from seedDir into dataDir/firmware/ if they are
+// not already present. This seeds the OTA server with the firmware baked into the image
+// so the first ESP32 can be provisioned without a manual upload.
+func seedFirmwareDir(dataDir, seedDir string) {
+	dest := filepath.Join(dataDir, "firmware")
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		log.Printf("[WARN] firmware seed: mkdir %s: %v", dest, err)
+		return
+	}
+	entries, err := os.ReadDir(seedDir)
+	if err != nil {
+		// seedDir absent — no baked firmware in this image
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".bin") {
+			continue
+		}
+		dst := filepath.Join(dest, e.Name())
+		if _, err := os.Stat(dst); err == nil {
+			continue // already present — don't overwrite user uploads
+		}
+		src := filepath.Join(seedDir, e.Name())
+		if err := copyFileToPath(src, dst); err != nil {
+			log.Printf("[WARN] firmware seed: copy %s: %v", e.Name(), err)
+		} else {
+			log.Printf("[INFO] firmware seed: installed %s", e.Name())
+		}
+	}
+}
+
+func copyFileToPath(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 // splitLinkID parses a link ID in format "nodeMAC-peerMAC" into its components
