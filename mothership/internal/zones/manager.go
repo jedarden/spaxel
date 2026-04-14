@@ -501,15 +501,25 @@ func (m *Manager) GetAllPortals() []*Portal {
 	return portals
 }
 
+// pendingCrossing holds a crossing event and associated zone transition events to fire after lock release.
+type pendingCrossing struct {
+	crossing CrossingEvent
+	exit     *ZoneTransitionEvent
+	entry    *ZoneTransitionEvent
+}
+
 // UpdateBlobPositions updates blob positions and detects portal crossings.
+// Callbacks are fired synchronously after the lock is released to avoid deadlock.
 func (m *Manager) UpdateBlobPositions(blobs []struct {
 	ID     int
 	X, Y, Z float64
 }) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	now := time.Now()
+
+	// Collect pending events while holding the lock.
+	var pending []pendingCrossing
+
+	m.mu.Lock()
 
 	for _, blob := range blobs {
 		// Get previous position
@@ -525,43 +535,64 @@ func (m *Manager) UpdateBlobPositions(blobs []struct {
 			LastUpdated time.Time
 		}{blob.X, blob.Y, blob.Z, zoneID, now}
 
-		// Update occupancy
+		if existed && prev.ZoneID != zoneID {
+			// Remove blob from old zone occupancy
+			if prev.ZoneID != "" {
+				m.removeFromOccupancy(prev.ZoneID, blob.ID)
+			}
+		}
+
+		// Add to new zone occupancy
 		if zoneID != "" {
 			m.updateOccupancy(zoneID, blob.ID)
 		}
 
-		// Detect portal crossings
+		// Detect portal crossings and collect zone transition events
 		if existed && prev.ZoneID != zoneID {
-			m.detectCrossings(blob.ID, prev.X, prev.Y, prev.Z, blob.X, blob.Y, blob.Z, zoneID)
+			crossings := m.collectCrossings(blob.ID, prev.X, prev.Y, prev.Z, blob.X, blob.Y, blob.Z, zoneID)
 
-			// Fire zone exit callback for previous zone
-			if prev.ZoneID != "" && m.onZoneExit != nil {
+			// Build zone exit event
+			var exitEvt *ZoneTransitionEvent
+			if prev.ZoneID != "" {
 				prevName := ""
 				if z, ok := m.zones[prev.ZoneID]; ok {
 					prevName = z.Name
 				}
-				go m.onZoneExit(ZoneTransitionEvent{
+				exitEvt = &ZoneTransitionEvent{
 					BlobID:    blob.ID,
 					ZoneID:    prev.ZoneID,
 					ZoneName:  prevName,
 					Kind:      "zone_exit",
 					Timestamp: now,
-				})
+				}
 			}
 
-			// Fire zone entry callback for new zone
-			if zoneID != "" && m.onZoneEntry != nil {
+			// Build zone entry event
+			var entryEvt *ZoneTransitionEvent
+			if zoneID != "" {
 				newName := ""
 				if z, ok := m.zones[zoneID]; ok {
 					newName = z.Name
 				}
-				go m.onZoneEntry(ZoneTransitionEvent{
+				entryEvt = &ZoneTransitionEvent{
 					BlobID:    blob.ID,
 					ZoneID:    zoneID,
 					ZoneName:  newName,
 					Kind:      "zone_entry",
 					Timestamp: now,
-				})
+				}
+			}
+
+			for _, c := range crossings {
+				pending = append(pending, pendingCrossing{crossing: c, exit: exitEvt, entry: entryEvt})
+				// Only attach zone events to the first crossing
+				exitEvt = nil
+				entryEvt = nil
+			}
+
+			// If no portal crossings but zone changed, still fire zone events
+			if len(crossings) == 0 {
+				pending = append(pending, pendingCrossing{exit: exitEvt, entry: entryEvt})
 			}
 		}
 	}
@@ -584,6 +615,25 @@ func (m *Manager) UpdateBlobPositions(blobs []struct {
 					m.persistOccupancyCount(zoneID, occ.Count)
 				}
 			}
+		}
+	}
+
+	onCrossing := m.onCrossing
+	onZoneEntry := m.onZoneEntry
+	onZoneExit := m.onZoneExit
+
+	m.mu.Unlock()
+
+	// Fire callbacks synchronously after releasing the lock.
+	for _, p := range pending {
+		if p.crossing.PortalID != "" && onCrossing != nil {
+			onCrossing(p.crossing)
+		}
+		if p.exit != nil && onZoneExit != nil {
+			onZoneExit(*p.exit)
+		}
+		if p.entry != nil && onZoneEntry != nil {
+			onZoneEntry(*p.entry)
 		}
 	}
 }
@@ -630,6 +680,27 @@ func (m *Manager) updateOccupancy(zoneID string, blobID int) {
 	m.persistOccupancyCount(zoneID, occ.Count)
 }
 
+// removeFromOccupancy removes a blob from a zone's occupancy tracking.
+// Caller must hold m.mu write lock.
+func (m *Manager) removeFromOccupancy(zoneID string, blobID int) {
+	occ, exists := m.occupancy[zoneID]
+	if !exists {
+		return
+	}
+	newBlobIDs := make([]int, 0, len(occ.BlobIDs))
+	for _, id := range occ.BlobIDs {
+		if id != blobID {
+			newBlobIDs = append(newBlobIDs, id)
+		}
+	}
+	if len(newBlobIDs) == len(occ.BlobIDs) {
+		return // blob was not in this zone
+	}
+	occ.BlobIDs = newBlobIDs
+	occ.Count = len(occ.BlobIDs)
+	m.persistOccupancyCount(zoneID, occ.Count)
+}
+
 // persistOccupancyCount writes a single zone's occupancy to SQLite.
 // Caller must hold m.mu write lock.
 func (m *Manager) persistOccupancyCount(zoneID string, count int) {
@@ -642,8 +713,11 @@ func (m *Manager) persistOccupancyCount(zoneID string, count int) {
 	}
 }
 
-// detectCrossings checks if a blob crossed any portals.
-func (m *Manager) detectCrossings(blobID int, prevX, prevY, prevZ, currX, currY, currZ float64, newZoneID string) {
+// collectCrossings detects portal crossings and persists them, returning the events.
+// Caller must hold m.mu. Callbacks are NOT fired here — caller fires them after releasing the lock.
+func (m *Manager) collectCrossings(blobID int, prevX, prevY, prevZ, currX, currY, currZ float64, newZoneID string) []CrossingEvent {
+	var events []CrossingEvent
+
 	for _, portal := range m.portals {
 		if !portal.Enabled {
 			continue
@@ -685,14 +759,13 @@ func (m *Manager) detectCrossings(blobID int, prevX, prevY, prevZ, currX, currY,
 			// Persist event
 			m.recordCrossing(event)
 
-			// Fire callback
-			if m.onCrossing != nil {
-				go m.onCrossing(event)
-			}
-
 			log.Printf("[INFO] Portal crossing: blob %d crossed %s (direction: %d)", blobID, portal.Name, direction)
+
+			events = append(events, event)
 		}
 	}
+
+	return events
 }
 
 // pointPlaneSide returns which side of a plane a point is on (>0 or <0).
