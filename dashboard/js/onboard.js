@@ -394,7 +394,6 @@
 
     function renderFlashFirmware(contentEl) {
         var flashRetryCount = 0;
-        var flashLogs = [];
         var origConsole = { log: console.log, warn: console.warn, error: console.error };
 
         function appendLog(level, args) {
@@ -402,7 +401,6 @@
                 try { return (typeof a === 'object') ? JSON.stringify(a) : String(a); } catch (e) { return String(a); }
             }).join(' ');
             var ts = new Date().toISOString().slice(11, 23);
-            flashLogs.push({ level: level, ts: ts, msg: msg });
             var logEl = document.getElementById('flash-log-body');
             if (logEl) {
                 var color = level === 'error' ? '#ef9a9a' : level === 'warn' ? '#ffe082' : '#b0bec5';
@@ -424,6 +422,7 @@
             ['log', 'warn', 'error'].forEach(function (m) { console[m] = origConsole[m]; });
         }
 
+        // Single container: button → progress bar → status text → log → retry help
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
             '<h2>Flash Firmware</h2>' +
@@ -439,43 +438,49 @@
             '</ol>' +
             BOOTLOADER_SVG +
             '</div></details>' +
-            '<div id="flash-container"></div>' +
-            '<div id="flash-progress" class="wizard-progress" style="display:none">' +
-            '<div class="progress-bar"><div class="progress-fill" id="flash-progress-fill"></div></div>' +
-            '<p id="flash-status">Preparing...</p>' +
-            '</div>' +
-            '<div id="flash-recovery" style="display:none"></div>' +
-            '<details id="flash-log-details" style="margin-top:16px;font-size:12px">' +
-            '<summary style="cursor:pointer;color:#546e7a">Show install log</summary>' +
-            '<div id="flash-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
+            '<div id="flash-main">' +
+            '  <div id="flash-btn-area"></div>' +
+            '  <div id="flash-progress-bar" style="display:none;margin:12px 0">' +
+            '    <div class="progress-bar"><div class="progress-fill" id="flash-progress-fill"></div></div>' +
+            '  </div>' +
+            '  <p id="flash-status-text" style="display:none;margin:8px 0;font-size:13px;color:#80cbc4"></p>' +
+            '  <div id="flash-recovery" style="display:none"></div>' +
+            '  <details id="flash-log-details" style="margin-top:12px;font-size:12px">' +
+            '    <summary style="cursor:pointer;color:#546e7a">Show install log</summary>' +
+            '    <div id="flash-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
             'padding:8px;margin-top:4px;max-height:160px;overflow-y:auto;font-family:monospace"></div>' +
-            '</details>' +
+            '  </details>' +
+            '</div>' +
             '</div>';
         hideNav();
         patchConsole();
         appendLog('log', ['Flash step loaded']);
 
-        // Check esp-web-tools is loaded
         if (!customElements.get('esp-web-install-button')) {
             restoreConsole();
-            document.getElementById('flash-container').innerHTML =
+            document.getElementById('flash-btn-area').innerHTML =
                 '<p class="wizard-error">Firmware flashing component failed to load. ' +
                 'Please refresh the page and ensure you have a stable internet connection.</p>';
-            renderNav(true, 'Skip Flashing', function () {
-                goToStep(state.currentStepIndex + 1);
-            }, false);
+            renderNav(true, 'Skip Flashing', function () { goToStep(state.currentStepIndex + 1); }, false);
             return { cleanup: function () { } };
         }
 
+        function setStatus(msg) {
+            var el = document.getElementById('flash-status-text');
+            if (!el) { return; }
+            el.style.display = msg ? 'block' : 'none';
+            el.textContent = msg;
+        }
+
         function mountInstallButton() {
-            var container = document.getElementById('flash-container');
-            if (!container) { return; }
-            container.innerHTML = '';
+            var btnArea = document.getElementById('flash-btn-area');
+            if (!btnArea) { return; }
+            btnArea.innerHTML = '';
             var installBtn = document.createElement('esp-web-install-button');
             installBtn.setAttribute('manifest', '/api/firmware/manifest');
             installBtn.innerHTML = '<button class="wizard-btn wizard-btn-primary" slot="activate">' +
                 (flashRetryCount > 0 ? 'Try Again' : 'Start Flashing') + '</button>';
-            container.appendChild(installBtn);
+            btnArea.appendChild(installBtn);
 
             installBtn.addEventListener('state-changed', function (e) {
                 var s = (e.detail || {}).state;
@@ -484,12 +489,12 @@
 
             installBtn.addEventListener('flash-start', function () {
                 appendLog('log', ['flash-start']);
-                document.getElementById('flash-progress').style.display = 'block';
-                document.getElementById('flash-status').textContent = 'Flashing...';
+                btnArea.style.display = 'none';
+                document.getElementById('flash-progress-bar').style.display = 'block';
                 document.getElementById('flash-progress-fill').style.width = '0%';
-                container.style.display = 'none';
                 document.getElementById('flash-recovery').style.display = 'none';
                 document.getElementById('flash-log-details').open = true;
+                setStatus('Connecting...');
             });
 
             installBtn.addEventListener('flash-progress', function (e) {
@@ -497,15 +502,15 @@
                 var pct = detail.bytesTotal > 0
                     ? Math.round((detail.bytesWritten / detail.bytesTotal) * 100) : 0;
                 document.getElementById('flash-progress-fill').style.width = pct + '%';
-                document.getElementById('flash-status').textContent = 'Flashing... ' + pct + '%';
+                setStatus('Flashing... ' + pct + '%');
             });
 
             installBtn.addEventListener('flash-success', function () {
                 appendLog('log', ['flash-success']);
                 restoreConsole();
-                document.getElementById('flash-progress').style.display = 'none';
-                container.innerHTML = '<p class="wizard-success">✓ Firmware flashed successfully!</p>';
-                container.style.display = 'block';
+                document.getElementById('flash-progress-bar').style.display = 'none';
+                setStatus('✓ Firmware flashed successfully!');
+                document.getElementById('flash-status-text').style.color = '#a5d6a7';
                 saveState();
                 setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1500);
             });
@@ -515,12 +520,13 @@
                 var errDetail = '';
                 try { errDetail = JSON.stringify(e.detail || {}); } catch (_) { errDetail = String(e.detail); }
                 appendLog('error', ['flash-error detail=' + errDetail]);
+                document.getElementById('flash-progress-bar').style.display = 'none';
                 document.getElementById('flash-log-details').open = true;
-                document.getElementById('flash-progress').style.display = 'none';
-                container.style.display = 'block';
+                setStatus('');
                 var recovery = document.getElementById('flash-recovery');
                 recovery.style.display = 'block';
                 recovery.innerHTML = renderBootloaderHelp(flashRetryCount);
+                btnArea.style.display = 'block';
                 mountInstallButton();
             });
         }
