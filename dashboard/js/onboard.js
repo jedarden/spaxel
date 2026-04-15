@@ -497,22 +497,45 @@
                 setStatus('Connecting...');
             });
 
-            installBtn.addEventListener('flash-progress', function (e) {
-                var detail = e.detail || {};
-                var pct = detail.bytesTotal > 0
-                    ? Math.round((detail.bytesWritten / detail.bytesTotal) * 100) : 0;
-                document.getElementById('flash-progress-fill').style.width = pct + '%';
-                setStatus('Flashing... ' + pct + '%');
-            });
-
-            installBtn.addEventListener('flash-success', function () {
-                appendLog('log', ['flash-success']);
+            var flashCompleteTimer = null;
+            function onFlashComplete() {
+                if (flashCompleteTimer) { clearTimeout(flashCompleteTimer); flashCompleteTimer = null; }
                 restoreConsole();
                 document.getElementById('flash-progress-bar').style.display = 'none';
                 setStatus('✓ Firmware flashed successfully!');
                 document.getElementById('flash-status-text').style.color = '#a5d6a7';
                 saveState();
                 setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1500);
+            }
+
+            installBtn.addEventListener('flash-progress', function (e) {
+                var detail = e.detail || {};
+                var pct = detail.bytesTotal > 0
+                    ? Math.round((detail.bytesWritten / detail.bytesTotal) * 100) : 0;
+                document.getElementById('flash-progress-fill').style.width = pct + '%';
+                setStatus('Flashing... ' + pct + '%');
+                // If we hit 100% but flash-success doesn't fire (e.g. JS error in
+                // esp-web-tools' progress display), show a manual Continue button.
+                if (pct >= 100 && !flashCompleteTimer) {
+                    flashCompleteTimer = setTimeout(function () {
+                        flashCompleteTimer = null;
+                        appendLog('log', ['flash-success not received after 100% — showing manual continue']);
+                        document.getElementById('flash-progress-bar').style.display = 'none';
+                        setStatus('✓ Flash complete.');
+                        document.getElementById('flash-status-text').style.color = '#a5d6a7';
+                        btnArea.style.display = 'block';
+                        btnArea.innerHTML = '<button class="wizard-btn wizard-btn-primary" id="flash-continue-btn">Continue →</button>';
+                        document.getElementById('flash-continue-btn').addEventListener('click', function () {
+                            saveState();
+                            goToStep(state.currentStepIndex + 1);
+                        });
+                    }, 4000);
+                }
+            });
+
+            installBtn.addEventListener('flash-success', function () {
+                appendLog('log', ['flash-success']);
+                onFlashComplete();
             });
 
             installBtn.addEventListener('flash-error', function (e) {
