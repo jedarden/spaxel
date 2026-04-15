@@ -4712,11 +4712,17 @@ func seedFirmwareDir(dataDir, seedDir string) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".bin") {
 			continue
 		}
-		dst := filepath.Join(dest, e.Name())
-		if _, err := os.Stat(dst); err == nil {
-			continue // already present — don't overwrite user uploads
-		}
 		src := filepath.Join(seedDir, e.Name())
+		dst := filepath.Join(dest, e.Name())
+		// Overwrite if missing or if the baked binary has a different size
+		// (catches upgrades where the PVC still holds an older binary).
+		if dstInfo, err := os.Stat(dst); err == nil {
+			if srcInfo, err := e.Info(); err == nil && srcInfo.Size() == dstInfo.Size() {
+				log.Printf("[INFO] firmware seed: %s already current (%d bytes)", e.Name(), dstInfo.Size())
+				continue
+			}
+			log.Printf("[INFO] firmware seed: replacing %s (size changed)", e.Name())
+		}
 		if err := copyFileToPath(src, dst); err != nil {
 			log.Printf("[WARN] firmware seed: copy %s: %v", e.Name(), err)
 		} else {

@@ -13,12 +13,11 @@ COPY firmware/ ./
 SHELL ["/bin/bash", "-c"]
 RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
     python -m esptool --chip esp32s3 merge_bin \
-        --flash_mode dio --flash_freq 80m --flash_size 16MB \
+        --flash_mode dio --flash_freq 80m --flash_size 4MB \
         --output build/spaxel-firmware-merged.bin \
-        0x0      build/bootloader/bootloader.bin \
-        0x8000   build/partition_table/partition-table.bin \
-        0x10000  build/spaxel-firmware.bin \
-        0xc10000 build/ota_data_initial.bin
+        0x0     build/bootloader/bootloader.bin \
+        0x8000  build/partition_table/partition-table.bin \
+        0x10000 build/spaxel-firmware.bin
 
 # Stage 2: Build the Go binary
 FROM golang:1.25-bookworm AS builder
