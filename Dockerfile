@@ -13,6 +13,7 @@ COPY firmware/ ./
 SHELL ["/bin/bash", "-c"]
 RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
     python -m esptool --chip esp32s3 merge_bin \
+        --flash_mode dio --flash_freq 80m --flash_size 16MB \
         --output build/spaxel-firmware-merged.bin \
         0x0      build/bootloader/bootloader.bin \
         0x8000   build/partition_table/partition-table.bin \
