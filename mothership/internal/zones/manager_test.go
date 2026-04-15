@@ -823,6 +823,7 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
 				NX:  -1, NY: 0, NZ: 0, // Normal pointing -X (A side is +X)
+				Enabled: true,
 			},
 			prevPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
 			currPos:      struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
@@ -840,6 +841,7 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
 				NX:  -1, NY: 0, NZ: 0,
+				Enabled: true,
 			},
 			prevPos:      struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
 			currPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
@@ -856,6 +858,7 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
 				NX:  -1, NY: 0, NZ: 0,
+				Enabled: true,
 			},
 			prevPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
 			currPos:      struct{ X, Y, Z float64 }{X: 7, Y: 1, Z: 0.5}, // Still A side
@@ -873,6 +876,7 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
 				NX:  -1, NY: 0, NZ: 0,
+				Enabled: true,
 			},
 			prevPos:      struct{ X, Y, Z float64 }{X: 4.9, Y: 0, Z: 0}, // Just on B side
 			currPos:      struct{ X, Y, Z float64 }{X: 4.9, Y: 2, Z: 1}, // Still B side, moved in YZ
@@ -1088,6 +1092,7 @@ func TestOccupancyCount_WithPortalCrossing(t *testing.T) {
 		P2X: 5, P2Y: 2, P2Z: 0,
 		P3X: 5, P3Y: 0, P3Z: 1,
 		NX:  -1, NY: 0, NZ: 0,
+		Enabled: true,
 	}
 	m.CreatePortal(portal)
 
@@ -1282,6 +1287,7 @@ func TestZoneTransitionWebSocket_Broadcast(t *testing.T) {
 		P2X: 5, P2Y: 2, P2Z: 0,
 		P3X: 5, P3Y: 0, P3Z: 1,
 		NX:  -1, NY: 0, NZ: 0,
+		Enabled: true,
 	}
 	m.CreatePortal(portal)
 

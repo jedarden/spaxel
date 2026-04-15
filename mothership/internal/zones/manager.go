@@ -734,15 +734,17 @@ func (m *Manager) collectCrossings(blobID int, prevX, prevY, prevZ, currX, currY
 
 		// Check if crossed (signs are different)
 		if prevSide*currSide < 0 {
-			// Determine direction
+			// Determine direction based on where the blob came FROM (prevSide),
+			// not where it is now. prevSide > 0 means it was on the A side
+			// (positive half-space), so it crossed from A to B.
 			var direction int
 			var fromZone, toZone string
-			if currSide > 0 {
-				direction = 1 // A->B
+			if prevSide > 0 {
+				direction = 1 // A->B (was on A side, now on B side)
 				fromZone = portal.ZoneAID
 				toZone = portal.ZoneBID
 			} else {
-				direction = -1 // B->A
+				direction = -1 // B->A (was on B side, now on A side)
 				fromZone = portal.ZoneBID
 				toZone = portal.ZoneAID
 			}

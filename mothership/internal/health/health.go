@@ -19,8 +19,9 @@ type Checker struct {
 	db            *sql.DB
 	getNodeCount  func() int
 	shedder       *loadshed.Shedder
-	getShedLevel  func() int // optional override for load_level
-	level3Since   time.Time // When level 3 shedding started
+	getShedLevel  func() int    // optional override for load_level
+	level3Since   time.Time     // When level 3 shedding started
+	checkDB       func() string // injectable for testing; defaults to defaultCheckDB
 }
 
 // Config holds configuration for the health checker.
@@ -33,13 +34,15 @@ type Config struct {
 
 // New creates a new health checker.
 func New(cfg Config) *Checker {
-	return &Checker{
+	c := &Checker{
 		startTime:    time.Now(),
-		db:          cfg.DB,
+		db:           cfg.DB,
 		getNodeCount: cfg.GetNodeCount,
-		shedder:     cfg.Shedder,
+		shedder:      cfg.Shedder,
 		getShedLevel: cfg.GetShedLevel,
 	}
+	c.checkDB = c.defaultCheckDB
+	return c
 }
 
 // Response is the health check response JSON structure.
@@ -78,7 +81,12 @@ func (c *Checker) check(version string) Response {
 	uptime := int64(time.Since(c.startTime).Seconds())
 
 	// Check database health with 100ms timeout
-	dbStatus := c.checkDB()
+	var dbStatus string
+	if c.checkDB != nil {
+		dbStatus = c.checkDB()
+	} else {
+		dbStatus = c.defaultCheckDB()
+	}
 
 	// Get node count
 	nodesOnline := 0
@@ -141,8 +149,8 @@ func (c *Checker) check(version string) Response {
 	}
 }
 
-// checkDB runs a simple query with a 100ms timeout to verify database health.
-func (c *Checker) checkDB() string {
+// defaultCheckDB runs a simple query with a 100ms timeout to verify database health.
+func (c *Checker) defaultCheckDB() string {
 	if c.db == nil {
 		return "failing"
 	}
