@@ -2,7 +2,6 @@
 package timeline
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"testing"
@@ -118,8 +117,9 @@ func TestTimelineStorage(t *testing.T) {
 			})
 		}
 
-		// Wait for flush
-		time.Sleep(200 * time.Millisecond)
+		// Wait for flush — queueSize=1000 events at flushBatchSize=100 per 100ms tick
+		// requires ~1000ms; use 1500ms for headroom.
+		time.Sleep(1500 * time.Millisecond)
 
 		// Check that some events were dropped
 		stats := storage.Stats()
@@ -392,6 +392,10 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("Open database: %v", err)
 	}
+	// SQLite in-memory databases are per-connection. Enforce a single connection
+	// so all operations (schema creation, inserts, queries) share the same database.
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
 
 	// Create the events table
 	_, err = db.Exec(`
