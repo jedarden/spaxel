@@ -462,3 +462,187 @@ mothership/internal/mqtt/
 - ✅ >75% accuracy at 15-minute horizon - AccuracyTracker with rolling 7-day window
 
 **Phase 7 Status:** COMPLETE
+
+## Phase 8 — Analysis & Developer Tools
+
+Goal: Deep debugging, system tuning, and detection explainability.
+
+### Status: COMPLETE
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Activity timeline (Component 27) | **Done** | Universal event stream with tap-to-time-travel |
+| Detection explainability (Component 28) | **Done** | X-ray overlay, per-link contributions, BLE match details |
+| Time-travel debugging | **Done** | Pause live, scrub timeline, parameter tuning overlay |
+| Pre-deployment simulator | **Done** | Virtual space + nodes + walkers, GDOP overlay |
+| CSI simulator (`cmd/sim`) | **Done** | Go CLI for hardware-free testing |
+| Fresnel zone debug overlay | **Done** | Toggle wireframe ellipsoids in 3D scene |
+
+### Implementation Summary
+
+**Activity timeline (`internal/timeline/`):**
+- `Storage` subscribes to EventBus and writes events to SQLite asynchronously via buffered queue
+- Handles all event types: detections, zone transitions, alerts, system events, learning milestones
+- WebSocket push of new events to dashboard clients in real-time
+- REST API: `GET /api/events` with cursor-based pagination, filters (type/zone/person/time), and FTS5 search
+- Frontend: `sidebar-timeline.js` — virtualized list, tap-to-time-travel, inline feedback buttons
+
+**Detection explainability (`internal/explainability/`):**
+- `Handler` maintains per-blob explanation data updated by the fusion engine
+- Per-link contribution table: deltaRMS, Fresnel zone number, learned weight, contribution amount
+- BLE match details: per-node RSSI, triangulation position, confidence
+- Fresnel zone ellipsoid geometry for 3D visualization
+- Frontend: `explainability.js` — X-ray overlay dims non-contributors, glowing contributing links
+
+**Time-travel debugging (`internal/replay/`):**
+- Append-only `csi_replay.bin` with per-frame records (recv_time_ms + raw CSI binary)
+- `Worker` manages replay sessions: play/pause/seek/speed control
+- Parameter tuning: `PATCH /api/replay/params` re-runs pipeline on buffered data at max speed
+- "Apply to Live" copies tuned params to the running pipeline
+- Dashboard: timeline scrubber integrated with activity timeline events
+
+**Pre-deployment simulator (`internal/simulator/`):**
+- `Space` defines room geometry with wall segments and material properties
+- `NodeSet` manages virtual TX/RX node placement
+- `WalkerSet` simulates random-walk or path-following persons
+- Two-ray propagation model with path loss + wall penetration + first-order reflections
+- GDOP computation per cell using Fisher information matrix
+- REST API at `/api/simulator/*` for space/node/walker management and GDOP computation
+
+**CSI simulator CLI (`cmd/sim/`):**
+- Connects to mothership as virtual nodes, sends synthetic CSI binary frames
+- Walker random-walk model with Gaussian velocity updates, wall reflection
+- Amplitude/phase generated from propagation model with Gaussian noise injection
+- Optional BLE advertisement simulation (`--ble` flag)
+- Verified authentication (exits non-zero on `{type:"reject"}`)
+- Integration test support: polls `GET /api/blobs` for blob count assertions
+
+**Fresnel zone debug overlay (`dashboard/js/fresnel.js`):**
+- Toggle-able wireframe ellipsoids between active TX/RX link pairs
+- Ellipsoid geometry computed from TX/RX positions and Fresnel zone number
+- Color-coded by zone number (zone 1 = bright, outer zones = dimmer)
+- Toolbar button integration with existing layers panel
+
+**Files created/modified:**
+```
+mothership/internal/timeline/       — timeline.go, timeline_test.go, handler.go, buffer_adapter.go
+mothership/internal/explainability/ — handler.go
+mothership/internal/replay/        — engine.go, engine_test.go, pipeline.go, pipeline_test.go,
+                                     session.go, store.go, store_test.go, types.go, worker.go
+mothership/internal/simulator/     — accuracy.go, engine.go, gdop.go, handler.go, node.go,
+                                     physics.go, propagation.go, registry_bridge.go, session.go,
+                                     space.go, virtual_state.go, walker.go + test files
+mothership/cmd/sim/                 — main.go, generator.go, verify.go, walker.go, main_test.go
+mothership/internal/api/            — replay.go, replay_test.go, simulator.go
+dashboard/js/                       — explainability.js, replay.js, fresnel.js, sidebar-timeline.js
+```
+
+**Phase 8 Status:** COMPLETE
+
+## Phase 9 — UX Polish & Accessibility
+
+Goal: Accessible to every household member. Power user efficiency. Always-on ambient display.
+
+### Status: COMPLETE
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Simple mode (progressive disclosure) | **Done** | Card-based mobile-first UI, room cards, activity feed |
+| Ambient dashboard mode (Component 31) | **Done** | `/ambient` route, Canvas 2D, time-of-day palette, auto-dim |
+| Spatial quick actions (Component 32) | **Done** | Right-click / long-press context menus on 3D elements |
+| Command palette (Component 34) | **Done** | Ctrl+K / Cmd+K, fuzzy search, navigate time, execute commands |
+| Morning briefing (Component 35) | **Done** | Daily summary card on first open, push notification support |
+| Guided troubleshooting (Component 36) | **Done** | Proactive contextual help, dismissible, never repeats |
+| Mobile-responsive expert mode | **Done** | Touch orbit/pan/zoom, hamburger menu, FXAA on mobile |
+| Fleet status page | **Done** | Full table with OTA progress, bulk actions, camera fly-to |
+
+### Implementation Summary
+
+**Simple mode (`dashboard/simple.html`, `dashboard/js/simple.js`):**
+- Card-based layout: one room card per zone with occupancy count and person names
+- Activity feed as chronological event list from timeline REST API
+- Alert banner for fall detection, anomaly alerts, system warnings
+- Sleep summary card for morning view
+- No 3D scene — designed for non-technical household members
+- Toggle button in toolbar; per-user default stored in `localStorage`
+
+**Ambient dashboard (`dashboard/ambient.html`, `dashboard/js/ambient.js`):**
+- Served at `/ambient` — separate lightweight route for wall-mounted tablets
+- Canvas 2D renderer: colored circles for people, zone labels, soft glow effects
+- Time-of-day palette: morning (cool), day (neutral), evening (amber), night (very dim)
+- Auto-dim when house empty for 30+ min; gentle fade-in on person detection
+- Alert mode: pulsing red border + large text + action buttons on fall/security events
+- Morning briefing integration: briefing text shown on first detection, fades after 30 s
+- Reconnect backoff handles WebSocket drops gracefully
+
+**Spatial quick actions (`dashboard/js/quick-actions.js`):**
+- Three.js Raycaster determines target under cursor (person/node/zone/portal/trigger/empty)
+- Context menu component renders appropriate options per target type
+- Per-blob: "Who is this?", "Why?", "Follow" camera, "Create automation", "Mark incorrect"
+- Per-node: "Diagnostics", "Blink LED", "Reposition", "Update firmware", "Show links"
+- Per-empty: "What happened here?", "Add trigger zone", "Add virtual node", "Coverage quality"
+- Per-zone: "Zone history", "Edit zone", "Create automation", "Crowd flow"
+- "Follow" mode: camera smoothly tracks person, auto-orbiting to keep them centered
+
+**Command palette (`dashboard/js/command-palette.js`):**
+- Ctrl+K (Cmd+K on Mac) opens universal search and command interface
+- Fuzzy matching across zones, persons, nodes, settings, help topics, events
+- Navigate time: "last night 2am", "yesterday kitchen", "this morning"
+- Execute commands: "update all nodes", "re-baseline kitchen", "arm security"
+- Help: "help fall detection", "why false positive", "troubleshoot kitchen"
+- Recently used commands surface first; expert mode only
+
+**Morning briefing (`internal/briefing/`, `dashboard/js/briefing.js`):**
+- `Generator` assembles briefing in priority order from sleep, events, anomalies, system health
+- Priority blocks: critical alerts → sleep summary → who is home → overnight anomalies → system health → predictions → learning progress
+- Degenerate case: "All quiet last night. All systems healthy."
+- Stored in `briefings` SQLite table (one per day per person)
+- REST API: `GET /api/briefing`, `GET /api/briefing/current`
+- Dashboard: card overlay on first open, dismissible, slides away after 10 s
+
+**Guided troubleshooting (`internal/guidedtroubleshoot/`, `dashboard/js/troubleshoot.js`):**
+- Trigger conditions: detection quality drops, repeated setting changes, node offline >2 h
+- Repeated-edit detection: per-key counter in memory; hint delivered in `GET /api/settings` response as `"repeated_edit_hint": true`
+- Proactive diagnostic flow: check connectivity → show link health → suggest repositioning → offer re-baseline
+- First-time feature tooltips shown once, dismissed on click, stored in `localStorage`
+- Post-feedback explanations in timeline after incorrect/missed detection feedback
+
+**Mobile-responsive expert mode (`dashboard/js/mobile.js` + CSS):**
+- Touch orbit (one finger), pan (two fingers), pinch-zoom (two fingers)
+- FXAA anti-aliasing replaces MSAA on mobile (better performance on low-power GPUs)
+- Hamburger menu for toolbar panels on small screens
+- Viewport meta tag with `viewport-fit=cover` for notch-aware layout
+- CSS Grid layout collapses gracefully on narrow viewports
+
+**Fleet status page (`dashboard/fleet.html`, `dashboard/js/fleet-page.js`):**
+- Full table with sortable columns: Name, MAC, Role, Position (fly-to), Firmware, RSSI, Status, Uptime, Actions
+- OTA progress bar per node during updates (PENDING → DOWNLOADING → REBOOTING → VERIFIED / FAILED)
+- Bulk actions: Update All (rolling OTA), Re-baseline All, Export Config, Import Config
+- Camera fly-to: clicking position coordinates in table jumps 3D camera to that node
+- Responsive layout works on both desktop and tablet
+
+**Files created/modified:**
+```
+dashboard/simple.html               — Simple mode page
+dashboard/ambient.html              — Ambient dashboard page
+dashboard/fleet.html                — Fleet status page
+dashboard/js/simple.js              — Simple mode WebSocket + card rendering
+dashboard/js/simplemode.js          — Simple mode toggle and state management
+dashboard/js/ambient.js             — Ambient dashboard controller
+dashboard/js/ambient_renderer.js    — Canvas 2D renderer with time-of-day palette
+dashboard/js/ambient_briefing.js    — Morning briefing integration for ambient
+dashboard/js/quick-actions.js       — Context menu for 3D scene elements
+dashboard/js/command-palette.js     — Universal search and command interface
+dashboard/js/briefing.js            — Morning briefing card overlay
+dashboard/js/troubleshoot.js        — Guided troubleshooting UI
+dashboard/js/guided-help.js         — First-time feature discovery tooltips
+dashboard/js/mobile.js              — Mobile touch controls and FXAA
+dashboard/js/fleet-page.js          — Fleet status table and bulk actions
+mothership/internal/briefing/       — briefing.go, briefing_test.go, scheduler.go,
+                                     dashboard_adapter.go, notify_adapter.go
+mothership/internal/guidedtroubleshoot/ — discovery.go, notifier.go, quality.go,
+                                          linkweather.go, reposition.go, alert_handler.go
+mothership/internal/api/            — briefing.go, briefing_test.go, guided.go
+```
+
+**Phase 9 Status:** COMPLETE
