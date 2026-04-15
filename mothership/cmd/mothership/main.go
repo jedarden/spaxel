@@ -3881,8 +3881,8 @@ func main() {
 					"chipFamily": "ESP32-S3",
 					"parts": []map[string]interface{}{
 						{
-							"path":    "/firmware/" + latest.Filename,
-							"address": 0x0,
+							"path":   "/firmware/" + latest.Filename,
+							"offset": 0,
 						},
 					},
 				},
