@@ -11,7 +11,13 @@ COPY firmware/ ./
 # set-target must be run explicitly before build even when CONFIG_IDF_TARGET is in sdkconfig.defaults.
 # idf.py build produces build/spaxel-firmware.bin
 SHELL ["/bin/bash", "-c"]
-RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build
+RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
+    python -m esptool --chip esp32s3 merge_bin \
+        --output build/spaxel-firmware-merged.bin \
+        0x0      build/bootloader/bootloader.bin \
+        0x8000   build/partition_table/partition-table.bin \
+        0x10000  build/spaxel-firmware.bin \
+        0xc10000 build/ota_data_initial.bin
 
 # Stage 2: Build the Go binary
 FROM golang:1.25-bookworm AS builder
@@ -46,7 +52,7 @@ COPY dashboard/ /dashboard/
 
 # Bake ESP32 firmware into the image so the mothership can seed it on first run.
 # The mothership copies /firmware/*.bin → /data/firmware/ at startup if not present.
-COPY --from=firmware-builder /project/build/spaxel-firmware.bin /firmware/spaxel-firmware.bin
+COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/spaxel-firmware.bin
 
 VOLUME ["/data"]
 
