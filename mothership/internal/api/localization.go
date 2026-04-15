@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -116,8 +117,9 @@ func (h *LocalizationHandler) resetWeights(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Reset all weights to default by creating a fresh LearnedWeights
-	weights := localization.NewLearnedWeights()
+	// Reset all weights to default
+	weights := h.weightLearner.GetLearnedWeights()
+	weights.Reset()
 
 	// Persist reset
 	if h.weightStore != nil {
@@ -279,11 +281,19 @@ func (h *LocalizationHandler) getGroundTruthStats(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Convert map[[2]int]int to map[string]int for JSON serialization
+	// JSON keys must be strings
+	zoneCountsStr := make(map[string]int, len(zoneCounts))
+	for k, v := range zoneCounts {
+		key := fmt.Sprintf("%d,%d", k[0], k[1])
+		zoneCountsStr[key] = v
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"total_samples":  total,
 		"today_samples":  today,
 		"by_person":      byPerson,
-		"zone_counts":    zoneCounts,
+		"zone_counts":    zoneCountsStr,
 	})
 }
 

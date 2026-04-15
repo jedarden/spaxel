@@ -33,6 +33,11 @@ type SelfImprovingLocalizerConfig struct {
 	MaxBLEBlobDistance float64
 }
 
+// DefaultSelfImprovingConfig returns sensible defaults (alias for DefaultSelfImprovingLocalizerConfig).
+func DefaultSelfImprovingConfig() SelfImprovingLocalizerConfig {
+	return DefaultSelfImprovingLocalizerConfig()
+}
+
 // DefaultSelfImprovingLocalizerConfig returns sensible defaults
 func DefaultSelfImprovingLocalizerConfig() SelfImprovingLocalizerConfig {
 	return SelfImprovingLocalizerConfig{
@@ -432,6 +437,13 @@ func (s *SelfImprovingLocalizer) GetGroundTruthProvider() GroundTruthSource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.groundTruthProvider
+}
+
+// GetGroundTruth returns the ground truth position for a specific entity.
+func (s *SelfImprovingLocalizer) GetGroundTruth(entityID string) *GroundTruthPosition {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.groundTruthProvider.GetGroundTruth(entityID)
 }
 
 // GetAllGroundTruth returns all current ground truth positions

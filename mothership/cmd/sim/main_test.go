@@ -1,18 +1,20 @@
 package main
 
 import (
-	"encoding/binary"
 	"math"
 	"math/rand"
 	"testing"
 )
 
-// TestGenerateCSIFrameHeader tests that generated frames have correct binary header format
+// TestGenerateCSIFrameHeader tests that generated frames have correct binary header format.
+// The frame must match the ingestion layer layout (ingestion/frame.go):
+//   [0:6]  node_mac, [6:12] peer_mac, [12:20] timestamp_us,
+//   [20] rssi, [21] noise_floor, [22] channel, [23] n_sub, [24:] payload
 func TestGenerateCSIFrameHeader(t *testing.T) {
 	rng := rand.New(rand.NewSource(42))
 
-	tx := &VirtualNode{ID: 0, Position: Point{X: 0, Y: 0, Z: 2}}
-	rx := &VirtualNode{ID: 1, Position: Point{X: 5, Y: 0, Z: 2}}
+	tx := &VirtualNode{ID: 0, MAC: generateMAC(0), Position: Point{X: 0, Y: 0, Z: 2}}
+	rx := &VirtualNode{ID: 1, MAC: generateMAC(1), Position: Point{X: 5, Y: 0, Z: 2}}
 	walkers := []*Walker{{ID: 0, Position: Point{X: 2.5, Y: 0, Z: 1.7}}}
 
 	frame := generateCSIFrame(tx, rx, walkers, nil, 0, rng)
@@ -22,48 +24,37 @@ func TestGenerateCSIFrameHeader(t *testing.T) {
 		t.Fatalf("Frame too short: %d bytes (minimum %d)", len(frame), headerSize)
 	}
 
-	// Check magic number
-	magic := binary.LittleEndian.Uint32(frame[0:4])
-	if magic != 0xABCDEF01 {
-		t.Errorf("Wrong magic number: 0x%X (expected 0xABCDEF01)", magic)
-	}
-
-	// Check version
-	if frame[4] != version {
-		t.Errorf("Wrong version: %d (expected %d)", frame[4], version)
-	}
-
-	// Check MAC addresses are present (not all zeros)
+	// Check MAC addresses are present (not all zeros) at ingestion format offsets
 	allZero := true
-	for i := 5; i < 11; i++ {
+	for i := 0; i < 6; i++ {
 		if frame[i] != 0 {
 			allZero = false
 			break
 		}
 	}
 	if allZero {
-		t.Error("TX MAC is all zeros")
+		t.Error("TX MAC (node_mac) is all zeros")
 	}
 
 	allZero = true
-	for i := 11; i < 17; i++ {
+	for i := 6; i < 12; i++ {
 		if frame[i] != 0 {
 			allZero = false
 			break
 		}
 	}
 	if allZero {
-		t.Error("RX MAC is all zeros")
+		t.Error("RX MAC (peer_mac) is all zeros")
 	}
 
-	// Check subcarrier count
-	nSub := frame[23]
-	if nSub != 64 {
-		t.Errorf("Wrong n_sub: %d (expected 64)", nSub)
+	// Check subcarrier count at ingestion format offset [23]
+	nSubRead := frame[23]
+	if nSubRead != 64 {
+		t.Errorf("Wrong n_sub: %d (expected 64)", nSubRead)
 	}
 
 	// Check payload length matches n_sub
-	expectedLen := headerSize + int(nSub)*2
+	expectedLen := headerSize + int(nSubRead)*2
 	if len(frame) != expectedLen {
 		t.Errorf("Frame length mismatch: %d (expected %d)", len(frame), expectedLen)
 	}
@@ -73,13 +64,14 @@ func TestGenerateCSIFrameHeader(t *testing.T) {
 func TestRSSIInRange(t *testing.T) {
 	rng := rand.New(rand.NewSource(42))
 
-	tx := &VirtualNode{ID: 0, Position: Point{X: 0, Y: 0, Z: 2}}
-	rx := &VirtualNode{ID: 1, Position: Point{X: 5, Y: 0, Z: 2}}
+	tx := &VirtualNode{ID: 0, MAC: generateMAC(0), Position: Point{X: 0, Y: 0, Z: 2}}
+	rx := &VirtualNode{ID: 1, MAC: generateMAC(1), Position: Point{X: 5, Y: 0, Z: 2}}
 	walkers := []*Walker{{ID: 0, Position: Point{X: 2.5, Y: 0, Z: 1.7}}}
 
 	frame := generateCSIFrame(tx, rx, walkers, nil, 0, rng)
 
-	rssi := int8(frame[25])
+	// RSSI is at ingestion format offset [20]
+	rssi := int8(frame[20])
 
 	// RSSI should be in [-90, -30] dBm for a 5m link
 	if rssi < -90 || rssi > -30 {
@@ -271,7 +263,8 @@ func TestMACGeneration(t *testing.T) {
 		{1, "AA:BB:CC:00:00:01"},
 		{255, "AA:BB:CC:00:00:FF"},
 		{256, "AA:BB:CC:00:01:00"},
-		{65535, "AA:BB:CC:FF:FF:FF"},
+		{65535, "AA:BB:CC:00:FF:FF"},
+		{16777215, "AA:BB:CC:FF:FF:FF"},
 	}
 
 	for _, tt := range tests {

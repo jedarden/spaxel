@@ -103,7 +103,6 @@ func TestShutdown_AllSteps(t *testing.T) {
 	mockRecording := &mockRecordingSyncer{}
 	mockDashboard := &mockDashboardBroadcaster{}
 	mockNodeCloser := &mockNodeConnectionCloser{}
-	mockEventWriter := &mockEventWriter{err: nil} // Will write to DB
 	mockIngestion := &mockIngestionShutdowner{}
 
 	// Create event writer that actually writes to the test database
@@ -146,14 +145,9 @@ func TestShutdown_AllSteps(t *testing.T) {
 		t.Error("Node connection closer not called")
 	}
 
-	// Verify event was written
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM events WHERE type = 'system'").Scan(&count)
-	if err != nil {
-		t.Fatalf("Failed to query events: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("Expected 1 system event, got %d", count)
+	// Verify event was written (can't query after shutdown closes the DB)
+	if !eventWriter.called {
+		t.Error("System stopped event was not written")
 	}
 
 	if !completed {
@@ -212,7 +206,8 @@ func TestShutdown_WithErrors(t *testing.T) {
 
 // testEventWriter is an EventWriter that writes to the test database.
 type testEventWriter struct {
-	db *sql.DB
+	db     *sql.DB
+	called bool
 }
 
 func (w *testEventWriter) WriteSystemStoppedEvent() error {
@@ -221,5 +216,8 @@ func (w *testEventWriter) WriteSystemStoppedEvent() error {
 		INSERT INTO events (timestamp_ms, type, zone, person, blob_id, detail_json, severity)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, time.Now().UnixNano()/1e6, "system", "", "", 0, detailJSON, "info")
+	if err == nil {
+		w.called = true
+	}
 	return err
 }

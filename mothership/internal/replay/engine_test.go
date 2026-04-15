@@ -2,8 +2,8 @@
 package replay
 
 import (
-	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +24,12 @@ func (m *mockBroadcaster) BroadcastReplayBlobs(blobs []BlobUpdate, timestampMS i
 	m.blobs = blobs
 	m.timestamp = timestampMS
 	m.calls++
+}
+
+func (m *mockBroadcaster) Calls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.calls
 }
 
 // TestNewEngine verifies engine creation.
@@ -85,16 +91,16 @@ func TestStartSession(t *testing.T) {
 	if session == nil {
 		t.Fatal("session is nil")
 	}
-	if session.State != StatePaused {
-		t.Errorf("State = %v, want StatePaused", session.State)
+	if session.State() != StatePaused {
+		t.Errorf("State = %v, want StatePaused", session.State())
 	}
-	if session.CurrentMS != fromMS {
-		t.Errorf("CurrentMS = %d, want %d", session.CurrentMS, fromMS)
+	if session.CurrentMS() != fromMS {
+		t.Errorf("CurrentMS = %d, want %d", session.CurrentMS(), fromMS)
 	}
-	if session.Speed != 1.0 {
-		t.Errorf("Speed = %f, want 1.0", session.Speed)
+	if session.Speed() != 1 {
+		t.Errorf("Speed = %d, want 1", session.Speed())
 	}
-	if session.Params == nil {
+	if session.Params() == nil {
 		t.Error("Params is nil")
 	}
 }
@@ -133,13 +139,13 @@ func TestStartSessionClampsRange(t *testing.T) {
 
 	// Should be clamped to actual data range
 	expectedFrom := time.Unix(1_000_000, 0).UnixMilli()
-	expectedTo := time.Unix(1_000_000, 4).UnixMilli() // 5th frame is at +4 seconds
+	expectedTo := time.Unix(1_000_004, 0).UnixMilli() // 5th frame is at +4 seconds
 
-	if session.FromMS != expectedFrom {
-		t.Errorf("FromMS = %d, want %d (should be clamped to oldest)", session.FromMS, expectedFrom)
+	if session.FromMS() != expectedFrom {
+		t.Errorf("FromMS = %d, want %d (should be clamped to oldest)", session.FromMS(), expectedFrom)
 	}
-	if session.ToMS != expectedTo {
-		t.Errorf("ToMS = %d, want %d (should be clamped to newest)", session.ToMS, expectedTo)
+	if session.ToMS() != expectedTo {
+		t.Errorf("ToMS = %d, want %d (should be clamped to newest)", session.ToMS(), expectedTo)
 	}
 }
 
@@ -184,13 +190,13 @@ func TestStopSession(t *testing.T) {
 		t.Fatalf("StartSession: %v", err)
 	}
 
-	err = engine.StopSession(session.ID)
+	err = engine.StopSession(session.ID())
 	if err != nil {
 		t.Fatalf("StopSession: %v", err)
 	}
 
 	// Verify session was removed
-	_, ok := engine.GetSession(session.ID)
+	_, ok := engine.GetSession(session.ID())
 	if ok {
 		t.Error("Session still exists after StopSession")
 	}
@@ -241,7 +247,7 @@ func TestSeek(t *testing.T) {
 
 	session, err := engine.StartSession(
 		time.Unix(1_000_000, 0).UnixMilli(),
-		time.Unix(1_000_000, 10).UnixMilli(),
+		time.Unix(1_000_010, 0).UnixMilli(), // 10 seconds of range
 	)
 	if err != nil {
 		t.Fatalf("StartSession: %v", err)
@@ -249,18 +255,18 @@ func TestSeek(t *testing.T) {
 
 	// Seek to the third frame
 	targetMS := timestamps[2] / 1_000_000 // Convert ns to ms
-	err = engine.Seek(session.ID, targetMS)
+	err = engine.Seek(session.ID(), targetMS)
 	if err != nil {
 		t.Fatalf("Seek: %v", err)
 	}
 
 	// Verify position was updated
-	if session.State != StatePaused {
-		t.Errorf("State = %v, want StatePaused after seek", session.State)
+	if session.State() != StatePaused {
+		t.Errorf("State = %v, want StatePaused after seek", session.State())
 	}
 	// CurrentMS should be close to target (may not match exactly due to SeekToTimestamp finding nearest)
-	if session.CurrentMS < targetMS-100 || session.CurrentMS > targetMS+100 {
-		t.Errorf("CurrentMS = %d, want close to %d", session.CurrentMS, targetMS)
+	if session.CurrentMS() < targetMS-100 || session.CurrentMS() > targetMS+100 {
+		t.Errorf("CurrentMS = %d, want close to %d", session.CurrentMS(), targetMS)
 	}
 }
 
@@ -283,21 +289,21 @@ func TestSeekClampsToSessionRange(t *testing.T) {
 	}
 
 	// Seek before session start
-	err = engine.Seek(session.ID, 500)
+	err = engine.Seek(session.ID(), 500)
 	if err != nil {
 		t.Fatalf("Seek before start: %v", err)
 	}
-	if session.CurrentMS != 1000 {
-		t.Errorf("CurrentMS = %d, want 1000 (clamped to FromMS)", session.CurrentMS)
+	if session.CurrentMS() != 1000 {
+		t.Errorf("CurrentMS = %d, want 1000 (clamped to FromMS)", session.CurrentMS())
 	}
 
 	// Seek after session end
-	err = engine.Seek(session.ID, 10000)
+	err = engine.Seek(session.ID(), 10000)
 	if err != nil {
 		t.Fatalf("Seek after end: %v", err)
 	}
-	if session.CurrentMS != 5000 {
-		t.Errorf("CurrentMS = %d, want 5000 (clamped to ToMS)", session.CurrentMS)
+	if session.CurrentMS() != 5000 {
+		t.Errorf("CurrentMS = %d, want 5000 (clamped to ToMS)", session.CurrentMS())
 	}
 }
 
@@ -326,14 +332,14 @@ func TestPlay(t *testing.T) {
 
 	session, err := engine.StartSession(
 		time.Unix(1_000_000, 0).UnixMilli(),
-		time.Unix(1_000_000, 1).UnixMilli(),
+		time.Unix(1_000_060, 0).UnixMilli(), // 60-second range to sustain playback
 	)
 	if err != nil {
 		t.Fatalf("StartSession: %v", err)
 	}
 
 	// Start playback
-	err = engine.Play(session.ID, 2.0)
+	err = engine.Play(session.ID(), 2.0)
 	if err != nil {
 		t.Fatalf("Play: %v", err)
 	}
@@ -341,15 +347,15 @@ func TestPlay(t *testing.T) {
 	// Give the playback worker time to start
 	time.Sleep(100 * time.Millisecond)
 
-	if session.State != StatePlaying {
-		t.Errorf("State = %v, want StatePlaying", session.State)
+	if session.State() != StatePlaying {
+		t.Errorf("State = %v, want StatePlaying", session.State())
 	}
-	if session.Speed != 2.0 {
-		t.Errorf("Speed = %f, want 2.0", session.Speed)
+	if session.Speed() != 2 {
+		t.Errorf("Speed = %d, want 2", session.Speed())
 	}
 
 	// Pause to stop the worker
-	err = engine.Pause(session.ID)
+	err = engine.Pause(session.ID())
 	if err != nil {
 		t.Fatalf("Pause: %v", err)
 	}
@@ -374,12 +380,12 @@ func TestPause(t *testing.T) {
 	}
 
 	// Pause when already paused should be a no-op
-	err = engine.Pause(session.ID)
+	err = engine.Pause(session.ID())
 	if err != nil {
 		t.Fatalf("Pause (already paused): %v", err)
 	}
-	if session.State != StatePaused {
-		t.Errorf("State = %v, want StatePaused", session.State)
+	if session.State() != StatePaused {
+		t.Errorf("State = %v, want StatePaused", session.State())
 	}
 }
 
@@ -402,12 +408,12 @@ func TestSetSpeed(t *testing.T) {
 	}
 
 	// Set speed while paused
-	err = engine.SetSpeed(session.ID, 5.0)
+	err = engine.SetSpeed(session.ID(), 5.0)
 	if err != nil {
 		t.Fatalf("SetSpeed: %v", err)
 	}
-	if session.Speed != 5.0 {
-		t.Errorf("Speed = %f, want 5.0", session.Speed)
+	if session.Speed() != 5 {
+		t.Errorf("Speed = %d, want 5", session.Speed())
 	}
 }
 
@@ -435,22 +441,22 @@ func TestSetParams(t *testing.T) {
 		DeltaRMSThreshold: &newThreshold,
 	}
 
-	err = engine.SetParams(session.ID, params)
+	err = engine.SetParams(session.ID(), params)
 	if err != nil {
 		t.Fatalf("SetParams: %v", err)
 	}
 
-	if session.Params.DeltaRMSThreshold == nil {
+	if session.Params().DeltaRMSThreshold == nil {
 		t.Error("DeltaRMSThreshold not set")
-	} else if *session.Params.DeltaRMSThreshold != newThreshold {
-		t.Errorf("DeltaRMSThreshold = %f, want %f", *session.Params.DeltaRMSThreshold, newThreshold)
+	} else if *session.Params().DeltaRMSThreshold != newThreshold {
+		t.Errorf("DeltaRMSThreshold = %f, want %f", *session.Params().DeltaRMSThreshold, newThreshold)
 	}
 
 	// Verify other defaults are preserved
-	if session.Params.TauS == nil {
+	if session.Params().TauS == nil {
 		t.Error("TauS not preserved")
-	} else if *session.Params.TauS != 30.0 {
-		t.Errorf("TauS = %f, want 30.0", *session.Params.TauS)
+	} else if *session.Params().TauS != 30.0 {
+		t.Errorf("TauS = %f, want 30.0", *session.Params().TauS)
 	}
 }
 

@@ -1135,7 +1135,7 @@ func scanDeviceRow(s scanner) (*DeviceRecord, error) {
 
 	err := s.Scan(
 		&d.Addr, &d.Name, &d.Label, &d.Manufacturer, &d.DeviceType, &d.DeviceName,
-		&d.MfrID, &d.MfrDataHex, &personID, &d.PersonName,
+		&d.MfrID, &d.MfrDataHex, &personID, &d.PersonName, &d.PersonColor,
 		&d.RSSIMin, &d.RSSIMax, &d.RSSIAvg,
 		&firstNS, &lastNS, &d.LastSeenNode, &isArchived, &isWearable, &enabled,
 		&d.LastLocation.X, &d.LastLocation.Y, &d.LastLocation.Z,

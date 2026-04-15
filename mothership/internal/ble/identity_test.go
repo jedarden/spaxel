@@ -206,20 +206,21 @@ func TestNearestBlobAssignment(t *testing.T) {
 	})
 	reg.AssignToPerson("aa:bb:cc:dd:ee:01", person.ID)
 
-	// RSSI readings that triangulate to ~ (2.3, 1.5, 1.9)
+	// RSSI readings that triangulate to ~ (1.5, 1.5, 1.0) on the X-Z floor plane.
+	// Distances: node1≈1.80m(→-71), node2≈3.91m(→-80), node3≈2.69m(→-76).
 	now := time.Now()
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -68, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -72, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:03", -68, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -71, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -80, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:03", -76, now)
 
-	// Two blobs: one at (2, 2), one at (5, 5)
+	// Two blobs: one near the triangulated position, one far away
 	blobs := []struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
-		Weight float64
+		Weight  float64
 	}{
-		{ID: 1, X: 2.0, Y: 1.5, Z: 2.0, Weight: 0.9},  // Closer
-		{ID: 2, X: 5.0, Y: 1.5, Z: 5.0, Weight: 0.9},  // Farther
+		{ID: 1, X: 1.5, Y: 1.5, Z: 1.0, Weight: 0.9}, // Closer to triangulated pos
+		{ID: 2, X: 5.0, Y: 1.5, Z: 5.0, Weight: 0.9}, // Far away
 	}
 
 	matcher.UpdateBlobs(blobs)
@@ -229,7 +230,7 @@ func TestNearestBlobAssignment(t *testing.T) {
 		t.Fatal("Expected at least one match")
 	}
 
-	// Should match blob 1 (at 2,2) since triangulated position is ~ (2.3, 1.9)
+	// Should match blob 1 (at 1.5, 1.5, 1.0) since triangulated position is ~ (1.5, 1.5, 1.0)
 	var matchedBlobID int
 	for blobID := range matches {
 		matchedBlobID = blobID
@@ -307,16 +308,17 @@ func TestHighConfidenceAssignment(t *testing.T) {
 	})
 	reg.AssignToPerson("aa:bb:cc:dd:ee:01", person.ID)
 
-	// Three nodes, device close to blob - should get high confidence
+	// Three nodes, device near blob at (2.0, 1.5, 1.0) — RSSI chosen so distances match.
+	// node1 d=2.24m→-74, node2 d=2.24m→-74, node3 d=2.5m→-75
 	now := time.Now()
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:03", -65, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -74, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -74, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:03", -75, now)
 
 	blobs := []struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
-		Weight float64
+		Weight  float64
 	}{
 		{ID: 1, X: 2.0, Y: 1.5, Z: 1.0, Weight: 0.9}, // Close to triangulated position
 	}
@@ -425,16 +427,17 @@ func TestIdentityPersistence(t *testing.T) {
 	})
 	reg.AssignToPerson("aa:bb:cc:dd:ee:01", person.ID)
 
-	// Establish initial match
+	// Establish initial match — RSSI chosen to match distances to blob at (2.0, 1.5, 1.0).
+	// node1 d=2.24m→-74, node2 d=2.24m→-74, node3 d=2.5m→-75
 	now := time.Now()
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:03", -65, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -74, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -74, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:03", -75, now)
 
 	blobs := []struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
-		Weight float64
+		Weight  float64
 	}{
 		{ID: 1, X: 2.0, Y: 1.5, Z: 1.0, Weight: 0.9},
 	}
@@ -447,11 +450,12 @@ func TestIdentityPersistence(t *testing.T) {
 		t.Fatal("Expected initial match")
 	}
 
-	// Clear RSSI cache (simulate BLE device disappearing)
+	// Clear RSSI cache and BLE position cache (simulate BLE device disappearing)
 	cache = NewRSSICache(30 * time.Second)
 	matcher.rssiCache = cache
+	matcher.cachedDevices = nil // force re-triangulation with empty cache
 
-	// Update blobs - identity should persist
+	// Update blobs - identity should persist (from persistentIdent)
 	matcher.UpdateBlobs(blobs)
 
 	// Get persistent identity
@@ -463,7 +467,8 @@ func TestIdentityPersistence(t *testing.T) {
 	// Wait for persistence to expire
 	time.Sleep(1100 * time.Millisecond)
 
-	// Update again - identity should be cleared
+	// Update again - identity should be cleared (cachedDevices still nil, RSSI cache still empty)
+	matcher.cachedDevices = nil
 	matcher.UpdateBlobs(blobs)
 
 	persistMatch = matcher.GetPersistentIdentity(1)
@@ -502,16 +507,17 @@ func TestIdentityHandoffOnMACRotation(t *testing.T) {
 	reg.AssignToPerson("aa:bb:cc:dd:ee:01", person.ID)
 	reg.AssignToPerson("aa:bb:cc:dd:ee:02", person.ID)
 
-	// RSSI from new MAC only
+	// RSSI from new MAC only — chosen to match distances to blob at (2.0, 1.5, 1.0).
+	// node1 d=2.24m→-74, node2 d=2.24m→-74, node3 d=2.5m→-75
 	now := time.Now()
-	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:01", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:02", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:03", -65, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:01", -74, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:02", -74, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:03", -75, now)
 
 	blobs := []struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
-		Weight float64
+		Weight  float64
 	}{
 		{ID: 1, X: 2.0, Y: 1.5, Z: 1.0, Weight: 0.9},
 	}
@@ -608,6 +614,7 @@ func TestMultipleDevicesSamePerson(t *testing.T) {
 		positions: map[string][3]float64{
 			"node:00:01": {0.0, 1.5, 0.0},
 			"node:00:02": {4.0, 1.5, 0.0},
+			"node:00:03": {2.0, 1.5, 3.5},
 		},
 	}
 
@@ -628,17 +635,20 @@ func TestMultipleDevicesSamePerson(t *testing.T) {
 	reg.AssignToPerson("aa:bb:cc:dd:ee:01", person.ID)
 	reg.AssignToPerson("aa:bb:cc:dd:ee:02", person.ID)
 
-	// Both devices at same location
+	// Both devices at blob position (2.0, 1.5, 0.0).
+	// Distances: node1=2.0m→-73, node2=2.0m→-73, node3=3.5m→-79
 	now := time.Now()
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:01", -65, now)
-	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:02", -65, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -73, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:02", -73, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:03", -79, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:01", -73, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:02", -73, now)
+	cache.AddWithTime("aa:bb:cc:dd:ee:02", "node:00:03", -79, now)
 
 	blobs := []struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
-		Weight float64
+		Weight  float64
 	}{
 		{ID: 1, X: 2.0, Y: 1.5, Z: 0.0, Weight: 0.9},
 	}

@@ -445,38 +445,74 @@ func migration_005_add_ble_device_aliases(tx *sql.Tx) error {
 
 // migration_006_add_virtual_node_columns adds columns for virtual AP nodes.
 func migration_006_add_virtual_node_columns(tx *sql.Tx) error {
-	schema := `
-	ALTER TABLE nodes ADD COLUMN virtual INTEGER NOT NULL DEFAULT 0;
-	ALTER TABLE nodes ADD COLUMN node_type TEXT NOT NULL DEFAULT 'esp32'
-		CHECK (node_type IN ('esp32','ap'));
-	ALTER TABLE nodes ADD COLUMN ap_bssid TEXT;
-	ALTER TABLE nodes ADD COLUMN ap_channel INTEGER;
-	`
-	_, err := tx.Exec(schema)
-	return err
+	// Check if nodes table exists before altering it
+	var exists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='nodes'`,
+	).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return nil // nodes table will be created by a later migration
+	}
+
+	cols := []struct {
+		name string
+		ddl  string
+	}{
+		{"virtual", "ALTER TABLE nodes ADD COLUMN virtual INTEGER NOT NULL DEFAULT 0"},
+		{"node_type", "ALTER TABLE nodes ADD COLUMN node_type TEXT NOT NULL DEFAULT 'esp32' CHECK (node_type IN ('esp32','ap'))"},
+		{"ap_bssid", "ALTER TABLE nodes ADD COLUMN ap_bssid TEXT"},
+		{"ap_channel", "ALTER TABLE nodes ADD COLUMN ap_channel INTEGER"},
+	}
+	for _, c := range cols {
+		var colExists bool
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) > 0 FROM pragma_table_info('nodes') WHERE name = ?`, c.name,
+		).Scan(&colExists); err != nil {
+			return err
+		}
+		if colExists {
+			continue
+		}
+		if _, err := tx.Exec(c.ddl); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 
 // migration_007_add_webhook_tables adds webhook_log, trigger_state tables
 // and error_message/error_count columns to the triggers table.
 func migration_007_add_webhook_tables(tx *sql.Tx) error {
-	cols := []struct {
-		name string
-		ddl  string
-	}{
-		{"error_message", "ALTER TABLE triggers ADD COLUMN error_message TEXT DEFAULT ''"},
-		{"error_count", "ALTER TABLE triggers ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0"},
+	// Check if triggers table exists before altering it
+	var triggersExists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='triggers'`,
+	).Scan(&triggersExists); err != nil {
+		return err
 	}
-	for _, c := range cols {
-		var exists bool
-		if err := tx.QueryRow(
-			`SELECT COUNT(*) > 0 FROM pragma_table_info('triggers') WHERE name = ?`, c.name,
-		).Scan(&exists); err != nil {
-			return err
+
+	if triggersExists {
+		cols := []struct {
+			name string
+			ddl  string
+		}{
+			{"error_message", "ALTER TABLE triggers ADD COLUMN error_message TEXT DEFAULT ''"},
+			{"error_count", "ALTER TABLE triggers ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0"},
 		}
-		if !exists {
-			if _, err := tx.Exec(c.ddl); err != nil {
+		for _, c := range cols {
+			var exists bool
+			if err := tx.QueryRow(
+				`SELECT COUNT(*) > 0 FROM pragma_table_info('triggers') WHERE name = ?`, c.name,
+			).Scan(&exists); err != nil {
 				return err
+			}
+			if !exists {
+				if _, err := tx.Exec(c.ddl); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -509,16 +545,47 @@ func migration_007_add_webhook_tables(tx *sql.Tx) error {
 
 // migration_008_add_breathing_anomaly adds breathing anomaly tracking columns to sleep_records.
 func migration_008_add_breathing_anomaly(tx *sql.Tx) error {
-	_, err := tx.Exec(`
-		ALTER TABLE sleep_records ADD COLUMN breathing_anomaly INTEGER NOT NULL DEFAULT 0;
-		ALTER TABLE sleep_records ADD COLUMN breathing_samples_json TEXT;
-	`)
-	return err
+	var exists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='sleep_records'`,
+	).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	cols := []struct{ name, ddl string }{
+		{"breathing_anomaly", "ALTER TABLE sleep_records ADD COLUMN breathing_anomaly INTEGER NOT NULL DEFAULT 0"},
+		{"breathing_samples_json", "ALTER TABLE sleep_records ADD COLUMN breathing_samples_json TEXT"},
+	}
+	for _, c := range cols {
+		var colExists bool
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) > 0 FROM pragma_table_info('sleep_records') WHERE name = ?`, c.name,
+		).Scan(&colExists); err != nil {
+			return err
+		}
+		if !colExists {
+			if _, err := tx.Exec(c.ddl); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // migration_009_sleep_records_unique adds a unique index on (person, date)
 // so that the ON CONFLICT upsert in Save() works correctly.
 func migration_009_sleep_records_unique(tx *sql.Tx) error {
+	var exists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='sleep_records'`,
+	).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
 	_, err := tx.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sleep_person_date_unique ON sleep_records(person, date)`)
 	return err
 }
@@ -528,6 +595,17 @@ func migration_009_sleep_records_unique(tx *sql.Tx) error {
 // For databases with the old schema (cal_distance_m, room_bounds_json),
 // it adds the new columns (distance_m, rotation_deg).
 func migration_010_add_floorplan(tx *sql.Tx) error {
+	// Check if floorplan table exists
+	var tableExists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='floorplan'`,
+	).Scan(&tableExists); err != nil {
+		return err
+	}
+	if !tableExists {
+		return nil
+	}
+
 	// Check if distance_m column already exists (indicates correct schema)
 	var colExists bool
 	err := tx.QueryRow(`
@@ -553,6 +631,16 @@ func migration_010_add_floorplan(tx *sql.Tx) error {
 
 // migration_011_add_events_fts adds FTS5 full-text search for events.
 func migration_011_add_events_fts(tx *sql.Tx) error {
+	var tableExists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='events'`,
+	).Scan(&tableExists); err != nil {
+		return err
+	}
+	if !tableExists {
+		return nil
+	}
+
 	schema := `
 	-- FTS5 index for natural-language search across event detail
 	CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
@@ -630,6 +718,16 @@ func migration_012_add_crowd_flow_tables(tx *sql.Tx) error {
 
 // migration_013_add_briefing_person_columns adds person and sections_json columns to briefings table.
 func migration_013_add_briefing_person_columns(tx *sql.Tx) error {
+	var tableExists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='briefings'`,
+	).Scan(&tableExists); err != nil {
+		return err
+	}
+	if !tableExists {
+		return nil
+	}
+
 	// Check if person column already exists
 	var colExists bool
 	err := tx.QueryRow(`
@@ -668,6 +766,16 @@ func migration_013_add_briefing_person_columns(tx *sql.Tx) error {
 
 // migration_014_add_briefing_delivery_columns adds id, delivered, acknowledged columns to briefings table.
 func migration_014_add_briefing_delivery_columns(tx *sql.Tx) error {
+	var tableExists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='briefings'`,
+	).Scan(&tableExists); err != nil {
+		return err
+	}
+	if !tableExists {
+		return nil
+	}
+
 	// Add id column (UUID) - primary key replacement
 	// Note: We can't add a PRIMARY KEY to an existing table with data, so we'll add a unique index instead
 	var idColExists bool

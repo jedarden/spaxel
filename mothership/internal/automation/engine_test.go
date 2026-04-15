@@ -161,9 +161,6 @@ func TestTriggerMatching(t *testing.T) {
 	triggered := false
 	engine.SetOnTrigger(func(data TriggerEventData) {
 		triggered = true
-		if data.AutomationID != "test-zone-enter" {
-			t.Errorf("Expected automation test-zone-enter, got %s", data.AutomationID)
-		}
 	})
 
 	engine.ProcessEvent(Event{
@@ -171,6 +168,7 @@ func TestTriggerMatching(t *testing.T) {
 		ZoneID:   "kitchen",
 		PersonID: "bob",
 	})
+	time.Sleep(20 * time.Millisecond) // allow async callback to run
 
 	if !triggered {
 		t.Error("Expected zone_enter automation to trigger")
@@ -183,6 +181,7 @@ func TestTriggerMatching(t *testing.T) {
 		ZoneID:   "kitchen",
 		PersonID: "bob",
 	})
+	time.Sleep(20 * time.Millisecond)
 
 	if triggered {
 		t.Error("zone_leave event should not trigger zone_enter automation")
@@ -192,14 +191,23 @@ func TestTriggerMatching(t *testing.T) {
 	engine.cooldowns["test-fall"] = time.Now().Add(-time.Minute)
 
 	triggered = false
+	var triggeredID string
+	engine.SetOnTrigger(func(data TriggerEventData) {
+		triggered = true
+		triggeredID = data.AutomationID
+	})
 	engine.ProcessEvent(Event{
 		Type:     TriggerFallDetected,
 		PersonID: "alice",
 		ZoneID:   "living_room",
 	})
+	time.Sleep(20 * time.Millisecond)
 
 	if !triggered {
 		t.Error("Expected fall_detected automation to trigger for alice")
+	}
+	if triggeredID != "test-fall" {
+		t.Errorf("Expected automation test-fall, got %s", triggeredID)
 	}
 }
 
@@ -319,6 +327,7 @@ func TestPersonFilterCondition(t *testing.T) {
 		ZoneID:   "office",
 		PersonID: "alice",
 	})
+	time.Sleep(20 * time.Millisecond)
 
 	if !triggered {
 		t.Error("Expected automation to trigger for alice")
@@ -331,12 +340,14 @@ func TestPersonFilterCondition(t *testing.T) {
 		ZoneID:   "office",
 		PersonID: "bob",
 	})
+	time.Sleep(20 * time.Millisecond)
 
 	if triggered {
 		t.Error("Automation should not trigger for bob (condition filters for alice)")
 	}
 
-	// Test with "anyone" filter
+	// Test with "anyone" filter (reset cooldown first)
+	engine.cooldowns["test-person-filter"] = time.Now().Add(-time.Minute)
 	automation.Conditions = []Condition{
 		{Type: ConditionPersonFilter, Value: "anyone"},
 	}
@@ -348,6 +359,7 @@ func TestPersonFilterCondition(t *testing.T) {
 		ZoneID:   "office",
 		PersonID: "charlie",
 	})
+	time.Sleep(20 * time.Millisecond)
 
 	if !triggered {
 		t.Error("Expected automation to trigger for anyone")
@@ -720,7 +732,7 @@ func TestTriggerVolumeContainment(t *testing.T) {
 		{2.0, 2.5, 2.0, false},  // Above height
 		{3.0, 1.0, 2.0, true},   // On edge
 		{3.5, 1.0, 2.0, false},  // Outside radius
-		{2.0, 1.0, 3.0, false},  // Outside radius in Z
+		{2.0, 1.0, 3.0, true},   // On edge (dist=1.0 from center in Z)
 	}
 
 	for _, tc := range cylinderCases {
@@ -926,10 +938,11 @@ func TestSystemMode(t *testing.T) {
 		triggered = true
 	})
 	engine.ProcessEvent(Event{
-		Type:     TriggerZoneEnter,
-		ZoneID:   "test",
+		Type:      TriggerZoneEnter,
+		ZoneID:    "test",
 		Timestamp: time.Now(),
 	})
+	time.Sleep(20 * time.Millisecond)
 
 	if triggered {
 		t.Error("Should not trigger when mode is sleep (condition requires away)")
@@ -940,10 +953,11 @@ func TestSystemMode(t *testing.T) {
 
 	triggered = false
 	engine.ProcessEvent(Event{
-		Type:     TriggerZoneEnter,
-		ZoneID:   "test",
+		Type:      TriggerZoneEnter,
+		ZoneID:    "test",
 		Timestamp: time.Now(),
 	})
+	time.Sleep(20 * time.Millisecond)
 
 	if !triggered {
 		t.Error("Should trigger when mode is away")

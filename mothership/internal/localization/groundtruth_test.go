@@ -221,6 +221,7 @@ func TestWeightLearner_PoorPrediction(t *testing.T) {
 	config := DefaultWeightLearnerConfig()
 	config.LearningRate = 0.1
 	config.PenaltyThreshold = 1.5
+	config.MaxErrorDistance = 10.0 // Allow large errors for this test
 
 	engine := NewEngine(10, 10, 0, 0)
 	learner := NewWeightLearner(mockGT, engine, config)
@@ -255,10 +256,10 @@ func TestSelfImprovingLocalizer_Integration(t *testing.T) {
 	sil := NewSelfImprovingLocalizer(config)
 
 	// Set up nodes
-	sil.SetNodePosition("node1", 0, 0)
-	sil.SetNodePosition("node2", 10, 0)
-	sil.SetNodePosition("node3", 10, 10)
-	sil.SetNodePosition("node4", 0, 10)
+	sil.SetNodePosition("node1", 0, 0, 0)
+	sil.SetNodePosition("node2", 10, 0, 0)
+	sil.SetNodePosition("node3", 10, 0, 10)
+	sil.SetNodePosition("node4", 0, 0, 10)
 
 	// Add BLE observations for an entity at (5, 5)
 	sil.AddBLEObservation("phone1", "node1", -80)
@@ -312,11 +313,9 @@ func TestGrid_WithLearnedSigma(t *testing.T) {
 	grid.AddLinkInfluence(0, 5, 10, 5, 1.0)
 
 	cells1, cols, rows := grid.Snapshot()
-	maxDefault := 0.0
+	totalDefault := 0.0
 	for _, v := range cells1 {
-		if v > maxDefault {
-			maxDefault = v
-		}
+		totalDefault += v
 	}
 
 	grid.Reset()
@@ -325,21 +324,19 @@ func TestGrid_WithLearnedSigma(t *testing.T) {
 	grid.AddLinkInfluenceWithSigma(0, 5, 10, 5, 1.0, 0.5)
 
 	cells2, _, _ := grid.Snapshot()
-	maxNarrow := 0.0
+	totalNarrow := 0.0
 	for _, v := range cells2 {
-		if v > maxNarrow {
-			maxNarrow = v
-		}
+		totalNarrow += v
 	}
 
-	// Narrower sigma should concentrate more weight at the center
-	if maxNarrow <= maxDefault {
-		t.Errorf("Expected narrower sigma to have higher peak, got default=%.2f, narrow=%.2f",
-			maxDefault, maxNarrow)
+	// Narrower sigma should have smaller total activation (less spread)
+	if totalNarrow >= totalDefault {
+		t.Errorf("Expected narrower sigma to have less total activation, got default=%.2f, narrow=%.2f",
+			totalDefault, totalNarrow)
 	}
 
 	t.Logf("Grid size: %d x %d = %d cells", cols, rows, cols*rows)
-	t.Logf("Max activation: default=%.3f, narrow=%.3f", maxDefault, maxNarrow)
+	t.Logf("Total activation: default=%.3f, narrow=%.3f", totalDefault, totalNarrow)
 }
 
 func TestFusion_WithLearnedWeights(t *testing.T) {

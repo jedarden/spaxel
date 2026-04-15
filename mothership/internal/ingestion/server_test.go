@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -200,7 +201,7 @@ func TestMalformedCounter_ConnectionCloseIntegration(t *testing.T) {
 
 	// Create a WebSocket connection
 	dialer := websocket.Dialer{}
-	conn, resp, err := dialer.Dial(wsURL, nil)
+	conn, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
@@ -212,11 +213,14 @@ func TestMalformedCounter_ConnectionCloseIntegration(t *testing.T) {
 		t.Fatalf("Failed to send hello: %v", err)
 	}
 
-	// Read the response (should be role or config message)
-	conn.SetReadDeadline(time.Now().Add(time.Second))
-	_, _, err = conn.ReadMessage()
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
+	// Drain all initial messages (role + config) sent by the server on connect
+	// The server sends two messages: role assignment and config — drain them both.
+	for i := 0; i < 2; i++ {
+		conn.SetReadDeadline(time.Now().Add(time.Second))
+		_, _, err = conn.ReadMessage()
+		if err != nil {
+			break // Fewer messages than expected is ok
+		}
 	}
 
 	// Now send many malformed frames to trigger the close threshold

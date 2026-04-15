@@ -590,7 +590,7 @@ func TestAsFloat64(t *testing.T) {
 		wantBool bool
 	}{
 		{"float64", 3.14, 3.14, true},
-		{"float32", float32(3.14), 3.14, true},
+		{"float32", float32(3.14), float64(float32(3.14)), true},
 		{"int", 42, 42.0, true},
 		{"int64", int64(42), 42.0, true},
 		{"int32", int32(42), 42.0, true},

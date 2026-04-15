@@ -23,6 +23,7 @@ type ReplayHandler struct {
 	nextID          int
 	activeSessionID string // Currently active session for dashboard control
 	settingsHandler SettingsPersister // For ApplyToLive functionality
+	replayPath      string // Path to the replay binary file
 }
 
 // SettingsPersister is the interface for persisting replay parameters to live settings.
@@ -110,9 +111,14 @@ func (h *ReplayHandler) Stop() {
 	h.worker.Stop()
 }
 
-// Close closes the replay handler.
+// Close closes the replay handler and the underlying store.
 func (h *ReplayHandler) Close() error {
 	h.Stop()
+	if h.worker != nil {
+		if store := h.worker.GetStore(); store != nil {
+			return store.Close()
+		}
+	}
 	return nil
 }
 
@@ -628,7 +634,17 @@ func formatTimestamp(ms int64) string {
 
 // GetReplayPath returns the path to the CSI replay binary file.
 func (h *ReplayHandler) GetReplayPath() string {
-	return "" // The recording buffer manages the file
+	if h.replayPath != "" {
+		return h.replayPath
+	}
+	return "/data/csi_replay.bin" // Default path
+}
+
+// SetReplayPath sets the path to the CSI replay binary file.
+func (h *ReplayHandler) SetReplayPath(path string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.replayPath = path
 }
 
 // GetStoreStats returns statistics about the replay store.

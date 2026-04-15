@@ -13,15 +13,14 @@ import (
 )
 
 func TestBriefingHandler_GetBriefing(t *testing.T) {
-	// Create temp database
-	tmpDB, err := os.CreateTemp("", "test-briefing-*.db")
+	// Create temp directory for the handler's database files
+	tmpDir, err := os.MkdirTemp("", "test-briefing-*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tmpDB.Close()
-	os.Remove(tmpDB.Name())
+	defer os.RemoveAll(tmpDir)
 
-	handler, err := NewBriefingHandler(tmpDB.Name())
+	handler, err := NewBriefingHandler(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,14 +63,13 @@ func TestBriefingHandler_GetBriefing(t *testing.T) {
 }
 
 func TestBriefingHandler_GenerateBriefing(t *testing.T) {
-	tmpDB, err := os.CreateTemp("", "test-briefing-*.db")
+	tmpDir, err := os.MkdirTemp("", "test-briefing-*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tmpDB.Close()
-	os.Remove(tmpDB.Name())
+	defer os.RemoveAll(tmpDir)
 
-	handler, err := NewBriefingHandler(tmpDB.Name())
+	handler, err := NewBriefingHandler(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,14 +98,13 @@ func TestBriefingHandler_GenerateBriefing(t *testing.T) {
 }
 
 func TestBriefingHandler_GetLatest(t *testing.T) {
-	tmpDB, err := os.CreateTemp("", "test-briefing-*.db")
+	tmpDir, err := os.MkdirTemp("", "test-briefing-*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tmpDB.Close()
-	os.Remove(tmpDB.Name())
+	defer os.RemoveAll(tmpDir)
 
-	handler, err := NewBriefingHandler(tmpDB.Name())
+	handler, err := NewBriefingHandler(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}

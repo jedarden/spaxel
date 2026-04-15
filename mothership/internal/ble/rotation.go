@@ -146,14 +146,20 @@ func (r *RotationDetector) calculateRotationScore(oldAddr string, oldReadings []
 	var reasons []string
 
 	// Get device records for manufacturer data comparison
-	oldDev, err := r.registry.GetDevice(oldAddr)
-	if err != nil {
-		return 0, ""
-	}
-	newDev, err := r.registry.GetDevice(newAddr)
-	if err != nil {
-		// New device not in registry yet - that's expected for rotations
-		// Create a temporary record for comparison
+	var oldDev, newDev *DeviceRecord
+	if r.registry != nil {
+		var err error
+		oldDev, err = r.registry.GetDevice(oldAddr)
+		if err != nil {
+			oldDev = &DeviceRecord{Addr: oldAddr}
+		}
+		newDev, err = r.registry.GetDevice(newAddr)
+		if err != nil {
+			// New device not in registry yet - that's expected for rotations
+			newDev = &DeviceRecord{Addr: newAddr}
+		}
+	} else {
+		oldDev = &DeviceRecord{Addr: oldAddr}
 		newDev = &DeviceRecord{Addr: newAddr}
 	}
 

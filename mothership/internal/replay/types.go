@@ -80,6 +80,20 @@ func (s *Session) CurrentMS() int64 {
 	return s.currentMS
 }
 
+// FromMS returns the session start timestamp in milliseconds.
+func (s *Session) FromMS() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.fromMS
+}
+
+// ToMS returns the session end timestamp in milliseconds.
+func (s *Session) ToMS() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.toMS
+}
+
 // State returns the current session state.
 func (s *Session) State() SessionState {
 	s.mu.RLock()
@@ -92,6 +106,18 @@ func (s *Session) Speed() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.speed
+}
+
+// SetSpeed updates the playback speed without changing state.
+func (s *Session) SetSpeed(speed int) error {
+	if speed < 1 || speed > 5 {
+		return fmt.Errorf("invalid speed: %d (must be 1-5)", speed)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.speed = speed
+	s.updated_at = time.Now().UnixMilli()
+	return nil
 }
 
 // Params returns the current tunable parameters.
@@ -109,13 +135,16 @@ func (s *Session) SetParams(params *TunableParams) {
 	s.updated_at = time.Now().UnixMilli()
 }
 
-// Seek moves the replay position to the target timestamp.
-func (s *Session) Seek(targetMS int64) error {
+// SeekTo moves the replay position to the target timestamp, clamping to session range.
+func (s *Session) SeekTo(targetMS int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if targetMS < s.fromMS || targetMS > s.toMS {
-		return fmt.Errorf("seek target %d out of range [%d, %d]", targetMS, s.fromMS, s.toMS)
+	if targetMS < s.fromMS {
+		targetMS = s.fromMS
+	}
+	if targetMS > s.toMS {
+		targetMS = s.toMS
 	}
 
 	s.currentMS = targetMS

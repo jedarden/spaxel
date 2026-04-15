@@ -21,8 +21,9 @@ var QualifyingSettingsKeys = map[string]bool{
 
 // EditTracker tracks edits to settings keys for repeated-edit hints.
 type EditTracker struct {
-	mu    sync.RWMutex
-	edits map[string]*editState // key -> edit state
+	mu         sync.RWMutex
+	edits      map[string]*editState // key -> edit state
+	EditWindow time.Duration         // How long edits are grouped together (default 60 minutes)
 }
 
 // editState tracks the edit count and last edit time for a settings key.
@@ -37,7 +38,8 @@ type editState struct {
 // NewEditTracker creates a new edit tracker.
 func NewEditTracker() *EditTracker {
 	return &EditTracker{
-		edits: make(map[string]*editState),
+		edits:      make(map[string]*editState),
+		EditWindow: 60 * time.Minute,
 	}
 }
 
@@ -71,8 +73,12 @@ func (t *EditTracker) RecordEdit(key string) (bool, bool) {
 		state.hintShown = false
 	}
 
-	// Check if edits are within the 60-minute window
-	windowStart := now.Add(-60 * time.Minute)
+	// Check if edits are within the edit window (default 60 minutes)
+	editWin := t.EditWindow
+	if editWin <= 0 {
+		editWin = 60 * time.Minute
+	}
+	windowStart := now.Add(-editWin)
 	if state.lastEdit.Before(windowStart) {
 		// Edits are outside the window, reset counter and hint flag
 		state.count = 1
@@ -202,17 +208,18 @@ func (t *ZoneQualityTracker) UpdateQuality(zoneID int, quality float64, timestam
 	}
 
 	// Check for recovery (with hysteresis to prevent flapping)
-	if quality >= QualityRecovery && state.quality < QualityRecovery {
-		state.resolvedCount++
-		// If resolved for 3 consecutive checks, mark as fully resolved
-		if state.resolvedCount >= 3 {
-			state.bannerShown = false
-			state.resolvedCount = 0
-			state.firstPoorTime = time.Time{}
-			return false, true // Issue resolved
-		}
-	} else {
+	// Recovery requires quality >= QualityRecovery (70%), which is higher than
+	// the poor threshold (60%), providing hysteresis to prevent flapping.
+	// Only mark resolved if the zone was actually in prolonged poor quality (>24h).
+	if quality >= QualityRecovery &&
+		!state.firstPoorTime.IsZero() &&
+		timestamp.Sub(state.firstPoorTime) > PoorQualityDuration {
+		state.bannerShown = false
 		state.resolvedCount = 0
+		state.firstPoorTime = time.Time{}
+		state.quality = quality
+		state.hysteresis = quality
+		return false, true // Issue resolved
 	}
 
 	state.quality = quality

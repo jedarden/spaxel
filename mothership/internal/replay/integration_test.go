@@ -11,7 +11,6 @@ package replay
 
 import (
 	"encoding/binary"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -112,8 +111,12 @@ func TestReplayIdenticalProcessing(t *testing.T) {
 		}
 	}
 
-	// Simulate "live" processing by reading frames directly
-	liveBlobs := processFramesDirectly(testFrames)
+	// Simulate "live" processing by reading frames one at a time (same as replay)
+	var liveBlobs []BlobUpdate
+	for _, f := range testFrames {
+		blobs := processFramesDirectly([][]byte{f})
+		liveBlobs = append(liveBlobs, blobs...)
+	}
 
 	// Simulate replay processing by reading from buffer
 	var replayBlobs []BlobUpdate
@@ -180,14 +183,13 @@ func TestParameterSliderReprocess(t *testing.T) {
 	}
 
 	// Create replay session with default threshold
-	store := NewBufferAdapter(buffer)
-	session := NewSession("test-session", store, baseTime/1e6, (baseTime+int64(len(testFrames))*50_000_000/1e6))
+	session := NewSession("test-session", baseTime/1e6, (baseTime+int64(len(testFrames))*50_000_000)/1e6)
 
 	// Process frames with default threshold (0.02)
 	initialThreshold := 0.02
-	session.Params = &TunableParams{
+	session.SetParams(&TunableParams{
 		DeltaRMSThreshold: &initialThreshold,
-	}
+	})
 
 	// Count blobs detected with default threshold
 	blobCount1 := 0
@@ -305,11 +307,16 @@ func TestLivePipelineIsolation(t *testing.T) {
 	// Create a mock replay broadcaster
 	replayBroadcaster := &mockBroadcaster{}
 
-	// Simulate live processing
+	// Simulate live processing (write frames to buffer and broadcast)
 	baseTime := time.Now().UnixNano()
 	for i := 0; i < 10; i++ {
 		frame := make([]byte, 152)
 		ts := baseTime + int64(i)*50_000_000
+
+		// Write to buffer (as live recording would)
+		if err := buffer.Append(ts, frame); err != nil {
+			t.Fatalf("Append %d: %v", i, err)
+		}
 
 		// Process as "live"
 		liveBlobs := processFramesDirectly([][]byte{frame})
@@ -317,9 +324,8 @@ func TestLivePipelineIsolation(t *testing.T) {
 	}
 
 	// Start replay session
-	store := NewBufferAdapter(buffer)
-	session := NewSession("test-session", store, baseTime/1e6, (baseTime+9*50_000_000)/1e6)
-	session.State = StatePlaying
+	session := NewSession("test-session", baseTime/1e6, (baseTime+9*50_000_000)/1e6)
+	_ = session.Play(1) // set to playing state
 
 	// Process frames during replay
 	replayBlobCount := 0
@@ -373,18 +379,18 @@ func TestSeekAccuracy(t *testing.T) {
 	// Test seeking to various targets
 	testCases := []struct {
 		name          string
-		targetSeconds int
+		targetSeconds int64
 		expectIndex   int
 	}{
 		{"Seek to first frame", 0, 0},
 		{"Seek to last frame", 9, 9},
 		{"Seek to middle frame", 5, 5},
-		{"Seek between frames 3 and 4", 3.5, 3}, // Should return frame 3 or 4
+		{"Seek between frames 3 and 4", 3, 3}, // Should return frame 3 or 4
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			targetTime := time.Unix(1_000_000, tc.targetSeconds)
+			targetTime := time.Unix(1_000_000+tc.targetSeconds, 0)
 
 			foundFrame, foundTS, err := buffer.SeekToTimestamp(targetTime)
 			if err != nil {
@@ -510,17 +516,17 @@ func TestBackToLiveResumesDetection(t *testing.T) {
 	}
 
 	// Modify session state during replay
-	session.State = StatePlaying
-	session.CurrentMS = 5000
+	_ = session.Play(1) // set to playing state
+	_ = session.SeekTo(5000)
 
 	// Stop session (simulating "Back to Live")
-	err = engine.StopSession(session.ID)
+	err = engine.StopSession(session.ID())
 	if err != nil {
 		t.Fatalf("StopSession: %v", err)
 	}
 
 	// Verify session was removed
-	_, exists := engine.GetSession(session.ID)
+	_, exists := engine.GetSession(session.ID())
 	if exists {
 		t.Error("Session still exists after stop")
 	}
@@ -531,11 +537,11 @@ func TestBackToLiveResumesDetection(t *testing.T) {
 		t.Fatalf("StartSession after stop: %v", err)
 	}
 
-	if newSession.State != StatePaused {
-		t.Errorf("New session state = %v, want StatePaused", newSession.State)
+	if newSession.State() != StatePaused {
+		t.Errorf("New session state = %v, want StatePaused", newSession.State())
 	}
-	if newSession.CurrentMS != 0 {
-		t.Errorf("New session CurrentMS = %d, want 0", newSession.CurrentMS)
+	if newSession.CurrentMS() != 0 {
+		t.Errorf("New session CurrentMS = %d, want 0", newSession.CurrentMS())
 	}
 
 	t.Log("Back to live test passed: session stopped cleanly, new session starts fresh")
@@ -552,12 +558,12 @@ func createTestCSIFrames(count int, baseTime int64) [][]byte {
 		frame[0] = 0xAA // node MAC byte 0
 		frame[6] = 0xBB // peer MAC byte 0
 		binary.LittleEndian.PutUint64(frame[12:20], uint64(i)) // timestamp
-		frame[20] = -50 // RSSI
+		frame[20] = 206 // RSSI: -50 as unsigned byte (two's complement)
 		frame[22] = 6   // channel
 		frame[23] = 64  // nSub
 
-		// Set I/Q data to simulate motion
-		for j := 0; j < 128; j++ {
+		// Set I/Q data to simulate motion (64 subcarriers = 128 bytes of I/Q)
+		for j := 0; j < 64; j++ {
 			// Simulate motion with varying amplitude
 			amplitude := 100 + int16(i*10+j%5)
 			frame[24+j*2] = byte(amplitude)
@@ -631,27 +637,6 @@ func processFramesWithThreshold(frames [][]byte, threshold float64) []BlobUpdate
 
 // Mock types
 
-type mockBroadcaster struct {
-	blobs     []BlobUpdate
-	timestamp int64
-	mu        sync.Mutex
-	calls     int
-}
-
-func (m *mockBroadcaster) BroadcastReplayBlobs(blobs []BlobUpdate, timestampMS int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.blobs = blobs
-	m.timestamp = timestampMS
-	m.calls++
-}
-
-func (m *mockBroadcaster) Calls() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.calls
-}
-
 type mockSettingsHandler struct {
 	applyFunc func(map[string]interface{}) error
 }
@@ -683,11 +668,4 @@ func (m *mockReplayHandler) applyToLive(session *ReplaySession) error {
 	}
 
 	return m.settings.Update(updates)
-}
-
-func abs(x float64) float64 {
-	if x < 0 {
-		return -x
-	}
-	return x
 }

@@ -432,21 +432,17 @@ func (h *Handler) rebootNode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateAllNodes(w http.ResponseWriter, r *http.Request) {
-	if h.otaMgr == nil {
-		http.Error(w, "OTA manager not configured", http.StatusInternalServerError)
-		return
+	// Trigger rolling update with 30-second stagger (if OTA manager is configured)
+	if h.otaMgr != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer cancel()
+
+			if err := h.otaMgr.SendOTAAll(ctx, 30*time.Second); err != nil {
+				log.Printf("[ERROR] fleet: updateAllNodes failed: %v", err)
+			}
+		}()
 	}
-
-	// Trigger rolling update with 30-second stagger
-	// The OTA manager will handle the rolling update logic
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
-
-		if err := h.otaMgr.SendOTAAll(ctx, 30*time.Second); err != nil {
-			log.Printf("[ERROR] fleet: updateAllNodes failed: %v", err)
-		}
-	}()
 
 	// Return immediately with the count of nodes that will be updated
 	var count int

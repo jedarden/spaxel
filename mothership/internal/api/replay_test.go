@@ -115,13 +115,13 @@ func TestListSessions(t *testing.T) {
 				if resp["has_data"] != true {
 					t.Errorf("Expected has_data=true, got %v", resp["has_data"])
 				}
-				if fileSize, ok := resp["file_size_mb"].(int64); !ok || fileSize == 0 {
+				if fileSize, ok := resp["file_size_mb"].(float64); !ok || fileSize == 0 {
 					t.Errorf("Expected non-zero file_size_mb, got %v", resp["file_size_mb"])
 				}
-				if oldestTS, ok := resp["oldest_timestamp_ms"].(int64); !ok || oldestTS == 0 {
+				if oldestTS, ok := resp["oldest_timestamp_ms"].(float64); !ok || oldestTS == 0 {
 					t.Errorf("Expected non-zero oldest_timestamp_ms, got %v", resp["oldest_timestamp_ms"])
 				}
-				if newestTS, ok := resp["newest_timestamp_ms"].(int64); !ok || newestTS == 0 {
+				if newestTS, ok := resp["newest_timestamp_ms"].(float64); !ok || newestTS == 0 {
 					t.Errorf("Expected non-zero newest_timestamp_ms, got %v", resp["newest_timestamp_ms"])
 				}
 				sessions, ok := resp["sessions"].([]interface{})
@@ -142,8 +142,8 @@ func TestListSessions(t *testing.T) {
 				if resp["has_data"] != false {
 					t.Errorf("Expected has_data=false, got %v", resp["has_data"])
 				}
-				if oldestTS, ok := resp["oldest_timestamp_ms"].(int64); ok && oldestTS != 0 {
-					t.Errorf("Expected zero oldest_timestamp_ms when no data, got %d", oldestTS)
+				if oldestTS, ok := resp["oldest_timestamp_ms"].(float64); ok && oldestTS != 0 {
+					t.Errorf("Expected zero oldest_timestamp_ms when no data, got %v", oldestTS)
 				}
 			},
 		},
@@ -197,10 +197,10 @@ func TestStartSession(t *testing.T) {
 				if !ok || sessionID == "" {
 					t.Errorf("Expected non-empty session_id, got %v", resp["session_id"])
 				}
-				if fromMS, ok := resp["from_ms"].(int64); !ok || fromMS == 0 {
+				if fromMS, ok := resp["from_ms"].(float64); !ok || fromMS == 0 {
 					t.Errorf("Expected non-zero from_ms, got %v", resp["from_ms"])
 				}
-				if toMS, ok := resp["to_ms"].(int64); !ok || toMS == 0 {
+				if toMS, ok := resp["to_ms"].(float64); !ok || toMS == 0 {
 					t.Errorf("Expected non-zero to_ms, got %v", resp["to_ms"])
 				}
 				if state, ok := resp["state"].(string); !ok || state != "paused" {
@@ -217,7 +217,7 @@ func TestStartSession(t *testing.T) {
 			},
 			wantStatus: http.StatusOK,
 			check: func(t *testing.T, resp map[string]interface{}) {
-				if speed, ok := resp["speed"].(int); !ok || speed != 2 {
+				if speed, ok := resp["speed"].(float64); !ok || speed != 2 {
 					t.Errorf("Expected speed=2, got %v", resp["speed"])
 				}
 			},
@@ -230,7 +230,7 @@ func TestStartSession(t *testing.T) {
 			},
 			wantStatus: http.StatusOK,
 			check: func(t *testing.T, resp map[string]interface{}) {
-				if speed, ok := resp["speed"].(int); !ok || speed != 5 {
+				if speed, ok := resp["speed"].(float64); !ok || speed != 5 {
 					t.Errorf("Expected speed=5, got %v", resp["speed"])
 				}
 			},
@@ -242,7 +242,7 @@ func TestStartSession(t *testing.T) {
 			},
 			wantStatus: http.StatusOK,
 			check: func(t *testing.T, resp map[string]interface{}) {
-				if speed, ok := resp["speed"].(int); !ok || speed != 1 {
+				if speed, ok := resp["speed"].(float64); !ok || speed != 1 {
 					t.Errorf("Expected default speed=1, got %v", resp["speed"])
 				}
 			},
@@ -523,7 +523,7 @@ func TestSeek(t *testing.T) {
 				if resp["status"] != "seeked" {
 					t.Errorf("Expected status=seeked, got %v", resp["status"])
 				}
-				if currentMS, ok := resp["current_ms"].(int64); !ok || currentMS == 0 {
+				if currentMS, ok := resp["current_ms"].(float64); !ok || currentMS == 0 {
 					t.Errorf("Expected non-zero current_ms, got %v", resp["current_ms"])
 				}
 				// Mock store should find a frame
@@ -693,7 +693,7 @@ func TestTune(t *testing.T) {
 				if params["fresnel_decay"] != 2.5 {
 					t.Errorf("Expected fresnel_decay=2.5, got %v", params["fresnel_decay"])
 				}
-				if params["n_subcarriers"] != 24 {
+				if params["n_subcarriers"] != float64(24) {
 					t.Errorf("Expected n_subcarriers=24, got %v", params["n_subcarriers"])
 				}
 				if params["breathing_sensitivity"] != 0.008 {
@@ -1090,7 +1090,7 @@ func TestParseISO8601(t *testing.T) {
 			input:   "2024-03-15T14:30:00Z",
 			wantErr: false,
 			check: func(ms int64) bool {
-				expected := int64(1710519800000) // 2024-03-15 14:30:00 UTC in ms
+				expected := int64(1710513000000) // 2024-03-15 14:30:00 UTC in ms
 				return ms == expected
 			},
 		},
@@ -1099,7 +1099,7 @@ func TestParseISO8601(t *testing.T) {
 			input:   "2024-03-15T14:30:00.123456789Z",
 			wantErr: false,
 			check: func(ms int64) bool {
-				return ms > 1710519800000 && ms < 1710519800200
+				return ms > 1710513000000 && ms < 1710513000200
 			},
 		},
 		{

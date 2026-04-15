@@ -66,6 +66,17 @@ func NewLearnedWeights() *LearnedWeights {
 	}
 }
 
+// Reset clears all learned weights and stats, restoring defaults.
+func (lw *LearnedWeights) Reset() {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+	lw.linkWeights = make(map[string]float64)
+	lw.linkSigmas = make(map[string]float64)
+	lw.linkStats = make(map[string]*LinkLearningStats)
+	lw.errorHistory = make([]ErrorHistoryEntry, 0, 100)
+	lw.lastUpdate = time.Now()
+}
+
 // GetLinkWeight returns the learned weight multiplier for a link
 func (lw *LearnedWeights) GetLinkWeight(linkID string) float64 {
 	lw.mu.RLock()

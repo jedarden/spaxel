@@ -25,7 +25,7 @@ const (
 	FFTBreathingBufferSize    = 60    // 30 seconds at 2Hz adaptive rate
 	FFTMinBreathingHz         = 0.2   // Lower bound of breathing band (FFT)
 	FFTMaxBreathingHz         = 1.0   // Upper bound of breathing band (FFT) - double breathing rate
-	FFTSNRThreshold           = 3.0   // Minimum SNR in dB to declare breathing
+	FFTSNRThreshold           = 15.0  // Minimum SNR in dB to declare breathing
 	FFTSampleRateHz           = 2.0   // Adaptive sensing rate for breathing buffer
 	FFTMinSamples             = 30    // Minimum 15s of data before detection can fire
 
@@ -532,8 +532,22 @@ func (bd *FFTBreathingDetector) Detect() FFTBreathingResult {
 		}
 	}
 
-	// Compute median amplitude (robust noise estimate)
-	medianAmplitude := computeMedian(spectrum)
+	// Compute in-band amplitude statistics for SNR estimation.
+	// Use the median of all in-band bins as the noise floor.
+	// Exclude the peak bin to get a better baseline estimate.
+	inBandAmps := make([]float64, 0, maxBin-minBin+1)
+	for bin := minBin; bin <= maxBin; bin++ {
+		if bin != peakBin {
+			inBandAmps = append(inBandAmps, spectrum[bin])
+		}
+	}
+	// Fall back to full spectrum median if not enough in-band bins
+	var medianAmplitude float64
+	if len(inBandAmps) >= 3 {
+		medianAmplitude = computeMedian(inBandAmps)
+	} else {
+		medianAmplitude = computeMedian(spectrum)
+	}
 
 	// Avoid division by zero
 	if medianAmplitude < 1e-10 {
