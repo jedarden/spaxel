@@ -37,7 +37,7 @@ func TestHealthCheckOK(t *testing.T) {
 		t.Errorf("expected nodes_online=3, got %d", resp.NodesOnline)
 	}
 	if resp.SheddingLevel != 0 {
-		t.Errorf("expected load_level=0, got %d", resp.LoadLevel)
+		t.Errorf("expected load_level=0, got %d", resp.SheddingLevel)
 	}
 	if resp.UptimeS < 0 {
 		t.Errorf("expected uptime_s >= 0, got %d", resp.UptimeS)
@@ -120,32 +120,27 @@ func TestHealthCheckNoNodesWithinGracePeriod(t *testing.T) {
 
 // TestHealthCheckLoadLevel3 tests that health check returns degraded after 60s of level 3.
 func TestHealthCheckLoadLevel3(t *testing.T) {
-	shedder := loadshed.New()
+	currentLevel := 0
 	checker := &Checker{
-		startTime: time.Now(),
-		db:        &sql.DB{},
+		startTime:    time.Now(),
+		db:           &sql.DB{},
 		getNodeCount: func() int { return 3 },
-		shedder:   shedder,
+		getShedLevel: func() int { return currentLevel },
 	}
 
-	// Override checkDB to return OK
-	originalCheckDB := checker.checkDB
 	checker.checkDB = func() string { return "ok" }
-	defer func() { checker.checkDB = originalCheckDB }()
 
-	// Initially OK
+	// Initially OK at level 0
 	resp := checker.check("1.0.0")
 	if resp.Status != "ok" {
 		t.Errorf("expected status=ok initially, got %s", resp.Status)
 	}
 
-	// Set to level 3 and mark it as having been active for 61 seconds
+	// Switch to level 3 and backdate level3Since to simulate 61 seconds at level 3
+	currentLevel = 3
 	checker.mu.Lock()
 	checker.level3Since = time.Now().Add(-61 * time.Second)
 	checker.mu.Unlock()
-
-	// Manually set shedder level (we need to access the internal state)
-	// Since we can't do that directly, we'll verify the timestamp logic works
 
 	resp = checker.check("1.0.0")
 	if resp.Status != "degraded" {
@@ -171,12 +166,12 @@ func TestHealthCheckSheddingLevelJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			shedder := loadshed.New()
 			// Use the getShedLevel override to inject a specific level.
+			shedLevel := tt.shedLevel
 			checker := New(Config{
 				DB:           &sql.DB{},
 				GetNodeCount: func() int { return 2 },
-				GetShedLevel: func() int { return tt.shedLevel },
+				GetShedLevel: func() int { return int(shedLevel) },
 			})
 			checker.checkDB = func() string { return "ok" }
 
@@ -259,8 +254,10 @@ func TestHealthCheckHandlerDegraded(t *testing.T) {
 
 // TestHealthCheckUptimeIncrement tests that uptime increments across calls.
 func TestHealthCheckUptimeIncrement(t *testing.T) {
+	// Backdate startTime so the first check yields at least 1s uptime,
+	// then wait past the next whole second boundary for a measurable increment.
 	checker := &Checker{
-		startTime: time.Now(),
+		startTime: time.Now().Add(-1900 * time.Millisecond),
 		db:        &sql.DB{},
 		getNodeCount: func() int { return 1 },
 		shedder:   loadshed.New(),
@@ -268,7 +265,7 @@ func TestHealthCheckUptimeIncrement(t *testing.T) {
 	checker.checkDB = func() string { return "ok" }
 
 	resp1 := checker.check("1.0.0")
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond) // crosses the 2-second boundary
 	resp2 := checker.check("1.0.0")
 
 	if resp2.UptimeS <= resp1.UptimeS {
