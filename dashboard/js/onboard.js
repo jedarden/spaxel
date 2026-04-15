@@ -362,17 +362,60 @@
         return html;
     }
 
+    var BOOTLOADER_SVG =
+        '<svg viewBox="0 0 200 120" width="180" height="108" style="display:block;margin:8px auto">' +
+        '<rect x="20" y="20" width="160" height="80" rx="4" fill="#2d5a27" stroke="#4a8a3f" stroke-width="1.5"/>' +
+        '<rect x="0" y="40" width="25" height="40" rx="3" fill="#888" stroke="#aaa" stroke-width="1"/>' +
+        '<rect x="2" y="42" width="21" height="36" rx="2" fill="#666"/>' +
+        '<rect x="155" y="15" width="25" height="35" rx="2" fill="#333" stroke="#555" stroke-width="1"/>' +
+        '<rect x="40" y="80" width="18" height="12" rx="2" fill="#4fc3f7" stroke="#29b6f6" stroke-width="2">' +
+        '<animate attributeName="opacity" values="1;0.4;1" dur="1s" repeatCount="indefinite"/>' +
+        '</rect>' +
+        '<text x="49" y="106" text-anchor="middle" fill="#4fc3f7" font-size="8" font-weight="bold">BOOT</text>' +
+        '<rect x="70" y="80" width="18" height="12" rx="2" fill="#f44336" stroke="#e53935" stroke-width="2">' +
+        '<animate attributeName="opacity" values="1;0.4;1" dur="1.4s" repeatCount="indefinite"/>' +
+        '</rect>' +
+        '<text x="79" y="106" text-anchor="middle" fill="#f44336" font-size="8" font-weight="bold">RST</text>' +
+        '<rect x="85" y="35" width="35" height="35" rx="2" fill="#1a1a1a" stroke="#333" stroke-width="1"/>' +
+        '<text x="102" y="56" text-anchor="middle" fill="#555" font-size="7">ESP32</text>' +
+        buildPins(30, 18, 15) + buildPins(30, 97, 15) +
+        '</svg>';
+
+    function renderBootloaderHelp(retryCount) {
+        var escalated = retryCount >= 2;
+        return '<div class="wizard-bootloader-help" style="background:#1a2a1a;border:1px solid #4fc3f7;border-radius:6px;padding:12px;margin:12px 0;text-align:center">' +
+            '<p style="margin:0 0 8px;color:#4fc3f7;font-weight:bold">' + (escalated ? '⚠ Still not working?' : 'Device not in download mode') + '</p>' +
+            (escalated
+                ? '<p style="font-size:12px;color:#aaa;margin:0 0 8px">Try a different USB cable (data cables only, not charge-only). If using a USB hub, connect directly to your computer.</p>'
+                : '<p style="font-size:12px;color:#ccc;margin:0 0 8px">Hold <strong style="color:#4fc3f7">BOOT</strong>, press &amp; release <strong style="color:#f44336">RST</strong>, then release <strong style="color:#4fc3f7">BOOT</strong>.</p>') +
+            BOOTLOADER_SVG +
+            '</div>';
+    }
+
     function renderFlashFirmware(contentEl) {
+        var flashRetryCount = 0;
+
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
             '<h2>Flash Firmware</h2>' +
-            '<p>The wizard will now flash the Spaxel firmware onto your ESP32-S3. This takes about 45-90 seconds.</p>' +
+            '<p>The wizard will flash the Spaxel firmware onto your ESP32-S3. This takes about 45–90 seconds.</p>' +
+            '<details style="margin-bottom:12px;font-size:13px;color:#aaa">' +
+            '<summary style="cursor:pointer;color:#80cbc4">Having trouble connecting?</summary>' +
+            '<div style="padding:8px 0 0">' +
+            '<p style="margin:4px 0">Before clicking Start Flashing, put the board in download mode:</p>' +
+            '<ol style="margin:4px 0 4px 16px;padding:0">' +
+            '<li>Hold <strong style="color:#4fc3f7">BOOT</strong></li>' +
+            '<li>Press &amp; release <strong style="color:#f44336">RST</strong></li>' +
+            '<li>Release <strong style="color:#4fc3f7">BOOT</strong></li>' +
+            '</ol>' +
+            BOOTLOADER_SVG +
+            '</div></details>' +
             '<div id="flash-container"></div>' +
             '<div id="flash-progress" class="wizard-progress" style="display:none">' +
             '<div class="progress-bar"><div class="progress-fill" id="flash-progress-fill"></div></div>' +
             '<p id="flash-status">Preparing...</p>' +
             '</div>' +
-            '<div id="flash-error" class="wizard-error" style="display:none"></div>' +
+            '<div id="flash-recovery" style="display:none"></div>' +
             '</div>';
         hideNav();
 
@@ -387,45 +430,53 @@
             return { cleanup: function () { } };
         }
 
-        var container = document.getElementById('flash-container');
-        var installBtn = document.createElement('esp-web-install-button');
-        installBtn.setAttribute('manifest', '/api/firmware/manifest');
-        installBtn.innerHTML = '<button class="wizard-btn wizard-btn-primary" slot="activate">Start Flashing</button>';
-        container.appendChild(installBtn);
+        function mountInstallButton() {
+            var container = document.getElementById('flash-container');
+            if (!container) { return; }
+            container.innerHTML = '';
+            var installBtn = document.createElement('esp-web-install-button');
+            installBtn.setAttribute('manifest', '/api/firmware/manifest');
+            installBtn.innerHTML = '<button class="wizard-btn wizard-btn-primary" slot="activate">' +
+                (flashRetryCount > 0 ? 'Try Again' : 'Start Flashing') + '</button>';
+            container.appendChild(installBtn);
 
-        installBtn.addEventListener('flash-start', function () {
-            document.getElementById('flash-progress').style.display = 'block';
-            document.getElementById('flash-status').textContent = 'Flashing...';
-            document.getElementById('flash-container').style.display = 'none';
-        });
+            installBtn.addEventListener('flash-start', function () {
+                document.getElementById('flash-progress').style.display = 'block';
+                document.getElementById('flash-status').textContent = 'Flashing...';
+                document.getElementById('flash-progress-fill').style.width = '0%';
+                container.style.display = 'none';
+                document.getElementById('flash-recovery').style.display = 'none';
+            });
 
-        installBtn.addEventListener('flash-progress', function (e) {
-            var detail = e.detail || {};
-            var pct = 0;
-            if (detail.bytesTotal > 0) {
-                pct = Math.round((detail.bytesWritten / detail.bytesTotal) * 100);
-            }
-            document.getElementById('flash-progress-fill').style.width = pct + '%';
-            document.getElementById('flash-status').textContent = 'Flashing... ' + pct + '%';
-        });
+            installBtn.addEventListener('flash-progress', function (e) {
+                var detail = e.detail || {};
+                var pct = detail.bytesTotal > 0
+                    ? Math.round((detail.bytesWritten / detail.bytesTotal) * 100) : 0;
+                document.getElementById('flash-progress-fill').style.width = pct + '%';
+                document.getElementById('flash-status').textContent = 'Flashing... ' + pct + '%';
+            });
 
-        installBtn.addEventListener('flash-success', function () {
-            document.getElementById('flash-progress').style.display = 'none';
-            document.getElementById('flash-container').innerHTML =
-                '<p class="wizard-success">✓ Firmware flashed successfully!</p>';
-            saveState();
-            setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1500);
-        });
+            installBtn.addEventListener('flash-success', function () {
+                document.getElementById('flash-progress').style.display = 'none';
+                container.innerHTML = '<p class="wizard-success">✓ Firmware flashed successfully!</p>';
+                container.style.display = 'block';
+                saveState();
+                setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1500);
+            });
 
-        installBtn.addEventListener('flash-error', function () {
-            document.getElementById('flash-progress').style.display = 'none';
-            var errEl = document.getElementById('flash-error');
-            errEl.style.display = 'block';
-            errEl.textContent =
-                'The connection was interrupted. Check the USB cable is not loose and try again.';
-            document.getElementById('flash-container').style.display = 'block';
-        });
+            installBtn.addEventListener('flash-error', function () {
+                flashRetryCount++;
+                document.getElementById('flash-progress').style.display = 'none';
+                container.style.display = 'block';
+                var recovery = document.getElementById('flash-recovery');
+                recovery.style.display = 'block';
+                recovery.innerHTML = renderBootloaderHelp(flashRetryCount);
+                // Rebuild the button so it can be clicked again
+                mountInstallButton();
+            });
+        }
 
+        mountInstallButton();
         return { cleanup: function () { } };
     }
 
