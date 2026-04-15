@@ -399,8 +399,8 @@ func (m *IdentityMatcher) assignBLEToBlobs(devices []*TriangulatedDevice, blobs 
 				continue
 			}
 
-			// Horizontal distance (ignore Z for BLE since antenna height is variable)
-			hDist := math.Sqrt(math.Pow(td.Position.X-b.X, 2) + math.Pow(td.Position.Y-b.Y, 2))
+			// Horizontal distance (ignore Y/height for BLE since antenna height is variable)
+			hDist := math.Sqrt(math.Pow(td.Position.X-b.X, 2) + math.Pow(td.Position.Z-b.Z, 2))
 
 			if hDist < bestDist {
 				bestDist = hDist

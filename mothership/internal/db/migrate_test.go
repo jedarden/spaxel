@@ -526,29 +526,12 @@ func TestBackupPruning(t *testing.T) {
 // TestOpenDBFullSequence tests the full OpenDB startup sequence.
 func TestOpenDBFullSequence(t *testing.T) {
 	dataDir := t.TempDir()
-	phaseLogs := make(map[StartupPhase]string)
 
-	logger := func(phase StartupPhase, message string) {
-		phaseLogs[phase] = message
-	}
-
-	db, err := OpenDB(dataDir, "spaxel.db", logger)
+	db, err := OpenDB(nil, dataDir, "spaxel.db")
 	if err != nil {
 		t.Fatalf("OpenDB: %v", err)
 	}
 	defer db.Close()
-
-	// Verify all phases were logged
-	expectedPhases := []StartupPhase{
-		PhaseDataDir, PhaseOpenDB, PhaseIntegrityCheck,
-		PhaseSchemaMigration, PhaseConfigSecrets, PhaseSubsystems, PhaseReady,
-	}
-
-	for _, phase := range expectedPhases {
-		if _, ok := phaseLogs[phase]; !ok {
-			t.Errorf("Phase %d was not logged", phase)
-		}
-	}
 
 	// Verify database is usable
 	var version int

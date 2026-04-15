@@ -613,8 +613,8 @@ func (de *DiagnosticEngine) checkPeriodicInterference(linkID string, history []L
 		return nil
 	}
 
-	// Check for periodicity
-	if !isPeriodic(spikes, 1*time.Minute, 3*time.Minute) {
+	// Check for periodicity (events occur every 6-20 minutes for 3-10 per hour)
+	if !isPeriodic(spikes, 1*time.Minute, 20*time.Minute) {
 		return nil
 	}
 

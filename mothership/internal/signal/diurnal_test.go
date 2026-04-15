@@ -103,7 +103,7 @@ func TestDiurnalBaseline_Update_WrongSize(t *testing.T) {
 }
 
 // TestDiurnalBaseline_HourSlotSelection tests hour-slot selection at boundaries
-// Spec: 23:59:59 -> slot 23, 00:00:00 -> slot 0
+// Spec: 23:59:59 -> slot 23 (past 15-min crossfade, full diurnal), 00:00:00 -> slot 0 (start of crossfade, frac=0 -> EMA)
 func TestDiurnalBaseline_HourSlotSelection(t *testing.T) {
 	db := NewDiurnalBaseline("test", 64)
 
@@ -124,16 +124,12 @@ func TestDiurnalBaseline_HourSlotSelection(t *testing.T) {
 		t.Errorf("Hour for 00:00:00 = %d, want 0", slot)
 	}
 
-	// Fill slots 23, 0, and 1 with different values
-	// At 23:59:59: needs slots 23 (current) and 0 (next)
-	// At 00:00:00: needs slots 0 (current) and 1 (next)
+	// Fill slots 23 and 0 with different values
 	amplitude23 := make([]float64, 64)
 	amplitude0 := make([]float64, 64)
-	amplitude1 := make([]float64, 64)
 	for i := range amplitude23 {
 		amplitude23[i] = 0.8
 		amplitude0[i] = 0.2
-		amplitude1[i] = 0.3
 	}
 
 	// Manually set slot 23
@@ -146,44 +142,40 @@ func TestDiurnalBaseline_HourSlotSelection(t *testing.T) {
 	db.slots[0].SampleCount = DiurnalMinSamples
 	copy(db.slots[0].Values, amplitude0)
 	db.slots[0].LastUpdate = t000000
-
-	// Manually set slot 1 (needed for 00:00:00 test - next slot after 0)
-	db.slots[1].SampleCount = DiurnalMinSamples
-	copy(db.slots[1].Values, amplitude1)
-	db.slots[1].LastUpdate = t000000
 	db.mu.Unlock()
 
-	// At 23:59:59, should use slot 23 mostly (frac near 1.0)
+	// EMA baseline (not used at 23:59:59 since we're past the 15-min crossfade)
 	emaBaseline := make([]float64, 64)
+
+	// At 23:59:59, we are at secondsIntoHour = 59*60+59 = 3599 > 900 (past crossfade window)
+	// So frac = 1.0 and result = slot 23 values (0.8) exclusively
 	result, frac, ready := db.GetActiveBaselineAt(t235959, emaBaseline)
 	if !ready {
 		t.Error("Should be ready with populated slots")
 	}
-	// frac at 23:59:59 = (59 + 59/60) / 60 ≈ 0.9997
-	expectedFrac := (59.0 + 59.0/60.0) / 60.0
-	if math.Abs(frac-expectedFrac) > 0.01 {
-		t.Errorf("frac at 23:59:59 = %f, want ~%f", frac, expectedFrac)
+	if math.Abs(frac-1.0) > 0.01 {
+		t.Errorf("frac at 23:59:59 = %f, want 1.0 (past 15-min crossfade window)", frac)
 	}
-	// Result should be mostly slot 23 values (0.8)
+	// Result should be slot 23 values (0.8)
 	for k := 0; k < 64; k++ {
-		expected := (1-frac)*0.8 + frac*0.2
-		if math.Abs(result[k]-expected) > 0.01 {
-			t.Errorf("result[%d] at 23:59:59 = %f, want ~%f", k, result[k], expected)
+		if math.Abs(result[k]-0.8) > 0.01 {
+			t.Errorf("result[%d] at 23:59:59 = %f, want 0.8", k, result[k])
 		}
 	}
 
-	// At 00:00:00, should use slot 0 with frac = 0
+	// At 00:00:00, we are at secondsIntoHour = 0, start of EMA→diurnal crossfade
+	// frac = 0.0, result = EMA baseline (all zeros)
 	result, frac, ready = db.GetActiveBaselineAt(t000000, emaBaseline)
 	if !ready {
 		t.Error("Should be ready with populated slots")
 	}
 	if frac != 0.0 {
-		t.Errorf("frac at 00:00:00 = %f, want 0.0", frac)
+		t.Errorf("frac at 00:00:00 = %f, want 0.0 (start of crossfade)", frac)
 	}
-	// Result should be exactly slot 0 values (0.2)
+	// Result should be EMA values (all 0.0)
 	for k := 0; k < 64; k++ {
-		if result[k] != 0.2 {
-			t.Errorf("result[%d] at 00:00:00 = %f, want 0.2", k, result[k])
+		if result[k] != 0.0 {
+			t.Errorf("result[%d] at 00:00:00 = %f, want 0.0 (EMA baseline)", k, result[k])
 		}
 	}
 }

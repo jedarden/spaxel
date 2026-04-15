@@ -332,6 +332,13 @@ func (l *SpatialWeightLearner) setWeightLocked(linkID string, zoneX, zoneY int, 
 	if l.weightCache[linkID][zoneX] == nil {
 		l.weightCache[linkID][zoneX] = make(map[int]float64)
 	}
+	// Clamp to configured range
+	if weight < l.config.MinWeight {
+		weight = l.config.MinWeight
+	}
+	if weight > l.config.MaxWeight {
+		weight = l.config.MaxWeight
+	}
 	l.weightCache[linkID][zoneX][zoneY] = weight
 }
 

@@ -41,7 +41,10 @@ func (m *mockDiurnalProcessorManager) GetDiurnalLearningStatus() []signal.Diurna
 }
 
 func (m *mockDiurnalProcessorManager) GetProcessor(linkID string) DiurnalLinkProcessor {
-	return m.processors[linkID]
+	if p, ok := m.processors[linkID]; ok {
+		return p
+	}
+	return nil
 }
 
 // newMockDiurnalBaseline creates a mock diurnal baseline with test data.
@@ -134,29 +137,33 @@ func TestGetDiurnalSlots(t *testing.T) {
 		t.Errorf("link_id = %v, want AA:BB:CC:DD:EE:FF", response["link_id"])
 	}
 
-	// Check slot_amplitudes exists and has 24 slots
-	slotAmplitudes, ok := response["slot_amplitudes"].([24][]float64)
+	// Check slot_amplitudes exists and has 24 slots (JSON unmarshals as []interface{})
+	slotAmplitudesRaw, ok := response["slot_amplitudes"].([]interface{})
 	if !ok {
-		t.Fatal("slot_amplitudes missing or wrong type")
+		t.Fatalf("slot_amplitudes missing or wrong type, got %T", response["slot_amplitudes"])
 	}
 
-	if len(slotAmplitudes) != 24 {
-		t.Errorf("got %d slots, want 24", len(slotAmplitudes))
+	if len(slotAmplitudesRaw) != 24 {
+		t.Errorf("got %d slots, want 24", len(slotAmplitudesRaw))
 	}
 
-	// Check first slot has data
-	if len(slotAmplitudes[0]) != 64 {
-		t.Errorf("slot 0 has %d values, want 64", len(slotAmplitudes[0]))
+	// Check first slot has data (each slot is []interface{} of float64 values)
+	if slot0, ok := slotAmplitudesRaw[0].([]interface{}); ok {
+		if len(slot0) != 64 {
+			t.Errorf("slot 0 has %d values, want 64", len(slot0))
+		}
+	} else {
+		t.Errorf("slot 0 wrong type: %T", slotAmplitudesRaw[0])
 	}
 
-	// Check confidence values exist
-	slotConfidences, ok := response["slot_confidences"].([]float64)
+	// Check confidence values exist (JSON unmarshals as []interface{})
+	slotConfidencesRaw, ok := response["slot_confidences"].([]interface{})
 	if !ok {
-		t.Fatal("slot_confidences missing or wrong type")
+		t.Fatalf("slot_confidences missing or wrong type, got %T", response["slot_confidences"])
 	}
 
-	if len(slotConfidences) != 24 {
-		t.Errorf("got %d confidences, want 24", len(slotConfidences))
+	if len(slotConfidencesRaw) != 24 {
+		t.Errorf("got %d confidences, want 24", len(slotConfidencesRaw))
 	}
 
 	// Check learning status

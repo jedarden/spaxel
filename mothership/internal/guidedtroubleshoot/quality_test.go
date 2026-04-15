@@ -111,6 +111,7 @@ func TestEditTracker_TimeWindow(t *testing.T) {
 
 func TestEditTracker_OutOfWindow(t *testing.T) {
 	tracker := NewEditTracker()
+	tracker.EditWindow = 50 * time.Millisecond // short window for testing
 	key := "breathing_sensitivity"
 
 	// First edit

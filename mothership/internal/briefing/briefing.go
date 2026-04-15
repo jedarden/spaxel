@@ -86,6 +86,24 @@ func NewGenerator(dbPath string) (*Generator, error) {
 		}
 	}
 
+	// Ensure briefings table exists (it may not in a fresh test database)
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS briefings (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			date          TEXT NOT NULL,
+			person        TEXT NOT NULL DEFAULT '',
+			content       TEXT NOT NULL DEFAULT '',
+			generated_at  INTEGER NOT NULL DEFAULT 0,
+			sections_json TEXT,
+			delivered     INTEGER NOT NULL DEFAULT 0,
+			acknowledged  INTEGER NOT NULL DEFAULT 0,
+			UNIQUE(date, person)
+		)
+	`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create briefings table: %w", err)
+	}
+
 	return &Generator{
 		db:              db,
 		weatherAPIURL:   weatherURL,

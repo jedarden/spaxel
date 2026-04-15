@@ -8,18 +8,28 @@ import (
 
 const (
 	// WiFi physical constants
-	wavelength      = 0.123  // meters (2.4 GHz)
-	halfWavelength  = wavelength / 2.0
+	wavelength        = 0.123     // meters (2.4 GHz)
+	halfWavelength    = wavelength / 2.0
 	subcarrierSpacing = 312.5e3 // Hz
-	c               = 3e8 // speed of light m/s
+	c                 = 3e8     // speed of light m/s
 
-	// CSI frame constants
-	magic   = 0xABCDEF01
-	version = 1
-	nSub    = 64 // number of subcarriers for HT20
+	// CSI frame constants — must match ingestion/frame.go format
+	nSub = 64 // number of subcarriers for HT20
 )
 
-// generateCSIFrame generates a synthetic CSI binary frame
+// generateCSIFrame generates a synthetic CSI binary frame.
+// The frame format matches the ingestion layer (ingestion/frame.go):
+//
+//	Header (24 bytes fixed):
+//	  [0:6]   node_mac     — TX node MAC address
+//	  [6:12]  peer_mac     — RX node MAC address
+//	  [12:20] timestamp_us — uint64 LE, microseconds since node boot
+//	  [20]    rssi         — int8, dBm
+//	  [21]    noise_floor  — int8, dBm
+//	  [22]    channel      — uint8, WiFi channel
+//	  [23]    n_sub        — uint8, subcarrier count
+//	Payload (n_sub × 2 bytes):
+//	  Per subcarrier: int8 I, int8 Q
 func generateCSIFrame(tx, rx *VirtualNode, walkers []*Walker, walls []Wall, frameNum int, rng *rand.Rand) []byte {
 	// Calculate combined CSI from all walkers
 	amplitude, phaseBase := computeCSIForWalkers(tx, rx, walkers, walls)
@@ -27,18 +37,17 @@ func generateCSIFrame(tx, rx *VirtualNode, walkers []*Walker, walls []Wall, fram
 	// Compute RSSI from amplitude
 	rssi := amplitudeToRSSI(amplitude)
 
-	// Create frame buffer
+	// Create frame buffer (headerSize=24 defined in main.go)
 	frame := make([]byte, headerSize+nSub*2)
 
-	// Write header
-	binary.LittleEndian.PutUint32(frame[0:4], magic)
-	frame[4] = version
-	copy(frame[5:11], tx.MAC[:])
-	copy(frame[11:17], rx.MAC[:])
-	binary.LittleEndian.PutUint64(frame[17:25], uint64(frameNum*50000)) // timestamp in microseconds
-	frame[25] = byte(rssi)
-	frame[26] = 0xFF // noise floor (invalid marker)
-	frame[27] = nSub
+	// Write header (matches ingestion/frame.go ParseFrame layout)
+	copy(frame[0:6], tx.MAC[:])   // node_mac
+	copy(frame[6:12], rx.MAC[:])  // peer_mac
+	binary.LittleEndian.PutUint64(frame[12:20], uint64(frameNum*50000)) // timestamp_us
+	frame[20] = byte(rssi)        // rssi
+	frame[21] = 0xA6              // noise_floor: -90 dBm as uint8 (two's complement of -90)
+	frame[22] = 6                 // channel (2.4 GHz ch6)
+	frame[23] = nSub              // n_sub
 
 	// Generate I/Q pairs for each subcarrier
 	for k := 0; k < nSub; k++ {

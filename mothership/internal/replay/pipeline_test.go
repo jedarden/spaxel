@@ -55,7 +55,7 @@ func TestProcessFrame(t *testing.T) {
 	frame := make([]byte, 24+128*2)
 	frame[0] = 0xAA // node MAC byte 0
 	frame[6] = 0xBB // peer MAC byte 0
-	frame[20] = -50 // RSSI
+	frame[20] = 206 // RSSI: -50 as unsigned byte (two's complement)
 	frame[22] = 6   // channel
 	frame[23] = 64  // nSub
 
@@ -92,8 +92,8 @@ func TestProcessFrameWithShortFrame(t *testing.T) {
 	// Should not crash, may or may not produce blobs
 }
 
-// TestSetSpeed verifies speed changes.
-func TestSetSpeed(t *testing.T) {
+// TestPipelineSetSpeed verifies speed changes on a Pipeline.
+func TestPipelineSetSpeed(t *testing.T) {
 	params := &TunableParams{}
 	broadcaster := &mockBroadcasterForPipeline{}
 
@@ -214,9 +214,3 @@ func TestFloat64Helpers(t *testing.T) {
 	}
 }
 
-func abs(x float64) float64 {
-	if x < 0 {
-		return -x
-	}
-	return x
-}

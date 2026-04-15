@@ -15,11 +15,11 @@ import (
 
 // BaselineStoreFlusher flushes baselines directly from a BaselineStore.
 type BaselineStoreFlusher struct {
-	store sigproc.BaselineStore
+	store *sigproc.BaselineStore
 }
 
 // NewBaselineStoreFlusher creates a new baseline flusher from a BaselineStore.
-func NewBaselineStoreFlusher(store sigproc.BaselineStore) *BaselineStoreFlusher {
+func NewBaselineStoreFlusher(store *sigproc.BaselineStore) *BaselineStoreFlusher {
 	return &BaselineStoreFlusher{store: store}
 }
 

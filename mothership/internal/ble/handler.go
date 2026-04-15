@@ -358,12 +358,18 @@ func (h *Handler) getDeviceHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	history, err := h.registry.GetDeviceSightingHistory(mac, limit)
-	if err != nil {
+	// Check that the device exists first
+	if _, err := h.registry.GetDevice(mac); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "device not found", http.StatusNotFound)
 			return
 		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	history, err := h.registry.GetDeviceSightingHistory(mac, limit)
+	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

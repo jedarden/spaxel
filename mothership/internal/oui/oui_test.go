@@ -114,8 +114,11 @@ func TestLookupOUI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse MAC string to bytes
 			hw, err := net.ParseMAC(tt.mac)
-			if err != nil && tt.mac != "" {
-				t.Fatalf("net.ParseMAC(%q) error = %v", tt.mac, err)
+			if err != nil {
+				if !tt.wantEmpty {
+					t.Fatalf("net.ParseMAC(%q) error = %v", tt.mac, err)
+				}
+				// For invalid MACs where we expect empty result, call with nil
 			}
 
 			got := LookupOUI(hw)

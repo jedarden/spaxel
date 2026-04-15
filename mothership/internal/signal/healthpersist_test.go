@@ -289,17 +289,17 @@ func TestHealthStore_PruneOldHealthLogs(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Log an entry
+	// Log an entry with a timestamp 2 seconds in the past
 	entry := HealthLogEntry{
 		LinkID:         "link-001",
-		Timestamp:      time.Now(),
+		Timestamp:      time.Now().Add(-2 * time.Second),
 		SNR:            0.8,
 		CompositeScore: 0.8,
 	}
 	store.LogHealth(entry)
 
-	// Prune entries older than 1 nanosecond
-	deleted, err := store.PruneOldHealthLogs(time.Nanosecond)
+	// Prune entries older than 1 second (entry is 2s old, so it should be pruned)
+	deleted, err := store.PruneOldHealthLogs(time.Second)
 	if err != nil {
 		t.Fatalf("PruneOldHealthLogs: %v", err)
 	}

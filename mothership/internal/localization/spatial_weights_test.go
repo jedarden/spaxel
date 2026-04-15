@@ -134,17 +134,22 @@ func TestSpatialWeightLearner_GetSpatialWeight_BilinearInterpolation(t *testing.
 	learner.setWeightLocked(linkID, 1, 1, 3.0)
 	learner.mu.Unlock()
 
+	// With ZoneGridCellSize=0.5, grid cell (gx,gy) maps to physical (gx*0.5, gy*0.5).
+	// Grid corners: (0,0)->pos(0,0)=1.0, (1,0)->pos(0.5,0)=2.0, (0,1)->pos(0,0.5)=2.0, (1,1)->pos(0.5,0.5)=3.0
 	tests := []struct {
 		name     string
 		x, z     float64
 		expected float64
 	}{
-		// At grid points
+		// At grid points (exact cell positions)
 		{"at origin", 0.0, 0.0, 1.0},
-		{"at (0.5, 0)", 0.5, 0.0, 1.5}, // (1+2)/2
-		{"at (0, 0.5)", 0.0, 0.5, 1.5}, // (1+2)/2
-		{"at center", 0.25, 0.25, 1.5}, // Bilinear center of 1,2,2,3
-		{"at (0.5, 0.5)", 0.5, 0.5, 2.0}, // Center of 1,2,2,3
+		{"at (0.5, 0)", 0.5, 0.0, 2.0},    // exact cell (1,0)
+		{"at (0, 0.5)", 0.0, 0.5, 2.0},    // exact cell (0,1)
+		{"at (0.5, 0.5)", 0.5, 0.5, 3.0},  // exact cell (1,1)
+		// Midpoints between grid cells
+		{"mid x-axis", 0.25, 0.0, 1.5},    // between (0,0)=1 and (1,0)=2
+		{"mid z-axis", 0.0, 0.25, 1.5},    // between (0,0)=1 and (0,1)=2
+		{"center", 0.25, 0.25, 2.0},       // bilinear center of 1,2,2,3
 	}
 
 	for _, tt := range tests {

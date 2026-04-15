@@ -4,6 +4,7 @@
 package replay
 
 import (
+	"math"
 	"sync"
 )
 
@@ -186,19 +187,9 @@ func (p *Pipeline) Stop() {
 
 // float64 helpers for math operations (avoiding math import for CGO compatibility)
 func float64Sin(x float64) float64 {
-	// Simple approximation of sin for demo purposes
-	// Taylor series: sin(x) = x - x³/6 + x⁵/120 - ...
-	// For demo, use a simplified periodic function
-	x = x - 3.14159265359*float64(int(x/3.14159265359))
-	if x > 3.14159265359 {
-		x -= 2 * 3.14159265359
-	} else if x < -3.14159265359 {
-		x += 2 * 3.14159265359
-	}
-	return x - x*x*x/6 + x*x*x*x*x/120
+	return math.Sin(x)
 }
 
 func float64Cos(x float64) float64 {
-	// cos(x) = sin(x + π/2)
-	return float64Sin(x + 1.57079632679)
+	return math.Cos(x)
 }

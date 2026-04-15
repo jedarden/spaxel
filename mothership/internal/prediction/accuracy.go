@@ -485,8 +485,8 @@ func (t *AccuracyTracker) ComputeZoneOccupancyPatterns() error {
 
 	// Get all unique zone/hour combinations
 	rows, err := t.db.Query(`
-		SELECT DISTINCT zone_id, (CAST(strftime('%w', datetime(enter_time/1000000000, 'unixepoch', 'localtime') AS INTEGER) * 24 +
-		                           CAST(strftime('%H', datetime(enter_time/1000000000, 'unixepoch', 'localtime') AS INTEGER))) as hour_of_week
+		SELECT DISTINCT zone_id, (CAST(strftime('%w', datetime(enter_time/1000000000, 'unixepoch', 'localtime')) AS INTEGER) * 24 +
+		                           CAST(strftime('%H', datetime(enter_time/1000000000, 'unixepoch', 'localtime')) AS INTEGER)) as hour_of_week
 		FROM zone_occupancy_history
 		WHERE exit_time IS NOT NULL
 	`)
@@ -527,8 +527,8 @@ func (t *AccuracyTracker) ComputeZoneOccupancyPatterns() error {
 				) as stddev_dwell
 			FROM zone_occupancy_history
 			WHERE zone_id = ? AND
-			      (CAST(strftime('%w', datetime(enter_time/1000000000, 'unixepoch', 'localtime') AS INTEGER) * 24 +
-			       CAST(strftime('%H', datetime(enter_time/1000000000, 'unixepoch', 'localtime') AS INTEGER))) = ?
+			      (CAST(strftime('%w', datetime(enter_time/1000000000, 'unixepoch', 'localtime')) AS INTEGER) * 24 +
+			       CAST(strftime('%H', datetime(enter_time/1000000000, 'unixepoch', 'localtime')) AS INTEGER)) = ?
 			AND exit_time IS NOT NULL
 		`, zh.zoneID, zh.hourOfWeek)
 

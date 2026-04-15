@@ -79,6 +79,13 @@ func (h *DiurnalHandler) getDiurnalStatus(w http.ResponseWriter, r *http.Request
 func (h *DiurnalHandler) getDiurnalSlots(w http.ResponseWriter, r *http.Request) {
 	linkID := chi.URLParam(r, "linkID")
 	if linkID == "" {
+		// Fallback: extract from URL path directly (e.g. /api/diurnal/slots/<linkID>)
+		const prefix = "/api/diurnal/slots/"
+		if len(r.URL.Path) > len(prefix) {
+			linkID = r.URL.Path[len(prefix):]
+		}
+	}
+	if linkID == "" {
 		writeJSONError(w, http.StatusBadRequest, "link_id is required")
 		return
 	}

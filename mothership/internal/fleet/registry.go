@@ -26,21 +26,21 @@ type NodeRegistry interface {
 
 // NodeRecord stores persistent node metadata.
 type NodeRecord struct {
-	MAC             string
-	Name            string
-	Role            string
-	PreviousRole    string    // Role before disconnect, for reconnect grace period
-	WentOfflineAt   time.Time // When the node went offline
-	PosX            float64
-	PosY            float64
-	PosZ            float64
-	Virtual         bool
-	Manufacturer    string    // Hardware manufacturer from OUI lookup (for virtual AP nodes)
-	FirstSeenAt     time.Time
-	LastSeenAt      time.Time
-	FirmwareVersion string
-	ChipModel       string
-	HealthScore     float64 // Latest health score from ambient confidence
+	MAC             string    `json:"mac"`
+	Name            string    `json:"name"`
+	Role            string    `json:"role"`
+	PreviousRole    string    `json:"previous_role"` // Role before disconnect, for reconnect grace period
+	WentOfflineAt   time.Time `json:"went_offline_at,omitempty"` // When the node went offline
+	PosX            float64   `json:"pos_x"`
+	PosY            float64   `json:"pos_y"`
+	PosZ            float64   `json:"pos_z"`
+	Virtual         bool      `json:"virtual"`
+	Manufacturer    string    `json:"manufacturer,omitempty"` // Hardware manufacturer from OUI lookup (for virtual AP nodes)
+	FirstSeenAt     time.Time `json:"first_seen_at"`
+	LastSeenAt      time.Time `json:"last_seen_at"`
+	FirmwareVersion string    `json:"firmware_version"`
+	ChipModel       string    `json:"chip_model"`
+	HealthScore     float64   `json:"health_score"` // Latest health score from ambient confidence
 }
 
 // RoomConfig stores room geometry.
