@@ -606,13 +606,40 @@
             '</div>' +
             '</details>' +
             '<div id="provision-error" class="wizard-error" style="display:none"></div>' +
+            '<p id="provision-status" style="display:none;margin:8px 0;font-size:12px;color:#80cbc4"></p>' +
             '<button type="submit" class="wizard-btn wizard-btn-primary">Send Configuration</button>' +
             '</form>' +
+            '<details id="provision-log-details" style="margin-top:12px;font-size:12px;display:none">' +
+            '  <summary style="cursor:pointer;color:#546e7a">Show log</summary>' +
+            '  <div id="provision-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
+            'padding:8px;margin-top:4px;max-height:120px;overflow-y:auto;font-family:monospace"></div>' +
+            '</details>' +
             '</div>';
 
         renderNav(true, '', function () { }, true);
         // Hide the default Next button since we use the form submit
         hideNav();
+
+        function setProvStatus(msg) {
+            var el = document.getElementById('provision-status');
+            if (el) { el.style.display = msg ? 'block' : 'none'; el.textContent = msg; }
+        }
+
+        function addProvLog(level, msg) {
+            var ts = new Date().toISOString().slice(11, 23);
+            var logEl = document.getElementById('provision-log-body');
+            var detailsEl = document.getElementById('provision-log-details');
+            if (logEl) {
+                if (detailsEl) detailsEl.style.display = 'block';
+                var color = level === 'error' ? '#ef9a9a' : level === 'warn' ? '#ffe082' : '#b0bec5';
+                var line = document.createElement('div');
+                line.style.cssText = 'font-size:11px;color:' + color + ';word-break:break-all;margin:1px 0';
+                line.textContent = '[' + ts + '] ' + msg;
+                logEl.appendChild(line);
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+            console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log']('[provision] ' + msg);
+        }
 
         document.getElementById('wifi-form').addEventListener('submit', function (e) {
             e.preventDefault();
@@ -634,10 +661,13 @@
             var btn = e.target.querySelector('button[type="submit"]');
             btn.disabled = true;
             btn.textContent = 'Sending...';
+            document.getElementById('provision-error').style.display = 'none';
+            setProvStatus('Contacting mothership...');
+            addProvLog('log', 'Submitting: ssid=' + ssid + ' msHost=' + (msHost || '(mDNS)') + ' msPort=' + msPort);
 
-            provisionAndSend(ssid, pass, msHost, msPort)
+            provisionAndSend(ssid, pass, msHost, msPort, addProvLog, setProvStatus)
                 .then(function () {
-                    // Fetch current known nodes before provisioning
+                    // Fetch current known nodes before advancing
                     return fetch(CONFIG.nodesEndpoint)
                         .then(function (r) { return r.json(); })
                         .then(function (nodes) {
@@ -646,13 +676,16 @@
                         .catch(function () { /* ignore */ });
                 })
                 .then(function () {
+                    setProvStatus('');
                     saveState();
                     goToStep(state.currentStepIndex + 1);
                 })
                 .catch(function (err) {
                     var msg = isUserError(err) ? err.message :
                         'Could not send configuration. Make sure the device is connected via USB and try again.';
+                    addProvLog('error', 'Failed: ' + (err.message || String(err)));
                     showFormError('provision-error', msg);
+                    setProvStatus('');
                     btn.disabled = false;
                     btn.textContent = 'Send Configuration';
                 });
@@ -661,7 +694,13 @@
         return { cleanup: function () { } };
     }
 
-    function provisionAndSend(ssid, pass, msHost, msPort) {
+    function provisionAndSend(ssid, pass, msHost, msPort, addProvLog, setProvStatus) {
+        addProvLog = addProvLog || function () {};
+        setProvStatus = setProvStatus || function () {};
+
+        addProvLog('log', 'POST ' + CONFIG.provisioningEndpoint + ' — requesting node credentials from mothership');
+        setProvStatus('Contacting mothership...');
+
         // Try server-side provisioning first (generates proper node_id and token)
         return fetch(CONFIG.provisioningEndpoint, {
             method: 'POST',
@@ -669,16 +708,21 @@
             body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass }),
         })
             .then(function (r) {
-                if (!r.ok) throw new Error('provisioning server error');
+                addProvLog('log', 'Mothership response: HTTP ' + r.status);
+                if (!r.ok) throw new Error('provisioning server error: HTTP ' + r.status);
                 return r.json();
             })
             .then(function (payload) {
                 // Apply user overrides for mothership address
                 if (msHost) payload.ms_mdns = msHost;
                 if (msPort) payload.ms_port = msPort;
-                return sendPayloadOverSerial(payload);
+                addProvLog('log', 'Payload ready — node_id=' + (payload.node_id || '(none)') + ' ms_mdns=' + (payload.ms_mdns || '(none)'));
+                setProvStatus('Sending configuration to device...');
+                return sendPayloadOverSerial(payload, addProvLog, setProvStatus);
             })
-            .catch(function () {
+            .catch(function (err) {
+                addProvLog('warn', 'Mothership unreachable (' + (err.message || err) + '), falling back to client-side payload');
+                setProvStatus('Sending configuration to device (offline mode)...');
                 // Fallback: assemble payload client-side
                 var payload = {
                     version: 1,
@@ -694,20 +738,27 @@
                     ms_port: msPort,
                     debug: false,
                 };
-                return sendPayloadOverSerial(payload);
+                addProvLog('log', 'Fallback payload — node_id=' + payload.node_id);
+                return sendPayloadOverSerial(payload, addProvLog, setProvStatus);
             });
     }
 
-    async function sendPayloadOverSerial(payload) {
+    async function sendPayloadOverSerial(payload, addProvLog, setProvStatus) {
+        addProvLog = addProvLog || function () {};
+        setProvStatus = setProvStatus || function () {};
+
         // Firmware expects {"provision": {...}} format
         var wrappedPayload = { provision: payload };
 
         // Prefer the port the user explicitly selected in the Connect step. Fall back to
         // whatever the browser has previously authorized if state.port was somehow lost.
+        addProvLog('log', 'Looking up serial port (state.port=' + (state.port ? 'set' : 'null') + ')');
         var port = state.port || await getAuthorizedPort();
         if (!port) {
+            addProvLog('error', 'No serial port available');
             throw new UserError('No device found. Please go back to Connect and select your ESP32-S3 again.');
         }
+        addProvLog('log', 'Port found — opening at ' + CONFIG.serialBaudRate + ' baud');
 
         // The port may be closed (esptool closes it after flashing). Open it with retries
         // to handle the brief gap while the device reboots and re-enumerates.
@@ -716,36 +767,46 @@
             try {
                 await port.open({ baudRate: CONFIG.serialBaudRate });
                 opened = true;
+                addProvLog('log', 'Port opened on attempt ' + (attempt + 1));
                 break;
             } catch (e) {
                 // Already open → proceed
                 if (e && (e.message || '').toLowerCase().includes('already open')) {
                     opened = true;
+                    addProvLog('log', 'Port was already open — proceeding');
                     break;
                 }
+                addProvLog('warn', 'Open attempt ' + (attempt + 1) + ' failed: ' + (e.message || e));
                 // Device not ready yet — wait and retry
                 if (attempt < 4) {
+                    setProvStatus('Waiting for device to boot... (attempt ' + (attempt + 2) + '/5)');
                     await new Promise(function (r) { setTimeout(r, 1000); });
                 }
             }
         }
 
         if (!opened) {
+            addProvLog('error', 'Could not open port after 5 attempts');
             throw new UserError(
                 'Could not open serial port. Unplug and replug the USB cable, then try again.'
             );
         }
 
+        addProvLog('log', 'Sending JSON payload: ' + JSON.stringify(wrappedPayload).substring(0, 120) + '...');
+        setProvStatus('Waiting for device acknowledgment...');
         var response = await sendSerialJSONAndWaitForResponse(port, wrappedPayload, 15000);
+        addProvLog('log', 'Serial response: ' + (response ? JSON.stringify(response) : '(none — timeout)'));
         try { await port.close(); } catch (_) {}
 
         if (!response) {
             throw new UserError(
-                'No response from device. Make sure the board finished booting and try again.'
+                'No response from device. Make sure the board finished booting and try again. ' +
+                'The provisioning window is open for 2 minutes after first boot.'
             );
         }
         if (response.ok === false) {
             var errorMsg = response.error || 'Unknown error';
+            addProvLog('error', 'Device rejected provisioning: ' + errorMsg);
             if (errorMsg === 'missing_provision_key') {
                 throw new UserError('Firmware communication error. Please try again.');
             }
@@ -754,6 +815,7 @@
             }
             throw new UserError('Provisioning failed: ' + errorMsg);
         }
+        addProvLog('log', 'Provisioning acknowledged by device — MAC: ' + (response.mac || '(unknown)'));
         return response.mac;
     }
 
