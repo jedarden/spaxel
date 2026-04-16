@@ -11,11 +11,12 @@
 
 static const char *TAG = "provision";
 
-#define PROVISION_UART        UART_NUM_0
-#define PROVISION_BAUD_RATE   115200
-#define PROVISION_WINDOW_MS   10000
-#define UART_RX_BUF_SIZE      1024
-#define MAX_LINE_LEN          768
+#define PROVISION_UART              UART_NUM_0
+#define PROVISION_BAUD_RATE         115200
+#define PROVISION_WINDOW_MS_FRESH   120000  // 2 min for unprovisioned boards
+#define PROVISION_WINDOW_MS_REPROV   15000  // 15 s for already-provisioned boards
+#define UART_RX_BUF_SIZE            1024
+#define MAX_LINE_LEN                768
 
 void provision_listen_window(void) {
     uart_config_t uart_cfg = {
@@ -39,13 +40,18 @@ void provision_listen_window(void) {
     char mac_str[18];
     mac_to_str(g_state.mac, mac_str, sizeof(mac_str));
 
-    // Signal that firmware is ready for provisioning
-    const char *ready = "SPAXEL READY\n";
-    uart_write_bytes(PROVISION_UART, ready, strlen(ready));
+    uint32_t window_ms = g_state.provisioned
+        ? PROVISION_WINDOW_MS_REPROV
+        : PROVISION_WINDOW_MS_FRESH;
 
-    ESP_LOGI(TAG, "Provisioning window open for %d ms (MAC: %s)", PROVISION_WINDOW_MS, mac_str);
+    // Signal that firmware is ready for provisioning (includes MAC for display)
+    char ready_msg[64];
+    snprintf(ready_msg, sizeof(ready_msg), "SPAXEL READY %s\n", mac_str);
+    uart_write_bytes(PROVISION_UART, ready_msg, strlen(ready_msg));
 
-    TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(PROVISION_WINDOW_MS);
+    ESP_LOGI(TAG, "Provisioning window open for %d ms (MAC: %s)", window_ms, mac_str);
+
+    TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(window_ms);
     char line[MAX_LINE_LEN];
     int line_pos = 0;
 

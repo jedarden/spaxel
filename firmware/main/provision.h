@@ -3,8 +3,9 @@
 #include "esp_err.h"
 #include "cJSON.h"
 
-// provision_listen_window opens a 10-second serial provisioning window.
-// Prints "SPAXEL READY\n" and reads {"provision": {...}}\n from UART0.
+// provision_listen_window opens a serial provisioning window.
+// Unprovisioned boards wait 120 s; already-provisioned boards wait 15 s.
+// Prints "SPAXEL READY <MAC>\n" and reads {"provision": {...}}\n from UART0.
 // Responds with {"ok": true, "mac": "..."}\n on success.
 // Safe to call even if no host is connected — times out cleanly.
 void provision_listen_window(void);
