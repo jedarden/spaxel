@@ -1215,7 +1215,12 @@
             '<div id="wizard-card">' +
             '<div id="wizard-header">' +
             '<h1>Spaxel Setup</h1>' +
+            '<div style="display:flex;align-items:center;gap:12px">' +
+            '<button id="wizard-restart-btn" title="Start over" style="background:none;border:none;' +
+            'color:#546e7a;font-size:12px;cursor:pointer;padding:4px 6px;border-radius:4px;' +
+            'text-decoration:underline">Start Over</button>' +
             '<button class="wizard-close" id="wizard-close-btn" title="Close">&times;</button>' +
+            '</div>' +
             '</div>' +
             '<div id="wizard-steps"></div>' +
             '<div id="wizard-content"></div>' +
@@ -1226,6 +1231,11 @@
         state.container = overlay;
 
         document.getElementById('wizard-close-btn').addEventListener('click', closeWizard);
+        document.getElementById('wizard-restart-btn').addEventListener('click', function () {
+            clearState();
+            if (activeCleanup) { activeCleanup.cleanup(); activeCleanup = null; }
+            goToStep(0);
+        });
         overlay.addEventListener('click', function (e) {
             if (e.target === overlay) closeWizard();
         });
