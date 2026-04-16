@@ -482,24 +482,12 @@
                 (flashRetryCount > 0 ? 'Try Again' : 'Start Flashing') + '</button>';
             btnArea.appendChild(installBtn);
 
-            installBtn.addEventListener('state-changed', function (e) {
-                var s = (e.detail || {}).state;
-                if (s) { appendLog('log', ['state: ' + s]); }
-            });
-
-            installBtn.addEventListener('flash-start', function () {
-                appendLog('log', ['flash-start']);
-                btnArea.style.display = 'none';
-                document.getElementById('flash-progress-bar').style.display = 'block';
-                document.getElementById('flash-progress-fill').style.width = '0%';
-                document.getElementById('flash-recovery').style.display = 'none';
-                document.getElementById('flash-log-details').open = true;
-                setStatus('Connecting...');
-            });
-
             var flashCompleteTimer = null;
+            var dlgObserver = null;
+
             function onFlashComplete() {
                 if (flashCompleteTimer) { clearTimeout(flashCompleteTimer); flashCompleteTimer = null; }
+                if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
                 restoreConsole();
                 document.getElementById('flash-progress-bar').style.display = 'none';
                 setStatus('✓ Firmware flashed successfully!');
@@ -508,50 +496,104 @@
                 setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1500);
             }
 
-            installBtn.addEventListener('flash-progress', function (e) {
-                var detail = e.detail || {};
-                var pct = detail.bytesTotal > 0
-                    ? Math.round((detail.bytesWritten / detail.bytesTotal) * 100) : 0;
-                document.getElementById('flash-progress-fill').style.width = pct + '%';
-                setStatus('Flashing... ' + pct + '%');
-                // If we hit 100% but flash-success doesn't fire (e.g. JS error in
-                // esp-web-tools' progress display), show a manual Continue button.
-                if (pct >= 100 && !flashCompleteTimer) {
-                    flashCompleteTimer = setTimeout(function () {
-                        flashCompleteTimer = null;
-                        appendLog('log', ['flash-success not received after 100% — showing manual continue']);
-                        document.getElementById('flash-progress-bar').style.display = 'none';
-                        setStatus('✓ Flash complete.');
-                        document.getElementById('flash-status-text').style.color = '#a5d6a7';
-                        btnArea.style.display = 'block';
-                        btnArea.innerHTML = '<button class="wizard-btn wizard-btn-primary" id="flash-continue-btn">Continue →</button>';
-                        document.getElementById('flash-continue-btn').addEventListener('click', function () {
-                            saveState();
-                            goToStep(state.currentStepIndex + 1);
-                        });
-                    }, 4000);
-                }
-            });
+            // Inject CSS into the shadow root to hide the esp-web-tools dialog once
+            // flashing starts — we drive the UI inline from that point on.
+            function hideDlgOverlay() {
+                var sr = installBtn.shadowRoot;
+                if (!sr || sr.querySelector('#ewt-suppress')) { return; }
+                var s = document.createElement('style');
+                s.id = 'ewt-suppress';
+                // Hide the dialog and its backdrop; keep the activate slot visible
+                s.textContent = ':host > *:not(slot) { display:none !important; }';
+                sr.appendChild(s);
+            }
 
-            installBtn.addEventListener('flash-success', function () {
-                appendLog('log', ['flash-success']);
-                onFlashComplete();
-            });
-
-            installBtn.addEventListener('flash-error', function (e) {
-                flashRetryCount++;
-                var errDetail = '';
-                try { errDetail = JSON.stringify(e.detail || {}); } catch (_) { errDetail = String(e.detail); }
-                appendLog('error', ['flash-error detail=' + errDetail]);
-                document.getElementById('flash-progress-bar').style.display = 'none';
+            function showProgressUI() {
+                btnArea.style.display = 'none';
+                document.getElementById('flash-progress-bar').style.display = 'block';
+                document.getElementById('flash-recovery').style.display = 'none';
                 document.getElementById('flash-log-details').open = true;
-                setStatus('');
-                var recovery = document.getElementById('flash-recovery');
-                recovery.style.display = 'block';
-                recovery.innerHTML = renderBootloaderHelp(flashRetryCount);
-                btnArea.style.display = 'block';
-                mountInstallButton();
-            });
+            }
+
+            // esp-web-tools v10 only fires state-changed, and it fires from the dialog
+            // element inside the shadow root (not composed), so the event never reaches
+            // listeners on the host. We use a MutationObserver to find the dialog element
+            // and attach directly to it.
+            function attachToDialog(dlg) {
+                dlg.addEventListener('state-changed', function (e) {
+                    var detail = e.detail || {};
+                    var s = detail.state;
+                    var det = detail.details || {};
+                    appendLog('log', ['state: ' + s]);
+
+                    if (s === 'erasing') {
+                        hideDlgOverlay();
+                        showProgressUI();
+                        document.getElementById('flash-progress-fill').style.width = '5%';
+                        setStatus('Erasing flash...');
+                    } else if (s === 'writing') {
+                        hideDlgOverlay();
+                        showProgressUI();
+                        // percentage is 0–1
+                        var pct = Math.round((det.percentage || 0) * 100);
+                        document.getElementById('flash-progress-fill').style.width = pct + '%';
+                        setStatus('Flashing... ' + pct + '%');
+                        // Fallback: if finished state never fires, show Continue after 4s
+                        if (pct >= 100 && !flashCompleteTimer) {
+                            flashCompleteTimer = setTimeout(function () {
+                                flashCompleteTimer = null;
+                                appendLog('log', ['finished state not received — manual continue']);
+                                document.getElementById('flash-progress-bar').style.display = 'none';
+                                setStatus('✓ Flash complete.');
+                                document.getElementById('flash-status-text').style.color = '#a5d6a7';
+                                btnArea.style.display = 'block';
+                                btnArea.innerHTML = '<button class="wizard-btn wizard-btn-primary" id="flash-continue-btn">Continue →</button>';
+                                document.getElementById('flash-continue-btn').addEventListener('click', function () {
+                                    saveState();
+                                    goToStep(state.currentStepIndex + 1);
+                                });
+                            }, 4000);
+                        }
+                    } else if (s === 'finished') {
+                        appendLog('log', ['flash-success']);
+                        onFlashComplete();
+                    } else if (s === 'error') {
+                        if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
+                        if (flashCompleteTimer) { clearTimeout(flashCompleteTimer); flashCompleteTimer = null; }
+                        hideDlgOverlay();
+                        flashRetryCount++;
+                        appendLog('error', ['flash-error: ' + (detail.message || JSON.stringify(detail))]);
+                        document.getElementById('flash-progress-bar').style.display = 'none';
+                        document.getElementById('flash-log-details').open = true;
+                        setStatus('');
+                        var recovery = document.getElementById('flash-recovery');
+                        recovery.style.display = 'block';
+                        recovery.innerHTML = renderBootloaderHelp(flashRetryCount);
+                        btnArea.style.display = 'block';
+                        mountInstallButton();
+                    }
+                });
+            }
+
+            // Watch for the dialog element to appear in the shadow root
+            var sr = installBtn.shadowRoot;
+            if (sr) {
+                dlgObserver = new MutationObserver(function (mutations) {
+                    for (var i = 0; i < mutations.length; i++) {
+                        var added = mutations[i].addedNodes;
+                        for (var j = 0; j < added.length; j++) {
+                            var node = added[j];
+                            if (node.nodeType === 1 && node.tagName.toLowerCase() !== 'style') {
+                                // This is the dialog element — attach and stop observing
+                                if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
+                                attachToDialog(node);
+                                return;
+                            }
+                        }
+                    }
+                });
+                dlgObserver.observe(sr, { childList: true });
+            }
         }
 
         mountInstallButton();
