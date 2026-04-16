@@ -30,8 +30,8 @@
     var STEPS = [
         { id: 'browser_check', label: 'Browser' },
         { id: 'connect_device', label: 'Connect' },
-        { id: 'flash_firmware', label: 'Flash' },
         { id: 'provision_wifi', label: 'WiFi' },
+        { id: 'flash_firmware', label: 'Flash' },
         { id: 'detect_node', label: 'Detect' },
         { id: 'calibrate', label: 'Calibrate' },
         { id: 'placement', label: 'Position' },
@@ -516,7 +516,7 @@
                 appendLog('log', ['Connected: ' + chip]);
                 setProgress(12);
 
-                // 4. Flash
+                // 4. Flash (progress 12% → 80%)
                 setStatus('Erasing and flashing...');
                 document.getElementById('flash-log-details').open = true;
 
@@ -529,7 +529,7 @@
                     compress: true,
                     reportProgress: function (fileIndex, written, total) {
                         if (cancelled) { return; }
-                        var pct = 12 + Math.round(written / total * 83);
+                        var pct = 12 + Math.round(written / total * 68);
                         setProgress(pct);
                         setStatus('Flashing... ' + Math.round(written / total * 100) + '%');
                     }
@@ -537,13 +537,32 @@
 
                 await transport.disconnect();
                 transport = null;
+                setProgress(80);
+                appendLog('log', ['Flash complete — device rebooting']);
 
                 if (cancelled) { return; }
 
+                // 5. Provision (progress 80% → 100%)
+                // Device reboots after flash and opens its provisioning window.
+                // Send WiFi + mothership config over serial immediately.
+                setStatus('Configuring device...');
+
+                var provLog = function (level, msg) {
+                    appendLog(level, [msg]);
+                };
+                var mac = await doProvision(provLog, setStatus, setProgress);
+
+                if (cancelled) { return; }
                 setProgress(100);
-                setStatus('✓ Firmware flashed successfully!', '#a5d6a7');
-                appendLog('log', ['Flash complete']);
+                setStatus('✓ Device configured!', '#a5d6a7');
+                appendLog('log', ['Provisioning complete — MAC: ' + (mac || 'unknown')]);
                 restoreConsole();
+                // Snapshot existing nodes before advancing so detect step knows what's new
+                try {
+                    var nodesResp = await fetch(CONFIG.nodesEndpoint);
+                    var nodes = await nodesResp.json();
+                    state.knownMACs = (nodes || []).map(function (n) { return n.mac; });
+                } catch (_) {}
                 saveState();
                 setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1200);
 
@@ -576,6 +595,59 @@
             }
         }
 
+        // Runs after firmware flash: fetches provisioning payload from server (or
+        // builds client-side fallback) and sends it over serial while the device's
+        // boot provisioning window is open.
+        async function doProvision(provLog, setStatus, setProgress) {
+            var ssid = state.wifiSSID;
+            var pass = state.wifiPass;
+            var msHost = state.mothershipHost;
+            var msPort = state.mothershipPort;
+
+            // Fetch server payload (generates node_id + token).
+            // Race it against a 5s timeout so we don't stall the provisioning window.
+            var payload = null;
+            try {
+                provLog('log', 'POST ' + CONFIG.provisioningEndpoint);
+                var fetchPromise = fetch(CONFIG.provisioningEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass }),
+                });
+                var timeoutPromise = new Promise(function (_, reject) {
+                    setTimeout(function () { reject(new Error('timeout')); }, 5000);
+                });
+                var resp = await Promise.race([fetchPromise, timeoutPromise]);
+                if (!resp.ok) { throw new Error('HTTP ' + resp.status); }
+                payload = await resp.json();
+                if (msHost) payload.ms_mdns = msHost;
+                if (msPort) payload.ms_port = msPort;
+                provLog('log', 'Server payload: node_id=' + (payload.node_id || '(none)'));
+            } catch (err) {
+                provLog('warn', 'Mothership unreachable (' + (err.message || err) + '), using client-side payload');
+                payload = {
+                    wifi_ssid: ssid,
+                    wifi_pass: pass,
+                    node_id: crypto.randomUUID ? crypto.randomUUID() :
+                        'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                            var r = Math.random() * 16 | 0;
+                            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                        }),
+                    node_token: '',
+                    ms_mdns: msHost || 'spaxel-mothership.local',
+                    ms_port: msPort,
+                    debug: false,
+                };
+            }
+            setProgress(85);
+
+            var addProvLog = function (level, msg) { provLog(level, msg); };
+            var setProvStatus = function (msg) { setStatus(msg); };
+            var mac = await sendPayloadOverSerial(payload, addProvLog, setProvStatus);
+            setProgress(95);
+            return mac;
+        }
+
         doFlash();
         return { cleanup: function () { cancelled = true; restoreConsole(); } };
     }
@@ -584,7 +656,7 @@
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
             '<h2>Configure WiFi</h2>' +
-            '<p>Enter your WiFi credentials. The ESP32-S3 needs to connect to the same network as this computer.</p>' +
+            '<p>Enter your WiFi credentials. These will be flashed to the device in the next step.</p>' +
             '<form id="wifi-form" class="wizard-form">' +
             '<div class="form-group">' +
             '<label for="wifi-ssid">WiFi Network Name (SSID)</label>' +
@@ -592,7 +664,7 @@
             '</div>' +
             '<div class="form-group">' +
             '<label for="wifi-pass">WiFi Password</label>' +
-            '<input type="password" id="wifi-pass" required placeholder="Password" value="' + escapeAttr(state.wifiPass) + '" autocomplete="off">' +
+            '<input type="password" id="wifi-pass" placeholder="Password" value="' + escapeAttr(state.wifiPass) + '" autocomplete="off">' +
             '</div>' +
             '<details class="wizard-details">' +
             '<summary>Advanced: Mothership Address</summary>' +
@@ -606,89 +678,25 @@
             '</div>' +
             '</details>' +
             '<div id="provision-error" class="wizard-error" style="display:none"></div>' +
-            '<p id="provision-status" style="display:none;margin:8px 0;font-size:12px;color:#80cbc4"></p>' +
-            '<button type="submit" class="wizard-btn wizard-btn-primary">Send Configuration</button>' +
+            '<button type="submit" class="wizard-btn wizard-btn-primary">Next: Flash Firmware</button>' +
             '</form>' +
-            '<details id="provision-log-details" style="margin-top:12px;font-size:12px;display:none">' +
-            '  <summary style="cursor:pointer;color:#546e7a">Show log</summary>' +
-            '  <div id="provision-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
-            'padding:8px;margin-top:4px;max-height:120px;overflow-y:auto;font-family:monospace"></div>' +
-            '</details>' +
             '</div>';
 
-        renderNav(true, '', function () { }, true);
-        // Hide the default Next button since we use the form submit
         hideNav();
-
-        function setProvStatus(msg) {
-            var el = document.getElementById('provision-status');
-            if (el) { el.style.display = msg ? 'block' : 'none'; el.textContent = msg; }
-        }
-
-        function addProvLog(level, msg) {
-            var ts = new Date().toISOString().slice(11, 23);
-            var logEl = document.getElementById('provision-log-body');
-            var detailsEl = document.getElementById('provision-log-details');
-            if (logEl) {
-                if (detailsEl) detailsEl.style.display = 'block';
-                var color = level === 'error' ? '#ef9a9a' : level === 'warn' ? '#ffe082' : '#b0bec5';
-                var line = document.createElement('div');
-                line.style.cssText = 'font-size:11px;color:' + color + ';word-break:break-all;margin:1px 0';
-                line.textContent = '[' + ts + '] ' + msg;
-                logEl.appendChild(line);
-                logEl.scrollTop = logEl.scrollHeight;
-            }
-            console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log']('[provision] ' + msg);
-        }
 
         document.getElementById('wifi-form').addEventListener('submit', function (e) {
             e.preventDefault();
             var ssid = document.getElementById('wifi-ssid').value.trim();
-            var pass = document.getElementById('wifi-pass').value;
-            var msHost = document.getElementById('ms-host').value.trim();
-            var msPort = parseInt(document.getElementById('ms-port').value, 10) || 8080;
-
             if (!ssid) {
                 showFormError('provision-error', 'Please enter a WiFi network name.');
                 return;
             }
-
             state.wifiSSID = ssid;
-            state.wifiPass = pass;
-            state.mothershipHost = msHost;
-            state.mothershipPort = msPort;
-
-            var btn = e.target.querySelector('button[type="submit"]');
-            btn.disabled = true;
-            btn.textContent = 'Sending...';
-            document.getElementById('provision-error').style.display = 'none';
-            setProvStatus('Contacting mothership...');
-            addProvLog('log', 'Submitting: ssid=' + ssid + ' msHost=' + (msHost || '(mDNS)') + ' msPort=' + msPort);
-
-            provisionAndSend(ssid, pass, msHost, msPort, addProvLog, setProvStatus)
-                .then(function () {
-                    // Fetch current known nodes before advancing
-                    return fetch(CONFIG.nodesEndpoint)
-                        .then(function (r) { return r.json(); })
-                        .then(function (nodes) {
-                            state.knownMACs = (nodes || []).map(function (n) { return n.mac; });
-                        })
-                        .catch(function () { /* ignore */ });
-                })
-                .then(function () {
-                    setProvStatus('');
-                    saveState();
-                    goToStep(state.currentStepIndex + 1);
-                })
-                .catch(function (err) {
-                    var msg = isUserError(err) ? err.message :
-                        'Could not send configuration. Make sure the device is connected via USB and try again.';
-                    addProvLog('error', 'Failed: ' + (err.message || String(err)));
-                    showFormError('provision-error', msg);
-                    setProvStatus('');
-                    btn.disabled = false;
-                    btn.textContent = 'Send Configuration';
-                });
+            state.wifiPass = document.getElementById('wifi-pass').value;
+            state.mothershipHost = document.getElementById('ms-host').value.trim();
+            state.mothershipPort = parseInt(document.getElementById('ms-port').value, 10) || 8080;
+            saveState();
+            goToStep(state.currentStepIndex + 1);
         });
 
         return { cleanup: function () { } };
@@ -1336,9 +1344,9 @@
             state.wifiPass = saved.wifiPass || '';
             state.mothershipHost = saved.mothershipHost || '';
             state.mothershipPort = saved.mothershipPort || 8080;
-            // After a page reload the serial port reference is gone. If we were mid-flash
-            // (step 2 = connect, step 3 = flash) drop back to connect so the user can
-            // re-select their device rather than landing on a broken flash screen.
+            // After a page reload the serial port reference is gone. If we were at the
+            // flash step or beyond, drop back to connect so the user can re-select their
+            // device rather than landing on a broken flash screen.
             var flashStepIndex = STEPS.findIndex(function (s) { return s.id === 'flash_firmware'; });
             var connectStepIndex = STEPS.findIndex(function (s) { return s.id === 'connect_device'; });
             if (state.currentStepIndex >= flashStepIndex && !state.port) {
