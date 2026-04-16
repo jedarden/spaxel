@@ -394,6 +394,7 @@
 
     function renderFlashFirmware(contentEl) {
         var flashRetryCount = 0;
+        var cancelled = false;
         var origConsole = { log: console.log, warn: console.warn, error: console.error };
 
         function appendLog(level, args) {
@@ -422,178 +423,151 @@
             ['log', 'warn', 'error'].forEach(function (m) { console[m] = origConsole[m]; });
         }
 
-        // Single container: button → progress bar → status text → log → retry help
-        contentEl.innerHTML =
-            '<div class="wizard-step-content">' +
-            '<h2>Flash Firmware</h2>' +
-            '<p>The wizard will flash the Spaxel firmware onto your ESP32-S3. This takes about 45–90 seconds.</p>' +
-            '<details style="margin-bottom:12px;font-size:13px;color:#aaa">' +
-            '<summary style="cursor:pointer;color:#80cbc4">Having trouble connecting?</summary>' +
-            '<div style="padding:8px 0 0">' +
-            '<p style="margin:4px 0">Before clicking Start Flashing, put the board in download mode:</p>' +
-            '<ol style="margin:4px 0 4px 16px;padding:0">' +
-            '<li>Hold <strong style="color:#4fc3f7">BOOT</strong></li>' +
-            '<li>Press &amp; release <strong style="color:#f44336">RST</strong></li>' +
-            '<li>Release <strong style="color:#4fc3f7">BOOT</strong></li>' +
-            '</ol>' +
-            BOOTLOADER_SVG +
-            '</div></details>' +
-            '<div id="flash-main">' +
-            '  <div id="flash-btn-area"></div>' +
-            '  <div id="flash-progress-bar" style="display:none;margin:12px 0">' +
-            '    <div class="progress-bar"><div class="progress-fill" id="flash-progress-fill"></div></div>' +
-            '  </div>' +
-            '  <p id="flash-status-text" style="display:none;margin:8px 0;font-size:13px;color:#80cbc4"></p>' +
-            '  <div id="flash-recovery" style="display:none"></div>' +
-            '  <details id="flash-log-details" style="margin-top:12px;font-size:12px">' +
-            '    <summary style="cursor:pointer;color:#546e7a">Show install log</summary>' +
-            '    <div id="flash-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
-            'padding:8px;margin-top:4px;max-height:160px;overflow-y:auto;font-family:monospace"></div>' +
-            '  </details>' +
-            '</div>' +
-            '</div>';
-        hideNav();
-        patchConsole();
-        appendLog('log', ['Flash step loaded']);
-
-        if (!customElements.get('esp-web-install-button')) {
-            restoreConsole();
-            document.getElementById('flash-btn-area').innerHTML =
-                '<p class="wizard-error">Firmware flashing component failed to load. ' +
-                'Please refresh the page and ensure you have a stable internet connection.</p>';
-            renderNav(true, 'Skip Flashing', function () { goToStep(state.currentStepIndex + 1); }, false);
-            return { cleanup: function () { } };
-        }
-
-        function setStatus(msg) {
+        function setStatus(msg, color) {
             var el = document.getElementById('flash-status-text');
             if (!el) { return; }
             el.style.display = msg ? 'block' : 'none';
+            el.style.color = color || '#80cbc4';
             el.textContent = msg;
         }
 
-        function mountInstallButton() {
-            var btnArea = document.getElementById('flash-btn-area');
-            if (!btnArea) { return; }
-            btnArea.innerHTML = '';
-            var installBtn = document.createElement('esp-web-install-button');
-            installBtn.setAttribute('manifest', '/api/firmware/manifest');
-            installBtn.innerHTML = '<button class="wizard-btn wizard-btn-primary" slot="activate">' +
-                (flashRetryCount > 0 ? 'Try Again' : 'Start Flashing') + '</button>';
-            btnArea.appendChild(installBtn);
+        function setProgress(pct) {
+            var fill = document.getElementById('flash-progress-fill');
+            if (fill) { fill.style.width = pct + '%'; }
+        }
 
-            var statePoll = null;
-            var dlgObserver = null;
+        contentEl.innerHTML =
+            '<div class="wizard-step-content">' +
+            '<h2>Flash Firmware</h2>' +
+            '<p>Flashing Spaxel firmware to your ESP32-S3...</p>' +
+            '<div id="flash-progress-bar" style="margin:16px 0">' +
+            '  <div class="progress-bar"><div class="progress-fill" id="flash-progress-fill" style="width:0%"></div></div>' +
+            '</div>' +
+            '<p id="flash-status-text" style="display:none;margin:8px 0;font-size:13px;color:#80cbc4"></p>' +
+            '<div id="flash-recovery" style="display:none"></div>' +
+            '<details id="flash-log-details" style="margin-top:16px;font-size:12px">' +
+            '  <summary style="cursor:pointer;color:#546e7a">Show install log</summary>' +
+            '  <div id="flash-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
+            'padding:8px;margin-top:4px;max-height:160px;overflow-y:auto;font-family:monospace"></div>' +
+            '</details>' +
+            '</div>';
+        hideNav();
+        patchConsole();
 
-            function stopPoll() {
-                if (statePoll) { clearInterval(statePoll); statePoll = null; }
-            }
+        // Uses vendored esptool-js (dashboard/js/esptool-bundle.js) loaded via dynamic import.
+        // Flashing starts automatically — no button click required.
+        async function doFlash() {
+            var transport = null;
+            try {
+                // 1. Fetch firmware manifest
+                setStatus('Fetching firmware info...');
+                appendLog('log', ['Fetching /api/firmware/manifest']);
+                var manifestResp = await fetch('/api/firmware/manifest');
+                if (!manifestResp.ok) { throw new Error('Manifest fetch failed: ' + manifestResp.status); }
+                var manifest = await manifestResp.json();
+                var builds = manifest.builds || [];
+                var build = builds.find(function (b) { return b.chipFamily === 'ESP32-S3'; }) || builds[0];
+                if (!build || !build.parts || !build.parts.length) { throw new Error('No firmware found in manifest'); }
+                var part = build.parts[0];
+                var firmwareUrl = part.path;
+                var offset = typeof part.offset === 'number' ? part.offset : 0;
+                appendLog('log', ['Firmware: ' + firmwareUrl + ' @ 0x' + offset.toString(16)]);
 
-            function onFlashComplete() {
-                stopPoll();
-                if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
-                restoreConsole();
-                document.getElementById('flash-progress-bar').style.display = 'none';
-                setStatus('✓ Firmware flashed successfully!');
-                document.getElementById('flash-status-text').style.color = '#a5d6a7';
-                saveState();
-                setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1500);
-            }
+                // 2. Download firmware binary
+                setStatus('Downloading firmware...');
+                setProgress(3);
+                var binResp = await fetch(firmwareUrl);
+                if (!binResp.ok) { throw new Error('Firmware download failed: ' + binResp.status); }
+                var arrayBuffer = await binResp.arrayBuffer();
+                var firmwareData = new Uint8Array(arrayBuffer);
+                appendLog('log', ['Downloaded ' + firmwareData.length + ' bytes']);
+                setProgress(8);
 
-            // Inject CSS into the shadow root to hide the esp-web-tools dialog once
-            // flashing starts — we drive the UI inline from that point on.
-            function hideDlgOverlay() {
-                var sr = installBtn.shadowRoot;
-                if (!sr || sr.querySelector('#ewt-suppress')) { return; }
-                var s = document.createElement('style');
-                s.id = 'ewt-suppress';
-                // Hide the dialog and its backdrop; keep the activate slot visible
-                s.textContent = ':host > *:not(slot) { display:none !important; }';
-                sr.appendChild(s);
-            }
+                // 3. Load esptool-js and connect to device
+                setStatus('Connecting to device...');
+                var flashLib = await import('/js/esptool-bundle.js');
+                var ESPLoader = flashLib.ESPLoader;
+                var Transport = flashLib.Transport;
 
-            function showProgressUI() {
-                btnArea.style.display = 'none';
-                document.getElementById('flash-progress-bar').style.display = 'block';
-                document.getElementById('flash-recovery').style.display = 'none';
-                document.getElementById('flash-log-details').open = true;
-            }
-
-            // esp-web-tools v10 does NOT dispatch a DOM state-changed event for firmware
-            // flashing — state lives on dlg._installState (a LitElement @state property).
-            // Poll it at 100 ms intervals once the dialog element appears in the shadow root.
-            function startPolling(dlg) {
-                var lastPct = -1;
-                statePoll = setInterval(function () {
-                    var is = dlg._installState;
-                    if (!is) { return; }
-                    var s = is.state;
-                    var det = is.details || {};
-
-                    if (s === 'preparing') {
-                        // chip info phase — dialog overlay still visible, nothing to do yet
-                    } else if (s === 'erasing') {
-                        hideDlgOverlay();
-                        showProgressUI();
-                        document.getElementById('flash-progress-fill').style.width = '5%';
-                        setStatus('Erasing flash...');
-                    } else if (s === 'writing') {
-                        hideDlgOverlay();
-                        showProgressUI();
-                        var pct = Math.round((det.percentage || 0) * 100);
-                        if (pct !== lastPct) {
-                            lastPct = pct;
-                            document.getElementById('flash-progress-fill').style.width = pct + '%';
-                            setStatus('Flashing... ' + pct + '%');
-                            appendLog('log', ['writing ' + pct + '%']);
-                        }
-                    } else if (s === 'finished') {
-                        stopPoll();
-                        appendLog('log', ['flash-success']);
-                        onFlashComplete();
-                    } else if (s === 'error') {
-                        stopPoll();
-                        if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
-                        hideDlgOverlay();
-                        flashRetryCount++;
-                        appendLog('error', ['flash-error: ' + (is.message || '')]);
-                        document.getElementById('flash-progress-bar').style.display = 'none';
-                        document.getElementById('flash-log-details').open = true;
-                        setStatus('');
-                        var recovery = document.getElementById('flash-recovery');
-                        recovery.style.display = 'block';
-                        recovery.innerHTML = renderBootloaderHelp(flashRetryCount);
-                        btnArea.style.display = 'block';
-                        mountInstallButton();
-                    }
-                }, 100);
-            }
-
-            // Watch for the dialog element to appear in the shadow root, then start polling
-            // _installState on it. Don't check for a specific tag name — just take the first
-            // non-style element child that appears.
-            var sr = installBtn.shadowRoot;
-            if (sr) {
-                dlgObserver = new MutationObserver(function (mutations) {
-                    for (var i = 0; i < mutations.length; i++) {
-                        var added = mutations[i].addedNodes;
-                        for (var j = 0; j < added.length; j++) {
-                            var node = added[j];
-                            if (node.nodeType === 1 && node.tagName &&
-                                    node.tagName.toLowerCase() !== 'style') {
-                                if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
-                                startPolling(node);
-                                return;
-                            }
-                        }
+                if (!state.port) { throw new Error('No serial port selected — go back to Connect step'); }
+                transport = new Transport(state.port, false);
+                var loader = new ESPLoader({
+                    transport: transport,
+                    baudrate: 460800,
+                    terminal: {
+                        clean: function () {},
+                        writeLine: function (s) { appendLog('log', [s]); },
+                        write: function (s) { appendLog('log', [s]); }
                     }
                 });
-                dlgObserver.observe(sr, { childList: true });
+
+                if (cancelled) { return; }
+                var chip = await loader.main();
+                appendLog('log', ['Connected: ' + chip]);
+                setProgress(12);
+
+                // 4. Flash
+                setStatus('Erasing and flashing...');
+                document.getElementById('flash-log-details').open = true;
+
+                await loader.writeFlash({
+                    fileArray: [{ data: firmwareData, address: offset }],
+                    flashSize: 'keep',
+                    flashMode: 'dio',
+                    flashFreq: '80m',
+                    eraseAll: false,
+                    compress: true,
+                    reportProgress: function (fileIndex, written, total) {
+                        if (cancelled) { return; }
+                        var pct = 12 + Math.round(written / total * 83);
+                        setProgress(pct);
+                        setStatus('Flashing... ' + Math.round(written / total * 100) + '%');
+                    }
+                });
+
+                await transport.disconnect();
+                transport = null;
+
+                if (cancelled) { return; }
+
+                setProgress(100);
+                setStatus('✓ Firmware flashed successfully!', '#a5d6a7');
+                appendLog('log', ['Flash complete']);
+                restoreConsole();
+                saveState();
+                setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1200);
+
+            } catch (e) {
+                if (cancelled) { return; }
+                if (transport) { try { await transport.disconnect(); } catch (_) {} transport = null; }
+
+                flashRetryCount++;
+                restoreConsole();
+                appendLog('error', ['Flash failed: ' + (e.message || String(e))]);
+                setStatus('');
+                setProgress(0);
+                document.getElementById('flash-progress-bar').style.display = 'none';
+                document.getElementById('flash-log-details').open = true;
+
+                var recovery = document.getElementById('flash-recovery');
+                recovery.style.display = 'block';
+                recovery.innerHTML = renderBootloaderHelp(flashRetryCount) +
+                    '<div style="text-align:center;margin-top:8px">' +
+                    '<button class="wizard-btn wizard-btn-primary" id="flash-retry-btn">Try Again</button>' +
+                    '</div>';
+                document.getElementById('flash-retry-btn').addEventListener('click', function () {
+                    recovery.style.display = 'none';
+                    recovery.innerHTML = '';
+                    document.getElementById('flash-progress-bar').style.display = 'block';
+                    setProgress(0);
+                    patchConsole();
+                    doFlash();
+                });
             }
         }
 
-        mountInstallButton();
-        return { cleanup: restoreConsole };
+        doFlash();
+        return { cleanup: function () { cancelled = true; restoreConsole(); } };
     }
 
     function renderProvisionWifi(contentEl) {
