@@ -482,11 +482,15 @@
                 (flashRetryCount > 0 ? 'Try Again' : 'Start Flashing') + '</button>';
             btnArea.appendChild(installBtn);
 
-            var flashCompleteTimer = null;
+            var statePoll = null;
             var dlgObserver = null;
 
+            function stopPoll() {
+                if (statePoll) { clearInterval(statePoll); statePoll = null; }
+            }
+
             function onFlashComplete() {
-                if (flashCompleteTimer) { clearTimeout(flashCompleteTimer); flashCompleteTimer = null; }
+                stopPoll();
                 if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
                 restoreConsole();
                 document.getElementById('flash-progress-bar').style.display = 'none';
@@ -515,18 +519,20 @@
                 document.getElementById('flash-log-details').open = true;
             }
 
-            // esp-web-tools v10 only fires state-changed, and it fires from the dialog
-            // element inside the shadow root (not composed), so the event never reaches
-            // listeners on the host. We use a MutationObserver to find the dialog element
-            // and attach directly to it.
-            function attachToDialog(dlg) {
-                dlg.addEventListener('state-changed', function (e) {
-                    var detail = e.detail || {};
-                    var s = detail.state;
-                    var det = detail.details || {};
-                    appendLog('log', ['state: ' + s]);
+            // esp-web-tools v10 does NOT dispatch a DOM state-changed event for firmware
+            // flashing — state lives on dlg._installState (a LitElement @state property).
+            // Poll it at 100 ms intervals once the dialog element appears in the shadow root.
+            function startPolling(dlg) {
+                var lastPct = -1;
+                statePoll = setInterval(function () {
+                    var is = dlg._installState;
+                    if (!is) { return; }
+                    var s = is.state;
+                    var det = is.details || {};
 
-                    if (s === 'erasing') {
+                    if (s === 'preparing') {
+                        // chip info phase — dialog overlay still visible, nothing to do yet
+                    } else if (s === 'erasing') {
                         hideDlgOverlay();
                         showProgressUI();
                         document.getElementById('flash-progress-fill').style.width = '5%';
@@ -534,35 +540,23 @@
                     } else if (s === 'writing') {
                         hideDlgOverlay();
                         showProgressUI();
-                        // percentage is 0–1
                         var pct = Math.round((det.percentage || 0) * 100);
-                        document.getElementById('flash-progress-fill').style.width = pct + '%';
-                        setStatus('Flashing... ' + pct + '%');
-                        // Fallback: if finished state never fires, show Continue after 4s
-                        if (pct >= 100 && !flashCompleteTimer) {
-                            flashCompleteTimer = setTimeout(function () {
-                                flashCompleteTimer = null;
-                                appendLog('log', ['finished state not received — manual continue']);
-                                document.getElementById('flash-progress-bar').style.display = 'none';
-                                setStatus('✓ Flash complete.');
-                                document.getElementById('flash-status-text').style.color = '#a5d6a7';
-                                btnArea.style.display = 'block';
-                                btnArea.innerHTML = '<button class="wizard-btn wizard-btn-primary" id="flash-continue-btn">Continue →</button>';
-                                document.getElementById('flash-continue-btn').addEventListener('click', function () {
-                                    saveState();
-                                    goToStep(state.currentStepIndex + 1);
-                                });
-                            }, 4000);
+                        if (pct !== lastPct) {
+                            lastPct = pct;
+                            document.getElementById('flash-progress-fill').style.width = pct + '%';
+                            setStatus('Flashing... ' + pct + '%');
+                            appendLog('log', ['writing ' + pct + '%']);
                         }
                     } else if (s === 'finished') {
+                        stopPoll();
                         appendLog('log', ['flash-success']);
                         onFlashComplete();
                     } else if (s === 'error') {
+                        stopPoll();
                         if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
-                        if (flashCompleteTimer) { clearTimeout(flashCompleteTimer); flashCompleteTimer = null; }
                         hideDlgOverlay();
                         flashRetryCount++;
-                        appendLog('error', ['flash-error: ' + (detail.message || JSON.stringify(detail))]);
+                        appendLog('error', ['flash-error: ' + (is.message || '')]);
                         document.getElementById('flash-progress-bar').style.display = 'none';
                         document.getElementById('flash-log-details').open = true;
                         setStatus('');
@@ -572,10 +566,10 @@
                         btnArea.style.display = 'block';
                         mountInstallButton();
                     }
-                });
+                }, 100);
             }
 
-            // Watch for the dialog element to appear in the shadow root
+            // Watch for ewt-install-dialog to appear in the shadow root, then start polling.
             var sr = installBtn.shadowRoot;
             if (sr) {
                 dlgObserver = new MutationObserver(function (mutations) {
@@ -583,10 +577,10 @@
                         var added = mutations[i].addedNodes;
                         for (var j = 0; j < added.length; j++) {
                             var node = added[j];
-                            if (node.nodeType === 1 && node.tagName.toLowerCase() !== 'style') {
-                                // This is the dialog element — attach and stop observing
+                            if (node.nodeType === 1 &&
+                                node.tagName && node.tagName.toLowerCase() === 'ewt-install-dialog') {
                                 if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
-                                attachToDialog(node);
+                                startPolling(node);
                                 return;
                             }
                         }
