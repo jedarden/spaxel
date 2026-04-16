@@ -450,9 +450,19 @@
             '  <div id="flash-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
             'padding:8px;margin-top:4px;max-height:160px;overflow-y:auto;font-family:monospace"></div>' +
             '</details>' +
+            '<p style="margin-top:20px;text-align:center">' +
+            '  <a id="flash-back-link" href="#" style="font-size:12px;color:#546e7a;text-decoration:none">← Back to Connect</a>' +
+            '</p>' +
             '</div>';
         hideNav();
         patchConsole();
+        document.getElementById('flash-back-link').addEventListener('click', function (e) {
+            e.preventDefault();
+            cancelled = true;
+            restoreConsole();
+            var connectIdx = STEPS.findIndex(function (s) { return s.id === 'connect_device'; });
+            goToStep(connectIdx >= 0 ? connectIdx : state.currentStepIndex - 1);
+        });
 
         // Uses vendored esptool-js (dashboard/js/esptool-bundle.js) loaded via dynamic import.
         // Flashing starts automatically — no button click required.
@@ -1237,7 +1247,16 @@
             state.wifiPass = saved.wifiPass || '';
             state.mothershipHost = saved.mothershipHost || '';
             state.mothershipPort = saved.mothershipPort || 8080;
-            goToStep(state.currentStepIndex);
+            // After a page reload the serial port reference is gone. If we were mid-flash
+            // (step 2 = connect, step 3 = flash) drop back to connect so the user can
+            // re-select their device rather than landing on a broken flash screen.
+            var flashStepIndex = STEPS.findIndex(function (s) { return s.id === 'flash_firmware'; });
+            var connectStepIndex = STEPS.findIndex(function (s) { return s.id === 'connect_device'; });
+            if (state.currentStepIndex >= flashStepIndex && !state.port) {
+                goToStep(connectStepIndex >= 0 ? connectStepIndex : 0);
+            } else {
+                goToStep(state.currentStepIndex);
+            }
         } else {
             goToStep(0);
         }
