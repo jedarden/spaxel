@@ -698,46 +698,63 @@
             });
     }
 
-    function sendPayloadOverSerial(payload) {
+    async function sendPayloadOverSerial(payload) {
         // Firmware expects {"provision": {...}} format
         var wrappedPayload = { provision: payload };
-        return getAuthorizedPort()
-            .then(function (port) {
-                if (!port) throw new UserError(
-                    'No device found. Please go back and connect your ESP32-S3 again.'
-                );
-                return port;
-            })
-            .then(function (port) {
-                return port.open({ baudRate: CONFIG.serialBaudRate })
-                    .then(function () { return port; })
-                    .catch(function () {
-                        // Port might already be open from a previous step
-                        return port;
-                    });
-            })
-            .then(function (port) {
-                return sendSerialJSONAndWaitForResponse(port, wrappedPayload, 15000)
-                    .then(function (response) {
-                        if (!response) {
-                            throw new UserError(
-                                'No response from device. Please ensure the ESP32-S3 is connected and try again.'
-                            );
-                        }
-                        if (response.ok === false) {
-                            var errorMsg = response.error || 'Unknown error';
-                            if (errorMsg === 'missing_provision_key') {
-                                throw new UserError('Firmware communication error. Please try again.');
-                            }
-                            if (errorMsg === 'nvs_write_failed') {
-                                throw new UserError('Failed to save configuration to device. Please try again.');
-                            }
-                            throw new UserError('Provisioning failed: ' + errorMsg);
-                        }
-                        // Success - return the MAC address
-                        return response.mac;
-                    });
-            });
+
+        // Prefer the port the user explicitly selected in the Connect step. Fall back to
+        // whatever the browser has previously authorized if state.port was somehow lost.
+        var port = state.port || await getAuthorizedPort();
+        if (!port) {
+            throw new UserError('No device found. Please go back to Connect and select your ESP32-S3 again.');
+        }
+
+        // The port may be closed (esptool closes it after flashing). Open it with retries
+        // to handle the brief gap while the device reboots and re-enumerates.
+        var opened = false;
+        for (var attempt = 0; attempt < 5; attempt++) {
+            try {
+                await port.open({ baudRate: CONFIG.serialBaudRate });
+                opened = true;
+                break;
+            } catch (e) {
+                // Already open → proceed
+                if (e && (e.message || '').toLowerCase().includes('already open')) {
+                    opened = true;
+                    break;
+                }
+                // Device not ready yet — wait and retry
+                if (attempt < 4) {
+                    await new Promise(function (r) { setTimeout(r, 1000); });
+                }
+            }
+        }
+
+        if (!opened) {
+            throw new UserError(
+                'Could not open serial port. Unplug and replug the USB cable, then try again.'
+            );
+        }
+
+        var response = await sendSerialJSONAndWaitForResponse(port, wrappedPayload, 15000);
+        try { await port.close(); } catch (_) {}
+
+        if (!response) {
+            throw new UserError(
+                'No response from device. Make sure the board finished booting and try again.'
+            );
+        }
+        if (response.ok === false) {
+            var errorMsg = response.error || 'Unknown error';
+            if (errorMsg === 'missing_provision_key') {
+                throw new UserError('Firmware communication error. Please try again.');
+            }
+            if (errorMsg === 'nvs_write_failed') {
+                throw new UserError('Failed to save configuration to device. Please try again.');
+            }
+            throw new UserError('Provisioning failed: ' + errorMsg);
+        }
+        return response.mac;
     }
 
     function showFormError(id, msg) {
