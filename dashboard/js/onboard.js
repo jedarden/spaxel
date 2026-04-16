@@ -569,7 +569,9 @@
                 }, 100);
             }
 
-            // Watch for ewt-install-dialog to appear in the shadow root, then start polling.
+            // Watch for the dialog element to appear in the shadow root, then start polling
+            // _installState on it. Don't check for a specific tag name — just take the first
+            // non-style element child that appears.
             var sr = installBtn.shadowRoot;
             if (sr) {
                 dlgObserver = new MutationObserver(function (mutations) {
@@ -577,8 +579,8 @@
                         var added = mutations[i].addedNodes;
                         for (var j = 0; j < added.length; j++) {
                             var node = added[j];
-                            if (node.nodeType === 1 &&
-                                node.tagName && node.tagName.toLowerCase() === 'ewt-install-dialog') {
+                            if (node.nodeType === 1 && node.tagName &&
+                                    node.tagName.toLowerCase() !== 'style') {
                                 if (dlgObserver) { dlgObserver.disconnect(); dlgObserver = null; }
                                 startPolling(node);
                                 return;
