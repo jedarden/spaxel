@@ -8,6 +8,7 @@
 #include "esp_timer.h"
 #include "esp_system.h"
 #include "esp_netif.h"
+#include "esp_flash.h"
 #include "driver/temperature_sensor.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
@@ -289,7 +290,9 @@ esp_err_t websocket_send_hello(void) {
     cJSON_AddItemToObject(root, "capabilities", caps);
 
     cJSON_AddStringToObject(root, "chip", "ESP32-S3");
-    cJSON_AddNumberToObject(root, "flash_mb", 16);
+    uint32_t flash_size = 0;
+    esp_flash_get_size(NULL, &flash_size);
+    cJSON_AddNumberToObject(root, "flash_mb", (int)(flash_size / (1024 * 1024)));
     cJSON_AddNumberToObject(root, "uptime_ms", esp_timer_get_time() / 1000);
 
     // AP BSSID and channel (for passive radar auto-detection)
