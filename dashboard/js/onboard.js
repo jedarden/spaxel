@@ -533,7 +533,7 @@
 
                 await loader.writeFlash({
                     fileArray: [{ data: firmwareData, address: offset }],
-                    flashSize: 'detect',
+                    flashSize: '4MB',
                     flashMode: 'dio',
                     flashFreq: '80m',
                     eraseAll: false,
