@@ -660,11 +660,11 @@
             '<form id="wifi-form" class="wizard-form">' +
             '<div class="form-group">' +
             '<label for="wifi-ssid">WiFi Network Name (SSID)</label>' +
-            '<input type="text" id="wifi-ssid" required placeholder="MyWiFi" value="' + escapeAttr(state.wifiSSID) + '" autocomplete="off">' +
+            '<input type="text" id="wifi-ssid" required placeholder="MyWiFi" value="' + escapeAttr(state.wifiSSID) + '" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">' +
             '</div>' +
             '<div class="form-group">' +
             '<label for="wifi-pass">WiFi Password</label>' +
-            '<input type="password" id="wifi-pass" placeholder="Password" value="' + escapeAttr(state.wifiPass) + '" autocomplete="off">' +
+            '<input type="password" id="wifi-pass" placeholder="Password" value="' + escapeAttr(state.wifiPass) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
             '</div>' +
             '<details class="wizard-details">' +
             '<summary>Advanced: Mothership Address</summary>' +
