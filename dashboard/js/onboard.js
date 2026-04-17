@@ -758,8 +758,6 @@
         // Firmware expects {"provision": {...}} format
         var wrappedPayload = { provision: payload };
 
-        // Prefer the port the user explicitly selected in the Connect step. Fall back to
-        // whatever the browser has previously authorized if state.port was somehow lost.
         addProvLog('log', 'Looking up serial port (state.port=' + (state.port ? 'set' : 'null') + ')');
         var port = state.port || await getAuthorizedPort();
         if (!port) {
@@ -768,8 +766,8 @@
         }
         addProvLog('log', 'Port found — opening at ' + CONFIG.serialBaudRate + ' baud');
 
-        // The port may be closed (esptool closes it after flashing). Open it with retries
-        // to handle the brief gap while the device reboots and re-enumerates.
+        // The port may be closed (esptool closes it after flashing). Retry while the device
+        // is still in the middle of its USB re-enumeration after the reset.
         var opened = false;
         for (var attempt = 0; attempt < 5; attempt++) {
             try {
@@ -778,14 +776,12 @@
                 addProvLog('log', 'Port opened on attempt ' + (attempt + 1));
                 break;
             } catch (e) {
-                // Already open → proceed
                 if (e && (e.message || '').toLowerCase().includes('already open')) {
                     opened = true;
                     addProvLog('log', 'Port was already open — proceeding');
                     break;
                 }
                 addProvLog('warn', 'Open attempt ' + (attempt + 1) + ' failed: ' + (e.message || e));
-                // Device not ready yet — wait and retry
                 if (attempt < 4) {
                     setProvStatus('Waiting for device to boot... (attempt ' + (attempt + 2) + '/5)');
                     await new Promise(function (r) { setTimeout(r, 1000); });
@@ -795,36 +791,139 @@
 
         if (!opened) {
             addProvLog('error', 'Could not open port after 5 attempts');
-            throw new UserError(
-                'Could not open serial port. Unplug and replug the USB cable, then try again.'
-            );
+            throw new UserError('Could not open serial port. Unplug and replug the USB cable, then try again.');
         }
 
-        addProvLog('log', 'Sending JSON payload: ' + JSON.stringify(wrappedPayload).substring(0, 120) + '...');
-        setProvStatus('Waiting for device acknowledgment...');
-        var response = await sendSerialJSONAndWaitForResponse(port, wrappedPayload, 15000);
-        addProvLog('log', 'Serial response: ' + (response ? JSON.stringify(response) : '(none — timeout)'));
-        try { await port.close(); } catch (_) {}
+        // Set up bidirectional streams. The reader is opened immediately so we don't
+        // miss the "SPAXEL READY" line that the firmware prints at boot.
+        var decoder = new TextDecoderStream();
+        var readableClosed = port.readable.pipeTo(decoder.writable);
+        var reader = decoder.readable.getReader();
 
-        if (!response) {
-            throw new UserError(
-                'No response from device. Make sure the board finished booting and try again. ' +
-                'The provisioning window is open for 2 minutes after first boot.'
-            );
-        }
-        if (response.ok === false) {
-            var errorMsg = response.error || 'Unknown error';
-            addProvLog('error', 'Device rejected provisioning: ' + errorMsg);
-            if (errorMsg === 'missing_provision_key') {
-                throw new UserError('Firmware communication error. Please try again.');
+        var encoder = new TextEncoderStream();
+        var writableClosed = encoder.readable.pipeTo(port.writable);
+        var writer = encoder.writable.getWriter();
+
+        var mac = null;
+        try {
+            // Phase 1: wait for "SPAXEL READY <MAC>" from the firmware (up to 30 s).
+            // The firmware prints this immediately after its UART driver initialises, a
+            // few seconds after the reset that follows the flash. If we send the payload
+            // before this line appears the bytes are lost because the device UART isn't
+            // ready yet.
+            setProvStatus('Waiting for device to boot...');
+            addProvLog('log', 'Waiting for SPAXEL READY signal (up to 30 s)...');
+
+            var buffer = '';
+            var readyReceived = false;
+            var readyDeadline = Date.now() + 30000;
+
+            outer: while (Date.now() < readyDeadline) {
+                var remaining = readyDeadline - Date.now();
+                var result;
+                try {
+                    result = await Promise.race([
+                        reader.read(),
+                        new Promise(function (_, reject) {
+                            setTimeout(function () { reject(new Error('timeout')); }, remaining + 50);
+                        })
+                    ]);
+                } catch (e) {
+                    break; // deadline expired
+                }
+                if (result.done) break;
+                buffer += result.value;
+
+                var nl;
+                while ((nl = buffer.indexOf('\n')) !== -1) {
+                    var line = buffer.substring(0, nl).trim();
+                    buffer = buffer.substring(nl + 1);
+                    if (line) addProvLog('log', 'Device: ' + line);
+                    if (line.startsWith('SPAXEL READY')) {
+                        readyReceived = true;
+                        // Extract MAC that the firmware appends after the keyword
+                        var parts = line.split(' ');
+                        if (parts.length >= 3) mac = parts[parts.length - 1];
+                        break outer;
+                    }
+                }
             }
-            if (errorMsg === 'nvs_write_failed') {
-                throw new UserError('Failed to save configuration to device. Please try again.');
+
+            if (!readyReceived) {
+                throw new UserError(
+                    'Device did not become ready after flashing. ' +
+                    'Unplug and replug the USB cable, then try again.'
+                );
             }
-            throw new UserError('Provisioning failed: ' + errorMsg);
+
+            addProvLog('log', 'SPAXEL READY received (MAC: ' + (mac || 'unknown') + ') — sending payload');
+            setProvStatus('Sending configuration to device...');
+            addProvLog('log', 'Payload: ' + JSON.stringify(wrappedPayload).substring(0, 120) + '...');
+
+            // Phase 2: send the JSON payload now that the firmware is listening.
+            await writer.write(JSON.stringify(wrappedPayload) + '\n');
+            writer.close();
+            await writableClosed;
+
+            // Phase 3: wait for the firmware's JSON acknowledgment (up to 10 s).
+            setProvStatus('Waiting for device acknowledgment...');
+            var response = null;
+            var respDeadline = Date.now() + 10000;
+
+            outer2: while (Date.now() < respDeadline) {
+                var remaining = respDeadline - Date.now();
+                var result;
+                try {
+                    result = await Promise.race([
+                        reader.read(),
+                        new Promise(function (_, reject) {
+                            setTimeout(function () { reject(new Error('timeout')); }, remaining + 50);
+                        })
+                    ]);
+                } catch (e) {
+                    break;
+                }
+                if (result.done) break;
+                buffer += result.value;
+
+                var nl;
+                while ((nl = buffer.indexOf('\n')) !== -1) {
+                    var line = buffer.substring(0, nl).trim();
+                    buffer = buffer.substring(nl + 1);
+                    if (line) addProvLog('log', 'Device: ' + line);
+                    if (line.length > 0) {
+                        try {
+                            response = JSON.parse(line);
+                            break outer2;
+                        } catch (e) { /* not JSON — keep reading */ }
+                    }
+                }
+            }
+
+            addProvLog('log', 'Serial response: ' + (response ? JSON.stringify(response) : '(none — timeout)'));
+
+            if (!response) {
+                throw new UserError(
+                    'No response from device after sending configuration. ' +
+                    'The provisioning window is open for 2 minutes after first boot.'
+                );
+            }
+            if (response.ok === false) {
+                var errorMsg = response.error || 'Unknown error';
+                addProvLog('error', 'Device rejected provisioning: ' + errorMsg);
+                if (errorMsg === 'missing_provision_key') throw new UserError('Firmware communication error. Please try again.');
+                if (errorMsg === 'nvs_write_failed') throw new UserError('Failed to save configuration to device. Please try again.');
+                throw new UserError('Provisioning failed: ' + errorMsg);
+            }
+
+            addProvLog('log', 'Provisioning acknowledged — MAC: ' + (response.mac || mac || '(unknown)'));
+            return response.mac || mac;
+
+        } finally {
+            try { reader.cancel(); } catch (_) {}
+            try { await readableClosed.catch(function () {}); } catch (_) {}
+            try { await port.close(); } catch (_) {}
         }
-        addProvLog('log', 'Provisioning acknowledged by device — MAC: ' + (response.mac || '(unknown)'));
-        return response.mac;
     }
 
     function showFormError(id, msg) {
