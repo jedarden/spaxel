@@ -49,7 +49,7 @@ void provision_listen_window(void) {
     snprintf(ready_msg, sizeof(ready_msg), "SPAXEL READY %s\n", mac_str);
     uart_write_bytes(PROVISION_UART, ready_msg, strlen(ready_msg));
 
-    ESP_LOGI(TAG, "Provisioning window open for %d ms (MAC: %s)", window_ms, mac_str);
+    ESP_LOGI(TAG, "Provisioning window open for %u ms (MAC: %s)", (unsigned)window_ms, mac_str);
 
     TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(window_ms);
     char line[MAX_LINE_LEN];
