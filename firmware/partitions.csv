@@ -1,11 +1,10 @@
 # Name,   Type, SubType, Offset,  Size, Flags
 # NVS, PHY init, and OTA data in standard low-flash locations
 nvs,      data, nvs,     0x9000,  0x6000,
-phy_init, data, phy,     0xf000,  0x1000,
-# Factory app at standard 0x10000 offset (4 MB)
-factory,  app,  factory, 0x10000, 0x400000,
-# Dual OTA partitions for A/B updates with rollback
-ota_0,    app,  ota_0,   0x410000,0x400000,
-ota_1,    app,  ota_1,   0x810000,0x400000,
+phy_init, data, phy,     0xF000,  0x1000,
+# Factory app at standard 0x10000 offset (~1.9MB — fits current ~1.7MB binary)
+factory,  app,  factory, 0x10000, 0x1F0000,
+# Single OTA partition for A/B updates with rollback (fits in 4MB flash)
+ota_0,    app,  ota_0,   0x200000,0x1F0000,
 # OTA data partition — bootloader uses this to track which OTA slot to boot
-otadata,  data, ota,     0xc10000,0x2000,
+otadata,  data, ota,     0x3F0000,0x2000,
