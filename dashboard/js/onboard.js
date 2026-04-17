@@ -468,6 +468,7 @@
         // Flashing starts automatically — no button click required.
         async function doFlash() {
             var transport = null;
+            var flashSucceeded = false;
             try {
                 // 1. Fetch firmware manifest
                 setStatus('Fetching firmware info...');
@@ -514,6 +515,16 @@
                 if (cancelled) { return; }
                 var chip = await loader.main();
                 appendLog('log', ['Connected: ' + chip]);
+
+                // Validate detected chip family against manifest
+                var expectedFamily = (build.chipFamily || '').toUpperCase().replace(/-/g, '');
+                if (expectedFamily && !chip.toUpperCase().replace(/-/g, '').includes(expectedFamily)) {
+                    throw new UserError(
+                        'Connected device (' + chip + ') is not supported by this firmware. ' +
+                        'This image requires an ' + build.chipFamily + '. ' +
+                        'Please connect the correct device.'
+                    );
+                }
                 setProgress(12);
 
                 // 4. Flash (progress 12% → 80%)
@@ -522,7 +533,7 @@
 
                 await loader.writeFlash({
                     fileArray: [{ data: firmwareData, address: offset }],
-                    flashSize: 'keep',
+                    flashSize: 'detect',
                     flashMode: 'dio',
                     flashFreq: '80m',
                     eraseAll: false,
@@ -537,6 +548,7 @@
 
                 await transport.disconnect();
                 transport = null;
+                flashSucceeded = true;
                 setProgress(80);
                 appendLog('log', ['Flash complete — device rebooting']);
 
@@ -580,7 +592,18 @@
 
                 var recovery = document.getElementById('flash-recovery');
                 recovery.style.display = 'block';
-                recovery.innerHTML = renderBootloaderHelp(flashRetryCount) +
+                var helpHtml;
+                if (flashSucceeded) {
+                    // Device flashed OK but provisioning failed — don't tell user about BOOT button
+                    helpHtml = '<div class="wizard-bootloader-help" style="background:#1a2a1a;border:1px solid #f44336;border-radius:6px;padding:12px;margin:12px 0;text-align:center">' +
+                        '<p style="margin:0 0 8px;color:#f44336;font-weight:bold">Provisioning failed</p>' +
+                        '<p style="font-size:12px;color:#ccc;margin:0 0 8px">Firmware flashed successfully. ' +
+                        'Unplug and replug the USB cable, then click Try Again to send the configuration.</p>' +
+                        '</div>';
+                } else {
+                    helpHtml = renderBootloaderHelp(flashRetryCount);
+                }
+                recovery.innerHTML = helpHtml +
                     '<div style="text-align:center;margin-top:8px">' +
                     '<button class="wizard-btn wizard-btn-primary" id="flash-retry-btn">Try Again</button>' +
                     '</div>';
@@ -634,7 +657,7 @@
                             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
                         }),
                     node_token: '',
-                    ms_mdns: msHost || 'spaxel-mothership.local',
+                    ms_mdns: msHost || window.location.hostname,
                     ms_port: msPort,
                     debug: false,
                 };
@@ -669,8 +692,8 @@
             '<details class="wizard-details">' +
             '<summary>Advanced: Mothership Address</summary>' +
             '<div class="form-group" style="margin-top:8px">' +
-            '<label for="ms-host">Host (leave blank for mDNS auto-discovery)</label>' +
-            '<input type="text" id="ms-host" placeholder="spaxel-mothership.local" value="' + escapeAttr(state.mothershipHost) + '" autocomplete="off">' +
+            '<label for="ms-host">Host <span class="wizard-muted">(leave blank to use ' + escapeAttr(window.location.hostname) + ')</span></label>' +
+            '<input type="text" id="ms-host" placeholder="' + escapeAttr(window.location.hostname) + '" value="' + escapeAttr(state.mothershipHost) + '" autocomplete="off">' +
             '</div>' +
             '<div class="form-group">' +
             '<label for="ms-port">Port</label>' +
@@ -742,7 +765,7 @@
                             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
                         }),
                     node_token: '',
-                    ms_mdns: msHost || 'spaxel-mothership.local',
+                    ms_mdns: msHost || window.location.hostname,
                     ms_port: msPort,
                     debug: false,
                 };
