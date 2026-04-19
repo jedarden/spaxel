@@ -504,7 +504,7 @@
                 transport = new Transport(state.port, false);
                 var loader = new ESPLoader({
                     transport: transport,
-                    baudrate: 460800,
+                    baudrate: 115200,
                     terminal: {
                         clean: function () {},
                         writeLine: function (s) { appendLog('log', [s]); },
