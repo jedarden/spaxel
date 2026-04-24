@@ -165,7 +165,7 @@
     flex-shrink: 0;
     width: 24px;
     text-align: center;
-    padding-top: 2px;
+    padding-top: var(--space-half);
 }
 
 .item-content {
@@ -177,7 +177,7 @@
     font-size: var(--text-sm);
     font-weight: 500;
     color: var(--context-text, var(--slate-12));
-    margin-bottom: 2px;
+    margin-bottom: var(--space-half);
 }
 
 .item-description {

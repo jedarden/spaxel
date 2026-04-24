@@ -233,7 +233,7 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    margin-left: 6px;
+    margin-left: var(--space-150);
 }
 
 .context-help-btn:hover {

@@ -303,7 +303,7 @@
 .gdop-legend-item {
     display: flex;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: var(--space-150);
 }
 
 .gdop-legend-item:last-child {

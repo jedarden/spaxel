@@ -65,7 +65,7 @@
     letter-spacing: var(--ls-wide);
     color: var(--text-muted);
     margin: var(--space-3);
-    padding-bottom: 6px;
+    padding-bottom: var(--space-150);
     border-bottom: 1px solid var(--bg-hover);
 }
 

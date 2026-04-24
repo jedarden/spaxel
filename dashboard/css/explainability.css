@@ -249,7 +249,7 @@
     display: flex;
     align-items: center;
     gapvar(--space-250);
-    margin-bottom: 10px;
+    margin-bottom: var(--space-250);
 }
 
 .ble-match-indicator {
