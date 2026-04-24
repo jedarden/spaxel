@@ -1,0 +1,239 @@
+/* ───────────────────────────────────────────────────────────────
+   Spaxel App Shell — Page-level CSS Grid (§8e Layout)
+   Establishes one grid container per page. No absolute-positioned
+   layout containers — overlays use <dialog> or fixed slide-ins.
+   ─────────────────────────────────────────────────────────────── */
+
+/* ── App shell grid ── */
+.app-shell {
+  display: grid;
+  grid-template-areas:
+    "header header"
+    "nav    main"
+    "footer footer";
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+  max-width: 1440px;
+  margin-inline: auto;
+}
+
+/* Named grid areas */
+.app-shell > .app-header  { grid-area: header; }
+.app-shell > .app-nav     { grid-area: nav; }
+.app-shell > .app-main    { grid-area: main; }
+.app-shell > .app-footer  { grid-area: footer; }
+
+/* ── Full-width pages (no sidebar nav) ── */
+.app-shell--full {
+  grid-template-areas:
+    "header"
+    "main"
+    "footer";
+  grid-template-columns: 1fr;
+}
+
+/* ── Live-view shell (3D canvas fills viewport) ── */
+.app-shell--live {
+  display: grid;
+  grid-template-areas:
+    "header"
+    "main";
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+  max-width: none;
+  margin-inline: 0;
+}
+
+/* ── Tablet: collapse sidebar nav ── */
+@media (max-width: 1023px) {
+  .app-shell {
+    grid-template-areas:
+      "header"
+      "main"
+      "footer";
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell > .app-nav {
+    display: none;
+  }
+}
+
+/* ── Mobile: single column + bottom nav ── */
+@media (max-width: 639px) {
+  .app-shell,
+  .app-shell--full,
+  .app-shell--live {
+    grid-template-areas:
+      "header"
+      "main";
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell > .app-nav,
+  .app-shell > .app-footer {
+    display: none;
+  }
+
+  /* Bottom navigation for mobile */
+  .app-mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--slate-3);
+    border-top: 1px solid var(--border-default);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 100;
+  }
+
+  .app-mobile-nav__list {
+    display: flex;
+    list-style: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .app-mobile-nav__item {
+    flex: 1;
+    text-align: center;
+  }
+
+  .app-mobile-nav__link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: var(--space-2) 0;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--text-xs);
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .app-mobile-nav__link--active {
+    color: var(--color-primary);
+  }
+}
+
+/* Desktop: hide mobile bottom nav */
+@media (min-width: 640px) {
+  .app-mobile-nav {
+    display: none;
+  }
+}
+
+/* ── Touch targets (all interactive elements) ── */
+@media (max-width: 1023px) {
+  .app-shell button,
+  .app-shell--full button,
+  .app-shell--live button,
+  .app-shell a,
+  .app-shell--full a,
+  .app-shell--live a,
+  .app-shell input[type="checkbox"],
+  .app-shell--full input[type="checkbox"],
+  .app-shell--live input[type="checkbox"],
+  .app-shell select,
+  .app-shell--full select,
+  .app-shell--live select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ── Shared header styling ── */
+.app-header {
+  background: var(--slate-3);
+  border-bottom: 1px solid var(--border-default);
+  padding: 0 var(--space-6);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+}
+
+.app-header__logo {
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heading);
+  color: var(--text-primary);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-header__links {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.app-header__link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.app-header__link:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.app-header__link--active {
+  color: var(--color-primary);
+}
+
+@media (max-width: 1023px) {
+  .app-header__links {
+    display: none;
+  }
+}
+
+/* ── Shared sidebar nav ── */
+.app-nav {
+  background: var(--slate-2);
+  border-right: 1px solid var(--border-default);
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+/* ── Main content area ── */
+.app-main {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Dialog-based modals (replaces fixed-position overlays) ── */
+dialog.app-dialog {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-modal);
+  padding: 0;
+  max-width: 560px;
+  width: 92%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+dialog.app-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Mobile body padding for bottom nav ── */
+@media (max-width: 639px) {
+  .has-mobile-nav {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}

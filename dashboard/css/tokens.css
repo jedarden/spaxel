@@ -1,0 +1,111 @@
+/* ───────────────────────────────────────────────────────────────
+   Spaxel Design System — Radix Dark Tokens (§8e)
+   Single source of truth for all dashboard surfaces.
+   ─────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Radix Slate (dark) ── */
+  --slate-1:  #111113;
+  --slate-2:  #18191b;
+  --slate-3:  #1e2024;
+  --slate-4:  #262830;
+  --slate-5:  #2e3039;
+  --slate-6:  #363842;
+  --slate-7:  #43454f;
+  --slate-8:  #565867;
+  --slate-9:  #6b6e7b;
+  --slate-10: #7c7f8c;
+  --slate-11: #9b9daa;
+  --slate-12: #ededf0;
+
+  /* ── Radix Blue (accent) ── */
+  --blue-1:  #11181e;
+  --blue-2:  #152233;
+  --blue-3:  #1a2e47;
+  --blue-4:  #1e3a5f;
+  --blue-5:  #224777;
+  --blue-6:  #26558f;
+  --blue-7:  #2e6aad;
+  --blue-8:  #3579c5;
+  --blue-9:  #3e96e8;
+  --blue-10: #4daaf5;
+  --blue-11: #68bdfa;
+  --blue-12: #aedcff;
+
+  /* ── Semantic state ── */
+  --ok:   #46a758;   /* green-9 */
+  --warn: #e5a00d;   /* amber-9 */
+  --alert: #e5484d;  /* red-9  */
+
+  /* ── Semantic aliases ── */
+  --color-success: var(--ok);
+  --color-warning: var(--warn);
+  --color-danger:  var(--alert);
+  --color-primary: var(--blue-9);
+  --color-primary-hover: var(--blue-10);
+
+  /* ── State with opacity (for badges, backgrounds) ── */
+  --ok-muted:     rgba(70, 167, 88, 0.2);
+  --ok-border:    rgba(70, 167, 88, 0.3);
+  --warn-muted:   rgba(229, 160, 13, 0.2);
+  --warn-border:  rgba(229, 160, 13, 0.3);
+  --alert-muted:  rgba(229, 72, 77, 0.2);
+  --alert-border: rgba(229, 72, 77, 0.3);
+  --blue-muted:   rgba(62, 150, 232, 0.15);
+  --blue-border:  rgba(62, 150, 232, 0.3);
+
+  /* ── Background steps ── */
+  --bg-page:   var(--slate-2);
+  --bg-card:   var(--slate-3);
+  --bg-panel:  var(--slate-3);
+  --bg-hover:  var(--slate-4);
+  --bg-active: var(--slate-5);
+  --bg-input:  var(--slate-4);
+
+  /* ── Text ── */
+  --text-primary:   var(--slate-12);
+  --text-secondary: var(--slate-11);
+  --text-muted:     var(--slate-9);
+  --text-on-accent: #fff;
+
+  /* ── Border ── */
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-subtle:  rgba(255, 255, 255, 0.04);
+  --border-strong:  rgba(255, 255, 255, 0.15);
+
+  /* ── Typography ── */
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+
+  --text-xs:   12px;
+  --text-sm:   14px;
+  --text-base: 16px;
+  --text-lg:   20px;
+  --text-2xl:  28px;
+
+  --lh-body:    1.5;
+  --lh-heading: 1.2;
+  --fw-body:    400;
+  --fw-heading: 600;
+
+  /* ── Spacing (4 px grid) ── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Radius ── */
+  --radius-control: 6px;
+  --radius-card:    10px;
+  --radius-modal:   16px;
+
+  /* ── Transitions ── */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+}
