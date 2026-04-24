@@ -519,16 +519,10 @@
 
         /* ===== Onboarding Wizard ===== */
         #wizard-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
             background: var(--live-status-bg);
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
         }
 
         #wizard-card {
@@ -1175,10 +1169,6 @@
 
         /* ===== Diurnal Learning Banner ===== */
         #diurnal-banner {
-            position: fixed;
-            top: 45px;
-            left: 50%;
-            transform: translateX(-50%);
             background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
             color: var(--text-on-accent);
             padding: 8px 16px;
@@ -1268,10 +1258,6 @@
 
         /* ===== Toast Notifications ===== */
         #toast-container {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
             z-index: 200;
             display: flex;
             flex-direction: column;
@@ -1449,7 +1435,7 @@
             top: -4px;
             right: -4px;
             background: var(--alert);
-            color: white;
+            color: var(--text-on-accent);
             font-size: 9px;
             font-weight: 600;
             padding: 1px 4px;
