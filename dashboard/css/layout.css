@@ -389,9 +389,294 @@ dialog.app-dialog::backdrop {
   backdrop-filter: blur(2px);
 }
 
+/* ── Setup toolbar (floats over 3D canvas in setup page) ── */
+.setup-toolbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  background: var(--overlay-strong);
+  padding: 8px 16px;
+  border-radius: var(--radius-card);
+  z-index: 100;
+}
+
+.setup-toolbar button {
+  background: var(--slate-5);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.setup-toolbar button:hover {
+  background: var(--slate-6);
+}
+
+.setup-toolbar button.active {
+  background: var(--blue-5);
+  border-color: var(--blue-8);
+}
+
+@media (max-width: 639px) {
+  .setup-toolbar {
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    left: 8px;
+    right: 8px;
+    transform: none;
+    width: auto;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .setup-toolbar button {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    font-size: var(--text-xs);
+  }
+}
+
 /* ── Mobile body padding for bottom nav ── */
 @media (max-width: 639px) {
   .has-mobile-nav {
     padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Onboarding wizard overlay ── */
+#wizard-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+/* ── Diurnal learning banner ── */
+#diurnal-banner {
+  position: fixed;
+  top: 45px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+}
+
+@media (max-width: 639px) {
+  #diurnal-banner {
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    left: 8px;
+    right: 8px;
+    transform: none;
+  }
+}
+
+/* ── Anomaly learning banner ── */
+#anomaly-learning-banner {
+  position: fixed;
+  top: 45px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+}
+
+@media (max-width: 639px) {
+  #anomaly-learning-banner {
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    left: 8px;
+    right: 8px;
+    transform: none;
+  }
+}
+
+/* ── Security mode indicator ── */
+#security-mode-indicator {
+  position: fixed;
+  top: 45px;
+  right: 20px;
+  z-index: 150;
+}
+
+@media (max-width: 639px) {
+  #security-mode-indicator {
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    right: 8px;
+  }
+}
+
+/* ── Link health panel (floats over canvas) ── */
+.link-health-panel {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  z-index: 100;
+}
+
+@media (max-width: 1023px) {
+  .link-health-panel {
+    right: 8px;
+  }
+}
+
+@media (max-width: 639px) {
+  .link-health-panel {
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    left: 8px;
+    right: 8px;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+}
+
+/* ── Replay control bar (shown during replay) ── */
+.replay-control-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+}
+
+@media (max-width: 639px) {
+  .replay-control-bar {
+    left: 8px;
+    right: 8px;
+    transform: none;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Replay tuning panel (floats over canvas) ── */
+.replay-tuning-panel {
+  position: fixed;
+  top: 60px;
+  right: 340px;
+  width: 280px;
+  z-index: 100;
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .replay-tuning-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: 340px;
+  }
+}
+
+@media (max-width: 639px) {
+  .replay-tuning-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+}
+
+/* ── Fresnel zone debug tooltip (positioned by JS) ── */
+.fresnel-tooltip {
+  position: fixed;
+  display: none;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* ── Portal editor panel (floats over canvas) ── */
+#portal-editor-panel {
+  position: fixed;
+  top: 60px;
+  left: 320px;
+  width: 240px;
+  z-index: 100;
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  #portal-editor-panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 639px) {
+  #portal-editor-panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+}
+
+/* ── Room editor panel (floats over canvas) ── */
+#room-editor-panel {
+  position: fixed;
+  top: 60px;
+  left: 320px;
+  width: 240px;
+  z-index: 100;
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  #room-editor-panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 639px) {
+  #room-editor-panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    top: auto;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+}
+
+/* ── GDOP legend (floats over canvas) ── */
+#gdop-legend {
+  position: fixed;
+  bottom: 20px;
+  left: 320px;
+  z-index: 100;
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  #gdop-legend {
+    left: 8px;
+    bottom: calc(280px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 639px) {
+  #gdop-legend {
+    left: 8px;
+    bottom: calc(220px + env(safe-area-inset-bottom));
   }
 }

@@ -226,23 +226,20 @@
     padding: var(--space-3) var(--space-4);
 }
 
-/* ===== Scene Container (3D Canvas) ===== */
+/* ===== Scene Container (3D Canvas) — grid child =====
+   #scene-container lives inside .app-main (the grid main area).
+   It fills its parent via width/height: 100% instead of position:fixed. */
 #scene-container {
-    position: fixed;
-    top: 0;
-    left: 0;
     width: 100%;
-    /* Full viewport height by default */
-    height: 100vh;
-    /* Fallback for browsers that don't support viewport units */
     height: 100%;
+    touch-action: none;
     z-index: 1;
 }
 
 /* Canvas height adjustment when simple mode navigation is visible */
 body.simple-mode #scene-container {
     /* Simple mode has 56px bottom nav, subtract from viewport height */
-    height: calc(100vh - 56px);
+    height: calc(100% - 56px);
 }
 
 /* iOS Safari-specific handling for visual viewport */
@@ -260,10 +257,8 @@ body.simple-mode #scene-container {
 }
 
 /* iOS Safari orientation change handling */
-/* Prevent iOS Safari from scaling content on orientation change */
 @supports (-webkit-touch-callout: none) {
     body {
-        /* Prevent automatic text size adjustment on orientation change */
         -webkit-text-size-adjust: 100%;
     }
 }
@@ -273,38 +268,24 @@ body.simple-mode #scene-container {
     display: block;
     max-width: 100%;
     max-height: 100%;
-    /* Fix iOS Safari passive event listener warnings */
     touch-action: none;
 }
 
 /* Handle visual viewport resize events (iOS Safari keyboard, address bar) */
 .visual-viewport-resizing #scene-container {
-    /* Prevent layout shift during visual viewport changes */
     pointer-events: none;
 }
 
-/* ===== Status Bar ===== */
+/* ===== Status Bar — grid header via layout.css =====
+   When #status-bar is a direct child of .app-shell--live, it is the
+   grid header. Uses position:sticky to stay visible during scroll. */
 #status-bar {
-    position: fixed;
+    position: sticky;
     top: 0;
-    left: 0;
-    right: 0;
-    height: 40px;
-    background: var(--overlay-panel);
     z-index: 100;
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    border-bottom: 1px solid var(--bg-hover);
 }
 
-/* Adjust scene container when status bar is visible */
-#status-bar ~ #scene-container {
-    top: 40px;
-    height: calc(100vh - 40px);
-}
-
-/* Simple mode navigation bar adjustment */
+/* Simple mode navigation bar */
 body.simple-mode .simple-quick-actions {
     position: fixed;
     bottom: 0;
@@ -317,42 +298,20 @@ body.simple-mode .simple-quick-actions {
 /* Simple mode navigation bar safe area support */
 @supports (padding: max(0px)) {
     body.simple-mode .simple-quick-actions {
-        /* Add safe area inset for home indicator on iOS */
         padding-bottom: env(safe-area-inset-bottom);
         height: calc(56px + env(safe-area-inset-bottom));
     }
-
-    body.simple-mode #scene-container {
-        /* Adjust height calculation to account for safe area bottom */
-        height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
-        height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
-    }
 }
 
-/* ===== Mode Toggle Bar ===== */
+/* ===== Mode Toggle Bar — positioned below sticky status bar ===== */
 .mode-toggle-bar {
-    position: fixed;
-    top: 40px;
-    left: 0;
-    right: 0;
+    position: sticky;
+    top: 56px;
     height: 44px;
     z-index: 90;
 }
 
-/* Adjust scene container when mode toggle bar is visible */
-.mode-toggle-bar ~ #scene-container,
-body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
-    top: 84px; /* 40px status bar + 44px mode toggle bar */
-    height: calc(100vh - 84px);
-}
-
-/* Both status bar and mode toggle bar present */
-#status-bar .mode-toggle-bar ~ #scene-container {
-    top: 84px;
-    height: calc(100vh - 84px);
-}
-
-/* ===== Alert Banner ===== */
+/* ===== Alert Banner — full-width overlay ===== */
 #alert-banner {
     position: fixed;
     top: 0;
@@ -361,19 +320,12 @@ body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
     z-index: 5000;
 }
 
-/* Adjust scene container when alert banner is visible */
-#alert-banner.visible ~ #scene-container {
-    top: 60px; /* Approximate alert banner height */
-    height: calc(100vh - 60px);
-}
-
 /* ===== Orientation-specific adjustments ===== */
 
 /* Landscape orientation */
 @media screen and (orientation: landscape) {
     #scene-container {
-        /* In landscape, ensure full height is used */
-        height: 100vh;
+        height: 100%;
         height: 100dvh;
     }
 
@@ -381,24 +333,12 @@ body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
         height: calc(100vh - 56px);
         height: calc(100dvh - 56px);
     }
-
-    /* Adjust for landscape status bar */
-    #status-bar ~ #scene-container {
-        height: calc(100vh - 40px);
-        height: calc(100dvh - 40px);
-    }
-
-    /* Adjust for landscape mode toggle bar */
-    .mode-toggle-bar ~ #scene-container {
-        height: calc(100vh - 44px);
-        height: calc(100dvh - 44px);
-    }
 }
 
 /* Portrait orientation */
 @media screen and (orientation: portrait) {
     #scene-container {
-        height: 100vh;
+        height: 100%;
         height: 100dvh;
     }
 
@@ -413,7 +353,7 @@ body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
 /* Small mobile devices */
 @media screen and (max-width: 600px) {
     #scene-container {
-        height: 100vh;
+        height: 100%;
         height: 100dvh;
     }
 
@@ -421,19 +361,12 @@ body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
         height: calc(100vh - 56px);
         height: calc(100dvh - 56px);
     }
-
-    /* On small mobile, status bar and mode toggle may stack */
-    #status-bar ~ .mode-toggle-bar ~ #scene-container {
-        top: 84px;
-        height: calc(100vh - 84px);
-        height: calc(100dvh - 84px);
-    }
 }
 
 /* Tablets and larger */
 @media screen and (min-width: 601px) {
     #scene-container {
-        height: 100vh;
+        height: 100%;
         height: 100dvh;
     }
 }
@@ -441,26 +374,22 @@ body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
 /* ===== Safe area insets for notched devices ===== */
 @supports (padding: max(0px)) {
     body {
-        /* Add safe area insets to body for iOS Safari notch/home indicator */
         padding-top: env(safe-area-inset-top);
         padding-bottom: env(safe-area-inset-bottom);
     }
 
     #scene-container {
-        /* Use safe-area-inset for devices with notches (iPhone X+) */
         padding-left: env(safe-area-inset-left);
         padding-right: env(safe-area-inset-right);
     }
 
-    /* Adjust height calculation to account for safe areas */
     #scene-container {
-        height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom));
         height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     }
 
     body.simple-mode #scene-container {
-        /* Simple mode: also subtract bottom nav height */
-        height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
+        height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
         height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
     }
 }
@@ -468,7 +397,6 @@ body:not(.simple-mode) .mode-toggle-bar ~ #scene-container {
 /* ===== Prevent overscroll/bounce on iOS ===== */
 @supports (-webkit-touch-callout: none) {
     #scene-container {
-        /* Prevent rubber-band scrolling effect */
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: none;
     }
