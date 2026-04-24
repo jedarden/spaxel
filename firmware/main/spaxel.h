@@ -58,6 +58,7 @@ typedef enum {
 #define NVS_KEY_NODE_TOKEN "node_token"
 #define NVS_KEY_MS_MDNS "ms_mdns"
 #define NVS_KEY_MS_IP "ms_ip"
+#define NVS_KEY_MS_IP_PROV "ms_ip_prov"
 #define NVS_KEY_MS_PORT "ms_port"
 #define NVS_KEY_PASSIVE_BSS "passive_bss"
 #define NVS_KEY_ROLE "role"
@@ -79,6 +80,7 @@ typedef struct {
     char node_token[65];
     char ms_mdns[65];
     char ms_ip[47];
+    char ms_ip_prov[47];
     uint16_t ms_port;
     bool provisioned;
     bool debug;

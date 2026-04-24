@@ -151,6 +151,12 @@ esp_err_t provision_write_nvs(cJSON *prov) {
         nvs_set_str(nvs, NVS_KEY_MS_MDNS, mdns_name->valuestring);
     }
 
+    cJSON *ms_ip = cJSON_GetObjectItem(prov, "ms_ip");
+    if (ms_ip && cJSON_IsString(ms_ip) && strlen(ms_ip->valuestring) > 0) {
+        nvs_set_str(nvs, NVS_KEY_MS_IP, ms_ip->valuestring);
+        nvs_set_str(nvs, NVS_KEY_MS_IP_PROV, ms_ip->valuestring);
+    }
+
     cJSON *port = cJSON_GetObjectItem(prov, "ms_port");
     if (port && cJSON_IsNumber(port) && port->valueint > 0) {
         nvs_set_u16(nvs, NVS_KEY_MS_PORT, (uint16_t)port->valueint);

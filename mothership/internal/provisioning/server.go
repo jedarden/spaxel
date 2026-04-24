@@ -28,6 +28,7 @@ type Payload struct {
 	NodeID    string `json:"node_id"`
 	NodeToken string `json:"node_token"`
 	MsMDNS   string `json:"ms_mdns"`
+	MsIP     string `json:"ms_ip,omitempty"` // Direct IPv4 override for mDNS-less networks
 	MsPort    int    `json:"ms_port"`
 	NTPServer string `json:"ntp_server"`
 	Debug     bool   `json:"debug"`
@@ -38,6 +39,7 @@ type provisionRequest struct {
 	WifiSSID string `json:"wifi_ssid"`
 	WifiPass string `json:"wifi_pass"`
 	MAC      string `json:"mac,omitempty"` // optional; used to derive deterministic node_token
+	MsIP     string `json:"ms_ip,omitempty"`
 	Debug    bool   `json:"debug,omitempty"`
 }
 
@@ -185,6 +187,7 @@ func (s *Server) HandleProvision(w http.ResponseWriter, r *http.Request) {
 		NodeID:     nodeID,
 		NodeToken:  token,
 		MsMDNS:     s.mdnsName,
+		MsIP:       req.MsIP,
 		MsPort:     s.msPort,
 		NTPServer:  s.ntpServer,
 		Debug:      req.Debug,

@@ -50,6 +50,7 @@
         wifiPass: '',
         mothershipHost: '',
         mothershipPort: 8080,
+        mothershipIP: '',
         pollTimer: null,
         calibrateTimer: null,
         calibratePhase: 'idle',
@@ -72,6 +73,7 @@
                 wifiPass: state.wifiPass,
                 mothershipHost: state.mothershipHost,
                 mothershipPort: state.mothershipPort,
+                mothershipIP: state.mothershipIP,
             }));
         } catch (e) { /* ignore */ }
     }
@@ -635,7 +637,7 @@
                 var fetchPromise = fetch(CONFIG.provisioningEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass }),
+                    body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass, ms_ip: state.mothershipIP || '' }),
                 });
                 var timeoutPromise = new Promise(function (_, reject) {
                     setTimeout(function () { reject(new Error('timeout')); }, 5000);
@@ -645,6 +647,7 @@
                 payload = await resp.json();
                 if (msHost) payload.ms_mdns = msHost;
                 if (msPort) payload.ms_port = msPort;
+                if (state.mothershipIP) payload.ms_ip = state.mothershipIP;
                 provLog('log', 'Server payload: node_id=' + (payload.node_id || '(none)'));
             } catch (err) {
                 provLog('warn', 'Mothership unreachable (' + (err.message || err) + '), using client-side payload');
@@ -659,6 +662,7 @@
                     node_token: '',
                     ms_mdns: msHost || window.location.hostname,
                     ms_port: msPort,
+                    ms_ip: state.mothershipIP || '',
                     debug: false,
                 };
             }
@@ -676,6 +680,14 @@
     }
 
     function renderProvisionWifi(contentEl) {
+        // Auto-populate ms_ip if the browser is accessing the mothership by IP directly
+        if (!state.mothershipIP) {
+            var host = window.location.hostname;
+            if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
+                state.mothershipIP = host;
+            }
+        }
+
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
             '<h2>Configure WiFi</h2>' +
@@ -690,14 +702,19 @@
             '<input type="password" id="wifi-pass" placeholder="Password" value="' + escapeAttr(state.wifiPass) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
             '</div>' +
             '<details class="wizard-details">' +
-            '<summary>Advanced: Mothership Address</summary>' +
+            '<summary>Advanced: Network Troubleshooting</summary>' +
             '<div class="form-group" style="margin-top:8px">' +
-            '<label for="ms-host">Host <span class="wizard-muted">(leave blank to use ' + escapeAttr(window.location.hostname) + ')</span></label>' +
+            '<label for="ms-host">Mothership Host <span class="wizard-muted">(leave blank to use ' + escapeAttr(window.location.hostname) + ')</span></label>' +
             '<input type="text" id="ms-host" placeholder="' + escapeAttr(window.location.hostname) + '" value="' + escapeAttr(state.mothershipHost) + '" autocomplete="off">' +
             '</div>' +
             '<div class="form-group">' +
             '<label for="ms-port">Port</label>' +
             '<input type="number" id="ms-port" value="' + state.mothershipPort + '" min="1" max="65535">' +
+            '</div>' +
+            '<div class="form-group">' +
+            '<label for="ms-ip">Mothership IP <span class="wizard-muted">(for networks where mDNS is blocked)</span></label>' +
+            '<input type="text" id="ms-ip" placeholder="e.g. 192.168.1.100" value="' + escapeAttr(state.mothershipIP) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
+            '<p class="wizard-muted" style="font-size:11px;margin-top:4px">If your network blocks mDNS (enterprise WiFi, some mesh routers), enter the mothership\'s IP address here. Leave blank to use automatic discovery.</p>' +
             '</div>' +
             '</details>' +
             '<div id="provision-error" class="wizard-error" style="display:none"></div>' +
@@ -718,6 +735,7 @@
             state.wifiPass = document.getElementById('wifi-pass').value;
             state.mothershipHost = document.getElementById('ms-host').value.trim();
             state.mothershipPort = parseInt(document.getElementById('ms-port').value, 10) || 8080;
+            state.mothershipIP = document.getElementById('ms-ip').value.trim();
             saveState();
             goToStep(state.currentStepIndex + 1);
         });
@@ -736,7 +754,7 @@
         return fetch(CONFIG.provisioningEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass }),
+            body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass, ms_ip: state.mothershipIP || '' }),
         })
             .then(function (r) {
                 addProvLog('log', 'Mothership response: HTTP ' + r.status);
@@ -747,6 +765,7 @@
                 // Apply user overrides for mothership address
                 if (msHost) payload.ms_mdns = msHost;
                 if (msPort) payload.ms_port = msPort;
+                if (state.mothershipIP) payload.ms_ip = state.mothershipIP;
                 addProvLog('log', 'Payload ready — node_id=' + (payload.node_id || '(none)') + ' ms_mdns=' + (payload.ms_mdns || '(none)'));
                 setProvStatus('Sending configuration to device...');
                 return sendPayloadOverSerial(payload, addProvLog, setProvStatus);
@@ -767,6 +786,7 @@
                     node_token: '',
                     ms_mdns: msHost || window.location.hostname,
                     ms_port: msPort,
+                    ms_ip: state.mothershipIP || '',
                     debug: false,
                 };
                 addProvLog('log', 'Fallback payload — node_id=' + payload.node_id);
@@ -1466,6 +1486,7 @@
             state.wifiPass = saved.wifiPass || '';
             state.mothershipHost = saved.mothershipHost || '';
             state.mothershipPort = saved.mothershipPort || 8080;
+            state.mothershipIP = saved.mothershipIP || '';
             // After a page reload the serial port reference is gone. If we were at the
             // flash step or beyond, drop back to connect so the user can re-select their
             // device rather than landing on a broken flash screen.
