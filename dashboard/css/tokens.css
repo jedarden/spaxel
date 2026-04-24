@@ -81,11 +81,19 @@
   --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
 
+  --text-3xs:  10px;
+  --text-2xs:  11px;
   --text-xs:   12px;
   --text-sm:   14px;
   --text-base: 16px;
+  --text-md:   15px;
   --text-lg:   20px;
+  --text-xl:   18px;
   --text-2xl:  28px;
+  --text-3xl:  24px;
+  --text-4xl:  32px;
+  --text-5xl:  48px;
+  --text-6xl:  64px;
 
   --lh-body:    1.5;
   --lh-heading: 1.2;
@@ -108,6 +116,7 @@
   --radius-control: 6px;
   --radius-card:    10px;
   --radius-modal:   16px;
+  --radius-pill:    9999px;
 
   /* ── Shadows (flat elevation, no drop shadows per §8e) ── */
   --shadow:     0 2px 8px rgba(0, 0, 0, 0.3);
@@ -174,4 +183,18 @@
 
   /* ── Green glow dot ── */
   --ok-glow:           rgba(70, 167, 88, 0.5);
+
+  /* ── Letter-spacing ── */
+  --ls-wide: 1px;
+
+  /* ── Component sizes ── */
+  --size-icon-sm:   16px;
+  --size-icon:      18px;
+  --size-icon-md:   20px;
+  --size-icon-lg:   24px;
+  --size-icon-xl:   28px;
+  --size-icon-2xl:  32px;
+  --size-touch:     44px;
+  --size-header:    56px;
+  --size-sidebar:   360px;
 }

@@ -107,7 +107,7 @@
 .btn-icon {
 	background: none;
 	border: none;
-	font-size: 18px;
+	font-size: var(--text-xl);
 	cursor: pointer;
 	padding: 5px;
 	opacity: 0.7;
@@ -342,7 +342,7 @@
 	background: none;
 	border: none;
 	color: var(--text-muted);
-	font-size: 24px;
+	font-size: var(--text-3xl);
 	cursor: pointer;
 	padding: 5px;
 	line-height: 1;

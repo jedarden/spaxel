@@ -52,7 +52,7 @@
     background: none;
     border: none;
     color: var(--text-muted, var(--text-muted));
-    font-size: 18px;
+    font-size: var(--text-xl);
     cursor: pointer;
     padding: 2px 6px;
     line-height: 1;
@@ -71,13 +71,13 @@
 }
 
 .sleep-summary-body > div {
-    font-size: 13px;
+    font-size: var(--text-sm);
     line-height: var(--lh-body);
 }
 
 .sleep-summary-duration {
     font-weight: 600;
-    font-size: 18px;
+    font-size: var(--text-xl);
     margin-bottom: var(--space-1);
 }
 
@@ -186,7 +186,7 @@
 }
 
 .sleep-panel-section h4 {
-    font-size: 13px;
+    font-size: var(--text-sm);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -260,7 +260,7 @@
 
 .sleep-stat-label {
     display: block;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     color: var(--text-muted, var(--text-muted));
     margin-bottom: var(--space-1);
 }
@@ -287,7 +287,7 @@
     padding: var(--space-2) 10px;
     background: var(--bg-card, var(--bg-card));
     border-radius: var(--radius-control);
-    font-size: 13px;
+    font-size: var(--text-sm);
 }
 
 .sleep-history-date {
@@ -308,6 +308,6 @@
 .sleep-history-empty {
     text-align: center;
     color: var(--text-muted, var(--text-muted));
-    font-size: 13px;
+    font-size: var(--text-sm);
     padding: 24px 0;
 }

@@ -114,7 +114,7 @@
     min-height: 44px;
     width: 44px;
     height: 44px;
-    font-size: 24px;
+    font-size: var(--text-3xl);
     line-height: 44px;
     padding: 0;
 }
@@ -130,7 +130,7 @@
 .link-item {
     min-height: 44px;
     padding: var(--space-3) var(--space-4);
-    font-size: 13px;
+    font-size: var(--text-sm);
 }
 
 /* Ensure all buttons meet 44x44px minimum */
@@ -184,7 +184,7 @@
     min-height: 44px;
     width: 44px;
     height: 44px;
-    font-size: 18px;
+    font-size: var(--text-xl);
 }
 
 /* Mode toggle buttons */
