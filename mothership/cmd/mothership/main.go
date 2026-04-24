@@ -3864,6 +3864,7 @@ func main() {
 	}
 	provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort, cfg.NTPServer, cfg.InstallSecret)
 	r.Post("/api/provision", provSrv.HandleProvision)
+	ingestSrv.SetTokenValidator(provSrv.ValidateToken)
 
 	// Firmware manifest for esp-web-tools (onboarding wizard flashing)
 	r.Get("/api/firmware/manifest", func(w http.ResponseWriter, r *http.Request) {

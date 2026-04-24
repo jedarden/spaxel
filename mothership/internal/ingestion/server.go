@@ -260,6 +260,14 @@ func (s *Server) SetAPDetector(detector *apdetector.Detector) {
 	s.mu.Unlock()
 }
 
+// SetTokenValidator sets the function used to validate node tokens in hello messages.
+// If set, nodes with missing or invalid tokens are rejected via sendReject and disconnected.
+func (s *Server) SetTokenValidator(fn func(mac, token string) bool) {
+	s.mu.Lock()
+	s.tokenValidator = fn
+	s.mu.Unlock()
+}
+
 // SetShedder sets the load shedder for frame dropping and replay write control.
 // This also wires the IngestChannelFull callback to check the frame gauge.
 func (s *Server) SetShedder(sh *loadshed.Shedder) {
@@ -435,6 +443,25 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 
 	nc.MAC = hello.MAC
 	nc.Hello = hello
+
+	// Token validation: if a validator is configured, reject unauthenticated nodes.
+	s.mu.RLock()
+	validator := s.tokenValidator
+	s.mu.RUnlock()
+	if validator != nil {
+		if hello.Token == "" {
+			log.Printf("[WARN] Node %s rejected: missing token", hello.MAC)
+			s.sendReject(conn, "invalid_token")
+			conn.Close()
+			return
+		}
+		if !validator(hello.MAC, hello.Token) {
+			log.Printf("[WARN] Node %s rejected: invalid token", hello.MAC)
+			s.sendReject(conn, "invalid_token")
+			conn.Close()
+			return
+		}
+	}
 
 	s.mu.Lock()
 	if existing, exists := s.connections[hello.MAC]; exists {
