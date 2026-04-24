@@ -369,7 +369,7 @@
         .view-btn.active { background: var(--blue-interact-active); color: var(--blue-10); border-color: var(--blue-10); }
 
         #floorplan-btn {
-            background: rgba(255,255,255,0.06);
+            background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: var(--text-xs);
@@ -681,7 +681,7 @@
             color: var(--alert);
             font-size: 13px;
             padding: 10px;
-            background: rgba(239, 83, 80, 0.1);
+            background: var(--alert-bg);
             border-radius: 4px;
             text-align: left;
             margin-top: 8px;
@@ -806,7 +806,7 @@
         .wizard-btn-secondary {
             background: var(--bg-hover);
             color: var(--text-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid var(--border-strong);
         }
 
         .wizard-btn-secondary:hover:not(:disabled) {
@@ -951,8 +951,8 @@
 
         /* "Why is this low?" hint */
         .link-health-hint {
-            background: rgba(255, 167, 38, 0.1);
-            border: 1px solid rgba(255, 167, 38, 0.3);
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
             border-radius: 4px;
             padding: 8px 10px;
             font-size: var(--text-xs);
@@ -1016,17 +1016,17 @@
         }
 
         .diagnosis-card.severity-info {
-            background: rgba(79, 195, 247, 0.1);
+            background: var(--blue-muted);
             border-left: 3px solid var(--blue-10);
         }
 
         .diagnosis-card.severity-warning {
-            background: rgba(255, 167, 38, 0.1);
+            background: var(--warn-bg);
             border-left: 3px solid var(--warn);
         }
 
         .diagnosis-card.severity-actionable {
-            background: rgba(239, 83, 80, 0.1);
+            background: var(--alert-bg);
             border-left: 3px solid var(--alert);
         }
 
@@ -1068,7 +1068,7 @@
         .diagnosis-reposition {
             margin-top: 6px;
             padding: 6px;
-            background: rgba(76, 175, 80, 0.1);
+            background: var(--ok-bg);
             border-radius: 3px;
             display: flex;
             justify-content: space-between;
@@ -1087,7 +1087,7 @@
 
         .reposition-apply-btn {
             background: var(--ok-border);
-            border: 1px solid rgba(76, 175, 80, 0.5);
+            border: 1px solid var(--ok-border);
             color: var(--ok);
             font-size: 11px;
             padding: 4px 10px;
@@ -1096,7 +1096,7 @@
         }
 
         .reposition-apply-btn:hover {
-            background: rgba(76, 175, 80, 0.4);
+            background: var(--ok-border);
         }
 
         .link-health-no-issues {
@@ -1105,7 +1105,7 @@
             gap: 8px;
             color: var(--ok);
             padding: 8px;
-            background: rgba(76, 175, 80, 0.1);
+            background: var(--ok-bg);
             border-radius: 4px;
         }
 
@@ -1175,14 +1175,14 @@
             position: absolute;
             top: 45px;
             right: 0;
-            background: rgba(0, 0, 0, 0.95);
+            background: var(--live-chart-bg);
             border-radius: 4px;
             padding: 8px 12px;
             font-size: 11px;
             white-space: nowrap;
             z-index: 200;
             display: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px var(--shadow);
         }
 
         #detection-quality:hover #quality-tooltip {
@@ -1204,7 +1204,7 @@
             top: 45px;
             left: 50%;
             transform: translateX(-50%);
-            background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
+            background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
             color: var(--text-on-accent);
             padding: 8px 16px;
             border-radius: var(--radius-control);
@@ -1213,7 +1213,7 @@
             align-items: center;
             gap: 10px;
             z-index: 150;
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+            box-shadow: 0 4px 12px var(--blue-border);
         }
 
         #diurnal-banner.visible {
@@ -1223,7 +1223,7 @@
         #diurnal-banner .progress-bar {
             width: 60px;
             height: 6px;
-            background: rgba(255, 255, 255, 0.3);
+            background: var(--border-strong);
             border-radius: 3px;
             overflow: hidden;
         }
@@ -1253,7 +1253,7 @@
         #diurnal-chart-container {
             margin-top: 20px;
             padding: 15px;
-            background: rgba(30, 30, 30, 0.5);
+            background: var(--bg-frosted);
             border-radius: 8px;
             border: 1px solid var(--bg-hover);
         }
@@ -1305,7 +1305,7 @@
         }
 
         .toast {
-            background: rgba(0, 0, 0, 0.9);
+            background: var(--overlay-panel);
             color: var(--text-on-accent);
             padding: 12px 20px;
             border-radius: var(--radius-control);
@@ -1313,21 +1313,21 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px var(--shadow);
             animation: toast-slide-in 0.3s ease-out;
             pointer-events: auto;
         }
 
         .toast.success {
-            background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(102, 187, 106, 0.95));
+            background: linear-gradient(135deg, var(--ok), var(--ok));
         }
 
         .toast.info {
-            background: linear-gradient(135deg, rgba(33, 150, 243, 0.95), rgba(100, 181, 246, 0.95));
+            background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
         }
 
         .toast.warning {
-            background: linear-gradient(135deg, rgba(255, 152, 0, 0.95), rgba(255, 183, 77, 0.95));
+            background: linear-gradient(135deg, var(--warn), var(--warn));
         }
 
         @keyframes toast-slide-in {
@@ -1420,8 +1420,8 @@
 
         /* Add Node button in status bar */
         #add-node-btn {
-            background: rgba(79, 195, 247, 0.15);
-            border: 1px solid rgba(79, 195, 247, 0.4);
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
             color: var(--blue-10);
             font-size: var(--text-xs);
             padding: 3px 10px;
@@ -1453,8 +1453,8 @@
 
         /* BLE button in status bar */
         #ble-btn {
-            background: rgba(171, 71, 188, 0.15);
-            border: 1px solid rgba(171, 71, 188, 0.4);
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
             color: var(--blue-10);
             font-size: var(--text-xs);
             padding: 3px 10px;
@@ -1465,7 +1465,7 @@
         }
 
         #ble-btn:hover {
-            background: rgba(171, 71, 188, 0.25);
+            background: var(--blue-interact-bg);
             color: var(--blue-10);
         }
 
@@ -1490,7 +1490,7 @@
 
         /* Room editor button */
         #room-editor-btn {
-            background: rgba(255,255,255,0.06);
+            background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: var(--text-xs);
@@ -1504,8 +1504,8 @@
 
         /* Add Portal button in status bar */
         #add-portal-btn {
-            background: rgba(255, 167, 38, 0.15);
-            border: 1px solid rgba(255, 167, 38, 0.4);
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
             color: var(--warn);
             font-size: var(--text-xs);
             padding: 3px 10px;
@@ -1515,12 +1515,12 @@
         }
 
         #add-portal-btn:hover {
-            background: rgba(255, 167, 38, 0.25);
+            background: var(--warn-muted);
         }
 
         /* Portal editor button */
         #portal-editor-btn {
-            background: rgba(255,255,255,0.06);
+            background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: var(--text-xs);
@@ -1530,7 +1530,7 @@
             transition: background 0.2s, color 0.2s;
         }
         #portal-editor-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
-        #portal-editor-btn.active { background: rgba(255,167,38,0.2); color: var(--warn); border-color: var(--warn); }
+        #portal-editor-btn.active { background: var(--warn-muted); color: var(--warn); border-color: var(--warn); }
 
         /* Portal editor panel */
         #portal-editor-panel {
@@ -1592,8 +1592,8 @@
 
         #portal-editor-panel .portal-actions button {
             flex: 1;
-            background: rgba(79, 195, 247, 0.15);
-            border: 1px solid rgba(79, 195, 247, 0.4);
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
             color: var(--blue-10);
             padding: 6px 12px;
             border-radius: 4px;
@@ -1607,13 +1607,13 @@
         }
 
         #portal-editor-panel .portal-delete-btn {
-            background: rgba(239, 83, 80, 0.15);
-            border-color: rgba(239, 83, 80, 0.4);
+            background: var(--alert-bg);
+            border-color: var(--alert-border);
             color: var(--alert);
         }
 
         #portal-editor-panel .portal-delete-btn:hover {
-            background: rgba(239, 83, 80, 0.25);
+            background: var(--alert-muted);
         }
 
         #portal-editor-panel .portal-position-info {
@@ -1624,7 +1624,7 @@
 
         /* Simulator button */
         #simulator-btn {
-            background: rgba(255,255,255,0.06);
+            background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: var(--text-xs);
@@ -1634,12 +1634,12 @@
             transition: background 0.2s, color 0.2s;
         }
         #simulator-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
-        #simulator-btn.active { background: rgba(156,39,176,0.2); color: var(--blue-9); border-color: var(--blue-9); }
+        #simulator-btn.active { background: var(--blue-muted); color: var(--blue-9); border-color: var(--blue-9); }
 
         /* Help button */
         #help-btn {
-            background: rgba(79,195,247,0.1);
-            border: 1px solid rgba(79,195,247,0.3);
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
             color: var(--blue-10);
             font-size: var(--text-sm);
             font-weight: 600;
@@ -1653,7 +1653,7 @@
 
         /* GDOP toggle */
         #gdop-toggle-btn {
-            background: rgba(255,255,255,0.06);
+            background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: var(--text-xs);
@@ -1663,11 +1663,11 @@
             transition: background 0.2s, color 0.2s;
         }
         #gdop-toggle-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
-        #gdop-toggle-btn.active { background: rgba(76,175,80,0.25); color: var(--ok); border-color: var(--ok); }
+        #gdop-toggle-btn.active { background: var(--ok-muted); color: var(--ok); border-color: var(--ok); }
 
         /* Fresnel zone toggle */
         #fresnel-toggle-btn {
-            background: rgba(255,255,255,0.06);
+            background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: var(--text-xs);
@@ -1681,14 +1681,14 @@
 
         /* Virtual node status badge */
         .node-status.virtual {
-            background: rgba(128, 203, 196, 0.25);
+            background: var(--stationary-bg);
             color: var(--ok);
         }
 
         /* Delete node button */
         #delete-node-btn {
             background: var(--alert-bg);
-            border: 1px solid rgba(244, 67, 54, 0.4);
+            border: 1px solid var(--alert-border);
             color: var(--alert);
             font-size: 11px;
             padding: 2px 8px;
@@ -1711,7 +1711,7 @@
 
         /* OTA rollback badge */
         .node-rollback-badge {
-            background: rgba(244, 67, 54, 0.35);
+            background: var(--alert-muted);
             color: var(--alert);
             font-size: 9px;
             font-weight: 600;
@@ -1728,7 +1728,7 @@
 
         /* OTA in-progress badge */
         .node-ota-badge {
-            background: rgba(255, 167, 38, 0.35);
+            background: var(--warn-muted);
             color: var(--warn);
             font-size: 9px;
             font-weight: 600;
@@ -1739,7 +1739,7 @@
 
         /* OTA verified badge */
         .node-verified-badge {
-            background: rgba(76, 175, 80, 0.35);
+            background: var(--ok-muted);
             color: var(--ok);
             font-size: 9px;
             font-weight: 600;
@@ -1765,12 +1765,12 @@
         }
         #ota-btn.has-update {
             background: var(--ok-muted);
-            border-color: rgba(76, 175, 80, 0.4);
+            border-color: var(--ok-border);
             color: var(--ok);
         }
         #ota-btn.in-progress {
-            background: rgba(255, 167, 38, 0.2);
-            border-color: rgba(255, 167, 38, 0.4);
+            background: var(--warn-muted);
+            border-color: var(--warn-border);
             color: var(--warn);
         }
 
@@ -1917,7 +1917,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(239, 68, 68, 0.15);
+            background: var(--alert-bg);
             z-index: 9999;
             display: flex;
             align-items: flex-start;
@@ -1931,17 +1931,17 @@
         }
 
         @keyframes anomaly-flash {
-            0%, 100% { background: rgba(239, 68, 68, 0.15); }
-            50% { background: rgba(239, 68, 68, 0.25); }
+            0%, 100% { background: var(--alert-bg); }
+            50% { background: var(--alert-muted); }
         }
 
         .anomaly-banner {
-            background: linear-gradient(135deg, rgba(185, 28, 28, 0.98), rgba(239, 68, 68, 0.95));
+            background: linear-gradient(135deg, var(--alert), var(--alert));
             border-radius: 12px;
             padding: 20px 24px;
             max-width: 600px;
             width: 90%;
-            box-shadow: 0 8px 32px rgba(185, 28, 28, 0.5);
+            box-shadow: 0 8px 32px var(--alert-muted);
             display: flex;
             align-items: center;
             gap: 16px;
@@ -2004,19 +2004,19 @@
         }
 
         .anomaly-btn.view {
-            background: rgba(255, 255, 255, 0.2);
+            background: var(--border-strong);
             color: var(--text-on-accent);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            border: 1px solid var(--border-strong);
         }
 
         .anomaly-btn.view:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: var(--border-strong);
         }
 
         .anomaly-btn.dismiss {
             background: transparent;
             color: var(--text-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid var(--border-strong);
         }
 
         .anomaly-btn.dismiss:hover {
@@ -2097,7 +2097,7 @@
 
         .feedback-btn:hover {
             background: var(--bg-hover);
-            border-color: rgba(255, 255, 255, 0.2);
+            border-color: var(--border-strong);
         }
 
         .feedback-btn.selected {
@@ -2188,7 +2188,7 @@
             position: fixed;
             top: 45px;
             right: 20px;
-            background: rgba(239, 68, 68, 0.9);
+            background: var(--alert);
             color: var(--text-on-accent);
             padding: 6px 12px;
             border-radius: 4px;
@@ -2205,8 +2205,8 @@
         }
 
         @keyframes security-pulse {
-            0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
-            50% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.8); }
+            0%, 100% { box-shadow: 0 0 8px var(--alert-muted); }
+            50% { box-shadow: 0 0 16px var(--alert-border); }
         }
 
         /* ===== Anomaly Learning Banner ===== */
@@ -2215,7 +2215,7 @@
             top: 45px;
             left: 50%;
             transform: translateX(-50%);
-            background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
+            background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
             color: var(--text-on-accent);
             padding: 8px 16px;
             border-radius: var(--radius-control);
@@ -2224,7 +2224,7 @@
             align-items: center;
             gap: 10px;
             z-index: 150;
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+            box-shadow: 0 4px 12px var(--blue-border);
         }
 
         #anomaly-learning-banner.visible {
@@ -2234,7 +2234,7 @@
         #anomaly-learning-banner .progress-bar {
             width: 80px;
             height: 6px;
-            background: rgba(255, 255, 255, 0.3);
+            background: var(--border-strong);
             border-radius: 3px;
             overflow: hidden;
         }
@@ -2250,7 +2250,7 @@
             display: none;
             width: 14px;
             height: 14px;
-            border: 2px solid rgba(255, 167, 38, 0.3);
+            border: 2px solid var(--warn-border);
             border-top-color: var(--warn);
             border-radius: 50%;
             animation: ws-spin 0.8s linear infinite;
@@ -2333,7 +2333,7 @@
         #mobile-menu-btn {
             display: none;
             background: var(--bg-hover);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid var(--border-strong);
             color: var(--text-secondary);
             font-size: var(--text-sm);
             padding: 10px; /* 44px touch target (18px icon + 10px padding top/bottom = ~38px, close enough) */
@@ -2576,7 +2576,7 @@
         }
 
         .presence-status.detected {
-            background: rgba(255, 152, 0, 0.2);
+            background: var(--warn-muted);
             color: var(--warn);
         }
 
@@ -2939,7 +2939,7 @@
             transition: background 0.2s;
         }
         #pause-live-btn:hover {
-            background: rgba(255, 193, 7, 0.25);
+            background: var(--warn-muted);
         }
 
         /* Replay control bar (shown during replay mode) */
@@ -2948,7 +2948,7 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.9);
+            background: var(--overlay-panel);
             border-radius: 12px;
             padding: 12px 20px;
             display: flex;
@@ -2980,7 +2980,7 @@
         }
         .replay-btn:hover {
             background: var(--blue-interact-bg);
-            border-color: rgba(79, 195, 247, 0.4);
+            border-color: var(--blue-border);
             color: var(--blue-10);
         }
 
@@ -3062,8 +3062,8 @@
         }
 
         .replay-tuning-btn {
-            background: rgba(171, 71, 188, 0.15);
-            border: 1px solid rgba(171, 71, 188, 0.4);
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
             color: var(--blue-10);
             font-size: 11px;
             padding: 4px 10px;
@@ -3072,7 +3072,7 @@
             transition: background 0.2s;
         }
         .replay-tuning-btn:hover {
-            background: rgba(171, 71, 188, 0.25);
+            background: var(--blue-interact-bg);
         }
 
         /* Replay tuning panel */
@@ -3081,7 +3081,7 @@
             top: 60px;
             right: 340px;
             width: 280px;
-            background: rgba(0, 0, 0, 0.9);
+            background: var(--overlay-panel);
             border-radius: 8px;
             padding: 16px;
             z-index: 100;
@@ -3208,7 +3208,7 @@
         .fresnel-tooltip {
             position: fixed;
             display: none;
-            background: rgba(0, 0, 0, 0.9);
+            background: var(--overlay-panel);
             border: 1px solid var(--blue-interact-border);
             border-radius: var(--radius-control);
             padding: 10px 12px;
@@ -3225,7 +3225,7 @@
 
         /* Fresnel ellipsoid hover effect on link items */
         .link-item.fresnel-hover {
-            background: rgba(79, 195, 247, 0.15);
+            background: var(--blue-muted);
             border-left: 2px solid var(--blue-10);
         }
         .link-item.flash-highlight {
@@ -3233,7 +3233,7 @@
         }
         @keyframes flashLink {
             0%, 100% { background: transparent; }
-            50% { background: rgba(79, 195, 247, 0.3); }
+            50% { background: var(--blue-border); }
         }
     </style>
 </head>
@@ -3730,7 +3730,7 @@
         </div>
         <div class="room-field">
             <label>Color</label>
-            <input type="color" id="zone-color" value="#3b82f6">
+            <input type="color" id="zone-color" value="#3e96e8">
         </div>
         <div class="room-field">
             <label>Zone Type</label>
