@@ -2,8 +2,8 @@
 
 .notification-settings {
 	max-width: 800px;
-	margin: 0 auto;
-	padding: 20px;
+	margin: 0;
+	padding: var(--space-5);
 }
 
 .notification-settings h2 {
@@ -14,7 +14,7 @@
 .settings-section {
 	background: var(--bg-card);
 	border-radius: var(--radius-card);
-	padding: 20px;
+	padding: var(--space-5);
 	margin-bottom: 30px;
 }
 
@@ -27,14 +27,14 @@
 .section-desc {
 	color: var(--text-secondary);
 	font-size: 0.9em;
-	margin-bottom: 20px;
+	margin-bottom: var(--space-5);
 }
 
 /* Channel Cards */
 .channels-list {
 	display: grid;
 	gap: 15px;
-	margin-bottom: 20px;
+	margin-bottom: var(--space-5);
 }
 
 .channel-card {
@@ -75,7 +75,7 @@
 
 /* Buttons */
 .btn {
-	padding: 10px 20px;
+	padding: 10px var(--space-5);
 	border: none;
 	border-radius: var(--radius-control);
 	font-size: var(--text-sm);
@@ -83,7 +83,7 @@
 	transition: all 0.2s;
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--space-2);
 }
 
 .btn-primary {
@@ -122,7 +122,7 @@
 .quiet-hours-config {
 	display: flex;
 	flex-direction: column;
-	gap: 20px;
+	gap: var(--space-5);
 }
 
 .checkbox-label {
@@ -141,7 +141,7 @@
 
 .time-range {
 	display: flex;
-	gap: 20px;
+	gap: var(--space-5);
 }
 
 .time-field {
@@ -156,7 +156,7 @@
 }
 
 .time-field input {
-	padding: 8px 12px;
+	padding: var(--space-2) var(--space-3);
 	background: var(--bg-hover);
 	border: 1px solid var(--slate-5);
 	border-radius: var(--radius-control);
@@ -212,7 +212,7 @@
 
 .batch-window input,
 .max-batch-size input {
-	padding: 8px 12px;
+	padding: var(--space-2) var(--space-3);
 	background: var(--bg-hover);
 	border: 1px solid var(--slate-5);
 	border-radius: var(--radius-control);
@@ -225,7 +225,7 @@
 .event-types {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
+	gap: var(--space-3);
 }
 
 .event-type-toggle {
@@ -329,7 +329,7 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 20px;
+	padding: var(--space-5);
 	border-bottom: 1px solid var(--slate-5);
 }
 
@@ -353,25 +353,25 @@
 }
 
 .modal-body {
-	padding: 20px;
+	padding: var(--space-5);
 }
 
 /* Form Styles */
 .form-group {
-	margin-bottom: 20px;
+	margin-bottom: var(--space-5);
 }
 
 .form-group label {
 	display: block;
 	color: var(--text-secondary);
 	font-size: 0.9em;
-	margin-bottom: 8px;
+	margin-bottom: var(--space-2);
 }
 
 .form-group input,
 .form-group select {
 	width: 100%;
-	padding: 10px 12px;
+	padding: 10px var(--space-3);
 	background: var(--bg-hover);
 	border: 1px solid var(--slate-5);
 	border-radius: var(--radius-control);
@@ -390,7 +390,7 @@
 }
 
 .event-types-selector {
-	margin-top: 20px;
+	margin-top: var(--space-5);
 }
 
 .event-types-selector label {
@@ -410,7 +410,7 @@
 	display: flex;
 	gap: 10px;
 	justify-content: flex-end;
-	margin-top: 20px;
+	margin-top: var(--space-5);
 }
 
 /* Toast Notifications */
@@ -418,7 +418,7 @@
 	position: fixed;
 	bottom: 20px;
 	right: 20px;
-	padding: 15px 20px;
+	padding: 15px var(--space-5);
 	border-radius: var(--radius-card);
 	color: var(--text-on-accent);
 	font-size: var(--text-sm);
@@ -459,7 +459,7 @@
 .empty-state {
 	text-align: center;
 	color: var(--text-muted);
-	padding: 40px 20px;
+	padding: var(--space-10) var(--space-5);
 	font-style: italic;
 }
 
@@ -494,14 +494,14 @@
 /* Settings Tabs */
 .settings-tabs {
     display: flex;
-    gap: 4px;
-    margin-bottom: 20px;
+    gap: var(--space-1);
+    margin-bottom: var(--space-5);
     border-bottom: 1px solid var(--slate-5);
 }
 
 .settings-tab {
     flex: 1;
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     background: transparent;
     border: none;
     color: var(--text-muted);
@@ -524,7 +524,7 @@
 /* Panel-specific notification settings styles */
 .panel-select {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px var(--space-3);
     background: var(--bg-hover);
     border: 1px solid var(--slate-5);
     border-radius: var(--radius-control);
@@ -534,7 +534,7 @@
 
 .panel-input {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px var(--space-3);
     background: var(--bg-hover);
     border: 1px solid var(--slate-5);
     border-radius: var(--radius-control);
@@ -550,7 +550,7 @@
 }
 
 .channel-config-group {
-    margin-bottom: 20px;
+    margin-bottom: var(--space-5);
     padding: 15px;
     background: var(--bg-hover);
     border-radius: var(--radius-control);
@@ -558,7 +558,7 @@
 
 .panel-time-range {
     display: flex;
-    gap: 20px;
+    gap: var(--space-5);
 }
 
 .panel-time-field {
@@ -569,7 +569,7 @@
     display: block;
     color: var(--text-secondary);
     font-size: 0.9em;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .panel-days-selector {
@@ -667,11 +667,11 @@
     color: var(--text-muted);
     font-size: 0.85em;
     margin-top: -8px;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .event-type-toggles {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
 }

@@ -9,7 +9,7 @@
 	max-width: 600px;
 	background: var(--bg-frosted);
 	border-radius: var(--radius-card);
-	padding: 24px;
+	padding: var(--space-6);
 	z-index: 200;
 	box-shadow: 0 8px 32px var(--shadow-xl);
 	border: 1px solid var(--border-default);
@@ -27,7 +27,7 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 16px;
+	margin-bottom: var(--space-4);
 }
 
 #briefing-card .briefing-title {
@@ -47,7 +47,7 @@
 	color: var(--text-muted);
 	font-size: var(--text-lg);
 	cursor: pointer;
-	padding: 4px 8px;
+	padding: var(--space-1) var(--space-2);
 	transition: color 0.2s;
 }
 
@@ -63,8 +63,8 @@
 }
 
 #briefing-card .briefing-section {
-	margin-bottom: 16px;
-	padding: 12px;
+	margin-bottom: var(--space-4);
+	padding: var(--space-3);
 	border-radius: var(--radius-card);
 	background: var(--border-subtle);
 }
@@ -106,13 +106,13 @@
 
 #briefing-card .briefing-actions {
 	display: flex;
-	gap: 12px;
-	margin-top: 16px;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
 }
 
 #briefing-card .briefing-btn {
 	flex: 1;
-	padding: 10px 16px;
+	padding: 10px var(--space-4);
 	border: none;
 	border-radius: var(--radius-control);
 	font-size: var(--text-sm);
@@ -141,7 +141,7 @@
 
 #briefing-card .briefing-loading {
 	text-align: center;
-	padding: 20px;
+	padding: var(--space-5);
 	color: var(--text-muted);
 }
 
@@ -223,7 +223,7 @@
 	transform: translate(-50%, -50%);
 	background: var(--bg-frosted-strong);
 	border-radius: var(--radius-card);
-	padding: 24px;
+	padding: var(--space-6);
 	z-index: 300;
 	min-width: 400px;
 	box-shadow: 0 8px 32px var(--shadow-xl);
@@ -238,14 +238,14 @@
 #briefing-settings h3 {
 	font-size: 18px;
 	color: var(--blue-10);
-	margin-bottom: 20px;
+	margin-bottom: var(--space-5);
 }
 
 #briefing-settings .setting-row {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 16px;
+	margin-bottom: var(--space-4);
 }
 
 #briefing-settings .setting-label {
@@ -254,7 +254,7 @@
 }
 
 #briefing-settings .setting-input {
-	padding: 8px 12px;
+	padding: var(--space-2) var(--space-3);
 	border-radius: var(--radius-control);
 	border: 1px solid var(--border-strong);
 	background: var(--border-subtle);
@@ -294,6 +294,6 @@
 
 #briefing-settings .settings-actions {
 	display: flex;
-	gap: 12px;
-	margin-top: 24px;
+	gap: var(--space-3);
+	margin-top: var(--space-6);
 }

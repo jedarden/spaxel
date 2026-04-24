@@ -45,7 +45,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
+    padding: var(--space-4);
     border-bottom: 1px solid var(--slate-5);
     background: var(--bg-page);
     position: sticky;
@@ -65,7 +65,7 @@
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    padding: 4px;
+    padding: var(--space-1);
     border-radius: var(--radius-control);
     display: flex;
     align-items: center;
@@ -82,7 +82,7 @@
    Simulator Sections
    ============================================ */
 .sim-section {
-    padding: 16px;
+    padding: var(--space-4);
     border-bottom: 1px solid var(--bg-hover);
 }
 
@@ -91,7 +91,7 @@
 }
 
 .sim-section h3 {
-    margin: 0 0 12px 0;
+    margin: var(--space-3);
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text-secondary);
@@ -105,21 +105,21 @@
 .sim-space-controls {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
 }
 
 .sim-space-controls label {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
     font-size: 13px;
     color: var(--slate-11);
 }
 
 .sim-space-controls input[type="number"] {
     width: 60px;
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
     background: var(--bg-hover);
     border: 1px solid var(--slate-6);
     border-radius: var(--radius-control);
@@ -137,15 +137,15 @@
    ============================================ */
 .sim-tools {
     display: flex;
-    gap: 4px;
-    margin-bottom: 12px;
+    gap: var(--space-1);
+    margin-bottom: var(--space-3);
 }
 
 .sim-tool-btn {
     background: var(--bg-hover);
     border: 1px solid var(--slate-6);
     border-radius: var(--radius-control);
-    padding: 8px;
+    padding: var(--space-2);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -177,7 +177,7 @@
    Buttons
    ============================================ */
 .sim-btn {
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
     background: var(--bg-hover);
     border: 1px solid var(--slate-6);
     border-radius: var(--radius-control);
@@ -231,17 +231,17 @@
 .sim-items-list {
     max-height: 200px;
     overflow-y: auto;
-    margin-top: 12px;
+    margin-top: var(--space-3);
 }
 
 .sim-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px;
+    padding: var(--space-2);
     background: var(--bg-hover);
     border-radius: var(--radius-control);
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .sim-item-name {
@@ -252,7 +252,7 @@
 .sim-item-position {
     font-size: 11px;
     color: var(--text-muted);
-    margin-left: 8px;
+    margin-left: var(--space-2);
 }
 
 .sim-item-delete {
@@ -261,7 +261,7 @@
     color: var(--alert);
     font-size: 11px;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-control);
     transition: background 0.2s;
 }
@@ -275,14 +275,14 @@
    ============================================ */
 .sim-walker-controls {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .sim-walker-controls select {
     flex: 1;
-    padding: 6px 8px;
+    padding: 6px var(--space-2);
     background: var(--bg-hover);
     border: 1px solid var(--slate-6);
     border-radius: var(--radius-control);
@@ -294,8 +294,8 @@
    GDOP Legend
    ============================================ */
 .sim-gdop-legend {
-    margin-top: 12px;
-    padding: 12px;
+    margin-top: var(--space-3);
+    padding: var(--space-3);
     background: var(--bg-hover);
     border-radius: var(--radius-control);
 }
@@ -314,7 +314,7 @@
     width: 24px;
     height: 12px;
     border-radius: var(--radius-control);
-    margin-right: 8px;
+    margin-right: var(--space-2);
 }
 
 .gdop-legend-item[data-quality="excellent"] .gdop-legend-color { background: var(--ok); }
@@ -331,9 +331,9 @@
 .gdop-stats {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 12px;
-    padding-top: 12px;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
     border-top: 1px solid var(--slate-6);
 }
 
@@ -344,7 +344,7 @@
 
 .gdop-stat-item strong {
     color: var(--text-on-accent);
-    margin-left: 4px;
+    margin-left: var(--space-1);
 }
 
 /* ============================================
@@ -352,8 +352,8 @@
    ============================================ */
 .sim-controls {
     display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
 }
 
 .sim-controls button {
@@ -364,13 +364,13 @@
    Progress Bar
    ============================================ */
 .sim-progress {
-    margin-top: 12px;
+    margin-top: var(--space-3);
 }
 
 .sim-progress #sim-time {
     font-size: var(--text-xs);
     color: var(--text-muted);
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
     display: block;
 }
 
@@ -394,13 +394,13 @@
 .sim-results {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .sim-result-item {
     display: flex;
     justify-content: space-between;
-    padding: 8px;
+    padding: var(--space-2);
     background: var(--bg-hover);
     border-radius: var(--radius-control);
 }
@@ -422,13 +422,13 @@
 .sim-recommendations {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .sim-recommendation {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-2);
     padding: 10px;
     background: var(--bg-hover);
     border-radius: var(--radius-control);
@@ -465,7 +465,7 @@
 .sim-shopping-item {
     display: flex;
     justify-content: space-between;
-    padding: 8px;
+    padding: var(--space-2);
     background: var(--bg-hover);
     border-radius: var(--radius-control);
 }
@@ -484,14 +484,14 @@
    ============================================ */
 .sim-empty-state {
     text-align: center;
-    padding: 32px 16px;
+    padding: var(--space-8) var(--space-4);
     color: var(--text-muted);
 }
 
 .sim-empty-state svg {
     width: 48px;
     height: 48px;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
     opacity: 0.5;
 }
 
@@ -554,7 +554,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 32px;
+    padding: var(--space-8);
     color: var(--text-muted);
 }
 
@@ -562,7 +562,7 @@
     content: "";
     width: 16px;
     height: 16px;
-    margin-left: 8px;
+    margin-left: var(--space-2);
     border: 2px solid var(--blue-9);
     border-top-color: transparent;
     border-radius: 50%;

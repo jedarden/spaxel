@@ -10,7 +10,7 @@
     background: var(--bg-card, var(--bg-card));
     border: 1px solid var(--border-color, var(--slate-5));
     border-radius: var(--radius-card);
-    padding: 16px;
+    padding: var(--space-4);
     max-width: 380px;
     width: 100%;
     box-shadow: 0 8px 32px var(--shadow-lg);
@@ -30,9 +30,9 @@
 .sleep-summary-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-2);
     border-bottom: 1px solid var(--border-color, var(--slate-5));
 }
 
@@ -67,18 +67,18 @@
 .sleep-summary-body {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .sleep-summary-body > div {
     font-size: 13px;
-    line-height: 1.5;
+    line-height: var(--lh-body);
 }
 
 .sleep-summary-duration {
     font-weight: 600;
     font-size: 18px;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .sleep-efficiency-dot {
@@ -86,7 +86,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    margin-right: 4px;
+    margin-right: var(--space-1);
     vertical-align: middle;
 }
 
@@ -100,8 +100,8 @@
 }
 
 .sleep-summary-details-btn {
-    margin-top: 8px;
-    padding: 6px 12px;
+    margin-top: var(--space-2);
+    padding: 6px var(--space-3);
     background: var(--bg-hover);
     border: 1px solid var(--border-color, var(--slate-6));
     border-radius: var(--radius-control);
@@ -149,7 +149,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px;
+    padding: var(--space-4);
     border-bottom: 1px solid var(--border-color, var(--slate-5));
     flex-shrink: 0;
 }
@@ -178,11 +178,11 @@
 .sleep-panel-content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: var(--space-4);
 }
 
 .sleep-panel-section {
-    margin-bottom: 24px;
+    margin-bottom: var(--space-6);
 }
 
 .sleep-panel-section h4 {
@@ -191,7 +191,7 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-muted, var(--text-muted));
-    margin: 0 0 12px 0;
+    margin: var(--space-3);
 }
 
 /* ── Trends ───────────────────────────────────────────────────────────────── */
@@ -199,13 +199,13 @@
 .sleep-trends-container {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 .sleep-trend-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .sleep-trend-label {
@@ -236,25 +236,25 @@
 .sleep-week-comparison {
     font-size: var(--text-xs);
     color: var(--text-muted, var(--text-muted));
-    margin-top: 8px;
-    padding: 8px;
+    margin-top: var(--space-2);
+    padding: var(--space-2);
     background: var(--bg-card, var(--bg-card));
     border-radius: var(--radius-control);
-    line-height: 1.5;
+    line-height: var(--lh-body);
 }
 
 /* ── Breathing Stats ──────────────────────────────────────────────────────── */
 
 .sleep-breathing-stats {
     display: flex;
-    gap: 16px;
+    gap: var(--space-4);
 }
 
 .sleep-stat {
     flex: 1;
     background: var(--bg-card, var(--bg-card));
     border-radius: var(--radius-card);
-    padding: 12px;
+    padding: var(--space-3);
     text-align: center;
 }
 
@@ -262,7 +262,7 @@
     display: block;
     font-size: 11px;
     color: var(--text-muted, var(--text-muted));
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .sleep-stat-value {
@@ -277,14 +277,14 @@
 .sleep-history {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-1);
 }
 
 .sleep-history-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 10px;
+    gap: var(--space-3);
+    padding: var(--space-2) 10px;
     background: var(--bg-card, var(--bg-card));
     border-radius: var(--radius-control);
     font-size: 13px;

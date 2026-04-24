@@ -20,13 +20,13 @@
 
 /* Header */
 .timeline-header {
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-secondary, var(--bg-card));
   border-bottom: 1px solid var(--border-color, var(--bg-hover));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -37,7 +37,7 @@
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .timeline-title svg {
@@ -73,11 +73,11 @@
 
 /* Filter Bar */
 .timeline-filter-bar {
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-secondary, var(--bg-card));
   border-bottom: 1px solid var(--border-color, var(--bg-hover));
   display: flex;
-  gap: 24px;
+  gap: var(--space-6);
   flex-wrap: wrap;
   max-height: 200px;
   overflow-y: auto;
@@ -102,14 +102,14 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted, var(--text-muted));
-  margin: 0 0 8px 0;
+  margin: var(--space-2);
 }
 
 /* Category Checkboxes */
 .timeline-category-checkboxes {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .timeline-category-checkbox {
@@ -161,13 +161,13 @@
 .timeline-filter-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .timeline-filters {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   flex: 1;
 }
@@ -198,7 +198,7 @@
   background: var(--bg-primary, var(--bg-page));
   border: 1px solid var(--border-color, var(--bg-hover));
   color: var(--text-primary, var(--slate-11));
-  padding: 6px 10px 6px 32px;
+  padding: 6px 10px 6px var(--space-8);
   border-radius: var(--radius-control);
   font-size: 13px;
   min-width: 200px;
@@ -226,10 +226,10 @@
 .timeline-events {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .timeline-events::-webkit-scrollbar {
@@ -254,7 +254,7 @@
   background: var(--bg-secondary, var(--bg-card));
   border: 1px solid var(--border-color, var(--bg-hover));
   border-radius: var(--radius-card);
-  padding: 12px;
+  padding: var(--space-3);
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -327,14 +327,14 @@
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary, var(--slate-11));
-  margin: 0 0 2px 0;
+  margin: 2px;
   line-height: 1.3;
 }
 
 .timeline-event-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   font-size: var(--text-xs);
   color: var(--text-muted, var(--text-muted));
@@ -343,20 +343,20 @@
 .timeline-event-time {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .timeline-event-zone {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   color: var(--accent-color, var(--blue-9));
 }
 
 .timeline-event-person {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 /* Event Details */
@@ -371,9 +371,9 @@
 .timeline-event-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--border-color, var(--bg-hover));
 }
 
@@ -381,11 +381,11 @@
   background: transparent;
   border: 1px solid var(--border-color, var(--bg-hover));
   border-radius: var(--radius-control);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 11px;
   color: var(--text-muted, var(--text-muted));
   transition: all 0.2s;
@@ -434,11 +434,11 @@
   background: transparent;
   border: 1px solid var(--border-color, var(--bg-hover));
   border-radius: var(--radius-control);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 11px;
   color: var(--text-muted, var(--text-muted));
   transition: all 0.2s;
@@ -455,11 +455,11 @@
   background: transparent;
   border: 1px solid var(--border-color, var(--bg-hover));
   border-radius: var(--radius-control);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 11px;
   color: var(--accent-color, var(--blue-9));
   transition: all 0.2s;
@@ -541,10 +541,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
   color: var(--text-muted, var(--text-muted));
   font-size: var(--text-sm);
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .timeline-loading-spinner {
@@ -568,7 +568,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: var(--space-12) var(--space-6);
   color: var(--text-muted, var(--text-muted));
   text-align: center;
 }
@@ -576,13 +576,13 @@
 .timeline-empty svg {
   width: 48px;
   height: 48px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   opacity: 0.5;
 }
 
 .timeline-empty h3 {
   font-size: var(--text-base);
-  margin: 0 0 8px 0;
+  margin: var(--space-2);
   color: var(--text-secondary, var(--text-secondary));
 }
 
@@ -597,15 +597,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
-  margin-top: 8px;
+  padding: var(--space-3);
+  margin-top: var(--space-2);
 }
 
 .timeline-load-more-btn {
   background: var(--bg-secondary, var(--bg-card));
   border: 1px solid var(--border-color, var(--bg-hover));
   border-radius: var(--radius-control);
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   color: var(--text-secondary, var(--text-secondary));
   font-size: 13px;
   cursor: pointer;
@@ -631,7 +631,7 @@
   font-weight: 600;
   padding: 2px 6px;
   border-radius: var(--radius-card);
-  margin-left: 8px;
+  margin-left: var(--space-2);
 }
 
 /* New Event Animation */
@@ -657,7 +657,7 @@
   gap: 6px;
   font-size: var(--text-xs);
   color: var(--color-success, var(--ok));
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   background: var(--ok-bg);
   border-radius: var(--radius-control);
 }
@@ -708,7 +708,7 @@
   align-items: center;
   gap: 6px;
   padding: 2px 10px;
-  margin-left: 8px;
+  margin-left: var(--space-2);
   background: color-mix(in srgb, var(--blue-9) 20%, transparent);
   color: var(--blue-11);
   border-radius: 9999px;
@@ -732,7 +732,7 @@
 .timeline-event.secondary {
   opacity: 0.6;
   font-size: 0.9em;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
 }
 
 .timeline-event.secondary .timeline-event-icon {
@@ -764,7 +764,7 @@
 
   .timeline-filter-bar {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .timeline-filter-section {
@@ -795,9 +795,9 @@
 .timeline-custom-date {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
   background: var(--bg-primary, var(--bg-page));
   border-radius: var(--radius-control);
 }
@@ -807,7 +807,7 @@
   border: 1px solid var(--border-color, var(--bg-hover));
   border-radius: var(--radius-control);
   color: var(--text-primary, var(--slate-11));
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
   font-family: inherit;
   flex: 1;
@@ -829,7 +829,7 @@
   color: var(--bg-primary, var(--bg-page));
   border: none;
   border-radius: var(--radius-control);
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
@@ -872,7 +872,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-tertiary, var(--bg-card));
   border-bottom: 1px solid var(--border-color, var(--bg-hover));
   flex-shrink: 0;
@@ -881,7 +881,7 @@
 .sidebar-panel-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary, var(--slate-11));
@@ -893,7 +893,7 @@
 
 .sidebar-panel-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .sidebar-panel-btn {
@@ -940,7 +940,7 @@
 
 /* Timeline Events in Sidebar */
 .sidebar-timeline-events {
-  padding: 8px;
+  padding: var(--space-2);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -951,13 +951,13 @@
   background: var(--bg-primary, var(--bg-page));
   border: 1px solid var(--border-color, var(--bg-hover));
   border-radius: var(--radius-control);
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-start;
 }
 
@@ -1068,7 +1068,7 @@
   background: transparent;
   border: none;
   color: var(--text-muted, var(--text-muted));
-  padding: 4px;
+  padding: var(--space-1);
   border-radius: var(--radius-control);
   cursor: pointer;
   display: flex;
@@ -1112,9 +1112,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: var(--space-10) var(--space-5);
   color: var(--text-muted, var(--text-muted));
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .sidebar-spinner {
@@ -1136,20 +1136,20 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: var(--space-10) var(--space-5);
   text-align: center;
   color: var(--text-muted, var(--text-muted));
 }
 
 .sidebar-timeline-empty svg {
   color: var(--border-color, var(--bg-hover));
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .sidebar-timeline-empty h3 {
   font-size: var(--text-sm);
   color: var(--text-secondary, var(--text-secondary));
-  margin: 0 0 4px 0;
+  margin: var(--space-1);
 }
 
 .sidebar-timeline-empty p {
@@ -1167,7 +1167,7 @@
   border: 1px solid var(--border-color, var(--bg-hover));
   border-right: none;
   border-radius: var(--radius-card) 0 0 var(--radius-card);
-  padding: 12px 8px;
+  padding: var(--space-3) var(--space-2);
   cursor: pointer;
   z-index: 59;
   transition: all 0.3s ease;
@@ -1176,7 +1176,7 @@
 
 .sidebar-show-btn:hover {
   background: var(--bg-tertiary, var(--bg-card));
-  padding-right: 12px;
+  padding-right: var(--space-3);
 }
 
 .sidebar-show-btn svg {
@@ -1241,7 +1241,7 @@
   align-items: center;
   gap: 6px;
   padding: 2px 10px;
-  margin-left: 8px;
+  margin-left: var(--space-2);
   background: color-mix(in srgb, var(--blue-9) 20%, transparent);
   color: var(--blue-11);
   border-radius: 9999px;

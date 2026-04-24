@@ -38,7 +38,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
+    padding: var(--space-4) var(--space-5);
     background: linear-gradient(135deg, var(--blue-muted), var(--blue-muted));
     border-bottom: 1px solid var(--blue-muted);
 }
@@ -85,15 +85,15 @@
 
 /* ===== Content ===== */
 .help-content {
-    padding: 20px;
+    padding: var(--space-5);
 }
 
 /* Progress Dots */
 .help-progress {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 20px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
 }
 
 .help-progress-dot {
@@ -116,34 +116,34 @@
 
 /* Step Content */
 .help-step {
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
 }
 
 .step-title {
     font-size: 15px;
     font-weight: 600;
     color: var(--blue-10);
-    margin: 0 0 8px 0;
+    margin: var(--space-2);
 }
 
 .step-content {
     font-size: var(--text-sm);
     color: var(--slate-11);
-    line-height: 1.5;
+    line-height: var(--lh-body);
     margin: 0;
 }
 
 /* Dismiss Hint */
 .help-dismiss-hint {
-    margin-top: 16px;
-    padding-top: 12px;
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
     border-top: 1px solid var(--bg-hover);
 }
 
 .help-dismiss-checkbox {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     font-size: var(--text-xs);
     color: var(--text-muted);
     cursor: pointer;
@@ -164,14 +164,14 @@
 /* ===== Actions ===== */
 .help-actions {
     display: flex;
-    gap: 8px;
-    padding: 16px 20px;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
     background: var(--shadow);
     border-top: 1px solid var(--bg-hover);
 }
 
 .help-btn {
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-control);
     font-size: 13px;
     font-weight: 500;

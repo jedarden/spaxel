@@ -17,7 +17,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 40px 20px;
+    padding: var(--space-10) var(--space-5);
     color: var(--text-muted);
     font-size: var(--text-sm);
 }
@@ -27,15 +27,15 @@
     background: var(--alert-bg);
     border: 1px solid var(--alert-border);
     border-radius: var(--radius-card);
-    padding: 16px;
+    padding: var(--space-4);
     color: var(--alert);
     font-size: 13px;
     text-align: center;
 }
 
 .ble-error button {
-    margin-top: 12px;
-    padding: 6px 12px;
+    margin-top: var(--space-3);
+    padding: 6px var(--space-3);
     background: var(--alert-muted);
     border: 1px solid var(--alert-border);
     border-radius: var(--radius-control);
@@ -52,10 +52,10 @@
 /* Empty State */
 .ble-empty {
     text-align: center;
-    padding: 40px 20px;
+    padding: var(--space-10) var(--space-5);
     color: var(--text-muted);
     font-size: 13px;
-    line-height: 1.5;
+    line-height: var(--lh-body);
 }
 
 /* Section Header */
@@ -64,7 +64,7 @@
     text-transform: uppercase;
     letter-spacing: 1px;
     color: var(--text-muted);
-    margin: 20px 0 12px 0;
+    margin: var(--space-3);
     padding-bottom: 6px;
     border-bottom: 1px solid var(--bg-hover);
 }
@@ -80,14 +80,14 @@
 .ble-device-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-1);
 }
 
 .ble-device {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 10px var(--space-3);
     background: var(--border-subtle);
     border-radius: var(--radius-control);
     cursor: pointer;
@@ -176,34 +176,34 @@
 }
 
 .ble-edit-form h3 {
-    margin: 0 0 8px;
+    margin: 0;
     font-size: var(--text-base);
     color: var(--slate-12);
 }
 
 .ble-hint {
-    margin: 0 0 16px;
+    margin: 0;
     font-size: 13px;
     color: var(--text-secondary);
     line-height: 1.4;
 }
 
 .ble-form-group {
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .ble-form-group label {
     display: block;
     font-size: var(--text-xs);
     color: var(--text-secondary);
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .ble-form-group input[type="text"],
 .ble-form-group input[type="color"],
 .ble-form-group select {
     width: 100%;
-    padding: 8px 10px;
+    padding: var(--space-2) 10px;
     background: var(--border-subtle);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
@@ -227,13 +227,13 @@
 
 .ble-form-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     justify-content: flex-end;
-    margin-top: 16px;
+    margin-top: var(--space-4);
 }
 
 .btn-cancel {
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     background: var(--bg-hover);
     border: none;
     border-radius: var(--radius-control);
@@ -248,7 +248,7 @@
 }
 
 .btn-primary {
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     background: var(--blue-9);
     border: none;
     border-radius: var(--radius-control);
@@ -264,7 +264,7 @@
 }
 
 .btn-secondary {
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     background: var(--bg-hover);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
@@ -280,7 +280,7 @@
 }
 
 .btn-danger {
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     background: var(--alert-muted);
     border: 1px solid var(--alert-border);
     border-radius: var(--radius-control);
@@ -301,8 +301,8 @@
 .ble-device-details {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 16px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
 }
 
 .ble-detail-row {
@@ -326,7 +326,7 @@
 
 .ble-details-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
 }
 
@@ -342,7 +342,7 @@
 .ble-history-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-1);
     max-height: 200px;
     overflow-y: auto;
 }
@@ -350,8 +350,8 @@
 .ble-history-entry {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
+    gap: var(--space-2);
+    padding: 6px var(--space-2);
     background: var(--border-subtle);
     border-radius: var(--radius-control);
     font-size: 11px;
@@ -380,8 +380,8 @@
     background: var(--blue-muted);
     border: 1px solid var(--blue-border);
     border-radius: var(--radius-control);
-    padding: 10px 12px;
-    margin-bottom: 16px;
+    padding: 10px var(--space-3);
+    margin-bottom: var(--space-4);
     font-size: 11px;
     color: var(--blue-10);
     line-height: 1.4;
@@ -406,7 +406,7 @@
 
 @media (max-width: 480px) {
     .ble-device {
-        padding: 8px 10px;
+        padding: var(--space-2) 10px;
     }
 
     .ble-device-name {
