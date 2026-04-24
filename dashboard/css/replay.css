@@ -61,7 +61,7 @@
 .replay-info {
     display: flex;
     flex-direction: column;
-    gapvar(--space-half);
+    gap: var(--space-half);
     min-width: 150px;
 }
 
@@ -90,7 +90,7 @@
     border: 1px solid var(--bg-hover);
     border-radius: var(--radius-control);
     color: var(--slate-11);
-    paddingvar(--space-150) var(--space-250);
+    padding: var(--space-150) var(--space-250);
     font-size: var(--text-sm);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -185,7 +185,7 @@
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
 }
 
 .replay-tune-btn:hover {
@@ -416,7 +416,7 @@
 /* ----- Replay Mode Indicator ----- */
 .replay-mode-indicator {
     position: fixed;
-    bottomvar(--space-5);
+    bottom: var(--space-5);
     left: 50%;
     transform: translateX(-50%);
     background: var(--blue-10);
