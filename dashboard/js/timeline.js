@@ -45,7 +45,7 @@
 		events: [],
 		cursor: null,
 		total: 0,
-		dashboardMode: 'expert', // 'expert' or 'simple' - determines timeline mode
+		dashboardMode: 'expert',
 		filters: {
 			categories: {
 				presence: true,
@@ -255,33 +255,9 @@
 			SpaxelRouter.onModeChange(onModeChange);
 		}
 
-		// Listen for simple mode changes
-		if (window.SpaxelSimpleModeDetection) {
-			SpaxelSimpleModeDetection.onModeChange(onSimpleModeChange);
-		}
-
 		// Listen for WebSocket event messages
 		if (window.SpaxelApp) {
 			SpaxelApp.registerMessageHandler(handleWebSocketMessage);
-		}
-	}
-
-	// ============================================
-	// Simple Mode Change Handler
-	// ============================================
-	function onSimpleModeChange(newMode, oldMode) {
-		console.log('[Timeline] Simple mode changed from', oldMode, 'to', newMode);
-
-		// Update dashboard mode based on simple mode
-		if (newMode === 'simple') {
-			state.dashboardMode = 'simple';
-		} else {
-			state.dashboardMode = 'expert';
-		}
-
-		// Reload events if timeline is visible
-		if (elements.container && elements.container.style.display !== 'none') {
-			loadInitialEvents();
 		}
 	}
 

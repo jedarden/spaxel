@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Spaxel Dashboard</title>
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="css/explainability.css">
     <link rel="stylesheet" href="css/replay.css">
     <link rel="stylesheet" href="css/expert.css">
-    <link rel="stylesheet" href="css/simple.css">
+
     <link rel="stylesheet" href="css/command-palette.css">
     <link rel="stylesheet" href="css/ambient.css">
     <link rel="stylesheet" href="css/guided-help.css">
@@ -3193,6 +3193,9 @@
             <button id="simulator-btn" onclick="Simulate && Simulate.togglePanel()">Simulator</button>
             <button id="help-btn" onclick="HelpOverlay && HelpOverlay.toggle()" title="Help &amp; Documentation (Ctrl+?)">?</button>
         </div>
+        <div class="status-item cp-shortcut-hint" id="cp-shortcut-hint" title="Open command palette">
+            <kbd id="cp-kbd">Ctrl+K</kbd>
+        </div>
         <div class="status-item">
             <span>FPS: <strong id="fps-counter">0</strong></span>
         </div>
@@ -3360,7 +3363,7 @@
                 </label>
                 <div class="pattern-filter">
                     <label>Time:</label>
-                    <select id="flow-time-filter" onchange="setFlowTimeFilter(this.value)">
+                    <select id="flow-time-filter" aria-label="Flow time filter" onchange="setFlowTimeFilter(this.value)">
                         <option value="7d">Last 7 days</option>
                         <option value="30d" selected>Last 30 days</option>
                         <option value="all">All time</option>
@@ -3368,7 +3371,7 @@
                 </div>
                 <div class="pattern-filter">
                     <label>Person:</label>
-                    <select id="flow-person-filter">
+                    <select id="flow-person-filter" aria-label="Flow person filter">
                         <option value="">All people</option>
                     </select>
                 </div>
@@ -3494,8 +3497,7 @@
     <script src="js/replay.js"></script>
     <!-- Pre-Deployment Simulator -->
     <script src="js/simulate.js"></script>
-    <!-- Simple Mode -->
-    <script src="js/simple.js"></script>
+    <!-- Simple Mode removed (progressive disclosure, see plan §8e) -->
     <!-- Command Palette (legacy) -->
     <!-- Command Palette (Component 34) -->
     <script src="js/command-palette.js"></script>
@@ -3543,13 +3545,13 @@
         </div>
         <div class="room-field">
             <label>Zone A</label>
-            <select id="portal-zone-a">
+            <select id="portal-zone-a" aria-label="Portal zone A">
                 <option value="">-- Select Zone --</option>
             </select>
         </div>
         <div class="room-field">
             <label>Zone B</label>
-            <select id="portal-zone-b">
+            <select id="portal-zone-b" aria-label="Portal zone B">
                 <option value="">-- Select Zone --</option>
             </select>
         </div>
@@ -3593,7 +3595,7 @@
         </div>
         <div class="room-field">
             <label>Zone Type</label>
-            <select id="zone-type">
+            <select id="zone-type" aria-label="Zone type">
                 <option value="general">General</option>
                 <option value="bedroom">Bedroom</option>
                 <option value="kitchen">Kitchen</option>
@@ -3692,7 +3694,7 @@
                 <h3>Synthetic Walkers <span id="sim-walker-count" class="sim-count">(0)</span></h3>
                 <div class="sim-field">
                     <label>Walker Type</label>
-                    <select id="sim-walker-type">
+                    <select id="sim-walker-type" aria-label="Walker type">
                         <option value="random">Random Walk</option>
                         <option value="path">Path Following</option>
                     </select>
@@ -3860,16 +3862,16 @@
             <div class="timeline-filter-section">
                 <h4 class="timeline-filter-section-title">Filters</h4>
                 <div class="timeline-filter-controls">
-                    <select id="timeline-filter-type" class="timeline-filter-select">
+                    <select id="timeline-filter-type" class="timeline-filter-select" aria-label="Filter by event type">
                         <option value="">All Types</option>
                     </select>
-                    <select id="timeline-filter-zone" class="timeline-filter-select">
+                    <select id="timeline-filter-zone" class="timeline-filter-select" aria-label="Filter by zone">
                         <option value="">All Zones</option>
                     </select>
-                    <select id="timeline-filter-person" class="timeline-filter-select">
+                    <select id="timeline-filter-person" class="timeline-filter-select" aria-label="Filter by person">
                         <option value="">All People</option>
                     </select>
-                    <select id="timeline-filter-time" class="timeline-filter-select">
+                    <select id="timeline-filter-time" class="timeline-filter-select" aria-label="Filter by time range">
                         <option value="">All Time</option>
                         <option value="today">Today</option>
                         <option value="7d">Last 7 days</option>
@@ -4363,9 +4365,9 @@
                 </a>
             </li>
             <li class="app-mobile-nav__item">
-                <a href="/simple" class="app-mobile-nav__link" aria-label="Simple view">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    <span>Simple</span>
+                <a href="/" class="app-mobile-nav__link" aria-label="Home">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+                    <span>Home</span>
                 </a>
             </li>
             <li class="app-mobile-nav__item">

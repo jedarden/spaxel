@@ -393,14 +393,14 @@ describe('Timeline tap-to-jump', function() {
     // ============================================
     describe('simple mode gating', function() {
         test('clicking event does not trigger jump in simple mode', function() {
-            // Simulate simple mode by triggering the registered callback
-            var simpleCallback = null;
-            var calls = global.SpaxelSimpleModeDetection.onModeChange.mock.calls;
+            // Simulate simple mode by triggering the registered router callback
+            var modeCallback = null;
+            var calls = global.SpaxelRouter.onModeChange.mock.calls;
             if (calls.length > 0) {
-                simpleCallback = calls[0][0];
+                modeCallback = calls[0][0];
             }
-            if (simpleCallback) {
-                simpleCallback('simple');
+            if (modeCallback) {
+                modeCallback('simple');
             }
 
             return loadEvents(testEvents).then(function() {
