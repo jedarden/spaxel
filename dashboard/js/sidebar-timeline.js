@@ -729,6 +729,11 @@
         if (state.dashboardMode === 'expert' && window.SpaxelReplay) {
             SpaxelReplay.jumpToTime(timestamp).then(function() {
                 updateNowReplayingChip(true, timestamp);
+
+                // Clear full-page timeline selection to avoid stale highlight
+                if (window.SpaxelTimeline && SpaxelTimeline.clearSelection) {
+                    SpaxelTimeline.clearSelection();
+                }
             }).catch(function(err) {
                 console.error('[SidebarTimeline] Jump-to-time failed:', err);
                 if (window.SpaxelApp && SpaxelApp.showToast) {

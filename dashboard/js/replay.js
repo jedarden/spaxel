@@ -486,7 +486,7 @@
         console.log('[Replay] Exiting replay mode');
 
         // Stop replay session
-        stopReplaySession().then(() => {
+        return stopReplaySession().then(() => {
             state.isReplayMode = false;
             state.isPaused = false;
 

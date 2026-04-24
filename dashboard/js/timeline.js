@@ -1363,51 +1363,43 @@
 			state.replay.selectedEventId = entryElement.dataset.id;
 		}
 
-		// Use jump-to-time API for single-call replay session creation
-		var payload = {
-			timestamp_ms: timestamp,
-			window_ms: CONFIG.replaySeekWindowSec * 1000
-		};
+		// Use SpaxelReplay.jumpToTime for coordinated replay session creation
+		if (window.SpaxelReplay) {
+			SpaxelReplay.jumpToTime(timestamp, CONFIG.replaySeekWindowSec * 1000)
+				.then(function() {
+					state.replay.activeSessionId = SpaxelReplay.getSession().id;
+					state.replay.isReplaying = true;
+					state.replay.replayTimestamp = timestamp;
 
-		fetch('/api/replay/jump-to-time', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(payload)
-		})
-			.then(function(res) {
-				if (!res.ok) {
-					throw new Error('Failed to jump to time');
-				}
-				return res.json();
-			})
-			.then(function(data) {
-				state.replay.activeSessionId = data.session_id;
-				state.replay.isReplaying = true;
-				state.replay.replayTimestamp = timestamp;
+					// Show "Now replaying" chip in this timeline
+					showNowReplayingChip(timestamp);
 
-				// Show "Now replaying" chip
-				showNowReplayingChip(timestamp);
+					// Navigate to replay mode if router available
+					if (window.SpaxelRouter) {
+						SpaxelRouter.navigate('replay');
+					}
 
-				// Navigate to replay mode if router available
-				if (window.SpaxelRouter) {
-					SpaxelRouter.navigate('replay');
-				}
+					// Clear sidebar selection to avoid stale highlight
+					if (window.SpaxelSidebarTimeline) {
+						SpaxelSidebarTimeline.clearSelection();
+					}
 
-				// Notify replay module about the jump
-				if (window.SpaxelReplay && SpaxelReplay.onJumpToTime) {
-					SpaxelReplay.onJumpToTime(data.session_id, timestamp);
-				}
-
-				if (window.SpaxelApp && SpaxelApp.showToast) {
-					SpaxelApp.showToast('Viewing ' + formatTimestamp(timestamp), 'info');
-				}
-			})
-			.catch(function(err) {
-				console.error('[Timeline] Jump to time failed:', err);
-				if (window.SpaxelApp && SpaxelApp.showToast) {
-					SpaxelApp.showToast('Failed to jump to replay: ' + err.message, 'warning');
-				}
-			});
+					if (window.SpaxelApp && SpaxelApp.showToast) {
+						SpaxelApp.showToast('Viewing ' + formatTimestamp(timestamp), 'info');
+					}
+				})
+				.catch(function(err) {
+					console.error('[Timeline] Jump to time failed:', err);
+					if (window.SpaxelApp && SpaxelApp.showToast) {
+						SpaxelApp.showToast('Failed to jump to replay: ' + err.message, 'warning');
+					}
+				});
+		} else {
+			console.error('[Timeline] SpaxelReplay module not available');
+			if (window.SpaxelApp && SpaxelApp.showToast) {
+				SpaxelApp.showToast('Replay module not available', 'warning');
+			}
+		}
 	}
 
 	// ============================================
@@ -1548,7 +1540,9 @@
 
 			handleNewEvent(event);
 		},
-		refresh: loadInitialEvents
+		refresh: loadInitialEvents,
+			clearSelection: clearSelectedEvent,
+			hideNowReplayingChip: hideNowReplayingChip
 	};
 
 	// Auto-initialize when DOM is ready
