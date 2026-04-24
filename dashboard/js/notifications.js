@@ -1,7 +1,7 @@
 // Notification Settings Panel for Spaxel Dashboard
 // Provides UI for configuring push notification channels, quiet hours, and batching
 
-export class NotificationSettings {
+class NotificationSettings {
 	constructor(api) {
 		this.api = api;
 		this.container = null;
