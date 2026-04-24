@@ -11,44 +11,7 @@
   flex-direction: column;
 }
 
-/* ── Top nav ── */
-.home-nav {
-  background: var(--slate-3);
-  border-bottom: 1px solid var(--border-default);
-  padding: 0 var(--space-6);
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.home-nav__logo {
-  font-size: var(--text-lg);
-  font-weight: var(--fw-heading);
-  color: var(--text-primary);
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.home-nav__links {
-  display: flex;
-  gap: var(--space-4);
-}
-.home-nav__link {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: var(--text-sm);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-control);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-.home-nav__link:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.home-nav__link--active {
-  color: var(--color-primary);
-}
+/* ── Top nav (uses shared .app-header from layout.css) ── */
 
 /* ── Status headline (Row 1) ── */
 .home-status {
@@ -184,41 +147,7 @@
   display: block;
 }
 
-/* ── Mobile bottom nav ── */
-.home-bottom-nav {
-  display: none;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--slate-3);
-  border-top: 1px solid var(--border-default);
-  padding-bottom: env(safe-area-inset-bottom);
-  z-index: 100;
-}
-.home-bottom-nav__list {
-  display: flex;
-  list-style: none;
-}
-.home-bottom-nav__item {
-  flex: 1;
-  text-align: center;
-}
-.home-bottom-nav__link {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: var(--space-2) 0;
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: var(--text-xs);
-  min-height: 44px;
-  justify-content: center;
-}
-.home-bottom-nav__link--active {
-  color: var(--color-primary);
-}
+/* ── Mobile bottom nav (uses shared .app-mobile-nav from layout.css) ── */
 
 /* ── Connection indicator ── */
 .home-status__dot {
@@ -244,19 +173,10 @@
     grid-template-columns: 1fr;
     max-width: 600px;
   }
-  .home-nav__links {
-    display: none;
-  }
 }
 
-/* ── Responsive: mobile (bottom nav) ── */
+/* ── Responsive: mobile ── */
 @media (max-width: 639px) {
-  .home-body {
-    padding-bottom: 60px;
-  }
-  .home-bottom-nav {
-    display: block;
-  }
   .home-status {
     padding: var(--space-4);
   }

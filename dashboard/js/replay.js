@@ -481,6 +481,12 @@
                 Viz3D.exitReplayMode();
             }
 
+            // Clear timeline selection and now-replaying chip
+            if (window.SpaxelSidebarTimeline) {
+                SpaxelSidebarTimeline.clearSelection();
+                SpaxelSidebarTimeline.hideNowReplayingChip();
+            }
+
             // Navigate back to live mode
             if (window.SpaxelRouter) {
                 SpaxelRouter.navigate('live');
@@ -733,6 +739,53 @@
     }
 
     // ============================================
+    // Jump-to-Time (tap-to-jump from timeline)
+    // ============================================
+    function jumpToTime(timestampMs, windowMs) {
+        if (!windowMs) windowMs = 5000; // ±5 seconds default
+
+        console.log('[Replay] Jump to time:', timestampMs, 'window:', windowMs);
+
+        state.isReplayMode = true;
+
+        return fetch('/api/replay/jump-to-time', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                timestamp_ms: timestampMs,
+                window_ms: windowMs
+            })
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to jump to time: ' + res.statusText);
+            return res.json();
+        })
+        .then(data => {
+            state.activeSessionId = data.session_id;
+            state.sessionFromMs = data.from_ms;
+            state.sessionToMs = data.to_ms;
+            state.sessionCurrentMs = data.timestamp_ms;
+            state.sessionState = data.state || 'paused';
+            state.sessionSpeed = 1;
+
+            // Show replay control bar
+            if (elements.bar) {
+                elements.bar.style.display = 'block';
+            }
+
+            updateUI();
+
+            // Notify 3D visualization to enter replay mode
+            if (window.Viz3D && Viz3D.enterReplayMode) {
+                Viz3D.enterReplayMode();
+            }
+
+            console.log('[Replay] Jump-to-time session:', data.session_id);
+            return data;
+        });
+    }
+
+    // ============================================
     // Public API
     // ============================================
     window.SpaxelReplay = {
@@ -743,6 +796,9 @@
 
         // Exit replay mode and return to live
         exitReplay: exitReplayMode,
+
+        // Jump to a specific timestamp (for tap-to-jump from timeline)
+        jumpToTime: jumpToTime,
 
         // Check if currently in replay mode
         isReplayMode: () => state.isReplayMode,

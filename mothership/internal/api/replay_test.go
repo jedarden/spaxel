@@ -1147,3 +1147,171 @@ func TestFormatTimestamp(t *testing.T) {
 		t.Errorf("formatTimestamp(%d) returned invalid format: %v", ms, err)
 	}
 }
+
+// TestJumpToTime tests POST /api/replay/jump-to-time.
+func TestJumpToTime(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       interface{}
+		wantStatus int
+		setup      func(*ReplayHandler)
+		check      func(*testing.T, *ReplayHandler, map[string]interface{})
+	}{
+		{
+			name: "jump with valid timestamp",
+			body: jumpToTimeRequest{
+				TimestampMS: 1710519800000,
+			},
+			wantStatus: http.StatusOK,
+			check: func(t *testing.T, h *ReplayHandler, resp map[string]interface{}) {
+				if _, ok := resp["session_id"].(string); !ok {
+					t.Errorf("Expected session_id string, got %v", resp["session_id"])
+				}
+				if ts, ok := resp["timestamp_ms"].(float64); !ok || int64(ts) != 1710519800000 {
+					t.Errorf("Expected timestamp_ms=1710519800000, got %v", resp["timestamp_ms"])
+				}
+				if from, ok := resp["from_ms"].(float64); !ok || int64(from) != 1710519795000 {
+					t.Errorf("Expected from_ms=1710519795000, got %v", resp["from_ms"])
+				}
+				if to, ok := resp["to_ms"].(float64); !ok || int64(to) != 1710519805000 {
+					t.Errorf("Expected to_ms=1710519805000, got %v", resp["to_ms"])
+				}
+				if state, ok := resp["state"].(string); !ok || state != "paused" {
+					t.Errorf("Expected state=paused, got %v", resp["state"])
+				}
+			},
+		},
+		{
+			name: "jump with custom window",
+			body: jumpToTimeRequest{
+				TimestampMS: 1710519800000,
+				WindowMS:    10000,
+			},
+			wantStatus: http.StatusOK,
+			check: func(t *testing.T, h *ReplayHandler, resp map[string]interface{}) {
+				if from, ok := resp["from_ms"].(float64); !ok || int64(from) != 1710519790000 {
+					t.Errorf("Expected from_ms=1710519790000 (±10s), got %v", resp["from_ms"])
+				}
+				if to, ok := resp["to_ms"].(float64); !ok || int64(to) != 1710519810000 {
+					t.Errorf("Expected to_ms=1710519810000 (±10s), got %v", resp["to_ms"])
+				}
+			},
+		},
+		{
+			name: "jump replaces previous active session",
+			body: jumpToTimeRequest{
+				TimestampMS: 1710519900000,
+			},
+			wantStatus: http.StatusOK,
+			setup: func(h *ReplayHandler) {
+				// Create a prior session
+				body, _ := json.Marshal(jumpToTimeRequest{TimestampMS: 1710519800000})
+				r := setupReplayRouter(h)
+				req := httptest.NewRequest("POST", "/api/replay/jump-to-time", bytes.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				rr := httptest.NewRecorder()
+				r.ServeHTTP(rr, req)
+			},
+			check: func(t *testing.T, h *ReplayHandler, resp map[string]interface{}) {
+				newID, _ := resp["session_id"].(string)
+				h.mu.RLock()
+				active := h.activeSessionID
+				count := len(h.sessions)
+				h.mu.RUnlock()
+				if active != newID {
+					t.Errorf("Active session = %q, want %q", active, newID)
+				}
+				if count != 1 {
+					t.Errorf("Expected 1 session after replacement, got %d", count)
+				}
+			},
+		},
+		{
+			name: "missing timestamp_ms",
+			body: map[string]interface{}{
+				"window_ms": 5000,
+			},
+			wantStatus: http.StatusBadRequest,
+			check: func(t *testing.T, h *ReplayHandler, resp map[string]interface{}) {
+				if _, ok := resp["error"]; !ok {
+					t.Error("Expected error in response")
+				}
+			},
+		},
+		{
+			name: "negative timestamp_ms",
+			body: jumpToTimeRequest{
+				TimestampMS: -100,
+			},
+			wantStatus: http.StatusBadRequest,
+			check: func(t *testing.T, h *ReplayHandler, resp map[string]interface{}) {
+				if _, ok := resp["error"]; !ok {
+					t.Error("Expected error in response")
+				}
+			},
+		},
+		{
+			name: "zero timestamp_ms",
+			body: jumpToTimeRequest{
+				TimestampMS: 0,
+			},
+			wantStatus: http.StatusBadRequest,
+			check: func(t *testing.T, h *ReplayHandler, resp map[string]interface{}) {
+				if _, ok := resp["error"]; !ok {
+					t.Error("Expected error in response")
+				}
+			},
+		},
+		{
+			name:       "malformed JSON",
+			body:       nil,
+			wantStatus: http.StatusBadRequest,
+			check: func(t *testing.T, h *ReplayHandler, resp map[string]interface{}) {
+				if _, ok := resp["error"]; !ok {
+					t.Error("Expected error in response")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := newTestReplayHandler(t, true)
+
+			if tt.setup != nil {
+				tt.setup(handler)
+			}
+
+			r := setupReplayRouter(handler)
+
+			var body []byte
+			if tt.name == "malformed JSON" {
+				body = []byte(`{invalid json}`)
+			} else if tt.body != nil {
+				var err error
+				body, err = json.Marshal(tt.body)
+				if err != nil {
+					t.Fatalf("Failed to marshal request: %v", err)
+				}
+			}
+
+			req := httptest.NewRequest("POST", "/api/replay/jump-to-time", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Fatalf("Expected status %d, got %d: %s", tt.wantStatus, rr.Code, rr.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+				t.Fatalf("Failed to decode response: %v", err)
+			}
+
+			if tt.check != nil {
+				tt.check(t, handler, resp)
+			}
+		})
+	}
+}
