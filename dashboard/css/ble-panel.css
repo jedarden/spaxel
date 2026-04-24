@@ -86,7 +86,7 @@
 .ble-device {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gapvar(--space-250);
     padding: 10px var(--space-3);
     background: var(--border-subtle);
     border-radius: var(--radius-control);
@@ -214,7 +214,7 @@
 
 .ble-form-group input[type="color"] {
     height: 36px;
-    padding: 2px;
+    paddingvar(--space-half);
     cursor: pointer;
 }
 

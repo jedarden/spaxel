@@ -348,7 +348,7 @@ body.simple-mode {
 .simple-room-card .room-status {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
     font-size: var(--text-sm);
     font-weight: 500;
     padding: var(--space-1) 10px;
@@ -373,7 +373,7 @@ body.simple-mode {
 .simple-room-card .room-occupants {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gapvar(--space-150);
     margin-bottom: var(--space-2);
 }
 
@@ -626,13 +626,13 @@ body.simple-mode {
 
 .simple-quick-actions .action-badge {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    topvar(--space-1);
+    rightvar(--space-1);
     background: var(--simple-accent-red);
     color: var(--text-on-accent);
     font-size: var(--text-3xs);
     font-weight: 600;
-    padding: 2px 6px;
+    paddingvar(--space-half) var(--space-150);
     border-radius: var(--radius-card);
     min-width: 16px;
     text-align: center;
@@ -911,7 +911,7 @@ body.simple-mode {
 
 .simple-security-toggle .security-toggle-btn {
     width: 100%;
-    padding: 14px;
+    paddingvar(--space-350);
     border-radius: var(--radius-card);
     font-size: var(--text-base);
     font-weight: 600;

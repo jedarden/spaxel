@@ -66,7 +66,7 @@ body.fleet-page {
 .nav-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
     padding: var(--space-2) var(--space-4);
     background: transparent;
     border: 1px solid var(--border-default);
@@ -116,7 +116,7 @@ body.fleet-page {
 
 .summary-item {
     display: flex;
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .summary-label {
@@ -143,7 +143,7 @@ body.fleet-page {
 .btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-control);
     font-size: var(--text-sm);
@@ -267,7 +267,7 @@ body.fleet-page {
 .filter-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
     padding: var(--space-1) 10px;
     background: var(--blue-muted);
     border: 1px solid var(--blue-border);
@@ -509,7 +509,7 @@ body.fleet-page {
 .status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
     padding: var(--space-1) 10px;
     border-radius: var(--radius-card);
     font-size: var(--text-xs);
@@ -559,7 +559,7 @@ body.fleet-page {
 .firmware-version {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .firmware-current {
@@ -574,7 +574,7 @@ body.fleet-page {
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    padding: 2px 6px;
+    paddingvar(--space-half) var(--space-150);
     background: var(--warn-bg);
     border-radius: var(--radius-control);
     font-size: var(--text-2xs);
@@ -694,7 +694,7 @@ body.fleet-page {
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 6px;
+    paddingvar(--space-150);
     font-size: var(--text-base);
     border-radius: var(--radius-control);
     transition: all 0.2s;
@@ -981,8 +981,8 @@ body.fleet-page {
    ============================================ */
 .toast-container {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
+    bottomvar(--space-6);
+    rightvar(--space-6);
     z-index: 1100;
     display: flex;
     flex-direction: column;
@@ -1163,9 +1163,9 @@ body.fleet-page {
     }
 
     .toast-container {
-        right: 12px;
-        left: 12px;
-        bottom: 12px;
+        rightvar(--space-3);
+        leftvar(--space-3);
+        bottomvar(--space-3);
     }
 
     .toast {

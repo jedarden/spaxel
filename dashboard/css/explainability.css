@@ -198,7 +198,7 @@
 .zone-badge {
     display: inline-block;
     min-width: 20px;
-    padding: 2px 6px;
+    paddingvar(--space-half) var(--space-150);
     border-radius: var(--radius-control);
     font-size: var(--text-2xs);
     font-weight: 600;
@@ -248,7 +248,7 @@
 .ble-match-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gapvar(--space-250);
     margin-bottom: 10px;
 }
 
@@ -274,7 +274,7 @@
 .ble-match-details {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .ble-match-detail {

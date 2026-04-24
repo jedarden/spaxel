@@ -4,8 +4,8 @@
 
 .sleep-summary-card {
     position: fixed;
-    top: 16px;
-    right: 16px;
+    topvar(--space-4);
+    rightvar(--space-4);
     z-index: 1000;
     background: var(--bg-card, var(--bg-card));
     border: 1px solid var(--border-color, var(--slate-5));
@@ -54,7 +54,7 @@
     color: var(--text-muted, var(--text-muted));
     font-size: var(--text-xl);
     cursor: pointer;
-    padding: 2px 6px;
+    paddingvar(--space-half) var(--space-150);
     line-height: 1;
     border-radius: var(--radius-control);
 }
@@ -166,7 +166,7 @@
     color: var(--text-muted, var(--text-muted));
     font-size: var(--text-lg);
     cursor: pointer;
-    padding: 2px 6px;
+    paddingvar(--space-half) var(--space-150);
     border-radius: var(--radius-control);
 }
 

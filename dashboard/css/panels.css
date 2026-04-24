@@ -263,12 +263,12 @@
 /* ----- Toast Notifications ----- */
 #toast-container {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    bottomvar(--space-5);
+    rightvar(--space-5);
     z-index: 3000;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gapvar(--space-250);
     pointer-events: none;
 }
 
@@ -385,7 +385,7 @@
 /* ----- Mode Toggle Bar ----- */
 .mode-toggle-bar {
     position: fixed;
-    top: 40px;
+    topvar(--space-10);
     left: 0;
     right: 0;
     height: 44px;
@@ -426,8 +426,8 @@
     content: '';
     position: absolute;
     bottom: 0;
-    left: 16px;
-    right: 16px;
+    leftvar(--space-4);
+    rightvar(--space-4);
     height: 2px;
     background: var(--blue-10);
     border-radius: 1px 1px 0 0;
@@ -498,7 +498,7 @@
     background: var(--bg-hover);
     border-radius: var(--radius-control);
     outline: none;
-    margin: 10px;
+    marginvar(--space-250);
 }
 
 .panel-form-group input[type="range"]::-webkit-slider-thumb {
@@ -538,7 +538,7 @@
 .panel-form-checkbox {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gapvar(--space-250);
     cursor: pointer;
     padding: 6px 0;
 }
@@ -627,7 +627,7 @@
 
 .panel-btn-group {
     display: flex;
-    gap: 10px;
+    gapvar(--space-250);
     margin-top: var(--space-4);
 }
 
@@ -828,7 +828,7 @@
     color: var(--warn);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gapvar(--space-250);
 }
 
 #security-dialog .learning-warning::before {
@@ -900,7 +900,7 @@
 
 .alert-banner-actions {
     display: flex;
-    gap: 10px;
+    gapvar(--space-250);
 }
 
 .alert-banner-btn {
@@ -1027,7 +1027,7 @@
 .learning-ready-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
     padding: var(--space-1) 10px;
     background: var(--ok-muted);
     border-radius: var(--radius-card);
@@ -1091,7 +1091,7 @@
 /* Arm/Disarm Button */
 .security-arm-btn {
     width: 100%;
-    padding: 14px;
+    paddingvar(--space-350);
     border-radius: var(--radius-card);
     font-size: var(--text-md);
     font-weight: 600;
@@ -1101,7 +1101,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gapvar(--space-250);
 }
 
 .security-arm-btn.disarmed {
@@ -1257,9 +1257,9 @@
     }
 
     #toast-container {
-        left: 10px;
-        right: 10px;
-        bottom: 10px;
+        leftvar(--space-250);
+        rightvar(--space-250);
+        bottomvar(--space-250);
     }
 
     .toast {
@@ -1671,7 +1671,7 @@
 
 .contributing-badge {
     display: inline-block;
-    padding: 2px 6px;
+    paddingvar(--space-half) var(--space-150);
     border-radius: var(--radius-control);
     font-size: var(--text-2xs);
     font-weight: 600;
@@ -1702,7 +1702,7 @@
 .ble-match-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gapvar(--space-250);
     margin-bottom: var(--space-3);
 }
 
@@ -1732,7 +1732,7 @@
 .ble-match-details {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .ble-match-detail {
@@ -1787,7 +1787,7 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gapvar(--space-250);
     font-size: var(--text-sm);
     color: var(--slate-11);
     transition: background 0.2s, color 0.2s;
@@ -1845,7 +1845,7 @@
 
     .links-table th,
     .links-table td {
-        padding: 6px 6px;
+        paddingvar(--space-150) var(--space-150);
     }
 }
 
@@ -1868,7 +1868,7 @@
 
 .volume-tools {
     display: flex;
-    gap: 6px;
+    gapvar(--space-150);
     align-items: center;
 }
 
@@ -1927,7 +1927,7 @@
 
 .trigger-card-actions {
     display: flex;
-    gap: 6px;
+    gapvar(--space-150);
     align-items: center;
     flex-shrink: 0;
 }
@@ -1935,8 +1935,8 @@
 .error-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 2px 7px;
+    gapvar(--space-075);
+    paddingvar(--space-half) var(--space-175);
     font-size: var(--text-3xs);
     font-weight: 600;
     border-radius: var(--radius-control);
@@ -1949,8 +1949,8 @@
 .disabled-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 2px 7px;
+    gapvar(--space-075);
+    paddingvar(--space-half) var(--space-175);
     font-size: var(--text-3xs);
     font-weight: 600;
     border-radius: var(--radius-control);
@@ -1963,8 +1963,8 @@
 .warning-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 2px 7px;
+    gapvar(--space-075);
+    paddingvar(--space-half) var(--space-175);
     font-size: var(--text-3xs);
     font-weight: 600;
     border-radius: var(--radius-control);
@@ -2070,8 +2070,8 @@
     position: absolute;
     width: 16px;
     height: 16px;
-    left: 2px;
-    bottom: 2px;
+    leftvar(--space-half);
+    bottomvar(--space-half);
     background: var(--slate-11);
     border-radius: 50%;
     transition: transform 0.2s, background 0.2s;
@@ -2125,7 +2125,7 @@
 
 .form-control {
     width: 100%;
-    padding: 6px 10px;
+    paddingvar(--space-150) var(--space-250);
     font-size: var(--text-sm);
     background: var(--border-subtle);
     border: 1px solid var(--bg-active);
@@ -2382,7 +2382,7 @@
 /* Simulator Panel */
 .simulator-panel {
     position: fixed;
-    top: 40px;
+    topvar(--space-10);
     right: 0;
     bottom: 0;
     width: 360px;
@@ -2459,7 +2459,7 @@
 .sim-space-controls {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gapvar(--space-250);
     margin-bottom: var(--space-3);
 }
 
@@ -2473,7 +2473,7 @@
 
 .sim-space-controls input[type="number"] {
     width: 80px;
-    padding: 6px 10px;
+    paddingvar(--space-150) var(--space-250);
     background: var(--border-subtle);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
@@ -2491,7 +2491,7 @@
 
 .sim-tool-btn {
     flex: 1;
-    padding: 10px;
+    paddingvar(--space-250);
     background: var(--border-subtle);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
@@ -2645,7 +2645,7 @@
 .sim-gdop-controls label {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
     font-size: var(--text-sm);
     color: var(--slate-11);
     cursor: pointer;
@@ -2732,7 +2732,7 @@
 .sim-recommendation {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gapvar(--space-250);
     padding: 10px var(--space-3);
     background: var(--border-subtle);
     border-radius: var(--radius-control);
@@ -3044,7 +3044,7 @@
     align-items: center;
     font-size: var(--text-sm);
     color: var(--text-muted);
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .sim-gdop-controls input[type="checkbox"] {
@@ -3178,7 +3178,7 @@
 }
 
 .sim-rec-priority {
-    padding: 2px 6px;
+    paddingvar(--space-half) var(--space-150);
     border-radius: var(--radius-control);
     font-size: var(--text-3xs);
     font-weight: 600;
@@ -3272,7 +3272,7 @@
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 10px;
+    gapvar(--space-250);
 }
 
 .gdop-stat-item {

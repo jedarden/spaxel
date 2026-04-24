@@ -4,7 +4,7 @@
 
 .floorplan-panel {
     position: fixed;
-    top: 60px;
+    topvar(--space-16);
     right: 340px;
     width: 380px;
     max-height: calc(100vh - 80px);
@@ -73,7 +73,7 @@
 }
 
 .floorplan-btn {
-    padding: 6px 14px;
+    paddingvar(--space-150) var(--space-350);
     border-radius: var(--radius-control);
     font-size: var(--text-xs);
     cursor: pointer;
@@ -81,7 +81,7 @@
     border: none;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .floorplan-btn-primary {
@@ -213,7 +213,7 @@
 
 .floorplan-distance-input input {
     width: 100%;
-    padding: 6px 10px;
+    paddingvar(--space-150) var(--space-250);
     background: var(--border-default);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
@@ -255,7 +255,7 @@
 /* Responsive adjustments */
 @media (max-width: 1200px) {
     .floorplan-panel {
-        right: 20px;
+        rightvar(--space-5);
         width: 340px;
     }
 }

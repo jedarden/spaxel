@@ -2,7 +2,7 @@
 
 #briefing-card {
 	position: fixed;
-	top: 60px;
+	topvar(--space-16);
 	left: 50%;
 	transform: translateX(-50%);
 	width: 90%;
@@ -162,7 +162,7 @@
 /* Simple mode briefing card */
 .simple-mode #briefing-card {
 	top: auto;
-	bottom: 20px;
+	bottomvar(--space-5);
 	transform: translateX(-50%);
 }
 
@@ -185,7 +185,7 @@
 #briefing-indicator {
 	position: fixed;
 	top: 50%;
-	right: 20px;
+	rightvar(--space-5);
 	transform: translateY(-50%);
 	width: 40px;
 	height: 40px;
@@ -279,8 +279,8 @@
 #briefing-settings .setting-toggle::after {
 	content: '';
 	position: absolute;
-	top: 2px;
-	left: 2px;
+	topvar(--space-half);
+	leftvar(--space-half);
 	width: 20px;
 	height: 20px;
 	background: var(--text-on-accent);
