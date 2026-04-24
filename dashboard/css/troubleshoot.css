@@ -4,9 +4,9 @@
 
 /* Troubleshoot section inside node panel */
 #troubleshoot-section {
-    margin-top: 12px;
+    margin-top: var(--space-3);
     border-top: 1px solid var(--bg-hover);
-    padding-top: 12px;
+    padding-top: var(--space-3);
 }
 
 /* Offline troubleshooting card */
@@ -15,7 +15,7 @@
     border: 1px solid var(--warn-border);
     border-radius: var(--radius-control);
     padding: 10px;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
     font-size: var(--text-xs);
     animation: troubleshoot-fade-in 0.3s ease-out;
 }
@@ -29,7 +29,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
     color: var(--warn);
     font-weight: 600;
 }
@@ -64,7 +64,7 @@
 
 .troubleshoot-step {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: flex-start;
 }
 
@@ -85,7 +85,7 @@
 
 .troubleshoot-step-text {
     color: var(--text-muted);
-    line-height: 1.5;
+    line-height: var(--lh-body);
 }
 
 .troubleshoot-step-text strong {
@@ -94,7 +94,7 @@
 
 /* More options expander */
 .troubleshoot-more {
-    margin-top: 4px;
+    margin-top: var(--space-1);
 }
 
 .troubleshoot-more summary {
@@ -118,7 +118,7 @@
     border: 1px solid var(--alert-border);
     color: var(--alert);
     font-size: 11px;
-    padding: 2px 8px;
+    padding: 2px var(--space-2);
     border-radius: var(--radius-control);
     cursor: pointer;
 }
@@ -136,10 +136,10 @@
     background: var(--warn-bg);
     border: 1px solid var(--warn-border);
     border-radius: var(--radius-control);
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     font-size: 13px;
     color: var(--warn);
     z-index: 150;
@@ -183,7 +183,7 @@
 .troubleshoot-modal {
     background: var(--bg-card);
     border-radius: var(--radius-card);
-    padding: 24px 28px;
+    padding: var(--space-6) 28px;
     max-width: 480px;
     width: 90%;
     box-shadow: 0 8px 32px var(--shadow-xl);
@@ -192,23 +192,23 @@
 .troubleshoot-modal h3 {
     font-size: var(--text-base);
     color: var(--slate-12);
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
 }
 
 .troubleshoot-list {
     color: var(--text-muted);
     font-size: 13px;
     line-height: 1.8;
-    padding-left: 20px;
-    margin-bottom: 16px;
+    padding-left: var(--space-5);
+    margin-bottom: var(--space-4);
 }
 
 .troubleshoot-list li {
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .troubleshoot-modal-close {
-    margin-top: 8px;
+    margin-top: var(--space-2);
 }
 
 /* ============================================
@@ -221,7 +221,7 @@
     background: var(--bg-card);
     border: 1px solid var(--blue-border);
     border-radius: var(--radius-control);
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
     max-width: 260px;
     box-shadow: 0 4px 16px var(--shadow-lg);
     animation: spaxel-tooltip-appear 0.3s ease-out;
@@ -292,7 +292,7 @@
     border: 1px solid var(--border-strong);
     color: var(--text-secondary);
     font-size: var(--text-xs);
-    padding: 6px 16px;
+    padding: 6px var(--space-4);
     border-radius: var(--radius-control);
     cursor: pointer;
     z-index: 2001;
@@ -322,27 +322,27 @@
 }
 
 .post-cal-card .wizard-icon-large {
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .post-cal-card h3 {
     font-size: 18px;
     color: var(--slate-12);
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .post-cal-summary {
     color: var(--ok) !important;
     font-size: var(--text-sm);
     font-weight: 500;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .post-cal-expect {
     color: var(--text-muted);
     font-size: 13px;
-    line-height: 1.5;
-    margin-bottom: 16px;
+    line-height: var(--lh-body);
+    margin-bottom: var(--space-4);
 }
 
 .post-cal-actions {

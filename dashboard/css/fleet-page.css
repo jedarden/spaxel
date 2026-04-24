@@ -13,7 +13,7 @@ body.fleet-page {
     font-family: var(--font-body);
     background: var(--bg-page);
     color: var(--text-primary);
-    line-height: 1.5;
+    line-height: var(--lh-body);
     min-height: 100vh;
 }
 
@@ -35,13 +35,13 @@ body.fleet-page {
     justify-content: space-between;
     width: 100%;
     max-width: 1400px;
-    margin: 0 auto;
+    margin: 0;
 }
 
 .nav-logo {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     text-decoration: none;
     color: var(--text-primary);
     font-weight: 600;
@@ -55,19 +55,19 @@ body.fleet-page {
 .nav-title {
     font-size: var(--text-lg);
     font-weight: 600;
-    margin-left: 20px;
+    margin-left: var(--space-5);
 }
 
 .nav-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .nav-btn {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     background: transparent;
     border: 1px solid var(--border-default);
     border-radius: var(--radius-control);
@@ -94,23 +94,23 @@ body.fleet-page {
 .fleet-header {
     background: var(--bg-card);
     border-bottom: 1px solid var(--border-default);
-    padding: 20px 24px;
+    padding: var(--space-5) var(--space-6);
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: var(--space-4);
 }
 
 .header-content h1 {
     font-size: 24px;
     font-weight: 600;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .fleet-summary {
     display: flex;
-    gap: 24px;
+    gap: var(--space-6);
     font-size: var(--text-sm);
 }
 
@@ -134,7 +134,7 @@ body.fleet-page {
 
 .header-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 /* ============================================
@@ -144,7 +144,7 @@ body.fleet-page {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-control);
     font-size: 13px;
     font-weight: 500;
@@ -201,7 +201,7 @@ body.fleet-page {
     background: none;
     border: none;
     color: var(--text-secondary);
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
 }
 
 .btn-link:hover {
@@ -219,7 +219,7 @@ body.fleet-page {
 .fleet-toolbar {
     background: var(--bg-hover);
     border-bottom: 1px solid var(--border-default);
-    padding: 12px 24px;
+    padding: var(--space-3) var(--space-6);
 }
 
 .toolbar-section {
@@ -227,17 +227,17 @@ body.fleet-page {
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 .filter-group {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
 }
 
 .search-input, .filter-select {
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-control);
@@ -260,7 +260,7 @@ body.fleet-page {
 
 .active-filters {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     flex-wrap: wrap;
 }
 
@@ -268,7 +268,7 @@ body.fleet-page {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
+    padding: var(--space-1) 10px;
     background: var(--blue-muted);
     border: 1px solid var(--blue-border);
     border-radius: var(--radius-modal);
@@ -292,7 +292,7 @@ body.fleet-page {
 .bulk-actions-bar {
     background: var(--blue-muted);
     border-bottom: 1px solid var(--blue-border);
-    padding: 12px 24px;
+    padding: var(--space-3) var(--space-6);
 }
 
 .bulk-content {
@@ -300,7 +300,7 @@ body.fleet-page {
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 .bulk-count {
@@ -310,7 +310,7 @@ body.fleet-page {
 
 .bulk-buttons {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 /* ============================================
@@ -319,7 +319,7 @@ body.fleet-page {
 .fleet-main {
     padding: 0;
     max-width: 1400px;
-    margin: 0 auto;
+    margin: 0;
 }
 
 .table-container {
@@ -343,7 +343,7 @@ body.fleet-page {
 }
 
 .fleet-table th {
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     text-align: left;
     font-weight: 600;
     color: var(--text-secondary);
@@ -366,7 +366,7 @@ body.fleet-page {
 .fleet-table th.sortable::after {
     content: ' ⇅';
     opacity: 0.3;
-    margin-left: 4px;
+    margin-left: var(--space-1);
 }
 
 .fleet-table th.sort-asc::after {
@@ -382,7 +382,7 @@ body.fleet-page {
 }
 
 .fleet-table td {
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--border-default);
 }
 
@@ -464,7 +464,7 @@ body.fleet-page {
 /* Label (editable) */
 .node-label {
     cursor: text;
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-control);
     border: 1px solid transparent;
     transition: all 0.2s;
@@ -510,7 +510,7 @@ body.fleet-page {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
+    padding: var(--space-1) 10px;
     border-radius: var(--radius-card);
     font-size: var(--text-xs);
     font-weight: 500;
@@ -573,7 +573,7 @@ body.fleet-page {
 .firmware-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
     padding: 2px 6px;
     background: var(--warn-bg);
     border-radius: var(--radius-control);
@@ -587,7 +587,7 @@ body.fleet-page {
 /* Role Badge */
 .role-badge {
     display: inline-block;
-    padding: 4px 8px;
+    padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-control);
     font-size: 11px;
     font-weight: 600;
@@ -618,7 +618,7 @@ body.fleet-page {
 .health-bar-container {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .health-bar {
@@ -685,7 +685,7 @@ body.fleet-page {
 /* Action Buttons */
 .action-buttons {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
     justify-content: flex-end;
 }
 
@@ -718,7 +718,7 @@ body.fleet-page {
     position: absolute;
     right: 0;
     top: 100%;
-    margin-top: 4px;
+    margin-top: var(--space-1);
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-control);
@@ -734,7 +734,7 @@ body.fleet-page {
 
 .dropdown-item {
     width: 100%;
-    padding: 10px 16px;
+    padding: 10px var(--space-4);
     background: none;
     border: none;
     color: var(--text-primary);
@@ -744,7 +744,7 @@ body.fleet-page {
     transition: background 0.2s;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .dropdown-item:hover {
@@ -786,7 +786,7 @@ body.fleet-page {
     border-top-color: var(--blue-9);
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin-right: 12px;
+    margin-right: var(--space-3);
     vertical-align: middle;
 }
 
@@ -796,24 +796,24 @@ body.fleet-page {
 
 .empty-state {
     text-align: center;
-    padding: 60px 20px;
+    padding: 60px var(--space-5);
     color: var(--text-muted);
 }
 
 .empty-icon {
     font-size: 64px;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
     opacity: 0.5;
 }
 
 .empty-state h3 {
     font-size: var(--text-lg);
     color: var(--text-secondary);
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .empty-state p {
-    margin-bottom: 24px;
+    margin-bottom: var(--space-6);
 }
 
 /* ============================================
@@ -848,7 +848,7 @@ body.fleet-page {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
+    padding: var(--space-4) var(--space-5);
     border-bottom: 1px solid var(--border-default);
 }
 
@@ -878,7 +878,7 @@ body.fleet-page {
 }
 
 .modal-body {
-    padding: 20px;
+    padding: var(--space-5);
     max-height: 50vh;
     overflow-y: auto;
 }
@@ -886,16 +886,16 @@ body.fleet-page {
 .modal-footer {
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
-    padding: 16px 20px;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
     border-top: 1px solid var(--border-default);
     background: var(--overlay);
 }
 
 /* OTA Modal */
 .ota-info {
-    margin-top: 16px;
-    padding: 12px;
+    margin-top: var(--space-4);
+    padding: var(--space-3);
     background: var(--overlay);
     border-radius: var(--radius-control);
 }
@@ -927,15 +927,15 @@ body.fleet-page {
 .role-options {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-top: 12px;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
 }
 
 .role-option {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: var(--space-3);
+    padding: var(--space-3);
     background: var(--overlay);
     border-radius: var(--radius-control);
     cursor: pointer;
@@ -959,15 +959,15 @@ body.fleet-page {
 
 /* Remove Modal */
 .remove-warning {
-    margin: 16px 0;
-    padding: 12px;
+    margin: var(--space-4);
+    padding: var(--space-3);
     background: var(--alert-bg);
     border: 1px solid var(--alert-border);
     border-radius: var(--radius-control);
 }
 
 .remove-warning ul {
-    margin: 8px 0 0 20px;
+    margin: 0;
     font-size: 13px;
 }
 
@@ -986,18 +986,18 @@ body.fleet-page {
     z-index: 1100;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .toast {
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     background: var(--bg-card);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-control);
     box-shadow: 0 4px 12px var(--shadow);
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
     min-width: 280px;
     animation: slideIn 0.3s ease;
 }
@@ -1080,7 +1080,7 @@ body.fleet-page {
     }
 
     .fleet-toolbar {
-        padding: 12px 16px;
+        padding: var(--space-3) var(--space-4);
     }
 
     .filter-group {
@@ -1097,7 +1097,7 @@ body.fleet-page {
     }
 
     .bulk-actions-bar {
-        padding: 12px 16px;
+        padding: var(--space-3) var(--space-4);
     }
 
     .bulk-content {
@@ -1115,7 +1115,7 @@ body.fleet-page {
 
     .fleet-table th,
     .fleet-table td {
-        padding: 8px 10px;
+        padding: var(--space-2) 10px;
     }
 
     /* Hide less important columns on mobile */
@@ -1140,11 +1140,11 @@ body.fleet-page {
     }
 
     .nav-content {
-        gap: 8px;
+        gap: var(--space-2);
     }
 
     .nav-title {
-        margin-left: 8px;
+        margin-left: var(--space-2);
     }
 
     .header-content h1 {
@@ -1153,13 +1153,13 @@ body.fleet-page {
 
     .fleet-summary {
         flex-direction: column;
-        gap: 4px;
+        gap: var(--space-1);
         font-size: var(--text-xs);
     }
 
     .modal-content {
         width: 95%;
-        margin: 12px;
+        margin: var(--space-3);
     }
 
     .toast-container {

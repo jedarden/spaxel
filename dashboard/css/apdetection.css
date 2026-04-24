@@ -27,15 +27,15 @@
 .ap-detection-content {
 	display: flex;
 	align-items: center;
-	padding: 16px 24px;
+	padding: var(--space-4) var(--space-6);
 	max-width: 800px;
-	margin: 0 auto;
+	margin: 0;
 	color: var(--text-on-accent);
 }
 
 .ap-detection-icon {
 	font-size: var(--text-2xl);
-	margin-right: 16px;
+	margin-right: var(--space-4);
 	animation: pulse 2s ease-in-out infinite;
 }
 
@@ -57,7 +57,7 @@
 .ap-detection-title {
 	font-size: 18px;
 	font-weight: 600;
-	margin-bottom: 4px;
+	margin-bottom: var(--space-1);
 }
 
 .ap-detection-subtitle {
@@ -67,8 +67,8 @@
 
 .ap-detection-actions {
 	display: flex;
-	gap: 12px;
-	margin-left: 16px;
+	gap: var(--space-3);
+	margin-left: var(--space-4);
 }
 
 /* ============================================
@@ -82,12 +82,12 @@
 .ap-placement-list {
 	list-style: none;
 	padding: 0;
-	margin: 16px 0;
+	margin: var(--space-4);
 }
 
 .ap-placement-list li {
 	padding: 8px 0;
-	padding-left: 24px;
+	padding-left: var(--space-6);
 	position: relative;
 }
 
@@ -100,13 +100,13 @@
 }
 
 .ap-placement-tips {
-	margin-top: 20px;
+	margin-top: var(--space-5);
 }
 
 .ap-placement-tip {
 	background: var(--bg-input);
 	border-left: 4px solid var(--blue-7);
-	padding: 12px;
+	padding: var(--space-3);
 	border-radius: var(--radius-control);
 	font-size: var(--text-sm);
 	color: var(--slate-6);
@@ -124,12 +124,12 @@
 
 	.ap-detection-icon {
 		margin-right: 0;
-		margin-bottom: 12px;
+		margin-bottom: var(--space-3);
 	}
 
 	.ap-detection-actions {
 		margin-left: 0;
-		margin-top: 16px;
+		margin-top: var(--space-4);
 		width: 100%;
 	}
 
@@ -151,7 +151,7 @@
    ============================================ */
 
 .ap-btn {
-	padding: 10px 20px;
+	padding: 10px var(--space-5);
 	border: none;
 	border-radius: var(--radius-control);
 	font-size: var(--text-sm);

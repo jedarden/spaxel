@@ -50,7 +50,7 @@ body.simple-mode {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--simple-border);
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -66,16 +66,16 @@ body.simple-mode {
 .simple-mode-header .mode-toggle {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     background: var(--simple-bg);
-    padding: 4px;
+    padding: var(--space-1);
     border-radius: var(--radius-card);
 }
 
 .simple-mode-header .mode-toggle-btn {
     background: transparent;
     border: none;
-    padding: 6px 12px;
+    padding: 6px var(--space-3);
     border-radius: var(--radius-control);
     font-size: 13px;
     font-weight: 500;
@@ -97,8 +97,8 @@ body.simple-mode {
 /* ===== Simple Mode Content ===== */
 .simple-mode-content {
     max-width: 1200px;
-    margin: 0 auto;
-    padding: 16px;
+    margin: 0;
+    padding: var(--space-4);
     padding-bottom: 100px; /* Space for bottom nav */
 }
 
@@ -106,9 +106,9 @@ body.simple-mode {
 .simple-alert-banner {
     background: linear-gradient(135deg, var(--simple-accent-red), var(--alert));
     color: var(--text-on-accent);
-    padding: 16px;
+    padding: var(--space-4);
     border-radius: var(--radius-card);
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
     box-shadow: var(--simple-shadow);
     display: none;
     animation: slideDown 0.3s ease-out;
@@ -117,7 +117,7 @@ body.simple-mode {
 .simple-alert-banner.visible {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 @keyframes slideDown {
@@ -174,9 +174,9 @@ body.simple-mode {
 .simple-morning-briefing {
     background: linear-gradient(135deg, var(--blue-7), var(--blue-9));
     color: var(--text-on-accent);
-    padding: 20px;
+    padding: var(--space-5);
     border-radius: var(--radius-modal);
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
     box-shadow: var(--simple-shadow);
     animation: fadeIn 0.4s ease-out;
 }
@@ -196,7 +196,7 @@ body.simple-mode {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .simple-morning-briefing .briefing-greeting {
@@ -212,12 +212,12 @@ body.simple-mode {
 .simple-morning-briefing .briefing-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 .simple-morning-briefing .briefing-section {
     background: var(--border-strong);
-    padding: 12px;
+    padding: var(--space-3);
     border-radius: var(--radius-card);
 }
 
@@ -226,7 +226,7 @@ body.simple-mode {
     text-transform: uppercase;
     letter-spacing: 1px;
     opacity: 0.7;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .simple-morning-briefing .section-value {
@@ -249,11 +249,11 @@ body.simple-mode {
 }
 
 .simple-morning-briefing .briefing-dismiss {
-    margin-top: 8px;
+    margin-top: var(--space-2);
     background: var(--border-strong);
     border: none;
     color: var(--text-on-accent);
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-card);
     font-size: var(--text-sm);
     font-weight: 500;
@@ -269,14 +269,14 @@ body.simple-mode {
 .simple-room-cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
 }
 
 .simple-room-card {
     background: var(--simple-card-bg);
     border-radius: var(--radius-modal);
-    padding: 16px;
+    padding: var(--space-4);
     box-shadow: var(--simple-shadow);
     transition: all 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
@@ -336,7 +336,7 @@ body.simple-mode {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .simple-room-card .room-name {
@@ -351,7 +351,7 @@ body.simple-mode {
     gap: 6px;
     font-size: 13px;
     font-weight: 500;
-    padding: 4px 10px;
+    padding: var(--space-1) 10px;
     border-radius: var(--radius-modal);
 }
 
@@ -374,7 +374,7 @@ body.simple-mode {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .simple-room-card .occupant-avatar {
@@ -392,7 +392,7 @@ body.simple-mode {
 .simple-room-card .room-activity {
     font-size: 13px;
     color: var(--simple-text-secondary);
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
 }
 
 .simple-room-card .room-timestamp {
@@ -404,8 +404,8 @@ body.simple-mode {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    margin-top: 8px;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
     font-size: var(--text-xs);
     color: var(--simple-text-secondary);
 }
@@ -414,7 +414,7 @@ body.simple-mode {
 .simple-activity-feed {
     background: var(--simple-card-bg);
     border-radius: var(--radius-modal);
-    padding: 16px;
+    padding: var(--space-4);
     box-shadow: var(--simple-shadow);
 }
 
@@ -422,7 +422,7 @@ body.simple-mode {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
 }
 
 .simple-activity-feed .feed-title {
@@ -433,13 +433,13 @@ body.simple-mode {
 
 .simple-activity-feed .feed-filter {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .simple-activity-feed .filter-btn {
     background: var(--simple-bg);
     border: none;
-    padding: 6px 12px;
+    padding: 6px var(--space-3);
     border-radius: var(--radius-card);
     font-size: 13px;
     font-weight: 500;
@@ -455,19 +455,19 @@ body.simple-mode {
 
 .simple-activity-feed .feed-empty {
     text-align: center;
-    padding: 40px 20px;
+    padding: var(--space-10) var(--space-5);
     color: var(--simple-text-secondary);
 }
 
 .simple-activity-feed .feed-empty-icon {
     font-size: 48px;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
     opacity: 0.5;
 }
 
 .simple-activity-feed .feed-empty-text {
     font-size: 15px;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .simple-activity-feed .feed-empty-subtext {
@@ -477,13 +477,13 @@ body.simple-mode {
 .simple-activity-feed .activity-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 .simple-activity-feed .activity-item {
     display: flex;
-    gap: 12px;
-    padding: 12px;
+    gap: var(--space-3);
+    padding: var(--space-3);
     background: var(--simple-bg);
     border-radius: var(--radius-card);
     transition: background 0.2s;
@@ -538,7 +538,7 @@ body.simple-mode {
 .simple-activity-feed .activity-description {
     font-size: 13px;
     color: var(--simple-text-secondary);
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .simple-activity-feed .activity-time {
@@ -548,14 +548,14 @@ body.simple-mode {
 
 .simple-activity-feed .activity-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 8px;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
 }
 
 .simple-activity-feed .activity-action-btn {
     background: transparent;
     border: 1px solid var(--simple-border);
-    padding: 4px 10px;
+    padding: var(--space-1) 10px;
     border-radius: var(--radius-control);
     font-size: var(--text-xs);
     color: var(--simple-text-secondary);
@@ -578,27 +578,27 @@ body.simple-mode {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--simple-border);
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
     padding-bottom: max(12px, env(safe-area-inset-bottom));
     z-index: 100;
 }
 
 .simple-quick-actions .actions-container {
     max-width: 1200px;
-    margin: 0 auto;
+    margin: 0;
     display: flex;
     justify-content: space-around;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .simple-quick-actions .quick-action-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-1);
     background: transparent;
     border: none;
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-card);
     cursor: pointer;
     transition: background 0.2s;
@@ -642,9 +642,9 @@ body.simple-mode {
 .simple-sleep-summary {
     background: linear-gradient(135deg, var(--blue-10), var(--blue-8));
     color: var(--text-on-accent);
-    padding: 20px;
+    padding: var(--space-5);
     border-radius: var(--radius-modal);
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
     box-shadow: var(--simple-shadow);
 }
 
@@ -652,7 +652,7 @@ body.simple-mode {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .simple-sleep-summary .sleep-title {
@@ -660,7 +660,7 @@ body.simple-mode {
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .simple-sleep-summary .sleep-date {
@@ -671,12 +671,12 @@ body.simple-mode {
 .simple-sleep-summary .sleep-metrics {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 .simple-sleep-summary .sleep-metric {
     background: var(--border-strong);
-    padding: 12px;
+    padding: var(--space-3);
     border-radius: var(--radius-card);
 }
 
@@ -685,7 +685,7 @@ body.simple-mode {
     text-transform: uppercase;
     letter-spacing: 1px;
     opacity: 0.7;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .simple-sleep-summary .metric-value {
@@ -702,7 +702,7 @@ body.simple-mode {
 .simple-sleep-summary .sleep-quality {
     grid-column: 1 / -1;
     background: var(--border-strong);
-    padding: 12px;
+    padding: var(--space-3);
     border-radius: var(--radius-card);
     display: flex;
     justify-content: space-between;
@@ -720,11 +720,11 @@ body.simple-mode {
 }
 
 .simple-sleep-summary .sleep-details-btn {
-    margin-top: 12px;
+    margin-top: var(--space-3);
     background: var(--border-strong);
     border: none;
     color: var(--text-on-accent);
-    padding: 10px 16px;
+    padding: 10px var(--space-4);
     border-radius: var(--radius-card);
     font-size: var(--text-sm);
     font-weight: 500;
@@ -749,7 +749,7 @@ body.simple-mode {
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: var(--space-4);
     animation: fadeIn 0.2s ease-out;
 }
 
@@ -783,7 +783,7 @@ body.simple-mode {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 20px 16px;
+    padding: var(--space-5) var(--space-5) var(--space-4);
     border-bottom: 1px solid var(--simple-border);
 }
 
@@ -813,19 +813,19 @@ body.simple-mode {
 }
 
 .simple-room-modal .modal-body {
-    padding: 20px;
+    padding: var(--space-5);
 }
 
 .simple-room-modal .room-stats {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
 }
 
 .simple-room-modal .room-stat {
     background: var(--simple-bg);
-    padding: 12px;
+    padding: var(--space-3);
     border-radius: var(--radius-card);
     text-align: center;
 }
@@ -833,7 +833,7 @@ body.simple-mode {
 .simple-room-modal .stat-label {
     font-size: var(--text-xs);
     color: var(--simple-text-secondary);
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
 }
 
 .simple-room-modal .stat-value {
@@ -843,27 +843,27 @@ body.simple-mode {
 }
 
 .simple-room-modal .room-history {
-    margin-top: 20px;
+    margin-top: var(--space-5);
 }
 
 .simple-room-modal .history-title {
     font-size: var(--text-base);
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
     color: var(--simple-text-primary);
 }
 
 .simple-room-modal .history-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .simple-room-modal .history-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 12px;
+    padding: 10px var(--space-3);
     background: var(--simple-bg);
     border-radius: var(--radius-card);
     font-size: var(--text-sm);
@@ -883,16 +883,16 @@ body.simple-mode {
 .simple-security-toggle {
     background: var(--simple-card-bg);
     border-radius: var(--radius-modal);
-    padding: 16px;
+    padding: var(--space-4);
     box-shadow: var(--simple-shadow);
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
 }
 
 .simple-security-toggle .security-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .simple-security-toggle .security-title {
@@ -900,13 +900,13 @@ body.simple-mode {
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .simple-security-toggle .security-description {
     font-size: var(--text-sm);
     color: var(--simple-text-secondary);
-    margin-bottom: 12px;
+    margin-bottom: var(--space-3);
 }
 
 .simple-security-toggle .security-toggle-btn {
@@ -934,7 +934,7 @@ body.simple-mode {
     text-align: center;
     font-size: 13px;
     color: var(--simple-text-secondary);
-    margin-top: 8px;
+    margin-top: var(--space-2);
 }
 
 /* ===== Loading State ===== */
@@ -943,7 +943,7 @@ body.simple-mode {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 60px 20px;
+    padding: 60px var(--space-5);
     color: var(--simple-text-secondary);
 }
 
@@ -954,7 +954,7 @@ body.simple-mode {
     border-top-color: var(--simple-accent-blue);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
 }
 
 @keyframes spin {
@@ -968,21 +968,21 @@ body.simple-mode {
 /* ===== Responsive Design ===== */
 @media (min-width: 768px) {
     .simple-mode-content {
-        padding: 24px;
+        padding: var(--space-6);
     }
 
     .simple-room-cards {
         grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 16px;
+        gap: var(--space-4);
     }
 
     .simple-quick-actions {
-        padding: 16px 24px;
+        padding: var(--space-4) var(--space-6);
     }
 
     .simple-quick-actions .quick-action-btn {
         min-width: 80px;
-        padding: 12px 16px;
+        padding: var(--space-3) var(--space-4);
     }
 
     .simple-quick-actions .action-icon {
@@ -998,7 +998,7 @@ body.simple-mode {
     .simple-mode-content {
         display: grid;
         grid-template-columns: 2fr 1fr;
-        gap: 24px;
+        gap: var(--space-6);
         align-items: start;
     }
 

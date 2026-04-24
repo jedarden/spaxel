@@ -89,8 +89,8 @@
 .context-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
+    gap: var(--space-3);
+    padding: 14px var(--space-4);
     border-bottom: 1px solid var(--context-border, var(--bg-hover));
     background: var(--context-header-bg, var(--border-subtle));
 }
@@ -145,8 +145,8 @@
 .context-item {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
     cursor: pointer;
     transition: background 0.15s ease;
     border-left: 3px solid transparent;
@@ -232,13 +232,13 @@
     transform: translateX(-50%);
     background: var(--blue-10);
     color: var(--text-on-accent);
-    padding: 10px 20px;
+    padding: 10px var(--space-5);
     border-radius: var(--radius-modal);
     font-size: var(--text-sm);
     font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     z-index: 999;
     animation: slideUp 0.2s ease-out;
     pointer-events: none;
@@ -267,12 +267,12 @@
     }
 
     .context-item {
-        padding: 14px 16px;
+        padding: 14px var(--space-4);
     }
 
     .follow-mode-indicator {
         bottom: 100px;
-        padding: 12px 24px;
+        padding: var(--space-3) var(--space-6);
         font-size: 15px;
     }
 }

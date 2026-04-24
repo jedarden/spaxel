@@ -364,9 +364,9 @@
   .app-shell--live .live-status-bar {
     height: auto;
     min-height: 44px;
-    padding: 8px 12px;
+    padding: var(--space-2) var(--space-3);
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--space-3);
   }
 }
 
