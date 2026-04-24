@@ -3952,6 +3952,36 @@ func main() {
 		http.NotFound(w, r)
 	})
 
+	r.Get("/live", func(w http.ResponseWriter, r *http.Request) {
+		staticDir := cfg.StaticDir
+		if staticDir == "" {
+			staticDir = findDashboardDir()
+		}
+		if staticDir != "" {
+			livePath := filepath.Join(staticDir, "live.html")
+			if _, err := os.Stat(livePath); err == nil {
+				http.ServeFile(w, r, livePath)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
+	r.Get("/setup", func(w http.ResponseWriter, r *http.Request) {
+		staticDir := cfg.StaticDir
+		if staticDir == "" {
+			staticDir = findDashboardDir()
+		}
+		if staticDir != "" {
+			setupPath := filepath.Join(staticDir, "setup.html")
+			if _, err := os.Stat(setupPath); err == nil {
+				http.ServeFile(w, r, setupPath)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
 	// Serve dashboard static files
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
