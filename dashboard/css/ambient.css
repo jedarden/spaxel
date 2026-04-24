@@ -25,7 +25,7 @@
     --ambient-person-bg-morning: var(--blue-muted);
     --ambient-person-bg-day: var(--blue-muted);
     --ambient-person-bg-evening: var(--warn-muted);
-    --ambient-person-bg-night: rgba(62, 150, 232, 0.08);
+    --ambient-person-bg-night: var(--blue-muted);
 }
 
 body.ambient-mode {
@@ -228,9 +228,9 @@ body.ambient-mode {
     justify-content: center;
     font-size: var(--text-sm);
     font-weight: 600;
-    color: white;
+    color: var(--text-on-accent);
     transition: all 0.5s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px var(--shadow);
 }
 
 .ambient-person::after {
@@ -275,12 +275,12 @@ body.ambient-mode {
 }
 
 .ambient-zone-label.occupied {
-    background: rgba(52, 199, 89, 0.9);
-    color: white;
+    background: var(--ok);
+    color: var(--text-on-accent);
 }
 
 .ambient-zone-label.empty {
-    background: rgba(200, 200, 200, 0.8);
+    background: var(--slate-10);
     color: var(--slate-7);
 }
 
@@ -344,14 +344,14 @@ body.ambient-mode {
 .ambient-alert-title {
     font-size: 32px;
     font-weight: 700;
-    color: white;
+    color: var(--text-on-accent);
     margin-bottom: 12px;
     text-align: center;
 }
 
 .ambient-alert-message {
     font-size: 18px;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--text-on-accent);
     margin-bottom: 32px;
     text-align: center;
     max-width: 500px;
@@ -383,7 +383,7 @@ body.ambient-mode {
 
 .ambient-alert-btn.secondary {
     background: var(--border-strong);
-    color: white;
+    color: var(--text-on-accent);
     border: 1px solid var(--border-strong);
 }
 
@@ -401,7 +401,7 @@ body.ambient-mode {
     align-items: center;
     justify-content: center;
     padding: 40px;
-    color: white;
+    color: var(--text-on-accent);
     animation: briefing-fade-in 1s ease-out;
 }
 
@@ -454,7 +454,7 @@ body.ambient-mode {
     margin-top: 24px;
     background: var(--border-strong);
     border: none;
-    color: white;
+    color: var(--text-on-accent);
     padding: 12px 24px;
     border-radius: 8px;
     font-size: var(--text-sm);
