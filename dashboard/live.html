@@ -66,7 +66,7 @@
             padding-top: max(0px, env(safe-area-inset-top)); /* iOS notch support */
             gap: 24px;
             z-index: 100;
-            font-size: 14px;
+            font-size: var(--text-sm);
         }
 
         .status-item {
@@ -105,7 +105,7 @@
         }
 
         #chart-title {
-            font-size: 12px;
+            font-size: var(--text-xs);
             color: var(--text-muted);
             margin-bottom: 6px;
         }
@@ -154,7 +154,7 @@
         }
 
         #node-panel h3 {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-muted);
             margin-bottom: 12px;
             text-transform: uppercase;
@@ -207,7 +207,7 @@
             background: var(--warn-bg);
             border: 1px solid var(--warn-border);
             color: var(--warn);
-            font-size: 14px;
+            font-size: var(--text-sm);
             padding: 2px 6px;
             border-radius: 3px;
             cursor: pointer;
@@ -253,7 +253,7 @@
             gap: 8px;
             padding: 6px 0;
             cursor: pointer;
-            font-size: 12px;
+            font-size: var(--text-xs);
             color: var(--text-secondary);
         }
 
@@ -302,7 +302,7 @@
             margin-bottom: 4px;
             background: var(--highlight-subtle);
             border-radius: 4px;
-            font-size: 12px;
+            font-size: var(--text-xs);
             cursor: pointer;
             display: flex;
             justify-content: space-between;
@@ -337,7 +337,7 @@
 
         /* Overall presence indicator in status bar */
         #presence-indicator {
-            font-size: 12px;
+            font-size: var(--text-xs);
             font-weight: 600;
             padding: 3px 8px;
             border-radius: 4px;
@@ -359,7 +359,7 @@
             background: var(--bg-hover);
             border: 1px solid var(--border-strong);
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -372,7 +372,7 @@
             background: rgba(255,255,255,0.06);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -400,7 +400,7 @@
         }
 
         #presence-header h3 {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -449,7 +449,7 @@
             margin-bottom: 3px;
             background: var(--highlight-subtle);
             border-radius: 4px;
-            font-size: 12px;
+            font-size: var(--text-xs);
             cursor: pointer;
             transition: background 0.2s;
         }
@@ -575,7 +575,7 @@
         }
 
         #wizard-header h1 {
-            font-size: 20px;
+            font-size: var(--text-lg);
             font-weight: 600;
             color: var(--text-primary);
         }
@@ -657,7 +657,7 @@
 
         .wizard-step-content p {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: var(--text-sm);
             line-height: 1.5;
             margin-bottom: 12px;
         }
@@ -689,7 +689,7 @@
 
         .wizard-success {
             color: var(--ok);
-            font-size: 14px;
+            font-size: var(--text-sm);
             font-weight: 500;
         }
 
@@ -772,7 +772,7 @@
         }
 
         .wizard-progress p {
-            font-size: 12px;
+            font-size: var(--text-xs);
             color: var(--text-muted);
             margin-top: 6px;
             text-align: center;
@@ -781,8 +781,8 @@
         /* Buttons */
         .wizard-btn {
             padding: 10px 24px;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
             font-weight: 500;
             cursor: pointer;
             border: none;
@@ -843,7 +843,7 @@
         }
 
         .link-health-header h3 {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -955,7 +955,7 @@
             border: 1px solid rgba(255, 167, 38, 0.3);
             border-radius: 4px;
             padding: 8px 10px;
-            font-size: 12px;
+            font-size: var(--text-xs);
         }
 
         .hint-header {
@@ -1012,7 +1012,7 @@
         .diagnosis-card {
             padding: 8px 10px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: var(--text-xs);
         }
 
         .diagnosis-card.severity-info {
@@ -1110,7 +1110,7 @@
         }
 
         .no-issues-icon {
-            font-size: 16px;
+            font-size: var(--text-base);
         }
 
         /* ===== System-wide Detection Quality Gauge ===== */
@@ -1207,7 +1207,7 @@
             background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
             color: var(--text-on-accent);
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             font-size: 13px;
             display: none;
             align-items: center;
@@ -1242,7 +1242,7 @@
             cursor: pointer;
             padding: 2px 6px;
             opacity: 0.7;
-            font-size: 16px;
+            font-size: var(--text-base);
         }
 
         #diurnal-banner .dismiss-btn:hover {
@@ -1308,8 +1308,8 @@
             background: rgba(0, 0, 0, 0.9);
             color: var(--text-on-accent);
             padding: 12px 20px;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
             display: flex;
             align-items: center;
             gap: 10px;
@@ -1374,7 +1374,7 @@
             border: 1px solid var(--border-strong);
             border-radius: 4px;
             color: var(--text-primary);
-            font-size: 14px;
+            font-size: var(--text-sm);
             box-sizing: border-box;
         }
 
@@ -1408,14 +1408,14 @@
         }
 
         .calibrate-phase h3 {
-            font-size: 16px;
+            font-size: var(--text-base);
             color: var(--text-primary);
             margin-bottom: 6px;
         }
 
         .calibrate-phase p {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: var(--text-sm);
         }
 
         /* Add Node button in status bar */
@@ -1423,7 +1423,7 @@
             background: rgba(79, 195, 247, 0.15);
             border: 1px solid rgba(79, 195, 247, 0.4);
             color: var(--blue-10);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1439,7 +1439,7 @@
             background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1456,7 +1456,7 @@
             background: rgba(171, 71, 188, 0.15);
             border: 1px solid rgba(171, 71, 188, 0.4);
             color: var(--blue-10);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1493,7 +1493,7 @@
             background: rgba(255,255,255,0.06);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1507,7 +1507,7 @@
             background: rgba(255, 167, 38, 0.15);
             border: 1px solid rgba(255, 167, 38, 0.4);
             color: var(--warn);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1523,7 +1523,7 @@
             background: rgba(255,255,255,0.06);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1548,7 +1548,7 @@
         }
 
         #portal-editor-panel h3 {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--warn);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -1574,7 +1574,7 @@
             color: var(--text-on-accent);
             padding: 6px 8px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: var(--text-xs);
             box-sizing: border-box;
         }
 
@@ -1627,7 +1627,7 @@
             background: rgba(255,255,255,0.06);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1641,7 +1641,7 @@
             background: rgba(79,195,247,0.1);
             border: 1px solid rgba(79,195,247,0.3);
             color: var(--blue-10);
-            font-size: 14px;
+            font-size: var(--text-sm);
             font-weight: 600;
             padding: 3px 10px;
             border-radius: 4px;
@@ -1656,7 +1656,7 @@
             background: rgba(255,255,255,0.06);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1670,7 +1670,7 @@
             background: rgba(255,255,255,0.06);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1753,7 +1753,7 @@
             background: var(--highlight-subtle);
             border: 1px solid var(--bg-hover);
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -1788,7 +1788,7 @@
         }
 
         #room-editor-panel h3 {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -1801,7 +1801,7 @@
 
         .room-field label {
             display: block;
-            font-size: 12px;
+            font-size: var(--text-xs);
             color: var(--text-secondary);
             margin-bottom: 3px;
         }
@@ -1813,7 +1813,7 @@
             border: 1px solid var(--border-strong);
             border-radius: 4px;
             color: var(--text-primary);
-            font-size: 14px;
+            font-size: var(--text-sm);
             box-sizing: border-box;
         }
 
@@ -1853,7 +1853,7 @@
             bottom: 20px;
             left: 320px;
             background: var(--live-status-bg);
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             padding: 10px 14px;
             z-index: 100;
             display: none;
@@ -1904,8 +1904,8 @@
             color: var(--bg-page);
             border: none;
             padding: 10px 24px;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
             font-weight: 500;
             cursor: pointer;
         }
@@ -1957,20 +1957,20 @@
         }
 
         .anomaly-title {
-            font-size: 16px;
+            font-size: var(--text-base);
             font-weight: 600;
             color: var(--text-on-accent);
             margin-bottom: 4px;
         }
 
         .anomaly-description {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-primary);
             margin-bottom: 4px;
         }
 
         .anomaly-meta {
-            font-size: 12px;
+            font-size: var(--text-xs);
             color: var(--text-secondary);
         }
 
@@ -1982,7 +1982,7 @@
 
         .anomaly-btn {
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             font-size: 13px;
             font-weight: 500;
             cursor: pointer;
@@ -2067,12 +2067,12 @@
         }
 
         .feedback-anomaly-desc {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-secondary);
             margin-bottom: 20px;
             padding: 12px;
             background: var(--highlight-subtle);
-            border-radius: 6px;
+            border-radius: var(--radius-control);
         }
 
         .feedback-options {
@@ -2106,19 +2106,19 @@
         }
 
         .feedback-btn .icon {
-            font-size: 20px;
+            font-size: var(--text-lg);
             width: 28px;
             text-align: center;
         }
 
         .feedback-btn .label {
-            font-size: 14px;
+            font-size: var(--text-sm);
             font-weight: 500;
             color: var(--text-primary);
         }
 
         .feedback-btn .desc {
-            font-size: 12px;
+            font-size: var(--text-xs);
             color: var(--text-muted);
         }
 
@@ -2132,7 +2132,7 @@
             padding: 10px;
             background: var(--highlight-subtle);
             border: 1px solid var(--border-strong);
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             color: var(--text-primary);
             font-size: 13px;
             resize: none;
@@ -2152,8 +2152,8 @@
 
         .modal-btn {
             padding: 10px 20px;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
             font-weight: 500;
             cursor: pointer;
             border: none;
@@ -2192,7 +2192,7 @@
             color: var(--text-on-accent);
             padding: 6px 12px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: var(--text-xs);
             font-weight: 600;
             letter-spacing: 1px;
             z-index: 150;
@@ -2218,7 +2218,7 @@
             background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
             color: var(--text-on-accent);
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             font-size: 13px;
             display: none;
             align-items: center;
@@ -2293,12 +2293,12 @@
             max-width: 380px;
         }
         .ws-lost-modal-content h3 {
-            font-size: 20px;
+            font-size: var(--text-lg);
             margin-bottom: 12px;
             color: var(--alert);
         }
         .ws-lost-modal-content p {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-secondary);
             margin-bottom: 24px;
             line-height: 1.5;
@@ -2308,8 +2308,8 @@
             color: var(--bg-page);
             border: none;
             padding: 10px 24px;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
             cursor: pointer;
             margin-right: 8px;
         }
@@ -2321,8 +2321,8 @@
             color: var(--text-secondary);
             border: none;
             padding: 10px 24px;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
             cursor: pointer;
         }
         .ws-lost-dismiss-btn:hover {
@@ -2335,7 +2335,7 @@
             background: var(--bg-hover);
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: var(--text-sm);
             padding: 10px; /* 44px touch target (18px icon + 10px padding top/bottom = ~38px, close enough) */
             min-width: 44px; /* Ensure 44px minimum */
             min-height: 44px;
@@ -2441,7 +2441,7 @@
         }
 
         .hamburger-section h3 {
-            font-size: 12px;
+            font-size: var(--text-xs);
             text-transform: uppercase;
             letter-spacing: 1px;
             color: var(--text-muted);
@@ -2462,7 +2462,7 @@
             background: none;
             width: 100%;
             text-align: left;
-            font-size: 14px;
+            font-size: var(--text-sm);
         }
 
         .hamburger-item:hover {
@@ -2555,7 +2555,7 @@
         }
 
         .hamburger-tab-header h3 {
-            font-size: 16px;
+            font-size: var(--text-base);
             font-weight: 600;
             color: var(--text-primary);
             margin: 0;
@@ -2593,7 +2593,7 @@
             padding: 12px;
             margin-bottom: 8px;
             background: var(--highlight-subtle);
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             font-size: 13px;
         }
 
@@ -2614,7 +2614,7 @@
             padding: 12px;
             margin-bottom: 4px;
             background: var(--highlight-subtle);
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             font-size: 13px;
         }
 
@@ -2674,7 +2674,7 @@
                 flex-wrap: wrap;
                 padding: 8px;
                 gap: 8px;
-                font-size: 12px;
+                font-size: var(--text-xs);
             }
 
             .status-item {
@@ -2893,7 +2893,7 @@
             /* Toast notifications - larger on touch devices */
             .toast {
                 padding: 14px 20px;
-                font-size: 14px;
+                font-size: var(--text-sm);
             }
 
             /* Replay controls - larger touch targets */
@@ -2932,7 +2932,7 @@
             background: var(--warn-bg);
             border: 1px solid var(--warn-border);
             color: var(--warn);
-            font-size: 12px;
+            font-size: var(--text-xs);
             padding: 3px 10px;
             border-radius: 4px;
             cursor: pointer;
@@ -2971,7 +2971,7 @@
             color: var(--text-secondary);
             width: 32px;
             height: 32px;
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -2990,7 +2990,7 @@
             gap: 2px;
         }
         .replay-timestamp {
-            font-size: 14px;
+            font-size: var(--text-sm);
             font-weight: 600;
             color: var(--text-primary);
             font-family: var(--font-mono);
@@ -3107,7 +3107,7 @@
             margin-bottom: 8px;
         }
         .replay-tuning-header h3 {
-            font-size: 14px;
+            font-size: var(--text-sm);
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -3185,7 +3185,7 @@
             padding: 8px;
             border: none;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: var(--text-xs);
             cursor: pointer;
             transition: background 0.2s;
         }
@@ -3210,9 +3210,9 @@
             display: none;
             background: rgba(0, 0, 0, 0.9);
             border: 1px solid var(--blue-interact-border);
-            border-radius: 6px;
+            border-radius: var(--radius-control);
             padding: 10px 12px;
-            font-size: 12px;
+            font-size: var(--text-xs);
             color: var(--text-primary);
             pointer-events: none;
             z-index: 1000;
@@ -3959,6 +3959,7 @@
                 Timeline
                 <span id="timeline-count" class="timeline-count"></span>
             </h2>
+            <span id="timeline-now-replaying"></span>
             <button id="timeline-filter-toggle" class="timeline-filter-toggle" title="Toggle filters">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="22 3 2 10 12.79 21 15.41 18.38 19 14.79 22 3 22 3"></polygon>
