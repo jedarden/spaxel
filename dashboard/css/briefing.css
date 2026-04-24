@@ -56,7 +56,7 @@
 }
 
 #briefing-card .briefing-content {
-	font-size: 15px;
+	font-size: var(--text-md);
 	line-height: 1.6;
 	color: var(--slate-11);
 	white-space: pre-line;
@@ -236,7 +236,7 @@
 }
 
 #briefing-settings h3 {
-	font-size: 18px;
+	font-size: var(--text-xl);
 	color: var(--blue-10);
 	margin-bottom: var(--space-5);
 }

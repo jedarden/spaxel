@@ -74,7 +74,7 @@
     border-radius: 50%;
     background: var(--warn-muted);
     color: var(--warn);
-    font-size: 10px;
+    font-size: var(--text-3xs);
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -99,7 +99,7 @@
 
 .troubleshoot-more summary {
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--text-2xs);
     cursor: pointer;
     padding: 2px 0;
 }
@@ -117,7 +117,7 @@
     background: var(--alert-bg);
     border: 1px solid var(--alert-border);
     color: var(--alert);
-    font-size: 11px;
+    font-size: var(--text-2xs);
     padding: 2px var(--space-2);
     border-radius: var(--radius-control);
     cursor: pointer;
@@ -140,7 +140,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    font-size: 13px;
+    font-size: var(--text-sm);
     color: var(--warn);
     z-index: 150;
     max-width: 600px;
@@ -197,7 +197,7 @@
 
 .troubleshoot-list {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: var(--text-sm);
     line-height: 1.8;
     padding-left: var(--space-5);
     margin-bottom: var(--space-4);
@@ -235,7 +235,7 @@
 
 .spaxel-tooltip-text {
     color: var(--slate-12);
-    font-size: 13px;
+    font-size: var(--text-sm);
     line-height: 1.4;
 }
 
@@ -326,7 +326,7 @@
 }
 
 .post-cal-card h3 {
-    font-size: 18px;
+    font-size: var(--text-xl);
     color: var(--slate-12);
     margin-bottom: var(--space-2);
 }
@@ -340,7 +340,7 @@
 
 .post-cal-expect {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: var(--text-sm);
     line-height: var(--lh-body);
     margin-bottom: var(--space-4);
 }

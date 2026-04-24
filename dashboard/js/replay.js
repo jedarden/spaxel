@@ -320,6 +320,25 @@
         });
     }
 
+    function fetchSessionBlobs(sessionId) {
+        if (!sessionId) return Promise.resolve();
+
+        return fetch('/api/replay/session/' + encodeURIComponent(sessionId))
+            .then(function(res) {
+                if (!res.ok) throw new Error('Failed to fetch session state');
+                return res.json();
+            })
+            .then(function(data) {
+                // Feed replay blobs to 3D scene
+                if (data.blobs && data.blobs.length > 0 && window.Viz3D && Viz3D.updateReplayBlobs) {
+                    Viz3D.updateReplayBlobs(data.blobs, data.timestamp_ms);
+                }
+            })
+            .catch(function(err) {
+                console.warn('[Replay] Failed to fetch session blobs:', err);
+            });
+    }
+
     function tuneParams(params) {
         if (!state.activeSessionId) return Promise.resolve();
 
@@ -780,8 +799,12 @@
                 Viz3D.enterReplayMode();
             }
 
-            console.log('[Replay] Jump-to-time session:', data.session_id);
-            return data;
+            // Fetch session state (includes blobs at the seeked timestamp)
+            // so the 3D scene immediately shows the correct state
+            return fetchSessionBlobs(data.session_id).then(function() {
+                console.log('[Replay] Jump-to-time session:', data.session_id);
+                return data;
+            });
         });
     }
 

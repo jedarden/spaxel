@@ -50,7 +50,7 @@
 }
 
 .help-icon {
-    font-size: 24px;
+    font-size: var(--text-3xl);
     line-height: 1;
 }
 
@@ -65,7 +65,7 @@
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 24px;
+    font-size: var(--text-3xl);
     cursor: pointer;
     padding: 0;
     line-height: 1;
@@ -120,7 +120,7 @@
 }
 
 .step-title {
-    font-size: 15px;
+    font-size: var(--text-md);
     font-weight: 600;
     color: var(--blue-10);
     margin: var(--space-2);
@@ -173,7 +173,7 @@
 .help-btn {
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-control);
-    font-size: 13px;
+    font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
     border: none;

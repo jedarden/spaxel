@@ -109,7 +109,7 @@
 
 .context-title {
     flex: 1;
-    font-size: 15px;
+    font-size: var(--text-md);
     font-weight: 600;
     color: var(--context-text, var(--slate-12));
     white-space: nowrap;
@@ -161,7 +161,7 @@
 }
 
 .item-icon {
-    font-size: 18px;
+    font-size: var(--text-xl);
     flex-shrink: 0;
     width: 24px;
     text-align: center;
@@ -273,7 +273,7 @@
     .follow-mode-indicator {
         bottom: 100px;
         padding: var(--space-3) var(--space-6);
-        font-size: 15px;
+        font-size: var(--text-md);
     }
 }
 

@@ -267,7 +267,7 @@ body.ambient-mode {
     padding: 6px var(--space-3);
     background: var(--slate-4);
     border-radius: var(--radius-card);
-    font-size: 13px;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--text-primary);
     box-shadow: 0 2px 8px var(--shadow);
@@ -289,7 +289,7 @@ body.ambient-mode {
 }
 
 .ambient-zone-label .zone-count {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     opacity: 0.8;
     margin-left: var(--space-1);
 }
@@ -325,7 +325,7 @@ body.ambient-mode {
 }
 
 .ambient-alert-icon {
-    font-size: 64px;
+    font-size: var(--text-6xl);
     margin-bottom: var(--space-5);
     animation: alert-pulse 1.5s ease-in-out infinite;
 }
@@ -342,7 +342,7 @@ body.ambient-mode {
 }
 
 .ambient-alert-title {
-    font-size: 32px;
+    font-size: var(--text-4xl);
     font-weight: 700;
     color: var(--text-on-accent);
     margin-bottom: var(--space-3);
@@ -350,7 +350,7 @@ body.ambient-mode {
 }
 
 .ambient-alert-message {
-    font-size: 18px;
+    font-size: var(--text-xl);
     color: var(--text-on-accent);
     margin-bottom: var(--space-8);
     text-align: center;
@@ -438,9 +438,9 @@ body.ambient-mode {
 }
 
 .ambient-briefing-section-label {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: var(--ls-wide);
     opacity: 0.7;
     margin-bottom: var(--space-1);
 }
@@ -479,12 +479,12 @@ body.ambient-mode {
 }
 
 .ambient-secure-icon {
-    font-size: 64px;
+    font-size: var(--text-6xl);
     margin-bottom: var(--space-4);
 }
 
 .ambient-secure-text {
-    font-size: 24px;
+    font-size: var(--text-3xl);
     font-weight: 500;
 }
 
@@ -502,11 +502,11 @@ body.ambient-mode {
 
     .ambient-zone-label {
         padding: var(--space-1) var(--space-2);
-        font-size: 11px;
+        font-size: var(--text-2xs);
     }
 
     .ambient-alert-title {
-        font-size: 24px;
+        font-size: var(--text-3xl);
     }
 
     .ambient-alert-message {

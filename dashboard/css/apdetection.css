@@ -55,7 +55,7 @@
 }
 
 .ap-detection-title {
-	font-size: 18px;
+	font-size: var(--text-xl);
 	font-weight: 600;
 	margin-bottom: var(--space-1);
 }

@@ -26,7 +26,7 @@
     font-size: var(--text-sm);
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: var(--ls-wide);
     margin: 0;
 }
 
@@ -34,7 +34,7 @@
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 24px;
+    font-size: var(--text-3xl);
     cursor: pointer;
     padding: 0 4px;
     line-height: 1;
@@ -54,13 +54,13 @@
 }
 
 .floorplan-section h4 {
-    font-size: 13px;
+    font-size: var(--text-sm);
     color: var(--slate-11);
     margin-bottom: var(--space-2);
 }
 
 .floorplan-hint {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     color: var(--text-muted);
     margin-bottom: var(--space-2);
 }
@@ -113,7 +113,7 @@
 }
 
 .floorplan-file-name {
-    font-size: 11px;
+    font-size: var(--text-2xs);
     color: var(--text-muted);
     max-width: 180px;
     overflow: hidden;
@@ -192,7 +192,7 @@
 .floorplan-point-info {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     margin-bottom: var(--space-1);
 }
 
@@ -206,7 +206,7 @@
 
 .floorplan-distance-input label {
     display: block;
-    font-size: 11px;
+    font-size: var(--text-2xs);
     color: var(--text-secondary);
     margin-bottom: var(--space-1);
 }
@@ -218,7 +218,7 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
     color: var(--slate-12);
-    font-size: 13px;
+    font-size: var(--text-sm);
     box-sizing: border-box;
 }
 
@@ -245,7 +245,7 @@
 .status-item {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: var(--text-2xs);
 }
 
 .status-label {
