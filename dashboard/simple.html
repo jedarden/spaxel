@@ -4,52 +4,55 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Spaxel - Simple Mode</title>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/simple.css">
     <link rel="stylesheet" href="css/notifications.css">
     <style>
-        #wizard-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:1000}
-        #wizard-card{background:#1e1e3a;border-radius:12px;padding:28px 32px 20px;max-width:560px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)}
-        #wizard-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-        #wizard-header h1{font-size:20px;font-weight:600;color:#eee}
-        .wizard-close{background:none;border:none;color:#888;font-size:24px;cursor:pointer;padding:0 4px;line-height:1}
-        .wizard-close:hover{color:#eee}
-        #wizard-steps{display:flex;align-items:center;justify-content:center;margin-bottom:24px;gap:0}
-        .wizard-step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:#333;color:#666;transition:all .3s;flex-shrink:0}
-        .wizard-step-dot.active{background:#4fc3f7;color:#fff;box-shadow:0 0 12px rgba(79,195,247,.5)}
-        .wizard-step-dot.completed{background:#4caf50;color:#fff}
-        .wizard-step-line{width:20px;height:2px;background:#333;flex-shrink:0}
-        .wizard-step-line.completed{background:#4caf50}
+        #wizard-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--overlay-strong);display:flex;align-items:center;justify-content:center;z-index:1000}
+        #wizard-card{background:var(--bg-card);border-radius:var(--radius-modal);padding:28px 32px 20px;max-width:560px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-xl)}
+        #wizard-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-5)}
+        #wizard-header h1{font-size:var(--text-lg);font-weight:var(--fw-heading);color:var(--text-primary)}
+        .wizard-close{background:none;border:none;color:var(--text-muted);font-size:24px;cursor:pointer;padding:0 4px;line-height:1}
+        .wizard-close:hover{color:var(--text-primary)}
+        #wizard-steps{display:flex;align-items:center;justify-content:center;margin-bottom:var(--space-6);gap:0}
+        .wizard-step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:var(--fw-heading);background:var(--bg-active);color:var(--slate-7);transition:all .3s;flex-shrink:0}
+        .wizard-step-dot.active{background:var(--color-primary);color:var(--text-on-accent);box-shadow:0 0 12px rgba(62,150,232,.5)}
+        .wizard-step-dot.completed{background:var(--ok);color:var(--text-on-accent)}
+        .wizard-step-line{width:20px;height:2px;background:var(--bg-active);flex-shrink:0}
+        .wizard-step-line.completed{background:var(--ok)}
         #wizard-content{min-height:180px}
         .wizard-step-content{text-align:center}
-        .wizard-step-content h2{font-size:18px;margin-bottom:8px;color:#eee}
-        .wizard-step-content p{color:#bbb;font-size:14px;line-height:1.5;margin-bottom:12px}
-        .wizard-muted{color:#777!important;font-size:13px!important}
-        .wizard-center-msg{padding:24px 0;text-align:center}
-        .wizard-center-msg p{color:#888;margin-top:12px}
-        .wizard-error{color:#ef5350;font-size:13px;padding:10px;background:rgba(239,83,80,.1);border-radius:4px;text-align:left;margin-top:8px}
-        .wizard-success{color:#66bb6a;font-size:14px;font-weight:500}
-        .wizard-icon-large{font-size:48px;margin-bottom:12px}
-        .wizard-list{text-align:left;color:#bbb;font-size:13px;line-height:1.8;margin:12px 0;padding-left:20px}
-        .spinner{display:inline-block;width:32px;height:32px;border:3px solid rgba(79,195,247,.2);border-top-color:#4fc3f7;border-radius:50%;animation:wizard-spin .8s linear infinite}
+        .wizard-step-content h2{font-size:18px;margin-bottom:var(--space-2);color:var(--text-primary)}
+        .wizard-step-content p{color:var(--text-secondary);font-size:var(--text-sm);line-height:var(--lh-body);margin-bottom:var(--space-3)}
+        .wizard-muted{color:var(--text-muted)!important;font-size:13px!important}
+        .wizard-center-msg{padding:var(--space-6) 0;text-align:center}
+        .wizard-center-msg p{color:var(--text-muted);margin-top:var(--space-3)}
+        .wizard-error{color:var(--alert);font-size:13px;padding:10px;background:var(--alert-bg);border-radius:var(--radius-control);text-align:left;margin-top:var(--space-2)}
+        .wizard-success{color:var(--ok);font-size:var(--text-sm);font-weight:500}
+        .wizard-icon-large{font-size:48px;margin-bottom:var(--space-3)}
+        .wizard-list{text-align:left;color:var(--text-secondary);font-size:13px;line-height:1.8;margin:var(--space-3) 0;padding-left:20px}
+        .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--blue-border);border-top-color:var(--color-primary);border-radius:50%;animation:wizard-spin .8s linear infinite}
         @keyframes wizard-spin{to{transform:rotate(360deg)}}
-        .wizard-progress{margin:16px 0}
-        .progress-bar{width:100%;height:8px;background:#333;border-radius:4px;overflow:hidden}
-        .progress-fill{height:100%;background:linear-gradient(90deg,#4fc3f7,#29b6f6);border-radius:4px;transition:width .3s;width:0%}
-        .wizard-progress p{font-size:12px;color:#888;margin-top:6px;text-align:center}
-        .wizard-btn{padding:10px 24px;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;border:none;transition:background .2s,opacity .2s}
+        .wizard-progress{margin:var(--space-4) 0}
+        .progress-bar{width:100%;height:8px;background:var(--bg-active);border-radius:4px;overflow:hidden}
+        .progress-fill{height:100%;background:linear-gradient(90deg,var(--blue-9),var(--blue-10));border-radius:4px;transition:width .3s;width:0%}
+        .wizard-progress p{font-size:var(--text-xs);color:var(--text-muted);margin-top:6px;text-align:center}
+        .wizard-btn{padding:10px 24px;border-radius:var(--radius-control);font-size:var(--text-sm);font-weight:500;cursor:pointer;border:none;transition:background .2s,opacity .2s}
         .wizard-btn:disabled{opacity:.5;cursor:not-allowed}
-        .wizard-btn-primary{background:#4fc3f7;color:#1a1a2e}
-        .wizard-btn-primary:hover:not(:disabled){background:#29b6f6}
-        .wizard-btn-secondary{background:rgba(255,255,255,.1);color:#ccc;border:1px solid rgba(255,255,255,.2)}
-        .wizard-btn-secondary:hover:not(:disabled){background:rgba(255,255,255,.15)}
-        #wizard-nav{display:flex;justify-content:space-between;margin-top:20px;gap:12px}
+        .wizard-btn-primary{background:var(--color-primary);color:var(--slate-1)}
+        .wizard-btn-primary:hover:not(:disabled){background:var(--color-primary-hover)}
+        .wizard-btn-secondary{background:var(--bg-hover);color:var(--text-secondary);border:1px solid var(--border-strong)}
+        .wizard-btn-secondary:hover:not(:disabled){background:var(--bg-active)}
+        #wizard-nav{display:flex;justify-content:space-between;margin-top:var(--space-5);gap:var(--space-3)}
     </style>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#f5f5f7">
 </head>
-<body class="simple-mode">
-    <!-- Simple Mode Header -->
+<body class="simple-mode has-mobile-nav">
+    <div class="app-shell app-shell--full">
+    <!-- Header (grid header area) -->
     <header id="simple-mode-header" class="simple-mode-header">
         <h1>&#x1F3E0; Spaxel</h1>
         <div class="mode-toggle">
@@ -58,40 +61,40 @@
         </div>
     </header>
 
-    <!-- Simple Mode Content -->
-    <main id="simple-mode-content" class="simple-mode-content">
+    <!-- Main content (grid main area) -->
+    <main id="simple-mode-content" class="simple-mode-content app-main">
         <!-- Loading State -->
         <div class="simple-loading">
             <div class="simple-loading-spinner"></div>
             <div class="simple-loading-text">Loading your home...</div>
         </div>
     </main>
+    </div><!-- /.app-shell -->
 
-    <!-- Quick Actions Bottom Navigation -->
-    <nav id="simple-quick-actions" class="simple-quick-actions">
-        <div class="actions-container">
-            <button class="quick-action-btn active" data-action="home" data-tab="home">
-                <span class="action-icon">&#x1F3E0;</span>
-                <span class="action-label">Home</span>
-            </button>
-            <button class="quick-action-btn" data-action="activity" data-tab="activity">
-                <span class="action-icon">&#x23F0;</span>
-                <span class="action-label">Activity</span>
-            </button>
-            <button class="quick-action-btn" data-action="alerts" data-tab="alerts">
-                <span class="action-icon">&#x1F514;</span>
-                <span class="action-label">Alerts</span>
-                <span class="action-badge hidden" id="alert-badge">0</span>
-            </button>
-            <button class="quick-action-btn" data-action="add-node" onclick="window.SpaxelOnboard && window.SpaxelOnboard.start()">
-                <span class="action-icon">&#x2795;</span>
-                <span class="action-label">Add Node</span>
-            </button>
-            <button class="quick-action-btn" data-action="settings" data-tab="settings">
-                <span class="action-icon">&#x2699;</span>
-                <span class="action-label">Settings</span>
-            </button>
-        </div>
+    <!-- Mobile bottom nav (outside grid, fixed at bottom) -->
+    <nav class="app-mobile-nav" aria-label="Main navigation">
+        <ul class="app-mobile-nav__list">
+            <li class="app-mobile-nav__item">
+                <a href="/" class="app-mobile-nav__link">
+                    <span>&#x1F3E0;</span> Home
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/live" class="app-mobile-nav__link">
+                    <span>&#x26F6;</span> Live
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/fleet" class="app-mobile-nav__link">
+                    <span>&#x1F4E1;</span> Fleet
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/setup" class="app-mobile-nav__link">
+                    <span>&#x2699;</span> Setup
+                </a>
+            </li>
+        </ul>
     </nav>
 
     <!-- Room Detail Modal -->

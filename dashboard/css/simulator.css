@@ -13,12 +13,12 @@
     right: 0;
     width: 380px;
     max-height: calc(100vh - 44px);
-    background: #1a1a1a;
-    border-left: 1px solid #333;
+    background: var(--bg-page);
+    border-left: 1px solid var(--slate-5);
     overflow-y: auto;
     overflow-x: hidden;
     z-index: 100;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+    box-shadow: -2px 0 10px var(--shadow);
 }
 
 .simulator-panel::-webkit-scrollbar {
@@ -26,16 +26,16 @@
 }
 
 .simulator-panel::-webkit-scrollbar-track {
-    background: #1a1a1a;
+    background: var(--bg-page);
 }
 
 .simulator-panel::-webkit-scrollbar-thumb {
-    background: #444;
+    background: var(--slate-6);
     border-radius: 4px;
 }
 
 .simulator-panel::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    background: var(--slate-7);
 }
 
 /* ============================================
@@ -46,8 +46,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px;
-    border-bottom: 1px solid #333;
-    background: #1a1a1a;
+    border-bottom: 1px solid var(--slate-5);
+    background: var(--bg-page);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -57,13 +57,13 @@
     margin: 0;
     font-size: 18px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-on-accent);
 }
 
 .sim-close-btn {
     background: none;
     border: none;
-    color: #888;
+    color: var(--text-muted);
     cursor: pointer;
     padding: 4px;
     border-radius: 4px;
@@ -74,8 +74,8 @@
 }
 
 .sim-close-btn:hover {
-    background: #333;
-    color: #fff;
+    background: var(--slate-5);
+    color: var(--text-on-accent);
 }
 
 /* ============================================
@@ -83,7 +83,7 @@
    ============================================ */
 .sim-section {
     padding: 16px;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--bg-hover);
 }
 
 .sim-section:last-child {
@@ -92,9 +92,9 @@
 
 .sim-section h3 {
     margin: 0 0 12px 0;
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 600;
-    color: #aaa;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -114,22 +114,22 @@
     align-items: center;
     gap: 4px;
     font-size: 13px;
-    color: #ccc;
+    color: var(--slate-11);
 }
 
 .sim-space-controls input[type="number"] {
     width: 60px;
     padding: 4px 8px;
-    background: #2a2a2a;
-    border: 1px solid #444;
+    background: var(--bg-hover);
+    border: 1px solid var(--slate-6);
     border-radius: 4px;
-    color: #fff;
+    color: var(--text-on-accent);
     font-size: 13px;
 }
 
 .sim-space-controls input[type="number"]:focus {
     outline: none;
-    border-color: #45b7d1;
+    border-color: var(--blue-9);
 }
 
 /* ============================================
@@ -142,8 +142,8 @@
 }
 
 .sim-tool-btn {
-    background: #2a2a2a;
-    border: 1px solid #444;
+    background: var(--bg-hover);
+    border: 1px solid var(--slate-6);
     border-radius: 4px;
     padding: 8px;
     cursor: pointer;
@@ -154,23 +154,23 @@
 }
 
 .sim-tool-btn:hover {
-    background: #333;
-    border-color: #555;
+    background: var(--slate-5);
+    border-color: var(--slate-7);
 }
 
 .sim-tool-btn.active {
-    background: #45b7d1;
-    border-color: #45b7d1;
+    background: var(--blue-9);
+    border-color: var(--blue-9);
 }
 
 .sim-tool-btn.active svg {
-    stroke: #fff;
+    stroke: var(--text-on-accent);
 }
 
 .sim-tool-btn svg {
     width: 16px;
     height: 16px;
-    stroke: #888;
+    stroke: var(--text-muted);
 }
 
 /* ============================================
@@ -178,41 +178,41 @@
    ============================================ */
 .sim-btn {
     padding: 8px 12px;
-    background: #2a2a2a;
-    border: 1px solid #444;
+    background: var(--bg-hover);
+    border: 1px solid var(--slate-6);
     border-radius: 4px;
-    color: #ccc;
+    color: var(--slate-11);
     font-size: 13px;
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .sim-btn:hover {
-    background: #333;
-    border-color: #555;
-    color: #fff;
+    background: var(--slate-5);
+    border-color: var(--slate-7);
+    color: var(--text-on-accent);
 }
 
 .sim-btn-primary {
-    background: #45b7d1;
-    border-color: #45b7d1;
-    color: #fff;
+    background: var(--blue-9);
+    border-color: var(--blue-9);
+    color: var(--text-on-accent);
 }
 
 .sim-btn-primary:hover {
-    background: #3aa6c3;
-    border-color: #3aa6c3;
+    background: var(--blue-8);
+    border-color: var(--blue-8);
 }
 
 .sim-btn-danger {
-    background: #dc3545;
-    border-color: #dc3545;
-    color: #fff;
+    background: var(--alert);
+    border-color: var(--alert);
+    color: var(--text-on-accent);
 }
 
 .sim-btn-danger:hover {
-    background: #c82333;
-    border-color: #c82333;
+    background: var(--alert);
+    border-color: var(--alert);
 }
 
 .sim-btn:disabled {
@@ -221,8 +221,8 @@
 }
 
 .sim-btn:disabled:hover {
-    background: #2a2a2a;
-    border-color: #444;
+    background: var(--bg-hover);
+    border-color: var(--slate-6);
 }
 
 /* ============================================
@@ -239,26 +239,26 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px;
-    background: #2a2a2a;
+    background: var(--bg-hover);
     border-radius: 4px;
     margin-bottom: 4px;
 }
 
 .sim-item-name {
     font-size: 13px;
-    color: #fff;
+    color: var(--text-on-accent);
 }
 
 .sim-item-position {
     font-size: 11px;
-    color: #888;
+    color: var(--text-muted);
     margin-left: 8px;
 }
 
 .sim-item-delete {
     background: none;
     border: none;
-    color: #dc3545;
+    color: var(--alert);
     font-size: 11px;
     cursor: pointer;
     padding: 4px 8px;
@@ -267,7 +267,7 @@
 }
 
 .sim-item-delete:hover {
-    background: rgba(220, 53, 69, 0.1);
+    background: var(--alert-bg);
 }
 
 /* ============================================
@@ -283,10 +283,10 @@
 .sim-walker-controls select {
     flex: 1;
     padding: 6px 8px;
-    background: #2a2a2a;
-    border: 1px solid #444;
+    background: var(--bg-hover);
+    border: 1px solid var(--slate-6);
     border-radius: 4px;
-    color: #fff;
+    color: var(--text-on-accent);
     font-size: 13px;
 }
 
@@ -296,7 +296,7 @@
 .sim-gdop-legend {
     margin-top: 12px;
     padding: 12px;
-    background: #2a2a2a;
+    background: var(--bg-hover);
     border-radius: 4px;
 }
 
@@ -318,8 +318,8 @@
 }
 
 .gdop-legend-label {
-    font-size: 12px;
-    color: #ccc;
+    font-size: var(--text-xs);
+    color: var(--slate-11);
 }
 
 .gdop-stats {
@@ -328,16 +328,16 @@
     gap: 12px;
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #444;
+    border-top: 1px solid var(--slate-6);
 }
 
 .gdop-stat-item {
-    font-size: 12px;
-    color: #888;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
 }
 
 .gdop-stat-item strong {
-    color: #fff;
+    color: var(--text-on-accent);
     margin-left: 4px;
 }
 
@@ -362,8 +362,8 @@
 }
 
 .sim-progress #sim-time {
-    font-size: 12px;
-    color: #888;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
     margin-bottom: 4px;
     display: block;
 }
@@ -371,14 +371,14 @@
 .sim-progress-bar {
     width: 100%;
     height: 6px;
-    background: #2a2a2a;
+    background: var(--bg-hover);
     border-radius: 3px;
     overflow: hidden;
 }
 
 .sim-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #45b7d1, #4ecdc4);
+    background: linear-gradient(90deg, var(--blue-9), var(--blue-9));
     transition: width 0.1s linear;
 }
 
@@ -395,18 +395,18 @@
     display: flex;
     justify-content: space-between;
     padding: 8px;
-    background: #2a2a2a;
+    background: var(--bg-hover);
     border-radius: 4px;
 }
 
 .sim-result-label {
     font-size: 13px;
-    color: #ccc;
+    color: var(--slate-11);
 }
 
 .sim-result-value {
     font-size: 13px;
-    color: #fff;
+    color: var(--text-on-accent);
     font-weight: 600;
 }
 
@@ -424,26 +424,26 @@
     align-items: flex-start;
     gap: 8px;
     padding: 10px;
-    background: #2a2a2a;
+    background: var(--bg-hover);
     border-radius: 4px;
-    border-left: 3px solid #555;
+    border-left: 3px solid var(--slate-7);
 }
 
 .sim-rec-priority.high {
-    border-left-color: #dc3545;
+    border-left-color: var(--alert);
 }
 
 .sim-rec-priority.medium {
-    border-left-color: #ffc107;
+    border-left-color: var(--warn);
 }
 
 .sim-rec-priority.low {
-    border-left-color: #22c65e;
+    border-left-color: var(--ok);
 }
 
 .sim-rec-text {
     font-size: 13px;
-    color: #ccc;
+    color: var(--slate-11);
     flex: 1;
 }
 
@@ -460,17 +460,17 @@
     display: flex;
     justify-content: space-between;
     padding: 8px;
-    background: #2a2a2a;
+    background: var(--bg-hover);
     border-radius: 4px;
 }
 
 .sim-shopping-item span {
     font-size: 13px;
-    color: #ccc;
+    color: var(--slate-11);
 }
 
 .sim-shopping-item strong {
-    color: #45b7d1;
+    color: var(--blue-9);
 }
 
 /* ============================================
@@ -479,7 +479,7 @@
 .sim-empty-state {
     text-align: center;
     padding: 32px 16px;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .sim-empty-state svg {
@@ -490,7 +490,7 @@
 }
 
 .sim-empty-state p {
-    font-size: 14px;
+    font-size: var(--text-sm);
     margin: 0;
 }
 
@@ -549,7 +549,7 @@
     align-items: center;
     justify-content: center;
     padding: 32px;
-    color: #888;
+    color: var(--text-muted);
 }
 
 .sim-loading::after {
@@ -557,7 +557,7 @@
     width: 16px;
     height: 16px;
     margin-left: 8px;
-    border: 2px solid #45b7d1;
+    border: 2px solid var(--blue-9);
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;

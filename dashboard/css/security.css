@@ -17,33 +17,33 @@
 }
 
 .security-status-indicator:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--border-default);
 }
 
 .security-status-indicator.mode-disarmed {
-    background: rgba(136, 136, 136, 0.15);
+    background: var(--bg-active);
 }
 
 .security-status-indicator.mode-learning {
-    background: rgba(255, 167, 38, 0.15);
+    background: var(--warn-bg);
 }
 
 .security-status-indicator.mode-ready {
-    background: rgba(102, 187, 106, 0.15);
+    background: var(--ok-bg);
 }
 
 .security-status-indicator.mode-armed {
-    background: rgba(244, 67, 54, 0.15);
+    background: var(--alert-bg);
 }
 
 .security-status-indicator.mode-alert {
-    background: rgba(239, 83, 80, 0.2);
+    background: var(--alert-muted);
     animation: alert-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes alert-pulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(239, 83, 80, 0.4); }
-    50% { box-shadow: 0 0 16px rgba(239, 83, 80, 0.8); }
+    0%, 100% { box-shadow: 0 0 8px var(--alert-border); }
+    50% { box-shadow: 0 0 16px var(--alert); }
 }
 
 .security-toggle-btn {
@@ -70,7 +70,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0);
+    background: transparent;
     z-index: 2000;
     display: flex;
     align-items: center;
@@ -86,7 +86,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--overlay-strong);
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -102,9 +102,9 @@
 }
 
 .security-dialog-card {
-    background: #1e1e3a;
+    background: var(--bg-card);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 32px var(--shadow-xl);
     width: 480px;
     max-width: 90vw;
     max-height: 90vh;
@@ -124,11 +124,11 @@
 }
 
 .security-dialog-card.arm {
-    border-top: 4px solid #66bb6a;
+    border-top: 4px solid var(--ok);
 }
 
 .security-dialog-card.disarm {
-    border-top: 4px solid #ef5350;
+    border-top: 4px solid var(--alert);
 }
 
 .security-dialog-header {
@@ -140,15 +140,15 @@
 
 .security-dialog-header h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--text-lg);
     font-weight: 600;
-    color: #eee;
+    color: var(--slate-12);
 }
 
 .security-dialog-close {
     background: none;
     border: none;
-    color: #888;
+    color: var(--text-muted);
     font-size: 24px;
     line-height: 1;
     cursor: pointer;
@@ -163,8 +163,8 @@
 }
 
 .security-dialog-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #eee;
+    background: var(--bg-hover);
+    color: var(--slate-12);
 }
 
 .security-dialog-content {
@@ -174,13 +174,13 @@
 .security-dialog-prompt {
     margin: 0 0 20px;
     font-size: 15px;
-    color: #ccc;
+    color: var(--slate-11);
     line-height: 1.5;
 }
 
 .security-dialog-warning {
-    background: rgba(255, 167, 38, 0.15);
-    border: 1px solid rgba(255, 167, 38, 0.3);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 20px;
@@ -189,7 +189,7 @@
 .security-dialog-warning p {
     margin: 0 0 8px;
     font-size: 13px;
-    color: #ffa726;
+    color: var(--warn);
 }
 
 .security-dialog-warning p:last-child {
@@ -204,7 +204,7 @@
 }
 
 .stat-item {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--border-subtle);
     border-radius: 8px;
     padding: 12px;
     text-align: center;
@@ -213,7 +213,7 @@
 .stat-label {
     display: block;
     font-size: 11px;
-    color: #888;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 4px;
@@ -223,7 +223,7 @@
     display: block;
     font-size: 18px;
     font-weight: 600;
-    color: #eee;
+    color: var(--slate-12);
 }
 
 .stat-item-full {
@@ -238,8 +238,8 @@
 
 .security-dialog-btn {
     padding: 10px 20px;
-    border-radius: 6px;
-    font-size: 14px;
+    border-radius: var(--radius-control);
+    font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
     border: none;
@@ -251,31 +251,31 @@
 }
 
 .security-dialog-btn.cancel {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ccc;
+    background: var(--bg-hover);
+    color: var(--slate-11);
 }
 
 .security-dialog-btn.cancel:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #eee;
+    background: var(--border-strong);
+    color: var(--slate-12);
 }
 
 .security-dialog-btn.arm {
-    background: rgba(102, 187, 106, 0.2);
-    color: #66bb6a;
+    background: var(--ok-muted);
+    color: var(--ok);
 }
 
 .security-dialog-btn.arm:hover {
-    background: rgba(102, 187, 106, 0.3);
+    background: var(--ok-border);
 }
 
 .security-dialog-btn.disarm {
-    background: rgba(244, 67, 54, 0.2);
-    color: #ef5350;
+    background: var(--alert-muted);
+    color: var(--alert);
 }
 
 .security-dialog-btn.disarm:hover {
-    background: rgba(244, 67, 54, 0.3);
+    background: var(--alert-border);
 }
 
 /* ── Alert Banner ──────────────────────────────────────────────────────────────────── */
@@ -285,7 +285,7 @@
     top: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(135deg, rgba(185, 28, 28, 0.98), rgba(239, 68, 68, 0.95));
+    background: linear-gradient(135deg, var(--alert), var(--alert));
     color: white;
     padding: 16px 20px;
     z-index: 5000;
@@ -293,7 +293,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 20px;
-    box-shadow: 0 4px 20px rgba(185, 28, 28, 0.4);
+    box-shadow: 0 4px 20px var(--alert-border);
     transform: translateY(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -303,7 +303,7 @@
 }
 
 .alert-banner-icon {
-    font-size: 28px;
+    font-size: var(--text-2xl);
     animation: alert-shake 0.5s ease-in-out infinite;
     flex-shrink: 0;
 }
@@ -320,13 +320,13 @@
 }
 
 .alert-banner-title {
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 600;
     margin-bottom: 4px;
 }
 
 .alert-banner-description {
-    font-size: 14px;
+    font-size: var(--text-sm);
     opacity: 0.95;
     margin-bottom: 4px;
 }
@@ -335,12 +335,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     opacity: 0.85;
 }
 
 .alert-banner-zone {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
     padding: 2px 8px;
     border-radius: 4px;
     font-weight: 500;
@@ -354,7 +354,7 @@
 
 .alert-banner-btn {
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -368,17 +368,17 @@
 }
 
 .alert-banner-btn.acknowledge {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong);
     color: white;
 }
 
 .alert-banner-btn.acknowledge:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--slate-7);
 }
 
 .alert-banner-btn.view {
     background: white;
-    color: #b91c1c;
+    color: var(--alert);
 }
 
 .alert-banner-btn.view:hover {
@@ -391,11 +391,11 @@
     position: fixed;
     top: 45px;
     right: 20px;
-    background: rgba(239, 68, 68, 0.9);
-    color: #fff;
+    background: var(--alert);
+    color: var(--text-on-accent);
     padding: 6px 12px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 1px;
     z-index: 150;
@@ -408,8 +408,8 @@
 }
 
 @keyframes security-pulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
-    50% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.8); }
+    0%, 100% { box-shadow: 0 0 8px var(--alert-muted); }
+    50% { box-shadow: 0 0 16px var(--alert); }
 }
 
 /* ── Responsive Design ───────────────────────────────────────────────────────────── */
@@ -461,16 +461,16 @@
     top: 45px;
     left: 50%;
     transform: translateX(-50%);
-    background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(100, 181, 246, 0.9));
-    color: #fff;
+    background: linear-gradient(135deg, var(--blue-10), var(--blue-10));
+    color: var(--text-on-accent);
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font-size: 13px;
     display: none;
     align-items: center;
     gap: 10px;
     z-index: 150;
-    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+    box-shadow: 0 4px 12px var(--blue-border);
 }
 
 #anomaly-learning-banner.visible {
@@ -480,14 +480,14 @@
 #anomaly-learning-banner .progress-bar {
     width: 80px;
     height: 6px;
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--slate-7);
     border-radius: 3px;
     overflow: hidden;
 }
 
 #anomaly-learning-banner .learning-progress {
     height: 100%;
-    background: #fff;
+    background: var(--text-on-accent);
     border-radius: 3px;
     transition: width 0.5s;
 }

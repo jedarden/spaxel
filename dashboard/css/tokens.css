@@ -45,10 +45,13 @@
   --color-primary-hover: var(--blue-10);
 
   /* ── State with opacity (for badges, backgrounds) ── */
+  --ok-bg:        rgba(70, 167, 88, 0.15);
   --ok-muted:     rgba(70, 167, 88, 0.2);
   --ok-border:    rgba(70, 167, 88, 0.3);
+  --warn-bg:      rgba(229, 160, 13, 0.15);
   --warn-muted:   rgba(229, 160, 13, 0.2);
   --warn-border:  rgba(229, 160, 13, 0.3);
+  --alert-bg:     rgba(229, 72, 77, 0.15);
   --alert-muted:  rgba(229, 72, 77, 0.2);
   --alert-border: rgba(229, 72, 77, 0.3);
   --blue-muted:   rgba(62, 150, 232, 0.15);
@@ -105,7 +108,43 @@
   --radius-card:    10px;
   --radius-modal:   16px;
 
+  /* ── Shadows (flat elevation, no drop shadows per §8e) ── */
+  --shadow:     0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg:  0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-xl:  0 8px 32px rgba(0, 0, 0, 0.5);
+
+  /* ── Overlays ── */
+  --overlay:        rgba(0, 0, 0, 0.5);
+  --overlay-strong: rgba(0, 0, 0, 0.7);
+
   /* ── Transitions ── */
   --transition-fast: 150ms ease;
   --transition-base: 200ms ease;
+
+  /* ── Section tints (briefing, guided-help) ── */
+  --section-sleep-bg:    rgba(70, 167, 88, 0.1);
+  --section-people-bg:   rgba(62, 150, 232, 0.1);
+  --section-anomaly-bg:  rgba(229, 160, 13, 0.1);
+  --section-health-bg:   rgba(155, 157, 170, 0.1);
+  --section-predict-bg:  rgba(62, 150, 232, 0.1);
+  --section-learn-bg:    rgba(229, 160, 13, 0.1);
+  --section-portal-bg:   rgba(62, 150, 232, 0.15);
+  --section-privacy-bg:  rgba(62, 150, 232, 0.1);
+  --section-privacy-border: rgba(62, 150, 232, 0.2);
+
+  /* ── Spinner track ── */
+  --spinner-track: rgba(62, 150, 232, 0.2);
+
+  /* ── Subtle highlight (replaces rgba(255,255,255,0.07)) ── */
+  --highlight-subtle: rgba(255, 255, 255, 0.07);
+
+  /* ── Dark overlay panels (replaces rgba(0,0,0,0.9)) ── */
+  --overlay-panel: rgba(0, 0, 0, 0.9);
+
+  /* ── Card frosted bg (replaces rgba(30,32,36,0.95)) ── */
+  --bg-frosted: rgba(30, 32, 36, 0.95);
+  --bg-frosted-strong: rgba(30, 32, 36, 0.98);
+
+  /* ── Selected row highlight ── */
+  --row-selected: rgba(62, 150, 232, 0.18);
 }

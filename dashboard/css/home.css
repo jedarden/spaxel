@@ -28,17 +28,17 @@
   margin: 0 auto;
 }
 .home-status__banner--ok {
-  background: rgba(70, 167, 88, 0.15);
+  background: var(--ok-bg);
   color: var(--ok);
   border: 1px solid rgba(70, 167, 88, 0.25);
 }
 .home-status__banner--warn {
-  background: rgba(229, 160, 13, 0.15);
+  background: var(--warn-bg);
   color: var(--warn);
   border: 1px solid rgba(229, 160, 13, 0.25);
 }
 .home-status__banner--alert {
-  background: rgba(229, 72, 77, 0.15);
+  background: var(--alert-bg);
   color: var(--alert);
   border: 1px solid rgba(229, 72, 77, 0.25);
 }
@@ -112,15 +112,15 @@
   color: var(--text-secondary);
 }
 .home-card__tag--ok {
-  background: rgba(70, 167, 88, 0.15);
+  background: var(--ok-bg);
   color: var(--ok);
 }
 .home-card__tag--warn {
-  background: rgba(229, 160, 13, 0.15);
+  background: var(--warn-bg);
   color: var(--warn);
 }
 .home-card__tag--alert {
-  background: rgba(229, 72, 77, 0.15);
+  background: var(--alert-bg);
   color: var(--alert);
 }
 

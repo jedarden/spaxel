@@ -7,21 +7,21 @@
 
 /* ===== Simple Mode Layout ===== */
 .simple-mode {
-    --simple-bg: #f5f5f7;
-    --simple-card-bg: #ffffff;
-    --simple-text-primary: #1d1d1f;
-    --simple-text-secondary: #86868b;
-    --simple-accent-blue: #007aff;
-    --simple-accent-green: #34c759;
-    --simple-accent-orange: #ff9500;
-    --simple-accent-red: #ff3b30;
-    --simple-border: #e5e5ea;
-    --simple-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    --simple-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.12);
+    --simple-bg: var(--bg-page);
+    --simple-card-bg: var(--bg-card);
+    --simple-text-primary: var(--text-primary);
+    --simple-text-secondary: var(--text-secondary);
+    --simple-accent-blue: var(--blue-9);
+    --simple-accent-green: var(--ok);
+    --simple-accent-orange: var(--warn);
+    --simple-accent-red: var(--alert);
+    --simple-border: var(--border-default);
+    --simple-shadow: var(--shadow);
+    --simple-shadow-hover: var(--shadow-lg);
 }
 
 body.simple-mode {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-body);
     background: var(--simple-bg);
     color: var(--simple-text-primary);
     overflow-y: auto;
@@ -46,7 +46,7 @@ body.simple-mode {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--bg-card);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--simple-border);
@@ -57,7 +57,7 @@ body.simple-mode {
 }
 
 .simple-mode-header h1 {
-    font-size: 20px;
+    font-size: var(--text-lg);
     font-weight: 600;
     margin: 0;
     color: var(--simple-text-primary);
@@ -76,7 +76,7 @@ body.simple-mode {
     background: transparent;
     border: none;
     padding: 6px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font-size: 13px;
     font-weight: 500;
     color: var(--simple-text-secondary);
@@ -87,7 +87,7 @@ body.simple-mode {
 .simple-mode-header .mode-toggle-btn.active {
     background: var(--simple-card-bg);
     color: var(--simple-text-primary);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 4px var(--border-subtle);
 }
 
 .simple-mode-header .mode-toggle-btn:hover:not(.active) {
@@ -104,7 +104,7 @@ body.simple-mode {
 
 /* ===== Alert Banner ===== */
 .simple-alert-banner {
-    background: linear-gradient(135deg, var(--simple-accent-red), #ff6b6b);
+    background: linear-gradient(135deg, var(--simple-accent-red), var(--alert));
     color: white;
     padding: 16px;
     border-radius: 12px;
@@ -142,17 +142,17 @@ body.simple-mode {
 
 .simple-alert-banner .alert-title {
     font-weight: 600;
-    font-size: 16px;
+    font-size: var(--text-base);
     margin-bottom: 2px;
 }
 
 .simple-alert-banner .alert-message {
-    font-size: 14px;
+    font-size: var(--text-sm);
     opacity: 0.95;
 }
 
 .simple-alert-banner .alert-dismiss {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong);
     border: none;
     color: white;
     width: 28px;
@@ -167,15 +167,15 @@ body.simple-mode {
 }
 
 .simple-alert-banner .alert-dismiss:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--border-strong);
 }
 
 /* ===== Morning Briefing Card ===== */
 .simple-morning-briefing {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, var(--blue-7), var(--blue-9));
     color: white;
     padding: 20px;
-    border-radius: 16px;
+    border-radius: var(--radius-modal);
     margin-bottom: 16px;
     box-shadow: var(--simple-shadow);
     animation: fadeIn 0.4s ease-out;
@@ -216,9 +216,9 @@ body.simple-mode {
 }
 
 .simple-morning-briefing .briefing-section {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
     padding: 12px;
-    border-radius: 10px;
+    border-radius: var(--radius-card);
 }
 
 .simple-morning-briefing .section-label {
@@ -237,7 +237,7 @@ body.simple-mode {
 .simple-morning-briefing .section-metric {
     display: flex;
     justify-content: space-between;
-    font-size: 14px;
+    font-size: var(--text-sm);
 }
 
 .simple-morning-briefing .metric-label {
@@ -250,19 +250,19 @@ body.simple-mode {
 
 .simple-morning-briefing .briefing-dismiss {
     margin-top: 8px;
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong);
     border: none;
     color: white;
     padding: 8px 16px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s;
 }
 
 .simple-morning-briefing .briefing-dismiss:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--border-strong);
 }
 
 /* ===== Room Cards ===== */
@@ -275,7 +275,7 @@ body.simple-mode {
 
 .simple-room-card {
     background: var(--simple-card-bg);
-    border-radius: 16px;
+    border-radius: var(--radius-modal);
     padding: 16px;
     box-shadow: var(--simple-shadow);
     transition: all 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
@@ -288,15 +288,15 @@ body.simple-mode {
 @keyframes occupancyPulse {
     0% {
         transform: scale(1);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 2px 8px var(--border-subtle);
     }
     50% {
         transform: scale(1.02);
-        box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+        box-shadow: 0 4px 20px var(--blue-border);
     }
     100% {
         transform: scale(1);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 2px 8px var(--border-subtle);
     }
 }
 
@@ -356,17 +356,17 @@ body.simple-mode {
 }
 
 .simple-room-card .room-status.empty {
-    background: rgba(52, 199, 89, 0.1);
+    background: var(--ok-bg);
     color: var(--simple-accent-green);
 }
 
 .simple-room-card .room-status.occupied {
-    background: rgba(0, 122, 255, 0.1);
+    background: var(--blue-muted);
     color: var(--simple-accent-blue);
 }
 
 .simple-room-card .room-status.alert {
-    background: rgba(255, 59, 48, 0.1);
+    background: var(--alert-bg);
     color: var(--simple-accent-red);
 }
 
@@ -384,7 +384,7 @@ body.simple-mode {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: white;
 }
@@ -396,7 +396,7 @@ body.simple-mode {
 }
 
 .simple-room-card .room-timestamp {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--simple-text-secondary);
 }
 
@@ -406,14 +406,14 @@ body.simple-mode {
     justify-content: center;
     gap: 4px;
     margin-top: 8px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--simple-text-secondary);
 }
 
 /* ===== Activity Feed ===== */
 .simple-activity-feed {
     background: var(--simple-card-bg);
-    border-radius: 16px;
+    border-radius: var(--radius-modal);
     padding: 16px;
     box-shadow: var(--simple-shadow);
 }
@@ -490,34 +490,34 @@ body.simple-mode {
 }
 
 .simple-activity-feed .activity-item:hover {
-    background: #ebebeb;
+    background: var(--border-default);
 }
 
 .simple-activity-feed .activity-icon {
     width: 40px;
     height: 40px;
-    border-radius: 10px;
+    border-radius: var(--radius-card);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: var(--text-lg);
     flex-shrink: 0;
 }
 
 .simple-activity-feed .activity-icon.presence {
-    background: rgba(0, 122, 255, 0.1);
+    background: var(--blue-muted);
 }
 
 .simple-activity-feed .activity-icon.alert {
-    background: rgba(255, 59, 48, 0.1);
+    background: var(--alert-bg);
 }
 
 .simple-activity-feed .activity-icon.system {
-    background: rgba(134, 134, 139, 0.1);
+    background: var(--bg-hover);
 }
 
 .simple-activity-feed .activity-icon.sleep {
-    background: rgba(175, 82, 222, 0.1);
+    background: var(--blue-muted);
 }
 
 .simple-activity-feed .activity-content {
@@ -526,7 +526,7 @@ body.simple-mode {
 }
 
 .simple-activity-feed .activity-title {
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--simple-text-primary);
     margin-bottom: 2px;
@@ -542,7 +542,7 @@ body.simple-mode {
 }
 
 .simple-activity-feed .activity-time {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--simple-text-secondary);
 }
 
@@ -556,8 +556,8 @@ body.simple-mode {
     background: transparent;
     border: 1px solid var(--simple-border);
     padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
+    border-radius: var(--radius-control);
+    font-size: var(--text-xs);
     color: var(--simple-text-secondary);
     cursor: pointer;
     transition: all 0.2s;
@@ -574,7 +574,7 @@ body.simple-mode {
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--bg-card);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--simple-border);
@@ -599,7 +599,7 @@ body.simple-mode {
     background: transparent;
     border: none;
     padding: 8px 12px;
-    border-radius: 10px;
+    border-radius: var(--radius-card);
     cursor: pointer;
     transition: background 0.2s;
     min-width: 60px;
@@ -610,7 +610,7 @@ body.simple-mode {
 }
 
 .simple-quick-actions .quick-action-btn.active {
-    background: rgba(0, 122, 255, 0.1);
+    background: var(--blue-muted);
 }
 
 .simple-quick-actions .action-icon {
@@ -633,17 +633,17 @@ body.simple-mode {
     font-size: 10px;
     font-weight: 600;
     padding: 2px 6px;
-    border-radius: 10px;
+    border-radius: var(--radius-card);
     min-width: 16px;
     text-align: center;
 }
 
 /* ===== Sleep Summary Card ===== */
 .simple-sleep-summary {
-    background: linear-gradient(135deg, #af52de, #9c27b0);
+    background: linear-gradient(135deg, var(--blue-10), var(--blue-8));
     color: white;
     padding: 20px;
-    border-radius: 16px;
+    border-radius: var(--radius-modal);
     margin-bottom: 16px;
     box-shadow: var(--simple-shadow);
 }
@@ -675,9 +675,9 @@ body.simple-mode {
 }
 
 .simple-sleep-summary .sleep-metric {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
     padding: 12px;
-    border-radius: 10px;
+    border-radius: var(--radius-card);
 }
 
 .simple-sleep-summary .metric-label {
@@ -689,7 +689,7 @@ body.simple-mode {
 }
 
 .simple-sleep-summary .metric-value {
-    font-size: 20px;
+    font-size: var(--text-lg);
     font-weight: 600;
 }
 
@@ -701,32 +701,32 @@ body.simple-mode {
 
 .simple-sleep-summary .sleep-quality {
     grid-column: 1 / -1;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
     padding: 12px;
-    border-radius: 10px;
+    border-radius: var(--radius-card);
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
 .simple-sleep-summary .quality-label {
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 500;
 }
 
 .simple-sleep-summary .quality-value {
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 600;
 }
 
 .simple-sleep-summary .sleep-details-btn {
     margin-top: 12px;
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong);
     border: none;
     color: white;
     padding: 10px 16px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
     width: 100%;
@@ -734,7 +734,7 @@ body.simple-mode {
 }
 
 .simple-sleep-summary .sleep-details-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--border-strong);
 }
 
 /* ===== Room Detail Modal ===== */
@@ -744,7 +744,7 @@ body.simple-mode {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay);
     z-index: 200;
     display: none;
     align-items: center;
@@ -764,7 +764,7 @@ body.simple-mode {
     width: 100%;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-xl);
     animation: slideUp 0.3s ease-out;
 }
 
@@ -788,7 +788,7 @@ body.simple-mode {
 }
 
 .simple-room-modal .modal-title {
-    font-size: 20px;
+    font-size: var(--text-lg);
     font-weight: 600;
     color: var(--simple-text-primary);
 }
@@ -800,7 +800,7 @@ body.simple-mode {
     height: 32px;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 20px;
+    font-size: var(--text-lg);
     color: var(--simple-text-secondary);
     display: flex;
     align-items: center;
@@ -809,7 +809,7 @@ body.simple-mode {
 }
 
 .simple-room-modal .modal-close:hover {
-    background: #e5e5e7;
+    background: var(--border-default);
 }
 
 .simple-room-modal .modal-body {
@@ -831,7 +831,7 @@ body.simple-mode {
 }
 
 .simple-room-modal .stat-label {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--simple-text-secondary);
     margin-bottom: 4px;
 }
@@ -847,7 +847,7 @@ body.simple-mode {
 }
 
 .simple-room-modal .history-title {
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 600;
     margin-bottom: 12px;
     color: var(--simple-text-primary);
@@ -865,8 +865,8 @@ body.simple-mode {
     align-items: center;
     padding: 10px 12px;
     background: var(--simple-bg);
-    border-radius: 10px;
-    font-size: 14px;
+    border-radius: var(--radius-card);
+    font-size: var(--text-sm);
 }
 
 .simple-room-modal .history-time {
@@ -882,7 +882,7 @@ body.simple-mode {
 /* ===== Security Mode Toggle ===== */
 .simple-security-toggle {
     background: var(--simple-card-bg);
-    border-radius: 16px;
+    border-radius: var(--radius-modal);
     padding: 16px;
     box-shadow: var(--simple-shadow);
     margin-bottom: 16px;
@@ -896,7 +896,7 @@ body.simple-mode {
 }
 
 .simple-security-toggle .security-title {
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -904,7 +904,7 @@ body.simple-mode {
 }
 
 .simple-security-toggle .security-description {
-    font-size: 14px;
+    font-size: var(--text-sm);
     color: var(--simple-text-secondary);
     margin-bottom: 12px;
 }
@@ -913,7 +913,7 @@ body.simple-mode {
     width: 100%;
     padding: 14px;
     border-radius: 12px;
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -986,11 +986,11 @@ body.simple-mode {
     }
 
     .simple-quick-actions .action-icon {
-        font-size: 28px;
+        font-size: var(--text-2xl);
     }
 
     .simple-quick-actions .action-label {
-        font-size: 12px;
+        font-size: var(--text-xs);
     }
 }
 
@@ -1019,57 +1019,32 @@ body.simple-mode {
     }
 }
 
-/* ===== Dark Mode Support ===== */
-@media (prefers-color-scheme: dark) {
-    body.simple-mode {
-        --simple-bg: #1c1c1e;
-        --simple-card-bg: #2c2c2e;
-        --simple-text-primary: #ffffff;
-        --simple-text-secondary: #98989d;
-        --simple-border: #38383a;
-        --simple-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        --simple-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
-    }
-
-    .simple-mode-header {
-        background: rgba(44, 44, 46, 0.95);
-    }
-
-    .simple-room-card .room-expand-hint {
-        color: var(--simple-text-secondary);
-    }
-
-    .simple-quick-actions {
-        background: rgba(44, 44, 46, 0.95);
-    }
-}
-
 /* ===== OLED Night Mode (True Black) ===== */
 body.simple-mode.night-mode.oled-night {
-    --simple-bg: #000000;
-    --simple-card-bg: #0a0a0a;
-    --simple-text-primary: #ffffff;
-    --simple-text-secondary: #98989d;
-    --simple-border: #1a1a1a;
-    --simple-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-    --simple-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.6);
+    --simple-bg: var(--slate-1);
+    --simple-card-bg: var(--slate-1);
+    --simple-text-primary: var(--text-on-accent);
+    --simple-text-secondary: var(--text-secondary);
+    --simple-border: var(--bg-page);
+    --simple-shadow: var(--shadow-xl);
+    --simple-shadow-hover: 0 4px 16px var(--overlay-strong);
 }
 
 body.simple-mode.night-mode.oled-night .simple-mode-header {
-    background: rgba(10, 10, 10, 0.95);
+    background: var(--bg-card);
 }
 
 body.simple-mode.night-mode.oled-night .simple-quick-actions {
-    background: rgba(10, 10, 10, 0.95);
+    background: var(--bg-card);
 }
 
 body.simple-mode.night-mode.oled-night .simple-room-card {
-    background: #0a0a0a;
+    background: var(--slate-1);
 }
 
 body.simple-mode.night-mode.oled-night .simple-activity-feed,
 body.simple-mode.night-mode.oled-night .simple-security-toggle {
-    background: #0a0a0a;
+    background: var(--slate-1);
 }
 
 /* Zone color accents remain vibrant in night mode */
@@ -1107,7 +1082,7 @@ body.simple-mode.night-mode.oled-night {
 /* High contrast mode support */
 @media (prefers-contrast: high) {
     body.simple-mode {
-        --simple-border: #000000;
+        --simple-border: var(--slate-1);
     }
 
     .simple-room-card,

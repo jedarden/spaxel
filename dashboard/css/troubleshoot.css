@@ -5,18 +5,18 @@
 /* Troubleshoot section inside node panel */
 #troubleshoot-section {
     margin-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--bg-hover);
     padding-top: 12px;
 }
 
 /* Offline troubleshooting card */
 .troubleshoot-card {
-    background: rgba(255, 167, 38, 0.08);
-    border: 1px solid rgba(255, 167, 38, 0.25);
-    border-radius: 6px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-control);
     padding: 10px;
     margin-bottom: 8px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     animation: troubleshoot-fade-in 0.3s ease-out;
 }
 
@@ -30,20 +30,20 @@
     align-items: center;
     gap: 6px;
     margin-bottom: 8px;
-    color: #ffa726;
+    color: var(--warn);
     font-weight: 600;
 }
 
 .troubleshoot-card-icon {
-    font-size: 14px;
+    font-size: var(--text-sm);
     flex-shrink: 0;
 }
 
 .troubleshoot-dismiss {
     background: none;
     border: none;
-    color: #888;
-    font-size: 16px;
+    color: var(--text-muted);
+    font-size: var(--text-base);
     cursor: pointer;
     padding: 0 2px;
     line-height: 1;
@@ -52,7 +52,7 @@
 }
 
 .troubleshoot-dismiss:hover {
-    color: #eee;
+    color: var(--slate-12);
 }
 
 /* Timeline steps */
@@ -72,8 +72,8 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: rgba(255, 167, 38, 0.2);
-    color: #ffa726;
+    background: var(--warn-muted);
+    color: var(--warn);
     font-size: 10px;
     font-weight: 700;
     display: flex;
@@ -84,12 +84,12 @@
 }
 
 .troubleshoot-step-text {
-    color: #bbb;
+    color: var(--text-muted);
     line-height: 1.5;
 }
 
 .troubleshoot-step-text strong {
-    color: #eee;
+    color: var(--slate-12);
 }
 
 /* More options expander */
@@ -98,14 +98,14 @@
 }
 
 .troubleshoot-more summary {
-    color: #888;
+    color: var(--text-muted);
     font-size: 11px;
     cursor: pointer;
     padding: 2px 0;
 }
 
 .troubleshoot-more summary:hover {
-    color: #bbb;
+    color: var(--text-muted);
 }
 
 .troubleshoot-more[open] .troubleshoot-step {
@@ -114,9 +114,9 @@
 
 /* Reset button inside card */
 .troubleshoot-reset-btn {
-    background: rgba(244, 67, 54, 0.15);
-    border: 1px solid rgba(244, 67, 54, 0.3);
-    color: #ef5350;
+    background: var(--alert-bg);
+    border: 1px solid var(--alert-border);
+    color: var(--alert);
     font-size: 11px;
     padding: 2px 8px;
     border-radius: 3px;
@@ -124,7 +124,7 @@
 }
 
 .troubleshoot-reset-btn:hover {
-    background: rgba(244, 67, 54, 0.25);
+    background: var(--alert-border);
 }
 
 /* Quality banner (fixed at top, below status bar) */
@@ -133,15 +133,15 @@
     top: 44px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(255, 167, 38, 0.15);
-    border: 1px solid rgba(255, 167, 38, 0.3);
-    border-radius: 6px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-control);
     padding: 8px 16px;
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    color: #ffa726;
+    color: var(--warn);
     z-index: 150;
     max-width: 600px;
     animation: troubleshoot-slide-down 0.3s ease-out;
@@ -154,16 +154,16 @@
 }
 
 .troubleshoot-quality-icon {
-    font-size: 14px;
+    font-size: var(--text-sm);
     flex-shrink: 0;
 }
 
 .troubleshoot-quality-banner .troubleshoot-dismiss {
-    color: #ffa726;
+    color: var(--warn);
 }
 
 .troubleshoot-quality-banner .troubleshoot-dismiss:hover {
-    color: #eee;
+    color: var(--slate-12);
 }
 
 /* Factory reset modal */
@@ -173,7 +173,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--overlay-strong);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -181,22 +181,22 @@
 }
 
 .troubleshoot-modal {
-    background: #1e1e3a;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 24px 28px;
     max-width: 480px;
     width: 90%;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 32px var(--shadow-xl);
 }
 
 .troubleshoot-modal h3 {
-    font-size: 16px;
-    color: #eee;
+    font-size: var(--text-base);
+    color: var(--slate-12);
     margin-bottom: 16px;
 }
 
 .troubleshoot-list {
-    color: #bbb;
+    color: var(--text-muted);
     font-size: 13px;
     line-height: 1.8;
     padding-left: 20px;
@@ -218,12 +218,12 @@
 .spaxel-tooltip {
     position: fixed;
     z-index: 2000;
-    background: rgba(30, 30, 58, 0.95);
-    border: 1px solid rgba(79, 195, 247, 0.4);
-    border-radius: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--blue-border);
+    border-radius: var(--radius-control);
     padding: 8px 12px;
     max-width: 260px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 16px var(--shadow-lg);
     animation: spaxel-tooltip-appear 0.3s ease-out;
     pointer-events: none;
 }
@@ -234,7 +234,7 @@
 }
 
 .spaxel-tooltip-text {
-    color: #eee;
+    color: var(--slate-12);
     font-size: 13px;
     line-height: 1.4;
 }
@@ -252,7 +252,7 @@
     transform: translateX(-50%);
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-top: 6px solid rgba(79, 195, 247, 0.4);
+    border-top: 6px solid var(--blue-border);
 }
 
 .spaxel-tooltip-arrow-bottom {
@@ -261,7 +261,7 @@
     transform: translateX(-50%);
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-bottom: 6px solid rgba(79, 195, 247, 0.4);
+    border-bottom: 6px solid var(--blue-border);
 }
 
 .spaxel-tooltip-arrow-left {
@@ -270,7 +270,7 @@
     transform: translateY(-50%);
     border-top: 6px solid transparent;
     border-bottom: 6px solid transparent;
-    border-left: 6px solid rgba(79, 195, 247, 0.4);
+    border-left: 6px solid var(--blue-border);
 }
 
 .spaxel-tooltip-arrow-right {
@@ -279,7 +279,7 @@
     transform: translateY(-50%);
     border-top: 6px solid transparent;
     border-bottom: 6px solid transparent;
-    border-right: 6px solid rgba(79, 195, 247, 0.4);
+    border-right: 6px solid var(--blue-border);
 }
 
 /* Dismiss all button */
@@ -288,10 +288,10 @@
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #aaa;
-    font-size: 12px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
     padding: 6px 16px;
     border-radius: 4px;
     cursor: pointer;
@@ -300,8 +300,8 @@
 }
 
 .spaxel-dismiss-all:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #eee;
+    background: var(--border-strong);
+    color: var(--slate-12);
 }
 
 /* Safe area support for dismiss button */
@@ -327,19 +327,19 @@
 
 .post-cal-card h3 {
     font-size: 18px;
-    color: #eee;
+    color: var(--slate-12);
     margin-bottom: 8px;
 }
 
 .post-cal-summary {
-    color: #66bb6a !important;
-    font-size: 14px;
+    color: var(--ok) !important;
+    font-size: var(--text-sm);
     font-weight: 500;
     margin-bottom: 8px;
 }
 
 .post-cal-expect {
-    color: #bbb;
+    color: var(--text-muted);
     font-size: 13px;
     line-height: 1.5;
     margin-bottom: 16px;

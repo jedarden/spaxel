@@ -69,7 +69,7 @@
 
 .panel-form-group input[type="range"]::-webkit-slider-runnable-track {
     height: 6px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-hover);
     border-radius: 3px;
     margin: 19px 0; /* Center track within 44px height */
 }
@@ -79,7 +79,7 @@
     appearance: none;
     width: 32px;
     height: 32px;
-    background: #4fc3f7;
+    background: var(--blue-10);
     border-radius: 50%;
     cursor: pointer;
     margin-top: -13px; /* Center thumb on track */
@@ -92,14 +92,14 @@
 
 .panel-form-group input[type="range"]::-moz-range-track {
     height: 6px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-hover);
     border-radius: 3px;
 }
 
 .panel-form-group input[type="range"]::-moz-range-thumb {
     width: 32px;
     height: 32px;
-    background: #4fc3f7;
+    background: var(--blue-10);
     border-radius: 50%;
     cursor: pointer;
     border: none;
@@ -147,7 +147,7 @@
     min-height: 44px;
     min-width: 44px;
     padding: 12px 20px;
-    font-size: 14px;
+    font-size: var(--text-sm);
 }
 
 /* Small buttons: expand with padding while keeping appearance compact */
@@ -199,7 +199,7 @@
     min-width: 44px;
     min-height: 44px;
     padding: 12px 8px;
-    font-size: 14px;
+    font-size: var(--text-sm);
 }
 
 /* Sim item delete button */
@@ -295,7 +295,7 @@ body.simple-mode #scene-container {
     display: flex;
     align-items: center;
     padding: 0 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--bg-hover);
 }
 
 /* Adjust scene container when status bar is visible */
