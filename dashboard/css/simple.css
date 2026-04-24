@@ -69,7 +69,7 @@ body.simple-mode {
     gap: 8px;
     background: var(--simple-bg);
     padding: 4px;
-    border-radius: 8px;
+    border-radius: var(--radius-card);
 }
 
 .simple-mode-header .mode-toggle-btn {
@@ -107,7 +107,7 @@ body.simple-mode {
     background: linear-gradient(135deg, var(--simple-accent-red), var(--alert));
     color: white;
     padding: 16px;
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     margin-bottom: 16px;
     box-shadow: var(--simple-shadow);
     display: none;
@@ -254,7 +254,7 @@ body.simple-mode {
     border: none;
     color: white;
     padding: 8px 16px;
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
@@ -352,7 +352,7 @@ body.simple-mode {
     font-size: 13px;
     font-weight: 500;
     padding: 4px 10px;
-    border-radius: 20px;
+    border-radius: var(--radius-modal);
 }
 
 .simple-room-card .room-status.empty {
@@ -440,7 +440,7 @@ body.simple-mode {
     background: var(--simple-bg);
     border: none;
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     font-size: 13px;
     font-weight: 500;
     color: var(--simple-text-secondary);
@@ -485,7 +485,7 @@ body.simple-mode {
     gap: 12px;
     padding: 12px;
     background: var(--simple-bg);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     transition: background 0.2s;
 }
 
@@ -725,7 +725,7 @@ body.simple-mode {
     border: none;
     color: white;
     padding: 10px 16px;
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
@@ -759,7 +759,7 @@ body.simple-mode {
 
 .simple-room-modal .modal-content {
     background: var(--simple-card-bg);
-    border-radius: 20px;
+    border-radius: var(--radius-modal);
     max-width: 500px;
     width: 100%;
     max-height: 80vh;
@@ -826,7 +826,7 @@ body.simple-mode {
 .simple-room-modal .room-stat {
     background: var(--simple-bg);
     padding: 12px;
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     text-align: center;
 }
 
@@ -912,7 +912,7 @@ body.simple-mode {
 .simple-security-toggle .security-toggle-btn {
     width: 100%;
     padding: 14px;
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     font-size: var(--text-base);
     font-weight: 600;
     cursor: pointer;

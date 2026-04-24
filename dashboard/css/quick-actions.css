@@ -65,7 +65,7 @@
     min-width: 280px;
     max-width: 340px;
     background: var(--context-bg, var(--bg-card));
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     box-shadow: 0 8px 32px var(--shadow-xl);
     border: 1px solid var(--context-border, var(--bg-hover));
     display: flex;
@@ -104,7 +104,7 @@
     align-items: center;
     justify-content: center;
     background: var(--context-icon-bg, var(--blue-muted));
-    border-radius: 8px;
+    border-radius: var(--radius-card);
 }
 
 .context-title {
@@ -134,7 +134,7 @@
 
 .context-body::-webkit-scrollbar-thumb {
     background: var(--border-strong);
-    border-radius: 3px;
+    border-radius: var(--radius-control);
 }
 
 .context-body::-webkit-scrollbar-thumb:hover {
@@ -214,7 +214,7 @@
 
 /* Portal context */
 .context-menu[data-target="portal"] .context-icon {
-    background: rgba(156, 39, 176, 0.15);
+    background: var(--blue-muted);
     color: var(--blue-8);
 }
 
@@ -233,7 +233,7 @@
     background: var(--blue-10);
     color: white;
     padding: 10px 20px;
-    border-radius: 20px;
+    border-radius: var(--radius-modal);
     font-size: var(--text-sm);
     font-weight: 500;
     display: flex;

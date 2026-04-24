@@ -50,7 +50,7 @@
 .timeline-filter-toggle {
   background: transparent;
   border: 1px solid var(--border-color, var(--bg-hover));
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   padding: 6px 10px;
   cursor: pointer;
   color: var(--text-secondary, var(--text-secondary));
@@ -177,7 +177,7 @@
   border: 1px solid var(--border-color, var(--bg-hover));
   color: var(--text-primary, var(--slate-11));
   padding: 6px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   font-size: 13px;
   min-width: 100px;
   cursor: pointer;
@@ -199,7 +199,7 @@
   border: 1px solid var(--border-color, var(--bg-hover));
   color: var(--text-primary, var(--slate-11));
   padding: 6px 10px 6px 32px;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   font-size: 13px;
   min-width: 200px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
@@ -242,7 +242,7 @@
 
 .timeline-events::-webkit-scrollbar-thumb {
   background: var(--border-color, var(--bg-hover));
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 }
 
 .timeline-events::-webkit-scrollbar-thumb:hover {
@@ -253,7 +253,7 @@
 .timeline-event {
   background: var(--bg-secondary, var(--bg-card));
   border: 1px solid var(--border-color, var(--bg-hover));
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   padding: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -380,7 +380,7 @@
 .timeline-feedback-btn {
   background: transparent;
   border: 1px solid var(--border-color, var(--bg-hover));
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   padding: 4px 8px;
   cursor: pointer;
   display: flex;
@@ -434,7 +434,7 @@
   margin-left: auto;
   background: transparent;
   border: 1px solid var(--border-color, var(--bg-hover));
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   padding: 4px 8px;
   cursor: pointer;
   display: flex;
@@ -639,7 +639,7 @@
   color: var(--color-success, var(--ok));
   padding: 4px 8px;
   background: var(--ok-bg);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .timeline-live-dot {
@@ -736,13 +736,13 @@
   margin-top: 8px;
   padding: 8px;
   background: var(--bg-primary, var(--bg-page));
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 .timeline-date-input {
   background: var(--bg-secondary, var(--bg-card));
   border: 1px solid var(--border-color, var(--bg-hover));
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   color: var(--text-primary, var(--slate-11));
   padding: 4px 8px;
   font-size: var(--text-xs);
@@ -765,7 +765,7 @@
   background: var(--accent-color, var(--blue-9));
   color: var(--bg-primary, var(--bg-page));
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   padding: 4px 12px;
   font-size: var(--text-xs);
   font-weight: 500;
@@ -838,7 +838,7 @@
   border: none;
   color: var(--text-secondary, var(--text-secondary));
   padding: 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -868,7 +868,7 @@
 
 .sidebar-panel-content::-webkit-scrollbar-thumb {
   background: var(--border-color, var(--bg-hover));
-  border-radius: 2px;
+  border-radius: var(--radius-control);
 }
 
 .sidebar-panel-content::-webkit-scrollbar-thumb:hover {
@@ -955,7 +955,7 @@
   align-items: center;
   justify-content: center;
   background: var(--blue-muted);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 
 /* Event Content */
@@ -1006,7 +1006,7 @@
   border: none;
   color: var(--text-muted, var(--text-muted));
   padding: 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1103,12 +1103,12 @@
   background: var(--bg-secondary, var(--bg-card));
   border: 1px solid var(--border-color, var(--bg-hover));
   border-right: none;
-  border-radius: 8px 0 0 8px;
+  border-radius: var(--radius-card) 0 0 var(--radius-card);
   padding: 12px 8px;
   cursor: pointer;
   z-index: 59;
   transition: all 0.3s ease;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+  box-shadow: -2px 0 8px var(--overlay);
 }
 
 .sidebar-show-btn:hover {

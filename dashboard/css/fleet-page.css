@@ -240,7 +240,7 @@ body.fleet-page {
     padding: 8px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border-default);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: var(--text-primary);
     font-size: 13px;
 }
@@ -465,7 +465,7 @@ body.fleet-page {
 .node-label {
     cursor: text;
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     border: 1px solid transparent;
     transition: all 0.2s;
 }
@@ -511,7 +511,7 @@ body.fleet-page {
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     font-size: var(--text-xs);
     font-weight: 500;
 }
@@ -576,7 +576,7 @@ body.fleet-page {
     gap: 4px;
     padding: 2px 6px;
     background: var(--warn-bg);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     font-size: 11px;
 }
 
@@ -588,7 +588,7 @@ body.fleet-page {
 .role-badge {
     display: inline-block;
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
@@ -600,7 +600,7 @@ body.fleet-page {
 }
 
 .role-badge.rx {
-    background: rgba(62, 150, 232, 0.2);
+    background: var(--blue-muted);
     color: var(--blue-9);
 }
 
@@ -625,7 +625,7 @@ body.fleet-page {
     width: 60px;
     height: 6px;
     background: var(--bg-hover);
-    border-radius: 3px;
+    border-radius: var(--radius-control);
     overflow: hidden;
 }
 
@@ -696,7 +696,7 @@ body.fleet-page {
     cursor: pointer;
     padding: 6px;
     font-size: var(--text-base);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     transition: all 0.2s;
 }
 
@@ -835,7 +835,7 @@ body.fleet-page {
 
 .modal-content {
     background: var(--bg-card);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     width: 90%;
     max-width: 500px;
     max-height: 85vh;
@@ -869,7 +869,7 @@ body.fleet-page {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
 }
 
 .modal-close:hover {
@@ -889,14 +889,14 @@ body.fleet-page {
     gap: 12px;
     padding: 16px 20px;
     border-top: 1px solid var(--border-default);
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--overlay);
 }
 
 /* OTA Modal */
 .ota-info {
     margin-top: 16px;
     padding: 12px;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--overlay);
     border-radius: var(--radius-control);
 }
 
@@ -936,7 +936,7 @@ body.fleet-page {
     align-items: center;
     gap: 12px;
     padding: 12px;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--overlay);
     border-radius: var(--radius-control);
     cursor: pointer;
     transition: background 0.2s;
