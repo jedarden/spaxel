@@ -27,7 +27,6 @@ const Viz3D = (function () {
     let _mouse       = new THREE.Vector2();
     let _hoveredBlob = null;
     let _feedbackTooltip = null;
-    let _renderer    = null;
 
     // Ghost node for repositioning advice
     let _ghostNode     = null;  // THREE.Mesh (translucent)
