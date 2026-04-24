@@ -4,6 +4,14 @@
    layout containers — overlays use <dialog> or fixed slide-ins.
    ─────────────────────────────────────────────────────────────── */
 
+/* ── Base body styles ── */
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  margin: 0;
+}
+
 /* ── App shell grid ── */
 .app-shell {
   display: grid;
