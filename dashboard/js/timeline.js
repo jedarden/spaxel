@@ -1352,68 +1352,100 @@
 	// Seek Handler (Time-Travel)
 	// ============================================
 	function handleSeek(timestamp, entryElement) {
-		// Convert timestamp to ISO8601
-		const targetDate = new Date(timestamp);
-		const iso8601 = targetDate.toISOString();
+		if (state.dashboardMode !== 'expert') {
+			return;
+		}
 
-		// Create a replay window around the event timestamp
-		const windowMs = CONFIG.replaySeekWindowSec * 1000;
-		const fromDate = new Date(timestamp - windowMs);
-		const toDate = new Date(timestamp + windowMs);
+		// Highlight selected event
+		clearSelectedEvent();
+		if (entryElement) {
+			entryElement.classList.add('timeline-event-selected');
+			state.replay.selectedEventId = entryElement.dataset.id;
+		}
 
-		// Create replay session
-		const startPayload = {
-			from_iso8601: fromDate.toISOString(),
-			to_iso8601: toDate.toISOString(),
-			speed: 1
+		// Use jump-to-time API for single-call replay session creation
+		var payload = {
+			timestamp_ms: timestamp,
+			window_ms: CONFIG.replaySeekWindowSec * 1000
 		};
 
-		fetch('/api/replay/start', {
+		fetch('/api/replay/jump-to-time', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(startPayload)
+			body: JSON.stringify(payload)
 		})
 			.then(function(res) {
 				if (!res.ok) {
-					throw new Error('Failed to start replay session');
+					throw new Error('Failed to jump to time');
 				}
 				return res.json();
 			})
 			.then(function(data) {
-				const sessionId = data.session_id;
+				state.replay.activeSessionId = data.session_id;
+				state.replay.isReplaying = true;
+				state.replay.replayTimestamp = timestamp;
 
-				// Seek to the specific timestamp
-				return fetch('/api/replay/seek', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						session_id: sessionId,
-						timestamp_iso8601: iso8601
-					})
-				});
-			})
-			.then(function(res) {
-				if (!res.ok) {
-					throw new Error('Failed to seek in replay');
-				}
-				return res.json();
-			})
-			.then(function(data) {
-				// Navigate to replay mode
+				// Show "Now replaying" chip
+				showNowReplayingChip(timestamp);
+
+				// Navigate to replay mode if router available
 				if (window.SpaxelRouter) {
 					SpaxelRouter.navigate('replay');
 				}
 
+				// Notify replay module about the jump
+				if (window.SpaxelReplay && SpaxelReplay.onJumpToTime) {
+					SpaxelReplay.onJumpToTime(data.session_id, timestamp);
+				}
+
 				if (window.SpaxelApp && SpaxelApp.showToast) {
-					SpaxelApp.showToast('Replay mode: viewing ' + formatTimestamp(timestamp), 'info');
+					SpaxelApp.showToast('Viewing ' + formatTimestamp(timestamp), 'info');
 				}
 			})
 			.catch(function(err) {
-				console.error('[Timeline] Replay seek failed:', err);
+				console.error('[Timeline] Jump to time failed:', err);
 				if (window.SpaxelApp && SpaxelApp.showToast) {
 					SpaxelApp.showToast('Failed to jump to replay: ' + err.message, 'warning');
 				}
 			});
+	}
+
+	// ============================================
+	// Selected Event Highlighting
+	// ============================================
+	function clearSelectedEvent() {
+		if (elements.eventsList) {
+			var prev = elements.eventsList.querySelector('.timeline-event-selected');
+			if (prev) {
+				prev.classList.remove('timeline-event-selected');
+			}
+		}
+		state.replay.selectedEventId = null;
+	}
+
+	// ============================================
+	// Now Replaying Chip
+	// ============================================
+	function showNowReplayingChip(timestampMs) {
+		var chip = elements.nowReplayingChip;
+		if (!chip) return;
+
+		var timeStr = formatTimestamp(timestampMs);
+		chip.innerHTML = '<span class="now-replaying-dot"></span> Now replaying: ' + timeStr;
+		chip.style.display = 'inline-flex';
+		chip.classList.add('visible');
+	}
+
+	function hideNowReplayingChip() {
+		var chip = elements.nowReplayingChip;
+		if (!chip) return;
+
+		chip.classList.remove('visible');
+		chip.style.display = 'none';
+		state.replay.isReplaying = false;
+		state.replay.activeSessionId = null;
+		state.replay.replayTimestamp = null;
+		clearSelectedEvent();
 	}
 
 	function updateFilterOptions(events) {

@@ -30,7 +30,7 @@
 	padding: 16px 24px;
 	max-width: 800px;
 	margin: 0 auto;
-	color: white;
+	color: var(--text-on-accent);
 }
 
 .ap-detection-icon {
@@ -161,7 +161,7 @@
 }
 
 .ap-btn-primary {
-	background: white;
+	background: var(--slate-12);
 	color: var(--blue-7);
 }
 
@@ -173,7 +173,7 @@
 
 .ap-btn-secondary {
 	background: var(--border-strong);
-	color: white;
+	color: var(--text-on-accent);
 	border: 1px solid var(--slate-7);
 }
 
