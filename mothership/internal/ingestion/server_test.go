@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -247,5 +248,238 @@ func TestMalformedCounter_ConnectionCloseIntegration(t *testing.T) {
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Error("Expected connection to be closed, but it's still open")
+	}
+}
+
+// readRejectMsg reads the next WebSocket message and tries to unmarshal it as
+// a RejectMessage. Returns the reject message or nil if the read fails or the
+// message is not a reject.
+func readRejectMsg(conn *websocket.Conn) *RejectMessage {
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		return nil
+	}
+	var rej RejectMessage
+	if err := json.Unmarshal(data, &rej); err != nil {
+		return nil
+	}
+	return &rej
+}
+
+func TestTokenValidation_ValidToken(t *testing.T) {
+	ingestServer := NewServer()
+	// Wire a simple validator: accepts mac="AA:BB:CC:DD:EE:FF" with token="good-token"
+	ingestServer.SetTokenValidator(func(mac, token string) bool {
+		return mac == "AA:BB:CC:DD:EE:FF" && token == "good-token"
+	})
+
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ingestServer.HandleNodeWS(w, r)
+	}))
+	defer httpServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+	dialer := websocket.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"good-token"}`
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
+		t.Fatalf("Failed to send hello: %v", err)
+	}
+
+	// Should receive role or config (not reject)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Expected role/config message, got error: %v", err)
+	}
+	var msg struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if msg.Type == "reject" {
+		t.Fatal("Node with valid token was rejected")
+	}
+
+	// Verify node is registered
+	if !ingestServer.IsNodeConnected("AA:BB:CC:DD:EE:FF") {
+		t.Fatal("Node should be connected after valid token")
+	}
+}
+
+func TestTokenValidation_MissingToken(t *testing.T) {
+	ingestServer := NewServer()
+	ingestServer.SetTokenValidator(func(mac, token string) bool {
+		return token == "good-token"
+	})
+
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ingestServer.HandleNodeWS(w, r)
+	}))
+	defer httpServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+	dialer := websocket.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// Hello without token field
+	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
+		t.Fatalf("Failed to send hello: %v", err)
+	}
+
+	rej := readRejectMsg(conn)
+	if rej == nil {
+		t.Fatal("Expected reject message for missing token, got none")
+	}
+	if rej.Reason != "invalid_token" {
+		t.Fatalf("Expected reason 'invalid_token', got %q", rej.Reason)
+	}
+}
+
+func TestTokenValidation_WrongToken(t *testing.T) {
+	ingestServer := NewServer()
+	ingestServer.SetTokenValidator(func(mac, token string) bool {
+		return token == "good-token"
+	})
+
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ingestServer.HandleNodeWS(w, r)
+	}))
+	defer httpServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+	dialer := websocket.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"wrong-token"}`
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
+		t.Fatalf("Failed to send hello: %v", err)
+	}
+
+	rej := readRejectMsg(conn)
+	if rej == nil {
+		t.Fatal("Expected reject message for wrong token, got none")
+	}
+	if rej.Reason != "invalid_token" {
+		t.Fatalf("Expected reason 'invalid_token', got %q", rej.Reason)
+	}
+}
+
+func TestTokenValidation_NoValidator(t *testing.T) {
+	ingestServer := NewServer()
+	// No validator set — all nodes should be accepted (backward compat)
+
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ingestServer.HandleNodeWS(w, r)
+	}))
+	defer httpServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+	dialer := websocket.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// Hello without any token
+	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
+		t.Fatalf("Failed to send hello: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("Expected role/config message, got error: %v", err)
+	}
+	var msg struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if msg.Type == "reject" {
+		t.Fatal("Node without token should be accepted when no validator is configured")
+	}
+}
+
+func TestTokenValidation_UnprovisionedNodeCannotPostCSI(t *testing.T) {
+	ingestServer := NewServer()
+	ingestServer.SetTokenValidator(func(mac, token string) bool {
+		return token == "good-token"
+	})
+
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ingestServer.HandleNodeWS(w, r)
+	}))
+	defer httpServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+	dialer := websocket.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// Send hello without token
+	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
+		t.Fatalf("Failed to send hello: %v", err)
+	}
+
+	// Expect reject
+	rej := readRejectMsg(conn)
+	if rej == nil || rej.Reason != "invalid_token" {
+		t.Fatal("Expected reject with invalid_token")
+	}
+
+	// Try to send a CSI frame anyway — connection should be closed by server
+	// Build a minimal valid CSI frame (24-byte header, no payload)
+	frame := make([]byte, HeaderSize)
+	// Set MAC fields
+	copy(frame[0:6], []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF})
+	copy(frame[6:12], []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66})
+	// timestamp_us (bytes 12-19) = 0 is fine
+	// rssi (byte 20)
+	frame[20] = 0xE0 // -32 dBm
+	// noise_floor (byte 21)
+	frame[21] = 0xA1 // -95 dBm
+	// channel (byte 22)
+	frame[22] = 6
+	// n_sub (byte 23) = 0, no payload
+
+	if err := conn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
+		// Connection already closed — this is the expected case
+		return
+	}
+
+	// Node should NOT be in connected list
+	if ingestServer.IsNodeConnected("AA:BB:CC:DD:EE:FF") {
+		t.Fatal("Unprovisioned node should not be in connected list")
+	}
+
+	// No links should exist for this node
+	for _, link := range ingestServer.GetAllLinks() {
+		if strings.HasPrefix(link, "AA:BB:CC:DD:EE:FF:") {
+			t.Fatalf("Unprovisioned node should not have links, found: %s", link)
+		}
 	}
 }

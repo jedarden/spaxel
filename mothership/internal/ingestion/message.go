@@ -19,6 +19,7 @@ type HelloMessage struct {
 	UptimeMS        int64    `json:"uptime_ms,omitempty"`
 	APBSSID         string   `json:"ap_bssid,omitempty"`
 	APChannel       int      `json:"ap_channel,omitempty"`
+	Token           string   `json:"token,omitempty"`
 }
 
 // HealthMessage is sent every 10 seconds

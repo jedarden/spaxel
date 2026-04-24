@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -117,6 +118,27 @@ func (s *Server) deriveToken(mac string) string {
 	h := hmac.New(sha256.New, s.installSecret)
 	h.Write([]byte(mac))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// GetInstallSecret returns the 32-byte installation secret.
+// Used by the ingestion server to create a token validator.
+func (s *Server) GetInstallSecret() []byte {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.installSecret
+}
+
+// ValidateToken checks whether the provided token matches the expected
+// HMAC-SHA256(installSecret, mac) using constant-time comparison.
+func (s *Server) ValidateToken(mac, token string) bool {
+	s.mu.RLock()
+	secret := s.installSecret
+	s.mu.RUnlock()
+	if secret == nil {
+		return false
+	}
+	expected := s.deriveToken(mac)
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(token)) == 1
 }
 
 // HandleProvision serves POST /api/provision.
