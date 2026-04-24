@@ -150,6 +150,16 @@
   font-weight: 500;
 }
 
+.wizard-reprove-banner {
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: var(--radius-control);
+  color: #fbbf24;
+  font-size: var(--text-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
 .wizard-icon-large {
   font-size: var(--text-2xl);
   margin-bottom: var(--space-3);

@@ -86,6 +86,8 @@
                     <button id="fleet-warning-dismiss" class="btn-dismiss">&times;</button>
                 </div>
 
+                <div id="fleet-unpaired-banner" class="fleet-unpaired-banner" style="display:none"></div>
+
                 <div class="fleet-stats">
                     <div class="stat-row">
                         <span class="stat-label">Coverage</span>
@@ -117,7 +119,7 @@
 
                 <div class="fleet-simulate">
                     <h4>Simulate Node Removal</h4>
-                    <select id="fleet-simulate-select" class="select-sm">
+                    <select id="fleet-simulate-select" class="select-sm" aria-label="Select a node to simulate removal">
                         <option value="">Select a node...</option>
                     </select>
                     <div id="fleet-simulate-result" class="simulate-result hidden"></div>
@@ -690,6 +692,39 @@
                 color: #e57373;
             }
 
+            .node-status-badge.unpaired {
+                background: rgba(251, 191, 36, 0.2);
+                color: #fbbf24;
+            }
+
+            .node-unpaired-badge {
+                display: inline-block;
+                padding: 1px 6px;
+                border-radius: 3px;
+                font-size: 10px;
+                font-weight: 600;
+                background: rgba(251, 191, 36, 0.2);
+                color: #fbbf24;
+                border: 1px solid rgba(251, 191, 36, 0.4);
+                margin-left: 6px;
+                vertical-align: middle;
+            }
+
+            .fleet-action-btn.reprovision {
+                color: #fbbf24;
+                border-color: rgba(251, 191, 36, 0.4);
+            }
+
+            .fleet-unpaired-banner {
+                background: rgba(251, 191, 36, 0.1);
+                border: 1px solid rgba(251, 191, 36, 0.3);
+                border-radius: 6px;
+                padding: 8px 12px;
+                margin-bottom: 8px;
+                font-size: 12px;
+                color: #fbbf24;
+            }
+
             .health-bar-wrapper {
                 display: flex;
                 align-items: center;
@@ -1054,6 +1089,19 @@
 
         // Update role list
         updateRoleList();
+
+        // Update unpaired banner
+        var unpairedCount = 0;
+        state.nodes.forEach(function(node) { if (node.unpaired) unpairedCount++; });
+        var bannerEl = document.getElementById('fleet-unpaired-banner');
+        if (bannerEl) {
+            if (unpairedCount > 0) {
+                bannerEl.textContent = '⚠ ' + unpairedCount + ' node' + (unpairedCount > 1 ? 's' : '') + ' connected without credentials — re-provision to pair.';
+                bannerEl.style.display = '';
+            } else {
+                bannerEl.style.display = 'none';
+            }
+        }
     }
 
     function updateRoleList() {
@@ -1073,12 +1121,13 @@
             var isOnline = node.online || false;
 
             html += '<div class="fleet-role-item">' +
-                '<span class="node-mac">' + formatMAC(mac) + '</span>' +
+                '<span class="node-mac">' + formatMAC(mac) + (node.unpaired ? ' <span title="Unpaired — needs re-provisioning">⚠</span>' : '') + '</span>' +
                 '<span>' +
                 '<span class="node-role ' + role + '">' + role + '</span>' +
                 '<span class="health-score">' + healthDisplay + '</span>' +
                 '</span>' +
-                (isOnline ? '<button class="fleet-identify-btn" onclick="FleetPanel.identifyNode(\'' + mac + '\')" title="Identify (blink LED)">⚡</button>' : '') +
+                (isOnline && !node.unpaired ? '<button class="fleet-identify-btn" onclick="FleetPanel.identifyNode(\'' + mac + '\')" title="Identify (blink LED)">⚡</button>' : '') +
+                (node.unpaired ? '<button class="fleet-identify-btn" onclick="FleetPanel.reproveNode(\'' + mac + '\')" title="Re-provision credentials" style="color:#fbbf24">↺</button>' : '') +
                 '</div>';
         });
         container.innerHTML = html;
@@ -1576,8 +1625,8 @@
             var uptime = node.uptime_seconds || 0;
             var uptimeStr = formatUptime(uptime);
             var firmware = node.firmware_version || '--';
-            var statusClass = node.online ? 'online' : 'offline';
-            var statusText = node.online ? 'Online' : 'Offline';
+            var statusClass = node.unpaired ? 'unpaired' : (node.online ? 'online' : 'offline');
+            var statusText = node.unpaired ? 'Unpaired' : (node.online ? 'Online' : 'Offline');
 
             html += '<tr class="fleet-row' + (isSelected ? ' selected' : '') + '" data-mac="' + node.mac + '">' +
                 '<td class="fleet-select-col">' +
@@ -1586,6 +1635,7 @@
                 '</td>' +
                 '<td class="fleet-mac-col">' +
                 '<span class="node-mac-full">' + node.mac + '</span>' +
+                (node.unpaired ? '<span class="node-unpaired-badge">UNPAIRED</span>' : '') +
                 (node.name ? '<br><span class="node-name">' + node.name + '</span>' : '') +
                 '</td>' +
                 '<td><span class="node-role-badge ' + node.role + '">' + node.role + '</span></td>' +
@@ -1607,6 +1657,7 @@
                 '<button class="fleet-action-btn" data-action="flyto" data-mac="' + node.mac + '" title="Fly camera to node">&#x26F6;</button>' +
                 '<button class="fleet-action-btn" data-action="identify" data-mac="' + node.mac + '" title="Identify (blink LED)">&#x26A1;</button>' +
                 '<button class="fleet-action-btn" data-action="diagnostics" data-mac="' + node.mac + '" title="View diagnostics">&#x2699;</button>' +
+                (node.unpaired ? '<button class="fleet-action-btn reprovision" data-action="reprovision" data-mac="' + node.mac + '" title="Re-provision credentials">&#x21BA;</button>' : '') +
                 '</td>' +
                 '</tr>';
         });
@@ -1722,6 +1773,12 @@
                 break;
             case 'diagnostics':
                 showNodeDiagnostics(mac);
+                break;
+            case 'reprovision':
+                if (window.SpaxelOnboard && SpaxelOnboard.reprove) {
+                    hideFullTableView();
+                    SpaxelOnboard.reprove(mac);
+                }
                 break;
         }
     }
@@ -2026,6 +2083,7 @@
         getState: function() { return state; },
         identifyNode: identifyNode,
         flyToNode: flyToNode,
+        reproveNode: function(mac) { handleNodeAction('reprovision', mac); },
         toggleFullTableView: toggleFullTableView,
         showFullTableView: showFullTableView,
         hideFullTableView: hideFullTableView
