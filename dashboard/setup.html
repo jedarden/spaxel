@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Spaxel — Setup</title>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/panels.css">
+    <link rel="stylesheet" href="css/floorplan.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-page);
+            color: var(--text-primary);
+            overflow: hidden;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+        #scene-container {
+            width: 100vw;
+            height: 100vh;
+            touch-action: none;
+        }
+        .setup-header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            padding-top: max(0px, env(safe-area-inset-top));
+            gap: 16px;
+            z-index: 100;
+            font-size: 14px;
+        }
+        .setup-header__link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: var(--text-sm);
+        }
+        .setup-header__link:hover {
+            color: var(--text-primary);
+        }
+        .setup-toolbar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 16px;
+            border-radius: 12px;
+            z-index: 100;
+        }
+        .setup-toolbar button {
+            background: var(--slate-5);
+            border: 1px solid var(--border-default);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: var(--radius-control);
+            cursor: pointer;
+            font-size: var(--text-sm);
+            font-family: var(--font-body);
+        }
+        .setup-toolbar button:hover {
+            background: var(--slate-6);
+        }
+        .setup-toolbar button.active {
+            background: var(--blue-5);
+            border-color: var(--blue-8);
+        }
+        #status-text {
+            color: var(--text-secondary);
+            flex: 1;
+        }
+    </style>
+</head>
+<body class="has-mobile-nav">
+    <div id="scene-container"></div>
+
+    <div class="setup-header">
+        <a href="/" class="setup-header__link">&larr; Home</a>
+        <span style="color:var(--text-primary);font-weight:600;">Spaxel Setup</span>
+        <span id="status-text"></span>
+        <a href="/live" class="setup-header__link">Live View</a>
+    </div>
+
+    <div class="setup-toolbar">
+        <button id="btn-floorplan">Floor Plan</button>
+        <button id="btn-nodes">Nodes</button>
+        <button id="btn-zones">Zones</button>
+        <button id="btn-coverage">Coverage</button>
+        <button id="btn-calibrate">Calibrate</button>
+    </div>
+
+    <script src="js/viz3d.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/placement.js"></script>
+    <script src="js/floorplan-setup.js"></script>
+    <script src="js/zone-editor.js"></script>
+    <script src="js/portal.js"></script>
+    <script>
+        // Auto-activate setup mode
+        document.addEventListener('DOMContentLoaded', function () {
+            // Open the placement/setup panels on load
+            if (typeof Placement !== 'undefined' && Placement.init) {
+                Placement.init();
+            }
+            if (typeof FloorPlanSetup !== 'undefined' && FloorPlanSetup.init) {
+                FloorPlanSetup.init();
+            }
+        });
+    </script>
+</body>
+</html>
