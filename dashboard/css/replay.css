@@ -31,7 +31,7 @@
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
-    color: #eee;
+    color: var(--slate-12);
     width: 36px;
     height: 36px;
     display: flex;
@@ -68,14 +68,14 @@
 .replay-timestamp {
     font-size: 16px;
     font-weight: 600;
-    color: #4fc3f7;
+    color: var(--blue-10);
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
     letter-spacing: 0.5px;
 }
 
 .replay-range {
     font-size: 12px;
-    color: #888;
+    color: var(--text-muted);
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
 }
 
@@ -89,7 +89,7 @@
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
-    color: #ccc;
+    color: var(--slate-11);
     padding: 6px 10px;
     font-size: 13px;
     cursor: pointer;
@@ -103,7 +103,7 @@
 
 .replay-speed:focus {
     outline: none;
-    border-color: #4fc3f7;
+    border-color: var(--blue-10);
 }
 
 .replay-timeline {
@@ -125,7 +125,7 @@
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
-    background: #4fc3f7;
+    background: var(--blue-10);
     border-radius: 50%;
     cursor: grab;
     transition: all 0.15s ease;
@@ -145,7 +145,7 @@
 .replay-scrubber::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    background: #4fc3f7;
+    background: var(--blue-10);
     border: none;
     border-radius: 50%;
     cursor: grab;
@@ -177,7 +177,7 @@
     background: rgba(76, 175, 80, 0.15);
     border: 1px solid rgba(76, 175, 80, 0.3);
     border-radius: 8px;
-    color: #81c784;
+    color: var(--ok);
     padding: 8px 14px;
     font-size: 13px;
     font-weight: 500;
@@ -220,7 +220,7 @@
 }
 
 .replay-tuning-content {
-    background: linear-gradient(135deg, #1e1e3a 0%, #15152a 100%);
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-page) 100%);
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     width: 100%;
@@ -245,13 +245,13 @@
     margin: 0;
     font-size: 18px;
     font-weight: 600;
-    color: #eee;
+    color: var(--slate-12);
 }
 
 .replay-tuning-close {
     background: none;
     border: none;
-    color: #888;
+    color: var(--text-muted);
     font-size: 24px;
     line-height: 1;
     cursor: pointer;
@@ -267,7 +267,7 @@
 
 .replay-tuning-close:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: #eee;
+    color: var(--slate-12);
 }
 
 .replay-tuning-body {
@@ -288,7 +288,7 @@
     display: block;
     font-size: 13px;
     font-weight: 500;
-    color: #ccc;
+    color: var(--slate-11);
     margin-bottom: 8px;
 }
 
@@ -306,7 +306,7 @@
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
-    background: #4fc3f7;
+    background: var(--blue-10);
     border-radius: 50%;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -320,7 +320,7 @@
 .tuning-param input[type="range"]::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    background: #4fc3f7;
+    background: var(--blue-10);
     border: none;
     border-radius: 50%;
     cursor: pointer;
@@ -341,7 +341,7 @@
 .tuning-value {
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
     font-size: 13px;
-    color: #4fc3f7;
+    color: var(--blue-10);
     float: right;
 }
 
@@ -363,8 +363,8 @@
 }
 
 .tuning-btn {
-    background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
-    color: #000;
+    background: linear-gradient(135deg, var(--blue-10) 0%, var(--blue-10) 100%);
+    color: var(--slate-1);
 }
 
 .tuning-btn:hover {
@@ -378,7 +378,7 @@
 
 .tuning-btn-secondary {
     background: rgba(255, 255, 255, 0.08);
-    color: #ccc;
+    color: var(--slate-11);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -420,7 +420,7 @@
     left: 50%;
     transform: translateX(-50%);
     background: rgba(79, 195, 247, 0.9);
-    color: #000;
+    color: var(--slate-1);
     padding: 8px 16px;
     border-radius: 20px;
     font-size: 12px;
@@ -452,7 +452,7 @@
     width: 14px;
     height: 14px;
     border: 2px solid rgba(255, 255, 255, 0.2);
-    border-top-color: #4fc3f7;
+    border-top-color: var(--blue-10);
     border-radius: 50%;
     animation: replaySpin 0.8s linear infinite;
 }

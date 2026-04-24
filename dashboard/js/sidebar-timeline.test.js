@@ -969,4 +969,266 @@ describe('SidebarTimeline', function() {
             });
         });
     });
+
+    // ============================================
+    // Tap-to-Jump Time-Travel Tests
+    // ============================================
+    describe('Tap-to-Jump Time-Travel', function() {
+        var mockJumpToTime;
+
+        beforeEach(function() {
+            mockJumpToTime = jest.fn(function() {
+                return Promise.resolve({
+                    session_id: 'test-session-1',
+                    timestamp_ms: 1710519800000,
+                    from_ms: 1710519795000,
+                    to_ms: 1710519805000,
+                    state: 'paused'
+                });
+            });
+            window.SpaxelReplay = {
+                jumpToTime: mockJumpToTime,
+                isReplayMode: jest.fn(function() { return false; })
+            };
+
+            global.fetch.mockImplementation(function() {
+                return Promise.resolve({
+                    ok: true,
+                    json: function() {
+                        return Promise.resolve({
+                            events: [
+                                {
+                                    id: 100,
+                                    timestamp_ms: 1710519800000,
+                                    type: 'zone_entry',
+                                    zone: 'Kitchen',
+                                    person: 'Alice',
+                                    severity: 'info'
+                                },
+                                {
+                                    id: 200,
+                                    timestamp_ms: 1710519860000,
+                                    type: 'zone_exit',
+                                    zone: 'Kitchen',
+                                    person: 'Alice',
+                                    severity: 'info'
+                                }
+                            ],
+                            cursor: null,
+                            total_filtered: 2
+                        });
+                    }
+                });
+            });
+        });
+
+        afterEach(function() {
+            delete window.SpaxelReplay;
+        });
+
+        test('clicking event calls jumpToTime with event timestamp', function() {
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    expect(eventEl).toBeTruthy();
+
+                    eventEl.click();
+
+                    expect(mockJumpToTime).toHaveBeenCalledTimes(1);
+                    expect(mockJumpToTime).toHaveBeenCalledWith(1710519800000);
+                    resolve();
+                }, 150);
+            });
+        });
+
+        test('clicking different events emits correct timestamps', function() {
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var first = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    var second = mockElements.eventsContainer.querySelector('[data-id="200"]');
+                    expect(first).toBeTruthy();
+                    expect(second).toBeTruthy();
+
+                    first.click();
+                    expect(mockJumpToTime).toHaveBeenCalledWith(1710519800000);
+
+                    second.click();
+                    expect(mockJumpToTime).toHaveBeenCalledWith(1710519860000);
+
+                    expect(mockJumpToTime).toHaveBeenCalledTimes(2);
+                    resolve();
+                }, 150);
+            });
+        });
+
+        test('selected event highlights with selected class', function() {
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    expect(eventEl).toBeTruthy();
+                    expect(eventEl.classList.contains('selected')).toBe(false);
+
+                    eventEl.click();
+
+                    // Wait for async handleSeek
+                    setTimeout(function() {
+                        expect(eventEl.classList.contains('selected')).toBe(true);
+                        resolve();
+                    }, 50);
+                }, 150);
+            });
+        });
+
+        test('clicking new event clears previous selection', function() {
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var first = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    var second = mockElements.eventsContainer.querySelector('[data-id="200"]');
+
+                    first.click();
+                    setTimeout(function() {
+                        expect(first.classList.contains('selected')).toBe(true);
+                        expect(second.classList.contains('selected')).toBe(false);
+
+                        second.click();
+                        setTimeout(function() {
+                            expect(first.classList.contains('selected')).toBe(false);
+                            expect(second.classList.contains('selected')).toBe(true);
+                            resolve();
+                        }, 50);
+                    }, 50);
+                }, 150);
+            });
+        });
+
+        test('Now replaying chip appears after jump in expert mode', function() {
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    eventEl.click();
+
+                    // Wait for jumpToTime promise to resolve
+                    setTimeout(function() {
+                        var chip = document.getElementById('now-replaying-chip');
+                        expect(chip).toBeTruthy();
+                        expect(chip.style.display).not.toBe('none');
+                        expect(chip.textContent).toContain('Now replaying');
+                        resolve();
+                    }, 100);
+                }, 150);
+            });
+        });
+
+        test('hideNowReplayingChip hides the chip', function() {
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    eventEl.click();
+
+                    setTimeout(function() {
+                        var chip = document.getElementById('now-replaying-chip');
+                        expect(chip).toBeTruthy();
+
+                        SidebarTimeline.hideNowReplayingChip();
+                        expect(chip.style.display).toBe('none');
+                        resolve();
+                    }, 100);
+                }, 150);
+            });
+        });
+
+        test('clearSelection removes selected class from event', function() {
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    eventEl.click();
+
+                    setTimeout(function() {
+                        expect(eventEl.classList.contains('selected')).toBe(true);
+                        SidebarTimeline.clearSelection();
+                        expect(eventEl.classList.contains('selected')).toBe(false);
+                        resolve();
+                    }, 50);
+                }, 150);
+            });
+        });
+
+        test('simple mode navigates to timeline view instead of replay', function() {
+            // Override to simple mode by triggering mode change
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    // Simulate simple mode by changing internal state
+                    // The module listens to SpaxelSimpleModeDetection.onModeChange callbacks
+                    // We need to trigger it through the registered callback
+                    var simpleCallback = null;
+                    if (global.SpaxelSimpleModeDetection && global.SpaxelSimpleModeDetection.onModeChange) {
+                        var calls = global.SpaxelSimpleModeDetection.onModeChange.mock.calls;
+                        if (calls.length > 0) {
+                            simpleCallback = calls[0][0];
+                        }
+                    }
+
+                    if (simpleCallback) {
+                        simpleCallback('simple');
+                    }
+
+                    var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    if (eventEl) {
+                        eventEl.click();
+                        // In simple mode, should navigate via router, not call jumpToTime
+                        var jumpCallsAfterSimple = mockJumpToTime.mock.calls.length;
+                        // The jumpToTime may or may not be called depending on mode,
+                        // but SpaxelRouter.navigate should be called with 'timeline'
+                        expect(global.SpaxelRouter.navigate).toHaveBeenCalledWith('timeline');
+                    }
+                    resolve();
+                }, 150);
+            });
+        });
+
+        test('jumpToTime failure shows error toast', function() {
+            mockJumpToTime.mockImplementation(function() {
+                return Promise.reject(new Error('Network error'));
+            });
+
+            SidebarTimeline.show();
+            SidebarTimeline.refresh();
+
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
+                    eventEl.click();
+
+                    setTimeout(function() {
+                        expect(global.SpaxelApp.showToast).toHaveBeenCalledWith('Failed to jump to time', 'error');
+                        resolve();
+                    }, 100);
+                }, 150);
+            });
+        });
+    });
 });

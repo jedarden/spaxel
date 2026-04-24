@@ -131,6 +131,7 @@ func (h *ReplayHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/replay/tune", h.tune)
 	r.Post("/api/replay/set-speed", h.setSpeed)
 	r.Post("/api/replay/set-state", h.setState)
+	r.Post("/api/replay/jump-to-time", h.jumpToTime)
 
 	// Session state endpoint for polling
 	r.Get("/api/replay/session/{id}", h.getSessionState)
@@ -613,6 +614,90 @@ func (h *ReplayHandler) getSessionState(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+// jumpToTimeRequest represents the request body for POST /api/replay/jump-to-time.
+type jumpToTimeRequest struct {
+	// TimestampMS is the target timestamp in epoch milliseconds.
+	TimestampMS int64 `json:"timestamp_ms"`
+	// WindowMS is the time window around the timestamp (default 5000ms).
+	WindowMS int64 `json:"window_ms,omitempty"`
+}
+
+// jumpToTime handles POST /api/replay/jump-to-time.
+// Creates a replay session centered on the given timestamp, seeks to it,
+// and sets it as the active session. Stops any previous active session first.
+func (h *ReplayHandler) jumpToTime(w http.ResponseWriter, r *http.Request) {
+	var req jumpToTimeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	if req.TimestampMS <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timestamp_ms is required and must be positive"})
+		return
+	}
+
+	windowMS := req.WindowMS
+	if windowMS <= 0 {
+		windowMS = 5000 // ±5 seconds default
+	}
+
+	fromMS := req.TimestampMS - windowMS
+	toMS := req.TimestampMS + windowMS
+
+	// Stop previous active session if any
+	h.mu.Lock()
+	prevID := h.activeSessionID
+	h.mu.Unlock()
+
+	if prevID != "" {
+		if err := h.worker.StopSession(prevID); err == nil {
+			h.mu.Lock()
+			delete(h.sessions, prevID)
+			h.mu.Unlock()
+			log.Printf("[INFO] Previous replay session stopped: %s", prevID)
+		}
+	}
+
+	// Start new session
+	sessionID, err := h.worker.StartSession(fromMS, toMS, 1)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to start session: " + err.Error()})
+		return
+	}
+
+	// Seek to target timestamp
+	if err := h.worker.Seek(sessionID, req.TimestampMS); err != nil {
+		log.Printf("[WARN] Jump-to-time seek failed: %v", err)
+	}
+
+	// Track in API layer
+	session := &_replaySession{
+		ID:        sessionID,
+		FromMS:    fromMS,
+		ToMS:      toMS,
+		CurrentMS: req.TimestampMS,
+		Speed:     1,
+		State:     "paused",
+		Params:    make(map[string]interface{}),
+		CreatedAt: formatTimestamp(fromMS),
+	}
+	h.mu.Lock()
+	h.sessions[sessionID] = session
+	h.activeSessionID = sessionID
+	h.mu.Unlock()
+
+	log.Printf("[INFO] Jump-to-time: session %s at %d (window ±%dms)", sessionID, req.TimestampMS, windowMS)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"session_id":   sessionID,
+		"timestamp_ms": req.TimestampMS,
+		"from_ms":      fromMS,
+		"to_ms":        toMS,
+		"state":        "paused",
+	})
 }
 
 // Helper functions

@@ -151,6 +151,7 @@
         loading: false,
         panelVisible: false,
         dashboardMode: 'expert', // 'expert' or 'simple' - determines timeline mode
+        selectedEventId: null,   // ID of the currently selected (jumped-to) event
         // Virtualization state
         virtualization: {
             observer: null,
@@ -626,7 +627,7 @@
         // Event click (seeks to timestamp in replay)
         eventEl.addEventListener('click', function() {
             const timestamp = parseInt(this.dataset.timestamp, 10);
-            handleSeek(timestamp);
+            handleSeek(timestamp, this);
         });
     }
 
@@ -714,27 +715,65 @@
         }
     }
 
-    function handleSeek(timestamp) {
-        // Convert timestamp to ISO8601
-        const targetDate = new Date(timestamp);
-        const iso8601 = targetDate.toISOString();
+    function handleSeek(timestamp, eventEl) {
+        if (!timestamp || timestamp <= 0) return;
 
-        // Navigate to timeline view with this timestamp
-        if (window.SpaxelRouter) {
-            SpaxelRouter.navigate('timeline');
-            // The timeline view will handle the seek
-            if (window.SpaxelTimeline) {
-                // Let the main timeline handle the seek
-                setTimeout(function() {
-                    // Trigger seek in main timeline
-                    const seekEvent = new CustomEvent('timeline-seek', { detail: { timestamp: timestamp } });
-                    document.dispatchEvent(seekEvent);
-                }, 100);
-            }
+        // Highlight selected event
+        clearSelectedEvent();
+        if (eventEl) {
+            state.selectedEventId = eventEl.dataset.id;
+            eventEl.classList.add('selected');
         }
 
-        if (window.SpaxelApp && SpaxelApp.showToast) {
-            SpaxelApp.showToast('Opening timeline...', 'info');
+        // In expert mode, use jump-to-time replay
+        if (state.dashboardMode === 'expert' && window.SpaxelReplay) {
+            SpaxelReplay.jumpToTime(timestamp).then(function() {
+                updateNowReplayingChip(true, timestamp);
+            }).catch(function(err) {
+                console.error('[SidebarTimeline] Jump-to-time failed:', err);
+                if (window.SpaxelApp && SpaxelApp.showToast) {
+                    SpaxelApp.showToast('Failed to jump to time', 'error');
+                }
+            });
+        } else {
+            // Simple mode: navigate to timeline view
+            if (window.SpaxelRouter) {
+                SpaxelRouter.navigate('timeline');
+            }
+        }
+    }
+
+    function clearSelectedEvent() {
+        if (state.selectedEventId) {
+            const prev = elements.eventsContainer
+                ? elements.eventsContainer.querySelector('.sidebar-timeline-event.selected')
+                : null;
+            if (prev) {
+                prev.classList.remove('selected');
+            }
+            state.selectedEventId = null;
+        }
+    }
+
+    function updateNowReplayingChip(visible, timestampMs) {
+        let chip = document.getElementById('now-replaying-chip');
+        if (!chip) {
+            // Create chip in the sidebar panel header
+            const header = document.querySelector('.sidebar-panel-header');
+            if (!header) return;
+            chip = document.createElement('span');
+            chip.id = 'now-replaying-chip';
+            chip.className = 'now-replaying-chip';
+            header.appendChild(chip);
+        }
+
+        if (visible && timestampMs) {
+            const date = new Date(timestampMs);
+            const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            chip.textContent = 'Now replaying ' + time;
+            chip.style.display = 'inline-flex';
+        } else {
+            chip.style.display = 'none';
         }
     }
 
@@ -796,7 +835,9 @@
         hide: hidePanel,
         toggle: togglePanel,
         refresh: loadInitialEvents,
-        isVisible: function() { return state.panelVisible; }
+        isVisible: function() { return state.panelVisible; },
+        clearSelection: clearSelectedEvent,
+        hideNowReplayingChip: function() { updateNowReplayingChip(false); }
     };
 
     // Auto-initialize when DOM is ready
