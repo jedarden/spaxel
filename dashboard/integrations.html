@@ -7,261 +7,7 @@
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/layout.css">
     <meta name="theme-color" content="#18191b">
-    <style>
-        .integrations-header {
-            margin-bottom: var(--space-6);
-        }
-
-        .integrations-header h1 {
-            font-size: var(--text-2xl);
-            font-weight: var(--fw-heading);
-            margin: 0 0 var(--space-2) 0;
-        }
-
-        .integrations-header p {
-            color: var(--text-muted);
-            font-size: var(--text-sm);
-            margin: 0;
-        }
-
-        .integration-card {
-            background: var(--bg-card);
-            border-radius: var(--radius-card);
-            padding: var(--space-6);
-            margin-bottom: var(--space-5);
-            border: 1px solid var(--border-default);
-        }
-
-        .integration-card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: var(--space-4);
-        }
-
-        .integration-card-title {
-            font-size: var(--text-lg);
-            font-weight: var(--fw-heading);
-            display: flex;
-            align-items: center;
-            gap: var(--space-3);
-        }
-
-        .integration-status {
-            display: flex;
-            align-items: center;
-            gap: var(--space-2);
-            font-size: var(--text-sm);
-        }
-
-        .status-dot {
-            width: var(--space-2);
-            height: var(--space-2);
-            border-radius: 50%;
-            background: var(--slate-7);
-        }
-
-        .status-dot.connected {
-            background: var(--ok);
-            box-shadow: 0 0 var(--space-2) var(--ok);
-        }
-
-        .status-dot.disconnected {
-            background: var(--alert);
-        }
-
-        .integration-description {
-            color: var(--text-muted);
-            font-size: var(--text-sm);
-            margin-bottom: var(--space-5);
-            line-height: var(--lh-body);
-        }
-
-        .form-group {
-            margin-bottom: var(--space-4);
-        }
-
-        .form-group label {
-            display: block;
-            font-size: var(--text-sm);
-            font-weight: 500;
-            margin-bottom: var(--space-1);
-            color: var(--text-secondary);
-        }
-
-        .form-group input[type="text"],
-        .form-group input[type="password"],
-        .form-group input[type="url"] {
-            width: 100%;
-            padding: var(--space-2) var(--space-3);
-            background: var(--bg-input);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-control);
-            color: var(--text-primary);
-            font-size: var(--text-sm);
-            box-sizing: border-box;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--blue-9);
-        }
-
-        .form-group input::placeholder {
-            color: var(--slate-7);
-        }
-
-        .form-hint {
-            font-size: var(--text-xs);
-            color: var(--slate-7);
-            margin-top: var(--space-1);
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: var(--space-2);
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .checkbox-group label {
-            margin: 0;
-            cursor: pointer;
-        }
-
-        .btn {
-            padding: var(--space-2) var(--space-5);
-            border-radius: var(--radius-control);
-            border: none;
-            font-size: var(--text-sm);
-            font-weight: 500;
-            cursor: pointer;
-            transition: background var(--transition-base);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-primary {
-            background: var(--blue-9);
-            color: var(--text-on-accent);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background: var(--blue-10);
-        }
-
-        .btn-secondary {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            background: var(--bg-active);
-        }
-
-        .btn-full {
-            width: 100%;
-        }
-
-        .button-group {
-            display: flex;
-            gap: var(--space-2);
-            margin-top: var(--space-3);
-        }
-
-        .button-group .btn {
-            flex: 1;
-        }
-
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: var(--overlay-strong);
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .loading-overlay.active {
-            display: flex;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--slate-5);
-            border-top-color: var(--blue-9);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .toast {
-            position: fixed;
-            bottom: var(--space-5);
-            right: var(--space-5);
-            background: var(--slate-4);
-            color: var(--text-primary);
-            padding: var(--space-3) var(--space-5);
-            border-radius: var(--radius-control);
-            box-shadow: 0 4px 12px var(--shadow);
-            display: none;
-            z-index: 1001;
-        }
-
-        .toast.show {
-            display: block;
-            animation: slideIn 0.3s ease;
-        }
-
-        .toast.success {
-            background: var(--ok);
-        }
-
-        .toast.error {
-            background: var(--alert);
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .back-link {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-2);
-            color: var(--blue-9);
-            text-decoration: none;
-            font-size: var(--text-sm);
-            margin-bottom: var(--space-4);
-        }
-
-        .back-link:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <link rel="stylesheet" href="css/integrations.css">
 </head>
 <body class="has-mobile-nav">
 <div class="app-shell app-shell--full">
@@ -278,7 +24,7 @@
 
     <!-- ── Main content ── -->
     <main class="app-main">
-    <div style="max-width:800px;margin:0 auto;padding:var(--space-5);">
+    <div class="integrations-container">
 
         <a href="index.html" class="back-link">← Back to Dashboard</a>
 
@@ -370,7 +116,7 @@
                     <label for="webhook-enabled">Enable System Webhook</label>
                 </div>
 
-                <div class="form-group" id="webhook-url-group" style="display: none;">
+                <div class="form-group hidden" id="webhook-url-group">
                     <label for="webhook-url">Webhook URL</label>
                     <input type="url" id="webhook-url" placeholder="https://your-server.com/spaxel-webhook">
                     <div class="form-hint">Events will be POSTed as JSON with X-Spaxel-Event header</div>
@@ -378,7 +124,7 @@
 
                 <button type="submit" class="btn btn-primary btn-full" id="save-webhook-btn">Save Webhook Settings</button>
 
-                <button type="button" class="btn btn-secondary btn-full" id="test-webhook-btn" style="margin-top: 12px;">Test Webhook</button>
+                <button type="button" class="btn btn-secondary btn-full btn-margin-top" id="test-webhook-btn">Test Webhook</button>
             </form>
         </div>
     </div>
@@ -427,7 +173,7 @@
                 webhookEnabled.addEventListener('change', function() {
                     const urlGroup = document.getElementById('webhook-url-group');
                     if (urlGroup) {
-                        urlGroup.style.display = this.checked ? '' : 'none';
+                        urlGroup.classList.toggle('hidden', !this.checked);
                     }
                 });
             }
