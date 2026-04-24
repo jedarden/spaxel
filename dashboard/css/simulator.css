@@ -317,6 +317,12 @@
     margin-right: 8px;
 }
 
+.gdop-legend-item[data-quality="excellent"] .gdop-legend-color { background: var(--ok); }
+.gdop-legend-item[data-quality="good"] .gdop-legend-color { background: var(--warn); }
+.gdop-legend-item[data-quality="fair"] .gdop-legend-color { background: var(--orange); }
+.gdop-legend-item[data-quality="poor"] .gdop-legend-color { background: var(--alert); }
+.gdop-legend-item[data-quality="none"] .gdop-legend-color { background: var(--slate-7); }
+
 .gdop-legend-label {
     font-size: var(--text-xs);
     color: var(--slate-11);

@@ -231,7 +231,7 @@
 
 /* ── Live-view status bar (grid header in app-shell--live) ── */
 .live-status-bar {
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--live-status-bg);
   height: 44px;
   display: flex;
   align-items: center;
@@ -239,8 +239,8 @@
   padding-top: max(0px, env(safe-area-inset-top));
   gap: 24px;
   font-size: 14px;
-  color: #eee;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-default);
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
@@ -260,11 +260,11 @@
    overlays, NOT layout containers. The grid children are the
    status bar (header) and the canvas (main). */
 .live-panel {
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--live-panel-bg);
   border-radius: 8px;
   z-index: 100;
   overflow-y: auto;
-  color: #eee;
+  color: var(--text-primary);
 }
 
 .live-panel--left {
