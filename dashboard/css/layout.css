@@ -235,10 +235,10 @@
   height: 44px;
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   padding-top: max(0px, env(safe-area-inset-top));
-  gap: 24px;
-  font-size: 14px;
+  gap: var(--space-6);
+  font-size: var(--text-sm);
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-default);
   flex-wrap: nowrap;
@@ -261,7 +261,7 @@
    status bar (header) and the canvas (main). */
 .live-panel {
   background: var(--live-panel-bg);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   z-index: 100;
   overflow-y: auto;
   color: var(--text-primary);
@@ -273,7 +273,7 @@
   left: 20px;
   width: 280px;
   max-height: calc(100vh - 80px);
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .live-panel--right {
@@ -281,7 +281,7 @@
   bottom: 20px;
   right: 20px;
   width: 400px;
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .live-panel--presence {
@@ -290,7 +290,7 @@
   right: 20px;
   width: 240px;
   max-height: calc(100vh - 80px);
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 /* ── Tablet breakpoint for live panels ── */

@@ -430,6 +430,26 @@
   color: var(--color-critical, var(--alert));
 }
 
+.timeline-explain-btn {
+  background: transparent;
+  border: 1px solid var(--border-color, var(--bg-hover));
+  border-radius: var(--radius-control);
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted, var(--text-muted));
+  transition: all 0.2s;
+}
+
+.timeline-explain-btn:hover {
+  background: var(--bg-primary, var(--bg-page));
+  color: var(--text-secondary, var(--text-secondary));
+  border-color: var(--text-muted, var(--text-muted));
+}
+
 .timeline-seek-btn {
   margin-left: auto;
   background: transparent;
@@ -663,6 +683,49 @@
 .timeline-event.feedback-dismissed {
   opacity: 0.5;
   pointer-events: none;
+}
+
+/* Selected Event (tap-to-jump highlight) */
+.timeline-event.timeline-event-selected {
+  background: color-mix(in srgb, var(--blue-9) 12%, transparent);
+  border-color: var(--blue-9) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue-9) 25%, transparent),
+              0 2px 12px color-mix(in srgb, var(--blue-9) 15%, transparent);
+}
+
+.timeline-event.timeline-event-selected::before {
+  background: var(--blue-9);
+  width: 4px;
+}
+
+.timeline-event.timeline-event-selected:hover {
+  background: color-mix(in srgb, var(--blue-9) 18%, transparent);
+}
+
+/* Now Replaying Chip (in full-page timeline header) */
+#timeline-now-replaying {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  margin-left: 8px;
+  background: color-mix(in srgb, var(--blue-9) 20%, transparent);
+  color: var(--blue-11);
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  animation: now-replaying-pulse 2s ease-in-out infinite;
+}
+
+.now-replaying-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--blue-9);
+  border-radius: 50%;
+  animation: timeline-pulse 1.5s ease-in-out infinite;
 }
 
 /* Secondary system events (expert mode - greyed out) */
