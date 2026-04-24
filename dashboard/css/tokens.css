@@ -36,6 +36,7 @@
   --ok:   #46a758;   /* green-9 */
   --warn: #e5a00d;   /* amber-9 */
   --alert: #e5484d;  /* red-9  */
+  --orange: #e5780d; /* orange-9 (GDOP fair) */
 
   /* ── Semantic aliases ── */
   --color-success: var(--ok);
@@ -147,4 +148,30 @@
 
   /* ── Selected row highlight ── */
   --row-selected: rgba(62, 150, 232, 0.18);
+
+  /* ── Live view overlays ── */
+  --live-status-bg:    rgba(0, 0, 0, 0.85);
+  --live-panel-bg:     rgba(0, 0, 0, 0.8);
+  --live-chart-bg:     rgba(0, 0, 0, 0.8);
+  --live-node-bg:      rgba(0, 0, 0, 0.8);
+  --live-presence-bg:  rgba(0, 0, 0, 0.8);
+
+  /* ── Inline-element opacity levels ── */
+  --opacity-subtle:    0.03;
+  --opacity-light:     0.05;
+  --opacity-soft:      0.08;
+  --opacity-mid:       0.1;
+  --opacity-medium:    0.12;
+  --opacity-strong:    0.15;
+
+  /* ── Accent interaction bg (blue tinted) ── */
+  --blue-interact-bg:  rgba(62, 150, 232, 0.2);
+  --blue-interact-border: rgba(62, 150, 232, 0.5);
+  --blue-interact-active: rgba(62, 150, 232, 0.25);
+
+  /* ── Stationary badge ── */
+  --stationary-bg:     rgba(62, 150, 232, 0.25);
+
+  /* ── Green glow dot ── */
+  --ok-glow:           rgba(70, 167, 88, 0.5);
 }

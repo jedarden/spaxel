@@ -81,7 +81,14 @@
 		// Client-side filtered events
 		filteredEvents: [],
 		// All loaded events (for client-side filtering)
-		allLoadedEvents: []
+		allLoadedEvents: [],
+		// Time-travel replay state
+		replay: {
+			activeSessionId: null,
+			selectedEventId: null,
+			isReplaying: false,
+			replayTimestamp: null
+		}
 	};
 
 	// DOM elements
@@ -472,7 +479,9 @@
 			dateApply: document.getElementById('timeline-date-apply'),
 			// Filter bar toggle
 			filterToggle: document.getElementById('timeline-filter-toggle'),
-			filterBar: document.getElementById('timeline-filter-bar')
+			filterBar: document.getElementById('timeline-filter-bar'),
+			// Now replaying chip
+			nowReplayingChip: document.getElementById('timeline-now-replaying')
 		};
 	}
 
