@@ -90,6 +90,7 @@
   --text-lg:   20px;
   --text-xl:   18px;
   --text-2xl:  28px;
+  --text-22:   22px;
   --text-3xl:  24px;
   --text-4xl:  32px;
   --text-5xl:  48px;
@@ -101,6 +102,7 @@
   --fw-heading: 600;
 
   /* ── Spacing (4 px grid) ── */
+  --space-half: 2px;
   --space-1:  4px;
   --space-2:  8px;
   --space-3:  12px;

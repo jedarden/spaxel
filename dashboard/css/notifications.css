@@ -20,7 +20,7 @@
 
 .settings-section h3 {
 	margin-top: 0;
-	margin-bottom: 10px;
+	margin-bottom: var(--space-250);
 	color: var(--blue-10);
 }
 
@@ -48,7 +48,7 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 10px;
+	margin-bottom: var(--space-250);
 }
 
 .channel-type {
@@ -397,7 +397,7 @@
 	display: block;
 	color: var(--text-secondary);
 	font-size: 0.9em;
-	margin-bottom: 10px;
+	margin-bottom: var(--space-250);
 }
 
 #modal-event-types {
@@ -576,7 +576,7 @@
     display: flex;
     flex-wrap: wrap;
     gapvar(--space-250);
-    margin-top: 10px;
+    margin-top: var(--space-250);
 }
 
 .panel-day-checkbox {
@@ -666,7 +666,7 @@
 .panel-form-hint {
     color: var(--text-muted);
     font-size: 0.85em;
-    margin-top: -8px;
+    margin-top: -var(--space-2);
     margin-bottom: var(--space-3);
 }
 

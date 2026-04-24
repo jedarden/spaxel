@@ -444,7 +444,7 @@
     display: block;
     font-size: var(--text-sm);
     color: var(--text-secondary);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-150);
     font-weight: 500;
 }
 
@@ -530,7 +530,7 @@
     color: var(--blue-10);
     font-weight: 500;
     text-align: right;
-    margin-top: -8px;
+    margin-top: -var(--space-2);
     margin-bottom: var(--space-2);
 }
 
@@ -568,7 +568,7 @@
     letter-spacing: var(--ls-wide);
     color: var(--text-muted);
     margin-bottom: var(--space-3);
-    padding-bottom: 6px;
+    padding-bottom: var(--space-150);
     border-bottom: 1px solid var(--bg-hover);
 }
 
@@ -1186,7 +1186,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 6px;
+    margin-bottom: var(--space-150);
 }
 
 .anomaly-item-type {
@@ -1212,7 +1212,7 @@
     border-radius: var(--radius-card);
     font-size: var(--text-3xs);
     font-weight: 600;
-    margin-top: 6px;
+    margin-top: var(--space-150);
 }
 
 .anomaly-item-status.active {
@@ -2095,7 +2095,7 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-control);
     font-size: var(--text-xs);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-150);
 }
 
 .action-item .action-type {
@@ -2145,7 +2145,7 @@
 }
 
 .form-group {
-    margin-bottom: 10px;
+    margin-bottom: var(--space-250);
 }
 
 .form-group label {
@@ -2605,7 +2605,7 @@
     padding: var(--space-2) var(--space-3);
     background: var(--border-subtle);
     border-radius: var(--radius-control);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-150);
 }
 
 .sim-item-name {
@@ -2678,7 +2678,7 @@
     display: block;
     font-size: var(--text-xs);
     color: var(--text-muted);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-150);
 }
 
 .sim-progress-bar {
@@ -3233,7 +3233,7 @@
    ============================================ */
 
 .sim-gdop-legend {
-    margin-top: 15px;
+    margin-top: var(--space-375);
     padding: var(--space-3);
     background: var(--shadow);
     border-radius: var(--radius-control);
@@ -3255,7 +3255,7 @@
     width: 16px;
     height: 16px;
     border-radius: var(--radius-control);
-    margin-right: 10px;
+    margin-right: var(--space-250);
     flex-shrink: 0;
     border: 1px solid var(--border-strong);
 }

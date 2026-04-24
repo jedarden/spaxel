@@ -2149,12 +2149,9 @@
             50% { box-shadow: 0 0 16px var(--alert-border); }
         }
 
-        /* ===== Anomaly Learning Banner ===== */
+        /* ===== Anomaly Learning Banner =====
+           Positioning in layout.css — only cosmetic styles here */
         #anomaly-learning-banner {
-            position: fixed;
-            top: 45px;
-            left: 50%;
-            transform: translateX(-50%);
             background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
             color: var(--text-on-accent);
             padding: 8px 16px;
@@ -2163,7 +2160,6 @@
             display: none;
             align-items: center;
             gap: 10px;
-            z-index: 150;
             box-shadow: 0 4px 12px var(--blue-border);
         }
 
@@ -2579,29 +2575,17 @@
             margin-left: 8px;
         }
 
-        /* ===== Mobile Responsive Styles ===== */
-        @media (max-width: 1024px) {
+        /* ===== Mobile Responsive Styles =====
+           Panel positioning and responsive overrides live in layout.css (§8e).
+           Only page-specific cosmetic adjustments remain here. */
+        @media (max-width: 1023px) {
             /* Show hamburger menu button */
             #mobile-menu-btn {
                 display: block;
             }
-
-            /* Hide side panels on mobile - use hamburger menu instead */
-            #node-panel,
-            #presence-panel {
-                display: none;
-            }
-
-            /* Chart panel - adjust position */
-            #chart-panel {
-                width: calc(100% - 16px);
-                right: 8px;
-                left: 8px;
-                bottom: calc(8px + env(safe-area-inset-bottom));
-            }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 639px) {
             /* Show mobile menu button */
             #mobile-menu-btn {
                 display: block;
@@ -2624,37 +2608,6 @@
             /* Hide less important status items on mobile */
             .status-item:has(#fps-counter),
             .status-item:has(#link-count) {
-                display: none;
-            }
-
-            /* Node panel - collapsible on mobile */
-            #node-panel {
-                top: auto;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                width: auto;
-                max-height: 50vh;
-                border-radius: 12px 12px 0 0;
-                transform: translateY(calc(100% - 40px));
-                transition: transform 0.3s ease;
-            }
-
-            #node-panel.expanded {
-                transform: translateY(0);
-            }
-
-            /* Chart panel - smaller on mobile */
-            #chart-panel {
-                width: calc(100% - 16px);
-                right: 8px;
-                left: 8px;
-                bottom: 8px;
-                height: 200px;
-            }
-
-            /* Presence panel - hide on mobile (use timeline instead) */
-            #presence-panel {
                 display: none;
             }
 
@@ -2684,29 +2637,7 @@
                 display: none;
             }
 
-            /* Room editor panel - full width on mobile */
-            #room-editor-panel {
-                top: auto;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                width: auto;
-                border-radius: 12px 12px 0 0;
-                transform: translateY(calc(100% - 40px));
-                transition: transform 0.3s ease;
-            }
-
-            #room-editor-panel.expanded {
-                transform: translateY(0);
-            }
-
-            /* GDOP legend - smaller on mobile */
-            #gdop-legend {
-                left: 8px;
-                bottom: 220px;
-                padding: 8px;
-            }
-
+            /* GDOP gradient - smaller on mobile */
             #gdop-gradient {
                 width: 100px;
             }
@@ -2882,19 +2813,14 @@
             background: var(--warn-muted);
         }
 
-        /* Replay control bar (shown during replay mode) */
+        /* Replay control bar — positioning in layout.css */
         .replay-control-bar {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
             background: var(--overlay-panel);
             border-radius: 12px;
             padding: 12px 20px;
             display: flex;
             align-items: center;
             gap: 16px;
-            z-index: 150;
             box-shadow: 0 4px 20px var(--overlay);
             border: 1px solid var(--bg-hover);
         }
@@ -3015,16 +2941,11 @@
             background: var(--blue-interact-bg);
         }
 
-        /* Replay tuning panel */
+        /* Replay tuning panel — positioning in layout.css */
         .replay-tuning-panel {
-            position: fixed;
-            top: 60px;
-            right: 340px;
-            width: 280px;
             background: var(--overlay-panel);
             border-radius: 8px;
             padding: 16px;
-            z-index: 100;
             display: none;
             box-shadow: 0 4px 20px var(--overlay);
             border: 1px solid var(--bg-hover);
@@ -3144,9 +3065,8 @@
             background: var(--border-strong);
         }
 
-        /* Fresnel zone debug tooltip */
+        /* Fresnel zone debug tooltip — positioning in layout.css */
         .fresnel-tooltip {
-            position: fixed;
             display: none;
             background: var(--overlay-panel);
             border: 1px solid var(--blue-interact-border);
@@ -3155,7 +3075,6 @@
             font-size: var(--text-xs);
             color: var(--text-primary);
             pointer-events: none;
-            z-index: 1000;
             max-width: 280px;
             box-shadow: 0 4px 12px var(--overlay);
         }

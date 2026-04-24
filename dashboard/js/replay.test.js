@@ -117,8 +117,8 @@ describe('SpaxelReplay', function() {
                 });
             }
 
-            // Stop session
-            if (url === '/api/replay/stop') {
+            // Stop session (match by method+url since body isn't in URL)
+            if (options && options.method === 'POST' && url === '/api/replay/stop') {
                 return Promise.resolve({
                     ok: true,
                     json: function() {

@@ -348,7 +348,7 @@
 .tuning-actions {
     display: flex;
     gap: var(--space-3);
-    margin-top: 28px;
+    margin-top: var(--space-7);
 }
 
 .tuning-btn {
