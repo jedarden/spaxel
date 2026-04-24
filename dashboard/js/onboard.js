@@ -58,6 +58,8 @@
         csiHistory: [],
         calibrationLinks: [],  // unique link IDs seen during calibration
         container: null,
+        reproveMode: false,    // true when started via reprove(mac)
+        reproveMAC: null,      // the specific MAC to re-provision
     };
 
     // ============================================
@@ -304,8 +306,15 @@
     }
 
     function renderConnectDevice(contentEl) {
+        var reproveBanner = state.reproveMode
+            ? '<div class="wizard-reprove-banner">' +
+              '<strong>Re-provisioning ' + escapeAttr(state.reproveMAC || 'node') + '</strong> — ' +
+              'Firmware is already installed. Connect via USB to update the security token only.' +
+              '</div>'
+            : '';
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
+            reproveBanner +
             '<h2>Connect Your ESP32-S3</h2>' +
             '<p>Connect the ESP32-S3 to your computer using a USB cable.</p>' +
             '<div class="esp32-illustration">' +
@@ -975,10 +984,16 @@
     }
 
     function renderDetectNode(contentEl) {
+        var detectTitle = state.reproveMode
+            ? 'Waiting for Node to Reconnect'
+            : 'Detecting Your Node';
+        var detectDesc = state.reproveMode
+            ? 'Unplug and replug the ESP32-S3 — it will reconnect with its new token. This may take up to 30 seconds.'
+            : 'The ESP32-S3 is booting and connecting to your WiFi network. This may take up to 30 seconds.';
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
-            '<h2>Detecting Your Node</h2>' +
-            '<p>The ESP32-S3 is booting and connecting to your WiFi network. This may take up to 30 seconds.</p>' +
+            '<h2>' + detectTitle + '</h2>' +
+            '<p>' + detectDesc + '</p>' +
             '<div class="wizard-center-msg">' +
             '<div class="spinner"></div>' +
             '<p id="detect-status">Waiting for node to appear...</p>' +
@@ -1032,16 +1047,23 @@
                 .then(function (nodes) {
                     var currentMACs = (nodes || []).map(function (n) { return n.mac; });
                     var newMAC = null;
-                    for (var i = 0; i < currentMACs.length; i++) {
-                        if (state.knownMACs.indexOf(currentMACs[i]) === -1) {
-                            newMAC = currentMACs[i];
-                            break;
-                        }
-                    }
 
-                    // Also accept the first online node if no known MACs were recorded
-                    if (!newMAC && state.knownMACs.length === 0 && currentMACs.length > 0) {
-                        newMAC = currentMACs[0];
+                    if (state.reproveMode && state.reproveMAC) {
+                        // In reprove mode, only accept the specific target MAC.
+                        if (currentMACs.indexOf(state.reproveMAC) !== -1) {
+                            newMAC = state.reproveMAC;
+                        }
+                    } else {
+                        for (var i = 0; i < currentMACs.length; i++) {
+                            if (state.knownMACs.indexOf(currentMACs[i]) === -1) {
+                                newMAC = currentMACs[i];
+                                break;
+                            }
+                        }
+                        // Also accept the first online node if no known MACs were recorded
+                        if (!newMAC && state.knownMACs.length === 0 && currentMACs.length > 0) {
+                            newMAC = currentMACs[0];
+                        }
                     }
 
                     if (newMAC) {
@@ -1396,6 +1418,16 @@
     function goToStep(index) {
         if (index < 0 || index >= STEPS.length) return;
 
+        // In reprove mode, skip the flash_firmware step — firmware is already on device.
+        if (state.reproveMode) {
+            var flashIdx = STEPS.findIndex(function (s) { return s.id === 'flash_firmware'; });
+            if (flashIdx >= 0 && index === flashIdx) {
+                // Skip forward or backward past the flash step.
+                index = index > state.currentStepIndex ? flashIdx + 1 : flashIdx - 1;
+                if (index < 0 || index >= STEPS.length) return;
+            }
+        }
+
         // Cleanup previous step
         if (activeCleanup) {
             activeCleanup.cleanup();
@@ -1466,6 +1498,10 @@
         }
         state.container = null;
 
+        // Clear reprove mode flags on close.
+        state.reproveMode = false;
+        state.reproveMAC = null;
+
         // Don't clear state — allow resume if user navigates back to /onboard
     }
 
@@ -1476,6 +1512,14 @@
         }
 
         createWizardUI();
+
+        // In reprove mode, always start fresh at the connect step.
+        if (state.reproveMode) {
+            clearState();
+            var connectIdx = STEPS.findIndex(function (s) { return s.id === 'connect_device'; });
+            goToStep(connectIdx >= 0 ? connectIdx : 0);
+            return;
+        }
 
         var saved = loadState();
         if (saved && typeof saved.currentStepIndex === 'number' && saved.currentStepIndex >= 0) {
@@ -1508,6 +1552,11 @@
     window.SpaxelOnboard = {
         start: startWizard,
         close: closeWizard,
+        reprove: function (mac) {
+            state.reproveMode = true;
+            state.reproveMAC = mac || null;
+            startWizard();
+        },
     };
 
     // Expose internals for testing

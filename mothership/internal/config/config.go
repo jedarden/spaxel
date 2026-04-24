@@ -39,7 +39,8 @@ type Config struct {
 	ReplayMaxMB int // Maximum replay buffer size in MB, range [10,10000] (default 360)
 
 	// Security
-	InstallSecret string // Installation secret (64-char hex, optional if set must be 32+ bytes)
+	InstallSecret        string // Installation secret (64-char hex, optional if set must be 32+ bytes)
+	MigrationWindowHours int    // How long after startup nodes without tokens are tolerated (default 24, 0 = disabled)
 
 	// Time
 	NTPServer string // NTP server hostname (default "pool.ntp.org")
@@ -130,6 +131,19 @@ func Load() (*Config, error) {
 			errs = append(errs, fmt.Errorf("SPAXEL_INSTALL_SECRET invalid: must be at least 32 bytes (64 hex chars)"))
 		} else {
 			cfg.InstallSecret = installSecret
+		}
+	}
+
+	// SPAXEL_MIGRATION_WINDOW_HOURS - int, default 24, range [0,168]
+	// 0 = disabled (strict token enforcement from startup)
+	cfg.MigrationWindowHours = 24
+	if mwStr := os.Getenv("SPAXEL_MIGRATION_WINDOW_HOURS"); mwStr != "" {
+		if val, err := strconv.Atoi(mwStr); err != nil {
+			errs = append(errs, fmt.Errorf("SPAXEL_MIGRATION_WINDOW_HOURS=%s invalid: must be an integer", mwStr))
+		} else if val < 0 || val > 168 {
+			errs = append(errs, fmt.Errorf("SPAXEL_MIGRATION_WINDOW_HOURS=%d invalid: must be in range [0,168]", val))
+		} else {
+			cfg.MigrationWindowHours = val
 		}
 	}
 

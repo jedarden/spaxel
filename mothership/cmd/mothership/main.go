@@ -2545,6 +2545,7 @@ func main() {
 
 	// Phase 6: Fleet Health REST API (self-healing with GDOP optimisation)
 	fleetHealthHandler := fleet.NewFleetHandler(selfHealManager, fleetReg)
+	fleetHealthHandler.SetUnpairedProvider(ingestSrv)
 	fleetHealthHandler.RegisterRoutes(r)
 
 	// Phase 6: Volume triggers REST API (webhook actions with fault tolerance)
@@ -3871,6 +3872,11 @@ func main() {
 	provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort, cfg.NTPServer, cfg.InstallSecret)
 	r.Post("/api/provision", provSrv.HandleProvision)
 	ingestSrv.SetTokenValidator(provSrv.ValidateToken)
+	if cfg.MigrationWindowHours > 0 {
+		deadline := time.Now().Add(time.Duration(cfg.MigrationWindowHours) * time.Hour)
+		ingestSrv.SetMigrationDeadline(deadline)
+		log.Printf("[INFO] Migration window open until %s (%d h)", deadline.Format(time.RFC3339), cfg.MigrationWindowHours)
+	}
 
 	// Firmware manifest for esp-web-tools (onboarding wizard flashing)
 	r.Get("/api/firmware/manifest", func(w http.ResponseWriter, r *http.Request) {

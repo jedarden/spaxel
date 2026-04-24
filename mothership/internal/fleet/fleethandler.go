@@ -9,10 +9,16 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// UnpairedProvider returns the MACs of currently-connected nodes that lack a valid token.
+type UnpairedProvider interface {
+	GetUnpairedMACs() []string
+}
+
 // FleetHandler serves the fleet health REST API.
 type FleetHandler struct {
-	healer *SelfHealManager
-	reg    *Registry
+	healer           *SelfHealManager
+	reg              *Registry
+	unpairedProvider UnpairedProvider
 }
 
 // NewFleetHandler creates a new fleet REST handler.
@@ -21,6 +27,11 @@ func NewFleetHandler(healer *SelfHealManager, registry *Registry) *FleetHandler 
 		healer: healer,
 		reg:    registry,
 	}
+}
+
+// SetUnpairedProvider wires in the source of unpaired node MACs (typically the ingestion server).
+func (h *FleetHandler) SetUnpairedProvider(p UnpairedProvider) {
+	h.unpairedProvider = p
 }
 
 // RegisterRoutes mounts fleet endpoints on r.
@@ -57,17 +68,18 @@ type fleetHealthResponse struct {
 }
 
 type fleetNodeEntry struct {
-	MAC            string  `json:"mac"`
-	Name           string  `json:"name"`
-	Role           string  `json:"role"`
-	HealthScore    float64 `json:"health_score"`
-	Online         bool    `json:"online"`
-	PosX           float64 `json:"pos_x"`
-	PosY           float64 `json:"pos_y"`
-	PosZ           float64 `json:"pos_z"`
+	MAC             string  `json:"mac"`
+	Name            string  `json:"name"`
+	Role            string  `json:"role"`
+	HealthScore     float64 `json:"health_score"`
+	Online          bool    `json:"online"`
+	PosX            float64 `json:"pos_x"`
+	PosY            float64 `json:"pos_y"`
+	PosZ            float64 `json:"pos_z"`
 	FirmwareVersion string  `json:"firmware_version"`
-	UptimeSeconds  int64   `json:"uptime_seconds"`
-	LastSeenMs     int64   `json:"last_seen_ms"`
+	UptimeSeconds   int64   `json:"uptime_seconds"`
+	LastSeenMs      int64   `json:"last_seen_ms"`
+	Unpaired        bool    `json:"unpaired,omitempty"`
 }
 
 func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +127,32 @@ func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
 			UptimeSeconds:  uptimeSeconds,
 			LastSeenMs:     n.LastSeenAt.UnixMilli(),
 		})
+	}
+
+	// Merge in unpaired nodes (connected without a valid token) that aren't in the registry yet.
+	if h.unpairedProvider != nil {
+		registeredMACs := make(map[string]struct{}, len(entries))
+		for _, e := range entries {
+			registeredMACs[e.MAC] = struct{}{}
+		}
+		for _, mac := range h.unpairedProvider.GetUnpairedMACs() {
+			if _, exists := registeredMACs[mac]; exists {
+				// Already in the registry — mark as unpaired in the existing entry.
+				for i := range entries {
+					if entries[i].MAC == mac {
+						entries[i].Unpaired = true
+						break
+					}
+				}
+			} else {
+				entries = append(entries, fleetNodeEntry{
+					MAC:      mac,
+					Online:   true,
+					Unpaired: true,
+					Role:     "rx",
+				})
+			}
+		}
 	}
 
 	resp := fleetHealthResponse{
@@ -175,6 +213,31 @@ func (h *FleetHandler) getFleet(w http.ResponseWriter, r *http.Request) {
 			UptimeSeconds:  uptimeSeconds,
 			LastSeenMs:     n.LastSeenAt.UnixMilli(),
 		})
+	}
+
+	// Merge in unpaired nodes not yet in the registry.
+	if h.unpairedProvider != nil {
+		registeredMACs := make(map[string]struct{}, len(entries))
+		for _, e := range entries {
+			registeredMACs[e.MAC] = struct{}{}
+		}
+		for _, mac := range h.unpairedProvider.GetUnpairedMACs() {
+			if _, exists := registeredMACs[mac]; exists {
+				for i := range entries {
+					if entries[i].MAC == mac {
+						entries[i].Unpaired = true
+						break
+					}
+				}
+			} else {
+				entries = append(entries, fleetNodeEntry{
+					MAC:      mac,
+					Online:   true,
+					Unpaired: true,
+					Role:     "rx",
+				})
+			}
+		}
 	}
 
 	if entries == nil {

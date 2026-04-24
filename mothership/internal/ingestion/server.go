@@ -126,6 +126,10 @@ type Server struct {
 	// Token validator for node authentication
 	// Function that takes (mac, token) and returns true if valid
 	tokenValidator func(mac, token string) bool
+
+	// migrationDeadline is the time after which nodes without valid tokens are rejected.
+	// Zero value means strict mode (no migration window).
+	migrationDeadline time.Time
 }
 
 // NodeConnection tracks state for a connected node
@@ -137,6 +141,7 @@ type NodeConnection struct {
 	LastHealthTime time.Time
 	ConnectedAt    time.Time
 	LastFrameTime  time.Time
+	Unpaired       bool // true if connected without a valid token (migration window grace)
 
 	// Write mutex for thread-safe sends
 	writeMu sync.Mutex
@@ -257,6 +262,15 @@ func (s *Server) SetOTAManager(h OTAStatusHandler) {
 func (s *Server) SetAPDetector(detector *apdetector.Detector) {
 	s.mu.Lock()
 	s.apDetector = detector
+	s.mu.Unlock()
+}
+
+// SetMigrationDeadline sets the deadline until which nodes with missing/invalid tokens
+// are accepted but flagged as Unpaired. After the deadline (or if deadline is zero),
+// nodes without valid tokens are rejected.
+func (s *Server) SetMigrationDeadline(t time.Time) {
+	s.mu.Lock()
+	s.migrationDeadline = t
 	s.mu.Unlock()
 }
 
@@ -444,22 +458,29 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	nc.MAC = hello.MAC
 	nc.Hello = hello
 
-	// Token validation: if a validator is configured, reject unauthenticated nodes.
+	// Token validation: if a validator is configured, reject unauthenticated nodes
+	// unless the migration window is still open, in which case allow but mark as Unpaired.
 	s.mu.RLock()
 	validator := s.tokenValidator
+	deadline := s.migrationDeadline
 	s.mu.RUnlock()
 	if validator != nil {
-		if hello.Token == "" {
-			log.Printf("[WARN] Node %s rejected: missing token", hello.MAC)
-			s.sendReject(conn, "invalid_token")
-			conn.Close()
-			return
-		}
-		if !validator(hello.MAC, hello.Token) {
-			log.Printf("[WARN] Node %s rejected: invalid token", hello.MAC)
-			s.sendReject(conn, "invalid_token")
-			conn.Close()
-			return
+		tokenOK := hello.Token != "" && validator(hello.MAC, hello.Token)
+		if !tokenOK {
+			if !deadline.IsZero() && time.Now().Before(deadline) {
+				log.Printf("[WARN] Node %s connected without valid token (migration window open until %s)",
+					hello.MAC, deadline.Format(time.RFC3339))
+				nc.Unpaired = true
+			} else {
+				if hello.Token == "" {
+					log.Printf("[WARN] Node %s rejected: missing token", hello.MAC)
+				} else {
+					log.Printf("[WARN] Node %s rejected: invalid token", hello.MAC)
+				}
+				s.sendReject(conn, "invalid_token")
+				conn.Close()
+				return
+			}
 		}
 	}
 
@@ -868,6 +889,7 @@ type NodeInfo struct {
 	MAC             string `json:"mac"`
 	FirmwareVersion string `json:"firmware_version,omitempty"`
 	Chip            string `json:"chip,omitempty"`
+	Unpaired        bool   `json:"unpaired,omitempty"`
 }
 
 // GetConnectedNodesInfo returns detailed info about connected nodes
@@ -877,7 +899,7 @@ func (s *Server) GetConnectedNodesInfo() []NodeInfo {
 
 	nodes := make([]NodeInfo, 0, len(s.connections))
 	for mac, nc := range s.connections {
-		info := NodeInfo{MAC: mac}
+		info := NodeInfo{MAC: mac, Unpaired: nc.Unpaired}
 		if nc.Hello != nil {
 			info.FirmwareVersion = nc.Hello.FirmwareVersion
 			info.Chip = nc.Hello.Chip
@@ -885,6 +907,20 @@ func (s *Server) GetConnectedNodesInfo() []NodeInfo {
 		nodes = append(nodes, info)
 	}
 	return nodes
+}
+
+// GetUnpairedMACs returns the MACs of currently-connected nodes that lack a valid token.
+func (s *Server) GetUnpairedMACs() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var macs []string
+	for mac, nc := range s.connections {
+		if nc.Unpaired {
+			macs = append(macs, mac)
+		}
+	}
+	return macs
 }
 
 // LinkInfo represents a link with its endpoints and health data
