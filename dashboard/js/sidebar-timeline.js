@@ -150,7 +150,7 @@
         total: 0,
         loading: false,
         panelVisible: false,
-        dashboardMode: 'expert', // 'expert' or 'simple' - determines timeline mode
+        dashboardMode: 'expert', // determines timeline mode
         selectedEventId: null,   // ID of the currently selected (jumped-to) event
         // Virtualization state
         virtualization: {
@@ -176,11 +176,6 @@
         bindEvents();
         setupVirtualization();
 
-        // Listen for simple mode changes
-        if (window.SpaxelSimpleModeDetection) {
-            SpaxelSimpleModeDetection.onModeChange(onSimpleModeChange);
-        }
-
         // Listen for router mode changes
         if (window.SpaxelRouter) {
             SpaxelRouter.onModeChange(onRouterModeChange);
@@ -191,6 +186,11 @@
         // Register for WebSocket messages
         if (window.SpaxelApp) {
             SpaxelApp.registerMessageHandler(handleWebSocketMessage);
+        }
+
+        // Listen for simple mode changes
+        if (window.SpaxelSimpleModeDetection) {
+            SpaxelSimpleModeDetection.onModeChange(onSimpleModeChange);
         }
 
         console.log('[SidebarTimeline] Initialized');
@@ -230,35 +230,25 @@
     // ============================================
     // Mode Change Handlers
     // ============================================
-    function onSimpleModeChange(newMode, oldMode) {
-        console.log('[SidebarTimeline] Simple mode changed from', oldMode, 'to', newMode);
-
-        // Update dashboard mode based on simple mode
-        if (newMode === 'simple') {
-            state.dashboardMode = 'simple';
-        } else {
-            state.dashboardMode = 'expert';
-        }
-
-        // Reload events with new mode
-        if (state.panelVisible) {
-            loadInitialEvents();
-        }
-    }
 
     function onRouterModeChange(newMode, oldMode) {
-        // Determine dashboard mode: expert mode shows all events, simple mode shows person-relevant only
-        if (newMode === 'live' || newMode === 'replay' || newMode === 'timeline') {
-            state.dashboardMode = 'expert';
-        } else if (newMode === 'simple' || newMode === 'ambient') {
+        if (newMode === 'ambient') {
             state.dashboardMode = 'simple';
         } else {
-            state.dashboardMode = 'expert'; // Default to expert
+            state.dashboardMode = 'expert';
         }
 
         // Reload events if panel is visible
         if (state.panelVisible) {
             loadInitialEvents();
+        }
+    }
+
+    function onSimpleModeChange(newMode, oldMode) {
+        if (newMode === 'simple') {
+            state.dashboardMode = 'simple';
+        } else {
+            state.dashboardMode = 'expert';
         }
     }
 
