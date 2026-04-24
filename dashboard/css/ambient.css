@@ -7,32 +7,32 @@
 
 /* ===== Ambient Mode Layout ===== */
 .ambient-mode {
-    --ambient-bg-morning: #f0f4f8;
-    --ambient-bg-day: #ffffff;
-    --ambient-bg-evening: #fef3e7;
-    --ambient-bg-night: #1a1a2e;
+    --ambient-bg-morning: var(--slate-2);
+    --ambient-bg-day: var(--slate-2);
+    --ambient-bg-evening: var(--slate-3);
+    --ambient-bg-night: var(--slate-1);
 
-    --ambient-text-morning: #1a365d;
-    --ambient-text-day: #1d1d1f;
-    --ambient-text-evening: #7c2d12;
-    --ambient-text-night: #e0e0e0;
+    --ambient-text-morning: var(--text-primary);
+    --ambient-text-day: var(--text-primary);
+    --ambient-text-evening: var(--text-primary);
+    --ambient-text-night: var(--text-secondary);
 
-    --ambient-accent-morning: #4299e1;
-    --ambient-accent-day: #0066cc;
-    --ambient-accent-evening: #ed8936;
-    --ambient-accent-night: #4fc3f7;
+    --ambient-accent-morning: var(--blue-9);
+    --ambient-accent-day: var(--blue-9);
+    --ambient-accent-evening: var(--warn);
+    --ambient-accent-night: var(--slate-5);
 
-    --ambient-person-bg-morning: rgba(66, 153, 225, 0.2);
-    --ambient-person-bg-day: rgba(0, 102, 204, 0.2);
-    --ambient-person-bg-evening: rgba(237, 137, 54, 0.2);
-    --ambient-person-bg-night: rgba(79, 195, 247, 0.2);
+    --ambient-person-bg-morning: var(--blue-muted);
+    --ambient-person-bg-day: var(--blue-muted);
+    --ambient-person-bg-evening: var(--warn-muted);
+    --ambient-person-bg-night: rgba(62, 150, 232, 0.08);
 }
 
 body.ambient-mode {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-body);
     background: var(--ambient-bg-day);
     color: var(--ambient-text-day);
     transition: background 1s ease, color 1s ease;
@@ -92,9 +92,9 @@ body.ambient-mode {
 }
 
 .ambient-canvas {
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    background: var(--bg-card);
+    border-radius: var(--radius-modal);
+    box-shadow: var(--shadow);
     display: block;
     /* Fix iOS Safari passive event listener warnings */
     touch-action: none;
@@ -109,7 +109,7 @@ body.ambient-mode {
     display: flex;
     align-items: center;
     gap: 24px;
-    font-size: 14px;
+    font-size: var(--text-sm);
     color: var(--ambient-text-day);
     opacity: 0.7;
     transition: color 1s ease, opacity 0.5s ease;
@@ -129,13 +129,13 @@ body.ambient-mode {
 }
 
 .ambient-status-dot.online {
-    background: #34c759;
-    box-shadow: 0 0 8px #34c759;
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
 }
 
 .ambient-status-dot.alert {
-    background: #ff3b30;
-    box-shadow: 0 0 8px #ff3b30;
+    background: var(--alert);
+    box-shadow: 0 0 8px var(--alert);
     animation: pulse-dot 1s ease-in-out infinite;
 }
 
@@ -214,7 +214,7 @@ body.ambient-mode {
 }
 
 .ambient-mode.time-night .ambient-canvas {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow);
 }
 
 /* ===== Ambient Person Indicators ===== */
@@ -226,7 +226,7 @@ body.ambient-mode {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: white;
     transition: all 0.5s ease;
@@ -247,30 +247,30 @@ body.ambient-mode {
 }
 
 /* Person colors - consistent per person */
-.ambient-person[data-person-index="0"] { background: #e74c3c; }
-.ambient-person[data-person-index="1"] { background: #3498db; }
-.ambient-person[data-person-index="2"] { background: #2ecc71; }
-.ambient-person[data-person-index="3"] { background: #f39c12; }
-.ambient-person[data-person-index="4"] { background: #9b59b6; }
-.ambient-person[data-person-index="5"] { background: #1abc9c; }
-.ambient-person[data-person-index="6"] { background: #e67e22; }
-.ambient-person[data-person-index="7"] { background: #34495e; }
+.ambient-person[data-person-index="0"] { background: var(--alert); }
+.ambient-person[data-person-index="1"] { background: var(--blue-9); }
+.ambient-person[data-person-index="2"] { background: var(--ok); }
+.ambient-person[data-person-index="3"] { background: var(--warn); }
+.ambient-person[data-person-index="4"] { background: var(--blue-9); }
+.ambient-person[data-person-index="5"] { background: var(--ok); }
+.ambient-person[data-person-index="6"] { background: var(--warn); }
+.ambient-person[data-person-index="7"] { background: var(--slate-6); }
 
 /* Unknown person */
 .ambient-person.unknown {
-    background: #95a5a6;
+    background: var(--slate-10);
 }
 
 /* ===== Ambient Zone Labels ===== */
 .ambient-zone-label {
     position: absolute;
     padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--slate-4);
     border-radius: 8px;
     font-size: 13px;
     font-weight: 500;
-    color: #333;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    color: var(--text-primary);
+    box-shadow: 0 2px 8px var(--shadow);
     transition: all 0.3s ease;
 }
 
@@ -281,7 +281,7 @@ body.ambient-mode {
 
 .ambient-zone-label.empty {
     background: rgba(200, 200, 200, 0.8);
-    color: #555;
+    color: var(--slate-7);
 }
 
 .ambient-zone-label .zone-name {
@@ -301,7 +301,7 @@ body.ambient-mode {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(239, 68, 68, 0.95);
+    background: var(--alert);
     z-index: 100;
     display: flex;
     flex-direction: column;
@@ -365,7 +365,7 @@ body.ambient-mode {
 .ambient-alert-btn {
     padding: 14px 28px;
     border-radius: 8px;
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 600;
     cursor: pointer;
     border: none;
@@ -377,14 +377,14 @@ body.ambient-mode {
 }
 
 .ambient-alert-btn.primary {
-    background: white;
-    color: #b91c1c;
+    background: var(--text-on-accent);
+    color: var(--alert);
 }
 
 .ambient-alert-btn.secondary {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong);
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid var(--border-strong);
 }
 
 /* ===== Morning Briefing Overlay ===== */
@@ -394,7 +394,7 @@ body.ambient-mode {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, var(--blue-7), var(--blue-9));
     z-index: 50;
     display: flex;
     flex-direction: column;
@@ -424,13 +424,13 @@ body.ambient-mode {
 }
 
 .ambient-briefing-greeting {
-    font-size: 28px;
+    font-size: var(--text-2xl);
     font-weight: 600;
     margin-bottom: 24px;
 }
 
 .ambient-briefing-section {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
     padding: 16px 20px;
     border-radius: 12px;
     margin-bottom: 12px;
@@ -446,25 +446,25 @@ body.ambient-mode {
 }
 
 .ambient-briefing-section-value {
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 500;
 }
 
 .ambient-briefing-dismiss {
     margin-top: 24px;
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong);
     border: none;
     color: white;
     padding: 12px 24px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s;
 }
 
 .ambient-briefing-dismiss:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--border-strong);
 }
 
 /* ===== "All Secure" State ===== */
@@ -497,7 +497,7 @@ body.ambient-mode {
     .ambient-person {
         width: 32px;
         height: 32px;
-        font-size: 12px;
+        font-size: var(--text-xs);
     }
 
     .ambient-zone-label {
@@ -510,7 +510,7 @@ body.ambient-mode {
     }
 
     .ambient-alert-message {
-        font-size: 16px;
+        font-size: var(--text-base);
     }
 
     .ambient-alert-actions {
@@ -533,15 +533,13 @@ body.ambient-mode {
 }
 
 /* ===== OLED-Safe Mode ===== */
-@media (display-mode: dark) or (prefers-color-scheme: dark) {
-    .ambient-mode.time-night {
-        background: #000000;
-        color: #333333;
-    }
+.ambient-mode.time-night {
+    background: var(--slate-1);
+    color: var(--slate-5);
+}
 
-    .ambient-mode.time-night .ambient-status {
-        opacity: 0.3;
-    }
+.ambient-mode.time-night .ambient-status {
+    opacity: 0.3;
 }
 
 /* ===== Accessibility ===== */

@@ -19,12 +19,12 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--bg-hover);
 }
 
 .floorplan-header h3 {
-    font-size: 14px;
-    color: #888;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
     margin: 0;
@@ -33,7 +33,7 @@
 .floorplan-close {
     background: none;
     border: none;
-    color: #888;
+    color: var(--text-muted);
     font-size: 24px;
     cursor: pointer;
     padding: 0 4px;
@@ -42,7 +42,7 @@
 }
 
 .floorplan-close:hover {
-    color: #eee;
+    color: var(--slate-12);
 }
 
 .floorplan-content {
@@ -55,13 +55,13 @@
 
 .floorplan-section h4 {
     font-size: 13px;
-    color: #ccc;
+    color: var(--slate-11);
     margin-bottom: 8px;
 }
 
 .floorplan-hint {
     font-size: 11px;
-    color: #888;
+    color: var(--text-muted);
     margin-bottom: 8px;
 }
 
@@ -75,7 +75,7 @@
 .floorplan-btn {
     padding: 6px 14px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     cursor: pointer;
     transition: background 0.2s;
     border: none;
@@ -85,12 +85,12 @@
 }
 
 .floorplan-btn-primary {
-    background: #4fc3f7;
-    color: #1a1a2e;
+    background: var(--blue-10);
+    color: var(--bg-card);
 }
 
 .floorplan-btn-primary:hover:not(:disabled) {
-    background: #29b6f6;
+    background: var(--blue-10);
 }
 
 .floorplan-btn-primary:disabled {
@@ -99,22 +99,22 @@
 }
 
 .floorplan-btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ccc;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: var(--bg-hover);
+    color: var(--slate-11);
+    border: 1px solid var(--border-strong);
 }
 
 .floorplan-btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
 }
 
 .floorplan-icon {
-    font-size: 14px;
+    font-size: var(--text-sm);
 }
 
 .floorplan-file-name {
     font-size: 11px;
-    color: #888;
+    color: var(--text-muted);
     max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -131,7 +131,7 @@
     max-width: 100%;
     max-height: 200px;
     border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--bg-hover);
 }
 
 /* Calibration */
@@ -142,7 +142,7 @@
 .floorplan-image-wrapper {
     position: relative;
     display: inline-block;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--bg-hover);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -158,15 +158,15 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    color: #fff;
-    font-size: 12px;
+    color: var(--text-on-accent);
+    font-size: var(--text-xs);
     font-weight: bold;
     display: flex;
     align-items: center;
     justify-content: center;
     transform: translate(-50%, -50%);
     pointer-events: none;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+    text-shadow: 0 1px 3px var(--overlay-strong);
 }
 
 .floorplan-controls {
@@ -174,16 +174,16 @@
 }
 
 .floorplan-instructions {
-    font-size: 12px;
-    color: #bbb;
-    background: rgba(255, 255, 255, 0.05);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    background: var(--border-subtle);
     padding: 8px 10px;
     border-radius: 4px;
     text-align: center;
 }
 
 .floorplan-points-info {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--shadow);
     border-radius: 4px;
     padding: 8px 10px;
     margin-top: 8px;
@@ -197,7 +197,7 @@
 }
 
 .point-label {
-    color: #888;
+    color: var(--text-muted);
 }
 
 .floorplan-distance-input {
@@ -207,25 +207,25 @@
 .floorplan-distance-input label {
     display: block;
     font-size: 11px;
-    color: #aaa;
+    color: var(--text-secondary);
     margin-bottom: 4px;
 }
 
 .floorplan-distance-input input {
     width: 100%;
     padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: var(--border-default);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
-    color: #eee;
+    color: var(--slate-12);
     font-size: 13px;
     box-sizing: border-box;
 }
 
 .floorplan-distance-input input:focus {
     outline: none;
-    border-color: #4fc3f7;
-    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+    border-color: var(--blue-10);
+    box-shadow: 0 0 0 2px var(--blue-muted);
 }
 
 .floorplan-actions {
@@ -249,7 +249,7 @@
 }
 
 .status-label {
-    color: #888;
+    color: var(--text-muted);
 }
 
 /* Responsive adjustments */

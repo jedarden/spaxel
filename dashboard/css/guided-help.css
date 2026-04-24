@@ -24,10 +24,10 @@
 
 /* ===== Help Panel ===== */
 .guided-help-panel {
-    background: rgba(30, 30, 58, 0.98);
-    border: 1px solid rgba(79, 195, 247, 0.3);
+    background: var(--bg-card);
+    border: 1px solid var(--blue-border);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(79, 195, 247, 0.1);
+    box-shadow: 0 8px 32px var(--shadow-xl), 0 0 0 1px var(--blue-muted);
     width: 380px;
     max-width: calc(100vw - 40px);
     overflow: hidden;
@@ -39,8 +39,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px 20px;
-    background: linear-gradient(135deg, rgba(79, 195, 247, 0.15), rgba(41, 182, 246, 0.1));
-    border-bottom: 1px solid rgba(79, 195, 247, 0.2);
+    background: linear-gradient(135deg, var(--blue-muted), rgba(41, 182, 246, 0.1));
+    border-bottom: 1px solid var(--blue-muted);
 }
 
 .help-title {
@@ -55,16 +55,16 @@
 }
 
 .help-title h3 {
-    font-size: 16px;
+    font-size: var(--text-base);
     font-weight: 600;
-    color: #eee;
+    color: var(--slate-12);
     margin: 0;
 }
 
 .help-close-btn {
     background: none;
     border: none;
-    color: #888;
+    color: var(--text-muted);
     font-size: 24px;
     cursor: pointer;
     padding: 0;
@@ -79,8 +79,8 @@
 }
 
 .help-close-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ccc;
+    background: var(--bg-hover);
+    color: var(--slate-11);
 }
 
 /* ===== Content ===== */
@@ -100,18 +100,18 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
     transition: all 0.3s ease;
 }
 
 .help-progress-dot.active {
-    background: #4fc3f7;
-    box-shadow: 0 0 8px rgba(79, 195, 247, 0.6);
+    background: var(--blue-10);
+    box-shadow: 0 0 8px var(--blue-9);
     transform: scale(1.3);
 }
 
 .help-progress-dot.completed {
-    background: #66bb6a;
+    background: var(--ok);
 }
 
 /* Step Content */
@@ -122,13 +122,13 @@
 .step-title {
     font-size: 15px;
     font-weight: 600;
-    color: #4fc3f7;
+    color: var(--blue-10);
     margin: 0 0 8px 0;
 }
 
 .step-content {
-    font-size: 14px;
-    color: #ccc;
+    font-size: var(--text-sm);
+    color: var(--slate-11);
     line-height: 1.5;
     margin: 0;
 }
@@ -137,15 +137,15 @@
 .help-dismiss-hint {
     margin-top: 16px;
     padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--bg-hover);
 }
 
 .help-dismiss-checkbox {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
-    color: #888;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
     cursor: pointer;
     user-select: none;
 }
@@ -153,7 +153,7 @@
 .help-dismiss-checkbox input[type="checkbox"] {
     width: 14px;
     height: 14px;
-    accent-color: #4fc3f7;
+    accent-color: var(--blue-10);
     cursor: pointer;
 }
 
@@ -166,13 +166,13 @@
     display: flex;
     gap: 8px;
     padding: 16px 20px;
-    background: rgba(0, 0, 0, 0.3);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--shadow);
+    border-top: 1px solid var(--bg-hover);
 }
 
 .help-btn {
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -189,33 +189,33 @@
 }
 
 .help-btn-primary {
-    background: #4fc3f7;
-    color: #1a1a2e;
+    background: var(--blue-10);
+    color: var(--bg-card);
     margin-left: auto;
 }
 
 .help-btn-primary:hover {
-    background: #29b6f6;
+    background: var(--blue-10);
 }
 
 .help-btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ccc;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: var(--bg-hover);
+    color: var(--slate-11);
+    border: 1px solid var(--border-strong);
 }
 
 .help-btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
 }
 
 .help-btn-action {
-    background: rgba(76, 175, 80, 0.2);
-    color: #66bb6a;
-    border: 1px solid rgba(76, 175, 80, 0.4);
+    background: var(--ok-muted);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
 }
 
 .help-btn-action:hover {
-    background: rgba(76, 175, 80, 0.3);
+    background: var(--ok-border);
 }
 
 /* ===== Context Help Button ===== */
@@ -223,10 +223,10 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: rgba(79, 195, 247, 0.2);
-    border: 1px solid rgba(79, 195, 247, 0.4);
-    color: #4fc3f7;
-    font-size: 12px;
+    background: var(--blue-muted);
+    border: 1px solid var(--blue-border);
+    color: var(--blue-10);
+    font-size: var(--text-xs);
     font-weight: 600;
     cursor: pointer;
     display: inline-flex;
@@ -237,8 +237,8 @@
 }
 
 .context-help-btn:hover {
-    background: rgba(79, 195, 247, 0.3);
-    border-color: rgba(79, 195, 247, 0.6);
+    background: var(--blue-border);
+    border-color: var(--blue-9);
 }
 
 /* ===== Animation ===== */
@@ -255,10 +255,10 @@
 
 @keyframes helpPulse {
     0%, 100% {
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(79, 195, 247, 0.1);
+        box-shadow: 0 8px 32px var(--shadow-xl), 0 0 0 1px var(--blue-muted);
     }
     50% {
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(79, 195, 247, 0.3);
+        box-shadow: 0 8px 32px var(--shadow-xl), 0 0 0 2px var(--blue-border);
     }
 }
 
@@ -293,7 +293,7 @@
 .help-btn:focus-visible,
 .help-close-btn:focus-visible,
 .context-help-btn:focus-visible {
-    outline: 2px solid #4fc3f7;
+    outline: 2px solid var(--blue-10);
     outline-offset: 2px;
 }
 

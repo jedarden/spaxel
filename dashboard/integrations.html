@@ -4,135 +4,123 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Integrations - Spaxel Dashboard</title>
-    <link rel="stylesheet" href="css/panels.css">
-    <link rel="stylesheet" href="css/integrations.css">
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <meta name="theme-color" content="#18191b">
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
-            margin: 0;
-            padding: 20px;
-        }
-
-        .integrations-container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
         .integrations-header {
-            margin-bottom: 24px;
+            margin-bottom: var(--space-6);
         }
 
         .integrations-header h1 {
-            font-size: 28px;
-            font-weight: 600;
-            margin: 0 0 8px 0;
+            font-size: var(--text-2xl);
+            font-weight: var(--fw-heading);
+            margin: 0 0 var(--space-2) 0;
         }
 
         .integrations-header p {
-            color: #888;
-            font-size: 14px;
+            color: var(--text-muted);
+            font-size: var(--text-sm);
             margin: 0;
         }
 
         .integration-card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--bg-card);
+            border-radius: var(--radius-card);
+            padding: var(--space-6);
+            margin-bottom: var(--space-5);
+            border: 1px solid var(--border-default);
         }
 
         .integration-card-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 16px;
+            margin-bottom: var(--space-4);
         }
 
         .integration-card-title {
-            font-size: 18px;
-            font-weight: 600;
+            font-size: var(--text-lg);
+            font-weight: var(--fw-heading);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: var(--space-3);
         }
 
         .integration-status {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 14px;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
         }
 
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: var(--space-2);
+            height: var(--space-2);
             border-radius: 50%;
-            background: #666;
+            background: var(--slate-7);
         }
 
         .status-dot.connected {
-            background: #4caf50;
-            box-shadow: 0 0 8px #4caf50;
+            background: var(--ok);
+            box-shadow: 0 0 var(--space-2) var(--ok);
         }
 
         .status-dot.disconnected {
-            background: #f44336;
+            background: var(--alert);
         }
 
         .integration-description {
-            color: #888;
-            font-size: 14px;
-            margin-bottom: 20px;
-            line-height: 1.5;
+            color: var(--text-muted);
+            font-size: var(--text-sm);
+            margin-bottom: var(--space-5);
+            line-height: var(--lh-body);
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: var(--space-4);
         }
 
         .form-group label {
             display: block;
-            font-size: 14px;
+            font-size: var(--text-sm);
             font-weight: 500;
-            margin-bottom: 6px;
-            color: #ccc;
+            margin-bottom: var(--space-1);
+            color: var(--text-secondary);
         }
 
         .form-group input[type="text"],
         .form-group input[type="password"],
         .form-group input[type="url"] {
             width: 100%;
-            padding: 10px 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            color: #eee;
-            font-size: 14px;
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-input);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-control);
+            color: var(--text-primary);
+            font-size: var(--text-sm);
             box-sizing: border-box;
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #4a90d9;
+            border-color: var(--blue-9);
         }
 
         .form-group input::placeholder {
-            color: #666;
+            color: var(--slate-7);
         }
 
         .form-hint {
-            font-size: 12px;
-            color: #666;
-            margin-top: 4px;
+            font-size: var(--text-xs);
+            color: var(--slate-7);
+            margin-top: var(--space-1);
         }
 
         .checkbox-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--space-2);
         }
 
         .checkbox-group input[type="checkbox"] {
@@ -147,13 +135,13 @@
         }
 
         .btn {
-            padding: 10px 20px;
-            border-radius: 6px;
+            padding: var(--space-2) var(--space-5);
+            border-radius: var(--radius-control);
             border: none;
-            font-size: 14px;
+            font-size: var(--text-sm);
             font-weight: 500;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background var(--transition-base);
         }
 
         .btn:disabled {
@@ -162,21 +150,21 @@
         }
 
         .btn-primary {
-            background: #4a90d9;
-            color: white;
+            background: var(--blue-9);
+            color: var(--text-on-accent);
         }
 
         .btn-primary:hover:not(:disabled) {
-            background: #357abd;
+            background: var(--blue-10);
         }
 
         .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: #eee;
+            background: var(--bg-hover);
+            color: var(--text-primary);
         }
 
         .btn-secondary:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--bg-active);
         }
 
         .btn-full {
@@ -185,8 +173,8 @@
 
         .button-group {
             display: flex;
-            gap: 8px;
-            margin-top: 12px;
+            gap: var(--space-2);
+            margin-top: var(--space-3);
         }
 
         .button-group .btn {
@@ -213,8 +201,8 @@
         .spinner {
             width: 40px;
             height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.2);
-            border-top-color: #4a90d9;
+            border: 3px solid var(--slate-5);
+            border-top-color: var(--blue-9);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -225,12 +213,12 @@
 
         .toast {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #333;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 6px;
+            bottom: var(--space-5);
+            right: var(--space-5);
+            background: var(--slate-4);
+            color: var(--text-primary);
+            padding: var(--space-3) var(--space-5);
+            border-radius: var(--radius-control);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             display: none;
             z-index: 1001;
@@ -242,11 +230,11 @@
         }
 
         .toast.success {
-            background: #4caf50;
+            background: var(--ok);
         }
 
         .toast.error {
-            background: #f44336;
+            background: var(--alert);
         }
 
         @keyframes slideIn {
@@ -263,11 +251,11 @@
         .back-link {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            color: #4a90d9;
+            gap: var(--space-2);
+            color: var(--blue-9);
             text-decoration: none;
-            font-size: 14px;
-            margin-bottom: 16px;
+            font-size: var(--text-sm);
+            margin-bottom: var(--space-4);
         }
 
         .back-link:hover {
@@ -275,8 +263,23 @@
         }
     </style>
 </head>
-<body>
-    <div class="integrations-container">
+<body class="has-mobile-nav">
+<div class="app-shell app-shell--full">
+
+    <!-- ── Top nav ── -->
+    <nav class="app-header">
+        <a href="/" class="app-header__logo">&#x26F6; Spaxel</a>
+        <div class="app-header__links">
+            <a href="/" class="app-header__link">Home</a>
+            <a href="/live" class="app-header__link">Live View</a>
+            <a href="/fleet" class="app-header__link">Fleet</a>
+        </div>
+    </nav>
+
+    <!-- ── Main content ── -->
+    <main class="app-main">
+    <div style="max-width:800px;margin:0 auto;padding:var(--space-5);">
+
         <a href="index.html" class="back-link">← Back to Dashboard</a>
 
         <div class="integrations-header">
@@ -379,14 +382,19 @@
             </form>
         </div>
     </div>
+    </main>
 
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loading-overlay">
-        <div class="spinner"></div>
-    </div>
+    <!-- ── Mobile bottom nav ── -->
+    <nav class="app-mobile-nav">
+        <ul class="app-mobile-nav__list">
+            <li class="app-mobile-nav__item"><a href="/" class="app-mobile-nav__link">Home</a></li>
+            <li class="app-mobile-nav__item"><a href="/live" class="app-mobile-nav__link">Live</a></li>
+            <li class="app-mobile-nav__item"><a href="/fleet" class="app-mobile-nav__link">Fleet</a></li>
+            <li class="app-mobile-nav__item"><a href="/integrations" class="app-mobile-nav__link app-mobile-nav__link--active">Integrations</a></li>
+        </ul>
+    </nav>
 
-    <!-- Toast Notification -->
-    <div class="toast" id="toast"></div>
+</div><!-- /.app-shell -->
 
     <script src="js/integrations.js"></script>
     <script>

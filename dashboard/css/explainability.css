@@ -9,14 +9,14 @@
     align-items: center;
     justify-content: center;
     padding: 40px 20px;
-    color: #888;
+    color: var(--text-muted);
 }
 
 .panel-loading-spinner {
     width: 32px;
     height: 32px;
     border: 3px solid rgba(76, 195, 247, 0.2);
-    border-top-color: #4fc3f7;
+    border-top-color: var(--blue-10);
     border-radius: 50%;
     animation: explainability-spin 1s linear infinite;
     margin-bottom: 12px;
@@ -33,7 +33,7 @@
     align-items: center;
     justify-content: center;
     padding: 40px 20px;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .panel-empty-icon {
@@ -43,7 +43,7 @@
 }
 
 .panel-empty-text {
-    font-size: 14px;
+    font-size: var(--text-sm);
 }
 
 /* ----- Confidence Gauge ----- */
@@ -53,7 +53,7 @@
     align-items: center;
     padding: 24px 0;
     margin-bottom: 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--bg-hover);
 }
 
 .confidence-gauge {
@@ -71,13 +71,13 @@
 
 .confidence-ring-bg {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.1);
+    stroke: var(--bg-hover);
     stroke-width: 6;
 }
 
 .confidence-ring-fill {
     fill: none;
-    stroke: #4fc3f7;
+    stroke: var(--blue-10);
     stroke-width: 6;
     stroke-linecap: round;
     transform-origin: 50% 50%;
@@ -91,12 +91,12 @@
     transform: translate(-50%, -50%);
     font-size: 24px;
     font-weight: 700;
-    color: #4fc3f7;
+    color: var(--blue-10);
 }
 
 .confidence-label {
-    font-size: 14px;
-    color: #888;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
 }
 
 /* ----- Sections ----- */
@@ -109,9 +109,9 @@
 }
 
 .section-title {
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 600;
-    color: #ccc;
+    color: var(--slate-11);
     margin: 0 0 12px 0;
 }
 
@@ -120,20 +120,20 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    background: var(--border-subtle);
+    border-radius: var(--radius-control);
     cursor: pointer;
     user-select: none;
     transition: background 0.2s;
 }
 
 .section-header:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--border-default);
 }
 
 .toggle-icon {
-    font-size: 12px;
-    color: #888;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
     transition: transform 0.2s;
 }
 
@@ -152,12 +152,12 @@
 .links-table td {
     padding: 8px 10px;
     text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .links-table th {
     font-weight: 600;
-    color: #888;
+    color: var(--text-muted);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -168,7 +168,7 @@
 }
 
 .links-table-detailed {
-    font-size: 12px;
+    font-size: var(--text-xs);
 }
 
 .links-table-detailed th,
@@ -183,12 +183,12 @@
 }
 
 .link-id {
-    color: #4fc3f7;
+    color: var(--blue-10);
 }
 
 .deltarms-cell {
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    color: #a5d6a7;
+    color: var(--ok);
 }
 
 .zone-cell {
@@ -207,7 +207,7 @@
 
 .weight-cell {
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    color: #ffcc80;
+    color: var(--warn);
 }
 
 .contributing-cell {
@@ -220,27 +220,27 @@
     height: 18px;
     line-height: 18px;
     border-radius: 50%;
-    font-size: 12px;
+    font-size: var(--text-xs);
 }
 
 .contributing-yes .contributing-badge {
-    background: #22c55e;
+    background: var(--ok);
     color: white;
 }
 
 .contributing-no .contributing-badge {
-    color: #666;
+    color: var(--text-muted);
 }
 
 .contribution-cell {
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    color: #90caf9;
+    color: var(--blue-9);
     font-size: 11px;
 }
 
 /* ----- BLE Match Card ----- */
 .ble-match-card {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--border-subtle);
     border-radius: 8px;
     padding: 12px;
 }
@@ -262,13 +262,13 @@
 .ble-match-name {
     font-size: 15px;
     font-weight: 600;
-    color: #eee;
+    color: var(--slate-12);
 }
 
 .ble-match-confidence {
     margin-left: auto;
-    font-size: 12px;
-    color: #888;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
 }
 
 .ble-match-details {
@@ -279,16 +279,16 @@
 
 .ble-match-detail {
     display: flex;
-    font-size: 12px;
+    font-size: var(--text-xs);
 }
 
 .detail-label {
-    color: #888;
+    color: var(--text-muted);
     min-width: 70px;
 }
 
 .detail-value {
-    color: #ccc;
+    color: var(--slate-11);
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
 }
 
@@ -296,7 +296,7 @@
 .explainability-footer {
     padding-top: 16px;
     margin-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--bg-hover);
     display: flex;
     justify-content: center;
 }
@@ -304,8 +304,8 @@
 .panel-btn {
     padding: 10px 20px;
     border: none;
-    border-radius: 6px;
-    font-size: 14px;
+    border-radius: var(--radius-control);
+    font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
@@ -316,44 +316,44 @@
 }
 
 .panel-btn-primary {
-    background: #4fc3f7;
-    color: #1a1a2e;
+    background: var(--blue-10);
+    color: var(--bg-card);
 }
 
 .panel-btn-primary:hover {
-    background: #29b6f6;
+    background: var(--blue-10);
 }
 
 .panel-btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #eee;
+    background: var(--bg-hover);
+    color: var(--slate-12);
 }
 
 .panel-btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-strong);
 }
 
 /* ----- Confidence Color Variants ----- */
 .confidence-ring-fill.high {
-    stroke: #22c55e;
+    stroke: var(--ok);
 }
 
 .confidence-value.high {
-    color: #22c55e;
+    color: var(--ok);
 }
 
 .confidence-ring-fill.medium {
-    stroke: #ff9800;
+    stroke: var(--warn);
 }
 
 .confidence-value.medium {
-    color: #ff9800;
+    color: var(--warn);
 }
 
 .confidence-ring-fill.low {
-    stroke: #f44336;
+    stroke: var(--alert);
 }
 
 .confidence-value.low {
-    color: #f44336;
+    color: var(--alert);
 }

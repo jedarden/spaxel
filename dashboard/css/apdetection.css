@@ -14,8 +14,8 @@
 	left: 0;
 	right: 0;
 	z-index: 1000;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+	background: linear-gradient(135deg, var(--blue-7) 0%, var(--blue-9) 100%);
+	box-shadow: 0 4px 20px var(--shadow);
 	transform: translateY(-100%);
 	transition: transform 0.3s ease-out;
 }
@@ -34,7 +34,7 @@
 }
 
 .ap-detection-icon {
-	font-size: 28px;
+	font-size: var(--text-2xl);
 	margin-right: 16px;
 	animation: pulse 2s ease-in-out infinite;
 }
@@ -61,7 +61,7 @@
 }
 
 .ap-detection-subtitle {
-	font-size: 14px;
+	font-size: var(--text-sm);
 	opacity: 0.9;
 }
 
@@ -95,7 +95,7 @@
 	content: "•";
 	position: absolute;
 	left: 0;
-	color: #667eea;
+	color: var(--blue-7);
 	font-weight: bold;
 }
 
@@ -104,12 +104,12 @@
 }
 
 .ap-placement-tip {
-	background: #f0f4ff;
-	border-left: 4px solid #667eea;
+	background: var(--bg-input);
+	border-left: 4px solid var(--blue-7);
 	padding: 12px;
 	border-radius: 4px;
-	font-size: 14px;
-	color: #444;
+	font-size: var(--text-sm);
+	color: var(--slate-6);
 }
 
 /* ============================================
@@ -153,8 +153,8 @@
 .ap-btn {
 	padding: 10px 20px;
 	border: none;
-	border-radius: 6px;
-	font-size: 14px;
+	border-radius: var(--radius-control);
+	font-size: var(--text-sm);
 	font-weight: 500;
 	cursor: pointer;
 	transition: all 0.2s ease;
@@ -162,23 +162,23 @@
 
 .ap-btn-primary {
 	background: white;
-	color: #667eea;
+	color: var(--blue-7);
 }
 
 .ap-btn-primary:hover {
-	background: #f0f0f0;
+	background: var(--bg-hover);
 	transform: translateY(-1px);
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .ap-btn-secondary {
-	background: rgba(255, 255, 255, 0.2);
+	background: var(--border-strong);
 	color: white;
-	border: 1px solid rgba(255, 255, 255, 0.3);
+	border: 1px solid var(--slate-7);
 }
 
 .ap-btn-secondary:hover {
-	background: rgba(255, 255, 255, 0.3);
+	background: var(--slate-7);
 }
 
 .ap-btn:active {
@@ -191,8 +191,8 @@
 
 /* Distinct router icon for virtual AP nodes in 3D view */
 .virtual-node-router {
-	fill: #667eea;
-	stroke: #764ba2;
+	fill: var(--blue-7);
+	stroke: var(--blue-9);
 	stroke-width: 1;
 }
 

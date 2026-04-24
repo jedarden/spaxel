@@ -7,12 +7,12 @@
 	transform: translateX(-50%);
 	width: 90%;
 	max-width: 600px;
-	background: rgba(26, 26, 46, 0.95);
+	background: rgba(30, 32, 36, 0.95);
 	border-radius: 12px;
 	padding: 24px;
 	z-index: 200;
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow: 0 8px 32px var(--shadow-xl);
+	border: 1px solid var(--border-default);
 	opacity: 0;
 	transition: opacity 0.3s ease;
 	pointer-events: none;
@@ -31,34 +31,34 @@
 }
 
 #briefing-card .briefing-title {
-	font-size: 20px;
+	font-size: var(--text-lg);
 	font-weight: 600;
-	color: #4fc3f7;
+	color: var(--blue-10);
 }
 
 #briefing-card .briefing-date {
-	font-size: 13px;
-	color: #888;
+	font-size: var(--text-xs);
+	color: var(--text-muted);
 }
 
 #briefing-card .briefing-close {
 	background: none;
 	border: none;
-	color: #888;
-	font-size: 20px;
+	color: var(--text-muted);
+	font-size: var(--text-lg);
 	cursor: pointer;
 	padding: 4px 8px;
 	transition: color 0.2s;
 }
 
 #briefing-card .briefing-close:hover {
-	color: #fff;
+	color: var(--text-on-accent);
 }
 
 #briefing-card .briefing-content {
 	font-size: 15px;
 	line-height: 1.6;
-	color: #ddd;
+	color: var(--slate-11);
 	white-space: pre-line;
 }
 
@@ -66,42 +66,42 @@
 	margin-bottom: 16px;
 	padding: 12px;
 	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.03);
+	background: var(--border-subtle);
 }
 
 #briefing-card .briefing-section.alert {
-	background: rgba(239, 83, 80, 0.1);
-	border-left: 3px solid #ef5350;
+	background: var(--alert-bg);
+	border-left: 3px solid var(--alert);
 }
 
 #briefing-card .briefing-section.sleep {
 	background: rgba(102, 187, 106, 0.1);
-	border-left: 3px solid #66bb6a;
+	border-left: 3px solid var(--ok);
 }
 
 #briefing-card .briefing-section.people {
 	background: rgba(33, 150, 243, 0.1);
-	border-left: 3px solid #2196f3;
+	border-left: 3px solid var(--blue-9);
 }
 
 #briefing-card .briefing-section.anomaly {
 	background: rgba(255, 193, 7, 0.1);
-	border-left: 3px solid #ffc107;
+	border-left: 3px solid var(--warn);
 }
 
 #briefing-card .briefing-section.health {
 	background: rgba(158, 158, 158, 0.1);
-	border-left: 3px solid #9e9e9e;
+	border-left: 3px solid var(--slate-10);
 }
 
 #briefing-card .briefing-section.prediction {
 	background: rgba(156, 39, 176, 0.1);
-	border-left: 3px solid #9c27b0;
+	border-left: 3px solid var(--blue-8);
 }
 
 #briefing-card .briefing-section.learning {
 	background: rgba(255, 112, 67, 0.1);
-	border-left: 3px solid #ff6f43;
+	border-left: 3px solid var(--warn);
 }
 
 #briefing-card .briefing-actions {
@@ -114,43 +114,43 @@
 	flex: 1;
 	padding: 10px 16px;
 	border: none;
-	border-radius: 6px;
-	font-size: 14px;
+	border-radius: var(--radius-control);
+	font-size: var(--text-sm);
 	font-weight: 500;
 	cursor: pointer;
 	transition: all 0.2s;
 }
 
 #briefing-card .briefing-btn.primary {
-	background: #4fc3f7;
-	color: #1a1a2e;
+	background: var(--blue-10);
+	color: var(--bg-card);
 }
 
 #briefing-card .briefing-btn.primary:hover {
-	background: #29b6f6;
+	background: var(--blue-10);
 }
 
 #briefing-card .briefing-btn.secondary {
-	background: rgba(255, 255, 255, 0.1);
-	color: #ddd;
+	background: var(--bg-hover);
+	color: var(--slate-11);
 }
 
 #briefing-card .briefing-btn.secondary:hover {
-	background: rgba(255, 255, 255, 0.15);
+	background: var(--border-strong);
 }
 
 #briefing-card .briefing-loading {
 	text-align: center;
 	padding: 20px;
-	color: #888;
+	color: var(--text-muted);
 }
 
 #briefing-card .briefing-spinner {
 	display: inline-block;
 	width: 24px;
 	height: 24px;
-	border: 3px solid rgba(255, 255, 255, 0.1);
-	border-top-color: #4fc3f7;
+	border: 3px solid var(--bg-hover);
+	border-top-color: var(--blue-10);
 	border-radius: 50%;
 	animation: briefing-spin 1s linear infinite;
 }
@@ -172,13 +172,13 @@
 
 /* Ambient mode briefing */
 .ambient-mode #briefing-card {
-	background: rgba(0, 0, 0, 0.8);
+	background: var(--overlay-strong);
 	backdrop-filter: blur(10px);
 	max-width: 500px;
 }
 
 .ambient-mode #briefing-card .briefing-content {
-	font-size: 16px;
+	font-size: var(--text-base);
 }
 
 /* Briefing indicator in status bar */
@@ -190,8 +190,8 @@
 	width: 40px;
 	height: 40px;
 	border-radius: 50%;
-	background: rgba(79, 195, 247, 0.2);
-	border: 2px solid #4fc3f7;
+	background: var(--blue-muted);
+	border: 2px solid var(--blue-10);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -206,13 +206,13 @@
 }
 
 #briefing-indicator:hover {
-	background: rgba(79, 195, 247, 0.3);
+	background: var(--blue-border);
 }
 
 #briefing-indicator svg {
 	width: 20px;
 	height: 20px;
-	fill: #4fc3f7;
+	fill: var(--blue-10);
 }
 
 /* Briefing settings panel */
@@ -221,13 +221,13 @@
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
-	background: rgba(26, 26, 46, 0.98);
+	background: rgba(30, 32, 36, 0.98);
 	border-radius: 12px;
 	padding: 24px;
 	z-index: 300;
 	min-width: 400px;
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow: 0 8px 32px var(--shadow-xl);
+	border: 1px solid var(--bg-hover);
 	display: none;
 }
 
@@ -237,7 +237,7 @@
 
 #briefing-settings h3 {
 	font-size: 18px;
-	color: #4fc3f7;
+	color: var(--blue-10);
 	margin-bottom: 20px;
 }
 
@@ -249,31 +249,31 @@
 }
 
 #briefing-settings .setting-label {
-	font-size: 14px;
-	color: #ddd;
+	font-size: var(--text-sm);
+	color: var(--slate-11);
 }
 
 #briefing-settings .setting-input {
 	padding: 8px 12px;
-	border-radius: 6px;
-	border: 1px solid rgba(255, 255, 255, 0.2);
-	background: rgba(255, 255, 255, 0.05);
-	color: #ddd;
-	font-size: 14px;
+	border-radius: var(--radius-control);
+	border: 1px solid var(--border-strong);
+	background: var(--border-subtle);
+	color: var(--slate-11);
+	font-size: var(--text-sm);
 }
 
 #briefing-settings .setting-toggle {
 	position: relative;
 	width: 44px;
 	height: 24px;
-	background: rgba(255, 255, 255, 0.1);
+	background: var(--bg-hover);
 	border-radius: 12px;
 	cursor: pointer;
 	transition: background 0.2s;
 }
 
 #briefing-settings .setting-toggle.active {
-	background: #4fc3f7;
+	background: var(--blue-10);
 }
 
 #briefing-settings .setting-toggle::after {
@@ -283,7 +283,7 @@
 	left: 2px;
 	width: 20px;
 	height: 20px;
-	background: #fff;
+	background: var(--text-on-accent);
 	border-radius: 50%;
 	transition: transform 0.2s;
 }

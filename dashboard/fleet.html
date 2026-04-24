@@ -4,28 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Spaxel Fleet Status</title>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/fleet-page.css">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#18191b">
 </head>
-<body class="fleet-page">
-    <!-- Navigation -->
-    <nav class="fleet-nav">
+<body class="fleet-page has-mobile-nav">
+    <div class="app-shell app-shell--full">
+
+    <!-- Navigation (grid header) -->
+    <nav class="app-header fleet-nav">
         <div class="nav-content">
-            <a href="/" class="nav-logo" title="Back to 3D View">
+            <a href="/" class="nav-logo" title="Spaxel Home">
                 <span class="logo-icon">&#x26F6;</span>
                 <span class="logo-text">Spaxel</span>
             </a>
             <div class="nav-title">Fleet Status</div>
             <div class="nav-actions">
-                <a href="/" class="nav-btn" title="Back to 3D View">
+                <a href="/live" class="nav-btn" title="Live 3D View">
                     <span class="icon">&#x26F6;</span>
-                    <span class="label">3D View</span>
+                    <span class="label">Live</span>
                 </a>
-                <a href="/simple" class="nav-btn" title="Simple Mode">
-                    <span class="icon">&#x2630;</span>
-                    <span class="label">Simple</span>
+                <a href="/" class="nav-btn" title="Home">
+                    <span class="icon">&#x1F3E0;</span>
+                    <span class="label">Home</span>
                 </a>
             </div>
         </div>
@@ -102,7 +106,7 @@
     </div>
 
     <!-- Fleet Table -->
-    <main class="fleet-main">
+    <main class="app-main fleet-main">
         <div class="table-container">
             <table class="fleet-table" id="fleet-table">
                 <thead>
@@ -251,6 +255,34 @@
 
     <!-- Toast Notifications -->
     <div class="toast-container" id="toast-container"></div>
+
+    </div><!-- /.app-shell -->
+
+    <!-- Mobile bottom nav -->
+    <nav class="app-mobile-nav" aria-label="Main navigation">
+        <ul class="app-mobile-nav__list">
+            <li class="app-mobile-nav__item">
+                <a href="/" class="app-mobile-nav__link">
+                    <span>&#x1F3E0;</span> Home
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/live" class="app-mobile-nav__link">
+                    <span>&#x26F6;</span> Live
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/fleet" class="app-mobile-nav__link app-mobile-nav__link--active">
+                    <span>&#x1F4E1;</span> Fleet
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/setup" class="app-mobile-nav__link">
+                    <span>&#x2699;</span> Setup
+                </a>
+            </li>
+        </ul>
+    </nav>
 
     <!-- Fleet Page JavaScript -->
     <script src="js/fleet-page.js"></script>

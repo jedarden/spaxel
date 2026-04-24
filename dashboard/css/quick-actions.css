@@ -26,7 +26,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--shadow-lg);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
     animation: fadeIn 0.15s ease-out;
@@ -64,10 +64,10 @@
     position: absolute;
     min-width: 280px;
     max-width: 340px;
-    background: var(--context-bg, #1e1e1e);
+    background: var(--context-bg, var(--bg-card));
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--context-border, rgba(255, 255, 255, 0.1));
+    box-shadow: 0 8px 32px var(--shadow-xl);
+    border: 1px solid var(--context-border, var(--bg-hover));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -91,8 +91,8 @@
     align-items: center;
     gap: 12px;
     padding: 14px 16px;
-    border-bottom: 1px solid var(--context-border, rgba(255, 255, 255, 0.1));
-    background: var(--context-header-bg, rgba(255, 255, 255, 0.03));
+    border-bottom: 1px solid var(--context-border, var(--bg-hover));
+    background: var(--context-header-bg, var(--border-subtle));
 }
 
 .context-icon {
@@ -103,7 +103,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--context-icon-bg, rgba(79, 195, 247, 0.15));
+    background: var(--context-icon-bg, var(--blue-muted));
     border-radius: 8px;
 }
 
@@ -111,7 +111,7 @@
     flex: 1;
     font-size: 15px;
     font-weight: 600;
-    color: var(--context-text, #eee);
+    color: var(--context-text, var(--slate-12));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -133,12 +133,12 @@
 }
 
 .context-body::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--border-strong);
     border-radius: 3px;
 }
 
 .context-body::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--slate-7);
 }
 
 /* ===== Context Items ===== */
@@ -153,11 +153,11 @@
 }
 
 .context-item:hover {
-    background: var(--context-hover, rgba(255, 255, 255, 0.05));
+    background: var(--context-hover, var(--border-subtle));
 }
 
 .context-item:active {
-    background: var(--context-active, rgba(255, 255, 255, 0.08));
+    background: var(--context-active, var(--border-default));
 }
 
 .item-icon {
@@ -174,15 +174,15 @@
 }
 
 .item-label {
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 500;
-    color: var(--context-text, #eee);
+    color: var(--context-text, var(--slate-12));
     margin-bottom: 2px;
 }
 
 .item-description {
-    font-size: 12px;
-    color: var(--context-description, #888);
+    font-size: var(--text-xs);
+    color: var(--context-description, var(--text-muted));
     line-height: 1.3;
 }
 
@@ -190,38 +190,38 @@
 
 /* Blob/Person context */
 .context-menu[data-target="blob"] .context-icon {
-    background: rgba(79, 195, 247, 0.15);
-    color: #4fc3f7;
+    background: var(--blue-muted);
+    color: var(--blue-10);
 }
 
 /* Node context */
 .context-menu[data-target="node"] .context-icon {
-    background: rgba(76, 175, 80, 0.15);
-    color: #4caf50;
+    background: var(--ok-bg);
+    color: var(--ok);
 }
 
 /* Zone context */
 .context-menu[data-target="zone"] .context-icon {
-    background: rgba(255, 152, 0, 0.15);
-    color: #ff9800;
+    background: var(--warn-bg);
+    color: var(--warn);
 }
 
 /* Empty space context */
 .context-menu[data-target="empty"] .context-icon {
-    background: rgba(158, 158, 158, 0.15);
-    color: #9e9e9e;
+    background: var(--bg-active);
+    color: var(--slate-10);
 }
 
 /* Portal context */
 .context-menu[data-target="portal"] .context-icon {
     background: rgba(156, 39, 176, 0.15);
-    color: #9c27b0;
+    color: var(--blue-8);
 }
 
 /* Trigger context */
 .context-menu[data-target="trigger"] .context-icon {
-    background: rgba(244, 67, 54, 0.15);
-    color: #f44336;
+    background: var(--alert-bg);
+    color: var(--alert);
 }
 
 /* ===== Follow Mode Indicator ===== */
@@ -230,11 +230,11 @@
     bottom: 80px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(79, 195, 247, 0.9);
+    background: var(--blue-10);
     color: white;
     padding: 10px 20px;
     border-radius: 20px;
-    font-size: 14px;
+    font-size: var(--text-sm);
     font-weight: 500;
     display: flex;
     align-items: center;
@@ -279,7 +279,7 @@
 
 /* ===== Accessibility ===== */
 .context-item:focus-visible {
-    outline: 2px solid var(--context-accent, #4fc3f7);
+    outline: 2px solid var(--context-accent, var(--blue-10));
     outline-offset: -2px;
 }
 
@@ -292,15 +292,3 @@
     }
 }
 
-/* ===== Dark/Light Mode Support ===== */
-@media (prefers-color-scheme: light) {
-    .context-menu {
-        --context-bg: #ffffff;
-        --context-text: #1d1d1f;
-        --context-border: rgba(0, 0, 0, 0.1);
-        --context-hover: rgba(0, 0, 0, 0.05);
-        --context-active: rgba(0, 0, 0, 0.08);
-        --context-description: #666;
-        --context-header-bg: rgba(0, 0, 0, 0.02);
-    }
-}

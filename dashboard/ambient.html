@@ -4,14 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Spaxel Ambient Display</title>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/ambient.css">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1a1a2e">
 </head>
 <body class="ambient-mode">
-    <!-- Ambient Container -->
-    <div class="ambient-container" id="ambient-container">
+    <div class="app-shell app-shell--full">
+    <!-- Main content (full viewport ambient display) -->
+    <main class="app-main ambient-container" id="ambient-container">
         <!-- Floor Plan Canvas -->
         <div class="ambient-floorplan">
             <canvas id="ambient-canvas" class="ambient-canvas"></canvas>
@@ -56,7 +59,8 @@
             <div class="ambient-secure-icon">&#128274;</div>
             <div class="ambient-secure-text">All secure</div>
         </div>
-    </div>
+    </main>
+    </div><!-- /.app-shell -->
 
     <!-- Ambient Mode -->
     <script src="js/ambient_renderer.js"></script>
