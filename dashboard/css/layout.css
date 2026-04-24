@@ -293,12 +293,69 @@
   padding: var(--space-3);
 }
 
+/* Legacy ID-based selectors (match live.html panel IDs) */
+#node-panel {
+  position: fixed;
+  top: 60px;
+  left: 20px;
+  width: 280px;
+  max-height: calc(100vh - 80px);
+  background: var(--live-node-bg);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  z-index: 100;
+  overflow-y: auto;
+}
+
+#chart-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 400px;
+  height: 260px;
+  background: var(--live-chart-bg);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  z-index: 100;
+}
+
+#presence-panel {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  width: 300px;
+  background: var(--live-panel-bg);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  z-index: 100;
+}
+
 /* ── Tablet breakpoint for live panels ── */
 @media (max-width: 1023px) {
   .live-panel--left,
   .live-panel--right,
-  .live-panel--presence {
+  .live-panel--presence,
+  #node-panel,
+  #presence-panel {
     display: none;
+  }
+
+  #chart-panel {
+    width: calc(100% - 16px);
+    right: 8px;
+    left: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Mobile breakpoint for live panels ── */
+@media (max-width: 639px) {
+  #chart-panel {
+    width: calc(100% - 16px);
+    right: 8px;
+    left: 8px;
+    bottom: 8px;
+    height: 200px;
   }
 }
 
