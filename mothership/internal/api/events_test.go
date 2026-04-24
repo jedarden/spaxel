@@ -286,6 +286,223 @@ func TestListEvents_InvalidType(t *testing.T) {
 	}
 }
 
+func TestListEvents_FilterByTypes(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 100)
+
+	tests := []struct {
+		name      string
+		types     string
+		wantCount int
+	}{
+		{"single type", "detection", 20},
+		{"two types", "detection,zone_entry", 40},
+		{"three types", "detection,zone_entry,zone_exit", 60},
+		{"all five types", "detection,zone_entry,zone_exit,portal_crossing,system", 100},
+		{"non-matching type", "fall_alert", 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/api/events?types="+tc.types+"&limit=100", nil)
+			w := httptest.NewRecorder()
+			h.listEvents(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", w.Code)
+			}
+
+			var resp eventsResponse
+			json.NewDecoder(w.Body).Decode(&resp)
+
+			if resp.TotalFiltered != tc.wantCount {
+				t.Errorf("total_filtered = %d, want %d", resp.TotalFiltered, tc.wantCount)
+			}
+
+			allowed := map[string]bool{}
+			for _, t := range strings.Split(tc.types, ",") {
+				allowed[t] = true
+			}
+			for _, ev := range resp.Events {
+				if !allowed[ev.Type] {
+					t.Errorf("event type = %q, not in types filter", ev.Type)
+				}
+			}
+		})
+	}
+}
+
+func TestListEvents_InvalidTypesParameter(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	tests := []struct {
+		name  string
+		types string
+	}{
+		{"single invalid", "bogus"},
+		{"mixed valid and invalid", "detection,bogus"},
+		{"invalid in middle", "detection,FAKE,zone_entry"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/api/events?types="+tc.types, nil)
+			w := httptest.NewRecorder()
+			h.listEvents(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400 for types=%q", w.Code, tc.types)
+			}
+		})
+	}
+}
+
+func TestListEvents_TypesPagination(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 100)
+
+	// Filter to detection + zone_entry = 40 events, paginate in pages of 15
+	var allIDs []int64
+	cursor := ""
+	page := 0
+
+	for {
+		url := "/api/events?types=detection,zone_entry&limit=15"
+		if cursor != "" {
+			url += "&before=" + cursor
+		}
+		req := httptest.NewRequest("GET", url, nil)
+		w := httptest.NewRecorder()
+		h.listEvents(w, req)
+
+		var resp eventsResponse
+		json.NewDecoder(w.Body).Decode(&resp)
+
+		for _, ev := range resp.Events {
+			allIDs = append(allIDs, ev.ID)
+		}
+
+		page++
+		if !resp.HasMore || page > 10 {
+			break
+		}
+		cursor = resp.Cursor
+	}
+
+	// Should have 40 events total across pages
+	if len(allIDs) != 40 {
+		t.Errorf("total events across pages = %d, want 40", len(allIDs))
+	}
+
+	// No duplicate IDs
+	seen := map[int64]bool{}
+	for _, id := range allIDs {
+		if seen[id] {
+			t.Errorf("duplicate event ID %d in paginated results", id)
+		}
+		seen[id] = true
+	}
+}
+
+func TestListEvents_TypesWithZoneAndPerson(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 100)
+
+	// detection (20, zone=Kitchen) + zone_entry (20, zone=Hallway) → zone=Kitchen filters to only detection = 20
+	req := httptest.NewRequest("GET", "/api/events?types=detection,zone_entry&zone=Kitchen&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// All detection events have zone=Kitchen (seed correlates type and zone by i%5)
+	if resp.TotalFiltered != 20 {
+		t.Errorf("total_filtered = %d, want 20", resp.TotalFiltered)
+	}
+
+	for _, ev := range resp.Events {
+		if ev.Type != "detection" && ev.Type != "zone_entry" {
+			t.Errorf("event type = %q, want detection or zone_entry", ev.Type)
+		}
+		if ev.Zone != "Kitchen" {
+			t.Errorf("event zone = %q, want Kitchen", ev.Zone)
+		}
+	}
+}
+
+func TestListEvents_CombinedThreeFilters(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 100)
+
+	// detection (20 events) + zone=Kitchen (4 of those) + person=Alice (2 of those: i%5==0 → Alice, i%5==0 → Kitchen)
+	req := httptest.NewRequest("GET", "/api/events?type=detection&zone=Kitchen&person=Alice&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// detection events where zone=Kitchen AND person=Alice
+	// seedEvents correlates type/zone/person by i%5: all detection events have zone=Kitchen, person=Alice
+	// So all 20 detection events match
+	if resp.TotalFiltered != 20 {
+		t.Errorf("total_filtered = %d, want 20", resp.TotalFiltered)
+	}
+
+	for _, ev := range resp.Events {
+		if ev.Type != "detection" {
+			t.Errorf("event type = %q, want detection", ev.Type)
+		}
+		if ev.Zone != "Kitchen" {
+			t.Errorf("event zone = %q, want Kitchen", ev.Zone)
+		}
+		if ev.Person != "Alice" {
+			t.Errorf("event person = %q, want Alice", ev.Person)
+		}
+	}
+}
+
+func TestListEvents_TypesTakesPrecedenceOverSimpleMode(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	base := time.Now()
+	seedEvents(t, h, base, 100)
+
+	// Simple mode normally excludes system events, but explicit types should override
+	req := httptest.NewRequest("GET", "/api/events?types=system,node_online&mode=simple&limit=100", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	var resp eventsResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	// Should return 20 system events (node_online doesn't exist in seeded data)
+	if resp.TotalFiltered != 20 {
+		t.Errorf("total_filtered = %d, want 20", resp.TotalFiltered)
+	}
+
+	for _, ev := range resp.Events {
+		if ev.Type != "system" {
+			t.Errorf("event type = %q, want system", ev.Type)
+		}
+	}
+}
+
 func TestListEvents_FilterByZone(t *testing.T) {
 	h, cleanup := testEventsHandler(t)
 	defer cleanup()

@@ -55,6 +55,7 @@ import (
 	"github.com/spaxel/mothership/internal/shutdown"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 	"github.com/spaxel/mothership/internal/sleep"
+	"github.com/spaxel/mothership/internal/timeline"
 	"github.com/spaxel/mothership/internal/startup"
 	"github.com/spaxel/mothership/internal/volume"
 	"github.com/spaxel/mothership/internal/webhook"
@@ -458,6 +459,11 @@ func main() {
 	// Events timeline handler (created early so fusion loop can log detection events)
 	eventsHandler := api.NewEventsHandlerFromDB(mainDB)
 	log.Printf("[INFO] Events handler initialized (shared DB)")
+
+	// Timeline storage subscriber: reads from EventBus and writes to SQLite asynchronously
+	// using a 1000-event buffered queue with drop-oldest behavior on overflow.
+	_ = timeline.New(mainDB)
+	log.Printf("[INFO] Timeline storage subscriber started")
 
 	// Auth is handled at the Traefik layer (Google OAuth) — no in-app PIN auth.
 

@@ -489,7 +489,7 @@
 			if (item.el) {
 				item.el.addEventListener('change', function() {
 					state.filters.categories[item.key] = item.el.checked;
-					applyClientSideFilters();
+					loadInitialEvents();
 				});
 			}
 		});
@@ -512,6 +512,15 @@
 			elements.filterSearch.addEventListener('input', function() {
 				clearTimeout(searchTimeout);
 				searchTimeout = setTimeout(onSearchChange, CONFIG.debounceMs);
+			});
+			// Enter key triggers server-side FTS5 search
+			elements.filterSearch.addEventListener('keydown', function(e) {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					clearTimeout(searchTimeout);
+					state.filters.q = elements.filterSearch.value.trim() || null;
+					loadInitialEvents();
+				}
 			});
 		}
 
@@ -730,6 +739,46 @@
 		}
 	}
 
+	// Fuzzy match: checks if all characters in query appear in text in order.
+	// "ktchn" matches "kitchen", "alce" matches "alice", etc.
+	// Returns a score (lower = better match) or -1 if no match.
+	function fuzzyMatch(query, text) {
+		if (!query || !text) return -1;
+		query = query.toLowerCase();
+		text = text.toLowerCase();
+
+		// Fast path: exact substring match
+		var idx = text.indexOf(query);
+		if (idx !== -1) return idx;
+
+		// Character-sequence matching
+		var qi = 0;
+		var score = 0;
+		var lastMatchIdx = -1;
+
+		for (var ti = 0; ti < text.length && qi < query.length; ti++) {
+			if (text[ti] === query[qi]) {
+				score += (lastMatchIdx === ti - 1) ? 0 : 1;
+				lastMatchIdx = ti;
+				qi++;
+			}
+		}
+
+		return qi === query.length ? score : -1;
+	}
+
+	// Multi-word fuzzy match: splits query into tokens, all must match.
+	// "alice kit" matches "Alice entered Kitchen" (both tokens match).
+	function fuzzyMatchAll(query, text) {
+		if (!query || !text) return false;
+		var tokens = query.toLowerCase().split(/\s+/).filter(function(t) { return t.length > 0; });
+		if (tokens.length === 0) return true;
+		var textLower = text.toLowerCase();
+		return tokens.every(function(token) {
+			return fuzzyMatch(token, textLower) >= 0;
+		});
+	}
+
 	function disableCategoryCheckboxes(disabled) {
 		const checkboxes = [
 			elements.categoryPresence,
@@ -799,31 +848,21 @@
 
 		// Apply text search with fuzzy matching
 		if (state.filters.q) {
-			const searchLower = state.filters.q.toLowerCase();
+			const query = state.filters.q;
 			filtered = filtered.filter(function(event) {
-				// Search in type, zone, person, and detail_json
-				if (event.type && event.type.toLowerCase().indexOf(searchLower) !== -1) return true;
-				if (event.zone && event.zone.toLowerCase().indexOf(searchLower) !== -1) return true;
-				if (event.person && event.person.toLowerCase().indexOf(searchLower) !== -1) return true;
-
-				// Parse detail_json for additional search
+				var searchParts = [event.type || '', event.zone || '', event.person || ''];
 				if (event.detail_json) {
 					try {
-						const detail = JSON.parse(event.detail_json);
-						const detailStr = JSON.stringify(detail).toLowerCase();
-						if (detailStr.indexOf(searchLower) !== -1) return true;
-
-						// Check description field specifically
-						if (detail.description && detail.description.toLowerCase().indexOf(searchLower) !== -1) {
-							return true;
-						}
+						var detail = JSON.parse(event.detail_json);
+						if (detail.description) searchParts.push(detail.description);
+						if (detail.message) searchParts.push(detail.message);
+						searchParts.push(JSON.stringify(detail));
 					} catch (e) {
-						// If not JSON, search as string
-						if (event.detail_json.toLowerCase().indexOf(searchLower) !== -1) return true;
+						searchParts.push(event.detail_json);
 					}
 				}
-
-				return false;
+				var combinedText = searchParts.join(' ');
+				return fuzzyMatchAll(query, combinedText);
 			});
 		}
 
@@ -840,6 +879,13 @@
 		// Server-side filters
 		if (state.filters.type) {
 			params.set('type', state.filters.type);
+		} else {
+			// Send category-based types filter to server for efficient initial loading
+			var enabledTypes = getEnabledCategoryTypes();
+			var allTypes = getAllCategoryTypes();
+			if (enabledTypes.length > 0 && enabledTypes.length < allTypes.length) {
+				params.set('types', enabledTypes.join(','));
+			}
 		}
 		if (state.filters.zone) {
 			params.set('zone', state.filters.zone);
@@ -858,6 +904,31 @@
 		}
 		// Add mode parameter based on dashboard mode
 		params.set('mode', state.dashboardMode);
+	}
+
+	function getEnabledCategoryTypes() {
+		var types = [];
+		Object.keys(state.filters.categories).forEach(function(cat) {
+			if (state.filters.categories[cat]) {
+				var catTypes = EVENT_CATEGORIES[cat];
+				if (catTypes) {
+					catTypes.forEach(function(t) {
+						if (types.indexOf(t) === -1) types.push(t);
+					});
+				}
+			}
+		});
+		return types;
+	}
+
+	function getAllCategoryTypes() {
+		var types = [];
+		Object.keys(EVENT_CATEGORIES).forEach(function(cat) {
+			EVENT_CATEGORIES[cat].forEach(function(t) {
+				if (types.indexOf(t) === -1) types.push(t);
+			});
+		});
+		return types;
 	}
 
 	// ============================================
@@ -905,8 +976,7 @@
 		// Prepend to DOM if timeline is visible and event passes filters
 		if (elements.container && elements.container.style.display !== 'none' && elements.eventsList) {
 			// Check if event passes current filters
-			const passesFilters = state.filteredEvents.length > 0 &&
-			                      state.filteredEvents[0].id === normalizedEvent.id;
+			const passesFilters = state.filteredEvents.some(function(e) { return e.id === normalizedEvent.id; });
 
 			if (!passesFilters) return; // Don't show if filtered out
 
