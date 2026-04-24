@@ -429,7 +429,7 @@
     display: flex;
     align-items: flex-start;
     gap: var(--space-2);
-    padding: 10px;
+    paddingvar(--space-250);
     background: var(--bg-hover);
     border-radius: var(--radius-control);
     border-left: 3px solid var(--slate-7);
@@ -459,7 +459,7 @@
 .sim-shopping-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .sim-shopping-item {

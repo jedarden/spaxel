@@ -52,8 +52,8 @@
 .toggle-switch .slider:before {
     width: 36px;
     height: 36px;
-    top: 4px;
-    left: 4px;
+    topvar(--space-1);
+    leftvar(--space-1);
 }
 
 .toggle-switch input:checked + .slider:before {

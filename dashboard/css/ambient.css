@@ -103,7 +103,7 @@ body.ambient-mode {
 /* ===== Ambient Status Line ===== */
 .ambient-status {
     position: fixed;
-    bottom: 20px;
+    bottomvar(--space-5);
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -118,7 +118,7 @@ body.ambient-mode {
 .ambient-status-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gapvar(--space-150);
 }
 
 .ambient-status-dot {
@@ -363,7 +363,7 @@ body.ambient-mode {
 }
 
 .ambient-alert-btn {
-    padding: 14px 28px;
+    paddingvar(--space-350) var(--space-7);
     border-radius: var(--radius-card);
     font-size: var(--text-base);
     font-weight: 600;
@@ -491,7 +491,7 @@ body.ambient-mode {
 /* ===== Responsive Design ===== */
 @media (max-width: 768px) {
     .ambient-container {
-        padding: 10px;
+        paddingvar(--space-250);
     }
 
     .ambient-person {
