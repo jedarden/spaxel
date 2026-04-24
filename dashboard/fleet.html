@@ -35,78 +35,77 @@
         </div>
     </nav>
 
-    <!-- Page Header -->
-    <header class="fleet-header">
-        <div class="header-content">
-            <h1>Fleet Status</h1>
-            <div class="fleet-summary">
-                <span class="summary-item">
-                    <span class="summary-label">Total:</span>
-                    <span class="summary-value" id="fleet-total">0</span>
-                </span>
-                <span class="summary-item">
-                    <span class="summary-label">Online:</span>
-                    <span class="summary-value online" id="fleet-online">0</span>
-                </span>
-            </div>
-        </div>
-        <div class="header-actions">
-            <button id="fleet-refresh-btn" class="btn btn-secondary" title="Refresh fleet data">
-                <span class="icon">&#x21BB;</span>
-                <span class="label">Refresh</span>
-            </button>
-            <button id="fleet-update-all-btn" class="btn btn-action" title="Update all nodes to latest firmware">
-                <span class="icon">&#x2191;</span>
-                <span class="label">Update All</span>
-            </button>
-            <button id="fleet-download-btn" class="btn btn-secondary" title="Download CSV report">
-                <span class="icon">&#x2193;</span>
-                <span class="label">Download Report</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Filter and Sort Bar -->
-    <div class="fleet-toolbar" id="fleet-toolbar" style="display: none;">
-        <div class="toolbar-section">
-            <div class="filter-group">
-                <input type="text" id="fleet-search" class="search-input" placeholder="Search by label or MAC...">
-                <select id="filter-status" class="filter-select">
-                    <option value="">All Status</option>
-                    <option value="online">Online</option>
-                    <option value="offline">Offline</option>
-                    <option value="updating">Updating</option>
-                </select>
-                <select id="filter-firmware" class="filter-select">
-                    <option value="">All Firmware</option>
-                    <option value="outdated">Outdated Only</option>
-                </select>
-                <select id="filter-role" class="filter-select" multiple>
-                    <option value="tx">TX</option>
-                    <option value="rx">RX</option>
-                    <option value="tx_rx">TX-RX</option>
-                    <option value="passive">Passive</option>
-                </select>
-            </div>
-            <div class="active-filters" id="active-filters"></div>
-        </div>
-    </div>
-
-    <!-- Bulk Actions Bar (shown when nodes are selected) -->
-    <div class="bulk-actions-bar" id="bulk-actions-bar" style="display: none;">
-        <div class="bulk-content">
-            <span class="bulk-count"><span id="bulk-selected-count">0</span> nodes selected</span>
-            <div class="bulk-buttons">
-                <button id="bulk-ota-btn" class="btn btn-action">Update Selected</button>
-                <button id="bulk-role-btn" class="btn btn-secondary">Re-assign Roles</button>
-                <button id="bulk-remove-btn" class="btn btn-danger">Remove Selected</button>
-                <button id="bulk-clear-btn" class="btn btn-link">Clear Selection</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Fleet Table -->
     <main class="app-main fleet-main">
+        <header class="fleet-header">
+            <div class="header-content">
+                <h1>Fleet Status</h1>
+                <div class="fleet-summary">
+                    <span class="summary-item">
+                        <span class="summary-label">Total:</span>
+                        <span class="summary-value" id="fleet-total">0</span>
+                    </span>
+                    <span class="summary-item">
+                        <span class="summary-label">Online:</span>
+                        <span class="summary-value online" id="fleet-online">0</span>
+                    </span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="fleet-refresh-btn" class="btn btn-secondary" title="Refresh fleet data">
+                    <span class="icon">&#x21BB;</span>
+                    <span class="label">Refresh</span>
+                </button>
+                <button id="fleet-update-all-btn" class="btn btn-action" title="Update all nodes to latest firmware">
+                    <span class="icon">&#x2191;</span>
+                    <span class="label">Update All</span>
+                </button>
+                <button id="fleet-download-btn" class="btn btn-secondary" title="Download CSV report">
+                    <span class="icon">&#x2193;</span>
+                    <span class="label">Download Report</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Filter and Sort Bar -->
+        <div class="fleet-toolbar" id="fleet-toolbar" style="display: none;">
+            <div class="toolbar-section">
+                <div class="filter-group">
+                    <input type="text" id="fleet-search" class="search-input" placeholder="Search by label or MAC...">
+                    <select id="filter-status" class="filter-select">
+                        <option value="">All Status</option>
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                        <option value="updating">Updating</option>
+                    </select>
+                    <select id="filter-firmware" class="filter-select">
+                        <option value="">All Firmware</option>
+                        <option value="outdated">Outdated Only</option>
+                    </select>
+                    <select id="filter-role" class="filter-select" multiple>
+                        <option value="tx">TX</option>
+                        <option value="rx">RX</option>
+                        <option value="tx_rx">TX-RX</option>
+                        <option value="passive">Passive</option>
+                    </select>
+                </div>
+                <div class="active-filters" id="active-filters"></div>
+            </div>
+        </div>
+
+        <!-- Bulk Actions Bar (shown when nodes are selected) -->
+        <div class="bulk-actions-bar" id="bulk-actions-bar" style="display: none;">
+            <div class="bulk-content">
+                <span class="bulk-count"><span id="bulk-selected-count">0</span> nodes selected</span>
+                <div class="bulk-buttons">
+                    <button id="bulk-ota-btn" class="btn btn-action">Update Selected</button>
+                    <button id="bulk-role-btn" class="btn btn-secondary">Re-assign Roles</button>
+                    <button id="bulk-remove-btn" class="btn btn-danger">Remove Selected</button>
+                    <button id="bulk-clear-btn" class="btn btn-link">Clear Selection</button>
+                </div>
+            </div>
+        </div>
+
         <div class="table-container">
             <table class="fleet-table" id="fleet-table">
                 <thead>
@@ -164,7 +163,9 @@
         </div>
     </main>
 
-    <!-- OTA Confirmation Modal -->
+    </div><!-- /.app-shell -->
+
+    <!-- Modals and toasts (outside grid shell) -->
     <div class="modal" id="ota-modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -195,7 +196,6 @@
         </div>
     </div>
 
-    <!-- Role Assignment Modal -->
     <div class="modal" id="role-modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -234,7 +234,6 @@
         </div>
     </div>
 
-    <!-- Remove Confirmation Modal -->
     <div class="modal" id="remove-modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -253,10 +252,7 @@
         </div>
     </div>
 
-    <!-- Toast Notifications -->
     <div class="toast-container" id="toast-container"></div>
-
-    </div><!-- /.app-shell -->
 
     <!-- Mobile bottom nav -->
     <nav class="app-mobile-nav" aria-label="Main navigation">

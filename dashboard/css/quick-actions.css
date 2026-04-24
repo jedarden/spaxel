@@ -231,7 +231,7 @@
     left: 50%;
     transform: translateX(-50%);
     background: var(--blue-10);
-    color: white;
+    color: var(--text-on-accent);
     padding: 10px 20px;
     border-radius: var(--radius-modal);
     font-size: var(--text-sm);

@@ -225,7 +225,7 @@
 
 .contributing-yes .contributing-badge {
     background: var(--ok);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .contributing-no .contributing-badge {

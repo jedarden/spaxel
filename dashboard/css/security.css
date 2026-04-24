@@ -286,7 +286,7 @@
     left: 0;
     right: 0;
     background: linear-gradient(135deg, var(--alert), var(--alert));
-    color: white;
+    color: var(--text-on-accent);
     padding: 16px 20px;
     z-index: 5000;
     display: flex;
@@ -369,7 +369,7 @@
 
 .alert-banner-btn.acknowledge {
     background: var(--border-strong);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .alert-banner-btn.acknowledge:hover {
@@ -377,12 +377,12 @@
 }
 
 .alert-banner-btn.view {
-    background: white;
+    background: var(--slate-12);
     color: var(--alert);
 }
 
 .alert-banner-btn.view:hover {
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--slate-12);
 }
 
 /* ── Security Mode Indicator (full page overlay when armed) ──────────────────────── */

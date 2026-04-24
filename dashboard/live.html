@@ -36,7 +36,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: var(--font-body);
             background: var(--bg-page);
             color: var(--text-primary);
             overflow: hidden;
@@ -59,7 +59,7 @@
             position: sticky;
             top: 0;
             height: 44px; /* Increased to 44px for touch target */
-            background: rgba(0, 0, 0, 0.7);
+            background: var(--live-status-bg);
             display: flex;
             align-items: center;
             padding: 0 16px;
@@ -146,7 +146,7 @@
             left: 20px;
             width: 280px;
             max-height: calc(100vh - 80px);
-            background: rgba(0, 0, 0, 0.8);
+            background: var(--live-node-bg);
             border-radius: 8px;
             padding: 12px;
             z-index: 100;
@@ -164,7 +164,7 @@
         .node-item {
             padding: 8px;
             margin-bottom: 4px;
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--highlight-subtle);
             border-radius: 4px;
             font-size: 13px;
             cursor: pointer;
@@ -172,12 +172,12 @@
         }
 
         .node-item:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
         }
 
         .node-item.selected {
-            background: rgba(79, 195, 247, 0.2);
-            border: 1px solid rgba(79, 195, 247, 0.5);
+            background: var(--blue-interact-bg);
+            border: 1px solid var(--blue-interact-border);
         }
 
         .node-mac {
@@ -193,19 +193,19 @@
         }
 
         .node-status.online {
-            background: rgba(76, 175, 80, 0.3);
+            background: var(--ok-border);
             color: var(--ok);
         }
 
         .node-status.offline {
-            background: rgba(244, 67, 54, 0.3);
+            background: var(--alert-border);
             color: var(--alert);
         }
 
         .node-identify-btn {
             float: right;
-            background: rgba(255, 193, 7, 0.2);
-            border: 1px solid rgba(255, 193, 7, 0.4);
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
             color: var(--warn);
             font-size: 14px;
             padding: 2px 6px;
@@ -215,12 +215,12 @@
         }
 
         .node-identify-btn:hover {
-            background: rgba(255, 193, 7, 0.3);
-            border-color: rgba(255, 193, 7, 0.6);
+            background: var(--warn-muted);
+            border-color: var(--warn-border);
         }
 
         .node-identify-btn:active {
-            background: rgba(255, 193, 7, 0.4);
+            background: var(--warn-border);
         }
 
         /* Empty state */
@@ -234,7 +234,7 @@
         /* Link list */
         .link-section {
             margin-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid var(--bg-hover);
             padding-top: 12px;
         }
 
@@ -242,7 +242,7 @@
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: rgba(255, 255, 255, 0.5);
+            color: var(--text-muted);
             margin-bottom: 8px;
         }
 
@@ -254,11 +254,11 @@
             padding: 6px 0;
             cursor: pointer;
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--text-secondary);
         }
 
         .pattern-checkbox:hover {
-            color: rgba(255, 255, 255, 0.9);
+            color: var(--text-primary);
         }
 
         .pattern-checkbox input[type="checkbox"] {
@@ -274,17 +274,17 @@
             gap: 8px;
             margin-top: 8px;
             padding-top: 8px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            border-top: 1px solid var(--bg-hover);
             font-size: 11px;
         }
 
         .pattern-filter label {
-            color: rgba(255, 255, 255, 0.5);
+            color: var(--text-muted);
         }
 
         .pattern-filter select {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
             border-radius: 4px;
             color: var(--text-primary);
             padding: 4px 8px;
@@ -300,7 +300,7 @@
         .link-item {
             padding: 6px 8px;
             margin-bottom: 4px;
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--highlight-subtle);
             border-radius: 4px;
             font-size: 12px;
             cursor: pointer;
@@ -309,11 +309,11 @@
         }
 
         .link-item:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--bg-hover);
         }
 
         .link-item.selected {
-            background: rgba(79, 195, 247, 0.2);
+            background: var(--blue-interact-bg);
         }
 
         /* Presence badge */
@@ -326,12 +326,12 @@
         }
 
         .presence-badge.motion {
-            background: rgba(244, 67, 54, 0.25);
+            background: var(--alert-muted);
             color: var(--alert);
         }
 
         .presence-badge.clear {
-            background: rgba(76, 175, 80, 0.2);
+            background: var(--ok-muted);
             color: var(--ok);
         }
 
@@ -345,19 +345,19 @@
         }
 
         #presence-indicator.motion {
-            background: rgba(244, 67, 54, 0.3);
+            background: var(--alert-border);
             color: var(--alert);
         }
 
         #presence-indicator.clear {
-            background: rgba(76, 175, 80, 0.15);
+            background: var(--ok-bg);
             color: var(--ok);
         }
 
         /* View preset buttons */
         .view-btn {
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.15);
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
             color: var(--text-secondary);
             font-size: 12px;
             padding: 3px 10px;
@@ -365,12 +365,12 @@
             cursor: pointer;
             transition: background 0.2s, color 0.2s;
         }
-        .view-btn:hover { background: rgba(79,195,247,0.2); color: var(--blue-10); }
-        .view-btn.active { background: rgba(79,195,247,0.25); color: var(--blue-10); border-color: var(--blue-10); }
+        .view-btn:hover { background: var(--blue-interact-bg); color: var(--blue-10); }
+        .view-btn.active { background: var(--blue-interact-active); color: var(--blue-10); border-color: var(--blue-10); }
 
         #floorplan-btn {
             background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -378,7 +378,7 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        #floorplan-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
+        #floorplan-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
 
         /* Presence panel */
         #presence-panel {
@@ -386,7 +386,7 @@
             top: 60px;
             right: 20px;
             width: 300px;
-            background: rgba(0, 0, 0, 0.8);
+            background: var(--live-panel-bg);
             border-radius: 8px;
             padding: 12px;
             z-index: 100;
@@ -416,17 +416,17 @@
         }
 
         #presence-status.motion {
-            background: rgba(244, 67, 54, 0.3);
+            background: var(--alert-border);
             color: var(--alert);
         }
 
         #presence-status.clear {
-            background: rgba(76, 175, 80, 0.15);
+            background: var(--ok-bg);
             color: var(--ok);
         }
 
         #presence-status.stationary {
-            background: rgba(66, 165, 245, 0.25);
+            background: var(--stationary-bg);
             color: var(--blue-10);
             animation: stationary-badge-pulse 2s ease-in-out infinite;
         }
@@ -447,7 +447,7 @@
             gap: 8px;
             padding: 5px 8px;
             margin-bottom: 3px;
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--highlight-subtle);
             border-radius: 4px;
             font-size: 12px;
             cursor: pointer;
@@ -455,11 +455,11 @@
         }
 
         .presence-row:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--bg-hover);
         }
 
         .presence-row.selected {
-            background: rgba(79, 195, 247, 0.2);
+            background: var(--blue-interact-bg);
         }
 
         .presence-dot {
@@ -472,38 +472,38 @@
 
         .presence-dot.clear {
             background: var(--ok);
-            box-shadow: 0 0 6px rgba(102, 187, 106, 0.5);
+            box-shadow: 0 0 6px var(--ok-glow);
         }
 
         .presence-dot.motion {
             background: var(--warn);
-            box-shadow: 0 0 6px rgba(255, 167, 38, 0.5);
+            box-shadow: 0 0 6px var(--warn-border);
         }
 
         .presence-dot.high-confidence {
             background: var(--alert);
-            box-shadow: 0 0 6px rgba(239, 83, 80, 0.5);
+            box-shadow: 0 0 6px var(--alert-border);
         }
 
         .presence-dot.stationary {
             background: var(--blue-10);
-            box-shadow: 0 0 8px rgba(66, 165, 245, 0.7);
+            box-shadow: 0 0 8px var(--blue-border);
             animation: stationary-pulse 2s ease-in-out infinite;
         }
 
         .presence-dot.possibly {
             background: var(--blue-9);
-            box-shadow: 0 0 6px rgba(171, 71, 188, 0.5);
+            box-shadow: 0 0 6px var(--alert-border);
         }
 
         @keyframes stationary-pulse {
             0%, 100% {
                 opacity: 1;
-                box-shadow: 0 0 8px rgba(66, 165, 245, 0.7);
+                box-shadow: 0 0 8px var(--blue-border);
             }
             50% {
                 opacity: 0.6;
-                box-shadow: 0 0 16px rgba(66, 165, 245, 0.9);
+                box-shadow: 0 0 16px var(--blue-border);
             }
         }
 
@@ -524,7 +524,7 @@
             color: var(--blue-10);
             font-size: 10px;
             padding: 1px 4px;
-            background: rgba(66, 165, 245, 0.15);
+            background: var(--blue-muted);
             border-radius: 3px;
             margin-left: 4px;
         }
@@ -549,7 +549,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
+            background: var(--live-status-bg);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -564,7 +564,7 @@
             width: 92%;
             max-height: 90vh;
             overflow-y: auto;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 8px 32px var(--overlay);
         }
 
         #wizard-header {
@@ -621,7 +621,7 @@
         .wizard-step-dot.active {
             background: var(--blue-10);
             color: var(--text-on-accent);
-            box-shadow: 0 0 12px rgba(79, 195, 247, 0.5);
+            box-shadow: 0 0 12px var(--blue-interact-border);
         }
 
         .wizard-step-dot.completed {
@@ -740,7 +740,7 @@
             display: inline-block;
             width: 32px;
             height: 32px;
-            border: 3px solid rgba(79, 195, 247, 0.2);
+            border: 3px solid var(--blue-interact-bg);
             border-top-color: var(--blue-10);
             border-radius: 50%;
             animation: wizard-spin 0.8s linear infinite;
@@ -804,13 +804,13 @@
         }
 
         .wizard-btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             color: var(--text-secondary);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .wizard-btn-secondary:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--border-strong);
         }
 
         #wizard-nav {
@@ -822,7 +822,7 @@
 
         /* ===== Link Health Panel ===== */
         .link-health-panel {
-            background: rgba(0, 0, 0, 0.85);
+            background: var(--live-status-bg);
             border-radius: 8px;
             padding: 12px;
             font-size: 13px;
@@ -838,7 +838,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid var(--bg-hover);
             padding-bottom: 8px;
         }
 
@@ -873,7 +873,7 @@
         .composite-gauge {
             flex: 1;
             height: 8px;
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             border-radius: 4px;
             overflow: hidden;
         }
@@ -910,13 +910,13 @@
 
         .metric-gauge {
             padding: 6px;
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--highlight-subtle);
             border-radius: 4px;
         }
 
         .metric-bar {
             height: 4px;
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             border-radius: 2px;
             overflow: hidden;
             margin-bottom: 4px;
@@ -1049,7 +1049,7 @@
         .diagnosis-confidence {
             font-size: 10px;
             color: var(--text-muted);
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             padding: 1px 5px;
             border-radius: 3px;
         }
@@ -1086,7 +1086,7 @@
         }
 
         .reposition-apply-btn {
-            background: rgba(76, 175, 80, 0.3);
+            background: var(--ok-border);
             border: 1px solid rgba(76, 175, 80, 0.5);
             color: var(--ok);
             font-size: 11px;
@@ -1119,14 +1119,14 @@
             align-items: center;
             gap: 8px;
             padding: 2px 10px;
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--highlight-subtle);
             border-radius: 4px;
             cursor: pointer;
             transition: background 0.2s;
         }
 
         #detection-quality:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
         }
 
         #quality-gauge-container {
@@ -1143,7 +1143,7 @@
 
         #quality-gauge-bg {
             fill: none;
-            stroke: rgba(255, 255, 255, 0.1);
+            stroke: var(--bg-hover);
             stroke-width: 3;
         }
 
@@ -1255,7 +1255,7 @@
             padding: 15px;
             background: rgba(30, 30, 30, 0.5);
             border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--bg-hover);
         }
 
         #diurnal-chart-container h4 {
@@ -1370,8 +1370,8 @@
         .form-group input {
             width: 100%;
             padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
             border-radius: 4px;
             color: var(--text-primary);
             font-size: 14px;
@@ -1381,7 +1381,7 @@
         .form-group input:focus {
             outline: none;
             border-color: var(--blue-10);
-            box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+            box-shadow: 0 0 0 2px var(--blue-interact-bg);
         }
 
         .form-group input::placeholder {
@@ -1431,13 +1431,13 @@
         }
 
         #add-node-btn:hover {
-            background: rgba(79, 195, 247, 0.25);
+            background: var(--blue-interact-active);
         }
 
         /* Settings button in status bar */
         #settings-btn {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -1447,7 +1447,7 @@
         }
 
         #settings-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
+            background: var(--bg-hover);
             color: var(--text-secondary);
         }
 
@@ -1491,7 +1491,7 @@
         /* Room editor button */
         #room-editor-btn {
             background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -1499,8 +1499,8 @@
             cursor: pointer;
             transition: background 0.2s, color 0.2s;
         }
-        #room-editor-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
-        #room-editor-btn.active { background: rgba(79,195,247,0.2); color: var(--blue-10); border-color: var(--blue-10); }
+        #room-editor-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        #room-editor-btn.active { background: var(--blue-interact-bg); color: var(--blue-10); border-color: var(--blue-10); }
 
         /* Add Portal button in status bar */
         #add-portal-btn {
@@ -1521,7 +1521,7 @@
         /* Portal editor button */
         #portal-editor-btn {
             background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -1529,7 +1529,7 @@
             cursor: pointer;
             transition: background 0.2s, color 0.2s;
         }
-        #portal-editor-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
+        #portal-editor-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
         #portal-editor-btn.active { background: rgba(255,167,38,0.2); color: var(--warn); border-color: var(--warn); }
 
         /* Portal editor panel */
@@ -1538,8 +1538,8 @@
             top: 60px;
             left: 580px;
             width: 240px;
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--live-status-bg);
+            border: 1px solid var(--bg-hover);
             border-radius: 8px;
             padding: 16px;
             z-index: 100;
@@ -1569,8 +1569,8 @@
         #portal-editor-panel .room-field input,
         #portal-editor-panel .room-field select {
             width: 100%;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
             color: var(--text-on-accent);
             padding: 6px 8px;
             border-radius: 4px;
@@ -1581,7 +1581,7 @@
         #portal-editor-panel .room-field input:focus,
         #portal-editor-panel .room-field select:focus {
             outline: none;
-            border-color: rgba(255, 167, 38, 0.5);
+            border-color: var(--warn-border);
         }
 
         #portal-editor-panel .portal-actions {
@@ -1603,7 +1603,7 @@
         }
 
         #portal-editor-panel .portal-actions button:hover {
-            background: rgba(79, 195, 247, 0.25);
+            background: var(--blue-interact-active);
         }
 
         #portal-editor-panel .portal-delete-btn {
@@ -1625,7 +1625,7 @@
         /* Simulator button */
         #simulator-btn {
             background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -1633,7 +1633,7 @@
             cursor: pointer;
             transition: background 0.2s, color 0.2s;
         }
-        #simulator-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
+        #simulator-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
         #simulator-btn.active { background: rgba(156,39,176,0.2); color: var(--blue-9); border-color: var(--blue-9); }
 
         /* Help button */
@@ -1649,12 +1649,12 @@
             transition: background 0.2s, color 0.2s;
             min-width: 32px;
         }
-        #help-btn:hover { background: rgba(79,195,247,0.2); color: var(--blue-10); }
+        #help-btn:hover { background: var(--blue-interact-bg); color: var(--blue-10); }
 
         /* GDOP toggle */
         #gdop-toggle-btn {
             background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -1662,13 +1662,13 @@
             cursor: pointer;
             transition: background 0.2s, color 0.2s;
         }
-        #gdop-toggle-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
+        #gdop-toggle-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
         #gdop-toggle-btn.active { background: rgba(76,175,80,0.25); color: var(--ok); border-color: var(--ok); }
 
         /* Fresnel zone toggle */
         #fresnel-toggle-btn {
             background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -1676,8 +1676,8 @@
             cursor: pointer;
             transition: background 0.2s, color 0.2s;
         }
-        #fresnel-toggle-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
-        #fresnel-toggle-btn.active { background: rgba(79,195,247,0.25); color: var(--blue-10); border-color: var(--blue-10); }
+        #fresnel-toggle-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        #fresnel-toggle-btn.active { background: var(--blue-interact-active); color: var(--blue-10); border-color: var(--blue-10); }
 
         /* Virtual node status badge */
         .node-status.virtual {
@@ -1687,7 +1687,7 @@
 
         /* Delete node button */
         #delete-node-btn {
-            background: rgba(244, 67, 54, 0.15);
+            background: var(--alert-bg);
             border: 1px solid rgba(244, 67, 54, 0.4);
             color: var(--alert);
             font-size: 11px;
@@ -1698,7 +1698,7 @@
             display: none;
         }
         #delete-node-btn:hover {
-            background: rgba(244, 67, 54, 0.3);
+            background: var(--alert-border);
         }
 
         /* Node firmware display */
@@ -1750,8 +1750,8 @@
 
         /* OTA panel button in status bar */
         #ota-btn {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
             color: var(--text-muted);
             font-size: 12px;
             padding: 3px 10px;
@@ -1760,11 +1760,11 @@
             transition: background 0.2s, color 0.2s;
         }
         #ota-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
+            background: var(--bg-hover);
             color: var(--text-secondary);
         }
         #ota-btn.has-update {
-            background: rgba(76, 175, 80, 0.2);
+            background: var(--ok-muted);
             border-color: rgba(76, 175, 80, 0.4);
             color: var(--ok);
         }
@@ -1780,7 +1780,7 @@
             top: 60px;
             left: 320px;
             width: 240px;
-            background: rgba(0, 0, 0, 0.85);
+            background: var(--live-status-bg);
             border-radius: 8px;
             padding: 16px;
             z-index: 100;
@@ -1809,8 +1809,8 @@
         .room-field input {
             width: 100%;
             padding: 6px 10px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
             border-radius: 4px;
             color: var(--text-primary);
             font-size: 14px;
@@ -1820,7 +1820,7 @@
         .room-field input:focus {
             outline: none;
             border-color: var(--blue-10);
-            box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+            box-shadow: 0 0 0 2px var(--blue-interact-bg);
         }
 
         .room-field .unit {
@@ -1852,7 +1852,7 @@
             position: fixed;
             bottom: 20px;
             left: 320px;
-            background: rgba(0, 0, 0, 0.85);
+            background: var(--live-status-bg);
             border-radius: 6px;
             padding: 10px 14px;
             z-index: 100;
@@ -1965,13 +1965,13 @@
 
         .anomaly-description {
             font-size: 14px;
-            color: rgba(255, 255, 255, 0.9);
+            color: var(--text-primary);
             margin-bottom: 4px;
         }
 
         .anomaly-meta {
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--text-secondary);
         }
 
         .anomaly-actions {
@@ -2015,12 +2015,12 @@
 
         .anomaly-btn.dismiss {
             background: transparent;
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--text-secondary);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .anomaly-btn.dismiss:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             color: var(--text-on-accent);
         }
 
@@ -2047,7 +2047,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
+            background: var(--overlay);
         }
 
         .modal-content {
@@ -2057,7 +2057,7 @@
             padding: 24px;
             max-width: 480px;
             width: 90%;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 8px 32px var(--overlay);
         }
 
         .modal-content h3 {
@@ -2071,7 +2071,7 @@
             color: var(--text-secondary);
             margin-bottom: 20px;
             padding: 12px;
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--highlight-subtle);
             border-radius: 6px;
         }
 
@@ -2087,8 +2087,8 @@
             align-items: center;
             gap: 12px;
             padding: 12px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
+            background: var(--highlight-subtle);
+            border: 2px solid var(--bg-hover);
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s;
@@ -2096,12 +2096,12 @@
         }
 
         .feedback-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             border-color: rgba(255, 255, 255, 0.2);
         }
 
         .feedback-btn.selected {
-            background: rgba(79, 195, 247, 0.2);
+            background: var(--blue-interact-bg);
             border-color: var(--blue-10);
         }
 
@@ -2130,8 +2130,8 @@
             width: 100%;
             height: 60px;
             padding: 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: var(--highlight-subtle);
+            border: 1px solid var(--border-strong);
             border-radius: 6px;
             color: var(--text-primary);
             font-size: 13px;
@@ -2161,12 +2161,12 @@
         }
 
         .modal-btn.cancel {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             color: var(--text-secondary);
         }
 
         .modal-btn.cancel:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--border-strong);
         }
 
         .modal-btn.submit {
@@ -2278,7 +2278,7 @@
         .ws-lost-modal {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
+            background: var(--overlay);
             z-index: 200;
             display: flex;
             align-items: center;
@@ -2317,7 +2317,7 @@
             background: var(--blue-10);
         }
         .ws-lost-dismiss-btn {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             color: var(--text-secondary);
             border: none;
             padding: 10px 24px;
@@ -2326,13 +2326,13 @@
             cursor: pointer;
         }
         .ws-lost-dismiss-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--border-strong);
         }
 
         /* ===== Mobile Menu Toggle Button ===== */
         #mobile-menu-btn {
             display: none;
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: var(--text-secondary);
             font-size: 14px;
@@ -2346,7 +2346,7 @@
         }
 
         #mobile-menu-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--border-strong);
             color: var(--text-on-accent);
         }
 
@@ -2364,7 +2364,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: var(--overlay);
             z-index: 999;
             opacity: 0;
             transition: opacity 0.2s ease;
@@ -2384,7 +2384,7 @@
             width: 320px;
             max-width: 85vw;
             background: var(--bg-card);
-            box-shadow: 4px 0 16px rgba(0, 0, 0, 0.5);
+            box-shadow: 4px 0 16px var(--overlay);
             z-index: 1000;
             transform: translateX(-100%);
             transition: transform 0.2s ease-out;
@@ -2403,7 +2403,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid var(--bg-hover);
             padding-top: max(16px, env(safe-area-inset-top));
         }
 
@@ -2431,13 +2431,13 @@
         }
 
         #hamburger-close-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             color: var(--text-primary);
         }
 
         .hamburger-section {
             padding: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid var(--bg-hover);
         }
 
         .hamburger-section h3 {
@@ -2466,7 +2466,7 @@
         }
 
         .hamburger-item:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             color: var(--text-primary);
         }
 
@@ -2480,7 +2480,7 @@
         /* ===== Hamburger Menu Tabs ===== */
         .hamburger-tabs {
             display: flex;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid var(--bg-hover);
             overflow-x: auto;
             scrollbar-width: none; /* Firefox */
             padding-bottom: env(safe-area-inset-bottom);
@@ -2522,7 +2522,7 @@
 
         .hamburger-tab:hover {
             color: var(--text-secondary);
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--highlight-subtle);
         }
 
         .hamburger-tab.active {
@@ -2551,7 +2551,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid var(--bg-hover);
         }
 
         .hamburger-tab-header h3 {
@@ -2571,7 +2571,7 @@
         }
 
         .presence-status.clear {
-            background: rgba(76, 175, 80, 0.2);
+            background: var(--ok-muted);
             color: var(--ok);
         }
 
@@ -2592,7 +2592,7 @@
         #hamburger-timeline-content .timeline-event-item {
             padding: 12px;
             margin-bottom: 8px;
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--highlight-subtle);
             border-radius: 6px;
             font-size: 13px;
         }
@@ -2613,7 +2613,7 @@
             align-items: center;
             padding: 12px;
             margin-bottom: 4px;
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--highlight-subtle);
             border-radius: 6px;
             font-size: 13px;
         }
@@ -2923,14 +2923,14 @@
             .view-btn:active,
             #gdop-toggle-btn:active,
             #fresnel-toggle-btn:active {
-                background: rgba(255, 255, 255, 0.15);
+                background: var(--border-strong);
             }
         }
 
         /* ===== Replay Control Bar ===== */
         #pause-live-btn {
-            background: rgba(255, 193, 7, 0.15);
-            border: 1px solid rgba(255, 193, 7, 0.4);
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
             color: var(--warn);
             font-size: 12px;
             padding: 3px 10px;
@@ -2955,8 +2955,8 @@
             align-items: center;
             gap: 16px;
             z-index: 150;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px var(--overlay);
+            border: 1px solid var(--bg-hover);
         }
 
         .replay-controls {
@@ -2966,8 +2966,8 @@
         }
 
         .replay-btn {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
             color: var(--text-secondary);
             width: 32px;
             height: 32px;
@@ -2979,7 +2979,7 @@
             transition: background 0.2s, color 0.2s;
         }
         .replay-btn:hover {
-            background: rgba(79, 195, 247, 0.2);
+            background: var(--blue-interact-bg);
             border-color: rgba(79, 195, 247, 0.4);
             color: var(--blue-10);
         }
@@ -3004,13 +3004,13 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 1px solid var(--bg-hover);
             padding-left: 12px;
         }
 
         .replay-speed {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
             color: var(--text-secondary);
             font-size: 11px;
             padding: 4px 8px;
@@ -3026,7 +3026,7 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
-            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 1px solid var(--bg-hover);
             padding-left: 12px;
         }
 
@@ -3035,7 +3035,7 @@
             height: 4px;
             -webkit-appearance: none;
             appearance: none;
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--border-strong);
             border-radius: 2px;
             outline: none;
         }
@@ -3086,8 +3086,8 @@
             padding: 16px;
             z-index: 100;
             display: none;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px var(--overlay);
+            border: 1px solid var(--bg-hover);
         }
         .replay-tuning-panel.visible {
             display: flex;
@@ -3148,7 +3148,7 @@
             height: 4px;
             -webkit-appearance: none;
             appearance: none;
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--border-strong);
             border-radius: 2px;
             outline: none;
         }
@@ -3197,11 +3197,11 @@
             background: var(--blue-10);
         }
         .tuning-btn.reset {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--bg-hover);
             color: var(--text-secondary);
         }
         .tuning-btn.reset:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--border-strong);
         }
 
         /* Fresnel zone debug tooltip */
@@ -3209,7 +3209,7 @@
             position: fixed;
             display: none;
             background: rgba(0, 0, 0, 0.9);
-            border: 1px solid rgba(79, 195, 247, 0.5);
+            border: 1px solid var(--blue-interact-border);
             border-radius: 6px;
             padding: 10px 12px;
             font-size: 12px;
@@ -3217,7 +3217,7 @@
             pointer-events: none;
             z-index: 1000;
             max-width: 280px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 4px 12px var(--overlay);
         }
         .fresnel-tooltip strong {
             color: var(--blue-10);
