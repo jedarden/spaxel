@@ -188,11 +188,6 @@
             SpaxelApp.registerMessageHandler(handleWebSocketMessage);
         }
 
-        // Listen for simple mode changes
-        if (window.SpaxelSimpleModeDetection) {
-            SpaxelSimpleModeDetection.onModeChange(onSimpleModeChange);
-        }
-
         console.log('[SidebarTimeline] Initialized');
     }
 
@@ -232,23 +227,9 @@
     // ============================================
 
     function onRouterModeChange(newMode, oldMode) {
-        if (newMode === 'ambient') {
-            state.dashboardMode = 'simple';
-        } else {
-            state.dashboardMode = 'expert';
-        }
-
         // Reload events if panel is visible
         if (state.panelVisible) {
             loadInitialEvents();
-        }
-    }
-
-    function onSimpleModeChange(newMode, oldMode) {
-        if (newMode === 'simple') {
-            state.dashboardMode = 'simple';
-        } else {
-            state.dashboardMode = 'expert';
         }
     }
 

@@ -1418,12 +1418,11 @@
     function goToStep(index) {
         if (index < 0 || index >= STEPS.length) return;
 
-        // In reprove mode, skip the flash_firmware step — firmware is already on device.
+        // In reprove mode, skip calibrate and placement — node is already positioned.
         if (state.reproveMode) {
-            var flashIdx = STEPS.findIndex(function (s) { return s.id === 'flash_firmware'; });
-            if (flashIdx >= 0 && index === flashIdx) {
-                // Skip forward or backward past the flash step.
-                index = index > state.currentStepIndex ? flashIdx + 1 : flashIdx - 1;
+            var stepId = STEPS[index] ? STEPS[index].id : '';
+            if (stepId === 'calibrate' || stepId === 'placement') {
+                index = index > state.currentStepIndex ? index + 1 : index - 1;
                 if (index < 0 || index >= STEPS.length) return;
             }
         }

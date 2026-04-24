@@ -198,7 +198,7 @@
 .zone-badge {
     display: inline-block;
     min-width: 20px;
-    paddingvar(--space-half) var(--space-150);
+    padding: var(--space-half) var(--space-150);
     border-radius: var(--radius-control);
     font-size: var(--text-2xs);
     font-weight: 600;
@@ -248,7 +248,7 @@
 .ble-match-header {
     display: flex;
     align-items: center;
-    gapvar(--space-250);
+    gap: var(--space-250);
     margin-bottom: var(--space-250);
 }
 
@@ -274,7 +274,7 @@
 .ble-match-details {
     display: flex;
     flex-direction: column;
-    gapvar(--space-150);
+    gap: var(--space-150);
 }
 
 .ble-match-detail {
@@ -356,4 +356,48 @@
 
 .confidence-value.low {
     color: var(--alert);
+}
+
+/* ----- Sparklines ----- */
+.sparklines-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.sparkline-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.sparkline-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    color: var(--blue-10);
+    min-width: 80px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sparkline-canvas {
+    flex: 1;
+    border-radius: var(--radius-control);
+    background: #1a1a2e;
+}
+
+/* ----- Blob Position ----- */
+.blob-position-display {
+    text-align: center;
+    padding: var(--space-2) 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--slate-11);
+    margin-bottom: var(--space-3);
+}
+
+.blob-position-display .coord {
+    color: var(--blue-10);
+    font-weight: 600;
 }

@@ -103,12 +103,20 @@
 
   /* ── Spacing (4 px grid) ── */
   --space-half: 2px;
+  --space-075: 3px;
   --space-1:  4px;
+  --space-125: 5px;
+  --space-150: 6px;
+  --space-175: 7px;
   --space-2:  8px;
+  --space-250: 10px;
   --space-3:  12px;
+  --space-350: 14px;
+  --space-375: 15px;
   --space-4:  16px;
   --space-5:  20px;
   --space-6:  24px;
+  --space-7:  28px;
   --space-8:  32px;
   --space-10: 40px;
   --space-12: 48px;

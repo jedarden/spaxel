@@ -7,8 +7,8 @@
 /* ===== Guided Help Container ===== */
 .guided-help-container {
     position: fixed;
-    bottomvar(--space-5);
-    leftvar(--space-5);
+    bottom: var(--space-5);
+    left: var(--space-5);
     z-index: 200;
     pointer-events: none;
     opacity: 0;
@@ -46,7 +46,7 @@
 .help-title {
     display: flex;
     align-items: center;
-    gapvar(--space-250);
+    gap: var(--space-250);
 }
 
 .help-icon {
@@ -269,9 +269,9 @@
 /* ===== Responsive Design ===== */
 @media (max-width: 480px) {
     .guided-help-container {
-        bottomvar(--space-250);
-        leftvar(--space-250);
-        rightvar(--space-250);
+        bottom: var(--space-250);
+        left: var(--space-250);
+        right: var(--space-250);
     }
 
     .guided-help-panel {

@@ -130,12 +130,9 @@
             anomalyEl.classList.add('hidden');
         }
 
-        // Show details button in expert mode
         const detailsBtn = card.querySelector('.sleep-summary-details-btn');
-        if (window.SpaxelApp && window.SpaxelApp.isExpertMode && window.SpaxelApp.isExpertMode()) {
+        if (detailsBtn) {
             detailsBtn.classList.remove('hidden');
-        } else {
-            detailsBtn.classList.add('hidden');
         }
 
         // Show the card

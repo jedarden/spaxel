@@ -267,7 +267,7 @@
 #feedback-notes-input {
     width: 100%;
     min-height: 80px;
-    paddingvar(--space-250);
+    padding: var(--space-250);
     background: var(--bg-input);
     border: 1px solid var(--slate-6);
     border-radius: var(--radius-control);
@@ -325,7 +325,7 @@
 
 #anomaly-learning-banner {
     position: fixed;
-    topvar(--space-16);
+    top: var(--space-16);
     left: 50%;
     transform: translateX(-50%);
     z-index: 500;
@@ -385,7 +385,7 @@
 #security-mode-indicator {
     display: flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
     padding: var(--space-1) 10px;
     border-radius: var(--radius-modal);
     font-size: var(--text-xs);
@@ -442,7 +442,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    paddingvar(--space-half);
+    padding: var(--space-half);
     margin-left: var(--space-1);
     border-radius: var(--radius-control);
     color: inherit;
@@ -775,7 +775,7 @@
 
 .anomaly-history-score {
     font-size: var(--text-xs);
-    paddingvar(--space-half) var(--space-150);
+    padding: var(--space-half) var(--space-150);
     border-radius: var(--radius-control);
     font-weight: 600;
     flex-shrink: 0;
@@ -798,7 +798,7 @@
 
 .anomaly-history-feedback {
     font-size: var(--text-xs);
-    paddingvar(--space-half) var(--space-150);
+    padding: var(--space-half) var(--space-150);
     border-radius: var(--radius-control);
     flex-shrink: 0;
 }

@@ -1163,6 +1163,13 @@
                 }
                 break;
 
+            case 'blob_explain':
+                // Explainability snapshot from the fusion engine
+                if (window.Explainability && msg.blob_id !== undefined && msg.snapshot) {
+                    Explainability.handleExplainSnapshot(msg.blob_id, msg.snapshot);
+                }
+                break;
+
             case 'zone_change':
                 // Zone created, updated, or deleted
                 if (window.Viz3D && Viz3D.handleZoneChange) {

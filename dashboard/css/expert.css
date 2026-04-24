@@ -1,7 +1,7 @@
 /**
- * Spaxel Dashboard - Expert Mode Styles
+ * Spaxel Dashboard - 3D Scene Styles
  *
- * Expert mode 3D scene layout with responsive canvas sizing.
+ * 3D scene layout with responsive canvas sizing.
  * Handles iOS Safari visual viewport quirks and bottom navigation spacing.
  *
  * WCAG 2.1 Touch Target Compliance:
@@ -52,8 +52,8 @@
 .toggle-switch .slider:before {
     width: 36px;
     height: 36px;
-    topvar(--space-1);
-    leftvar(--space-1);
+    top: var(--space-1);
+    left: var(--space-1);
 }
 
 .toggle-switch input:checked + .slider:before {
@@ -236,23 +236,12 @@
     z-index: 1;
 }
 
-/* Canvas height adjustment when simple mode navigation is visible */
-body.simple-mode #scene-container {
-    /* Simple mode has 56px bottom nav, subtract from viewport height */
-    height: calc(100% - 56px);
-}
-
 /* iOS Safari-specific handling for visual viewport */
 @supports (-webkit-touch-callout: none) {
     /* iOS Safari with visual viewport API */
     #scene-container {
         /* Use dynamic viewport height on iOS (handles address bar) */
         height: 100dvh;
-    }
-
-    body.simple-mode #scene-container {
-        /* Subtract bottom navigation bar height */
-        height: calc(100dvh - 56px);
     }
 }
 
@@ -285,32 +274,6 @@ body.simple-mode #scene-container {
     z-index: 100;
 }
 
-/* Simple mode navigation bar */
-body.simple-mode .simple-quick-actions {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    z-index: 100;
-}
-
-/* Simple mode navigation bar safe area support */
-@supports (padding: max(0px)) {
-    body.simple-mode .simple-quick-actions {
-        padding-bottom: env(safe-area-inset-bottom);
-        height: calc(56px + env(safe-area-inset-bottom));
-    }
-}
-
-/* ===== Mode Toggle Bar — positioned below sticky status bar ===== */
-.mode-toggle-bar {
-    position: sticky;
-    top: 56px;
-    height: 44px;
-    z-index: 90;
-}
-
 /* ===== Alert Banner — full-width overlay ===== */
 #alert-banner {
     position: fixed;
@@ -328,11 +291,6 @@ body.simple-mode .simple-quick-actions {
         height: 100%;
         height: 100dvh;
     }
-
-    body.simple-mode #scene-container {
-        height: calc(100vh - 56px);
-        height: calc(100dvh - 56px);
-    }
 }
 
 /* Portrait orientation */
@@ -340,11 +298,6 @@ body.simple-mode .simple-quick-actions {
     #scene-container {
         height: 100%;
         height: 100dvh;
-    }
-
-    body.simple-mode #scene-container {
-        height: calc(100vh - 56px);
-        height: calc(100dvh - 56px);
     }
 }
 
@@ -355,11 +308,6 @@ body.simple-mode .simple-quick-actions {
     #scene-container {
         height: 100%;
         height: 100dvh;
-    }
-
-    body.simple-mode #scene-container {
-        height: calc(100vh - 56px);
-        height: calc(100dvh - 56px);
     }
 }
 
@@ -388,10 +336,6 @@ body.simple-mode .simple-quick-actions {
         height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     }
 
-    body.simple-mode #scene-container {
-        height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
-        height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
-    }
 }
 
 /* ===== Prevent overscroll/bounce on iOS ===== */
@@ -409,12 +353,3 @@ body.simple-mode .simple-quick-actions {
     transition: opacity 0.3s ease;
 }
 
-/* ===== Hide scene container in simple mode ===== */
-body.simple-mode #scene-container {
-    display: none;
-}
-
-/* ===== Expert mode specific styles ===== */
-body:not(.simple-mode) #scene-container {
-    display: block;
-}

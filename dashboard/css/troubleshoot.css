@@ -14,7 +14,7 @@
     background: var(--warn-bg);
     border: 1px solid var(--warn-border);
     border-radius: var(--radius-control);
-    paddingvar(--space-250);
+    padding: var(--space-250);
     margin-bottom: var(--space-2);
     font-size: var(--text-xs);
     animation: troubleshoot-fade-in 0.3s ease-out;
@@ -28,7 +28,7 @@
 .troubleshoot-card-header {
     display: flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
     margin-bottom: var(--space-2);
     color: var(--warn);
     font-weight: 600;
@@ -59,7 +59,7 @@
 .troubleshoot-timeline {
     display: flex;
     flex-direction: column;
-    gapvar(--space-150);
+    gap: var(--space-150);
 }
 
 .troubleshoot-step {
@@ -285,7 +285,7 @@
 /* Dismiss all button */
 .spaxel-dismiss-all {
     position: fixed;
-    bottomvar(--space-5);
+    bottom: var(--space-5);
     left: 50%;
     transform: translateX(-50%);
     background: var(--bg-hover);
@@ -347,7 +347,7 @@
 
 .post-cal-actions {
     display: flex;
-    gapvar(--space-250);
+    gap: var(--space-250);
     justify-content: center;
     flex-wrap: wrap;
 }

@@ -969,11 +969,9 @@
     // =========================================================
     // Mode detection
     // =========================================================
-    function isExpertMode() {
-        // Palette is unavailable in simple mode or ambient mode
-        if (document.body.classList.contains('simple-mode')) return false;
+    function isPaletteAvailable() {
         if (document.body.classList.contains('ambient-mode')) return false;
-        if (window.currentMode === 'simple' || window.currentMode === 'ambient') return false;
+        if (window.currentMode === 'ambient') return false;
         return true;
     }
 
@@ -1109,7 +1107,7 @@
         },
 
         open: function () {
-            if (!isExpertMode()) return;
+            if (!isPaletteAvailable()) return;
 
             createDOM();
 
@@ -1170,7 +1168,7 @@
         _onKeydown: function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                if (!isExpertMode()) return;
+                if (!isPaletteAvailable()) return;
                 this.toggle();
             } else if (e.key === 'Escape' && this.isOpen) {
                 e.preventDefault();
@@ -1267,7 +1265,7 @@
     Manager._saveHistory         = saveHistory;
     Manager._addToHistory        = addToHistory;
     Manager._search              = search;
-    Manager._isExpertMode        = isExpertMode;
+    Manager._isPaletteAvailable  = isPaletteAvailable;
 
     // Auto-init when DOM is ready
     if (document.readyState === 'loading') {

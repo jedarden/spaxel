@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	// CSI frame header size (24 bytes)
+	// CSI frame header size (24 bytes) — matches ingestion/frame.go
 	headerSize = 24
 
 	// Default values
@@ -44,21 +44,52 @@ const (
 
 var (
 	// CLI flags
-	flagMothership  = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
-	flagToken       = flag.String("token", "", "Provisioning token (auto-generated if empty)")
-	flagNodes       = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
-	flagWalkers     = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
-	flagRate        = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
-	flagDuration    = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
-	flagSeed        = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
-	flagSpace       = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
-	flagBLE         = flag.Bool("ble", false, "Include synthetic BLE advertisements")
-	flagVerify      = flag.Bool("verify", false, "Verify blob detection after duration")
-	flagNoiseSigma  = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
-	flagWall        = flag.String("wall", "", "Add a wall as x1,y1,x2,y2 (can be repeated)")
-	flagOutputCSV   = flag.String("output-csv", "", "Write ground truth to CSV file")
-	flagChannel    = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
+	flagMothership = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
+	flagToken      = flag.String("token", "", "Provisioning token (auto-generated if empty)")
+	flagNodes      = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
+	flagWalkers    = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
+	flagRate       = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
+	flagDuration   = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
+	flagSeed       = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
+	flagSpace      = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
+	flagBLE        = flag.Bool("ble", false, "Include synthetic BLE advertisements")
+	flagVerify     = flag.Bool("verify", false, "Verify blob detection after duration")
+	flagNoiseSigma = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
+	flagOutputCSV  = flag.String("output-csv", "", "Write ground truth to CSV file")
+	flagChannel   = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
 )
+
+// walls is populated from repeated --wall flags
+var walls []Wall
+
+// addWall is a custom flag value for repeated --wall flags
+type wallFlag struct{}
+
+func (w *wallFlag) String() string { return "" }
+func (w *wallFlag) Set(value string) error {
+	parts := strings.Split(value, ",")
+	if len(parts) != 4 {
+		return fmt.Errorf("expected x1,y1,x2,y2 format, got: %s", value)
+	}
+	x1, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return fmt.Errorf("invalid x1: %w", err)
+	}
+	y1, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return fmt.Errorf("invalid y1: %w", err)
+	}
+	x2, err := strconv.ParseFloat(parts[2], 64)
+	if err != nil {
+		return fmt.Errorf("invalid x2: %w", err)
+	}
+	y2, err := strconv.ParseFloat(parts[3], 64)
+	if err != nil {
+		return fmt.Errorf("invalid y2: %w", err)
+	}
+	walls = append(walls, Wall{X1: x1, Y1: y1, X2: x2, Y2: y2, Attenuation: 3.0})
+	return nil
+}
 
 // VirtualNode represents a simulated ESP32 node
 type VirtualNode struct {
@@ -89,6 +120,12 @@ type Space struct {
 	Width, Depth, Height float64
 }
 
+// Wall represents a wall segment
+type Wall struct {
+	X1, Y1, X2, Y2 float64
+	Attenuation     float64
+}
+
 // Stats tracks simulation statistics
 type Stats struct {
 	FramesSent     atomic.Int64
@@ -99,6 +136,7 @@ type Stats struct {
 }
 
 func main() {
+	flag.Var(&wallFlag{}, "wall", "Add a wall as x1,y1,x2,y2 (can be repeated)")
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -116,12 +154,6 @@ func main() {
 	}
 	rng := rand.New(rand.NewSource(*flagSeed))
 	log.Printf("[SIM] Random seed: %d", *flagSeed)
-
-	// Parse walls
-	walls, err := parseWalls(*flagWall)
-	if err != nil {
-		log.Fatalf("[SIM] Invalid wall specification: %v", err)
-	}
 
 	// Validate channel
 	if *flagChannel < 1 || *flagChannel > 14 {
@@ -168,13 +200,14 @@ func main() {
 	go reportStats(ctx, stats)
 
 	// Connect all nodes to mothership
-	if err := connectNodes(ctx, nodes, stats); err != nil {
+	if err := connectNodes(ctx, nodes); err != nil {
 		log.Fatalf("[SIM] Failed to connect nodes: %v", err)
 	}
+	defer closeAllNodes(nodes)
 
 	// Main simulation loop
 	simulationComplete := make(chan struct{})
-	go runSimulation(ctx, nodes, walkers, space, walls, rng, csvWriter, stats, simulationComplete)
+	go runSimulation(ctx, nodes, walkers, space, rng, csvWriter, stats, simulationComplete)
 
 	// Wait for completion or interrupt
 	select {
@@ -192,7 +225,7 @@ func main() {
 
 	// Verify blob count if requested
 	if *flagVerify {
-		if err := verifyBlobs(*flagWalkers); err != nil {
+		if err := verifyBlobs(*flagWalkers, walkers, space); err != nil {
 			log.Printf("[SIM] Verification FAILED: %v", err)
 			os.Exit(1)
 		}
@@ -224,48 +257,10 @@ func parseSpace(s string) (*Space, error) {
 	return &Space{Width: width, Depth: depth, Height: height}, nil
 }
 
-// parseWalls parses wall definitions
-func parseWalls(wallStr string) ([]Wall, error) {
-	if wallStr == "" {
-		return nil, nil
-	}
-
-	parts := strings.Split(wallStr, ",")
-	if len(parts) != 4 {
-		return nil, fmt.Errorf("expected x1,y1,x2,y2 format, got: %s", wallStr)
-	}
-
-	x1, err := strconv.ParseFloat(parts[0], 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid x1: %w", err)
-	}
-	y1, err := strconv.ParseFloat(parts[1], 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid y1: %w", err)
-	}
-	x2, err := strconv.ParseFloat(parts[2], 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid x2: %w", err)
-	}
-	y2, err := strconv.ParseFloat(parts[3], 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid y2: %w", err)
-	}
-
-	return []Wall{{X1: x1, Y1: y1, X2: x2, Y2: y2, Attenuation: 3.0}}, nil
-}
-
-// Wall represents a wall segment
-type Wall struct {
-	X1, Y1, X2, Y2 float64
-	Attenuation     float64
-}
-
 // createVirtualNodes creates virtual nodes positioned in the space
 func createVirtualNodes(count int, space *Space, rng *rand.Rand) []*VirtualNode {
 	nodes := make([]*VirtualNode, count)
 
-	// Position nodes around the perimeter
 	for i := 0; i < count; i++ {
 		node := &VirtualNode{
 			ID:   i,
@@ -319,14 +314,14 @@ func createWalkers(count int, space *Space, rng *rand.Rand) []*Walker {
 			Position: Point{
 				X: rng.Float64() * space.Width,
 				Y: rng.Float64() * space.Depth,
-				Z: 1.7, // Average person height
+				Z: 1.7,
 			},
 			Velocity: Point{
 				X: (rng.Float64() - 0.5) * 0.5,
 				Y: (rng.Float64() - 0.5) * 0.5,
 				Z: 0,
 			},
-			Speed:  0.8 + rng.Float64()*0.4, // 0.8-1.2 m/s
+			Speed:  0.8 + rng.Float64()*0.4,
 			Height: 1.7,
 		}
 	}
@@ -334,17 +329,19 @@ func createWalkers(count int, space *Space, rng *rand.Rand) []*Walker {
 	return walkers
 }
 
-// connectNodes connects all virtual nodes to the mothership
-func connectNodes(ctx context.Context, nodes []*VirtualNode, stats *Stats) error {
+// connectNodes connects all virtual nodes to the mothership.
+// Each node gets its own persistent connection with background goroutines
+// for ping, health, and message reading.
+func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 	// Get or generate token
 	token := *flagToken
 	if token == "" {
 		var err error
-		token, err = provisionNode()
+		token, err = provisionToken()
 		if err != nil {
-			return fmt.Errorf("failed to provision: %w", err)
+			return fmt.Errorf("failed to provision token: %w", err)
 		}
-		log.Printf("[SIM] Auto-provisioned token: %s", token[:16]+"...")
+		log.Printf("[SIM] Auto-provisioned token: %s...", token[:min(16, len(token))])
 	}
 
 	// Parse mothership URL
@@ -360,125 +357,149 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode, stats *Stats) error
 		wsURL.Scheme = "wss"
 	}
 
-	var wg sync.WaitGroup
 	errChan := make(chan error, len(nodes))
 
 	for _, node := range nodes {
-		wg.Add(1)
-		go func(n *VirtualNode) {
-			defer wg.Done()
-
-			// Add node ID to URL path
-			nodeURL := wsURL.String()
-			if !strings.Contains(nodeURL, "/ws/") {
-				if strings.HasSuffix(nodeURL, "/") {
-					nodeURL = nodeURL + "ws"
-				} else {
-					nodeURL = nodeURL + "/ws"
-				}
+		// Add node WS path if needed
+		nodeURL := wsURL.String()
+		if !strings.Contains(nodeURL, "/ws/") && !strings.HasSuffix(nodeURL, "/ws") {
+			if strings.HasSuffix(nodeURL, "/") {
+				nodeURL = nodeURL + "ws"
+			} else {
+				nodeURL = nodeURL + "/ws"
 			}
-
-			headers := http.Header{}
-			headers.Set("X-Spaxel-Token", token)
-
-			log.Printf("[SIM] Node %d connecting to %s", n.ID, nodeURL)
-
-			conn, resp, err := websocket.DefaultDialer.DialContext(ctx, nodeURL, headers)
-			if err != nil {
-				if resp != nil {
-					body, _ := io.ReadAll(resp.Body)
-					errChan <- fmt.Errorf("node %d dial failed: %w (status %d: %s)", n.ID, err, resp.StatusCode, string(body))
-				} else {
-					errChan <- fmt.Errorf("node %d dial failed: %w", n.ID, err)
-				}
-				return
-			}
-			defer conn.Close()
-
-			n.Conn = conn
-			log.Printf("[SIM] Node %d connected", n.ID)
-
-			// Send hello message
-			hello := map[string]interface{}{
-				"type":             "hello",
-				"mac":              macToString(n.MAC),
-				"firmware_version": "sim-1.0.0",
-				"capabilities":     []string{"csi", "tx", "rx"},
-				"chip":             "ESP32-S3",
-				"flash_mb":         16,
-				"uptime_ms":        1000,
-				"wifi_rssi":        -45,
-				"ip":               fmt.Sprintf("127.0.0.%d", n.ID+2),
-			}
-
-			helloBytes, err := json.Marshal(hello)
-			if err != nil {
-				errChan <- fmt.Errorf("node %d marshal hello: %w", n.ID, err)
-				return
-			}
-
-			n.mu.Lock()
-			err = conn.WriteMessage(websocket.TextMessage, helloBytes)
-			n.mu.Unlock()
-
-			if err != nil {
-				errChan <- fmt.Errorf("node %d send hello: %w", n.ID, err)
-				return
-			}
-
-			// Wait for role assignment
-			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				errChan <- fmt.Errorf("node %d read role: %w", n.ID, err)
-				return
-			}
-
-			var roleMsg map[string]interface{}
-			if err := json.Unmarshal(message, &roleMsg); err != nil {
-				errChan <- fmt.Errorf("node %d parse role: %w", n.ID, err)
-				return
-			}
-
-			if roleMsg["type"] == "reject" {
-				errChan <- fmt.Errorf("node %d rejected: %v", n.ID, roleMsg["reason"])
-				return
-			}
-
-			log.Printf("[SIM] Node %d received role: %v", n.ID, roleMsg["role"])
-
-			// Start pinger
-			go n.pingLoop(ctx)
-
-			// Start health reporter
-			go n.healthLoop(ctx)
-
-			// Start message reader
-			go n.readLoop(ctx, errChan)
-
-		}(node)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	// Check for errors
-	for err := range errChan {
-		if err != nil {
-			return err
 		}
+
+		headers := http.Header{}
+		headers.Set("X-Spaxel-Token", token)
+
+		log.Printf("[SIM] Node %d connecting to %s", node.ID, nodeURL)
+
+		conn, resp, err := websocket.DefaultDialer.DialContext(ctx, nodeURL, headers)
+		if err != nil {
+			if resp != nil {
+				body, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("node %d dial failed: %w (status %d: %s)", node.ID, err, resp.StatusCode, string(body))
+			}
+			return fmt.Errorf("node %d dial failed: %w", node.ID, err)
+		}
+
+		node.Conn = conn
+		log.Printf("[SIM] Node %d connected", node.ID)
+
+		// Send hello message
+		hello := map[string]interface{}{
+			"type":             "hello",
+			"mac":              macToString(node.MAC),
+			"firmware_version": "sim-1.0.0",
+			"capabilities":     []string{"csi", "tx", "rx"},
+			"chip":             "ESP32-S3",
+			"flash_mb":         16,
+			"uptime_ms":        1000,
+			"wifi_rssi":        -45,
+			"ip":               fmt.Sprintf("127.0.0.%d", node.ID+2),
+		}
+
+		helloBytes, err := json.Marshal(hello)
+		if err != nil {
+			conn.Close()
+			return fmt.Errorf("node %d marshal hello: %w", node.ID, err)
+		}
+
+		node.mu.Lock()
+		err = conn.WriteMessage(websocket.TextMessage, helloBytes)
+		node.mu.Unlock()
+
+		if err != nil {
+			conn.Close()
+			return fmt.Errorf("node %d send hello: %w", node.ID, err)
+		}
+
+		// Wait for role assignment
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			conn.Close()
+			return fmt.Errorf("node %d read role: %w", node.ID, err)
+		}
+
+		var roleMsg map[string]interface{}
+		if err := json.Unmarshal(message, &roleMsg); err != nil {
+			conn.Close()
+			return fmt.Errorf("node %d parse role: %w", node.ID, err)
+		}
+
+		if roleMsg["type"] == "reject" {
+			conn.Close()
+			return fmt.Errorf("node %d rejected: %v", node.ID, roleMsg["reason"])
+		}
+
+		log.Printf("[SIM] Node %d received role: %v", node.ID, roleMsg["role"])
+
+		// Start background goroutines for this connection
+		startTime := time.Now()
+		go node.pingLoop(ctx)
+		go node.healthLoop(ctx, startTime)
+		go node.readLoop(ctx, errChan)
 	}
 
 	return nil
 }
 
-// provisionNode provisions a new node via POST /api/provision
-func provisionNode() (string, error) {
-	// For simulator, we'll use a simple synthetic token
-	// In production, this would call the mothership's provision API
+// provisionToken provisions a token. Tries the mothership API first,
+// falls back to a synthetic HMAC token.
+func provisionToken() (string, error) {
+	// Parse mothership URL to get HTTP endpoint
+	wsURL, err := url.Parse(*flagMothership)
+	if err != nil {
+		return "", fmt.Errorf("invalid mothership URL: %w", err)
+	}
+
+	httpURL := *wsURL
+	if httpURL.Scheme == "ws" {
+		httpURL.Scheme = "http"
+	} else if httpURL.Scheme == "wss" {
+		httpURL.Scheme = "https"
+	}
+
+	// Trim /ws suffix to get base URL
+	baseURL := strings.TrimSuffix(httpURL.String(), "/ws")
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	provisionURL := baseURL + "/api/provision"
+
+	// Try POST /api/provision with synthetic credentials
+	body := strings.NewReader(`{"mac":"AA:BB:CC:00:00:00"}`)
+	resp, err := http.Post(provisionURL, "application/json", body)
+	if err == nil && resp.StatusCode == http.StatusOK {
+		var result map[string]interface{}
+		if json.NewDecoder(resp.Body).Decode(&result) == nil {
+			resp.Body.Close()
+			if token, ok := result["node_token"].(string); ok && token != "" {
+				return token, nil
+			}
+		}
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	// Fallback: generate synthetic token
 	h := hmac.New(sha256.New, []byte("sim-install-secret"))
 	h.Write([]byte("sim-node"))
 	return fmt.Sprintf("%064x", h.Sum(nil)), nil
+}
+
+// closeAllNodes closes all node WebSocket connections
+func closeAllNodes(nodes []*VirtualNode) {
+	for _, node := range nodes {
+		if node.Conn != nil {
+			node.mu.Lock()
+			node.Conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "sim shutdown"))
+			node.Conn.Close()
+			node.mu.Unlock()
+		}
+	}
 }
 
 // macToString converts a 6-byte MAC to colon-separated hex
@@ -510,7 +531,7 @@ func (n *VirtualNode) pingLoop(ctx context.Context) {
 }
 
 // healthLoop sends periodic health messages
-func (n *VirtualNode) healthLoop(ctx context.Context) {
+func (n *VirtualNode) healthLoop(ctx context.Context, startTime time.Time) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -520,12 +541,12 @@ func (n *VirtualNode) healthLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			health := map[string]interface{}{
-				"type":           "health",
-				"mac":            macToString(n.MAC),
-				"timestamp_ms":   time.Now().UnixMilli(),
+				"type":            "health",
+				"mac":             macToString(n.MAC),
+				"timestamp_ms":    time.Now().UnixMilli(),
 				"free_heap_bytes": 200000,
 				"wifi_rssi_dbm":   -45,
-				"uptime_ms":       time.Since(time.Now()).Milliseconds(),
+				"uptime_ms":       time.Since(startTime).Milliseconds(),
 				"csi_rate_hz":     *flagRate,
 				"wifi_channel":    *flagChannel,
 			}
@@ -548,10 +569,8 @@ func (n *VirtualNode) healthLoop(ctx context.Context) {
 	}
 }
 
-// readLoop reads messages from the WebSocket
+// readLoop reads downstream messages from the WebSocket
 func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
-	defer close(errChan)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -583,10 +602,8 @@ func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
 			return
 		}
 
-		// Parse downstream message
 		var msg map[string]interface{}
 		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Printf("[SIM] Node %d parse message: %v", n.ID, err)
 			continue
 		}
 
@@ -611,7 +628,7 @@ func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
 }
 
 // runSimulation runs the main CSI generation loop
-func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker, space *Space, walls []Wall, rng *rand.Rand, csvWriter *CSVWriter, stats *Stats, done chan<- struct{}) {
+func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker, space *Space, rng *rand.Rand, csvWriter *CSVWriter, stats *Stats, done chan<- struct{}) {
 	defer close(done)
 
 	ticker := time.NewTicker(time.Duration(1000/(*flagRate)) * time.Millisecond)
@@ -630,7 +647,7 @@ func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker,
 
 			// Write to CSV
 			if csvWriter != nil {
-				csvWriter.WriteRow(walkers, nodes)
+				csvWriter.WriteRow(walkers, nodes, walls)
 			}
 
 			// Send CSI frames for each node pair
@@ -640,10 +657,8 @@ func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker,
 						continue
 					}
 
-					// Generate CSI frame
 					frame := generateCSIFrame(txNode, rxNode, walkers, walls, frameNum, rng)
 
-					// Send binary frame
 					txNode.mu.Lock()
 					err := txNode.Conn.WriteMessage(websocket.BinaryMessage, frame)
 					txNode.mu.Unlock()
@@ -673,7 +688,6 @@ func updateWalkers(walkers []*Walker, space *Space, rng *rand.Rand) {
 	dt := 1.0 / float64(*flagRate)
 
 	for _, walker := range walkers {
-		// Update position
 		walker.Position.X += walker.Velocity.X * dt
 		walker.Position.Y += walker.Velocity.Y * dt
 
@@ -720,22 +734,20 @@ func sendBLEMessages(nodes []*VirtualNode, walkers []*Walker) {
 		devices := make([]map[string]interface{}, 0)
 
 		for _, walker := range walkers {
-			// Calculate distance-based RSSI
 			dx := walker.Position.X - node.Position.X
 			dy := walker.Position.Y - node.Position.Y
 			dz := walker.Position.Z - node.Position.Z
-			distance := math.Sqrt(dx*dx + dy*dy + dz*dz)
+			dist := math.Sqrt(dx*dx + dy*dy + dz*dz)
 
-			// RSSI falls off with distance
-			rssi := -50.0 - 20.0*math.Log10(distance/1.0)
+			rssi := -50.0 - 20.0*math.Log10(dist/1.0)
 			if rssi < -90 {
 				rssi = -90
 			}
 
 			devices = append(devices, map[string]interface{}{
-				"addr":    fmt.Sprintf("AA:BB:CC:DD:EE:%02X", walker.ID),
-				"rssi":    int(rssi),
-				"name":    fmt.Sprintf("sim-person-%d", walker.ID),
+				"addr": fmt.Sprintf("AA:BB:CC:DD:EE:%02X", walker.ID),
+				"rssi": int(rssi),
+				"name": fmt.Sprintf("sim-person-%d", walker.ID),
 			})
 		}
 
@@ -744,10 +756,10 @@ func sendBLEMessages(nodes []*VirtualNode, walkers []*Walker) {
 		}
 
 		bleMsg := map[string]interface{}{
-			"type":        "ble",
-			"mac":         macToString(node.MAC),
+			"type":         "ble",
+			"mac":          macToString(node.MAC),
 			"timestamp_ms": time.Now().UnixMilli(),
-			"devices":     devices,
+			"devices":      devices,
 		}
 
 		bleBytes, err := json.Marshal(bleMsg)
@@ -802,59 +814,9 @@ func printFinalStats(stats *Stats, walkerCount int) {
 	log.Printf("[SIM]   Walkers: %d", walkerCount)
 }
 
-// verifyBlobs verifies that the mothership detected the expected number of blobs
-func verifyBlobs(expectedWalkers int) error {
-	// Parse mothership URL to get HTTP endpoint
-	wsURL, err := url.Parse(*flagMothership)
-	if err != nil {
-		return fmt.Errorf("invalid mothership URL: %w", err)
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-
-	// Convert ws(s) to http(s)
-	httpURL := *wsURL
-	if httpURL.Scheme == "ws" {
-		httpURL.Scheme = "http"
-	} else if httpURL.Scheme == "wss" {
-		httpURL.Scheme = "https"
-	}
-
-	// Wait for pipeline to settle
-	log.Printf("[SIM] Waiting 2 seconds for pipeline to settle...")
-	time.Sleep(2 * time.Second)
-
-	// Query blobs endpoint
-	blobsURL := httpURL.String()
-	blobsURL = strings.TrimSuffix(blobsURL, "/ws")
-	blobsURL = strings.TrimSuffix(blobsURL, "/")
-	blobsURL += "/api/blobs"
-
-	resp, err := http.Get(blobsURL)
-	if err != nil {
-		return fmt.Errorf("failed to query blobs: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("blobs API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var blobs []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&blobs); err != nil {
-		return fmt.Errorf("failed to decode blobs response: %w", err)
-	}
-
-	blobCount := len(blobs)
-
-	// Check if blob count is within tolerance
-	tolerance := 1
-	minExpected := expectedWalkers - tolerance
-	maxExpected := expectedWalkers + tolerance
-
-	if blobCount < minExpected || blobCount > maxExpected {
-		return fmt.Errorf("expected %d blobs (±%d), got %d", expectedWalkers, tolerance, blobCount)
-	}
-
-	log.Printf("[SIM] Verification: %d blobs detected for %d walkers - PASS", blobCount, expectedWalkers)
-	return nil
+	return b
 }

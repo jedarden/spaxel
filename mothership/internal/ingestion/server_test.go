@@ -420,6 +420,207 @@ func TestTokenValidation_NoValidator(t *testing.T) {
 	}
 }
 
+func TestMigrationWindow(t *testing.T) {
+	tests := []struct {
+		name             string
+		validator        func(mac, token string) bool
+		migrationDeadline time.Time
+		helloJSON        string
+		wantAccepted     bool
+		wantUnpaired     bool
+	}{
+		{
+			name:             "no validator accepts normally",
+			validator:        nil,
+			migrationDeadline: time.Time{},
+			helloJSON:        `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`,
+			wantAccepted:     true,
+			wantUnpaired:     false,
+		},
+		{
+			name:             "valid token always accepted",
+			validator:        func(mac, token string) bool { return token == "good" },
+			migrationDeadline: time.Now().Add(24 * time.Hour),
+			helloJSON:        `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"good"}`,
+			wantAccepted:     true,
+			wantUnpaired:     false,
+		},
+		{
+			name:              "missing token accepted during migration window",
+			validator:         func(mac, token string) bool { return token == "good" },
+			migrationDeadline: time.Now().Add(24 * time.Hour),
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`,
+			wantAccepted:      true,
+			wantUnpaired:      true,
+		},
+		{
+			name:              "wrong token accepted during migration window",
+			validator:         func(mac, token string) bool { return token == "good" },
+			migrationDeadline: time.Now().Add(24 * time.Hour),
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"bad"}`,
+			wantAccepted:      true,
+			wantUnpaired:      true,
+		},
+		{
+			name:              "missing token rejected after migration window",
+			validator:         func(mac, token string) bool { return token == "good" },
+			migrationDeadline: time.Now().Add(-1 * time.Hour), // expired
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`,
+			wantAccepted:      false,
+			wantUnpaired:      false,
+		},
+		{
+			name:              "wrong token rejected after migration window",
+			validator:         func(mac, token string) bool { return token == "good" },
+			migrationDeadline: time.Now().Add(-1 * time.Hour),
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"bad"}`,
+			wantAccepted:      false,
+			wantUnpaired:      false,
+		},
+		{
+			name:              "zero deadline is strict mode rejects missing token",
+			validator:         func(mac, token string) bool { return token == "good" },
+			migrationDeadline: time.Time{}, // zero = strict
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`,
+			wantAccepted:      false,
+			wantUnpaired:      false,
+		},
+		{
+			name:              "valid token accepted even after migration window",
+			validator:         func(mac, token string) bool { return token == "good" },
+			migrationDeadline: time.Now().Add(-1 * time.Hour), // expired
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"good"}`,
+			wantAccepted:      true,
+			wantUnpaired:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ingestServer := NewServer()
+			if tt.validator != nil {
+				ingestServer.SetTokenValidator(tt.validator)
+			}
+			if !tt.migrationDeadline.IsZero() {
+				ingestServer.SetMigrationDeadline(tt.migrationDeadline)
+			}
+
+			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ingestServer.HandleNodeWS(w, r)
+			}))
+			defer httpServer.Close()
+
+			wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+			dialer := websocket.Dialer{}
+			conn, _, err := dialer.Dial(wsURL, nil)
+			if err != nil {
+				t.Fatalf("Failed to connect: %v", err)
+			}
+			defer conn.Close()
+
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(tt.helloJSON)); err != nil {
+				t.Fatalf("Failed to send hello: %v", err)
+			}
+
+			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, data, err := conn.ReadMessage()
+
+			if tt.wantAccepted {
+				if err != nil {
+					t.Fatalf("Expected acceptance, got read error: %v", err)
+				}
+				var msg struct {
+					Type string `json:"type"`
+				}
+				if err := json.Unmarshal(data, &msg); err != nil {
+					t.Fatalf("Failed to parse response: %v", err)
+				}
+				if msg.Type == "reject" {
+					t.Fatal("Node was rejected but expected acceptance")
+				}
+
+				if !ingestServer.IsNodeConnected("AA:BB:CC:DD:EE:FF") {
+					t.Fatal("Node should be in connected list")
+				}
+
+				// Check Unpaired flag via NodeInfo
+				infos := ingestServer.GetConnectedNodesInfo()
+				var found *NodeInfo
+				for i := range infos {
+					if infos[i].MAC == "AA:BB:CC:DD:EE:FF" {
+						found = &infos[i]
+						break
+					}
+				}
+				if found == nil {
+					t.Fatal("Node not found in GetConnectedNodesInfo")
+				}
+				if found.Unpaired != tt.wantUnpaired {
+					t.Errorf("Unpaired flag: got %v, want %v", found.Unpaired, tt.wantUnpaired)
+				}
+
+				// Check GetUnpairedMACs
+				unpaired := ingestServer.GetUnpairedMACs()
+				hasUnpaired := false
+				for _, m := range unpaired {
+					if m == "AA:BB:CC:DD:EE:FF" {
+						hasUnpaired = true
+						break
+					}
+				}
+				if hasUnpaired != tt.wantUnpaired {
+					t.Errorf("GetUnpairedMACs contains node: got %v, want %v", hasUnpaired, tt.wantUnpaired)
+				}
+			} else {
+				if err == nil {
+					var msg struct {
+						Type   string `json:"type"`
+						Reason string `json:"reason"`
+					}
+					_ = json.Unmarshal(data, &msg)
+					if msg.Type != "reject" {
+						t.Fatalf("Expected reject, got type=%q", msg.Type)
+					}
+					if msg.Reason != "invalid_token" {
+						t.Fatalf("Expected reason 'invalid_token', got %q", msg.Reason)
+					}
+				}
+				// Connection should close after reject
+				if ingestServer.IsNodeConnected("AA:BB:CC:DD:EE:FF") {
+					t.Fatal("Rejected node should not be in connected list")
+				}
+			}
+		})
+	}
+}
+
+func TestGetUnpairedMACs_Empty(t *testing.T) {
+	server := NewServer()
+	macs := server.GetUnpairedMACs()
+	if len(macs) != 0 {
+		t.Errorf("Expected empty slice, got %v", macs)
+	}
+}
+
+func TestGetUnpairedMACs_WithUnpairedNodes(t *testing.T) {
+	server := NewServer()
+	server.mu.Lock()
+	server.connections["AA:BB:CC:DD:EE:FF"] = &NodeConnection{
+		MAC:      "AA:BB:CC:DD:EE:FF",
+		Unpaired: true,
+	}
+	server.connections["11:22:33:44:55:66"] = &NodeConnection{
+		MAC:      "11:22:33:44:55:66",
+		Unpaired: false,
+	}
+	server.mu.Unlock()
+
+	macs := server.GetUnpairedMACs()
+	if len(macs) != 1 || macs[0] != "AA:BB:CC:DD:EE:FF" {
+		t.Errorf("Expected [AA:BB:CC:DD:EE:FF], got %v", macs)
+	}
+}
+
 func TestTokenValidation_UnprovisionedNodeCannotPostCSI(t *testing.T) {
 	ingestServer := NewServer()
 	ingestServer.SetTokenValidator(func(mac, token string) bool {
