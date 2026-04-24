@@ -25,7 +25,7 @@
   font-weight: var(--fw-heading);
   line-height: var(--lh-body);
   max-width: 700px;
-  margin: 0;
+  margin: 0 auto;
 }
 .home-status__banner--ok {
   background: var(--ok-bg);
@@ -50,7 +50,7 @@
   gap: var(--space-6);
   padding: 0 var(--space-6) var(--space-6);
   max-width: 1440px;
-  margin: 0;
+  margin: 0 auto;
   width: 100%;
 }
 
@@ -131,7 +131,7 @@
   gap: var(--space-6);
   padding: 0 var(--space-6) var(--space-8);
   max-width: 1440px;
-  margin: 0;
+  margin: 0 auto;
   width: 100%;
 }
 .home-extras__item {
