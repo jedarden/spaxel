@@ -786,6 +786,58 @@
     }
 
     // ============================================
+    // Cross-Module Callback (from timeline click)
+    // ============================================
+    function onJumpToTime(sessionId, timestampMs) {
+        console.log('[Replay] onJumpToTime callback:', sessionId, timestampMs);
+
+        state.activeSessionId = sessionId;
+        state.sessionCurrentMs = timestampMs;
+        state.sessionState = 'paused';
+        state.sessionSpeed = 1;
+        state.isReplayMode = true;
+
+        // Fetch full session details from the API
+        fetch('/api/replay/session/' + encodeURIComponent(sessionId))
+            .then(function(res) {
+                if (!res.ok) throw new Error('Failed to fetch session');
+                return res.json();
+            })
+            .then(function(data) {
+                state.sessionFromMs = data.from_ms;
+                state.sessionToMs = data.to_ms;
+                state.sessionCurrentMs = data.current_ms || timestampMs;
+                state.sessionState = data.state || 'paused';
+                state.sessionSpeed = data.speed || 1;
+
+                // Show replay control bar
+                if (elements.bar) {
+                    elements.bar.style.display = 'block';
+                }
+
+                updateUI();
+
+                // Notify 3D visualization to enter replay mode
+                if (window.Viz3D && Viz3D.enterReplayMode) {
+                    Viz3D.enterReplayMode();
+                }
+
+                // Feed replay blobs to 3D scene if available
+                if (data.blobs && data.blobs.length > 0 && window.Viz3D && Viz3D.updateReplayBlobs) {
+                    Viz3D.updateReplayBlobs(data.blobs, data.timestamp_ms);
+                }
+            })
+            .catch(function(err) {
+                console.error('[Replay] onJumpToTime session fetch failed:', err);
+                // Still show the bar with partial state
+                if (elements.bar) {
+                    elements.bar.style.display = 'block';
+                }
+                updateUI();
+            });
+    }
+
+    // ============================================
     // Public API
     // ============================================
     window.SpaxelReplay = {
@@ -799,6 +851,9 @@
 
         // Jump to a specific timestamp (for tap-to-jump from timeline)
         jumpToTime: jumpToTime,
+
+        // Cross-module callback: sync replay state after timeline-initiated jump
+        onJumpToTime: onJumpToTime,
 
         // Check if currently in replay mode
         isReplayMode: () => state.isReplayMode,
