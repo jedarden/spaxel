@@ -32,7 +32,7 @@ describe('CommandPaletteManager', function () {
 
         // Load the module (if not already loaded in this env)
         if (typeof window.CommandPaletteManager === 'undefined') {
-            require('./commandpalette.js');
+            require('./command-palette.js');
         }
     });
 
