@@ -30,17 +30,17 @@
 .home-status__banner--ok {
   background: var(--ok-bg);
   color: var(--ok);
-  border: 1px solid rgba(70, 167, 88, 0.25);
+  border: 1px solid var(--ok-border);
 }
 .home-status__banner--warn {
   background: var(--warn-bg);
   color: var(--warn);
-  border: 1px solid rgba(229, 160, 13, 0.25);
+  border: 1px solid var(--warn-border);
 }
 .home-status__banner--alert {
   background: var(--alert-bg);
   color: var(--alert);
-  border: 1px solid rgba(229, 72, 77, 0.25);
+  border: 1px solid var(--alert-border);
 }
 
 /* ── Card grid (Row 2) ── */
@@ -145,6 +145,11 @@
 }
 .home-extras__item--visible {
   display: block;
+}
+.home-extras__item--armed {
+  border-color: var(--alert-border);
+  background: var(--alert-bg);
+  color: var(--alert);
 }
 
 /* ── Mobile bottom nav (uses shared .app-mobile-nav from layout.css) ── */
