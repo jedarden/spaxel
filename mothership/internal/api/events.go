@@ -182,7 +182,8 @@ func isValidEventType(t string) bool {
 	case "detection", "zone_entry", "zone_exit", "portal_crossing",
 		"trigger_fired", "fall_alert", "FallDetected", "anomaly", "AnomalyDetected", "security_alert",
 		"node_online", "node_offline", "ota_update", "baseline_changed",
-		"system", "learning_milestone", "sleep_session_end", "ZoneTransition":
+		"system", "learning_milestone", "sleep_session_end", "ZoneTransition",
+		"presence_transition", "stationary_detected", "anomaly_learned", "sleep_session_start":
 		return true
 	}
 	return false
@@ -193,7 +194,9 @@ func isValidEventType(t string) bool {
 // GET /api/events — paginated event list with FTS5 search and keyset cursor pagination.
 //
 //	Query params: limit (default 50, max 500), before (timestamp_ms cursor),
-//	since (ISO8601), until (ISO8601), type, zone_id, person_id, q (FTS5 query), mode (expert|simple).
+//	since (ISO8601), until (ISO8601), type (single type filter),
+//	types (comma-separated type list for category filtering),
+//	zone, zone_id, person, person_id, q (FTS5 query), mode (expert|simple).
 //
 // GET /api/events/{id} — single event by ID.
 //
@@ -268,6 +271,7 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	// Parse filters
 	q := r.URL.Query().Get("q")
 	eventType := r.URL.Query().Get("type")
+	typesStr := r.URL.Query().Get("types") // comma-separated list of event types
 	zone := r.URL.Query().Get("zone")
 	zoneID := r.URL.Query().Get("zone_id")
 	if zoneID != "" {
@@ -282,6 +286,22 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	sinceStr := r.URL.Query().Get("since") // Alias for after
 	untilStr := r.URL.Query().Get("until") // Upper bound timestamp
 	mode := r.URL.Query().Get("mode")      // "expert" or "simple" (default: simple)
+
+	// Parse and validate types list (comma-separated)
+	var typesFilter []string
+	if typesStr != "" {
+		for _, t := range strings.Split(typesStr, ",") {
+			t = strings.TrimSpace(t)
+			if t == "" {
+				continue
+			}
+			if !isValidEventType(t) {
+				writeJSONError(w, http.StatusBadRequest, "invalid event type: "+t)
+				return
+			}
+			typesFilter = append(typesFilter, t)
+		}
+	}
 
 	// Validate event type
 	if eventType != "" && !isValidEventType(eventType) {
@@ -369,6 +389,16 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	if eventType != "" {
 		whereSQL += " AND " + p + "type = ?"
 		whereArgs = append(whereArgs, eventType)
+	} else if len(typesFilter) > 0 {
+		// Multiple type filter (from category checkboxes)
+		ph := make([]string, len(typesFilter))
+		for i := range ph {
+			ph[i] = "?"
+		}
+		whereSQL += " AND " + p + "type IN (" + strings.Join(ph, ", ") + ")"
+		for _, t := range typesFilter {
+			whereArgs = append(whereArgs, t)
+		}
 	} else if isSimpleMode {
 		// In simple mode with no explicit type filter, only show person-relevant event types
 		// Build IN clause for simple mode types
