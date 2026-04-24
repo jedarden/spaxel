@@ -95,6 +95,14 @@ describe('CommandPaletteManager', function () {
         it('"bedrm" → "Bedroom" scores >= 0.3', function () {
             expect(fuzzyScore('bedrm', 'Bedroom')).toBeGreaterThanOrEqual(0.3);
         });
+
+        it('"flr pln" → "Toggle floor plan" scores >= 0.3 (fuzzy multi-word)', function () {
+            expect(fuzzyScore('flr pln', 'Toggle floor plan')).toBeGreaterThanOrEqual(0.3);
+        });
+
+        it('"brth" → "Help: breathing detection" scores >= 0.3 (subsequence)', function () {
+            expect(fuzzyScore('brth', 'Help: breathing detection')).toBeGreaterThanOrEqual(0.3);
+        });
     });
 
     // ── Time parsing ─────────────────────────────────────────────────────────
@@ -189,6 +197,20 @@ describe('CommandPaletteManager', function () {
             var d = parse('@');
             expect(d).toBeNull();
         });
+
+        it('@this morning → today at 06:00', function () {
+            var d = parse('@this morning');
+            expect(d).not.toBeNull();
+            expect(d.getHours()).toBe(6);
+            expect(d.getMinutes()).toBe(0);
+        });
+
+        it('@last night → yesterday at 22:00 (after 6am)', function () {
+            var d = parse('@last night');
+            expect(d).not.toBeNull();
+            expect(d.getHours()).toBe(22);
+            expect(d.getMinutes()).toBe(0);
+        });
     });
 
     // ── Commands registry completeness ───────────────────────────────────────
@@ -220,7 +242,32 @@ describe('CommandPaletteManager', function () {
             'Export all events CSV',
             'Show link health table',
             'Run diagnostics',
-            'Check firmware updates'
+            'Check firmware updates',
+            // Security commands
+            'Arm security',
+            'Disarm security',
+            // Appearance commands
+            'Dark mode',
+            'Light mode',
+            // Actions
+            'Add node',
+            'Re-baseline all links',
+            'Export config',
+            // View presets
+            'Camera: Top view',
+            'Camera: Front view',
+            'Camera: Perspective',
+            'Toggle trails',
+            'Toggle link lines',
+            'Toggle floor plan',
+            'Toggle coverage overlay',
+            // Help
+            'Help: fall detection',
+            'Help: breathing detection',
+            'Help: how does prediction work',
+            'Help: why false positive',
+            'Help: troubleshoot detection',
+            'Help: keyboard shortcuts'
         ];
 
         REQUIRED_COMMANDS.forEach(function (label) {
@@ -539,6 +586,62 @@ describe('CommandPaletteManager', function () {
             if (!search) return;
             var results = search('@zzznottimestamp');
             expect(results.length).toBe(0);
+        });
+
+        it('search for "arm" finds "Arm security"', function () {
+            var search = window.CommandPaletteManager._search;
+            if (!search) return;
+            var results = search('arm');
+            expect(results.length).toBeGreaterThan(0);
+            var labels = results.map(function (r) { return r.label; });
+            expect(labels).toContain('Arm security');
+        });
+
+        it('search for "disarm" finds "Disarm security"', function () {
+            var search = window.CommandPaletteManager._search;
+            if (!search) return;
+            var results = search('disarm');
+            expect(results.length).toBeGreaterThan(0);
+            var labels = results.map(function (r) { return r.label; });
+            expect(labels).toContain('Disarm security');
+        });
+
+        it('search for "help" returns help topic commands', function () {
+            var search = window.CommandPaletteManager._search;
+            if (!search) return;
+            var results = search('help');
+            expect(results.length).toBeGreaterThan(0);
+            var helpResults = results.filter(function (r) {
+                return r.category === 'command' && r.label.indexOf('Help:') === 0;
+            });
+            expect(helpResults.length).toBeGreaterThan(0);
+        });
+
+        it('search for "dark mode" finds the command', function () {
+            var search = window.CommandPaletteManager._search;
+            if (!search) return;
+            var results = search('dark mode');
+            expect(results.length).toBeGreaterThan(0);
+            var labels = results.map(function (r) { return r.label; });
+            expect(labels).toContain('Dark mode');
+        });
+
+        it('search for "@this morning" returns a time result', function () {
+            var search = window.CommandPaletteManager._search;
+            if (!search) return;
+            var results = search('@this morning');
+            expect(results.length).toBeGreaterThan(0);
+            expect(results[0].category).toBe('time');
+        });
+
+        it('command results include hint field', function () {
+            var search = window.CommandPaletteManager._search;
+            if (!search) return;
+            var results = search('settings');
+            var settingsResult = results.find(function (r) { return r.id === 'nav-settings'; });
+            if (settingsResult) {
+                expect(typeof settingsResult.hint).toBe('string');
+            }
         });
     });
 });

@@ -186,6 +186,25 @@
             if (!isNaN(dt.getTime())) return dt;
         }
 
+        // @this morning → today at 06:00
+        if (/^this\s+morning$/i.test(s)) {
+            var morning = new Date(now);
+            morning.setHours(6, 0, 0, 0);
+            return morning;
+        }
+
+        // @last night → yesterday at 22:00
+        if (/^last\s+night$/i.test(s)) {
+            var lastNight = new Date(now);
+            lastNight.setHours(22, 0, 0, 0);
+            if (now.getHours() < 6) {
+                // Before 6am — "last night" was yesterday
+            } else {
+                lastNight.setDate(lastNight.getDate() - 1);
+            }
+            return lastNight;
+        }
+
         // @yesterday ...
         var yest = s.match(/^yesterday\s+(.+)$/i);
         if (yest) {
@@ -232,7 +251,7 @@
             category: 'command',
             group: 'Navigation',
             icon: '⚙',
-            hint: '',
+            hint: 'Ctrl+,',
             action: function () { window.location.href = '/settings'; }
         },
         {
@@ -471,6 +490,253 @@
                     if (window.showToast) window.showToast('Could not fetch firmware info', 'warning');
                 });
             }
+        },
+        // ---- Security ----
+        {
+            id: 'security-arm',
+            label: 'Arm security',
+            category: 'command',
+            group: 'Security',
+            icon: '🛡',
+            hint: '',
+            action: function () {
+                fetch('/api/security/arm', { method: 'POST' }).then(function () {
+                    if (window.showToast) window.showToast('Security mode armed', 'info');
+                });
+            }
+        },
+        {
+            id: 'security-disarm',
+            label: 'Disarm security',
+            category: 'command',
+            group: 'Security',
+            icon: '🔓',
+            hint: '',
+            action: function () {
+                fetch('/api/security/disarm', { method: 'POST' }).then(function () {
+                    if (window.showToast) window.showToast('Security mode disarmed', 'info');
+                });
+            }
+        },
+        // ---- Appearance ----
+        {
+            id: 'theme-dark',
+            label: 'Dark mode',
+            category: 'command',
+            group: 'Appearance',
+            icon: '🌙',
+            hint: '',
+            action: function () {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                try { localStorage.setItem('spaxel-theme', 'dark'); } catch (e) {}
+                if (window.showToast) window.showToast('Dark mode enabled', 'info');
+            }
+        },
+        {
+            id: 'theme-light',
+            label: 'Light mode',
+            category: 'command',
+            group: 'Appearance',
+            icon: '☀',
+            hint: '',
+            action: function () {
+                document.documentElement.setAttribute('data-theme', 'light');
+                try { localStorage.setItem('spaxel-theme', 'light'); } catch (e) {}
+                if (window.showToast) window.showToast('Light mode enabled', 'info');
+            }
+        },
+        // ---- Actions ----
+        {
+            id: 'add-node',
+            label: 'Add node',
+            category: 'command',
+            group: 'Actions',
+            icon: '🔌',
+            hint: '',
+            action: function () {
+                if (window.OnboardWizard && window.OnboardWizard.start) window.OnboardWizard.start();
+                else window.location.href = '/onboard';
+            }
+        },
+        {
+            id: 'rebaseline-all',
+            label: 'Re-baseline all links',
+            category: 'command',
+            group: 'Actions',
+            icon: '🎯',
+            hint: '',
+            action: function () {
+                fetch('/api/nodes/rebaseline-all', { method: 'POST' }).then(function () {
+                    if (window.showToast) window.showToast('Re-baseline started for all links', 'info');
+                });
+            }
+        },
+        {
+            id: 'export-config',
+            label: 'Export config',
+            category: 'command',
+            group: 'Actions',
+            icon: '📦',
+            hint: '',
+            action: function () {
+                var a = document.createElement('a');
+                a.href = '/api/export';
+                a.download = 'spaxel-config.json';
+                a.click();
+            }
+        },
+        {
+            id: 'view-top',
+            label: 'Camera: Top view',
+            category: 'command',
+            group: 'View',
+            icon: '⬆',
+            hint: '',
+            action: function () {
+                if (window.Viz3D && window.Viz3D.setViewPreset) window.Viz3D.setViewPreset('topdown');
+            }
+        },
+        {
+            id: 'view-front',
+            label: 'Camera: Front view',
+            category: 'command',
+            group: 'View',
+            icon: '👁',
+            hint: '',
+            action: function () {
+                if (window.Viz3D && window.Viz3D.setViewPreset) window.Viz3D.setViewPreset('front');
+            }
+        },
+        {
+            id: 'view-perspective',
+            label: 'Camera: Perspective',
+            category: 'command',
+            group: 'View',
+            icon: '🎲',
+            hint: '',
+            action: function () {
+                if (window.Viz3D && window.Viz3D.setViewPreset) window.Viz3D.setViewPreset('perspective');
+            }
+        },
+        {
+            id: 'view-trails',
+            label: 'Toggle trails',
+            category: 'command',
+            group: 'View',
+            icon: '👣',
+            hint: '',
+            action: function () {
+                if (window.Viz3D && window.Viz3D.toggleTrails) window.Viz3D.toggleTrails();
+            }
+        },
+        {
+            id: 'view-links',
+            label: 'Toggle link lines',
+            category: 'command',
+            group: 'View',
+            icon: '🔗',
+            hint: '',
+            action: function () {
+                if (window.Viz3D && window.Viz3D.toggleLinks) window.Viz3D.toggleLinks();
+            }
+        },
+        {
+            id: 'view-floorplan',
+            label: 'Toggle floor plan',
+            category: 'command',
+            group: 'View',
+            icon: '🗺',
+            hint: '',
+            action: function () {
+                if (window.Viz3D && window.Viz3D.toggleFloorPlan) window.Viz3D.toggleFloorPlan();
+            }
+        },
+        {
+            id: 'view-coverage',
+            label: 'Toggle coverage overlay',
+            category: 'command',
+            group: 'View',
+            icon: '🟩',
+            hint: '',
+            action: function () {
+                if (window.Viz3D && window.Viz3D.toggleCoverageOverlay) window.Viz3D.toggleCoverageOverlay();
+            }
+        },
+        // ---- Help ----
+        {
+            id: 'help-fall-detection',
+            label: 'Help: fall detection',
+            category: 'command',
+            group: 'Help',
+            icon: '❓',
+            hint: '',
+            action: function () {
+                if (window.HelpOverlay && window.HelpOverlay.openTopic) window.HelpOverlay.openTopic('fall-detection');
+                else if (window.HelpOverlay && window.HelpOverlay.toggle) window.HelpOverlay.toggle();
+            }
+        },
+        {
+            id: 'help-breathing',
+            label: 'Help: breathing detection',
+            category: 'command',
+            group: 'Help',
+            icon: '❓',
+            hint: '',
+            action: function () {
+                if (window.HelpOverlay && window.HelpOverlay.openTopic) window.HelpOverlay.openTopic('breathing');
+                else if (window.HelpOverlay && window.HelpOverlay.toggle) window.HelpOverlay.toggle();
+            }
+        },
+        {
+            id: 'help-prediction',
+            label: 'Help: how does prediction work',
+            category: 'command',
+            group: 'Help',
+            icon: '❓',
+            hint: '',
+            action: function () {
+                if (window.HelpOverlay && window.HelpOverlay.openTopic) window.HelpOverlay.openTopic('prediction');
+                else if (window.HelpOverlay && window.HelpOverlay.toggle) window.HelpOverlay.toggle();
+            }
+        },
+        {
+            id: 'help-why-false-positive',
+            label: 'Help: why false positive',
+            category: 'command',
+            group: 'Help',
+            icon: '❓',
+            hint: '',
+            action: function () {
+                if (window.Explainability && window.Explainability.showLastIncorrect) {
+                    window.Explainability.showLastIncorrect();
+                } else if (window.HelpOverlay && window.HelpOverlay.openTopic) {
+                    window.HelpOverlay.openTopic('false-positives');
+                }
+            }
+        },
+        {
+            id: 'help-troubleshoot',
+            label: 'Help: troubleshoot detection',
+            category: 'command',
+            group: 'Help',
+            icon: '❓',
+            hint: '',
+            action: function () {
+                if (window.Troubleshoot && window.Troubleshoot.open) window.Troubleshoot.open();
+                else if (window.HelpOverlay && window.HelpOverlay.openTopic) window.HelpOverlay.openTopic('troubleshoot');
+            }
+        },
+        {
+            id: 'help-shortcuts',
+            label: 'Help: keyboard shortcuts',
+            category: 'command',
+            group: 'Help',
+            icon: '⌨',
+            hint: '',
+            action: function () {
+                if (window.HelpOverlay && window.HelpOverlay.openTopic) window.HelpOverlay.openTopic('shortcuts');
+                else if (window.HelpOverlay && window.HelpOverlay.toggle) window.HelpOverlay.toggle();
+            }
         }
     ];
 
@@ -593,6 +859,7 @@
                     category: 'command',
                     icon:     cmd.icon,
                     secondary: cmd.group || '',
+                    hint:     cmd.hint || '',
                     score:    s,
                     action:   cmd.action
                 });
@@ -762,6 +1029,7 @@
             }
 
             var selectedClass = (i === Manager.selectedIndex) ? ' cp-item-selected' : '';
+            var hintHtml = item.hint ? '    <kbd class="cp-item-hint">' + escapeHtml(item.hint) + '</kbd>' : '';
             html +=
                 '<li class="cp-item' + selectedClass + '" data-index="' + i + '" role="option"' +
                 '  aria-selected="' + (i === Manager.selectedIndex) + '">' +
@@ -770,6 +1038,7 @@
                 '    <span class="cp-item-label">' + escapeHtml(item.label) + '</span>' +
                 '    <span class="cp-item-secondary">' + escapeHtml(item.secondary || '') + '</span>' +
                 '  </span>' +
+                hintHtml +
                 '  <span class="cp-item-arrow">›</span>' +
                 '</li>';
 
@@ -836,6 +1105,7 @@
         init: function () {
             // Register Ctrl+K / Cmd+K globally
             document.addEventListener('keydown', this._onKeydown.bind(this));
+            this._initShortcutHint();
         },
 
         open: function () {
@@ -864,6 +1134,7 @@
             }
 
             this._showItems([]);
+            this._dismissHint();
         },
 
         close: function () {
@@ -949,6 +1220,36 @@
             if (!list) return;
             var sel = list.querySelector('.cp-item-selected');
             if (sel) sel.scrollIntoView({ block: 'nearest' });
+        },
+
+        _initShortcutHint: function () {
+            var hint = document.getElementById('cp-shortcut-hint');
+            if (!hint) return;
+
+            // Show correct modifier for platform
+            var kbd = document.getElementById('cp-kbd');
+            if (kbd && navigator.platform && /Mac|iPod|iPhone|iPad/.test(navigator.platform)) {
+                kbd.textContent = '⌘K';
+            }
+
+            // Dismiss after first palette open
+            var DISMISSED_KEY = 'spaxel_palette_hint_dismissed';
+            if (localStorage.getItem(DISMISSED_KEY)) {
+                hint.classList.add('cp-shortcut-hint-dismissed');
+            }
+
+            // Click opens palette
+            hint.addEventListener('click', function () {
+                Manager.open();
+            });
+        },
+
+        _dismissHint: function () {
+            var hint = document.getElementById('cp-shortcut-hint');
+            if (hint) {
+                hint.classList.add('cp-shortcut-hint-dismissed');
+                try { localStorage.setItem('spaxel_palette_hint_dismissed', '1'); } catch (e) {}
+            }
         }
     };
 
