@@ -424,7 +424,7 @@
      * This helps devices that can't maintain 60 FPS by reducing rendering load.
      */
     function detectStrugglingDevice() {
-        if (!isMobile()) return; // Only cap frame rate on mobile
+        if (!isMobile() || !CONFIG.autoDetectStrugglingDevice) return;
 
         // Calculate current FPS based on actual frame rendering time
         // Use the elapsed time since last frame was RENDERED (after frame skipping)
@@ -2120,6 +2120,27 @@
     // ============================================
     function init() {
         console.log('[Spaxel] Dashboard initializing...');
+
+        // Parse frame rate cap from URL parameter before renderer init
+        // ?maxFps=30  → cap at 30 FPS on mobile (default for struggling devices)
+        // ?maxFps=60  → no cap, let auto-detection decide
+        // ?maxFps=0   → disable frame rate capping and auto-detection entirely
+        const urlParams = new URLSearchParams(window.location.search);
+        const maxFpsParam = urlParams.get('maxFps');
+        if (maxFpsParam !== null) {
+            const fps = parseInt(maxFpsParam, 10);
+            if (!isNaN(fps) && fps >= 0 && fps <= 60) {
+                if (fps === 0) {
+                    CONFIG.autoDetectStrugglingDevice = false;
+                    CONFIG.mobileFrameRateCap = 60;
+                } else {
+                    CONFIG.mobileFrameRateCap = fps;
+                }
+                console.log('[Spaxel] Frame rate cap set to ' + (fps === 0 ? 'disabled' : fps + ' FPS') + ' via URL parameter');
+            } else {
+                console.warn('[Spaxel] Invalid maxFps value: ' + maxFpsParam + ' (must be 0-60)');
+            }
+        }
 
         initScene();
         initChart();
