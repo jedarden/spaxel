@@ -115,6 +115,10 @@ static esp_err_t load_nvs_config(void) {
     len = sizeof(g_state.ms_ip);
     nvs_get_str(nvs, NVS_KEY_MS_IP, g_state.ms_ip, &len);
 
+    // Load provisioning-time IP override
+    len = sizeof(g_state.ms_ip_prov);
+    nvs_get_str(nvs, NVS_KEY_MS_IP_PROV, g_state.ms_ip_prov, &len);
+
     // Load node ID
     len = sizeof(g_state.node_id);
     nvs_get_str(nvs, NVS_KEY_NODE_ID, g_state.node_id, &len);
@@ -236,14 +240,24 @@ static void state_machine_task(void *arg) {
                     char ms_ip[64] = {0};
                     uint16_t ms_port = g_state.ms_port;
 
-                    // Try mDNS first
+                    // 1. Try provisioned IP override first (for mDNS-less networks)
+                    if (strlen(g_state.ms_ip_prov) > 0) {
+                        ESP_LOGI(TAG, "Trying provisioned mothership IP: %s:%d", g_state.ms_ip_prov, ms_port);
+                        strncpy(g_state.ms_ip, g_state.ms_ip_prov, sizeof(g_state.ms_ip) - 1);
+                        // Skip mDNS on first attempt if provisioned IP is set
+                        if (discovery_fail_count == 0) {
+                            goto attempt_connect;
+                        }
+                    }
+
+                    // 2. Try mDNS discovery
                     if (wifi_discover_mothership(ms_ip, sizeof(ms_ip), &ms_port)) {
                         ESP_LOGI(TAG, "Mothership discovered via mDNS: %s:%d", ms_ip, ms_port);
                         strncpy(g_state.ms_ip, ms_ip, sizeof(g_state.ms_ip) - 1);
                         g_state.ms_port = ms_port;
                         discovery_fail_count = 0;
                     } else if (strlen(g_state.ms_ip) > 0) {
-                        // Fallback to cached IP
+                        // 3. Fallback to cached IP
                         ESP_LOGI(TAG, "Using cached mothership IP: %s", g_state.ms_ip);
                     } else {
                         discovery_fail_count++;
@@ -257,6 +271,8 @@ static void state_machine_task(void *arg) {
                         vTaskDelay(pdMS_TO_TICKS(5000));
                         break;
                     }
+
+                attempt_connect:
 
                     // Attempt WebSocket connection
                     if (websocket_connect(g_state.ms_ip, g_state.ms_port)) {
