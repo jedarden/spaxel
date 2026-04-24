@@ -26,7 +26,7 @@
 .ble-error {
     background: var(--alert-bg);
     border: 1px solid var(--alert-border);
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     padding: 16px;
     color: var(--alert);
     font-size: 13px;
@@ -38,7 +38,7 @@
     padding: 6px 12px;
     background: var(--alert-muted);
     border: 1px solid var(--alert-border);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: var(--alert);
     font-size: var(--text-xs);
     cursor: pointer;
@@ -139,7 +139,7 @@
     width: 24px;
     height: 24px;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     font-size: var(--text-sm);
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
@@ -206,7 +206,7 @@
     padding: 8px 10px;
     background: var(--border-subtle);
     border: 1px solid var(--border-strong);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: var(--slate-12);
     font-size: 13px;
     box-sizing: border-box;
@@ -222,7 +222,7 @@
 .ble-form-group select:focus {
     outline: none;
     border-color: var(--blue-9);
-    box-shadow: 0 0 0 2px rgba(171, 71, 188, 0.15);
+    box-shadow: 0 0 0 2px var(--blue-border);
 }
 
 .ble-form-actions {
@@ -236,7 +236,7 @@
     padding: 8px 16px;
     background: var(--bg-hover);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: var(--slate-11);
     font-size: 13px;
     cursor: pointer;
@@ -251,7 +251,7 @@
     padding: 8px 16px;
     background: var(--blue-9);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: var(--text-on-accent);
     font-size: 13px;
     font-weight: 500;
@@ -267,7 +267,7 @@
     padding: 8px 16px;
     background: var(--bg-hover);
     border: 1px solid var(--border-strong);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: var(--slate-11);
     font-size: 13px;
     cursor: pointer;
@@ -283,7 +283,7 @@
     padding: 8px 16px;
     background: var(--alert-muted);
     border: 1px solid var(--alert-border);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: var(--alert);
     font-size: 13px;
     cursor: pointer;
@@ -353,7 +353,7 @@
     gap: 8px;
     padding: 6px 8px;
     background: var(--border-subtle);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     font-size: 11px;
 }
 
@@ -377,8 +377,8 @@
    ============================================ */
 
 .ble-privacy-notice {
-    background: rgba(171, 71, 188, 0.1);
-    border: 1px solid rgba(171, 71, 188, 0.2);
+    background: var(--blue-muted);
+    border: 1px solid var(--blue-border);
     border-radius: var(--radius-control);
     padding: 10px 12px;
     margin-bottom: 16px;

@@ -107,7 +107,7 @@
 	background: var(--bg-input);
 	border-left: 4px solid var(--blue-7);
 	padding: 12px;
-	border-radius: 4px;
+	border-radius: var(--radius-control);
 	font-size: var(--text-sm);
 	color: var(--slate-6);
 }
@@ -168,7 +168,7 @@
 .ap-btn-primary:hover {
 	background: var(--bg-hover);
 	transform: translateY(-1px);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 4px 8px var(--overlay);
 }
 
 .ap-btn-secondary {

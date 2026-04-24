@@ -26,7 +26,7 @@
 .guided-help-panel {
     background: var(--bg-card);
     border: 1px solid var(--blue-border);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     box-shadow: 0 8px 32px var(--shadow-xl), 0 0 0 1px var(--blue-muted);
     width: 380px;
     max-width: calc(100vw - 40px);
@@ -39,7 +39,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px 20px;
-    background: linear-gradient(135deg, var(--blue-muted), rgba(41, 182, 246, 0.1));
+    background: linear-gradient(135deg, var(--blue-muted), var(--blue-muted));
     border-bottom: 1px solid var(--blue-muted);
 }
 
@@ -74,7 +74,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     transition: background 0.2s, color 0.2s;
 }
 

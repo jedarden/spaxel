@@ -15,7 +15,7 @@
 .panel-loading-spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid rgba(76, 195, 247, 0.2);
+    border: 3px solid var(--blue-border);
     border-top-color: var(--blue-10);
     border-radius: 50%;
     animation: explainability-spin 1s linear infinite;
@@ -178,7 +178,7 @@
 
 /* ----- Table Cells ----- */
 .link-cell {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
 }
 
@@ -187,7 +187,7 @@
 }
 
 .deltarms-cell {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-family: var(--font-mono);
     color: var(--ok);
 }
 
@@ -199,14 +199,14 @@
     display: inline-block;
     min-width: 20px;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     font-size: 11px;
     font-weight: 600;
     text-align: center;
 }
 
 .weight-cell {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-family: var(--font-mono);
     color: var(--warn);
 }
 
@@ -233,7 +233,7 @@
 }
 
 .contribution-cell {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-family: var(--font-mono);
     color: var(--blue-9);
     font-size: 11px;
 }
@@ -241,7 +241,7 @@
 /* ----- BLE Match Card ----- */
 .ble-match-card {
     background: var(--border-subtle);
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     padding: 12px;
 }
 
@@ -289,7 +289,7 @@
 
 .detail-value {
     color: var(--slate-11);
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 /* ----- Footer ----- */

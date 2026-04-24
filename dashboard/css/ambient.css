@@ -242,7 +242,7 @@ body.ambient-mode {
     width: 20px;
     height: 3px;
     background: currentColor;
-    border-radius: 2px;
+    border-radius: var(--radius-control);
     opacity: 0.5;
 }
 
@@ -266,7 +266,7 @@ body.ambient-mode {
     position: absolute;
     padding: 6px 12px;
     background: var(--slate-4);
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     font-size: 13px;
     font-weight: 500;
     color: var(--text-primary);
@@ -364,7 +364,7 @@ body.ambient-mode {
 
 .ambient-alert-btn {
     padding: 14px 28px;
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     font-size: var(--text-base);
     font-weight: 600;
     cursor: pointer;
@@ -432,7 +432,7 @@ body.ambient-mode {
 .ambient-briefing-section {
     background: var(--border-strong);
     padding: 16px 20px;
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     margin-bottom: 12px;
     text-align: left;
 }
@@ -456,7 +456,7 @@ body.ambient-mode {
     border: none;
     color: var(--text-on-accent);
     padding: 12px 24px;
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;

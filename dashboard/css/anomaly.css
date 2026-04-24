@@ -363,7 +363,7 @@
     width: 120px;
     height: 6px;
     background: var(--bg-input);
-    border-radius: 3px;
+    border-radius: var(--radius-control);
     overflow: hidden;
 }
 
@@ -371,7 +371,7 @@
     height: 100%;
     background: linear-gradient(90deg, var(--blue-10), var(--ok));
     transition: width 0.5s ease-out;
-    border-radius: 3px;
+    border-radius: var(--radius-control);
 }
 
 .days-remaining {
@@ -387,7 +387,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    border-radius: 20px;
+    border-radius: var(--radius-modal);
     font-size: var(--text-xs);
     font-weight: 600;
     background: var(--bg-card);
@@ -444,7 +444,7 @@
     cursor: pointer;
     padding: 2px;
     margin-left: 4px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     color: inherit;
     opacity: 0.7;
     transition: opacity 0.2s;
@@ -602,7 +602,7 @@
     cursor: pointer;
     padding: 4px;
     line-height: 1;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
 }
 
 .security-dialog-close:hover {
@@ -776,7 +776,7 @@
 .anomaly-history-score {
     font-size: var(--text-xs);
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     font-weight: 600;
     flex-shrink: 0;
 }
@@ -799,7 +799,7 @@
 .anomaly-history-feedback {
     font-size: var(--text-xs);
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     flex-shrink: 0;
 }
 

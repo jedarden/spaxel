@@ -7,8 +7,8 @@
 	transform: translateX(-50%);
 	width: 90%;
 	max-width: 600px;
-	background: rgba(30, 32, 36, 0.95);
-	border-radius: 12px;
+	background: var(--bg-frosted);
+	border-radius: var(--radius-card);
 	padding: 24px;
 	z-index: 200;
 	box-shadow: 0 8px 32px var(--shadow-xl);
@@ -65,7 +65,7 @@
 #briefing-card .briefing-section {
 	margin-bottom: 16px;
 	padding: 12px;
-	border-radius: 8px;
+	border-radius: var(--radius-card);
 	background: var(--border-subtle);
 }
 
@@ -75,32 +75,32 @@
 }
 
 #briefing-card .briefing-section.sleep {
-	background: rgba(102, 187, 106, 0.1);
+	background: var(--section-sleep-bg);
 	border-left: 3px solid var(--ok);
 }
 
 #briefing-card .briefing-section.people {
-	background: rgba(33, 150, 243, 0.1);
+	background: var(--section-people-bg);
 	border-left: 3px solid var(--blue-9);
 }
 
 #briefing-card .briefing-section.anomaly {
-	background: rgba(255, 193, 7, 0.1);
+	background: var(--section-anomaly-bg);
 	border-left: 3px solid var(--warn);
 }
 
 #briefing-card .briefing-section.health {
-	background: rgba(158, 158, 158, 0.1);
+	background: var(--section-health-bg);
 	border-left: 3px solid var(--slate-10);
 }
 
 #briefing-card .briefing-section.prediction {
-	background: rgba(156, 39, 176, 0.1);
+	background: var(--section-predict-bg);
 	border-left: 3px solid var(--blue-8);
 }
 
 #briefing-card .briefing-section.learning {
-	background: rgba(255, 112, 67, 0.1);
+	background: var(--section-learn-bg);
 	border-left: 3px solid var(--warn);
 }
 
@@ -221,8 +221,8 @@
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
-	background: rgba(30, 32, 36, 0.98);
-	border-radius: 12px;
+	background: var(--bg-frosted-strong);
+	border-radius: var(--radius-card);
 	padding: 24px;
 	z-index: 300;
 	min-width: 400px;
@@ -267,7 +267,7 @@
 	width: 44px;
 	height: 24px;
 	background: var(--bg-hover);
-	border-radius: 12px;
+	border-radius: var(--radius-card);
 	cursor: pointer;
 	transition: background 0.2s;
 }

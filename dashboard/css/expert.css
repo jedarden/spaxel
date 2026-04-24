@@ -70,7 +70,7 @@
 .panel-form-group input[type="range"]::-webkit-slider-runnable-track {
     height: 6px;
     background: var(--bg-hover);
-    border-radius: 3px;
+    border-radius: var(--radius-control);
     margin: 19px 0; /* Center track within 44px height */
 }
 
@@ -93,7 +93,7 @@
 .panel-form-group input[type="range"]::-moz-range-track {
     height: 6px;
     background: var(--bg-hover);
-    border-radius: 3px;
+    border-radius: var(--radius-control);
 }
 
 .panel-form-group input[type="range"]::-moz-range-thumb {
@@ -290,7 +290,7 @@ body.simple-mode #scene-container {
     left: 0;
     right: 0;
     height: 40px;
-    background: rgba(0, 0, 0, 0.9);
+    background: var(--overlay-panel);
     z-index: 100;
     display: flex;
     align-items: center;
