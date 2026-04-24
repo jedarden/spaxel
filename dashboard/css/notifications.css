@@ -33,7 +33,7 @@
 /* Channel Cards */
 .channels-list {
 	display: grid;
-	gapvar(--space-375);
+	gap: var(--space-375);
 	margin-bottom: var(--space-5);
 }
 
@@ -41,7 +41,7 @@
 	background: var(--bg-hover);
 	border: 1px solid var(--slate-5);
 	border-radius: var(--radius-card);
-	paddingvar(--space-375);
+	padding: var(--space-375);
 }
 
 .channel-header {
@@ -60,7 +60,7 @@
 
 .channel-actions {
 	display: flex;
-	gapvar(--space-250);
+	gap: var(--space-250);
 }
 
 .channel-details {
@@ -109,7 +109,7 @@
 	border: none;
 	font-size: var(--text-xl);
 	cursor: pointer;
-	paddingvar(--space-125);
+	padding: var(--space-125);
 	opacity: 0.7;
 	transition: opacity 0.2s;
 }
@@ -128,7 +128,7 @@
 .checkbox-label {
 	display: flex;
 	align-items: center;
-	gapvar(--space-250);
+	gap: var(--space-250);
 	color: var(--text-on-accent);
 	cursor: pointer;
 }
@@ -147,7 +147,7 @@
 .time-field {
 	display: flex;
 	flex-direction: column;
-	gapvar(--space-125);
+	gap: var(--space-125);
 }
 
 .time-field label {
@@ -167,18 +167,18 @@
 .days-selector {
 	display: flex;
 	flex-direction: column;
-	gapvar(--space-250);
+	gap: var(--space-250);
 }
 
 .day-checkbox {
 	display: flex;
-	gapvar(--space-375);
+	gap: var(--space-375);
 }
 
 .day-checkbox-label {
 	display: flex;
 	align-items: center;
-	gapvar(--space-125);
+	gap: var(--space-125);
 	color: var(--text-on-accent);
 	cursor: pointer;
 	font-size: 0.9em;
@@ -194,14 +194,14 @@
 .batching-config {
 	display: flex;
 	flex-direction: column;
-	gapvar(--space-375);
+	gap: var(--space-375);
 }
 
 .batch-window,
 .max-batch-size {
 	display: flex;
 	flex-direction: column;
-	gapvar(--space-125);
+	gap: var(--space-125);
 }
 
 .batch-window label,
@@ -231,8 +231,8 @@
 .event-type-toggle {
 	display: flex;
 	align-items: center;
-	gapvar(--space-375);
-	paddingvar(--space-250);
+	gap: var(--space-375);
+	padding: var(--space-250);
 	background: var(--bg-hover);
 	border-radius: var(--radius-control);
 }
@@ -283,8 +283,8 @@
 	content: "";
 	height: 18px;
 	width: 18px;
-	leftvar(--space-075);
-	bottomvar(--space-075);
+	left: var(--space-075);
+	bottom: var(--space-075);
 	background-color: var(--text-on-accent);
 	transition: 0.3s;
 	border-radius: 50%;
@@ -344,7 +344,7 @@
 	color: var(--text-muted);
 	font-size: var(--text-3xl);
 	cursor: pointer;
-	paddingvar(--space-125);
+	padding: var(--space-125);
 	line-height: 1;
 }
 
@@ -382,7 +382,7 @@
 
 .auth-fields {
 	display: flex;
-	gapvar(--space-250);
+	gap: var(--space-250);
 }
 
 .auth-fields input {
@@ -403,12 +403,12 @@
 #modal-event-types {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
-	gapvar(--space-250);
+	gap: var(--space-250);
 }
 
 .form-actions {
 	display: flex;
-	gapvar(--space-250);
+	gap: var(--space-250);
 	justify-content: flex-end;
 	margin-top: var(--space-5);
 }
@@ -416,8 +416,8 @@
 /* Toast Notifications */
 .toast {
 	position: fixed;
-	bottomvar(--space-5);
-	rightvar(--space-5);
+	bottom: var(--space-5);
+	right: var(--space-5);
 	padding: 15px var(--space-5);
 	border-radius: var(--radius-card);
 	color: var(--text-on-accent);
@@ -466,16 +466,16 @@
 /* Responsive Design */
 @media (max-width: 600px) {
 	.notification-settings {
-		paddingvar(--space-375);
+		padding: var(--space-375);
 	}
 
 	.settings-section {
-		paddingvar(--space-375);
+		padding: var(--space-375);
 	}
 
 	.time-range {
 		flex-direction: column;
-		gapvar(--space-250);
+		gap: var(--space-250);
 	}
 
 	.channels-list {
@@ -551,7 +551,7 @@
 
 .channel-config-group {
     margin-bottom: var(--space-5);
-    paddingvar(--space-375);
+    padding: var(--space-375);
     background: var(--bg-hover);
     border-radius: var(--radius-control);
 }
@@ -575,14 +575,14 @@
 .panel-days-selector {
     display: flex;
     flex-wrap: wrap;
-    gapvar(--space-250);
+    gap: var(--space-250);
     margin-top: var(--space-250);
 }
 
 .panel-day-checkbox {
     display: flex;
     align-items: center;
-    gapvar(--space-125);
+    gap: var(--space-125);
     color: var(--text-on-accent);
     cursor: pointer;
     font-size: 0.9em;
@@ -597,8 +597,8 @@
 .panel-event-type-toggle {
     display: flex;
     align-items: center;
-    gapvar(--space-375);
-    paddingvar(--space-250);
+    gap: var(--space-375);
+    padding: var(--space-250);
     background: var(--bg-hover);
     border-radius: var(--radius-control);
 }
@@ -648,8 +648,8 @@
     content: "";
     height: 18px;
     width: 18px;
-    leftvar(--space-075);
-    bottomvar(--space-075);
+    left: var(--space-075);
+    bottom: var(--space-075);
     background-color: var(--text-on-accent);
     transition: 0.3s;
     border-radius: 50%;
@@ -666,7 +666,7 @@
 .panel-form-hint {
     color: var(--text-muted);
     font-size: 0.85em;
-    margin-top: -var(--space-2);
+    margin-top: calc(-1 * var(--space-2));
     margin-bottom: var(--space-3);
 }
 

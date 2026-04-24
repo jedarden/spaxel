@@ -23,6 +23,7 @@ const Explainability = (function () {
     let _sidebarPanel = null;
     let _sceneOverlay = null;
     let _viz3dCallbacks = [];  // Store Viz3D cleanup callbacks
+    let _escKeyHandler = null;
 
     // ── Configuration ─────────────────────────────────────────────────────────
     const CONFIG = {
@@ -86,8 +87,18 @@ const Explainability = (function () {
         // Calculate confidence percentage
         var confidencePercent = Math.round(data.confidence * 100);
 
-        var html =
-            '<div class="explainability-confidence">' +
+        var html = '';
+
+        // Blob position display
+        if (data.blob_position) {
+            html += '<div class="blob-position-display">' +
+                'Detected at (<span class="coord">' + data.blob_position[0].toFixed(1) + 'm</span>, ' +
+                '<span class="coord">' + data.blob_position[1].toFixed(1) + 'm</span>, ' +
+                '<span class="coord">' + data.blob_position[2].toFixed(1) + 'm</span>)' +
+                '</div>';
+        }
+
+        html += '<div class="explainability-confidence">' +
             '  <div class="confidence-gauge">' +
             '    <svg viewBox="0 0 36 36" class="confidence-ring">' +
             '      <circle class="confidence-ring-bg" cx="18" cy="18" r="15"/>' +
@@ -107,23 +118,22 @@ const Explainability = (function () {
                 '    <thead>' +
                 '      <tr>' +
                 '        <th>Link</th>' +
+                '        <th>Contribution</th>' +
                 '        <th>deltaRMS</th>' +
                 '        <th>Zone</th>' +
-                '        <th>Weight</th>' +
-                '        <th>Contributing</th>' +
                 '      </tr>' +
                 '    </thead>' +
                 '    <tbody>';
 
             data.contributing_links.forEach(function (link) {
                 var zoneColor = _getZoneColor(link.zone_number);
+                var contribPct = Math.round((link.contribution || 0) * 100);
                 html +=
                     '<tr>' +
                     '  <td class="link-cell"><code class="link-id">' + _shortenMAC(link.node_mac) + ':' + _shortenMAC(link.peer_mac) + '</code></td>' +
+                    '  <td class="contribution-cell">' + contribPct + '%</td>' +
                     '  <td class="deltarms-cell">' + link.delta_rms.toFixed(3) + '</td>' +
                     '  <td class="zone-cell"><span class="zone-badge" style="background:' + zoneColor + '">' + link.zone_number + '</span></td>' +
-                    '  <td class="weight-cell">' + link.weight.toFixed(2) + '</td>' +
-                    '  <td class="contributing-cell"><span class="contributing-badge">✓</span></td>' +
                     '</tr>';
             });
 
@@ -197,19 +207,30 @@ const Explainability = (function () {
         // BLE match section
         if (data.ble_match) {
             var ble = data.ble_match;
+            var bleName = ble.person_label || ble.person_id || 'Unknown';
+            var bleConfidence = ble.confidence || ble.triangulation_confidence || 0;
+            var bleDevice = ble.device_addr || ble.device_mac || '';
+            var bleColor = ble.person_color || '#4488ff';
             html += '<div class="explainability-section">' +
                 '  <h3 class="section-title">BLE Identity Match</h3>' +
                 '  <div class="ble-match-card">' +
                 '    <div class="ble-match-header">' +
-                '      <span class="ble-match-indicator" style="background:' + ble.person_color + '"></span>' +
-                '      <span class="ble-match-name">' + ble.person_label + '</span>' +
-                '      <span class="ble-match-confidence">' + Math.round(ble.confidence * 100) + '% confident</span>' +
+                '      <span class="ble-match-indicator" style="background:' + bleColor + '"></span>' +
+                '      <span class="ble-match-name">' + bleName + '</span>' +
+                '      <span class="ble-match-confidence">' + Math.round(bleConfidence * 100) + '% confident</span>' +
                 '    </div>' +
                 '    <div class="ble-match-details">' +
                 '      <div class="ble-match-detail">' +
                 '        <span class="detail-label">Device:</span>' +
-                '        <code class="detail-value">' + ble.device_addr + '</code>' +
+                '        <code class="detail-value">' + bleDevice + '</code>' +
                 '      </div>';
+
+            if (ble.ble_distance_m !== undefined) {
+                html += '<div class="ble-match-detail">' +
+                    '  <span class="detail-label">Distance:</span>' +
+                    '  <span class="detail-value">' + ble.ble_distance_m.toFixed(1) + 'm from blob</span>' +
+                    '</div>';
+            }
 
             if (ble.reported_by_nodes && ble.reported_by_nodes.length > 0) {
                 html += '<div class="ble-match-detail">' +
@@ -219,6 +240,18 @@ const Explainability = (function () {
             }
 
             html += '    </div>' +
+                '  </div>' +
+                '</div>';
+        } else if (data.all_links && data.all_links.length > 0) {
+            // No BLE match: show "Unknown" identity
+            html += '<div class="explainability-section">' +
+                '  <h3 class="section-title">Identity</h3>' +
+                '  <div class="ble-match-card">' +
+                '    <div class="ble-match-header">' +
+                '      <span class="ble-match-indicator" style="background:#888"></span>' +
+                '      <span class="ble-match-name">Unknown</span>' +
+                '      <span class="ble-match-confidence">no BLE device match</span>' +
+                '    </div>' +
                 '  </div>' +
                 '</div>';
         }
@@ -484,17 +517,60 @@ const Explainability = (function () {
     }
 
     /**
+     * Map a contribution percentage (0-100) to a Fresnel zone color.
+     * Low contribution = pale blue, high contribution = bright yellow.
+     */
+    function _contributionColor(contributionPct) {
+        // Normalize to 0..1 range
+        var t = Math.min(1, Math.max(0, (contributionPct || 0) / 50));
+        // Interpolate from pale blue (0x4FC3F7) to bright yellow (0xFFD700)
+        var r = Math.round(0x4F + t * (0xFF - 0x4F));
+        var g = Math.round(0xC3 + t * (0xD7 - 0xC3));
+        var b = Math.round(0xF7 + t * (0x00 - 0xF7));
+        return (r << 16) | (g << 8) | b;
+    }
+
+    /**
      * Render Fresnel zone ellipsoids for contributing links.
+     * Uses the Fresnel module for proper orientation along the link axis.
      */
     function _renderFresnelZones(explanationData) {
         if (!explanationData.fresnel_zones) return;
 
+        // Build a lookup of contribution percentages by link_id for color mapping
+        var contribMap = {};
+        if (explanationData.contributing_links) {
+            explanationData.contributing_links.forEach(function (link) {
+                contribMap[link.link_id] = (link.contribution || 0) * 100;
+            });
+        }
+
         explanationData.fresnel_zones.forEach(function (zone) {
-            if (window.Viz3D.addFresnelZone) {
+            var pct = contribMap[zone.link_id] || 0;
+            var color = _contributionColor(pct);
+
+            // Try the Fresnel module first (proper orientation along link axis)
+            if (window.Fresnel && zone.tx_pos && zone.rx_pos) {
+                var tx = new THREE.Vector3(zone.tx_pos[0], zone.tx_pos[1], zone.tx_pos[2]);
+                var rx = new THREE.Vector3(zone.rx_pos[0], zone.rx_pos[1], zone.rx_pos[2]);
+                // Derive channel from wavelength: 2.4 GHz channels ≤ 14, 5 GHz > 14
+                var channel = zone.lambda <= 0.07 ? 36 : 6;
+                var ellipsoid = Fresnel.addFresnelEllipsoid(tx, rx, channel, color, {
+                    fillOpacity: 0.1,
+                    wireframeOpacity: 0.4
+                });
+                if (ellipsoid) {
+                    _fresnelMeshes.push(ellipsoid);
+                }
+                return;
+            }
+
+            // Fallback to Viz3D (no orientation, but at least shows ellipsoid at center)
+            if (window.Viz3D && Viz3D.addFresnelZone) {
                 var mesh = Viz3D.addFresnelZone(
                     zone.center_pos[0], zone.center_pos[1], zone.center_pos[2],
                     zone.semi_axes[0], zone.semi_axes[1], zone.semi_axes[2],
-                    CONFIG.fresnelColor,
+                    color,
                     CONFIG.fresnelOpacity
                 );
                 if (mesh) {
@@ -517,10 +593,13 @@ const Explainability = (function () {
             });
         }
 
-        // Remove Fresnel zone meshes
-        _fresnelMeshes.forEach(function (mesh) {
-            if (window.Viz3D) {
-                Viz3D.removeFresnelZone(mesh);
+        // Remove Fresnel zone ellipsoids
+        _fresnelMeshes.forEach(function (item) {
+            // Fresnel module returns { wireframe, fill, data } objects
+            if (item && item.wireframe && window.Fresnel) {
+                Fresnel.removeFresnelEllipsoid(item);
+            } else if (item && window.Viz3D) {
+                Viz3D.removeFresnelZone(item);
             }
         });
         _fresnelMeshes = [];
@@ -531,22 +610,96 @@ const Explainability = (function () {
     // ── API Integration ─────────────────────────────────────────────────────────
 
     function fetchExplanation(blobID) {
-        return fetch('/api/explain/' + encodeURIComponent(blobID))
-            .then(function (response) {
-                if (!response.ok) {
-                    throw new Error('Failed to fetch explanation: ' + response.statusText);
+        // Send a WebSocket request_explain message. The server will respond
+        // with a blob_explain message on the next fusion tick, which app.js
+        // routes to handleExplainSnapshot().
+        if (window.SpaxelWebSocket && SpaxelWebSocket.send) {
+            SpaxelWebSocket.send(JSON.stringify({
+                type: 'request_explain',
+                blob_id: blobID
+            }));
+        } else {
+            // Fallback to REST API if WebSocket not available
+            fetch('/api/explain/' + encodeURIComponent(blobID))
+                .then(function (response) {
+                    if (!response.ok) throw new Error('Failed to fetch explanation');
+                    return response.json();
+                })
+                .then(function (data) {
+                    _explanationData = data;
+                    renderContent(data);
+                    applyXRayOverlay(data);
+                })
+                .catch(function (error) {
+                    console.error('[Explainability] Failed to load explanation:', error);
+                    renderContent(null);
+                });
+        }
+    }
+
+    /**
+     * Handle a blob_explain WebSocket message from the fusion engine.
+     * Called by app.js when a {"type":"blob_explain",...} message arrives.
+     *
+     * @param {number} blobID - The blob ID this snapshot explains
+     * @param {Object} snapshot - The ExplainabilitySnapshot from the server
+     */
+    function handleExplainSnapshot(blobID, snapshot) {
+        // Only process if we're waiting for this blob
+        if (!_isActive || _currentBlobID !== blobID) return;
+
+        _explanationData = _transformSnapshot(snapshot);
+        renderContent(_explanationData);
+        applyXRayOverlay(_explanationData);
+    }
+
+    /**
+     * Transform the WebSocket ExplainabilitySnapshot into the format
+     * expected by renderContent() and the X-ray overlay.
+     */
+    function _transformSnapshot(snap) {
+        if (!snap) return null;
+
+        var data = {
+            confidence: snap.fusion_score || 0,
+            blob_position: snap.blob_position,
+            contributing_links: [],
+            all_links: [],
+            fresnel_zones: [],
+            ble_match: snap.ble_match || null
+        };
+
+        if (snap.per_link_contributions) {
+            snap.per_link_contributions.forEach(function (link) {
+                var entry = {
+                    link_id: link.link_id,
+                    node_mac: link.tx_mac,
+                    peer_mac: link.rx_mac,
+                    delta_rms: link.delta_rms,
+                    zone_number: link.zone_number,
+                    weight: link.combined_weight,
+                    contribution: link.contribution_pct / 100,
+                    contributing: link.contributing
+                };
+
+                if (link.contributing) {
+                    data.contributing_links.push(entry);
                 }
-                return response.json();
-            })
-            .then(function (data) {
-                _explanationData = data;
-                renderContent(data);
-                applyXRayOverlay(data);
-            })
-            .catch(function (error) {
-                console.error('[Explainability] Failed to load explanation:', error);
-                renderContent(null);
+                data.all_links.push(entry);
             });
+        }
+
+        // Sort contributing by contribution descending
+        data.contributing_links.sort(function (a, b) {
+            return b.contribution - a.contribution;
+        });
+
+        // Pass Fresnel zone geometry from the server snapshot
+        if (snap.fresnel_zones) {
+            data.fresnel_zones = snap.fresnel_zones;
+        }
+
+        return data;
     }
 
     // ── Public API ─────────────────────────────────────────────────────────────
@@ -578,6 +731,16 @@ const Explainability = (function () {
 
             // Fetch and display data
             fetchExplanation(blobID);
+
+            // Register Escape key handler to exit explain mode
+            if (!_escKeyHandler) {
+                _escKeyHandler = function(e) {
+                    if (e.key === 'Escape' && _isActive) {
+                        Explainability.close();
+                    }
+                };
+                document.addEventListener('keydown', _escKeyHandler);
+            }
         },
 
         /**
@@ -602,6 +765,12 @@ const Explainability = (function () {
 
             // Restore scene
             restoreScene();
+
+            // Remove Escape key handler
+            if (_escKeyHandler) {
+                document.removeEventListener('keydown', _escKeyHandler);
+                _escKeyHandler = null;
+            }
         },
 
         /**
@@ -628,7 +797,13 @@ const Explainability = (function () {
          */
         getCurrentBlobID: function () {
             return _currentBlobID;
-        }
+        },
+
+        /**
+         * Handle a blob_explain WebSocket message.
+         * Called by app.js when a blob_explain message arrives.
+         */
+        handleExplainSnapshot: handleExplainSnapshot
     };
 })();
 

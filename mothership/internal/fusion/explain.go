@@ -5,6 +5,24 @@ import (
 	"time"
 )
 
+// ExplainFresnelZone holds the Fresnel zone ellipsoid geometry for a link,
+// used by the frontend to render translucent wireframe ellipsoids in the 3D scene.
+type ExplainFresnelZone struct {
+	// LinkID is the canonical link identifier.
+	LinkID string `json:"link_id"`
+	// TXPos is the transmitter position [x, y, z].
+	TXPos [3]float64 `json:"tx_pos"`
+	// RXPos is the receiver position [x, y, z].
+	RXPos [3]float64 `json:"rx_pos"`
+	// Center is the midpoint of the link (ellipsoid centre).
+	Center [3]float64 `json:"center_pos"`
+	// SemiAxes is [b, b, a] where a = semi-major, b = semi-minor.
+	// Ordered for direct use as Three.js scale: X=b, Y=b, Z=a.
+	SemiAxes [3]float64 `json:"semi_axes"`
+	// Lambda is the WiFi wavelength used for the computation.
+	Lambda float64 `json:"lambda"`
+}
+
 // ExplainabilitySnapshot contains all data needed to explain why a specific
 // blob appeared at a specific position. It is emitted alongside each BlobUpdate.
 type ExplainabilitySnapshot struct {
@@ -14,6 +32,8 @@ type ExplainabilitySnapshot struct {
 	BlobPosition [3]float64 `json:"blob_position"`
 	// PerLinkContributions describes how each link contributed to this detection.
 	PerLinkContributions []ExplainLinkContribution `json:"per_link_contributions"`
+	// FresnelZones holds the ellipsoid geometry for contributing links.
+	FresnelZones []ExplainFresnelZone `json:"fresnel_zones"`
 	// BLEMatch is optional identity information if a BLE device matched.
 	BLEMatch *ExplainBLEMatch `json:"ble_match,omitempty"`
 	// FusionScore is the total occupancy grid score at blob position.
@@ -179,6 +199,30 @@ func GenerateExplainabilitySnapshot(
 	}
 
 	snap.PerLinkContributions = contribs
+
+	// Build Fresnel zone ellipsoid data for contributing links.
+	fresnelZones := make([]ExplainFresnelZone, 0)
+	for _, s := range scores {
+		if !s.lm.Motion || s.lm.DeltaRMS <= 0.02 {
+			continue
+		}
+		a, b, _ := ComputeFresnelEllipsoidAxes(s.posA, s.posB, lambda)
+		center := [3]float64{
+			(s.posA.X + s.posB.X) / 2,
+			(s.posA.Y + s.posB.Y) / 2,
+			(s.posA.Z + s.posB.Z) / 2,
+		}
+		fresnelZones = append(fresnelZones, ExplainFresnelZone{
+			LinkID: s.lm.NodeMAC + ":" + s.lm.PeerMAC,
+			TXPos:  [3]float64{s.posA.X, s.posA.Y, s.posA.Z},
+			RXPos:  [3]float64{s.posB.X, s.posB.Y, s.posB.Z},
+			Center: center,
+			SemiAxes: [3]float64{b, b, a}, // X=b, Y=b, Z=a for Three.js scale
+			Lambda:  lambda,
+		})
+	}
+	snap.FresnelZones = fresnelZones
+
 	return snap
 }
 

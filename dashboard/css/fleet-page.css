@@ -66,7 +66,7 @@ body.fleet-page {
 .nav-btn {
     display: flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
     padding: var(--space-2) var(--space-4);
     background: transparent;
     border: 1px solid var(--border-default);
@@ -116,7 +116,7 @@ body.fleet-page {
 
 .summary-item {
     display: flex;
-    gapvar(--space-150);
+    gap: var(--space-150);
 }
 
 .summary-label {
@@ -143,7 +143,7 @@ body.fleet-page {
 .btn {
     display: inline-flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-control);
     font-size: var(--text-sm);
@@ -179,7 +179,7 @@ body.fleet-page {
 
 .btn-action {
     background: var(--ok-muted);
-    color: var(--ok);
+    color: #5bc96c;
     border: 1px solid var(--ok-border);
 }
 
@@ -267,7 +267,7 @@ body.fleet-page {
 .filter-chip {
     display: inline-flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
     padding: var(--space-1) 10px;
     background: var(--blue-muted);
     border: 1px solid var(--blue-border);
@@ -509,7 +509,7 @@ body.fleet-page {
 .status-badge {
     display: inline-flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
     padding: var(--space-1) 10px;
     border-radius: var(--radius-card);
     font-size: var(--text-xs);
@@ -550,6 +550,81 @@ body.fleet-page {
     color: var(--warn);
 }
 
+.status-badge.unpaired .status-dot {
+    background: #fbbf24;
+    animation: pulse 2s infinite;
+}
+
+.status-badge.unpaired {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+}
+
+.node-unpaired-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.fleet-unpaired-banner {
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 8px 0;
+    font-size: 12px;
+    color: #fbbf24;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fleet-unpaired-banner .banner-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.fleet-unpaired-banner .banner-text {
+    flex: 1;
+}
+
+.fleet-unpaired-banner .banner-action {
+    background: rgba(251, 191, 36, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    color: #fbbf24;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.fleet-unpaired-banner .banner-action:hover {
+    background: rgba(251, 191, 36, 0.3);
+}
+
+.action-btn.btn-reprovision {
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.1);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 3px;
+}
+
+.action-btn.btn-reprovision:hover {
+    background: rgba(251, 191, 36, 0.25);
+    color: #fbbf24;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
@@ -559,7 +634,7 @@ body.fleet-page {
 .firmware-version {
     display: flex;
     align-items: center;
-    gapvar(--space-150);
+    gap: var(--space-150);
 }
 
 .firmware-current {
@@ -574,7 +649,7 @@ body.fleet-page {
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    paddingvar(--space-half) var(--space-150);
+    padding: var(--space-half) var(--space-150);
     background: var(--warn-bg);
     border-radius: var(--radius-control);
     font-size: var(--text-2xs);
@@ -694,7 +769,7 @@ body.fleet-page {
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    paddingvar(--space-150);
+    padding: var(--space-150);
     font-size: var(--text-base);
     border-radius: var(--radius-control);
     transition: all 0.2s;
@@ -981,8 +1056,8 @@ body.fleet-page {
    ============================================ */
 .toast-container {
     position: fixed;
-    bottomvar(--space-6);
-    rightvar(--space-6);
+    bottom: var(--space-6);
+    right: var(--space-6);
     z-index: 1100;
     display: flex;
     flex-direction: column;
@@ -1163,9 +1238,9 @@ body.fleet-page {
     }
 
     .toast-container {
-        rightvar(--space-3);
-        leftvar(--space-3);
-        bottomvar(--space-3);
+        right: var(--space-3);
+        left: var(--space-3);
+        bottom: var(--space-3);
     }
 
     .toast {

@@ -2,7 +2,6 @@
  * Spaxel Dashboard - Router
  *
  * Hash-based routing: #live (default), #timeline, #automations, #settings, #ambient, #replay
- * Mode toggle bar in header with active state preserved in localStorage
  */
 
 (function() {
@@ -16,11 +15,6 @@
             title: 'Live',
             icon: '&#x25A0;',
             description: 'Real-time 3D detection view'
-        },
-        simple: {
-            title: 'Simple',
-            icon: '&#x1F3E0;',
-            description: 'Card-based mobile-first UI'
         },
         timeline: {
             title: 'Timeline',
@@ -54,8 +48,6 @@
         }
     };
 
-    const STORAGE_KEY = 'spaxel_active_mode';
-
     // ============================================
     // State
     // ============================================
@@ -71,9 +63,10 @@
      * Initialize the router
      */
     function init() {
-        // Read saved mode from localStorage
-        const savedMode = localStorage.getItem(STORAGE_KEY);
-        const hash = window.location.hash.slice(1) || savedMode || 'live';
+        // Clean up legacy localStorage key
+        localStorage.removeItem('spaxel_active_mode');
+
+        const hash = window.location.hash.slice(1) || 'live';
 
         // Validate hash against available routes
         if (ROUTES[hash]) {
@@ -81,9 +74,6 @@
         } else {
             currentMode = 'live';
         }
-
-        // Create mode toggle bar
-        createModeToggleBar();
 
         // Set initial mode
         setMode(currentMode, false);
@@ -95,57 +85,6 @@
         window.addEventListener('popstate', onPopState);
 
         console.log('[Router] Initialized with mode:', currentMode);
-    }
-
-    /**
-     * Create the mode toggle bar in the header
-     */
-    function createModeToggleBar() {
-        // Check if bar already exists
-        if (document.getElementById('mode-toggle-bar')) {
-            return;
-        }
-
-        const statusBar = document.getElementById('status-bar');
-        if (!statusBar) {
-            console.error('[Router] Status bar not found');
-            return;
-        }
-
-        const bar = document.createElement('div');
-        bar.id = 'mode-toggle-bar';
-        bar.className = 'mode-toggle-bar';
-
-        // Create buttons for each mode
-        Object.keys(ROUTES).forEach(mode => {
-            const route = ROUTES[mode];
-            const btn = document.createElement('button');
-            btn.className = 'mode-toggle-btn';
-            btn.dataset.mode = mode;
-            btn.innerHTML = route.icon + ' ' + route.title;
-            btn.href = '#' + mode;
-            btn.addEventListener('click', onModeClick);
-            bar.appendChild(btn);
-        });
-
-        // Insert bar after status bar
-        statusBar.parentNode.insertBefore(bar, statusBar.nextSibling);
-
-        // Adjust scene-container top position to account for mode bar
-        const sceneContainer = document.getElementById('scene-container');
-        if (sceneContainer) {
-            sceneContainer.style.marginTop = '44px';
-        }
-    }
-
-    /**
-     * Handle mode button click
-     */
-    function onModeClick(e) {
-        const mode = e.currentTarget.dataset.mode;
-        if (mode !== currentMode) {
-            setMode(mode);
-        }
     }
 
     /**
@@ -187,85 +126,10 @@
             history.replaceState({ mode: mode }, '', '#' + mode);
         }
 
-        // Update active button state
-        updateActiveButton();
-
-        // Save to localStorage
-        localStorage.setItem(STORAGE_KEY, mode);
-
-        // Handle simple mode visibility
-        handleSimpleModeVisibility(mode);
-
         // Trigger mode change handlers
         notifyModeChange(mode, previousMode);
 
         console.log('[Router] Mode changed:', previousMode, '->', mode);
-    }
-
-    /**
-     * Handle simple mode visibility
-     * Hides expert mode UI elements when in simple mode
-     */
-    function handleSimpleModeVisibility(mode) {
-        const isSimple = mode === 'simple';
-        const statusBar = document.getElementById('status-bar');
-        const modeToggleBar = document.getElementById('mode-toggle-bar');
-        const sceneContainer = document.getElementById('scene-container');
-        const simpleHeader = document.getElementById('simple-mode-header');
-        const simpleContent = document.getElementById('simple-mode-content');
-        const simpleQuickActions = document.getElementById('simple-quick-actions');
-
-        if (isSimple) {
-            // Hide expert mode elements
-            if (statusBar) statusBar.style.display = 'none';
-            if (modeToggleBar) modeToggleBar.style.display = 'none';
-            if (sceneContainer) sceneContainer.style.display = 'none';
-
-            // Show simple mode elements
-            if (simpleHeader) simpleHeader.style.display = 'flex';
-            if (simpleContent) simpleContent.style.display = 'block';
-            if (simpleQuickActions) simpleQuickActions.style.display = 'block';
-
-            // Enable simple mode
-            document.body.classList.add('simple-mode');
-
-            // Initialize simple mode if available
-            if (window.SpaxelSimpleMode) {
-                window.SpaxelSimpleMode.enable();
-            }
-        } else {
-            // Show expert mode elements
-            if (statusBar) statusBar.style.display = 'flex';
-            if (modeToggleBar) modeToggleBar.style.display = 'flex';
-            if (sceneContainer) sceneContainer.style.display = 'block';
-
-            // Hide simple mode elements
-            if (simpleHeader) simpleHeader.style.display = 'none';
-            if (simpleContent) simpleContent.style.display = 'none';
-            if (simpleQuickActions) simpleQuickActions.style.display = 'none';
-
-            // Disable simple mode
-            document.body.classList.remove('simple-mode');
-
-            // Disable simple mode module if available
-            if (window.SpaxelSimpleMode) {
-                window.SpaxelSimpleMode.disable();
-            }
-        }
-    }
-
-    /**
-     * Update the active state of mode buttons
-     */
-    function updateActiveButton() {
-        const buttons = document.querySelectorAll('.mode-toggle-btn');
-        buttons.forEach(btn => {
-            if (btn.dataset.mode === currentMode) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
     }
 
     /**

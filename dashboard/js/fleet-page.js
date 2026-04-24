@@ -108,6 +108,12 @@
             removeNodeCount: document.getElementById('remove-node-count'),
             removeNodeList: document.getElementById('remove-node-list'),
 
+            // Unpaired elements
+            unpairedSummary: document.getElementById('fleet-unpaired-summary'),
+            unpairedCount: document.getElementById('fleet-unpaired'),
+            unpairedBanner: document.getElementById('fleet-unpaired-banner'),
+            unpairedBannerText: document.getElementById('fleet-unpaired-banner-text'),
+
             toastContainer: document.getElementById('toast-container')
         };
     }
@@ -498,6 +504,7 @@
                             <span class="status-dot"></span>
                             ${capitalize(status)}
                         </span>
+                        ${node.unpaired ? '<span class="node-unpaired-badge">UNPAIRED</span>' : ''}
                     </td>
                     <td class="col-firmware">
                         <div class="firmware-version">
@@ -538,6 +545,12 @@
                     </td>
                     <td class="col-actions">
                         <div class="action-buttons">
+                            ${node.unpaired ? `
+                                <button class="action-btn btn-reprovision" data-mac="${node.mac}"
+                                        title="Re-provision credentials">
+                                    &#x21BA; Pair
+                                </button>
+                            ` : ''}
                             <button class="action-btn btn-locate" data-mac="${node.mac}"
                                     title="Locate (flash LED)" ${status !== 'online' ? 'disabled' : ''}>
                                 &#x26A1;
@@ -599,6 +612,17 @@
                 e.stopPropagation();
                 const mac = labelEl.dataset.mac;
                 startLabelEdit(labelEl, mac);
+            });
+        });
+
+        // Re-provision button (unpaired nodes only)
+        document.querySelectorAll('.btn-reprovision').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const mac = btn.dataset.mac;
+                if (window.SpaxelOnboard && SpaxelOnboard.reprove) {
+                    SpaxelOnboard.reprove(mac);
+                }
             });
         });
 
@@ -1175,15 +1199,39 @@
     function updateSummary() {
         const total = state.nodes.length;
         const online = state.nodes.filter(n => getNodeStatus(n) === 'online').length;
+        const unpaired = state.nodes.filter(n => n.unpaired).length;
 
         elements.totalSummary.textContent = total;
         elements.onlineSummary.textContent = online;
+
+        // Unpaired summary
+        if (unpaired > 0) {
+            elements.unpairedSummary.style.display = '';
+            elements.unpairedCount.textContent = unpaired;
+        } else {
+            elements.unpairedSummary.style.display = 'none';
+        }
+
+        // Unpaired banner
+        if (unpaired > 0) {
+            elements.unpairedBannerText.textContent =
+                unpaired + ' node' + (unpaired > 1 ? 's' : '') +
+                ' connected without credentials — re-provision to pair';
+            elements.unpairedBanner.style.display = '';
+        } else {
+            elements.unpairedBanner.style.display = 'none';
+        }
     }
 
     // ============================================
     // Helper Functions
     // ============================================
     function getNodeStatus(node) {
+        // Check if node is unpaired (connected without valid credentials)
+        if (node.unpaired) {
+            return 'unpaired';
+        }
+
         // Check if node is currently updating
         if (node.ota_in_progress) {
             return 'updating';

@@ -1041,6 +1041,46 @@ const Viz3D = (function () {
         canvas.addEventListener('contextmenu', _onBlobContextMenu);
         canvas.addEventListener('click', _onBlobClick);
 
+        // Long-press support for mobile explain mode (300ms)
+        var _longPressTimer = null;
+        var _longPressFired = false;
+
+        canvas.addEventListener('touchstart', function(e) {
+            _longPressFired = false;
+            if (e.touches.length !== 1) return;
+            var touch = e.touches[0];
+            _longPressTimer = setTimeout(function() {
+                _longPressFired = true;
+                // Convert touch to a synthetic contextmenu event
+                _onBlobContextMenu({
+                    preventDefault: function() {},
+                    clientX: touch.clientX,
+                    clientY: touch.clientY,
+                    target: canvas,
+                    button: 2
+                });
+            }, 300);
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', function() {
+            if (_longPressTimer) {
+                clearTimeout(_longPressTimer);
+                _longPressTimer = null;
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchend', function(e) {
+            if (_longPressTimer) {
+                clearTimeout(_longPressTimer);
+                _longPressTimer = null;
+            }
+            // Prevent click from firing after a long-press
+            if (_longPressFired) {
+                e.preventDefault();
+                _longPressFired = false;
+            }
+        });
+
         // Close context menus on click elsewhere
         document.addEventListener('click', function() {
             _hideBlobContextMenu();

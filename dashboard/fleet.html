@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Spaxel Fleet Status</title>
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/layout.css">
@@ -49,6 +49,10 @@
                         <span class="summary-label">Online:</span>
                         <span class="summary-value online" id="fleet-online">0</span>
                     </span>
+                    <span class="summary-item" id="fleet-unpaired-summary" style="display: none;">
+                        <span class="summary-label">Unpaired:</span>
+                        <span class="summary-value" id="fleet-unpaired" style="color: #fbbf24;">0</span>
+                    </span>
                 </div>
             </div>
             <div class="header-actions">
@@ -76,6 +80,7 @@
                         <option value="">All Status</option>
                         <option value="online">Online</option>
                         <option value="offline">Offline</option>
+                        <option value="unpaired">Unpaired</option>
                         <option value="updating">Updating</option>
                     </select>
                     <select id="filter-firmware" class="filter-select">
@@ -106,12 +111,19 @@
             </div>
         </div>
 
+        <!-- Unpaired Nodes Banner (shown when unpaired nodes are connected) -->
+        <div class="fleet-unpaired-banner" id="fleet-unpaired-banner" style="display: none;">
+            <span class="banner-icon">&#x26A0;</span>
+            <span class="banner-text" id="fleet-unpaired-banner-text"></span>
+            <a href="/" class="banner-action">Re-provision</a>
+        </div>
+
         <div class="table-container">
             <table class="fleet-table" id="fleet-table">
                 <thead>
                     <tr>
                         <th class="col-checkbox">
-                            <input type="checkbox" id="select-all-checkbox" class="checkbox">
+                            <input type="checkbox" id="select-all-checkbox" class="checkbox" aria-label="Select all nodes">
                         </th>
                         <th class="col-label sortable" data-sort="label">
                             Label

@@ -348,7 +348,7 @@
 
 .alert-banner-actions {
     display: flex;
-    gapvar(--space-250);
+    gap: var(--space-250);
     flex-shrink: 0;
 }
 
@@ -390,7 +390,7 @@
 #security-mode-indicator {
     position: fixed;
     top: 45px;
-    rightvar(--space-5);
+    right: var(--space-5);
     background: var(--alert);
     color: var(--text-on-accent);
     padding: 6px var(--space-3);
@@ -468,7 +468,7 @@
     font-size: var(--text-sm);
     display: none;
     align-items: center;
-    gapvar(--space-250);
+    gap: var(--space-250);
     z-index: 150;
     box-shadow: 0 4px 12px var(--blue-border);
 }
