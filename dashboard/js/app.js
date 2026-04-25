@@ -2280,17 +2280,19 @@
     };
 
     window.toggleFresnelZones = function() {
-        var btn = document.getElementById('fresnel-toggle-btn');
-        var isActive = btn && btn.classList.contains('active');
-
-        if (isActive) {
-            // Turn off
-            Viz3D.toggleFresnelZones(false);
-            if (btn) btn.classList.remove('active');
+        if (window.Layers) {
+            Layers.toggleLayer(Layers.LAYERS.FRESNEL);
         } else {
-            // Turn on
-            Viz3D.toggleFresnelZones(true);
-            if (btn) btn.classList.add('active');
+            // Fallback without Layers module
+            var btn = document.getElementById('fresnel-toggle-btn');
+            var isActive = btn && btn.classList.contains('active');
+            if (isActive) {
+                Viz3D.toggleFresnelZones(false);
+                if (btn) btn.classList.remove('active');
+            } else {
+                Viz3D.toggleFresnelZones(true);
+                if (btn) btn.classList.add('active');
+            }
         }
     };
 
@@ -2304,6 +2306,18 @@
      */
     window.toggleFresnelDebugOverlay = function(visible) {
         state.fresnelDebugVisible = visible;
+
+        // Sync Viz3D Fresnel zones with debug overlay state
+        if (window.Viz3D && Viz3D.toggleFresnelZones) {
+            Viz3D.toggleFresnelZones(visible);
+        }
+
+        // Sync toolbar button
+        var btn = document.getElementById('fresnel-toggle-btn');
+        if (btn) {
+            if (visible) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
 
         if (visible) {
             rebuildFresnelDebugEllipsoids();
@@ -2589,6 +2603,17 @@
         var debugSection = document.getElementById('debug-section');
         if (debugSection) {
             debugSection.style.display = 'block';
+        }
+
+        // Bind layer controls to Layers module
+        if (window.Layers) {
+            var fresnelCheckbox = document.getElementById('fresnel-zones-toggle');
+            if (fresnelCheckbox) {
+                Layers.bindCheckbox(Layers.LAYERS.FRESNEL, fresnelCheckbox);
+            }
+            Layers.onLayerChange(Layers.LAYERS.FRESNEL, function(visible) {
+                toggleFresnelDebugOverlay(visible);
+            });
         }
     };
 
