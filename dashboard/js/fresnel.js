@@ -233,22 +233,16 @@
     function removeFresnelEllipsoid(ellipsoid) {
         if (!ellipsoid) return;
 
-        if (ellipsoid.wireframe && _scene) {
-            _scene.remove(ellipsoid.wireframe);
-            ellipsoid.wireframe.geometry.dispose();
-            if (ellipsoid.wireframe.material) {
-                ellipsoid.wireframe.material.dispose();
-            }
+        if (ellipsoid.wireframe) {
+            if (_scene) _scene.remove(ellipsoid.wireframe);
+            if (ellipsoid.wireframe.geometry) ellipsoid.wireframe.geometry.dispose();
+            if (ellipsoid.wireframe.material) ellipsoid.wireframe.material.dispose();
         }
 
-        if (ellipsoid.fill && _scene) {
-            _scene.remove(ellipsoid.fill);
-            if (ellipsoid.fill.geometry) {
-                ellipsoid.fill.geometry.dispose();
-            }
-            if (ellipsoid.fill.material) {
-                ellipsoid.fill.material.dispose();
-            }
+        if (ellipsoid.fill) {
+            if (_scene) _scene.remove(ellipsoid.fill);
+            if (ellipsoid.fill.geometry) ellipsoid.fill.geometry.dispose();
+            if (ellipsoid.fill.material) ellipsoid.fill.material.dispose();
         }
     }
 

@@ -30,6 +30,8 @@ describe('Fresnel Module', function() {
                     this.position = { copy: function() {} };
                     this.quaternion = { copy: function() {} };
                     this.userData = {};
+                    this.geometry = { dispose: function() {} };
+                    this.material = { dispose: function() {} };
                 },
                 MeshBasicMaterial: function() {},
                 Mesh: function() {
@@ -37,6 +39,8 @@ describe('Fresnel Module', function() {
                     this.position = { copy: function() {} };
                     this.quaternion = { copy: function() {} };
                     this.userData = {};
+                    this.geometry = { dispose: function() {} };
+                    this.material = { dispose: function() {} };
                 },
                 DoubleSide: 2
             };
