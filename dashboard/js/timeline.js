@@ -534,14 +534,10 @@
 		const container = elements.container;
 		if (!container) return;
 
-		// Determine dashboard mode: expert mode shows all events, simple mode shows person-relevant only
-		// Expert mode is the default for live view, simple mode is for simplified dashboard
-		if (newMode === 'live' || newMode === 'replay' || newMode === 'timeline') {
-			state.dashboardMode = 'expert';
-		} else if (newMode === 'simple' || newMode === 'ambient') {
-			state.dashboardMode = 'simple';
+		if (newMode === 'ambient') {
+			state.dashboardMode = 'ambient';
 		} else {
-			state.dashboardMode = 'expert'; // Default to expert
+			state.dashboardMode = 'expert';
 		}
 
 		if (newMode === 'timeline') {
@@ -1111,7 +1107,7 @@
 		const severityClass = event.severity === 'alert' || event.severity === 'critical' ? ' severity-critical' : '';
 		const newClass = isNew ? ' new-event' : '';
 
-		// Determine if this is a system event (for secondary styling in expert mode)
+		// Determine if this is a system event (for secondary styling)
 		// System events: node_online, node_offline, ota_update, baseline_changed, system, learning_milestone, anomaly_learned
 		const systemEventTypes = ['node_online', 'node_offline', 'ota_update', 'baseline_changed', 'system', 'learning_milestone', 'anomaly_learned'];
 		const isSystemEvent = systemEventTypes.indexOf(event.type) !== -1;

@@ -41,11 +41,6 @@ global.SpaxelRouter = {
 // Mock SpaxelTimeline
 global.SpaxelTimeline = {};
 
-// Mock SpaxelSimpleModeDetection
-global.SpaxelSimpleModeDetection = {
-    onModeChange: jest.fn()
-};
-
 // Mock IntersectionObserver
 global.IntersectionObserver = jest.fn(function(callback, options) {
     this.observe = jest.fn();
@@ -975,6 +970,7 @@ describe('SidebarTimeline', function() {
     // ============================================
     describe('Tap-to-Jump Time-Travel', function() {
         var mockJumpToTime;
+        var routerModeChangeCallback = null;
 
         beforeEach(function() {
             mockJumpToTime = jest.fn(function() {
@@ -990,6 +986,12 @@ describe('SidebarTimeline', function() {
                 jumpToTime: mockJumpToTime,
                 isReplayMode: jest.fn(function() { return false; })
             };
+
+            // Capture router mode change callback via mockImplementation
+            routerModeChangeCallback = null;
+            global.SpaxelRouter.onModeChange.mockImplementation(function(cb) {
+                routerModeChangeCallback = cb;
+            });
 
             global.fetch.mockImplementation(function() {
                 return Promise.resolve({
@@ -1113,7 +1115,7 @@ describe('SidebarTimeline', function() {
             });
         });
 
-        test('Now replaying chip appears after jump in expert mode', function() {
+        test('Now replaying chip appears after jump', function() {
             SidebarTimeline.show();
             SidebarTimeline.refresh();
 
@@ -1174,37 +1176,26 @@ describe('SidebarTimeline', function() {
             });
         });
 
-        test('simple mode navigates to timeline view instead of replay', function() {
-            // Override to simple mode by triggering mode change
+        test('non-replay mode navigates to timeline view instead of replay', function() {
+            // Show panel and load events
             SidebarTimeline.show();
             SidebarTimeline.refresh();
 
             return new Promise(function(resolve) {
                 setTimeout(function() {
-                    // Simulate simple mode by changing internal state
-                    // The module listens to SpaxelSimpleModeDetection.onModeChange callbacks
-                    // We need to trigger it through the registered callback
-                    var simpleCallback = null;
-                    if (global.SpaxelSimpleModeDetection && global.SpaxelSimpleModeDetection.onModeChange) {
-                        var calls = global.SpaxelSimpleModeDetection.onModeChange.mock.calls;
-                        if (calls.length > 0) {
-                            simpleCallback = calls[0][0];
-                        }
-                    }
-
-                    if (simpleCallback) {
-                        simpleCallback('simple');
-                    }
+                    // Trigger ambient mode via the router callback that sidebar-timeline registered during init
+                    var routerCalls = global.SpaxelRouter.onModeChange.mock.calls;
+                    expect(routerCalls.length).toBeGreaterThan(0);
+                    var routerCallback = routerCalls[0][0];
+                    expect(typeof routerCallback).toBe('function');
+                    routerCallback('ambient');
 
                     var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
-                    if (eventEl) {
-                        eventEl.click();
-                        // In simple mode, should navigate via router, not call jumpToTime
-                        var jumpCallsAfterSimple = mockJumpToTime.mock.calls.length;
-                        // The jumpToTime may or may not be called depending on mode,
-                        // but SpaxelRouter.navigate should be called with 'timeline'
-                        expect(global.SpaxelRouter.navigate).toHaveBeenCalledWith('timeline');
-                    }
+                    expect(eventEl).toBeTruthy();
+                    eventEl.click();
+
+                    // In ambient mode, should navigate via router, not call jumpToTime
+                    expect(global.SpaxelRouter.navigate).toHaveBeenCalledWith('timeline');
                     resolve();
                 }, 150);
             });

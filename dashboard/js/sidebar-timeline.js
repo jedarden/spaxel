@@ -150,7 +150,7 @@
         total: 0,
         loading: false,
         panelVisible: false,
-        dashboardMode: 'expert', // determines timeline mode
+        dashboardMode: 'expert',
         selectedEventId: null,   // ID of the currently selected (jumped-to) event
         // Virtualization state
         virtualization: {
@@ -227,6 +227,14 @@
     // ============================================
 
     function onRouterModeChange(newMode, oldMode) {
+        // Expert modes support time-travel replay
+        var expertModes = ['live', 'timeline', 'replay', 'simulate'];
+        if (expertModes.indexOf(newMode) === -1) {
+            state.dashboardMode = 'simple';
+        } else {
+            state.dashboardMode = 'expert';
+        }
+
         // Reload events if panel is visible
         if (state.panelVisible) {
             loadInitialEvents();
@@ -489,11 +497,10 @@
                             event.severity === 'warning' ? ' severity-warning' : '';
         const newClass = isNew ? ' new-event' : '';
 
-        // Determine if this is a system event (for secondary styling in expert mode only)
+        // System events get secondary styling
         const systemEventTypes = ['node_online', 'node_offline', 'ota_update', 'baseline_changed', 'system', 'learning_milestone', 'anomaly_learned'];
         const isSystemEvent = systemEventTypes.indexOf(event.type) !== -1;
-        // Only apply secondary class in expert mode for system events
-        const secondaryClass = (state.dashboardMode === 'expert' && isSystemEvent) ? ' secondary' : '';
+        const secondaryClass = isSystemEvent ? ' secondary' : '';
 
         const dataIndex = index !== undefined ? ` data-index="${index}"` : '';
 
@@ -711,11 +718,9 @@
                     SpaxelApp.showToast('Failed to jump to time', 'error');
                 }
             });
-        } else {
-            // Simple mode: navigate to timeline view
-            if (window.SpaxelRouter) {
-                SpaxelRouter.navigate('timeline');
-            }
+        } else if (window.SpaxelRouter) {
+            // In simple mode, navigate to timeline view instead of replay
+            SpaxelRouter.navigate('timeline');
         }
     }
 

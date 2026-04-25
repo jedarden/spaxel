@@ -8,7 +8,7 @@
  * - Now replaying chip appears in timeline header
  * - hideNowReplayingChip hides the chip and clears replay state
  * - clearSelection removes selected class from event
- * - Simple mode does not trigger replay jump
+ * - Ambient mode does not trigger replay jump
  * - Cross-module coordination: sidebar selection cleared on timeline jump
  */
 
@@ -38,11 +38,6 @@ global.SpaxelApp = {
 global.SpaxelRouter = {
     onModeChange: jest.fn(),
     navigate: jest.fn()
-};
-
-// Mock SpaxelSimpleModeDetection
-global.SpaxelSimpleModeDetection = {
-    onModeChange: jest.fn()
 };
 
 // Mock SpaxelSidebarTimeline
@@ -384,32 +379,6 @@ describe('Timeline tap-to-jump', function() {
                         resolve();
                     }, 100);
                 });
-            });
-        });
-    });
-
-    // ============================================
-    // Simple mode gating
-    // ============================================
-    describe('simple mode gating', function() {
-        test('clicking event does not trigger jump in simple mode', function() {
-            // Simulate simple mode by triggering the registered router callback
-            var modeCallback = null;
-            var calls = global.SpaxelRouter.onModeChange.mock.calls;
-            if (calls.length > 0) {
-                modeCallback = calls[0][0];
-            }
-            if (modeCallback) {
-                modeCallback('simple');
-            }
-
-            return loadEvents(testEvents).then(function() {
-                var eventEl = document.querySelector('[data-id="100"]');
-                if (eventEl) {
-                    eventEl.click();
-                    // In simple mode, jumpToTime should NOT be called
-                    expect(mockJumpToTime).not.toHaveBeenCalled();
-                }
             });
         });
     });
