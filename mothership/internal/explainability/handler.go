@@ -63,10 +63,13 @@ type BLEMatch struct {
 
 // FresnelZone describes a Fresnel zone ellipsoid for a link.
 type FresnelZone struct {
-	LinkID      string   `json:"link_id"`
+	LinkID      string     `json:"link_id"`
 	CenterPos   [3]float64 `json:"center_pos"`   // [x, y, z] zone center
 	SemiAxes    [3]float64 `json:"semi_axes"`    // [a, b, c] for ellipsoid
-	ZoneNumber  int      `json:"zone_number"`   // zone number for this blob position
+	ZoneNumber  int        `json:"zone_number"`  // zone number for this blob position
+	TXPos       [3]float64 `json:"tx_pos"`       // transmitter position for proper ellipsoid orientation
+	RXPos       [3]float64 `json:"rx_pos"`       // receiver position for proper ellipsoid orientation
+	Lambda      float64    `json:"lambda"`       // WiFi wavelength in metres
 }
 
 // LinkState captures the current state of a link.
@@ -156,7 +159,8 @@ func (h *Handler) UpdateBlobs(blobs []BlobSnapshot, links []LinkState, grid *Gri
 				maxID = id
 			}
 		}
-		cutoff := maxID - 100
+		// keep IDs maxID-99 .. maxID (100 entries): delete id < maxID-99
+		cutoff := maxID - 99
 		for id := range h.blobHistory {
 			if id < cutoff {
 				delete(h.blobHistory, id)
@@ -348,18 +352,8 @@ func (h *Handler) refreshData(w http.ResponseWriter, r *http.Request) {
 }
 
 // computeExplanation calculates the explanation for a single blob.
-func (h *Handler) computeExplanation(blob BlobSnapshot, links []LinkState, grid *GridSnapshot) *BlobExplanation {
-	if grid == nil {
-		return &BlobExplanation{
-			BlobID:     blob.ID,
-			X:          blob.X,
-			Y:          blob.Y,
-			Z:          blob.Z,
-			Confidence: blob.Confidence,
-			AllLinks:    []LinkContribution{},
-		}
-	}
-
+// grid is accepted for future use but Fresnel computation only needs blob/link positions.
+func (h *Handler) computeExplanation(blob BlobSnapshot, links []LinkState, _ *GridSnapshot) *BlobExplanation {
 	explanation := &BlobExplanation{
 		BlobID:            blob.ID,
 		X:                 blob.X,
@@ -367,7 +361,7 @@ func (h *Handler) computeExplanation(blob BlobSnapshot, links []LinkState, grid 
 		Z:                 blob.Z,
 		Confidence:        blob.Confidence,
 		ContributingLinks: []LinkContribution{},
-		AllLinks:           make([]LinkContribution, 0, len(links)),
+		AllLinks:          make([]LinkContribution, 0, len(links)),
 		FresnelZones:      []FresnelZone{},
 	}
 
@@ -375,85 +369,164 @@ func (h *Handler) computeExplanation(blob BlobSnapshot, links []LinkState, grid 
 	const lambda = 0.123
 	const halfLambda = lambda / 2
 
-	// Compute contribution for each link
+	var totalContribution float64
+
+	// Compute raw contribution for each link
 	for _, link := range links {
 		linkID := link.NodeMAC + ":" + link.PeerMAC
 
-		// Get node positions
 		nodePos := [3]float64{link.NodePos[0], link.NodePos[1], link.NodePos[2]}
 		peerPos := [3]float64{link.PeerPos[0], link.PeerPos[1], link.PeerPos[2]}
 
-		// Calculate path length excess at blob position
+		// Path length excess at blob position: ΔL = |blob-TX| + |blob-RX| - |TX-RX|
 		pathDirect := math.Sqrt(
 			math.Pow(peerPos[0]-nodePos[0], 2) +
 				math.Pow(peerPos[1]-nodePos[1], 2) +
 				math.Pow(peerPos[2]-nodePos[2], 2))
 		pathViaBlob := math.Sqrt(
-			math.Pow(blob.X-nodePos[0], 2) +
-				math.Pow(blob.Y-nodePos[1], 2) +
+			math.Pow(blob.X-nodePos[0], 2)+
+				math.Pow(blob.Y-nodePos[1], 2)+
 				math.Pow(blob.Z-nodePos[2], 2)) +
 			math.Sqrt(
-				math.Pow(peerPos[0]-blob.X, 2) +
-					math.Pow(peerPos[1]-blob.Y, 2) +
+				math.Pow(peerPos[0]-blob.X, 2)+
+					math.Pow(peerPos[1]-blob.Y, 2)+
 					math.Pow(peerPos[2]-blob.Z, 2))
 		deltaL := pathViaBlob - pathDirect
 
-		// Fresnel zone number
+		// Fresnel zone number: zone = ceil(ΔL / (λ/2)), minimum 1
 		zoneNumber := int(math.Ceil(deltaL / halfLambda))
 		if zoneNumber < 1 {
 			zoneNumber = 1
 		}
 
-		// Zone decay function (default decay_rate = 2.0)
+		// Zone decay: 1/n^decay_rate, decay_rate=2.0 per plan
 		zoneDecay := 1.0 / math.Pow(float64(zoneNumber), 2.0)
 
-		// Contribution = deltaRMS * weight * zoneDecay
-		contribution := link.DeltaRMS * link.Weight * zoneDecay
+		contributing := link.Motion && link.DeltaRMS > 0.02
+		// Raw contribution = deltaRMS × learned_weight × zone_decay
+		rawContribution := link.DeltaRMS * link.Weight * zoneDecay
 
 		linkContrib := LinkContribution{
-			LinkID:      linkID,
-			NodeMAC:     link.NodeMAC,
-			PeerMAC:     link.PeerMAC,
-			DeltaRMS:    link.DeltaRMS,
-			ZoneNumber:  zoneNumber,
-			Weight:      link.Weight,
-			Contributing: link.Motion && link.DeltaRMS > 0.02,
-			Contribution: contribution,
+			LinkID:       linkID,
+			NodeMAC:      link.NodeMAC,
+			PeerMAC:      link.PeerMAC,
+			DeltaRMS:     link.DeltaRMS,
+			ZoneNumber:   zoneNumber,
+			Weight:       link.Weight,
+			Contributing: contributing,
+			Contribution: rawContribution, // normalized below
 		}
-
 		explanation.AllLinks = append(explanation.AllLinks, linkContrib)
 
-		if link.Motion && link.DeltaRMS > 0.02 {
-			explanation.ContributingLinks = append(explanation.ContributingLinks, linkContrib)
-		}
+		if contributing {
+			totalContribution += rawContribution
 
-		// Add Fresnel zone ellipsoid data for contributing links
-		if link.Motion && link.DeltaRMS > 0.02 {
-			// Compute ellipsoid parameters
-			// Center is midpoint between nodes
+			// Fresnel zone ellipsoid for contributing link
 			centerX := (nodePos[0] + peerPos[0]) / 2
 			centerY := (nodePos[1] + peerPos[1]) / 2
 			centerZ := (nodePos[2] + peerPos[2]) / 2
-
-			// Semi-axes approximation for first Fresnel zone
-			// The ellipsoid is roughly centered at the midpoint, with the
-			// long axis along the link direction
-			linkLength := pathDirect
-			longAxis := linkLength / 2
-			// Width of Fresnel zone at this distance
-			zoneWidth := 2 * math.Sqrt(math.Pow(lambda*float64(zoneNumber)/2, 2) -
-				math.Pow(float64(zoneNumber-1)*lambda/2, 2))
-
+			// Semi-major axis along link axis; semi-minor perpendicular
+			a := (pathDirect + lambda) / 2
+			b := math.Sqrt(math.Max(0, a*a-(pathDirect/2)*(pathDirect/2)))
 			explanation.FresnelZones = append(explanation.FresnelZones, FresnelZone{
-				LinkID:     linkID,
-				CenterPos:  [3]float64{centerX, centerY, centerZ},
-				SemiAxes:   [3]float64{longAxis, zoneWidth, zoneWidth},
+				LinkID:    linkID,
+				CenterPos: [3]float64{centerX, centerY, centerZ},
+				SemiAxes:  [3]float64{b, b, a},
 				ZoneNumber: zoneNumber,
+				TXPos:     nodePos,
+				RXPos:     peerPos,
+				Lambda:    lambda,
 			})
 		}
 	}
 
+	// Normalize contributions so contributing links sum to 1.0 (proper percentage breakdown).
+	// Non-contributing links retain their raw value for display context.
+	if totalContribution > 0 {
+		for i := range explanation.AllLinks {
+			if explanation.AllLinks[i].Contributing {
+				explanation.AllLinks[i].Contribution /= totalContribution
+			}
+		}
+	}
+
+	// Populate ContributingLinks from the normalized AllLinks slice
+	for _, lc := range explanation.AllLinks {
+		if lc.Contributing {
+			explanation.ContributingLinks = append(explanation.ContributingLinks, lc)
+		}
+	}
+
 	return explanation
+}
+
+// BuildWebSocketSnapshot returns an explanation snapshot for a blob in the
+// format expected by the dashboard WebSocket handler (_transformSnapshot in
+// explainability.js). Returns nil if the blob has no recorded explanation.
+func (h *Handler) BuildWebSocketSnapshot(blobID int) map[string]interface{} {
+	h.mu.RLock()
+	exp, ok := h.blobHistory[blobID]
+	h.mu.RUnlock()
+	if !ok || exp == nil {
+		return nil
+	}
+
+	// Convert AllLinks to the per_link_contributions format the dashboard expects.
+	perLinkContribs := make([]map[string]interface{}, 0, len(exp.AllLinks))
+	for _, link := range exp.AllLinks {
+		perLinkContribs = append(perLinkContribs, map[string]interface{}{
+			"link_id":                    link.LinkID,
+			"tx_mac":                     link.NodeMAC,
+			"rx_mac":                     link.PeerMAC,
+			"delta_rms":                  link.DeltaRMS,
+			"zone_number":                link.ZoneNumber,
+			"weight":                     link.Weight,
+			"learned_weight":             1.0,
+			"combined_weight":            link.Weight,
+			"contribution_pct":           link.Contribution * 100,
+			"fresnel_intersection_volume": 0,
+			"contributing":               link.Contributing,
+		})
+	}
+
+	// Convert FresnelZones to the format the dashboard expects.
+	fresnelZones := make([]map[string]interface{}, 0, len(exp.FresnelZones))
+	for _, z := range exp.FresnelZones {
+		fresnelZones = append(fresnelZones, map[string]interface{}{
+			"link_id":    z.LinkID,
+			"tx_pos":     z.TXPos[:],
+			"rx_pos":     z.RXPos[:],
+			"center_pos": z.CenterPos[:],
+			"semi_axes":  z.SemiAxes[:],
+			"zone_number": z.ZoneNumber,
+			"lambda":     z.Lambda,
+		})
+	}
+
+	snap := map[string]interface{}{
+		"blob_id":               exp.BlobID,
+		"blob_position":         []float64{exp.X, exp.Y, exp.Z},
+		"fusion_score":          exp.Confidence,
+		"per_link_contributions": perLinkContribs,
+		"fresnel_zones":         fresnelZones,
+		"timestamp":             time.UnixMilli(exp.Timestamp),
+	}
+
+	if exp.BLEMatch != nil {
+		snap["ble_match"] = map[string]interface{}{
+			"device_mac":               exp.BLEMatch.DeviceAddr,
+			"person_id":                exp.BLEMatch.PersonID,
+			"person_label":             exp.BLEMatch.PersonLabel,
+			"person_color":             exp.BLEMatch.PersonColor,
+			"triangulation_confidence": exp.BLEMatch.Confidence,
+			"match_method":             exp.BLEMatch.MatchMethod,
+		}
+		if exp.BLEMatch.TriangulationPos != nil {
+			snap["ble_match"].(map[string]interface{})["triangulation_pos"] = exp.BLEMatch.TriangulationPos[:]
+		}
+	}
+
+	return snap
 }
 
 // writeJSON writes a JSON response.
