@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -17,6 +18,7 @@ type mockNodeIdentifier struct {
 	sendIdentifyFunc  func(mac string, durationMS int) bool
 	sendRebootFunc    func(mac string, delayMS int) bool
 	getConnectedMACs  func() []string
+	getUnpairedMACs   func() []string
 }
 
 func (m *mockNodeIdentifier) SendIdentifyToMAC(mac string, durationMS int) bool {
@@ -38,6 +40,35 @@ func (m *mockNodeIdentifier) GetConnectedMACs() []string {
 		return m.getConnectedMACs()
 	}
 	return []string{}
+}
+
+func (m *mockNodeIdentifier) GetUnpairedMACs() []string {
+	if m.getUnpairedMACs != nil {
+		return m.getUnpairedMACs()
+	}
+	return []string{}
+}
+
+// mockMigProvider is a mock MigrationDeadlineProvider for testing.
+type mockMigProvider struct {
+	deadline time.Time
+}
+
+func (m *mockMigProvider) GetMigrationDeadline() time.Time {
+	return m.deadline
+}
+
+// fleetListResp mirrors fleetListResponse for test decoding.
+type fleetListResp struct {
+	Nodes []FleetNode `json:"nodes"`
+}
+
+// fleetListFullResp mirrors fleetListResponse with migration window fields.
+type fleetListFullResp struct {
+	Nodes                  []FleetNode `json:"nodes"`
+	MigrationWindowActive  bool        `json:"migration_window_active"`
+	MigrationDeadlineMS    int64       `json:"migration_deadline_ms,omitempty"`
+	MigrationRemainingSecs float64     `json:"migration_remaining_secs,omitempty"`
 }
 
 // mockRegistry is a mock implementation of Registry for testing.
@@ -524,10 +555,11 @@ func TestHandlerListFleet(t *testing.T) {
 		t.Errorf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
 	}
 
-	var nodes []FleetNode
-	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+	var resp fleetListResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
+	nodes := resp.Nodes
 
 	if len(nodes) != 2 {
 		t.Errorf("Expected 2 nodes, got %d", len(nodes))
@@ -566,13 +598,13 @@ func TestHandlerListFleetEmpty(t *testing.T) {
 		t.Errorf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
 	}
 
-	var nodes []FleetNode
-	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+	var resp fleetListResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes, got %d", len(nodes))
+	if len(resp.Nodes) != 0 {
+		t.Errorf("Expected 0 nodes, got %d", len(resp.Nodes))
 	}
 }
 
@@ -1493,10 +1525,11 @@ func TestFleetTableRendering(t *testing.T) {
 		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
 	}
 
-	var nodes []FleetNode
-	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
+	nodes := resp.Nodes
 
 	// Verify we have exactly 4 nodes
 	if len(nodes) != 4 {
@@ -1623,10 +1656,11 @@ func TestFleetNodeFields(t *testing.T) {
 		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
 	}
 
-	var nodes []FleetNode
-	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
+	nodes := resp.Nodes
 
 	if len(nodes) != 1 {
 		t.Fatalf("Expected 1 node, got %d", len(nodes))
@@ -1723,10 +1757,11 @@ func TestFleetWithVirtualNodes(t *testing.T) {
 		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
 	}
 
-	var nodes []FleetNode
-	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
+	nodes := resp.Nodes
 
 	if len(nodes) != 2 {
 		t.Fatalf("Expected 2 nodes, got %d", len(nodes))
@@ -1779,13 +1814,13 @@ func TestFleetWithNoNodes(t *testing.T) {
 		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
 	}
 
-	var nodes []FleetNode
-	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes, got %d", len(nodes))
+	if len(resp.Nodes) != 0 {
+		t.Errorf("Expected 0 nodes, got %d", len(resp.Nodes))
 	}
 }
 
@@ -1818,10 +1853,11 @@ func TestFleetNodeStatusOffline(t *testing.T) {
 		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
 	}
 
-	var nodes []FleetNode
-	if err := json.NewDecoder(w.Body).Decode(&nodes); err != nil {
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
+	nodes := resp.Nodes
 
 	if len(nodes) != 1 {
 		t.Fatalf("Expected 1 node, got %d", len(nodes))
@@ -1829,5 +1865,329 @@ func TestFleetNodeStatusOffline(t *testing.T) {
 
 	if nodes[0].Status != "offline" {
 		t.Errorf("Expected status 'offline', got '%s'", nodes[0].Status)
+	}
+}
+
+// TestFleetWithUnpairedNode verifies that unpaired nodes are correctly flagged
+// and show "unpaired" status in the fleet list.
+func TestFleetWithUnpairedNode(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	// Add a regular online node
+	reg.UpsertNode("AA:BB:CC:DD:EE:01", "1.2.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:01", "Paired Node")
+	reg.SetNodeRole("AA:BB:CC:DD:EE:01", "rx")
+
+	// Add an unpaired node (connected without valid token)
+	reg.UpsertNode("AA:BB:CC:DD:EE:02", "1.2.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:02", "Unpaired Node")
+	reg.SetNodeRole("AA:BB:CC:DD:EE:02", "rx")
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02"}
+			},
+			getUnpairedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:02"}
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(resp.Nodes) != 2 {
+		t.Fatalf("Expected 2 nodes, got %d", len(resp.Nodes))
+	}
+
+	nodeMap := make(map[string]FleetNode)
+	for _, n := range resp.Nodes {
+		nodeMap[n.MAC] = n
+	}
+
+	// Paired node should be online
+	paired, ok := nodeMap["AA:BB:CC:DD:EE:01"]
+	if !ok {
+		t.Fatal("Paired node not found")
+	}
+	if paired.Status != "online" {
+		t.Errorf("Paired node: expected status 'online', got '%s'", paired.Status)
+	}
+	if paired.Unpaired {
+		t.Error("Paired node should not be marked as unpaired")
+	}
+
+	// Unpaired node should have unpaired status and flag
+	unpaired, ok := nodeMap["AA:BB:CC:DD:EE:02"]
+	if !ok {
+		t.Fatal("Unpaired node not found")
+	}
+	if unpaired.Status != "unpaired" {
+		t.Errorf("Unpaired node: expected status 'unpaired', got '%s'", unpaired.Status)
+	}
+	if !unpaired.Unpaired {
+		t.Error("Unpaired node should have Unpaired=true")
+	}
+}
+
+// TestFleetAllUnpaired verifies that when all connected nodes are unpaired,
+// the fleet list still returns them with the correct status.
+func TestFleetAllUnpaired(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Unpaired Only")
+	reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx")
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:FF"}
+			},
+			getUnpairedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:FF"}
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	nodes := resp.Nodes
+
+	if len(nodes) != 1 {
+		t.Fatalf("Expected 1 node, got %d", len(nodes))
+	}
+
+	if nodes[0].Status != "unpaired" {
+		t.Errorf("Expected status 'unpaired', got '%s'", nodes[0].Status)
+	}
+	if !nodes[0].Unpaired {
+		t.Error("Expected Unpaired=true")
+	}
+}
+
+// TestFleetListMigrationWindowActive verifies that migration window metadata
+// is returned when the deadline is in the future.
+func TestFleetListMigrationWindowActive(t *testing.T) {
+	reg := newTestRegistry(t)
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Node 1")
+
+	mgr := NewManager(reg)
+
+	deadline := time.Now().Add(12 * time.Hour)
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:FF"}
+			},
+		},
+		migProvider: &mockMigProvider{deadline: deadline},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var resp fleetListFullResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if !resp.MigrationWindowActive {
+		t.Error("Expected migration_window_active to be true")
+	}
+	if resp.MigrationDeadlineMS == 0 {
+		t.Error("Expected migration_deadline_ms to be set")
+	}
+	if resp.MigrationRemainingSecs <= 0 {
+		t.Errorf("Expected migration_remaining_secs > 0, got %v", resp.MigrationRemainingSecs)
+	}
+}
+
+// TestFleetListMigrationWindowClosed verifies that the migration window is
+// reported as inactive when the deadline has passed.
+func TestFleetListMigrationWindowClosed(t *testing.T) {
+	reg := newTestRegistry(t)
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3")
+
+	mgr := NewManager(reg)
+
+	// Deadline in the past
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:FF"}
+			},
+		},
+		migProvider: &mockMigProvider{deadline: time.Now().Add(-1 * time.Hour)},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var resp fleetListFullResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.MigrationWindowActive {
+		t.Error("Expected migration_window_active to be false when deadline has passed")
+	}
+}
+
+// TestFleetListNoMigrationWindow verifies that migration window fields are
+// absent when no migration deadline provider is configured.
+func TestFleetListNoMigrationWindow(t *testing.T) {
+	reg := newTestRegistry(t)
+	reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3")
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:FF"}
+			},
+		},
+		// No migProvider set
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var resp fleetListFullResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.MigrationWindowActive {
+		t.Error("Expected migration_window_active to be false with no provider")
+	}
+	if resp.MigrationDeadlineMS != 0 {
+		t.Error("Expected migration_deadline_ms to be 0 with no provider")
+	}
+}
+
+// TestFleetListUnpairedNotInRegistry verifies that an unpaired node whose
+// MAC is not in the registry is still appended to the fleet list.
+func TestFleetListUnpairedNotInRegistry(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	// Only one registered node
+	reg.UpsertNode("AA:BB:CC:DD:EE:01", "1.0.0", "ESP32-S3")
+	reg.SetNodeLabel("AA:BB:CC:DD:EE:01", "Registered Node")
+
+	mgr := NewManager(reg)
+
+	h := &Handler{
+		mgr: mgr,
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02"}
+			},
+			getUnpairedMACs: func() []string {
+				return []string{"AA:BB:CC:DD:EE:02"} // Not in registry
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/fleet", nil)
+	w := httptest.NewRecorder()
+
+	h.listFleet(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listFleet() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	var resp fleetListResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(resp.Nodes) != 2 {
+		t.Fatalf("Expected 2 nodes (1 registered + 1 unregistered unpaired), got %d", len(resp.Nodes))
+	}
+
+	nodeMap := make(map[string]FleetNode)
+	for _, n := range resp.Nodes {
+		nodeMap[n.MAC] = n
+	}
+
+	// Registered node should be online
+	regNode, ok := nodeMap["AA:BB:CC:DD:EE:01"]
+	if !ok {
+		t.Fatal("Registered node not found")
+	}
+	if regNode.Status != "online" {
+		t.Errorf("Registered node: expected status 'online', got '%s'", regNode.Status)
+	}
+	if regNode.Unpaired {
+		t.Error("Registered node should not be unpaired")
+	}
+
+	// Unregistered unpaired node should be present with unpaired status
+	unregNode, ok := nodeMap["AA:BB:CC:DD:EE:02"]
+	if !ok {
+		t.Fatal("Unregistered unpaired node not found in fleet list")
+	}
+	if unregNode.Status != "unpaired" {
+		t.Errorf("Unregistered unpaired node: expected status 'unpaired', got '%s'", unregNode.Status)
+	}
+	if !unregNode.Unpaired {
+		t.Error("Unregistered unpaired node should have Unpaired=true")
+	}
+	if unregNode.Role != "rx" {
+		t.Errorf("Unregistered unpaired node: expected default role 'rx', got '%s'", unregNode.Role)
 	}
 }
