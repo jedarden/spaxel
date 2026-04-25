@@ -261,6 +261,11 @@ body {
   width: 100%;
   height: 100%;
   touch-action: none;
+  /* Mobile-specific touch handling improvements */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ── Live-view overlay panels (float over canvas) ──

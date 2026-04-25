@@ -188,58 +188,52 @@
 
         // Touch gesture configuration for OrbitControls
         // One finger: rotate (orbit)
-        // Two fingers: pinch-to-zoom (dolly) only
+        // Two fingers: pinch-to-zoom (dolly) only - NO pan on two fingers
         // Three fingers: pan (native OrbitControls support)
         //
         // Using OrbitControls' built-in touch configuration:
         // - ONE: THREE.TOUCH.ROTATE (one-finger orbit)
-        // - TWO: THREE.TOUCH.DOLLY_PAN (pinch zoom + two-finger pan, with pan disabled below)
+        // - TWO: THREE.TOUCH.DOLLY (pinch zoom ONLY, no pan)
         // - THREE: THREE.TOUCH.PAN (three-finger pan)
         //
-        // Note: We set enablePan=false initially to prevent two-finger pan,
-        // allowing only pinch zoom on two fingers. Three-finger pan works
-        // through the THREE.TOUCH.PAN configuration.
+        // Note: THREE.TOUCH.DOLLY (not DOLLY_PAN) ensures two-finger touch
+        // only performs pinch zoom, eliminating accidental pan during zoom.
         controls.touches = {
             ONE: THREE.TOUCH.ROTATE,  // One-finger touch rotates the camera
-            TWO: THREE.TOUCH.DOLLY_PAN, // Two-finger touch zooms (pinch) and pans
+            TWO: THREE.TOUCH.DOLLY,   // Two-finger touch zooms (pinch) ONLY - no pan
             THREE: THREE.TOUCH.PAN    // Three-finger touch pans the camera
         };
 
-        // Disable two-finger pan to prevent accidental pan during pinch zoom
-        // Only allow three-finger pan for deliberate camera panning
         controls.listenToKeyEvents(window); // Enable keyboard controls for desktop
 
-        // Custom touch event handling to prevent two-finger pan while allowing three-finger pan
-        const element = renderer.domElement;
-        let originalEnablePan = controls.enablePan;
+        // Mobile-specific touch handling improvements
+        // Prevent default browser behaviors that interfere with OrbitControls
+        const canvasElement = renderer.domElement;
 
-        element.addEventListener('touchstart', function(event) {
-            // Disable pan for two-finger touch to prevent accidental pan during pinch zoom
-            if (event.touches.length === 2) {
-                controls.enablePan = false;
-            } else if (event.touches.length === 3) {
-                // Enable pan for three-finger touch
-                controls.enablePan = true;
-            } else {
-                controls.enablePan = originalEnablePan;
+        // Ensure touch events are properly handled on mobile devices
+        canvasElement.style.touchAction = 'none';
+        canvasElement.style.webkitTouchCallout = 'none';
+        canvasElement.style.webkitUserSelect = 'none';
+        canvasElement.style.userSelect = 'none';
+
+        // Handle iOS Safari-specific touch issues
+        // Prevent double-tap zoom on iOS
+        canvasElement.addEventListener('touchstart', function(event) {
+            if (event.touches.length === 1) {
+                // Store timestamp for double-tap detection
+                canvasElement._lastTouchStart = Date.now();
             }
         }, { passive: true });
 
-        element.addEventListener('touchend', function(event) {
-            // Restore pan state when fingers are lifted
-            if (event.touches.length === 0) {
-                controls.enablePan = originalEnablePan;
-            } else if (event.touches.length === 2) {
-                controls.enablePan = false;
-            } else if (event.touches.length === 3) {
-                controls.enablePan = true;
+        canvasElement.addEventListener('touchend', function(event) {
+            if (event.touches.length === 0 && canvasElement._lastTouchStart) {
+                const timeSinceLastTouch = Date.now() - canvasElement._lastTouchStart;
+                // If it's a quick tap (potential double-tap), prevent default
+                if (timeSinceLastTouch < 300) {
+                    event.preventDefault();
+                }
             }
-        }, { passive: true });
-
-        element.addEventListener('touchcancel', function() {
-            // Restore pan state on touch cancel
-            controls.enablePan = originalEnablePan;
-        }, { passive: true });
+        }, { passive: false });
 
         // Grid helper (XZ plane, Y-up)
         gridHelper = new THREE.GridHelper(

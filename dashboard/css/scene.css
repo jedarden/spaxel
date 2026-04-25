@@ -227,6 +227,12 @@
     height: 100%;
     touch-action: none;
     z-index: 1;
+    /* Mobile-specific touch handling improvements */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    /* Prevent iOS Safari from delaying single taps */
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* iOS Safari-specific handling for visual viewport */
@@ -251,6 +257,11 @@
     max-width: 100%;
     max-height: 100%;
     touch-action: none;
+    /* Mobile-specific touch handling improvements */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* Handle visual viewport resize events (iOS Safari keyboard, address bar) */
