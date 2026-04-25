@@ -159,17 +159,6 @@
 	to { transform: rotate(360deg); }
 }
 
-/* Simple mode briefing card */
-.simple-mode #briefing-card {
-	top: auto;
-	bottom: var(--space-5);
-	transform: translateX(-50%);
-}
-
-.simple-mode #briefing-card.visible {
-	opacity: 1;
-}
-
 /* Ambient mode briefing */
 .ambient-mode #briefing-card {
 	background: var(--overlay-strong);

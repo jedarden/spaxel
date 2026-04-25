@@ -96,14 +96,14 @@
         const center = new THREE.Vector3().addVectors(tx, rx).multiplyScalar(0.5);
 
         // Rotation: align with TX-RX axis
-        // We want the Z-axis of the ellipsoid to point along the link direction
+        // X-axis is the major axis of the ellipsoid (a), Y and Z are minor (b)
         const direction = new THREE.Vector3().subVectors(rx, tx).normalize();
-        const up = new THREE.Vector3(0, 0, 1); // Z-axis is up in our ellipsoid geometry
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
+        const xAxis = new THREE.Vector3(1, 0, 0);
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(xAxis, direction);
 
         return {
             center: center,
-            semiAxes: new THREE.Vector3(b, b, a), // X, Y (minor), Z (major along link)
+            semiAxes: new THREE.Vector3(a, b, b), // X (major along link), Y, Z (minor)
             rotation: quaternion,
             lambda: lambda,
             d: d,
@@ -142,12 +142,8 @@
         const segments = isMobile ? CONFIG.mobileSegments : CONFIG.sphereSegments;
         const heightSegments = isMobile ? CONFIG.mobileHeightSegments : CONFIG.sphereHeightSegments;
 
-        // Create sphere geometry (unit sphere that will be scaled)
+        // Create unit sphere geometry — will be scaled via mesh.scale
         const geometry = new THREE.SphereGeometry(1, segments, heightSegments);
-
-        // Apply non-uniform scaling to create ellipsoid
-        // We scale after creation to get the correct ellipsoid shape
-        geometry.scale(ellipsoid.semiAxes.x, ellipsoid.semiAxes.y, ellipsoid.semiAxes.z);
 
         // Create wireframe using EdgesGeometry for crisp edges
         const edgesGeometry = new THREE.EdgesGeometry(geometry);
@@ -169,6 +165,10 @@
             side: THREE.DoubleSide
         });
         const fill = new THREE.Mesh(geometry, fillMaterial);
+
+        // Apply non-uniform scaling: X = semi-major (a), Y = semi-minor (b), Z = semi-minor (b)
+        wireframe.scale.copy(ellipsoid.semiAxes);
+        fill.scale.copy(ellipsoid.semiAxes);
 
         // Position at ellipsoid center
         wireframe.position.copy(ellipsoid.center);

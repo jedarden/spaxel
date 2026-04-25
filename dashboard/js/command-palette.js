@@ -1,7 +1,7 @@
 /**
  * Spaxel Dashboard — Command Palette (Component 34)
  *
- * Ctrl+K / Cmd+K: universal keyboard-driven interface for expert mode.
+ * Ctrl+K / Cmd+K: universal keyboard-driven command interface.
  * Fuzzy search across zones, people, nodes, events, and commands.
  * Time navigation via "@" prefix.
  *

@@ -4383,5 +4383,21 @@
             </li>
         </ul>
     </nav>
+
+    <!-- Auto-trigger re-provision wizard when navigated from fleet page -->
+    <script>
+    (function () {
+        var params = new URLSearchParams(window.location.search);
+        var reproveMAC = params.get('reprovision');
+        if (reproveMAC && window.SpaxelOnboard && SpaxelOnboard.reprove) {
+            // Clean the URL so refresh doesn't re-trigger
+            if (window.history.replaceState) {
+                var clean = window.location.pathname;
+                window.history.replaceState({}, '', clean);
+            }
+            SpaxelOnboard.reprove(reproveMAC);
+        }
+    })();
+    </script>
 </body>
 </html>
