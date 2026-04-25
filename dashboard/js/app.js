@@ -2286,13 +2286,7 @@
             // Fallback without Layers module
             var btn = document.getElementById('fresnel-toggle-btn');
             var isActive = btn && btn.classList.contains('active');
-            if (isActive) {
-                Viz3D.toggleFresnelZones(false);
-                if (btn) btn.classList.remove('active');
-            } else {
-                Viz3D.toggleFresnelZones(true);
-                if (btn) btn.classList.add('active');
-            }
+            toggleFresnelDebugOverlay(!isActive);
         }
     };
 
@@ -2306,11 +2300,6 @@
      */
     window.toggleFresnelDebugOverlay = function(visible) {
         state.fresnelDebugVisible = visible;
-
-        // Sync Viz3D Fresnel zones with debug overlay state
-        if (window.Viz3D && Viz3D.toggleFresnelZones) {
-            Viz3D.toggleFresnelZones(visible);
-        }
 
         // Sync toolbar button
         var btn = document.getElementById('fresnel-toggle-btn');

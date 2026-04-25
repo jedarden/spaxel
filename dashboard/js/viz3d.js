@@ -2914,9 +2914,9 @@ const Viz3D = (function () {
         // Ellipsoid semi-axes calculation
         // For a prolate spheroid with foci at tx and rx:
         // Semi-major axis (a) = (d + deltaL) / 2
-        // Semi-minor axis (b) = sqrt(deltaL * (d + deltaL)) / 2
+        // Semi-minor axis (b) = sqrt(deltaL * (2*d + deltaL)) / 2
         const a = (d + deltaL) / 2;
-        const b = Math.sqrt(deltaL * (d + deltaL)) / 2;
+        const b = Math.sqrt(Math.max(0, deltaL * (2 * d + deltaL))) / 2;
 
         // Center of ellipsoid (midpoint between TX and RX)
         const center = new THREE.Vector3().addVectors(tx, rx).multiplyScalar(0.5);
