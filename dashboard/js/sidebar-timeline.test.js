@@ -1176,25 +1176,21 @@ describe('SidebarTimeline', function() {
             });
         });
 
-        test('non-replay mode navigates to timeline view instead of replay', function() {
+        test('without SpaxelReplay navigates to timeline view', function() {
+            // Remove SpaxelReplay to simulate it not being available
+            delete window.SpaxelReplay;
+
             // Show panel and load events
             SidebarTimeline.show();
             SidebarTimeline.refresh();
 
             return new Promise(function(resolve) {
                 setTimeout(function() {
-                    // Trigger ambient mode via the router callback that sidebar-timeline registered during init
-                    var routerCalls = global.SpaxelRouter.onModeChange.mock.calls;
-                    expect(routerCalls.length).toBeGreaterThan(0);
-                    var routerCallback = routerCalls[0][0];
-                    expect(typeof routerCallback).toBe('function');
-                    routerCallback('ambient');
-
                     var eventEl = mockElements.eventsContainer.querySelector('[data-id="100"]');
                     expect(eventEl).toBeTruthy();
                     eventEl.click();
 
-                    // In ambient mode, should navigate via router, not call jumpToTime
+                    // Without SpaxelReplay, should navigate via router
                     expect(global.SpaxelRouter.navigate).toHaveBeenCalledWith('timeline');
                     resolve();
                 }, 150);
