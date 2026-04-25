@@ -2481,9 +2481,24 @@
             }
         }
 
-        // Also highlight the link line in 3D if Viz3D supports it
-        if (window.Viz3D && window.Viz3D.highlightLink) {
-            window.Viz3D.highlightLink(linkID, highlight);
+        // Also highlight the link line in 3D
+        if (window.Viz3D) {
+            if (highlight) {
+                // Brighten link line on hover
+                var healthData = Viz3D.getLinkHealth ? Viz3D.getLinkHealth(linkID) : null;
+                var score = healthData ? healthData.score : 0.5;
+                var color = getFresnelHealthColor(score);
+                if (Viz3D.highlightLink) Viz3D.highlightLink(linkID, color);
+            } else {
+                // Rebuild link lines to restore normal appearance
+                if (Viz3D.applyLinks) {
+                    var links = [];
+                    state.links.forEach(function(link, id) {
+                        links.push({ id: id, node_mac: link.nodeMAC, peer_mac: link.peerMAC });
+                    });
+                    Viz3D.applyLinks(links);
+                }
+            }
         }
     }
 

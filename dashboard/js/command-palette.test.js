@@ -7,7 +7,7 @@
  * - Commands registry completeness
  * - Keyboard navigation (arrow down, enter, escape)
  * - Recent history (localStorage)
- * - Expert-mode gating (palette unavailable in simple/ambient mode)
+ * - Ambient-mode gating (palette unavailable in ambient mode)
  * - Viewport positioning (palette centred on screen)
  */
 
@@ -38,7 +38,7 @@ describe('CommandPaletteManager', function () {
 
     beforeEach(function () {
         // Reset body classes and history before each test
-        document.body.classList.remove('simple-mode', 'ambient-mode');
+        document.body.classList.remove('ambient-mode');
         localStorage.clear();
 
         // Close palette if open
@@ -448,62 +448,6 @@ describe('CommandPaletteManager', function () {
         });
     });
 
-    // ── Expert-mode gating ───────────────────────────────────────────────────
-
-    describe('Expert-mode gating', function () {
-
-        it('isExpertMode() returns true by default (no class on body)', function () {
-            var isExpert = window.CommandPaletteManager._isExpertMode;
-            if (!isExpert) return;
-            document.body.classList.remove('simple-mode', 'ambient-mode');
-            expect(isExpert()).toBe(true);
-        });
-
-        it('isExpertMode() returns false when body has simple-mode class', function () {
-            var isExpert = window.CommandPaletteManager._isExpertMode;
-            if (!isExpert) return;
-            document.body.classList.add('simple-mode');
-            expect(isExpert()).toBe(false);
-            document.body.classList.remove('simple-mode');
-        });
-
-        it('isExpertMode() returns false when body has ambient-mode class', function () {
-            var isExpert = window.CommandPaletteManager._isExpertMode;
-            if (!isExpert) return;
-            document.body.classList.add('ambient-mode');
-            expect(isExpert()).toBe(false);
-            document.body.classList.remove('ambient-mode');
-        });
-
-        it('open() does nothing in simple mode', function () {
-            var mgr = window.CommandPaletteManager;
-            if (!mgr) return;
-            document.body.classList.add('simple-mode');
-            mgr.open();
-            expect(mgr.isOpen).toBe(false);
-            document.body.classList.remove('simple-mode');
-        });
-
-        it('open() does nothing in ambient mode (window.currentMode)', function () {
-            var mgr = window.CommandPaletteManager;
-            if (!mgr) return;
-            window.currentMode = 'ambient';
-            mgr.open();
-            expect(mgr.isOpen).toBe(false);
-            delete window.currentMode;
-        });
-
-        it('Ctrl+K does not open palette in simple mode', function () {
-            var mgr = window.CommandPaletteManager;
-            if (!mgr) return;
-            document.body.classList.add('simple-mode');
-            var ev = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true });
-            document.dispatchEvent(ev);
-            expect(mgr.isOpen).toBe(false);
-            document.body.classList.remove('simple-mode');
-        });
-    });
-
     // ── Viewport positioning ─────────────────────────────────────────────────
 
     describe('Viewport positioning', function () {
@@ -512,7 +456,7 @@ describe('CommandPaletteManager', function () {
             var mgr = window.CommandPaletteManager;
             if (!mgr) return;
 
-            // Open in expert mode to create DOM
+            // Open palette to create DOM
             mgr.open();
             expect(mgr.isOpen).toBe(true);
 

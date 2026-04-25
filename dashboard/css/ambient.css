@@ -47,12 +47,7 @@ body.ambient-mode {
 .ambient-mode #room-editor-panel,
 .ambient-mode #gdop-legend,
 .ambient-mode #timeline-view,
-.ambient-mode #mode-toggle-bar,
-.ambient-mode .simulator-panel,
-.ambient-mode .simple-mode-header,
-.ambient-mode .simple-mode-content,
-.ambient-mode .simple-quick-actions,
-.ambient-mode .simple-alert-banner {
+.ambient-mode .simulator-panel {
     display: none !important;
 }
 

@@ -28,7 +28,7 @@
         // Create help overlay
         createHelpOverlay();
 
-        // Add help button to expert mode header
+        // Add help button to header
         addHelpButton();
 
         // Add keyboard shortcut (Ctrl/Cmd + ?)
@@ -118,7 +118,7 @@
     }
 
     /**
-     * Add help button to expert mode header
+     * Set up help button click handler.
      * Note: The button already exists in HTML (id="help-btn"), this just sets up the click handler
      */
     function addHelpButton() {

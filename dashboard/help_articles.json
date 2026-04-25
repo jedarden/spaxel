@@ -182,13 +182,6 @@
     "action": { "label": "View Fleet", "url": "#/fleet" }
   },
   {
-    "id": "simple-mode",
-    "title": "What is Simple Mode?",
-    "content": "Simple Mode is a card-based interface for household members who don't need the full 3D view. It shows room occupancy, activity feed, and alerts in an easy-to-use format. Toggle between Simple and Expert modes from the toolbar.",
-    "category": "Interface",
-    "action": null
-  },
-  {
     "id": "ambient-mode",
     "title": "What is Ambient Mode?",
     "content": "Ambient Mode is a display-only mode for wall-mounted tablets. It shows a simplified floor plan with colored dots for people and room labels. The display dims when the house is empty and brightens when someone arrives. Access at /ambient on your tablet.",

@@ -639,9 +639,9 @@
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const mac = btn.dataset.mac;
-                if (window.SpaxelOnboard && SpaxelOnboard.reprove) {
-                    SpaxelOnboard.reprove(mac);
-                }
+                // Navigate to live page which loads the onboard wizard;
+                // the query param triggers re-provision mode automatically.
+                window.location.href = '/live?reprovision=' + encodeURIComponent(mac);
             });
         });
 
@@ -1234,7 +1234,25 @@
         // Unpaired banner
         if (unpaired > 0) {
             let bannerText = unpaired + ' node' + (unpaired > 1 ? 's' : '') +
-                ' connected without credentials — re-provision to pair';
+                ' connected without credentials';
+            if (unpaired === 1) {
+                // Single unpaired node: link goes straight to re-provision for that node
+                const unpairedNode = state.nodes.find(function (n) { return n.unpaired; });
+                if (unpairedNode) {
+                    const bannerLink = elements.unpairedBanner.querySelector('.banner-action');
+                    if (bannerLink) {
+                        bannerLink.href = '/live?reprovision=' + encodeURIComponent(unpairedNode.mac);
+                        bannerLink.textContent = 'Re-provision';
+                    }
+                }
+            } else {
+                const bannerLink = elements.unpairedBanner.querySelector('.banner-action');
+                if (bannerLink) {
+                    bannerLink.href = '/live';
+                    bannerLink.textContent = 'Open Setup';
+                }
+                bannerText += ' — use the Pair button on each node below';
+            }
             if (migrationWindow.active && migrationWindow.remainingSecs !== null) {
                 const hours = Math.floor(migrationWindow.remainingSecs / 3600);
                 const mins = Math.floor((migrationWindow.remainingSecs % 3600) / 60);
@@ -1244,7 +1262,6 @@
                     bannerText += ' (migration window: ' + mins + 'm remaining)';
                 }
             } else if (!migrationWindow.active && unpaired > 0) {
-                // Nodes are unpaired but window is closed — these must have connected during window
                 bannerText += ' (migration window closed — new unpaired connections will be rejected)';
             }
             elements.unpairedBannerText.textContent = bannerText;

@@ -63,9 +63,6 @@
      * Initialize the router
      */
     function init() {
-        // Clean up legacy localStorage key
-        localStorage.removeItem('spaxel_active_mode');
-
         const hash = window.location.hash.slice(1) || 'live';
 
         // Validate hash against available routes
