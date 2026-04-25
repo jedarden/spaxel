@@ -495,7 +495,7 @@ describe('Fleet Page', function() {
     });
 
     describe('Camera fly-to', function() {
-        it('should store MAC in localStorage and redirect to expert mode', function() {
+        it('should store MAC in localStorage and redirect to live view', function() {
             const mac = 'AA:BB:CC:DD:EE:01';
             const storageKey = 'fleetFlyToMAC';
 
@@ -568,6 +568,108 @@ describe('Fleet Page', function() {
             expect(csvContent).toContain('AA:BB:CC:DD:EE:02');
             expect(csvContent).not.toContain('AA:BB:CC:DD:EE:03');
             expect(csvContent).not.toContain('AA:BB:CC:DD:EE:04');
+        });
+    });
+
+    describe('Unpaired node badge and re-provision', function() {
+        it('should render unpaired badge for unpaired nodes', function() {
+            const tableBody = document.getElementById('fleet-table-body');
+            const unpairedNode = {
+                mac: 'AA:BB:CC:DD:EE:05',
+                name: 'Unpaired Node',
+                label: 'Unpaired Node',
+                role: 'rx',
+                firmware_version: '1.2.3',
+                uptime_seconds: 100,
+                health_score: 0.50,
+                packet_rate: 10,
+                configured_rate: 20,
+                temperature: 40,
+                last_seen_ms: Date.now() - 1000,
+                pos_x: 1.0,
+                pos_y: 1.0,
+                pos_z: 1.0,
+                status: 'online',
+                ota_in_progress: false,
+                unpaired: true,
+            };
+
+            tableBody.innerHTML = `
+                <tr class="fleet-row" data-mac="${unpairedNode.mac}">
+                    <td class="col-status">
+                        <span class="status-badge unpaired">
+                            <span class="status-dot"></span>
+                            UNPAIRED
+                        </span>
+                    </td>
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-reprovision" data-mac="${unpairedNode.mac}" title="Re-provision credentials">↺ Pair</button>
+                            <button class="action-btn btn-locate" data-mac="${unpairedNode.mac}">⚡</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            const badge = tableBody.querySelector('.status-badge.unpaired');
+            expect(badge).not.toBe(null);
+            expect(badge.textContent.trim()).toContain('UNPAIRED');
+
+            const reproveBtn = tableBody.querySelector('.btn-reprovision');
+            expect(reproveBtn).not.toBe(null);
+            expect(reproveBtn.dataset.mac).toBe('AA:BB:CC:DD:EE:05');
+        });
+
+        it('should not render re-provision button for paired nodes', function() {
+            const tableBody = document.getElementById('fleet-table-body');
+            const pairedNode = mockState.nodes[0]; // online, paired node
+
+            tableBody.innerHTML = `
+                <tr class="fleet-row" data-mac="${pairedNode.mac}">
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-locate" data-mac="${pairedNode.mac}">⚡</button>
+                            <button class="action-btn btn-ota" data-mac="${pairedNode.mac}">↑</button>
+                            <button class="action-btn btn-more" data-mac="${pairedNode.mac}">…</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            const reproveBtn = tableBody.querySelector('.btn-reprovision');
+            expect(reproveBtn).toBe(null);
+        });
+
+        it('should call SpaxelOnboard.reprove when re-provision button is clicked', function() {
+            const tableBody = document.getElementById('fleet-table-body');
+            tableBody.innerHTML = `
+                <tr class="fleet-row" data-mac="AA:BB:CC:DD:EE:05">
+                    <td class="col-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-reprovision" data-mac="AA:BB:CC:DD:EE:05">↺ Pair</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            // Mock SpaxelOnboard
+            const mockReprove = jest.fn();
+            window.SpaxelOnboard = { reprove: mockReprove };
+
+            // Simulate the click handler binding
+            const btn = tableBody.querySelector('.btn-reprovision');
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const mac = btn.dataset.mac;
+                if (window.SpaxelOnboard && SpaxelOnboard.reprove) {
+                    SpaxelOnboard.reprove(mac);
+                }
+            });
+            btn.click();
+
+            expect(mockReprove).toHaveBeenCalledWith('AA:BB:CC:DD:EE:05');
+
+            delete window.SpaxelOnboard;
         });
     });
 

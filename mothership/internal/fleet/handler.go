@@ -20,13 +20,20 @@ type NodeIdentifier interface {
 	SendIdentifyToMAC(mac string, durationMS int) bool
 	SendRebootToMAC(mac string, delayMS int) bool
 	GetConnectedMACs() []string
+	GetUnpairedMACs() []string
+}
+
+// MigrationDeadlineProvider returns the migration window deadline (zero = strict mode).
+type MigrationDeadlineProvider interface {
+	GetMigrationDeadline() time.Time
 }
 
 // Handler serves the fleet REST API.
 type Handler struct {
-	mgr    *Manager
-	nodeID NodeIdentifier
-	otaMgr *ota.Manager
+	mgr         *Manager
+	nodeID      NodeIdentifier
+	otaMgr      *ota.Manager
+	migProvider MigrationDeadlineProvider
 }
 
 // NewHandler creates a new fleet REST handler backed by mgr.
@@ -42,6 +49,11 @@ func (h *Handler) SetOTAManager(mgr *ota.Manager) {
 // SetNodeIdentifier sets the node identifier for sending identify commands.
 func (h *Handler) SetNodeIdentifier(ni NodeIdentifier) {
 	h.nodeID = ni
+}
+
+// SetMigrationDeadlineProvider wires in the source of the migration window deadline.
+func (h *Handler) SetMigrationDeadlineProvider(p MigrationDeadlineProvider) {
+	h.migProvider = p
 }
 
 // RegisterRoutes mounts fleet endpoints on r.
@@ -105,7 +117,7 @@ type FleetNode struct {
 	Name            string  `json:"name"`
 	Label           string  `json:"label"`
 	Role            string  `json:"role"`
-	Status          string  `json:"status"` // "online", "offline", "updating"
+	Status          string  `json:"status"` // "online", "offline", "updating", "unpaired"
 	FirmwareVersion string  `json:"firmware_version"`
 	ChipModel       string  `json:"chip_model"`
 	PosX            float64 `json:"pos_x"`
@@ -113,6 +125,7 @@ type FleetNode struct {
 	PosZ            float64 `json:"pos_z"`
 	Virtual         bool    `json:"virtual"`
 	HealthScore     float64 `json:"health_score"`
+	Unpaired        bool    `json:"unpaired,omitempty"`
 	// Computed fields
 	LastSeenMS    int64   `json:"last_seen_ms"`
 	UptimeSeconds int64   `json:"uptime_seconds"`
@@ -120,6 +133,14 @@ type FleetNode struct {
 	ConfiguredRate int   `json:"configured_rate"`
 	Temperature   float64 `json:"temperature"`
 	OTAInProgress bool    `json:"ota_in_progress"`
+}
+
+// fleetListResponse wraps the fleet list with migration window metadata.
+type fleetListResponse struct {
+	Nodes                   []FleetNode `json:"nodes"`
+	MigrationWindowActive   bool        `json:"migration_window_active"`
+	MigrationDeadlineMS     int64       `json:"migration_deadline_ms,omitempty"`
+	MigrationRemainingSecs  float64     `json:"migration_remaining_secs,omitempty"`
 }
 
 // listFleet returns extended node data with computed fields for the fleet page.
@@ -141,6 +162,14 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 	connectedSet := make(map[string]bool)
 	for _, mac := range connectedMACs {
 		connectedSet[mac] = true
+	}
+
+	// Get unpaired MACs (nodes connected without valid tokens)
+	unpairedSet := make(map[string]bool)
+	if h.nodeID != nil {
+		for _, mac := range h.nodeID.GetUnpairedMACs() {
+			unpairedSet[mac] = true
+		}
 	}
 
 	// Get OTA progress if OTA manager is available
@@ -170,8 +199,14 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 			Temperature:     0,  // Not currently tracked
 		}
 
-		// Determine status - check OTA progress first
-		if otaProgress != nil {
+		// Check unpaired status first (highest priority visual indicator)
+		if unpairedSet[node.MAC] {
+			fleetNode.Unpaired = true
+			fleetNode.Status = "unpaired"
+		}
+
+		// Determine status - check OTA progress first (skip if already unpaired)
+		if !fleetNode.Unpaired && otaProgress != nil {
 			if progress, ok := otaProgress[node.MAC]; ok {
 				// Node has OTA progress - determine status from OTA state
 				switch progress.State {
@@ -211,7 +246,7 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 				}
 				fleetNode.OTAInProgress = false
 			}
-		} else {
+		} else if !fleetNode.Unpaired {
 			// No OTA manager - check connection status
 			if connectedSet[node.MAC] {
 				fleetNode.Status = "online"
@@ -239,7 +274,40 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 		fleetNodes = append(fleetNodes, fleetNode)
 	}
 
-	writeJSON(w, fleetNodes)
+	// Append unpaired nodes that are connected but not in the registry.
+	registeredMACs := make(map[string]bool, len(fleetNodes))
+	for _, n := range fleetNodes {
+		registeredMACs[n.MAC] = true
+	}
+	for mac := range unpairedSet {
+		if !registeredMACs[mac] {
+			fleetNodes = append(fleetNodes, FleetNode{
+				MAC:        mac,
+				Status:     "unpaired",
+				Unpaired:   true,
+				Role:       "rx",
+				LastSeenMS: now.UnixMilli(),
+			})
+		}
+	}
+
+	// Build response with migration window metadata.
+	resp := fleetListResponse{
+		Nodes: fleetNodes,
+	}
+	if h.migProvider != nil {
+		deadline := h.migProvider.GetMigrationDeadline()
+		if !deadline.IsZero() {
+			resp.MigrationDeadlineMS = deadline.UnixMilli()
+			remaining := time.Until(deadline).Seconds()
+			if remaining > 0 {
+				resp.MigrationWindowActive = true
+				resp.MigrationRemainingSecs = remaining
+			}
+		}
+	}
+
+	writeJSON(w, resp)
 }
 
 func (h *Handler) getNode(w http.ResponseWriter, r *http.Request) {

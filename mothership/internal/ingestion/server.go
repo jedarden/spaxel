@@ -18,7 +18,7 @@ import (
 // CSIBroadcaster is a callback for broadcasting CSI frames to dashboard
 type CSIBroadcaster interface {
 	BroadcastCSI(nodeMAC, peerMAC string, data []byte)
-	BroadcastNodeConnected(mac, firmware, chip string)
+	BroadcastNodeConnected(mac, firmware, chip string, unpaired bool)
 	BroadcastNodeDisconnected(mac string)
 	BroadcastLinkActive(linkID, nodeMAC, peerMAC string)
 }
@@ -274,6 +274,14 @@ func (s *Server) SetMigrationDeadline(t time.Time) {
 	s.mu.Unlock()
 }
 
+// GetMigrationDeadline returns the current migration window deadline.
+// Zero value means strict mode (no migration window).
+func (s *Server) GetMigrationDeadline() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.migrationDeadline
+}
+
 // SetTokenValidator sets the function used to validate node tokens in hello messages.
 // If set, nodes with missing or invalid tokens are rejected via sendReject and disconnected.
 func (s *Server) SetTokenValidator(fn func(mac, token string) bool) {
@@ -506,7 +514,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if broadcaster != nil {
-		broadcaster.BroadcastNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)
+		broadcaster.BroadcastNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip, nc.Unpaired)
 	}
 
 	if fleetFn != nil {

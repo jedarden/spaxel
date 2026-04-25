@@ -117,10 +117,10 @@ func TestHub_NodeEvents(t *testing.T) {
 	drainSnapshot(t, client.send)
 
 	// Test node connected event
-	hub.BroadcastNodeConnected("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3")
+	hub.BroadcastNodeConnected("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3", false)
 
 	msg := <-client.send
-	expected := `{"chip":"ESP32-S3","firmware_version":"1.0.0","mac":"AA:BB:CC:DD:EE:FF","type":"node_connected"}`
+	expected := `{"chip":"ESP32-S3","firmware_version":"1.0.0","mac":"AA:BB:CC:DD:EE:FF","type":"node_connected","unpaired":false}`
 	if string(msg) != expected {
 		t.Errorf("expected %s, got %s", expected, msg)
 	}
