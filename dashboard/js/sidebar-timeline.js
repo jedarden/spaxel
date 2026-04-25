@@ -150,7 +150,6 @@
         total: 0,
         loading: false,
         panelVisible: false,
-        dashboardMode: 'expert',
         selectedEventId: null,   // ID of the currently selected (jumped-to) event
         // Virtualization state
         virtualization: {
@@ -227,14 +226,6 @@
     // ============================================
 
     function onRouterModeChange(newMode, oldMode) {
-        // Expert modes support time-travel replay
-        var expertModes = ['live', 'timeline', 'replay', 'simulate'];
-        if (expertModes.indexOf(newMode) === -1) {
-            state.dashboardMode = 'simple';
-        } else {
-            state.dashboardMode = 'expert';
-        }
-
         // Reload events if panel is visible
         if (state.panelVisible) {
             loadInitialEvents();
@@ -278,7 +269,6 @@
     function loadInitialEvents() {
         const params = new URLSearchParams();
         params.set('limit', CONFIG.initialLoadLimit);
-        params.set('mode', state.dashboardMode);
 
         fetch('/api/events?' + params.toString())
             .then(function(res) {
@@ -703,8 +693,8 @@
             eventEl.classList.add('selected');
         }
 
-        // In expert mode, use jump-to-time replay
-        if (state.dashboardMode === 'expert' && window.SpaxelReplay) {
+        // Jump-to-time replay
+        if (window.SpaxelReplay) {
             SpaxelReplay.jumpToTime(timestamp).then(function() {
                 updateNowReplayingChip(true, timestamp);
 
@@ -719,7 +709,6 @@
                 }
             });
         } else if (window.SpaxelRouter) {
-            // In simple mode, navigate to timeline view instead of replay
             SpaxelRouter.navigate('timeline');
         }
     }
