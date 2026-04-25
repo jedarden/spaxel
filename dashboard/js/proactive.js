@@ -1193,7 +1193,7 @@
 
         const explanation = eventData.explainability;
         const contributingLinks = explanation.contributing_links || [];
-        const allLinks = explanation.all_links || [];
+        const diagnosis = explanation.diagnosis || null;
 
         // Find the primary contributing link
         const primaryLink = contributingLinks.length > 0 ? contributingLinks[0] : null;
@@ -1209,13 +1209,13 @@
             explanationText = `The system detected motion here because: <strong>${linkName}</strong>'s signal (deltaRMS: ${deltaRMS}) exceeded the motion threshold by <strong>${ratio}x</strong>.`;
 
             // Add root cause from diagnostic if available
-            if (primaryLink.diagnosis) {
-                const diagnosis = primaryLink.diagnosis;
+            if (diagnosis) {
                 explanationText += `<br><br><strong>Possible cause:</strong> ${diagnosis.detail}`;
 
                 if (diagnosis.advice) {
                     explanationText += `<br><strong>What to do:</strong> ${diagnosis.advice}`;
                 }
+                explanationText += `<br><br><em>We've noted this and will apply corrections.</em>`;
             } else {
                 explanationText += `<br><br><strong>Possible cause:</strong> Ambient RF interference or environmental changes. We've noted this and will apply corrections.`;
             }
