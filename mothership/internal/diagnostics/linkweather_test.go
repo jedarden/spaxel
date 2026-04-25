@@ -707,6 +707,198 @@ func TestGetAllDiagnoses(t *testing.T) {
 	}
 }
 
+// TestGetDiagnosticFor tests point-in-time diagnostic lookup
+func TestGetDiagnosticFor(t *testing.T) {
+	tests := []struct {
+		name          string
+		linkID        string
+		setupHistory  func() []LinkHealthSnapshot
+		wantRuleID    string
+		wantSeverity  DiagnosisSeverity
+	}{
+		{
+			name:   "environmental_change_from_high_drift",
+			linkID: "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+			setupHistory: func() []LinkHealthSnapshot {
+				now := time.Now()
+				samples := make([]LinkHealthSnapshot, 15)
+				for i := range samples {
+					samples[i] = LinkHealthSnapshot{
+						Timestamp:      now.Add(-time.Duration(i) * time.Minute),
+						SNR:            0.7,
+						PhaseStability: 0.3,
+						PacketRate:     18.0,
+						DriftRate:      0.08, // High drift
+					}
+				}
+				return samples
+			},
+			wantRuleID:   "environmental_change",
+			wantSeverity: SeverityINFO,
+		},
+		{
+			name:   "wifi_congestion_from_low_packet_rate",
+			linkID: "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+			setupHistory: func() []LinkHealthSnapshot {
+				now := time.Now()
+				samples := make([]LinkHealthSnapshot, 15)
+				for i := range samples {
+					samples[i] = LinkHealthSnapshot{
+						Timestamp:      now.Add(-time.Duration(i) * time.Minute),
+						SNR:            0.7,
+						PhaseStability: 0.3,
+						PacketRate:     10.0, // Below 16 Hz threshold
+						DriftRate:      0.02,
+					}
+				}
+				return samples
+			},
+			wantRuleID:   "wifi_congestion",
+			wantSeverity: SeverityACTIONABLE,
+		},
+		{
+			name:   "metal_interference_from_phase_instability",
+			linkID: "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+			setupHistory: func() []LinkHealthSnapshot {
+				now := time.Now()
+				samples := make([]LinkHealthSnapshot, 15)
+				for i := range samples {
+					samples[i] = LinkHealthSnapshot{
+						Timestamp:      now.Add(-time.Duration(i) * time.Minute),
+						SNR:            0.7,
+						PhaseStability: 0.8, // Above 0.6 threshold
+						PacketRate:     18.0,
+						DriftRate:      0.02,
+					}
+				}
+				return samples
+			},
+			wantRuleID:   "metal_interference",
+			wantSeverity: SeverityACTIONABLE,
+		},
+		{
+			name:   "periodic_interference_from_variance_spike",
+			linkID: "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+			setupHistory: func() []LinkHealthSnapshot {
+				now := time.Now()
+				samples := make([]LinkHealthSnapshot, 15)
+				for i := range samples {
+					samples[i] = LinkHealthSnapshot{
+						Timestamp:        now.Add(-time.Duration(i) * time.Minute),
+						SNR:              0.7,
+						PhaseStability:   0.3,
+						PacketRate:       18.0,
+						DriftRate:        0.02,
+						DeltaRMSVariance: 3.0, // Above 2.0 threshold
+					}
+				}
+				return samples
+			},
+			wantRuleID:   "periodic_interference",
+			wantSeverity: SeverityWARNING,
+		},
+		{
+			name:   "no_issue_when_metrics_normal",
+			linkID: "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+			setupHistory: func() []LinkHealthSnapshot {
+				now := time.Now()
+				samples := make([]LinkHealthSnapshot, 15)
+				for i := range samples {
+					samples[i] = LinkHealthSnapshot{
+						Timestamp:      now.Add(-time.Duration(i) * time.Minute),
+						SNR:            0.8,
+						PhaseStability: 0.2,
+						PacketRate:     19.0,
+						DriftRate:      0.01,
+					}
+				}
+				return samples
+			},
+			wantRuleID:   "no_issue_detected",
+			wantSeverity: SeverityINFO,
+		},
+		{
+			name:   "insufficient_data_returns_generic",
+			linkID: "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+			setupHistory: func() []LinkHealthSnapshot {
+				return []LinkHealthSnapshot{} // Empty history
+			},
+			wantRuleID:   "insufficient_data",
+			wantSeverity: SeverityINFO,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := NewDiagnosticEngine(DiagnosticConfig{
+				DiagnosticInterval: 15 * time.Minute,
+				HistoryWindow:      1 * time.Hour,
+				MinSamples:         10,
+			})
+
+			history := tt.setupHistory()
+
+			engine.SetHealthHistoryAccessor(func(linkID string, window time.Duration) []LinkHealthSnapshot {
+				return history
+			})
+
+			diagnosis := engine.GetDiagnosticFor(tt.linkID, time.Now())
+
+			if diagnosis == nil {
+				t.Fatal("Expected non-nil diagnosis")
+			}
+			if diagnosis.RuleID != tt.wantRuleID {
+				t.Errorf("Expected RuleID %q, got %q", tt.wantRuleID, diagnosis.RuleID)
+			}
+			if diagnosis.Severity != tt.wantSeverity {
+				t.Errorf("Expected Severity %s, got %s", tt.wantSeverity, diagnosis.Severity)
+			}
+			if diagnosis.Title == "" {
+				t.Error("Expected non-empty Title")
+			}
+			if diagnosis.Detail == "" {
+				t.Error("Expected non-empty Detail")
+			}
+		})
+	}
+}
+
+// TestGetDiagnosticFor_PriorityOrder tests that more severe issues take priority
+func TestGetDiagnosticFor_PriorityOrder(t *testing.T) {
+	engine := NewDiagnosticEngine(DiagnosticConfig{
+		DiagnosticInterval: 15 * time.Minute,
+		HistoryWindow:      1 * time.Hour,
+		MinSamples:         10,
+	})
+
+	// Snapshot with both high drift AND low packet rate
+	// Drift check comes first in GetDiagnosticFor, so environmental_change should win
+	now := time.Now()
+	history := make([]LinkHealthSnapshot, 15)
+	for i := range history {
+		history[i] = LinkHealthSnapshot{
+			Timestamp:      now.Add(-time.Duration(i) * time.Minute),
+			SNR:            0.7,
+			PhaseStability: 0.3,
+			PacketRate:     10.0, // Low
+			DriftRate:      0.08,  // High
+		}
+	}
+
+	engine.SetHealthHistoryAccessor(func(linkID string, window time.Duration) []LinkHealthSnapshot {
+		return history
+	})
+
+	diagnosis := engine.GetDiagnosticFor("AA:BB:CC:DD:EE:FF:11:22:33:44:55:66", now)
+	if diagnosis == nil {
+		t.Fatal("Expected non-nil diagnosis")
+	}
+	// Environmental change is checked first (drift > 0.05)
+	if diagnosis.RuleID != "environmental_change" {
+		t.Errorf("Expected environmental_change (drift checked first), got %s", diagnosis.RuleID)
+	}
+}
+
 // TestDiagnosticEngineStop tests that the engine stops cleanly
 func TestDiagnosticEngineStop(t *testing.T) {
 	engine := NewDiagnosticEngine(DiagnosticConfig{

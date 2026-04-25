@@ -14,13 +14,21 @@ import (
 	"github.com/spaxel/mothership/internal/zones"
 )
 
+// BlobIdentityProvider resolves blob IDs to person labels.
+type BlobIdentityProvider interface {
+	// PersonLabelForBlob returns the BLE-identified person label for a blob,
+	// or an empty string if the blob is unidentified.
+	PersonLabelForBlob(blobID int) string
+}
+
 // ZonesHandler manages zones and portals via the zones.Manager.
 // Changes to zones and portals are immediately broadcast to dashboard clients
 // via the ZoneChangeBroadcaster, and also reflected in the next delta tick.
 type ZonesHandler struct {
-	mu  sync.RWMutex
-	mgr *zones.Manager
-	bc  dashboard.ZoneChangeBroadcaster
+	mu      sync.RWMutex
+	mgr     *zones.Manager
+	bc      dashboard.ZoneChangeBroadcaster
+	ident   BlobIdentityProvider
 }
 
 // zoneWithOcc extends a zone with current occupancy and people list for API responses.
@@ -91,6 +99,13 @@ func (h *ZonesHandler) SetZoneChangeBroadcaster(bc dashboard.ZoneChangeBroadcast
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.bc = bc
+}
+
+// SetBlobIdentityProvider sets the provider that resolves blob IDs to person labels.
+func (h *ZonesHandler) SetBlobIdentityProvider(p BlobIdentityProvider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.ident = p
 }
 
 // notifyZoneChange broadcasts a zone change event if a broadcaster is set.
@@ -290,8 +305,13 @@ func (h *ZonesHandler) RegisterRoutes(r chi.Router) {
 func (h *ZonesHandler) toZoneResponse(z *zones.Zone) zoneWithOcc {
 	occ := h.mgr.GetZoneOccupancy(z.ID)
 	count := 0
+	var people []string
 	if occ != nil {
 		count = occ.Count
+		people = h.resolvePeople(occ.BlobIDs)
+	}
+	if people == nil {
+		people = []string{}
 	}
 	return zoneWithOcc{
 		ID:        z.ID,
@@ -309,9 +329,31 @@ func (h *ZonesHandler) toZoneResponse(z *zones.Zone) zoneWithOcc {
 		Enabled:   z.Enabled,
 		ZoneType:  string(z.ZoneType),
 		Occupancy: count,
-		People:    []string{},
+		People:    people,
 		CreatedAt: z.CreatedAt,
 	}
+}
+
+// resolvePeople maps blob IDs to deduplicated person labels.
+func (h *ZonesHandler) resolvePeople(blobIDs []int) []string {
+	h.mu.RLock()
+	ident := h.ident
+	h.mu.RUnlock()
+
+	if ident == nil || len(blobIDs) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var people []string
+	for _, id := range blobIDs {
+		label := ident.PersonLabelForBlob(id)
+		if label != "" && !seen[label] {
+			seen[label] = true
+			people = append(people, label)
+		}
+	}
+	return people
 }
 
 // toPortalResponse converts a zones.Portal to the API response format.
@@ -444,13 +486,10 @@ func (h *ZonesHandler) deleteZone(w http.ResponseWriter, r *http.Request) {
 }
 
 // historyEntry represents an hourly occupancy bucket for the zone history API.
-type historyEntry struct {
-	Timestamp int64    `json:"timestamp"`
-	Count     int      `json:"count"`
-	People   []string `json:"people"`
-}
+type historyEntry = zones.HistoryEntry
 
-// getZoneHistory returns hourly occupancy history for a zone.
+// getZoneHistory returns hourly occupancy history for a zone by querying
+// crossing events from the zones manager's SQLite database.
 func (h *ZonesHandler) getZoneHistory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -467,15 +506,9 @@ func (h *ZonesHandler) getZoneHistory(w http.ResponseWriter, r *http.Request) {
 		limit = 24 * 30
 	}
 
-	// Generate synthetic history data (in real implementation, query from events)
-	history := make([]historyEntry, limit)
-	now := time.Now()
-	for i := range history {
-		history[i] = historyEntry{
-			Timestamp: now.Add(-time.Duration(i) * time.Hour).UnixNano() / 1e6,
-			Count:     0,
-			People:    []string{},
-		}
+	history := h.mgr.GetZoneHistory(id, limit)
+	if history == nil {
+		history = []historyEntry{}
 	}
 
 	writeJSON(w, http.StatusOK, history)
