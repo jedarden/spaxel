@@ -31,7 +31,7 @@ const (
 	headerSize = 24
 
 	// Default values
-	defaultMothership = "ws://localhost:8080/ws"
+	defaultMothership = "ws://localhost:8080/ws/node"
 	defaultNodes      = 2
 	defaultWalkers    = 1
 	defaultRate       = 20  // Hz
