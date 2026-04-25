@@ -1486,3 +1486,14 @@ func (e *Engine) GetRecentActionLog(limit int) []struct {
 
 	return results
 }
+
+// HasFirstFired returns true if any automation has fired at least once.
+// This is used for feature discovery notifications.
+func (e *Engine) HasFirstFired() bool {
+	var fireCount int
+	err := e.db.QueryRow("SELECT COALESCE(SUM(fire_count), 0) FROM automations").Scan(&fireCount)
+	if err != nil {
+		return false
+	}
+	return fireCount > 0
+}
