@@ -36,6 +36,13 @@
         staleThresholdMs: 30000   // Node considered stale after 30s
     };
 
+    // Migration window state
+    let migrationWindow = {
+        active: false,
+        deadlineMs: null,
+        remainingSecs: null
+    };
+
     // ============================================
     // DOM Elements
     // ============================================
@@ -229,8 +236,20 @@
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const nodes = await response.json();
-            state.nodes = nodes || [];
+            const data = await response.json();
+
+            // Handle both wrapped response format (with migration window metadata)
+            // and legacy format (plain array of nodes).
+            if (Array.isArray(data)) {
+                state.nodes = data;
+            } else if (data && Array.isArray(data.nodes)) {
+                state.nodes = data.nodes;
+                migrationWindow.active = !!data.migration_window_active;
+                migrationWindow.deadlineMs = data.migration_deadline_ms || null;
+                migrationWindow.remainingSecs = data.migration_remaining_secs || null;
+            } else {
+                state.nodes = [];
+            }
 
             // Get latest firmware version
             await fetchLatestFirmware();
@@ -807,10 +826,10 @@
     }
 
     function flyToNode(mac) {
-        // Store target MAC in localStorage for expert mode
+        // Store target MAC in localStorage for live view fly-to
         localStorage.setItem('fleetFlyToMAC', mac);
 
-        // Redirect to expert mode
+        // Redirect to live view
         window.location.href = '/?highlight=' + mac;
     }
 
@@ -1214,9 +1233,21 @@
 
         // Unpaired banner
         if (unpaired > 0) {
-            elements.unpairedBannerText.textContent =
-                unpaired + ' node' + (unpaired > 1 ? 's' : '') +
+            let bannerText = unpaired + ' node' + (unpaired > 1 ? 's' : '') +
                 ' connected without credentials — re-provision to pair';
+            if (migrationWindow.active && migrationWindow.remainingSecs !== null) {
+                const hours = Math.floor(migrationWindow.remainingSecs / 3600);
+                const mins = Math.floor((migrationWindow.remainingSecs % 3600) / 60);
+                if (hours > 0) {
+                    bannerText += ' (migration window: ' + hours + 'h ' + mins + 'm remaining)';
+                } else {
+                    bannerText += ' (migration window: ' + mins + 'm remaining)';
+                }
+            } else if (!migrationWindow.active && unpaired > 0) {
+                // Nodes are unpaired but window is closed — these must have connected during window
+                bannerText += ' (migration window closed — new unpaired connections will be rejected)';
+            }
+            elements.unpairedBannerText.textContent = bannerText;
             elements.unpairedBanner.style.display = '';
         } else {
             elements.unpairedBanner.style.display = 'none';

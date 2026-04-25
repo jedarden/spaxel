@@ -424,12 +424,13 @@ func (h *Hub) BroadcastCSI(nodeMAC, peerMAC string, data []byte) {
 }
 
 // BroadcastNodeConnected notifies dashboards of a new node
-func (h *Hub) BroadcastNodeConnected(mac, firmware, chip string) {
+func (h *Hub) BroadcastNodeConnected(mac, firmware, chip string, unpaired bool) {
 	msg := map[string]interface{}{
 		"type":             "node_connected",
 		"mac":              mac,
 		"firmware_version": firmware,
 		"chip":             chip,
+		"unpaired":         unpaired,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)

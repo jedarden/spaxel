@@ -976,6 +976,7 @@
                     mac: msg.mac,
                     firmware: msg.firmware_version,
                     chip: msg.chip,
+                    unpaired: !!msg.unpaired,
                     lastSeen: Date.now()
                 });
                 updateNodeList();
@@ -1411,12 +1412,14 @@
                 motionDetected: false,
                 deltaRMS: 0,
                 ampHistory: [],
-                lastAmpSample: 0
+                lastAmpSample: 0,
+                channel: frame.channel
             };
             state.links.set(linkID, link);
             updateLinkList();
         } else {
             link.lastFrame = Date.now();
+            link.channel = frame.channel;
             // Ensure time-series fields exist on links pre-created from JSON events
             if (!link.ampHistory) {
                 link.ampHistory = [];
@@ -1530,8 +1533,9 @@
         state.nodes.forEach((node, mac) => {
             const isVirtual = !!node.virtual;
             const isOnline = isVirtual || Date.now() - node.lastSeen < 30000;
-            const statusClass = isVirtual ? 'virtual' : (isOnline ? 'online' : 'offline');
-            const statusLabel = isVirtual ? 'Virtual' : (isOnline ? 'Online' : 'Offline');
+            const isUnpaired = !!node.unpaired;
+            const statusClass = isUnpaired ? 'unpaired' : (isVirtual ? 'virtual' : (isOnline ? 'online' : 'offline'));
+            const statusLabel = isUnpaired ? 'Unpaired' : (isVirtual ? 'Virtual' : (isOnline ? 'Online' : 'Offline'));
 
             // Check for OTA rollback state
             let rollbackBadge = '';
@@ -2323,7 +2327,7 @@
         clearFresnelDebugEllipsoids();
 
         // Get node positions from Viz3D
-        var nodeMeshes = Viz3D.getNodeMesh ? Viz3D.getNodeMesh() : new Map();
+        var nodeMeshes = (window.Viz3D && Viz3D.getNodeMeshes) ? Viz3D.getNodeMeshes() : new Map();
 
         // Create ellipsoids for each active link
         state.links.forEach(function(link, linkID) {
@@ -2341,12 +2345,15 @@
             var tx = txMesh.position;
             var rx = rxMesh.position;
 
-            // Get channel from link health data (default to 6 for 2.4 GHz)
-            var healthData = state.worstLinkID === linkID ? { score: state.worstLinkScore } : null;
-            var channel = 6; // Default 2.4 GHz channel
+            // Get channel from link's last CSI frame (default to 6 for 2.4 GHz)
+            var channel = link.channel || 6;
 
-            // Determine color based on link health
-            var healthScore = healthData ? healthData.score : 0.5;
+            // Get per-link health score from Viz3D
+            var healthScore = 0.5;
+            if (window.Viz3D && Viz3D.getLinkHealth) {
+                var healthData = Viz3D.getLinkHealth(linkID);
+                if (healthData) healthScore = healthData.score;
+            }
             var color = getFresnelHealthColor(healthScore);
 
             // Create Fresnel ellipsoid
@@ -2356,9 +2363,11 @@
                 ellipsoid.wireframe.userData.linkID = linkID;
                 ellipsoid.wireframe.userData.txMAC = txMAC;
                 ellipsoid.wireframe.userData.rxMAC = rxMAC;
+                ellipsoid.wireframe.userData.healthScore = healthScore;
                 ellipsoid.fill.userData.linkID = linkID;
                 ellipsoid.fill.userData.txMAC = txMAC;
                 ellipsoid.fill.userData.rxMAC = rxMAC;
+                ellipsoid.fill.userData.healthScore = healthScore;
 
                 state.fresnelEllipsoids.set(linkID, ellipsoid);
             }
@@ -2498,16 +2507,20 @@
         if (!link || !ellipsoid) return;
 
         var data = ellipsoid.data;
-        var healthScore = state.worstLinkID === linkID ? state.worstLinkScore : 0.5;
+        var healthScore = 0.5;
+        if (window.Viz3D && Viz3D.getLinkHealth) {
+            var healthData = Viz3D.getLinkHealth(linkID);
+            if (healthData) healthScore = healthData.score;
+        }
 
-        var txLabel = state.nodes.get(data.txMAC) ? state.nodes.get(data.txMAC).mac : data.txMAC;
-        var rxLabel = state.nodes.get(data.rxMAC) ? state.nodes.get(data.rxMAC).mac : data.rxMAC;
+        var txNode = state.nodes.get(data.txMAC);
+        var rxNode = state.nodes.get(data.rxMAC);
+        var txLabel = txNode ? (txNode.name || txNode.mac) : data.txMAC;
+        var rxLabel = rxNode ? (rxNode.name || rxNode.mac) : data.rxMAC;
 
         tooltip.innerHTML =
-            '<strong>Link:</strong> ' + abbreviateLinkID(linkID) + '<br>' +
-            '<strong>TX:</strong> ' + txLabel + '<br>' +
-            '<strong>RX:</strong> ' + rxLabel + '<br>' +
-            '<strong>Fresnel radius at midpoint:</strong> ' + data.b.toFixed(3) + ' m<br>' +
+            '<strong>Link:</strong> ' + txLabel + ' to ' + rxLabel + '<br>' +
+            '<strong>Fresnel radius at midpoint:</strong> ' + data.b.toFixed(2) + ' m<br>' +
             '<strong>Link distance:</strong> ' + data.d.toFixed(2) + ' m<br>' +
             '<strong>Wavelength:</strong> ' + data.lambda.toFixed(3) + ' m (ch ' + data.channel + ')<br>' +
             '<strong>Link health:</strong> ' + Math.round(healthScore * 100) + '%';
@@ -2557,7 +2570,7 @@
         renderer.domElement.addEventListener('mousemove', onFresnelMouseMove);
         renderer.domElement.addEventListener('click', onFresnelClick);
 
-        // Show debug section if expert mode (always visible for now)
+        // Show debug section
         var debugSection = document.getElementById('debug-section');
         if (debugSection) {
             debugSection.style.display = 'block';
@@ -2588,7 +2601,7 @@
         };
     };
 
-    // Ctrl+K / Cmd+K → Command Palette (expert mode only)
+    // Ctrl+K / Cmd+K → Command Palette
     document.addEventListener('keydown', function (e) {
         if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
             // CommandPaletteManager registers its own handler; let it run.

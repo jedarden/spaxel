@@ -2537,6 +2537,7 @@ func main() {
 	// Fleet REST API
 	fleetHandler := fleet.NewHandler(fleetMgr)
 	fleetHandler.SetNodeIdentifier(ingestSrv)
+	fleetHandler.SetMigrationDeadlineProvider(ingestSrv)
 	fleetHandler.RegisterRoutes(r)
 
 	// Floorplan REST API
@@ -3920,22 +3921,6 @@ func main() {
 			ambientPath := filepath.Join(staticDir, "ambient.html")
 			if _, err := os.Stat(ambientPath); err == nil {
 				http.ServeFile(w, r, ambientPath)
-				return
-			}
-		}
-		http.NotFound(w, r)
-	})
-
-	// Serve simple mode page
-	r.Get("/simple", func(w http.ResponseWriter, r *http.Request) {
-		staticDir := cfg.StaticDir
-		if staticDir == "" {
-			staticDir = findDashboardDir()
-		}
-		if staticDir != "" {
-			simplePath := filepath.Join(staticDir, "simple.html")
-			if _, err := os.Stat(simplePath); err == nil {
-				http.ServeFile(w, r, simplePath)
 				return
 			}
 		}

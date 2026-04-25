@@ -403,7 +403,141 @@
             '</div>';
     }
 
+    // In reprove mode, skip firmware flash and send provisioning payload over serial.
+    function renderReprovision(contentEl) {
+        var cancelled = false;
+
+        contentEl.innerHTML =
+            '<div class="wizard-step-content">' +
+            '<h2>Re-provision Node</h2>' +
+            '<p>Sending updated security credentials to your ESP32-S3...</p>' +
+            '<p class="wizard-muted">Press the <strong style="color:#f44336">RST</strong> button on your device if the progress stalls.</p>' +
+            '<div id="reprovision-progress-bar" style="margin:16px 0">' +
+            '  <div class="progress-bar"><div class="progress-fill" id="reprovision-progress-fill" style="width:0%"></div></div>' +
+            '</div>' +
+            '<p id="reprovision-status-text" style="display:none;margin:8px 0;font-size:13px;color:#80cbc4"></p>' +
+            '<div id="reprovision-recovery" style="display:none"></div>' +
+            '<details id="reprovision-log-details" style="margin-top:16px;font-size:12px">' +
+            '  <summary style="cursor:pointer;color:#546e7a">Show log</summary>' +
+            '  <div id="reprovision-log-body" style="background:#0a0e13;border:1px solid #263238;border-radius:4px;' +
+            'padding:8px;margin-top:4px;max-height:160px;overflow-y:auto;font-family:monospace"></div>' +
+            '</details>' +
+            '</div>';
+        hideNav();
+
+        function appendLog(level, msg) {
+            var logEl = document.getElementById('reprovision-log-body');
+            if (!logEl) return;
+            var ts = new Date().toISOString().slice(11, 23);
+            var color = level === 'error' ? '#ef9a9a' : level === 'warn' ? '#ffe082' : '#b0bec5';
+            var line = document.createElement('div');
+            line.style.cssText = 'font-size:11px;color:' + color + ';word-break:break-all;margin:1px 0';
+            line.textContent = '[' + ts + '] ' + msg;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function setStatus(msg, color) {
+            var el = document.getElementById('reprovision-status-text');
+            if (!el) return;
+            el.style.display = msg ? 'block' : 'none';
+            el.style.color = color || '#80cbc4';
+            el.textContent = msg;
+        }
+
+        function setProgress(pct) {
+            var fill = document.getElementById('reprovision-progress-fill');
+            if (fill) fill.style.width = pct + '%';
+        }
+
+        async function doReprovision() {
+            try {
+                // Fetch provisioning payload with the known MAC so the server derives the correct token.
+                setStatus('Generating credentials...');
+                setProgress(10);
+                appendLog('log', 'POST ' + CONFIG.provisioningEndpoint + ' with mac=' + (state.reproveMAC || '(unknown)'));
+
+                var resp = await fetch(CONFIG.provisioningEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        wifi_ssid: state.wifiSSID,
+                        wifi_pass: state.wifiPass,
+                        mac: state.reproveMAC || '',
+                        ms_ip: state.mothershipIP || ''
+                    }),
+                });
+                if (!resp.ok) throw new Error('Provisioning server error: HTTP ' + resp.status);
+                var payload = await resp.json();
+                if (state.mothershipHost) payload.ms_mdns = state.mothershipHost;
+                if (state.mothershipPort) payload.ms_port = state.mothershipPort;
+                if (state.mothershipIP) payload.ms_ip = state.mothershipIP;
+                appendLog('log', 'Payload ready — node_id=' + (payload.node_id || '(none)'));
+
+                setProgress(30);
+                setStatus('Waiting for device...');
+                appendLog('log', 'Sending payload over serial...');
+
+                var mac = await sendPayloadOverSerial(payload,
+                    function (level, msg) { appendLog(level, msg); },
+                    function (msg) { setStatus(msg); }
+                );
+
+                if (cancelled) return;
+
+                setProgress(100);
+                setStatus('✓ Credentials updated!', '#a5d6a7');
+                appendLog('log', 'Re-provisioning complete — MAC: ' + (mac || 'unknown'));
+                state.nodeMAC = mac || state.reproveMAC;
+
+                // Snapshot existing nodes for the detect step.
+                try {
+                    var nodesResp = await fetch(CONFIG.nodesEndpoint);
+                    var nodes = await nodesResp.json();
+                    state.knownMACs = (nodes || []).map(function (n) { return n.mac; });
+                } catch (_) {}
+
+                saveState();
+                setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1200);
+
+            } catch (e) {
+                if (cancelled) return;
+                appendLog('error', 'Re-provision failed: ' + (e.message || String(e)));
+                setStatus('');
+                setProgress(0);
+                document.getElementById('reprovision-progress-bar').style.display = 'none';
+                document.getElementById('reprovision-log-details').open = true;
+
+                var recovery = document.getElementById('reprovision-recovery');
+                recovery.style.display = 'block';
+                recovery.innerHTML =
+                    '<div class="wizard-error" style="margin-bottom:12px">' +
+                    (isUserError(e) ? e.message : 'Re-provisioning failed. Check that the device is connected and try again.') +
+                    '</div>' +
+                    '<div style="text-align:center">' +
+                    '<button class="wizard-btn wizard-btn-primary" id="reprove-retry-btn">Try Again</button>' +
+                    '</div>';
+                document.getElementById('reprove-retry-btn').addEventListener('click', function () {
+                    recovery.style.display = 'none';
+                    recovery.innerHTML = '';
+                    document.getElementById('reprovision-progress-bar').style.display = 'block';
+                    setProgress(0);
+                    doReprovision();
+                });
+            }
+        }
+
+        doReprovision();
+        return {
+            cleanup: function () { cancelled = true; }
+        };
+    }
+
     function renderFlashFirmware(contentEl) {
+        // In reprove mode, skip the firmware flash and go straight to serial provisioning.
+        if (state.reproveMode) {
+            return renderReprovision(contentEl);
+        }
         var flashRetryCount = 0;
         var cancelled = false;
         var origConsole = { log: console.log, warn: console.warn, error: console.error };
