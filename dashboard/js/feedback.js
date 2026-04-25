@@ -375,8 +375,10 @@
             ';
 
             // Add explanation section if available (for FALSE_POSITIVE feedback)
-            if (response.explainability && response.type === 'adjustment') {
-                content += this.renderFeedbackExplanation(response.explainability);
+            // Check both response.explainability and response.inline_response.explainability
+            var explainability = response.explainability || (response.inline_response && response.inline_response.explainability);
+            if (explainability && response.type === 'adjustment') {
+                content += this.renderFeedbackExplanation(explainability);
             }
 
             content += '<button class="feedback-inline-close" onclick="this.parentElement.remove()">\u00D7</button>';
@@ -476,7 +478,7 @@
                 // Add correction note
                 explanationHTML += '\
                     <p class="explanation-correction">\
-                        <em>We\'ve noted this feedback and will apply corrections to improve future detection accuracy.</em>\
+                        <em>We\'ve noted this and will apply a correction.</em>\
                     </p>\
                 ';
             } else {
@@ -484,6 +486,9 @@
                     <p class="explanation-text">\
                         The system detected motion based on signal patterns across multiple links.\
                         We\'ve noted this feedback to improve accuracy.\
+                    </p>\
+                    <p class="explanation-correction">\
+                        <em>We\'ve noted this and will apply a correction.</em>\
                     </p>\
                 ';
             }
