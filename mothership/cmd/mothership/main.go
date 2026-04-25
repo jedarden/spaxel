@@ -1819,6 +1819,16 @@ func main() {
 						// Update explainability handler with grid data (no fusion grid available)
 						var gridSnapshot *explainability.GridSnapshot
 						explainabilityHandler.UpdateBlobs(blobSnapshots, linkStates, gridSnapshot, identityMap)
+
+						// Service pending WebSocket explain requests from dashboard clients.
+						// ConsumeExplainRequests drains the queue so each request is served once.
+						if dashboardHub != nil {
+							for _, blobID := range dashboardHub.ConsumeExplainRequests() {
+								if snap := explainabilityHandler.BuildWebSocketSnapshot(blobID); snap != nil {
+									dashboardHub.BroadcastExplainSnapshot(blobID, snap)
+								}
+							}
+						}
 					}
 				}
 				shedder.EndStage(st2)
