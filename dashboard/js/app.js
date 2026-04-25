@@ -2531,10 +2531,12 @@
             if (healthData) healthScore = healthData.score;
         }
 
-        var txNode = state.nodes.get(data.txMAC);
-        var rxNode = state.nodes.get(data.rxMAC);
-        var txLabel = txNode ? (txNode.name || txNode.mac) : data.txMAC;
-        var rxLabel = rxNode ? (rxNode.name || rxNode.mac) : data.rxMAC;
+        var txMAC = link.nodeMAC;
+        var rxMAC = link.peerMAC;
+        var txNode = state.nodes.get(txMAC);
+        var rxNode = state.nodes.get(rxMAC);
+        var txLabel = txNode ? (txNode.name || txNode.mac) : txMAC;
+        var rxLabel = rxNode ? (rxNode.name || rxNode.mac) : rxMAC;
 
         tooltip.innerHTML =
             '<strong>Link:</strong> ' + txLabel + ' to ' + rxLabel + '<br>' +
