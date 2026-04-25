@@ -1186,6 +1186,49 @@ func (m *Manager) IsReconciled() bool {
 	return m.reconciled
 }
 
+// HistoryEntry represents an hourly occupancy bucket for the zone history API.
+type HistoryEntry struct {
+	Timestamp int64    `json:"timestamp"`
+	Count     int      `json:"count"`
+	People    []string `json:"people"`
+}
+
+// GetZoneHistory returns hourly occupancy buckets for a zone by querying
+// crossing_events from SQLite. It computes net entry count per hour window.
+func (m *Manager) GetZoneHistory(zoneID string, hours int) []HistoryEntry {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	now := time.Now()
+	entries := make([]HistoryEntry, hours)
+
+	// Build hourly buckets from now backwards
+	for i := 0; i < hours; i++ {
+		bucketEnd := now.Add(-time.Duration(i) * time.Hour)
+		bucketStart := bucketEnd.Add(-time.Hour)
+		entries[i] = HistoryEntry{
+			Timestamp: bucketEnd.UnixNano() / 1e6,
+			Count:     0,
+			People:    []string{},
+		}
+
+		// Query net crossings into this zone during this bucket
+		var netIn int
+		row := m.db.QueryRow(`
+			SELECT
+				COALESCE(SUM(CASE WHEN to_zone = ? THEN 1 ELSE 0 END), 0)
+				- COALESCE(SUM(CASE WHEN from_zone = ? THEN 1 ELSE 0 END), 0)
+			FROM crossing_events
+			WHERE timestamp >= ? AND timestamp < ?
+		`, zoneID, zoneID, bucketStart.UnixMilli(), bucketEnd.UnixMilli())
+		if err := row.Scan(&netIn); err == nil && netIn > 0 {
+			entries[i].Count = netIn
+		}
+	}
+
+	return entries
+}
+
 // GetOccupancyStatus returns the status map for all zones.
 func (m *Manager) GetOccupancyStatus() map[string]OccupancyStatus {
 	m.mu.RLock()

@@ -53,10 +53,13 @@
         if (poorQualityLinks.length === 0) {
             // Quality recovered - clear any active prompt and tracking state
             if (qualityPromptActive || qualityPromptLinkID) {
+                // Clear dismiss-for-today so the prompt can re-appear if condition reoccurs
+                if (qualityPromptLinkID) {
+                    const today = new Date().toDateString();
+                    const dismissKey = `${qualityPromptLinkID}_${today}`;
+                    dismissedQualityPrompts.delete(dismissKey);
+                }
                 dismissQualityPrompt();
-                // Clear tracking state to allow re-arming if condition reoccurs
-                qualityPromptLinkID = null;
-                qualityPromptStartTime = null;
             }
             return;
         }
@@ -86,16 +89,19 @@
      * Show a quality degradation prompt card
      */
     function showQualityPrompt(link) {
+        // Use consistent linkID computation (matches monitorLinkQuality)
+        const linkID = link.link_id || (link.node_mac + ':' + link.peer_mac);
+
         // Check if already dismissed today
         const today = new Date().toDateString();
-        const dismissKey = `${link.link_id}_${today}`;
+        const dismissKey = `${linkID}_${today}`;
         if (dismissedQualityPrompts.has(dismissKey)) {
             return;
         }
 
         qualityPromptActive = true;
 
-        const linkName = link.name || formatLinkID(link.link_id);
+        const linkName = link.name || formatLinkID(linkID);
         const qualityPercent = Math.round((link.composite_score || link.quality || 0) * 100);
 
         // Remove existing prompt if present
@@ -118,7 +124,7 @@
                 <p class="quality-prompt-detail">This link is experiencing degraded performance, which may affect detection accuracy in this area.</p>
             </div>
             <div class="quality-prompt-actions">
-                <button class="quality-prompt-btn quality-prompt-diagnose" onclick="Proactive.diagnoseLink('${link.link_id}')">
+                <button class="quality-prompt-btn quality-prompt-diagnose" onclick="Proactive.diagnoseLink('${linkID}')">
                     <span class="btn-icon">🔍</span> Diagnose
                 </button>
                 <button class="quality-prompt-btn quality-prompt-dismiss" onclick="Proactive.dismissQualityPromptForToday()">
@@ -131,7 +137,7 @@
         document.body.appendChild(prompt);
 
         // Highlight the 3D link line if available
-        highlightLinkIn3D(link.link_id);
+        highlightLinkIn3D(linkID);
     }
 
     /**
@@ -179,7 +185,10 @@
         try {
             const saved = localStorage.getItem('spaxel_dismissed_quality_prompts');
             if (saved) {
-                dismissedQualityPrompts = new Set(saved.split(',').filter(id => id));
+                const today = new Date().toDateString();
+                const all = saved.split(',').filter(id => id);
+                // Only keep today's entries to prevent stale data buildup
+                dismissedQualityPrompts = new Set(all.filter(key => key.endsWith(today)));
             }
         } catch (e) {
             console.warn('Failed to load dismissed prompts:', e);
@@ -315,8 +324,7 @@
      */
     function diagnoseLink(linkID) {
         // Fetch diagnostic results from API
-        // Using the correct endpoint: /api/links/{linkID}/diagnostics
-        fetch(`/api/links/${encodeURIComponent(linkID)}/diagnostics`)
+        fetch(`/api/diagnostics/link/${encodeURIComponent(linkID)}`)
             .then(res => res.json())
             .then(data => {
                 showDiagnosticResults(linkID, data);

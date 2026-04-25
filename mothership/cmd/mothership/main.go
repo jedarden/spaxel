@@ -1425,23 +1425,26 @@ func main() {
 
 		// Set callback to broadcast anomalies to dashboard
 		anomalyDetector.SetOnAnomaly(func(event events.AnomalyEvent) {
-			// Broadcast as typed anomaly_detected for dashboard alert handling
-			dashboardHub.BroadcastAnomaly(map[string]interface{}{
-				"id":           event.ID,
-				"anomaly_type": event.Type,
-				"score":        event.Score,
-				"description":  event.Description,
-				"zone_id":      event.ZoneID,
-				"zone_name":    event.ZoneName,
-				"severity":     "warning",
-				"timestamp_ms": event.Timestamp.UnixMilli(),
-			})
-
-			// Also broadcast as alert for the alert banner
+			// Use same field names as AnomalyEvent JSON / REST API so the frontend
+			// can handle both WebSocket pushes and polled history uniformly.
 			severity := "warning"
 			if event.Score >= 0.85 {
 				severity = "critical"
 			}
+			dashboardHub.BroadcastAnomaly(map[string]interface{}{
+				"id":           event.ID,
+				"type":         string(event.Type),
+				"score":        event.Score,
+				"description":  event.Description,
+				"zone_id":      event.ZoneID,
+				"zone_name":    event.ZoneName,
+				"person_name":  event.PersonName,
+				"severity":     severity,
+				"timestamp":    event.Timestamp.Format(time.RFC3339),
+				"acknowledged": false,
+			})
+
+			// Also broadcast as alert for the alert banner
 			dashboardHub.BroadcastAlert(event.ID, event.Timestamp, severity, event.Description, event.Acknowledged)
 		})
 

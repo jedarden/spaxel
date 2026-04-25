@@ -70,23 +70,39 @@
         indicator.id = 'security-status-indicator';
         indicator.className = 'security-status-indicator mode-disarmed';
         indicator.innerHTML = `
-            <span class="security-icon">🛡️</span>
-            <span class="security-text">Disarmed</span>
-            <button class="security-toggle-btn" aria-label="Toggle security mode">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d="M12 15.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm.5 0a1 1 0 1 0-2 0 1 1 0 0 0 2 0zM12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8-8zm0-14a6 6 0 1 0-6 6 6 6 0 0 0 6 6zm0 10a4 4 0 1 1-4 4 4 4 0 0 1 4-4zm0-6a2 2 0 1 0-2 2 2 2 0 0 0 2 2z"/>
-                </svg>
-            </button>
+            <div class="security-card-main">
+                <span class="security-icon">🛡️</span>
+                <span class="security-text">DISARMED</span>
+                <button class="security-toggle-btn" aria-label="Toggle security mode" title="Arm / Disarm security mode">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                    </svg>
+                </button>
+                <button class="security-history-btn" aria-label="View anomaly history" title="View anomaly history">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="security-card-detail">
+                <div class="security-learning-inline hidden" id="security-learning-inline">
+                    <div class="security-progress-wrap">
+                        <div class="security-progress-fill" id="security-progress-fill"></div>
+                    </div>
+                    <span class="security-progress-label" id="security-progress-label">0 of 7 days complete</span>
+                </div>
+                <div class="security-last-anomaly hidden" id="security-last-anomaly-line"></div>
+            </div>
         `;
 
         container.appendChild(indicator);
         _statusIndicator = indicator;
 
-        // Add click handler for mode toggle
         const toggleBtn = indicator.querySelector('.security-toggle-btn');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', openSecurityDialog);
-        }
+        if (toggleBtn) toggleBtn.addEventListener('click', openSecurityDialog);
+
+        const historyBtn = indicator.querySelector('.security-history-btn');
+        if (historyBtn) historyBtn.addEventListener('click', openAnomalyTimeline);
     }
 
     // ── polling ────────────────────────────────────────────────────────────────
@@ -110,16 +126,16 @@
     }
 
     function fetchAnomalyCount() {
-        fetch(API.anomalyHistory + '?since=24h&limit=1')
+        // /api/anomalies returns {active, history, since} so we can get both count and last event
+        fetch(API.anomalies + '?since=24h')
             .then(res => res.json())
             .then(data => {
-                if (data.history && Array.isArray(data.history)) {
-                    _anomalyCount24h = data.total || data.history.length;
-                    if (data.history.length > 0) {
-                        _lastAnomaly = data.history[0];
-                    }
-                    updateStatusIndicator();
+                const history = data.history || [];
+                _anomalyCount24h = history.length;
+                if (history.length > 0) {
+                    _lastAnomaly = history[0];
                 }
+                updateStatusIndicator();
             })
             .catch(err => {
                 console.error('[SecurityPanel] Failed to fetch anomaly count:', err);
@@ -198,11 +214,13 @@
                 icon = '🛡️';
                 modeClass = 'mode-ready';
                 break;
-            case 'learning':
-                text = 'LEARNING';
+            case 'learning': {
+                const daysLeft = Math.ceil((1 - _learningProgress) * 7);
+                text = daysLeft > 0 ? `LEARNING (${daysLeft}d left)` : 'LEARNING';
                 icon = '📚';
                 modeClass = 'mode-learning';
                 break;
+            }
             default:
                 text = 'DISARMED';
                 icon = '🛡️';
@@ -216,6 +234,36 @@
         // Update mode class
         _statusIndicator.classList.remove('mode-disarmed', 'mode-learning', 'mode-armed', 'mode-alert', 'mode-ready');
         _statusIndicator.classList.add(modeClass);
+
+        // Update learning progress bar inline
+        const learningInline = document.getElementById('security-learning-inline');
+        const progressFill = document.getElementById('security-progress-fill');
+        const progressLabel = document.getElementById('security-progress-label');
+        if (learningInline) {
+            if (!_modelReady) {
+                learningInline.classList.remove('hidden');
+                const daysComplete = Math.floor(_learningProgress * 7);
+                if (progressFill) progressFill.style.width = (_learningProgress * 100) + '%';
+                if (progressLabel) progressLabel.textContent = `${daysComplete} of 7 days complete`;
+            } else {
+                learningInline.classList.add('hidden');
+            }
+        }
+
+        // Update last anomaly line
+        const lastAnomalyLine = document.getElementById('security-last-anomaly-line');
+        if (lastAnomalyLine) {
+            if (_lastAnomaly) {
+                lastAnomalyLine.classList.remove('hidden');
+                const timeAgo = formatTimeAgo(_lastAnomaly.timestamp);
+                const zone = _lastAnomaly.zone_name || 'unknown zone';
+                const ts = _lastAnomaly.timestamp ? new Date(_lastAnomaly.timestamp) : null;
+                const timeStr = ts ? ts.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
+                lastAnomalyLine.textContent = `Last: ${timeAgo} — ${zone}${timeStr ? ' at ' + timeStr : ''}`;
+            } else {
+                lastAnomalyLine.classList.add('hidden');
+            }
+        }
     }
 
     function updateLearningProgress() {
@@ -490,11 +538,7 @@
         if (viewBtn) {
             viewBtn.addEventListener('click', function() {
                 hideAlertBanner();
-                if (window.TimelineView) {
-                    TimelineView.show();
-                } else if (window.SpaxelRouter) {
-                    SpaxelRouter.setMode('timeline');
-                }
+                openAnomalyTimeline();
             });
         }
     }
@@ -557,11 +601,159 @@
         }
     }
 
+    // ── anomaly timeline panel ──────────────────────────────────────────────────
+
+    function openAnomalyTimeline() {
+        ensureAnomalyTimelinePanel();
+        const panel = document.getElementById('anomaly-timeline-panel');
+        if (!panel) return;
+        panel.classList.add('open');
+        fetchAndRenderAnomalyHistory();
+    }
+
+    function closeAnomalyTimeline() {
+        const panel = document.getElementById('anomaly-timeline-panel');
+        if (panel) panel.classList.remove('open');
+    }
+
+    function ensureAnomalyTimelinePanel() {
+        if (document.getElementById('anomaly-timeline-panel')) return;
+
+        const panel = document.createElement('div');
+        panel.id = 'anomaly-timeline-panel';
+        panel.className = 'anomaly-timeline-panel';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', 'Anomaly history');
+        panel.innerHTML = `
+            <div class="anomaly-timeline-inner">
+                <div class="anomaly-timeline-header">
+                    <span class="anomaly-timeline-title">Anomaly History (24h)</span>
+                    <div class="anomaly-timeline-header-actions">
+                        <button class="anomaly-timeline-view-all" id="anomaly-timeline-view-all" title="Open full timeline">
+                            View All
+                        </button>
+                        <button class="anomaly-timeline-close" id="anomaly-timeline-close" aria-label="Close">&times;</button>
+                    </div>
+                </div>
+                <div class="anomaly-timeline-list" id="anomaly-timeline-list">
+                    <div class="anomaly-timeline-loading">Loading…</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(panel);
+
+        document.getElementById('anomaly-timeline-close')
+            .addEventListener('click', closeAnomalyTimeline);
+
+        document.getElementById('anomaly-timeline-view-all')
+            .addEventListener('click', function() {
+                closeAnomalyTimeline();
+                if (window.TimelineView && TimelineView.show) {
+                    TimelineView.show();
+                } else if (window.SpaxelRouter) {
+                    SpaxelRouter.setMode('timeline');
+                }
+            });
+
+        // Close on outside click
+        panel.addEventListener('click', function(e) {
+            if (e.target === panel) closeAnomalyTimeline();
+        });
+    }
+
+    function fetchAndRenderAnomalyHistory() {
+        const list = document.getElementById('anomaly-timeline-list');
+        if (!list) return;
+        list.innerHTML = '<div class="anomaly-timeline-loading">Loading…</div>';
+
+        fetch('/api/anomalies?since=24h&limit=20')
+            .then(res => res.json())
+            .then(data => {
+                const anomalies = data.history || data || [];
+                renderAnomalyHistory(list, anomalies);
+            })
+            .catch(err => {
+                list.innerHTML = '<div class="anomaly-timeline-empty">Failed to load history.</div>';
+                console.error('[SecurityPanel] Failed to fetch anomaly history:', err);
+            });
+    }
+
+    function renderAnomalyHistory(container, anomalies) {
+        if (!anomalies || anomalies.length === 0) {
+            container.innerHTML = '<div class="anomaly-timeline-empty">No anomalies in the last 24 hours.</div>';
+            return;
+        }
+
+        container.innerHTML = anomalies.map(function(a) {
+            const typeClass = (a.type || '').replace(/_/g, '-');
+            const icon = getAnomalyIcon(a.type);
+            const title = getAnomalyTitle(a);
+            const timeAgo = formatTimeAgo(a.timestamp);
+            const score = a.score || 0;
+            const scoreClass = score >= 0.85 ? 'high' : score >= 0.6 ? 'medium' : 'low';
+            const scorePct = Math.round(score * 100);
+            const zone = a.zone_name || 'Unknown zone';
+            const acknowledged = a.acknowledged ? ' anomaly-history-item--acked' : '';
+            const feedbackHtml = a.feedback
+                ? `<span class="anomaly-history-feedback ${a.feedback.replace(/_/g, '-')}">${formatFeedback(a.feedback)}</span>`
+                : '';
+
+            return `<div class="anomaly-history-item${acknowledged}" data-id="${a.id || ''}">
+                <div class="anomaly-history-icon ${typeClass}">${icon}</div>
+                <div class="anomaly-history-content">
+                    <div class="anomaly-history-title">${title}</div>
+                    <div class="anomaly-history-time">${zone} · ${timeAgo}</div>
+                </div>
+                <span class="anomaly-history-score ${scoreClass}">${scorePct}%</span>
+                ${feedbackHtml}
+                <button class="anomaly-history-view-btn" data-id="${a.id || ''}" title="View in Timeline" aria-label="View in timeline">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+                    </svg>
+                </button>
+            </div>`;
+        }).join('');
+
+        container.querySelectorAll('.anomaly-history-view-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                closeAnomalyTimeline();
+                if (window.TimelineView && TimelineView.show) {
+                    TimelineView.show();
+                    if (this.dataset.id && TimelineView.scrollToEvent) {
+                        TimelineView.scrollToEvent(this.dataset.id);
+                    }
+                }
+            });
+        });
+    }
+
+    function getAnomalyIcon(type) {
+        switch (type) {
+            case 'unusual_hour':       return '🕰️';
+            case 'unknown_ble':        return '📡';
+            case 'motion_during_away': return '🚶';
+            case 'unusual_dwell':      return '⏱️';
+            default:                   return '⚠️';
+        }
+    }
+
+    function formatFeedback(feedback) {
+        switch (feedback) {
+            case 'expected':    return 'Expected';
+            case 'intrusion':   return 'Intrusion';
+            case 'false_alarm': return 'False Alarm';
+            default:            return feedback;
+        }
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────────
 
     function formatTimeAgo(timestamp) {
         const now = Date.now();
-        const diff = now - timestamp;
+        // Accept Unix-ms numbers or ISO8601/RFC3339 strings
+        const ts = typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime();
+        if (isNaN(ts)) return 'unknown time';
+        const diff = now - ts;
 
         if (diff < 60000) {
             const secs = Math.floor(diff / 1000);
@@ -623,6 +815,8 @@
         openSecurityDialog: openSecurityDialog,
         closeSecurityDialog: closeSecurityDialog,
         acknowledgeAnomaly: acknowledgeAnomaly,
+        openAnomalyTimeline: openAnomalyTimeline,
+        closeAnomalyTimeline: closeAnomalyTimeline,
         getSecurityMode: function() { return _securityMode; },
         isLearning: function() { return _securityMode === 'learning' || !_modelReady; },
         isReady: function() { return _modelReady; },
