@@ -2290,6 +2290,13 @@
         }
     };
 
+    // Expose for viz3d.js to call when links rebuild
+    window.rebuildFresnelDebugEllipsoids = function() {
+        if (state.fresnelDebugVisible) {
+            rebuildFresnelDebugEllipsoids();
+        }
+    };
+
     // ============================================
     // Fresnel Zone Debug Overlay
     // ============================================
