@@ -9,7 +9,7 @@
    ============================================ */
 .simulator-panel {
     position: fixed;
-    top: 44px; /* Below mode toggle bar */
+    top: 44px; /* Below status bar */
     right: 0;
     width: 380px;
     max-height: calc(100vh - 44px);
