@@ -124,6 +124,7 @@ type FleetNode struct {
 	PosY            float64 `json:"pos_y"`
 	PosZ            float64 `json:"pos_z"`
 	Virtual         bool    `json:"virtual"`
+	Manufacturer    string  `json:"manufacturer,omitempty"`
 	HealthScore     float64 `json:"health_score"`
 	Unpaired        bool    `json:"unpaired,omitempty"`
 	// Computed fields
@@ -193,6 +194,7 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 			PosY:            node.PosY,
 			PosZ:            node.PosZ,
 			Virtual:         node.Virtual,
+			Manufacturer:    node.Manufacturer,
 			HealthScore:     node.HealthScore,
 			LastSeenMS:      node.LastSeenAt.UnixMilli(),
 			ConfiguredRate:  20, // Default configured rate
