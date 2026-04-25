@@ -3,6 +3,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -174,7 +175,21 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 			// We'll use the blob ID to get the explanation
 			// Get explanation from the handler directly
 			if exp := h.getExplainabilityForBlob(req.BlobID, timestamp); exp != nil {
-				// Build explainability response
+				// Build contributing links data with detailed information
+				contributingLinksData := make([]map[string]interface{}, 0, len(exp.ContributingLinks))
+				for _, link := range exp.ContributingLinks {
+					linkData := map[string]interface{}{
+						"link_id":     link.LinkID,
+						"node_mac":    link.NodeMAC,
+						"peer_mac":    link.PeerMAC,
+						"delta_rms":   link.DeltaRMS,
+						"zone_number": link.ZoneNumber,
+						"weight":      link.Weight,
+						"contributing": link.Contributing,
+					}
+					contributingLinksData = append(contributingLinksData, linkData)
+				}
+
 				explainabilityData := map[string]interface{}{
 					"blob_id":            exp.BlobID,
 					"x":                  exp.X,
@@ -182,8 +197,7 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 					"z":                  exp.Z,
 					"confidence":         exp.Confidence,
 					"timestamp_ms":       exp.Timestamp,
-					"contributing_links": exp.ContributingLinks,
-					"all_links":          exp.AllLinks,
+					"contributing_links": contributingLinksData,
 				}
 
 				// Add diagnostic info for primary contributing link
@@ -206,7 +220,22 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 
 						// Update the inline response message with diagnostic context
 						if diagnosis.RuleID != "no_issue_detected" && diagnosis.RuleID != "insufficient_data" {
-							inlineResp["message"] = diagnosis.Detail + " " + diagnosis.Advice
+							// Build a more detailed explanation message
+							linkName := linkID
+							if len(primaryLink.NodeMAC) >= 8 {
+								linkName = primaryLink.NodeMAC[:8]
+							}
+							deltaRMS := primaryLink.DeltaRMS
+							threshold := 0.02
+							ratio := "1.0"
+							if threshold > 0 {
+								ratio = fmt.Sprintf("%.1f", deltaRMS/threshold)
+							}
+
+							explanationMsg := fmt.Sprintf("The system detected motion here because: %s's signal (deltaRMS: %.4f) exceeded the motion threshold by %sx. ",
+								linkName, deltaRMS, ratio)
+							explanationMsg += diagnosis.Detail + " " + diagnosis.Advice + " We've noted this and will apply corrections."
+							inlineResp["message"] = explanationMsg
 						}
 					}
 				}
