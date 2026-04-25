@@ -187,13 +187,6 @@
     font-size: var(--text-xl);
 }
 
-/* Mode toggle buttons */
-.mode-toggle-btn {
-    min-height: 44px;
-    min-width: 44px;
-    padding: var(--space-3) var(--space-4);
-}
-
 /* Action items */
 .action-item .action-remove {
     min-width: 44px;

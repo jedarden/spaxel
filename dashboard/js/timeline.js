@@ -45,7 +45,7 @@
 		events: [],
 		cursor: null,
 		total: 0,
-		dashboardMode: 'expert',
+		dashboardMode: 'live',
 		filters: {
 			categories: {
 				presence: true,
@@ -537,7 +537,7 @@
 		if (newMode === 'ambient') {
 			state.dashboardMode = 'ambient';
 		} else {
-			state.dashboardMode = 'expert';
+			state.dashboardMode = 'live';
 		}
 
 		if (newMode === 'timeline') {
@@ -1111,7 +1111,7 @@
 		// System events: node_online, node_offline, ota_update, baseline_changed, system, learning_milestone, anomaly_learned
 		const systemEventTypes = ['node_online', 'node_offline', 'ota_update', 'baseline_changed', 'system', 'learning_milestone', 'anomaly_learned'];
 		const isSystemEvent = systemEventTypes.indexOf(event.type) !== -1;
-		const secondaryClass = (state.dashboardMode === 'expert' && isSystemEvent) ? ' secondary' : '';
+		const secondaryClass = isSystemEvent ? ' secondary' : '';
 
 		// Check if this event has a blob_id for explainability
 		const hasBlobId = event.blob_id !== undefined && event.blob_id !== null && event.blob_id !== 0;
@@ -1324,10 +1324,6 @@
 	// Seek Handler (Time-Travel)
 	// ============================================
 	function handleSeek(timestamp, entryElement) {
-		if (state.dashboardMode !== 'expert') {
-			return;
-		}
-
 		// Highlight selected event
 		clearSelectedEvent();
 		if (entryElement) {
