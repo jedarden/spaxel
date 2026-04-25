@@ -45,8 +45,9 @@ func generateCSIFrame(tx, rx *VirtualNode, walkers []*Walker, walls []Wall, fram
 	copy(frame[6:12], rx.MAC[:])  // peer_mac
 	binary.LittleEndian.PutUint64(frame[12:20], uint64(frameNum*50000)) // timestamp_us
 	frame[20] = byte(rssi)        // rssi
-	frame[21] = 0xA6              // noise_floor: -90 dBm as uint8 (two's complement of -90)
-	frame[22] = 6                 // channel (2.4 GHz ch6)
+	var noiseFloor int8 = -95
+	frame[21] = byte(noiseFloor) // noise_floor: -95 dBm
+	frame[22] = byte(*flagChannel) // channel (from --channel flag)
 	frame[23] = nSub              // n_sub
 
 	// Generate I/Q pairs for each subcarrier
