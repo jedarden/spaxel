@@ -3,7 +3,7 @@
 /* Timeline Container */
 #timeline-view {
   position: fixed;
-  top: 44px; /* Below mode toggle bar */
+  top: 44px; /* Below status bar */
   left: 0;
   right: 0;
   bottom: 0;
@@ -728,7 +728,7 @@
   animation: timeline-pulse 1.5s ease-in-out infinite;
 }
 
-/* Secondary system events (expert mode - greyed out) */
+/* Secondary system events (greyed out) */
 .timeline-event.secondary {
   opacity: 0.6;
   font-size: 0.9em;
@@ -1258,7 +1258,7 @@
   50% { opacity: 0.7; }
 }
 
-/* Secondary System Events (dimmed in expert mode) */
+/* Secondary System Events (dimmed) */
 .sidebar-timeline-event.secondary {
   opacity: 0.6;
 }
