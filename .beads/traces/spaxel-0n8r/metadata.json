@@ -1,0 +1,16 @@
+{
+  "bead_id": "spaxel-0n8r",
+  "agent": "claude-code-glm-5",
+  "provider": "zai",
+  "model": "glm-5",
+  "exit_code": 1,
+  "outcome": "failure",
+  "duration_ms": 506665,
+  "input_tokens": null,
+  "output_tokens": null,
+  "cost_usd": null,
+  "captured_at": "2026-04-24T11:25:32.012162112Z",
+  "trace_format": "claude_json",
+  "pruned": false,
+  "template_version": null
+}

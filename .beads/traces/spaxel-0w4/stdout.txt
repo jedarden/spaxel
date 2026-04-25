@@ -1,0 +1,1 @@
+Bead `spaxel-0w4` is closed. The fleet status page implementation was already fully committed — all 11 table columns, inline label editing, bulk OTA with 30s stagger, camera fly-to, sorting/filtering with active filter chips, CSV export, and the Go test suite all landed in prior commits on main.

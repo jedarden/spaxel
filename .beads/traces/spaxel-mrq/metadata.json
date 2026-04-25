@@ -1,0 +1,16 @@
+{
+  "bead_id": "spaxel-mrq",
+  "agent": "claude-anthropic-sonnet",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "exit_code": 1,
+  "outcome": "failure",
+  "duration_ms": 261405,
+  "input_tokens": null,
+  "output_tokens": null,
+  "cost_usd": null,
+  "captured_at": "2026-04-15T18:32:36.746215949Z",
+  "trace_format": "claude_json",
+  "pruned": false,
+  "template_version": null
+}
