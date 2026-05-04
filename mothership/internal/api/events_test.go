@@ -2012,3 +2012,103 @@ func (m *mockFeedbackHandler) SubmitFeedback(w http.ResponseWriter, r *http.Requ
 		m.submitFunc(w, r, req)
 	}
 }
+
+// --- Load-more pagination with 500+ total results ---
+
+// TestListEvents_LoadMoreWith500Plus verifies that cursor-based pagination correctly
+// retrieves all events when the total result count exceeds 500 (the max single-page limit).
+// Acceptance criteria: "Load more pagination works for 500+ results"
+func TestListEvents_LoadMoreWith500Plus(t *testing.T) {
+	h, cleanup := testEventsHandler(t)
+	defer cleanup()
+
+	const totalEvents = 550
+	base := time.Now()
+	// Seed 550 events of a single type for predictable counting.
+	for i := 0; i < totalEvents; i++ {
+		ts := base.Add(time.Duration(i) * time.Millisecond)
+		if err := h.LogEvent("detection", ts, "Kitchen", "Alice", i, `{"seq":`+strconv.Itoa(i)+`}`, "info"); err != nil {
+			t.Fatalf("LogEvent %d: %v", i, err)
+		}
+	}
+
+	// First load-more request: fetch max allowed (500).
+	req := httptest.NewRequest("GET", "/api/events?limit=500", nil)
+	w := httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("page 1 status = %d, want 200", w.Code)
+	}
+
+	var page1 eventsResponse
+	if err := json.NewDecoder(w.Body).Decode(&page1); err != nil {
+		t.Fatalf("decode page 1: %v", err)
+	}
+
+	if len(page1.Events) != 500 {
+		t.Errorf("page 1: got %d events, want 500", len(page1.Events))
+	}
+	if !page1.HasMore {
+		t.Error("page 1: expected has_more=true (550 total, 500 returned)")
+	}
+	if page1.Cursor == "" {
+		t.Fatal("page 1: expected non-empty cursor")
+	}
+	if page1.TotalFiltered != totalEvents {
+		t.Errorf("page 1: total_filtered = %d, want %d", page1.TotalFiltered, totalEvents)
+	}
+
+	// Second load-more request using the cursor from page 1.
+	req = httptest.NewRequest("GET", "/api/events?limit=500&before="+page1.Cursor, nil)
+	w = httptest.NewRecorder()
+	h.listEvents(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("page 2 status = %d, want 200", w.Code)
+	}
+
+	var page2 eventsResponse
+	if err := json.NewDecoder(w.Body).Decode(&page2); err != nil {
+		t.Fatalf("decode page 2: %v", err)
+	}
+
+	remaining := totalEvents - 500
+	if len(page2.Events) != remaining {
+		t.Errorf("page 2: got %d events, want %d (remaining)", len(page2.Events), remaining)
+	}
+	if page2.HasMore {
+		t.Error("page 2: expected has_more=false (no more events)")
+	}
+	if page2.Cursor != "" {
+		t.Error("page 2: expected empty cursor when no more events")
+	}
+
+	// Verify no overlap: page 2 timestamps must all be strictly before page 1's last timestamp.
+	lastPage1TS := page1.Events[len(page1.Events)-1].Timestamp
+	for _, ev := range page2.Events {
+		if ev.Timestamp >= lastPage1TS {
+			t.Errorf("page 2 event ts %d >= page 1 last ts %d (cursor overlap!)", ev.Timestamp, lastPage1TS)
+		}
+	}
+
+	// Verify no duplicate IDs across pages.
+	seen := make(map[int64]bool, totalEvents)
+	for _, ev := range page1.Events {
+		if seen[ev.ID] {
+			t.Errorf("duplicate event ID %d on page 1", ev.ID)
+		}
+		seen[ev.ID] = true
+	}
+	for _, ev := range page2.Events {
+		if seen[ev.ID] {
+			t.Errorf("duplicate event ID %d across pages", ev.ID)
+		}
+		seen[ev.ID] = true
+	}
+
+	// All 550 events must be accounted for.
+	if len(seen) != totalEvents {
+		t.Errorf("total unique events across pages = %d, want %d", len(seen), totalEvents)
+	}
+}
