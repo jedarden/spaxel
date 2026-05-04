@@ -5,11 +5,11 @@
   "model": "claude-sonnet-4-6",
   "exit_code": 0,
   "outcome": "success",
-  "duration_ms": 14841,
+  "duration_ms": 436868,
   "input_tokens": null,
   "output_tokens": null,
   "cost_usd": null,
-  "captured_at": "2026-05-04T03:32:53.834616995Z",
+  "captured_at": "2026-05-04T03:54:29.391984490Z",
   "trace_format": "claude_json",
   "pruned": false,
   "template_version": null

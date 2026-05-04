@@ -84,6 +84,7 @@ func SubscribeDefault(fn Subscriber) {
 type Bus struct {
 	mu          sync.RWMutex
 	subscribers []Subscriber
+	inFlight    sync.WaitGroup
 }
 
 // New creates a new event bus.
