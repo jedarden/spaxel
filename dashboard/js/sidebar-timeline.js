@@ -519,6 +519,17 @@
             params.set('q', state.filters.searchQuery);
         }
 
+        // Collect enabled category types for server-side filtering
+        var enabledTypes = [];
+        Object.keys(state.filters.categories).forEach(function(cat) {
+            if (state.filters.categories[cat] && CATEGORY_TYPES[cat]) {
+                enabledTypes = enabledTypes.concat(CATEGORY_TYPES[cat]);
+            }
+        });
+        if (enabledTypes.length > 0) {
+            params.set('types', enabledTypes.join(','));
+        }
+
         if (cursor) params.set('before', cursor);
 
         return params;
