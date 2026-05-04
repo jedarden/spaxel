@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,6 +43,7 @@ type TestHarness struct {
 	MothershipURL string
 	APIURL        string
 	t             *testing.T
+	stderrBuf     *bytes.Buffer // Captured stderr for debugging
 }
 
 // NewTestHarness creates a new test harness
@@ -82,7 +84,8 @@ func (h *TestHarness) Start(ctx context.Context) error {
 		"TZ=UTC",
 	)
 	h.MothershipCmd.Stdout = io.Discard
-	h.MothershipCmd.Stderr = io.Discard
+	h.stderrBuf = &bytes.Buffer{}
+	h.MothershipCmd.Stderr = h.stderrBuf
 
 	if err := h.MothershipCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start mothership: %w", err)
@@ -92,6 +95,11 @@ func (h *TestHarness) Start(ctx context.Context) error {
 
 	// Wait for health check
 	if err := h.WaitForHealth(ctx); err != nil {
+		// Log captured stderr for debugging
+		stderrStr := h.stderrBuf.String()
+		if stderrStr != "" {
+			h.t.Logf("Mothership stderr:\n%s", stderrStr)
+		}
 		h.Stop()
 		return fmt.Errorf("health check failed: %w", err)
 	}
