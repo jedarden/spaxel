@@ -17,3 +17,16 @@
 .panel-content {
     overscroll-behavior: contain;
 }
+
+/* Ensure the Three.js canvas has touch-action: none to prevent passive listener warnings
+   This is set inline in app.js but also here for CSS-level consistency */
+#scene-container {
+    touch-action: none;
+}
+
+canvas {
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
