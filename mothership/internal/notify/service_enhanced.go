@@ -361,10 +361,18 @@ func (ext *ExtendedService) checkMorningDigest() {
 // sendMorningDigest sends the queued notifications as a morning digest.
 func (ext *ExtendedService) sendMorningDigest() {
 	ext.mu.Lock()
+
+	// Check if already sent today
+	todayDate := time.Now().Format("2006-01-02")
+	if ext.digestSentToday && ext.digestLastDate == todayDate {
+		ext.mu.Unlock()
+		return
+	}
+
 	queued := ext.queuedDuringQuiet
 	ext.queuedDuringQuiet = nil
 	ext.digestSentToday = true
-	ext.digestLastDate = time.Now().Format("2006-01-02")
+	ext.digestLastDate = todayDate
 	ext.mu.Unlock()
 
 	if len(queued) == 0 {
