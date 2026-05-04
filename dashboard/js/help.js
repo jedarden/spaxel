@@ -156,59 +156,84 @@
     }
 
     /**
-     * Render articles list based on search query
+     * Render articles list based on search query, sorted by relevance score.
      */
     function renderArticles() {
         if (!articlesList) {
             return;
         }
 
-        // Filter articles based on search query
-        const filtered = helpArticles.filter(article => {
-            if (!searchQuery) {
-                return true;
-            }
+        let toRender;
+        if (!searchQuery) {
+            toRender = helpArticles;
+        } else {
+            // Minimum 0.6 score so only substring/prefix matches are shown
+            // (subsequence-only matches score ≤0.45 and are excluded to keep results tight)
+            toRender = helpArticles
+                .map(article => {
+                    const titleScore   = scoreMatch(searchQuery, article.title) * 1.5;
+                    const contentScore = scoreMatch(searchQuery, article.content);
+                    const catScore     = scoreMatch(searchQuery, article.category) * 0.5;
+                    return { article, score: Math.max(titleScore, contentScore, catScore) };
+                })
+                .filter(({ score }) => score >= 0.6)
+                .sort((a, b) => b.score - a.score)
+                .map(({ article }) => article);
+        }
 
-            const searchText = `${article.title} ${article.content} ${article.category}`.toLowerCase();
-            return searchText.includes(searchQuery) || fuzzyMatch(searchQuery, searchText);
-        });
-
-        // Render filtered articles
-        if (filtered.length === 0) {
+        if (toRender.length === 0) {
             articlesList.innerHTML = `
                 <div class="help-no-results">
-                    <p>No articles found for "${searchQuery}"</p>
+                    <p>No articles found for "${escapeHtml(searchQuery)}"</p>
                     <p class="help-no-results-hint">Try different keywords or browse categories below.</p>
                 </div>
             `;
         } else {
-            articlesList.innerHTML = filtered.map(article => renderArticle(article)).join('');
+            articlesList.innerHTML = toRender.map(article => renderArticle(article)).join('');
+            attachActionListeners();
         }
     }
 
     /**
-     * Fuzzy match helper
+     * Score how well a query matches text. Returns 0 if no match.
+     * Mirrors the command palette scoring: exact > prefix > substring > subsequence.
+     */
+    function scoreMatch(query, text) {
+        if (!query) return 1;
+        const q = query.toLowerCase();
+        const t = text.toLowerCase();
+        if (t === q) return 1.0;
+        if (t.startsWith(q)) return 0.9;
+        if (t.includes(q)) return 0.8;
+        // Word-level prefix check
+        const words = t.split(/\s+/);
+        for (const w of words) {
+            if (w.startsWith(q)) return 0.7;
+        }
+        // Subsequence check (require ≥80% of query chars in order)
+        if (q.length >= 3) {
+            let qi = 0;
+            for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+                if (q[qi] === t[ti]) qi++;
+            }
+            if (qi >= q.length * 0.8) return 0.3;
+        }
+        return 0;
+    }
+
+    /**
+     * Fuzzy match helper (kept for backward compat; uses scoreMatch)
      */
     function fuzzyMatch(query, text) {
-        if (query.length < 3) {
-            return false;
-        }
+        return scoreMatch(query, text) > 0;
+    }
 
-        // Simple character-by-character fuzzy matching
-        let queryIdx = 0;
-        let textIdx = 0;
-        let matches = 0;
-
-        while (queryIdx < query.length && textIdx < text.length) {
-            if (query[queryIdx] === text[textIdx]) {
-                matches++;
-                queryIdx++;
-            }
-            textIdx++;
-        }
-
-        // Require at least 80% of query characters to match
-        return matches >= query.length * 0.8;
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     /**
@@ -218,20 +243,20 @@
         let actionHTML = '';
         if (article.action) {
             actionHTML = `
-                <button class="help-article-action" data-url="${article.action.url}">
-                    ${article.action.label} →
+                <button class="help-article-action" data-url="${escapeHtml(article.action.url)}">
+                    ${escapeHtml(article.action.label)} →
                 </button>
             `;
         }
 
         return `
-            <div class="help-article" data-category="${article.category}">
+            <div class="help-article" data-category="${escapeHtml(article.category)}">
                 <div class="article-header">
-                    <span class="article-category">${article.category}</span>
-                    <h3 class="article-title">${article.title}</h3>
+                    <span class="article-category">${escapeHtml(article.category)}</span>
+                    <h3 class="article-title">${escapeHtml(article.title)}</h3>
                 </div>
                 <div class="article-content">
-                    ${article.content}
+                    ${escapeHtml(article.content)}
                 </div>
                 ${actionHTML ? `<div class="article-actions">${actionHTML}</div>` : ''}
             </div>
