@@ -39,7 +39,7 @@ func NewCSVWriter(filename string) (*CSVWriter, error) {
 		"delta_rms",
 	}
 	if err := writer.Write(header); err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, err
 	}
 
@@ -106,7 +106,7 @@ func (w *CSVWriter) Close() error {
 
 // verifyBlobs verifies that the mothership detected the expected number of blobs.
 // It queries GET /api/blobs and checks blob_count == walker_count within ±1 tolerance.
-func verifyBlobs(expectedWalkers int, walkers []*Walker, space *Space) error {
+func verifyBlobs(expectedWalkers int, walkers []*Walker, space *Space) (err error) {
 	wsURL, err := url.Parse(*flagMothership)
 	if err != nil {
 		return fmt.Errorf("invalid mothership URL: %w", err)
@@ -130,7 +130,13 @@ func verifyBlobs(expectedWalkers int, walkers []*Walker, space *Space) error {
 	if err != nil {
 		return fmt.Errorf("failed to query blobs: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			if err == nil {
+				err = fmt.Errorf("failed to close response body: %w", closeErr)
+			}
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
