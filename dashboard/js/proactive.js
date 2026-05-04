@@ -1336,8 +1336,19 @@
             .then(res => res.json())
             .then(settings => {
                 if (settings.repeated_edit_hint) {
-                    // Show the hint - the server detected repeated edits
-                    showSettingChangeHint('detected_by_server');
+                    // Server detected repeated edits. Find the most-changed qualifying
+                    // setting from our local history to give a specific hint; fall back
+                    // to delta_rms_threshold as the most common tuning target.
+                    let bestKey = 'delta_rms_threshold';
+                    let bestCount = 0;
+                    for (const key of QUALIFYING_SETTINGS) {
+                        const count = (settingChangeHistory[key] || []).length;
+                        if (count > bestCount) {
+                            bestCount = count;
+                            bestKey = key;
+                        }
+                    }
+                    showSettingChangeHint(bestKey);
                 }
             })
             .catch(err => {
