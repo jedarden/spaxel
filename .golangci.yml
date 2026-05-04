@@ -1,0 +1,88 @@
+run:
+  timeout: 5m
+  tests: true
+  build-tags: []
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - staticcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - unused
+
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+
+  staticcheck:
+    checks: ["all", "-SA1004", "-SA1019", "-SA2002", "-SA4003", "-SA4006", "-SA4010", "-SA4011", "-SA5011", "-SA9003", "-SA6003"]
+
+  govet:
+    enable-all: false
+    enable:
+      - atomic
+      - bools
+      - composites
+      - copylocks
+      - loopaddress
+      - nilfunc
+      - printf
+      - stdmethods
+      - unsafeptr
+    disable:
+      - shadow
+      - fieldalignment
+      - nilness
+      - unusedwrite
+
+  gosimple:
+    checks: ["all", "-S1021", "-S1039"]
+
+  unused:
+    field-writes-are-uses: false
+    export-fields-are-used: true
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Exclude most linters from test files (test code is less critical)
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosimple
+        - govet
+        - ineffassign
+        - staticcheck
+        - unused
+    # Exclude errcheck from main.go entrypoint (os.Exit is acceptable)
+    - path: cmd/mothership/main.go
+      linters:
+        - errcheck
+    # Exclude errcheck from sim/main.go (CLI tool with WebSocket cleanup)
+    - path: cmd/sim/main.go
+      linters:
+        - errcheck
+    # Exclude unused from cmd/mothership/main.go (fields used indirectly via reflection)
+    - path: cmd/mothership/main.go
+      linters:
+        - unused
+    # Exclude errcheck from internal packages (cleanup patterns, defer Close, fire-and-forget SQL)
+    - path: internal/
+      linters:
+        - errcheck
+    # Exclude unused fields/types/funcs that are reserved for future use
+    # Many fields have "Reserved" in their comments but unused linter doesn't see comments
+    - linters:
+        - unused
+      text: "field.*is unused"
+      source: "^\\s*_\\w+\\s+"  # Fields starting with underscore are intentionally unused
+    # Exclude unused fields/funcs in internal packages (reserved for future use, API compatibility, etc.)
+    - path: internal/
+      linters:
+        - unused
