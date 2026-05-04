@@ -1,0 +1,19 @@
+/* ============================================
+   Expert Mode (3D Live View) Panel Styles
+   ============================================
+   Ensures sidebar panels layered above the Three.js canvas correctly
+   capture touch events so they do not propagate to OrbitControls. */
+
+/* Sidebar panels must capture all touch interactions */
+.panel-sidebar,
+.panel-overlay,
+.panel-modal,
+.panel-backdrop {
+    touch-action: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Panel content areas scroll normally without leaking touches */
+.panel-content {
+    overscroll-behavior: contain;
+}
