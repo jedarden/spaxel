@@ -262,6 +262,8 @@ describe('Help Overlay Module', () => {
                     querySelector: jest.fn(() => null),
                     querySelectorAll: jest.fn(() => []),
                     focus: jest.fn(),
+                    dispatchEvent: jest.fn(),
+                    classList: { add: jest.fn(), remove: jest.fn(), contains: jest.fn() },
                 };
                 if (tag === 'div') el.tagName = 'DIV';
                 if (tag === 'input') el.tagName = 'INPUT';
@@ -281,6 +283,25 @@ describe('Help Overlay Module', () => {
                 if (id === 'help-overlay') {
                     return { style: { display: 'none' } };
                 }
+                if (id === 'help-search-input') {
+                    return {
+                        value: '',
+                        addEventListener: jest.fn(),
+                        focus: jest.fn(),
+                        dispatchEvent: jest.fn()
+                    };
+                }
+                if (id === 'help-categories') {
+                    return {
+                        innerHTML: '',
+                        querySelectorAll: jest.fn(() => []),
+                    };
+                }
+                if (id === 'help-articles') {
+                    return {
+                        innerHTML: '',
+                    };
+                }
                 return null;
             }),
         };
@@ -299,9 +320,11 @@ describe('Help Overlay Module', () => {
 
         global.document = mockDocument;
         global.fetch = mockFetch;
+        global.window = {};
 
         jest.resetModules();
-        HelpOverlay = require('./help.js');
+        require('./help.js');
+        HelpOverlay = window.HelpOverlay;
     });
 
     afterEach(() => {
@@ -312,7 +335,7 @@ describe('Help Overlay Module', () => {
         test('should load articles from JSON file', async () => {
             await HelpOverlay.init();
 
-            expect(mockFetch).toHaveBeenCalledWith('/help_articles.json');
+            expect(mockFetch).toHaveBeenCalledWith('help_articles.json');
         });
 
         test('should handle JSON load failure gracefully', async () => {
@@ -320,7 +343,9 @@ describe('Help Overlay Module', () => {
 
             global.fetch = mockFetch;
             jest.resetModules();
-            HelpOverlay = require('./help.js');
+            global.window = {};
+            require('./help.js');
+            HelpOverlay = window.HelpOverlay;
 
             await HelpOverlay.init();
 
