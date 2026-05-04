@@ -71,8 +71,8 @@ func New(db *sql.DB) *Storage {
 	return s
 }
 
-// enqueue adds an event to the queue, dropping oldest if full.
-// This is called from the EventBus subscriber callback and must never block.
+// enqueue adds an event to the queue, dropping the incoming event if full.
+// This is called from the EventBus subscriber goroutine and must never block.
 func (s *Storage) enqueue(e eventbus.Event) {
 	select {
 	case s.queue <- Event{
@@ -86,34 +86,19 @@ func (s *Storage) enqueue(e eventbus.Event) {
 	}:
 		// Event queued successfully
 	default:
-		// Queue is full, drop oldest event
+		// Queue is full — drop this event and increment the counter.
+		// Drop-oldest via drain+send is not safe here: multiple goroutines
+		// can concurrently drain a slot and then block on the re-send.
 		s.mu.Lock()
 		s.dropped++
-		s.mu.Unlock()
-
-		// Warn about overflow at most once per minute
-		now := time.Now()
-		s.mu.Lock()
-		shouldWarn := now.Sub(s.lastWarn) > time.Minute
+		shouldWarn := time.Since(s.lastWarn) > time.Minute
 		if shouldWarn {
-			s.lastWarn = now
+			s.lastWarn = time.Now()
 		}
 		s.mu.Unlock()
 
 		if shouldWarn {
-			log.Printf("[WARN] Timeline storage queue overflow (dropped oldest event, %d total dropped)", s.dropped)
-		}
-
-		// Drop oldest by receiving and discarding one, then sending the new one
-		<-s.queue
-		s.queue <- Event{
-			Type:        e.Type,
-			TimestampMs: e.TimestampMs,
-			Zone:        e.Zone,
-			Person:      e.Person,
-			BlobID:      e.BlobID,
-			Detail:      e.Detail,
-			Severity:    e.Severity,
+			log.Printf("[WARN] Timeline storage queue overflow (dropped event, %d total dropped)", s.dropped)
 		}
 	}
 }
