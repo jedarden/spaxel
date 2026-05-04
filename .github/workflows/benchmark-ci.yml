@@ -1,0 +1,97 @@
+# CI Pipeline Timing Benchmark Gate
+#
+# This workflow enforces the fusion loop timing budget as a CI quality gate,
+# per plan §Quality Gates / Definition of Done (item 9).
+#
+# The benchmark runs the full fusion pipeline:
+#   - Phase sanitization → Feature extraction → Fresnel accumulation → Peak extraction → UKF update
+#   - Against synthetic CSI data from spaxel-sim output
+#
+# Timing constraints:
+#   - Median fusion iteration < 15 ms (production target)
+#   - Median fusion iteration < 30 ms (CI threshold - 2x allowance for slower hardware)
+#   - P99 < 40 ms (hard limit)
+#
+# To integrate with Argo Workflows CI, add this step after go test ./...:
+#   go test -bench=BenchmarkFusionLoop -benchtime=60s -count=1 ./internal/localizer/fusion/
+
+name: CI Benchmark - Fusion Loop Timing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  timing-benchmark:
+    name: Fusion Loop Timing Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: mothership/go.sum
+
+      - name: Run fusion loop timing benchmark
+        working-directory: mothership
+        run: |
+          echo "Running fusion loop timing benchmark..."
+          go test -bench=BenchmarkFusionLoop -benchtime=60s -count=1 ./internal/localizer/fusion/ 2>&1 | tee /tmp/bench.txt
+
+      - name: Check timing thresholds
+        working-directory: mothership
+        run: |
+          echo "Checking timing thresholds..."
+
+          # Parse benchmark output for median and P99
+          # Expected output format:
+          #   Median: Xms (target: 15ms, CI threshold: 30ms)
+          #   P99: Yms (hard limit: 40ms)
+
+          if ! grep -q "Median:" /tmp/bench.txt; then
+            echo "ERROR: Benchmark output missing Median timing"
+            exit 1
+          fi
+
+          # Extract median value (format: "Median: 2.557768ms")
+          median_ms=$(grep "Median:" /tmp/bench.txt | sed 's/.*Median: \([0-9.]*\)ms.*/\1/')
+          p99_ms=$(grep "P99:" /tmp/bench.txt | sed 's/.*P99: \([0-9.]*\)ms.*/\1/')
+
+          echo "Median: ${median_ms}ms (CI threshold: 30ms, Production target: 15ms)"
+          echo "P99: ${p99_ms}ms (Hard limit: 40ms)"
+
+          # Convert to integer for comparison (multiply by 1000 to avoid floating point issues)
+          median_int=$(echo "$median_ms * 1000" | bc | cut -d. -f1)
+          p99_int=$(echo "$p99_ms * 1000" | bc | cut -d. -f1)
+
+          ci_threshold=30000  # 30ms in microseconds
+          hard_limit=40000    # 40ms in microseconds
+
+          # Check CI threshold
+          if [ "$median_int" -gt "$ci_threshold" ]; then
+            echo "FAIL: Median fusion iteration ${median_ms}ms exceeds CI threshold 30ms"
+            exit 1
+          fi
+
+          # Check hard limit
+          if [ "$p99_int" -gt "$hard_limit" ]; then
+            echo "FAIL: P99 fusion iteration ${p99_ms}ms exceeds hard limit 40ms"
+            exit 1
+          fi
+
+          echo "PASS: Timing constraints satisfied"
+
+      - name: Report metrics
+        working-directory: mothership
+        run: |
+          echo "## Fusion Loop Timing Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat /tmp/bench.txt | grep -E "(Median|P99|Min|Max)" >> $GITHUB_STEP_SUMMARY
