@@ -1,5 +1,8 @@
 # Spaxel — Implementation Plan
 
+**Last updated:** 2026-05-02  
+**Status:** Implementation in progress (Phases 1–9 underway)
+
 WiFi CSI-based indoor positioning for self-hosted home environments.
 
 ## System Overview
@@ -18,6 +21,47 @@ Based on physics and literature (see `docs/research/06-accuracy-and-limits.md`):
 - **Stationary person detection** — via breathing micro-motion (0.1–0.5 Hz), requires stable setup
 
 **Not achievable:** sub-10 cm accuracy, skeletal pose, reliable 5+ person tracking.
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|-----------|
+| **CSI** | Channel State Information — complex amplitude and phase per WiFi subcarrier extracted by the ESP32 from received 802.11 frames. The raw signal that drives all detection. |
+| **deltaRMS** | Root-mean-square deviation of RSSI-normalized CSI amplitudes from the per-link baseline. Primary motion indicator: ~0.02 empty room, ~0.10 walking. |
+| **NBVI** | Normalized Bandwidth Variance Index — `Var(amplitude) / Mean(amplitude)²` per subcarrier, used to select the 16 most motion-sensitive subcarriers from the 47 available. |
+| **Fresnel zone** | Ellipsoidal region around a TX→RX link path where reflected signals undergo constructive or destructive interference. Zone 1 is most sensitive to motion. |
+| **Fusion tick** | One iteration of the localization loop, running at 10 Hz (every 100 ms). One grid accumulation + peak extraction + UKF update + WebSocket publish. |
+| **GDOP** | Geometric Dilution of Precision — quantifies how well a set of link geometries can localize a point. Low GDOP = good coverage. >4 = poor, Infinity = no coverage. |
+| **UKF** | Unscented Kalman Filter — per-blob state estimator tracking position `[px,py,pz]` and velocity `[vx,vy,vz]` with biomechanical constraints. |
+| **OTA** | Over-the-Air firmware update — ESP-IDF dual-partition scheme where new firmware is downloaded to an inactive partition, verified by SHA-256, and activated on reboot. |
+| **NVS** | Non-Volatile Storage — ESP32 key-value flash partition used to persist WiFi credentials, node ID, HMAC token, and runtime state across reboots. |
+| **mDNS** | Multicast DNS — zero-configuration service discovery on the local LAN. Mothership advertises `_spaxel._tcp.local`; nodes discover it without manual IP configuration. |
+| **Blob** | A detected spatial presence — position + velocity estimate for a person (or other moving entity) tracked by the UKF. Has a stable ID within a mothership session. |
+| **Link** | A directional TX→RX pair. In a 4-node fleet with all nodes TX/RX, there are `N×(N-1)` = 12 unidirectional links. Stored in canonical form `min(MAC_a):max(MAC_b)`. |
+| **Baseline** | Per-link per-subcarrier amplitude reference representing the empty-room RF environment. deltaRMS is computed relative to this. Maintained as an EMA with τ=30s. |
+| **Mothership** | The single Docker container running the Go backend — ingestion, pipeline, localization, fleet manager, dashboard server, and all storage. |
+| **Phase sanitization** | Processing step that removes hardware-induced phase artifacts (STO slope, CFO intercept) via spatial phase unwrapping + OLS regression. |
+| **STO/CFO** | Sampling Time Offset / Carrier Frequency Offset — hardware timing and frequency errors that impose a deterministic phase ramp across subcarriers, removed before feature extraction. |
+
+---
+
+## Non-Goals
+
+These are **conscious scope decisions**, not physics limitations. Each has a rationale.
+
+| Non-Goal | Rationale |
+|----------|-----------|
+| **No embedded MQTT broker** | Users already have Home Assistant / Mosquitto. A broker inside the container adds operational complexity (ports, persistence, HA config) with zero detection benefit. Integration layer only. |
+| **No 5 GHz support** | ESP32-S3 is 2.4 GHz hardware. Adding 5 GHz would require different hardware (ESP32-C6) with a different CSI API — a separate hardware platform decision, not an incremental feature. |
+| **No cloud relay or remote access** | Spaxel is intentionally self-hosted. Cloud relay would require a relay server, account management, and TLS termination — all better served by a Tailscale/VPN overlay on the user's side. |
+| **No camera or audio fallback** | CSI-only is the privacy design principle. Adding camera or microphone input would require consent UI, storage policy, and a fundamentally different threat model. |
+| **No sub-10 cm localization accuracy** | Physics limit of 2.4 GHz CSI. Pursuing higher accuracy would require UWB hardware (completely different platform) or dense node deployments (20+ nodes per room). |
+| **No multi-site / multi-home support** | One mothership per physical location. Multi-site coordination requires remote configuration sync and distributed state — a different product tier, not a feature. |
+| **No building/floor management** | Floor plans are per-installation. Multi-floor or multi-building topologies would require coordinate space unification that the current 3D grid does not support cleanly. |
+| **No user accounts / multi-user auth** | A single PIN protects the mothership dashboard. Multi-user auth with roles is out of scope; home deployments have one admin. |
+| **No real-time WebSocket API to external consumers** | The `/ws/dashboard` feed is for the dashboard UI. External consumers use the REST API. A public WebSocket API would require versioning, auth tokens, and rate limiting not designed here. |
 
 ---
 
@@ -3283,6 +3327,144 @@ Each `Up` function runs in a SQLite transaction. If it fails, the transaction is
 
 ---
 
+## Acceptance Scenarios
+
+These define **done** independently of the feature list. Each is independently verifiable.
+Pass criteria and fail criteria are listed explicitly under each scenario.
+
+### AS-1: First-time setup in under 5 minutes
+**User** has a home WiFi network, a server running Docker, and one ESP32-S3.
+**Steps:** User runs `docker compose up -d`, opens `http://server:8080`, sets a PIN, connects ESP32 via USB, clicks "Add Node." Dashboard flashes firmware, provisions WiFi credentials automatically.
+**Pass:** ESP32 connects within 30 seconds, the 3D view shows a node icon, and passive radar CSI begins streaming (amplitude bars visible). No manual IP configuration entered.
+**Fail:** User must enter a mothership IP address, or the process takes >5 minutes.
+
+### AS-2: Person detected while walking
+**User** has 2+ nodes online and walks through the space.
+**Steps:** User walks across the room at normal pace.
+**Pass:** Within 3 seconds a blob appears in the 3D view, tracks the user's approximate path, and disappears within 5 seconds of the user standing still beyond the baseline threshold. Dashboard shows `smooth_deltaRMS > 0.05` on at least one link.
+**Fail:** No blob appears, or a blob persists >30 seconds after the user leaves.
+
+### AS-3: Fall alert fires correctly
+**User** (or a test object) drops rapidly to floor height.
+**Steps:** Drop a ~5 kg bag from standing height to the floor in a zone with 2+ nodes above 1.5 m.
+**Pass:** Fall alert fires within 15 seconds: dashboard shows red pulsing blob, timeline shows `fall_alert` event, and the configured webhook receives a POST within 5 seconds of alert.
+**Fail:** No alert fires within 60 seconds, or alert fires for bag-on-couch drop test (false positive).
+
+### AS-4: BLE identity resolves to person name
+**User** has registered their phone (BLE address) as "Alice" in the device registry.
+**Steps:** Alice walks into detection range with her phone in her pocket.
+**Pass:** The blob in the 3D view shows "Alice" label within 10 seconds of the blob appearing. Dashboard shows "Alice entered Kitchen" in the timeline.
+**Fail:** Blob remains labeled "Unknown" despite Alice's phone being within 2 m of a node.
+
+### AS-5: OTA update succeeds without physical access
+**User** has uploaded a new firmware binary to the dashboard.
+**Steps:** User clicks "Update All" in the Fleet Status panel.
+**Pass:** All nodes update in rolling fashion (30 s gap). Each node reconnects with the new firmware version. Dashboard shows green "VERIFIED" badge on all nodes within 10 minutes.
+**Fail:** Any node gets stuck in FAILED or ROLLBACK state, or >50% of nodes go offline simultaneously.
+
+### AS-6: Replay shows what happened at 2am
+**User** wants to investigate an anomaly from last night.
+**Steps:** User opens Activity Timeline, taps an anomaly event at 2:34am, clicks "Why?"
+**Pass:** 3D view scrubs to that exact moment, shows blobs where they were at 2:34am, explains contributing links. User can scrub ±10 minutes and re-run pipeline with different thresholds.
+**Fail:** Replay is unavailable (CSI buffer expired), or the 3D view does not update when tapping the timeline event.
+
+---
+
+## Anti-Patterns
+
+Things **NOT** to do and why. These are design constraints, not suggestions.
+
+| Anti-Pattern | Why It's Wrong | What to Do Instead |
+|---|---|---|
+| **Adding a broker inside the container** | Doubles operational complexity, adds ports, requires user config, provides no detection benefit. Users already have Mosquitto via Home Assistant. | Use `SPAXEL_MQTT_BROKER` to connect to the user's broker as a client. |
+| **Using HTTP polling from nodes to mothership** | Polling creates state-detection lag, wastes bandwidth, and eliminates the authoritative "connected = online" invariant. | Nodes maintain a single persistent WebSocket. Connection state IS liveness. |
+| **Persisting UKF state to SQLite between runs** | UKF state is only valid within a continuous tracking session. Stale state from a previous session poisons the next session's estimates. | UKF state is in-memory only. On restart, blobs are reconstructed from scratch. |
+| **Growing the events table unboundedly** | At 10 Hz with motion, the events table would hit millions of rows quickly. | Archive events older than 90 days to `events_archive` automatically. |
+| **Calling `CanonicalLinkID` in the hot path without caching** | String sort + concatenation per Fresnel grid cell × fusion tick = ~600 allocations/tick at full rate. | Canonical link IDs are computed once at link creation and stored. |
+| **Using Docker bridge networking for the mothership** | mDNS uses multicast to `224.0.0.251` (link-local), which bridge networking blocks. Nodes cannot discover the mothership. | Use `network_mode: host`. If host mode is forbidden, set `SPAXEL_MDNS_ENABLED=false` and provision nodes with manual IP. |
+| **Updating the learning models on every fusion tick** | Prediction models, anomaly patterns, and baseline snapshots written every 100 ms would saturate SQLite WAL and burn through SD card writes on Pi. | Batch writes: baselines every 60 s, anomaly patterns every hour, prediction models every 5 minutes. |
+| **Triggering re-baseline on every node position update** | Node position updates happen interactively during drag operations (~30 fps). A re-baseline is a 60-second process. | Re-baseline only on explicit user confirmation after position is finalized. |
+| **Sending full snapshot on every WebSocket frame** | 10 Hz × full snapshot ≈ 100 KB/s per dashboard client. Kills mobile connections. | Send snapshot once on connect; subsequent frames are incremental diffs. |
+
+---
+
+## Failure Modes & Resilience
+
+Taxonomy of failure types with recovery strategy per type. Each failure mode has a specified test.
+
+| Failure Type | Mode | Symptoms | Recovery Strategy | Test |
+|---|---|---|---|---|
+| **Node network loss** | Transient | Node WebSocket disconnects; OFFLINE in dashboard | Firmware exponential backoff reconnect (1→2→4→8→16→30s). Mothership marks OFFLINE immediately on disconnect; ONLINE on next `hello`. Self-healing fleet re-optimizes roles. | Integration: disconnect node mid-sim, assert fleet continues producing blobs |
+| **Mothership unreachable (WiFi ok)** | Transient | Firmware enters MOTHERSHIP_UNAVAILABLE; dashboard shows STALE | Node retries discovery every 30s indefinitely. CSI discarded locally. BLE results queued (max 60). Never triggers captive portal. | Firmware unit test: simulate 30s blackout, assert reconnect on mothership restore |
+| **WiFi credential failure** | Persistent | 10 consecutive WiFi failures → captive portal | ESP32 starts `spaxel-XXXX` AP at 192.168.4.1 for re-provisioning. User enters new credentials. | Firmware test: NVS with bad SSID → captive portal within timeout |
+| **SQLite corruption** | Rare | `PRAGMA integrity_check` fails on startup | Move corrupted DB aside to `spaxel.db.corrupt.<timestamp>`, start fresh. Baseline/learning data lost; nodes reconnect automatically. | Unit test: corrupt DB file header, verify startup creates fresh DB |
+| **CSI replay file truncation** | Rare | Last write incomplete (ungraceful shutdown) | On open: scan backward from `write_pos` to find last complete frame; truncate. Replay resumes from last clean frame. | Unit test: write partial frame, open file, verify truncation to previous frame |
+| **Disk full** | Gradual | `/data` free < 100 MB | Halt CSI replay writes (largest writer). If <20 MB: also halt crowd flow + prediction updates. Detection continues. Dashboard shows warning. | Integration: fill volume to near-full, assert `/healthz` returns `"disk":"degraded"` |
+| **Pipeline overload** | Gradual | Fusion iteration consistently >80ms | Load shedding: level 1 (suspend crowd flow), level 2 (suspend replay writes), level 3 (reduce all nodes to 10 Hz). Auto-recover when load drops below 60ms for 10 iterations. | Benchmark: force 20-node sim, measure iteration time; assert load shedding fires |
+| **OTA firmware corruption** | Rare | SHA-256 mismatch after download | Node aborts OTA, sends `ota_status: failed, error: sha256_mismatch`. Does NOT reboot. Retains current firmware. | Integration: serve corrupted binary, assert node does not reboot and stays on old version |
+| **Dashboard WebSocket overload** | Transient | Client receives 10 Hz × full scene > budget | Send queue capped at 50 frames; oldest dropped if client is slow. Dashboard detects reconnect gap and requests fresh snapshot. | Integration: slow dashboard client, assert no server crash; assert snapshot-on-reconnect |
+| **BLE identity lapse on address rotation** | Expected | Person label disappears for 60-90s | Identity retained for 5s after last match; rotation heuristics re-link within 90s. Blob continues to track; only label is lost temporarily. | Unit test: simulate rotation, assert re-linking within 3 scan cycles |
+| **mDNS blocked by router** | Environment | Node cannot discover mothership | Fallback to `ms_ip` NVS key. If NVS is empty: captive portal shows IP entry field. `SPAXEL_MDNS_ENABLED=false` disables advertisement when not needed. | Firmware test: disable mDNS response, assert fallback to `ms_ip` |
+
+---
+
+## Go Module Layout
+
+```
+spaxel/
+  cmd/
+    mothership/           — main.go: startup sequencing, subsystem wiring
+    sim/                  — main.go: CSI simulator CLI (spaxel-sim)
+  internal/
+    ingestion/            — WebSocket server, binary frame parsing, node lifecycle
+    pipeline/
+      phase/              — Phase sanitization (unwrap, OLS, residual)
+      nbvi/               — NBVI subcarrier selection (Welford online algorithm)
+      feature/            — deltaRMS, phase variance, breathing band IIR filter
+      baseline/           — EMA baseline, diurnal slots, snapshot persistence
+    localizer/
+      fresnel/            — Zone number cache, grid accumulation
+      ukf/                — Biomechanical UKF (gonum/mat)
+      gdop/               — Fisher information matrix, GDOP computation
+      fusion/             — Full localization loop (10 Hz)
+    fleet/                — Node registry, role assignment, stagger scheduler
+    ble/                  — BLE centroid, rotation heuristics, identity matching
+    portal/               — Crossing detection state machine, zone occupancy
+    replay/               — csi_replay.bin reader/writer, replay pipeline
+    anomaly/              — Pattern model (Welford), anomaly scoring
+    predict/              — Presence prediction model, predicted_enter trigger
+    sleep/                — Sleep state machine, breathing FFT, daily records
+    flow/                 — Crowd flow accumulator, dwell heatmap
+    notify/               — Notification renderer (fogleman/gg), delivery channels
+    mqtt/                 — MQTT client, HA auto-discovery
+    auth/                 — HMAC token derivation, bcrypt PIN, session management
+    oui/                  — OUI lookup table (go:generate from IEEE list)
+    db/                   — SQLite open/migrate, schema migrations
+    config/               — Environment variable parsing and defaults
+  dashboard/              — Static assets: HTML, JS (Three.js), CSS
+  firmware/               — ESP-IDF project (C source, CMakeLists, partitions.csv)
+  test/
+    integration/          — Simulator-based integration tests
+```
+
+---
+
+## Risk Register
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| **ESP32-S3 CSI API changes in future ESP-IDF versions** | Medium | High | Pin to ESP-IDF 5.2.x in CI; test against 5.3.x in a canary branch before adopting |
+| **`modernc.org/sqlite` performance ceiling at large fleets** | Low | Medium | Profiled at 8-node fleet (<5% of 100ms budget). Switch to `mattn/go-sqlite3` if >16-node fleets need <1ms query times |
+| **BLE address rotation breaks identity tracking** | High | Low | Rotation heuristics documented and implemented (Component 21). Identity lapses are 60s max. Recommend tracker tags for reliable identity |
+| **mDNS blocked on enterprise/managed home routers** | Medium | Medium | `ms_ip` NVS fallback and captive portal IP entry provide recovery path without mDNS |
+| **`network_mode: host` unavailable in some environments** | Medium | Medium | `SPAXEL_MDNS_ENABLED=false` disables mDNS; nodes use `ms_ip` NVS key. Documented in compose file. |
+| **CSI callback rate exceeds WebSocket send capacity** | Low | High | FreeRTOS `ws_send_queue` depth 32 with silent drop. Load shedding at mothership reduces rates to 10 Hz under pressure. |
+| **`csi_replay.bin` corruption on ungraceful host power loss** | Medium | Low | File header magic + truncation recovery on open. Live CSI continues without replay. Replay data loss ≤ 1 unflushed write. |
+| **Webhook endpoint unreachability cascades** | Low | Low | 5s HTTP timeout, fire-and-forget, 4xx auto-disables trigger. Alert shown in dashboard. |
+| **Three.js SkinnedMesh performance on low-end mobile GPUs** | Medium | Medium | LOD: disable Fresnel zones + shorten trails at >8 blobs. Fallback Simple Mode is CSS-only. |
+
+---
+
 ## Phase Plan
 
 ### Phase 1 — Foundation
@@ -3298,6 +3480,8 @@ Goal: Bare-minimum loop from ESP32 to browser. Zero-config with passive radar an
 
 **Exit criteria:** Flash firmware via Web Serial → plug in → node auto-discovers mothership → passive radar CSI streaming → amplitude bars visible in browser. Under 5 minutes, zero manual network config.
 
+**Entry criteria for Phase 2:** All Phase 1 unit tests pass (`go test ./...`). Binary frame parse round-trip verified. Docker image builds cleanly for `linux/amd64` and `linux/arm64`.
+
 ### Phase 2 — Signal Processing & Detection
 
 Goal: Detect presence on a single link.
@@ -3310,6 +3494,8 @@ Goal: Detect presence on a single link.
 12. **Adaptive sensing rate** — Mothership-controlled rate changes (idle 2 Hz ↔ active 50 Hz) per link. On-device amplitude variance check for local burst-to-active. Motion hints from ESP32 to preemptively ramp adjacent links
 
 **Exit criteria:** Dashboard reliably shows motion detected / clear for a single link with one person walking through. Idle links automatically drop to 2 Hz.
+
+**Entry criteria for Phase 3:** Phase sanitization, deltaRMS, and baseline unit tests all pass. CSI simulator produces frames that the mothership correctly parses without malformed-frame warnings.
 
 ### Phase 3 — Multi-Node & Localization
 
@@ -3325,6 +3511,8 @@ Goal: Spatial positioning with 4+ nodes. Humanoid blob rendering from the start.
 
 **Exit criteria:** 4+ nodes produce a 3D view with humanoid figures tracking a walking person at ±1 m accuracy. Figures animate between postures. User can orbit, pan, and zoom. Coverage overlay shows detection quality.
 
+**Entry criteria for Phase 4:** Fresnel zone, UKF, and GDOP unit tests all pass. `spaxel-sim --nodes 4 --walkers 1 --duration 30s` produces blob count > 0 for >80% of the run.
+
 ### Phase 4 — Onboarding & OTA
 
 Goal: Non-technical users can add and update nodes. Interactive guided wizard that teaches by doing.
@@ -3336,6 +3524,8 @@ Goal: Non-technical users can add and update nodes. Interactive guided wizard th
 24. **Guided troubleshooting foundation (Component 36)** — First-time feature discovery tooltips. Node-offline troubleshooting steps in timeline. Post-calibration positive reinforcement messages
 
 **Exit criteria:** A new ESP32-S3 can go from unboxed to streaming CSI in under 5 minutes with the user understanding HOW detection works. Firmware can be updated OTA without physical access.
+
+**Entry criteria for Phase 5:** Web Serial provisioning round-trip integration test passes. OTA rollback integration test passes (push invalid firmware → node reverts). Phase 1–4 unit tests green.
 
 ### Phase 5 — Reliability & Intelligence
 
@@ -3852,9 +4042,44 @@ ESP-IDF supports host-based testing via `idf.py test --target linux`. The follow
 - `csi` — Binary frame serialization: verify frame header fields and little-endian encoding
 - `serial_prov` — Provisioning JSON parser: verify valid JSON parsed correctly; invalid JSON returns `{"ok":false}`
 
+### Property-Based / Fuzz Tests
+
+The following are high-value fuzz targets — any malformed input here has an outsized impact:
+
+| Target | What to fuzz | Tool |
+|--------|-------------|------|
+| `ingestion.ParseBinaryFrame` | Random byte slices 0–300 bytes | `go test -fuzz=FuzzParseBinaryFrame ./internal/ingestion/` |
+| `ingestion.ParseJSONFrame` | Random UTF-8 strings up to 4096 bytes | `go test -fuzz=FuzzParseJSONFrame` |
+| `pipeline/phase.Sanitize` | Edge I/Q pairs: all-zero, max int8, alternating sign | Table-driven property test: output is always finite (no NaN/Inf) |
+| `replay.SeekToTimestamp` | Target timestamps before/after file bounds, at wrap points | Fuzz with arbitrary int64 timestamps |
+| `auth.VerifyToken` | Tokens with wrong length, invalid hex, correct length but wrong bytes | Property: VerifyToken never panics |
+
+Fuzz targets are in `*_fuzz_test.go` files and must be run with `go test -fuzz` — they are excluded from the regular `go test ./...` run to avoid indefinite CI loops. A 60-second fuzz run is added as an optional CI step.
+
+### Quality Gates / Definition of Done
+
+**We do not ship a version if any of the following fail:**
+
+1. `go test ./...` — all unit tests pass
+2. `go vet ./...` — no vet warnings
+3. `golangci-lint run` — no lint errors (at least: `errcheck`, `staticcheck`, `gosimple`)
+4. `docker buildx build --platform linux/amd64,linux/arm64 .` — multi-arch build succeeds
+5. Integration test suite: `spaxel-sim --nodes 4 --walkers 1 --duration 30s` with blob count >0
+6. Integration test: OTA rollback test (invalid firmware → node reverts)
+7. Integration test: auth rejection test (node without token → HTTP 401)
+8. `axe-core` accessibility CI gate passes on dashboard HTML
+9. Pipeline timing: fusion loop median <15 ms over a 60-second run (measured by the `timing_budget_test.go` benchmark)
+
+**Advisory (tracked but not blocking):**
+- Fuzz 60-second runs for binary frame and JSON parsers (run on release branches, not every commit)
+- `go tool pprof` heap snapshot during 8-node sim run: baseline heap <80 MB
+
 ## Open Questions
 
-- **5 GHz support:** ESP32-S3 is 2.4 GHz only. Future ESP32-C6 or C5 may add 5 GHz with different CSI characteristics. Design the pipeline to be frequency-agnostic where possible
-- **Node self-positioning:** MDS-MAP from pairwise ToF could eliminate manual position entry. Feasibility with ESP32 ToF resolution (~7.5 m) is questionable — defer to a future phase
-- **IEEE 802.11bf:** The new sensing standard (approved May 2025) will eventually provide standardized sensing frames. Monitor for ESP32 support — could replace promiscuous mode CSI capture
+These are unresolved design questions. Each is tagged with the earliest phase where a decision is needed.
+
+- **5 GHz support** *(Phase 1+ — monitor)*: ESP32-S3 is 2.4 GHz only. Future ESP32-C6 or C5 may add 5 GHz with different CSI characteristics. Design the pipeline to be frequency-agnostic where possible (parameterize λ = c/f).
+- **Node self-positioning** *(Phase 3 — defer)*: MDS-MAP from pairwise ToF could eliminate manual position entry. Feasibility with ESP32 ToF resolution (~7.5 m) is questionable — defer to a future phase. Until then, manual positioning via the 3D editor is the only path.
+- **IEEE 802.11bf** *(monitor — no action until ESP32 support ships)*: The sensing standard (approved May 2025) provides standardized sensing frames that could replace promiscuous mode CSI capture entirely. Monitor ESP-IDF release notes for support. If added, it will be a firmware-layer change only.
+- **Multi-installation coordination** *(out of scope — see Non-Goals)*: Could multiple Spaxel instances in adjacent apartments share boundary link data? Deferred — privacy and network topology implications need thought. Not a blocker for any current phase.
 - **Multi-installation coordination:** Could multiple Spaxel instances in adjacent apartments share boundary link data to improve wall-adjacent detection? Deferred — privacy and network topology implications need thought
