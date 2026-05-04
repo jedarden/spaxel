@@ -539,3 +539,17 @@ func (s *Storage) DeleteOldSessions(days int) (int64, error) {
 
 	return result.RowsAffected()
 }
+
+// HasAnyCompletedSession returns true if at least one sleep session has been completed.
+// A completed session has both sleep_onset and wake_time set.
+func (s *Storage) HasAnyCompletedSession() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM sleep_sessions
+		WHERE sleep_onset > 0 AND wake_time > 0
+	`).Scan(&count)
+	return err == nil && count > 0
+}
