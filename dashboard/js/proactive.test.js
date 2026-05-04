@@ -8,6 +8,9 @@ describe('Proactive Quality Module', () => {
     let mockWindow;
 
     beforeEach(() => {
+        // Clear localStorage FIRST, before any module initialization
+        localStorage.clear();
+
         // Mock document and window
         let createdElements = {};
 
@@ -120,11 +123,6 @@ describe('Proactive Quality Module', () => {
     });
 
     describe('Setting Change Tracking', () => {
-        beforeEach(() => {
-            // Clear localStorage
-            localStorage.clear();
-        });
-
         test('should track qualifying setting changes', () => {
             Proactive.trackSettingChange('delta_rms_threshold', 0.02);
             Proactive.trackSettingChange('delta_rms_threshold', 0.025);
