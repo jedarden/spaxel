@@ -109,8 +109,17 @@ func (b *Bus) Publish(e Event) {
 	b.mu.RUnlock()
 
 	for _, fn := range subs {
-		go fn(e)
+		b.inFlight.Add(1)
+		go func(fn Subscriber) {
+			defer b.inFlight.Done()
+			fn(e)
+		}(fn)
 	}
+}
+
+// Wait blocks until all in-flight Publish goroutines have completed.
+func (b *Bus) Wait() {
+	b.inFlight.Wait()
 }
 
 // PublishSync sends an event to all subscribers, blocking until all complete.

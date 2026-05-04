@@ -216,8 +216,12 @@ func (s *Storage) Close() error {
 	close(s.done)
 	s.wg.Wait()
 
-	// Final flush to ensure all events are written
-	s.flush()
+	// Wait for in-flight async EventBus delivery goroutines to complete,
+	// then drain any events they enqueued after the flusher stopped.
+	eventbus.Default().Wait()
+	for len(s.queue) > 0 {
+		s.flush()
+	}
 
 	return nil
 }
