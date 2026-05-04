@@ -138,13 +138,14 @@
 
         // Add touch event listeners to prevent propagation to canvas
         // This prevents OrbitControls from responding to touches on the panel
+        // Using passive listeners with stopPropagation to avoid iOS warnings
         sidebarElement.addEventListener('touchstart', function(e) {
             e.stopPropagation();
         }, { passive: true });
 
         sidebarElement.addEventListener('touchmove', function(e) {
             e.stopPropagation();
-        }, { passive: false }); // Non-passive to allow preventDefault if needed
+        }, { passive: true });
 
         sidebarElement.addEventListener('touchend', function(e) {
             e.stopPropagation();
@@ -157,7 +158,7 @@
 
         sidebarOverlay.addEventListener('touchmove', function(e) {
             e.stopPropagation();
-        }, { passive: false });
+        }, { passive: true });
 
         sidebarOverlay.addEventListener('touchend', function(e) {
             e.stopPropagation();
@@ -339,13 +340,14 @@
 
         // Add touch event listeners to prevent propagation to canvas
         // This prevents OrbitControls from responding to touches on the modal
+        // Using passive listeners with stopPropagation to avoid iOS warnings
         modalElement.addEventListener('touchstart', function(e) {
             e.stopPropagation();
         }, { passive: true });
 
         modalElement.addEventListener('touchmove', function(e) {
             e.stopPropagation();
-        }, { passive: false }); // Non-passive to allow preventDefault if needed
+        }, { passive: true });
 
         modalElement.addEventListener('touchend', function(e) {
             e.stopPropagation();
@@ -358,7 +360,7 @@
 
         modalBackdrop.addEventListener('touchmove', function(e) {
             e.stopPropagation();
-        }, { passive: false });
+        }, { passive: true });
 
         modalBackdrop.addEventListener('touchend', function(e) {
             e.stopPropagation();
