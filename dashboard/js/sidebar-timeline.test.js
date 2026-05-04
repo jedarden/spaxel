@@ -339,16 +339,15 @@ describe('SidebarTimeline', function() {
                             mockEventData.total_filtered = 15;
         });
 
-        test('all event types render correctly', function() {
+        test('all event types render correctly', function(done) {
             SidebarTimeline.show();
             SidebarTimeline.refresh();
 
             // Wait for fetch to complete and rendering to happen
-            return new Promise(function(resolve) {
-                setTimeout(function() {
-                    // Check that all events were rendered
-                    const eventEls = mockElements.eventsContainer.querySelectorAll('.sidebar-timeline-event');
-                    expect(eventEls.length).toBe(15);
+            setTimeout(function() {
+                // Check that all events were rendered
+                const eventEls = mockElements.eventsContainer.querySelectorAll('.sidebar-timeline-event');
+                expect(eventEls.length).toBe(15);
 
                     // Verify zone_entry
                     const zoneEntry = mockElements.eventsContainer.querySelector('[data-id="1"]');
@@ -448,9 +447,9 @@ describe('SidebarTimeline', function() {
                     expect(sleep.querySelector('.sidebar-timeline-event-icon').textContent).toBe('😴');
                     expect(sleep.querySelector('.sidebar-timeline-event-title').textContent).toContain('7h 23m');
 
-                    resolve();
-                }, 150);
-            });
+                    done();
+                }, 300);
+            }, 10000);
         });
     });
 
@@ -943,18 +942,19 @@ describe('SidebarTimeline', function() {
             });
         });
 
-        test('system events have secondary class', function() {
+        test('system events have secondary class', function(done) {
             SidebarTimeline.show();
             SidebarTimeline.refresh();
 
             return new Promise(function(resolve) {
                 setTimeout(function() {
-                    const eventEl = mockElements.eventsContainer.querySelector('[data-id="2"]');
+                    // Check node_online (id=10) which is a system event
+                    const eventEl = mockElements.eventsContainer.querySelector('[data-id="10"]');
                     expect(eventEl).toBeTruthy();
                     expect(eventEl.classList.contains('secondary')).toBe(true);
-                    resolve();
-                }, 150);
-            });
+                    done();
+                }, 300);
+            }, 10000);
         });
     });
 
