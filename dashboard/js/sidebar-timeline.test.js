@@ -66,8 +66,10 @@ describe('SidebarTimeline', function() {
         // Reset all mocks
         jest.clearAllMocks();
 
-        // Reset mock event data
-        mockEventData = { events: [], cursor: null, total_filtered: 0 };
+        // Reset mock event data (update the variable used by fetch mock)
+        mockEventData.events = [];
+        mockEventData.cursor = null;
+        mockEventData.total_filtered = 0;
 
         // Setup DOM structure
         document.body.innerHTML = `
@@ -184,13 +186,8 @@ describe('SidebarTimeline', function() {
                 window.SpaxelSidebarTimeline.state.events = [];
             }
 
-            // Mock successful API response
-            global.fetch.mockImplementation(function() {
-                return Promise.resolve({
-                    ok: true,
-                    json: function() {
-                        return Promise.resolve({
-                            events: [
+            // Update the shared mockEventData object with 15 test events
+            mockEventData.events = [
                                 {
                                     id: 1,
                                     timestamp_ms: Date.now() - 3600000,
@@ -337,13 +334,9 @@ describe('SidebarTimeline', function() {
                                     }),
                                     severity: 'info'
                                 }
-                            ],
-                            cursor: null,
-                            total_filtered: 15
-                        });
-                    }
-                });
-            });
+                            ];
+                            mockEventData.cursor = null;
+                            mockEventData.total_filtered = 15;
         });
 
         test('all event types render correctly', function() {

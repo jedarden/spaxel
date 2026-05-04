@@ -3231,7 +3231,95 @@
                 </button>
             </div>
         </div>
+
+        <!-- Filter Bar -->
+        <div id="sidebar-timeline-filter-bar" class="sidebar-timeline-filter-bar">
+            <!-- Search Input -->
+            <div class="sidebar-filter-search">
+                <input type="text" id="sidebar-timeline-search" class="sidebar-search-input" placeholder="Search events...">
+            </div>
+
+            <!-- Filter Toggle Button -->
+            <button id="sidebar-filter-toggle-btn" class="sidebar-filter-toggle-btn" title="Show filters">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                Filters
+            </button>
+        </div>
+
+        <!-- Expanded Filter Controls -->
+        <div id="sidebar-timeline-filter-controls" class="sidebar-timeline-filter-controls collapsed">
+            <!-- Category Checkboxes -->
+            <div class="sidebar-filter-section">
+                <div class="sidebar-filter-section-title">Event Categories</div>
+                <div class="sidebar-category-checkboxes">
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-presence" checked>
+                        <span class="sidebar-category-icon">👤</span>
+                        <span class="sidebar-category-label">Presence</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-zones" checked>
+                        <span class="sidebar-category-icon">🚪</span>
+                        <span class="sidebar-category-label">Zones</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-alerts" checked>
+                        <span class="sidebar-category-icon">⚠️</span>
+                        <span class="sidebar-category-label">Alerts</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-system">
+                        <span class="sidebar-category-icon">⚙️</span>
+                        <span class="sidebar-category-label">System</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-learning">
+                        <span class="sidebar-category-icon">🎓</span>
+                        <span class="sidebar-category-label">Learning</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Dropdown Filters -->
+            <div class="sidebar-filter-section">
+                <div class="sidebar-filter-section-title">Filter By</div>
+                <div class="sidebar-filter-dropdowns">
+                    <select id="sidebar-filter-person" class="sidebar-filter-select">
+                        <option value="">All People</option>
+                    </select>
+                    <select id="sidebar-filter-zone" class="sidebar-filter-select">
+                        <option value="">All Zones</option>
+                    </select>
+                    <select id="sidebar-filter-date-range" class="sidebar-filter-select">
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="7days">Last 7 Days</option>
+                        <option value="30days">Last 30 Days</option>
+                        <option value="custom">Custom Range...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Custom Date Range (hidden by default) -->
+            <div id="sidebar-custom-date-container" class="sidebar-custom-date-container" style="display: none;">
+                <input type="date" id="sidebar-date-from" class="sidebar-date-input">
+                <span class="sidebar-date-separator">to</span>
+                <input type="date" id="sidebar-date-to" class="sidebar-date-input">
+                <button id="sidebar-date-apply-btn" class="sidebar-date-apply-btn">Apply</button>
+            </div>
+
+            <!-- Active Filters Display -->
+            <div id="sidebar-active-filters" class="sidebar-active-filters" style="display: none;">
+                <span class="sidebar-active-filters-label">Active:</span>
+                <div id="sidebar-active-filter-tags" class="sidebar-active-filter-tags"></div>
+                <button id="sidebar-clear-filters-btn" class="sidebar-clear-filters-btn">Clear All</button>
+            </div>
+        </div>
+
         <div id="sidebar-timeline-content" class="sidebar-panel-content">
+            <div id="sidebar-timeline-count" class="sidebar-timeline-count" style="display: none;"></div>
             <div id="sidebar-timeline-events" class="sidebar-timeline-events">
                 <!-- Events will be rendered here -->
             </div>
@@ -3248,6 +3336,9 @@
             </div>
             <div id="sidebar-timeline-spacer-top" class="timeline-spacer timeline-spacer-top" style="height: 0px;"></div>
             <div id="sidebar-timeline-spacer-bottom" class="timeline-spacer timeline-spacer-bottom" style="height: 0px;"></div>
+            <div id="sidebar-load-more" class="sidebar-load-more" style="display: none;">
+                <button id="sidebar-load-more-btn" class="sidebar-load-more-btn">Load more</button>
+            </div>
         </div>
     </div>
 
