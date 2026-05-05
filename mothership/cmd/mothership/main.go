@@ -1082,6 +1082,42 @@ func main() {
 					log.Printf("[WARN] Failed to subscribe to system mode commands: %v", err)
 				}
 
+				// Subscribe to security mode commands from MQTT (arm/disarm)
+				if err := mqttClient.SubscribeToSecurityMode(func(action string) {
+					// Handle security mode command from MQTT
+					log.Printf("[INFO] Security mode command via MQTT: %s", action)
+					if anomalyDetector != nil {
+						if action == "arm" {
+							anomalyDetector.SetSecurityMode(analytics.SecurityModeArmed, "mqtt")
+						} else if action == "disarm" {
+							anomalyDetector.SetSecurityMode(analytics.SecurityModeDisarmed, "mqtt")
+						}
+					} else {
+						log.Printf("[WARN] Anomaly detector not available for security mode command")
+					}
+				}); err != nil {
+					log.Printf("[WARN] Failed to subscribe to security mode commands: %v", err)
+				}
+
+				// Subscribe to re-baseline commands from MQTT
+				if err := mqttClient.SubscribeToRebaseline(func(zone string) {
+					// Handle re-baseline command from MQTT
+					log.Printf("[INFO] Re-baseline command via MQTT: zone=%s", zone)
+					// Publish event to signal baseline capture request
+					eventbus.PublishDefault(eventbus.Event{
+						Type:        eventbus.TypeSystem,
+						TimestampMs: time.Now().UnixMilli(),
+						Severity:    eventbus.SeverityInfo,
+						Detail: map[string]interface{}{
+							"action":     "rebaseline",
+							"zone":       zone,
+							"source":     "mqtt",
+						},
+					})
+				}); err != nil {
+					log.Printf("[WARN] Failed to subscribe to re-baseline commands: %v", err)
+				}
+
 				log.Printf("[INFO] MQTT event publisher started")
 			}
 		}
