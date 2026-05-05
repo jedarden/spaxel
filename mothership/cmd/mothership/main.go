@@ -3895,6 +3895,11 @@ func main() {
 	diurnalHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Diurnal baseline API registered at /api/diurnal/*")
 
+	// Baseline REST API — read and capture baseline snapshots
+	baselineHandler := api.NewBaselineHandler(mainDB)
+	baselineHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Baseline API registered at /api/baseline/*")
+
 	// Backup API — streams a zip of all databases via SQLite Online Backup API
 	backupHandler := api.NewBackupHandler(cfg.DataDir, version)
 	r.Get("/api/backup", backupHandler.HandleBackup)
