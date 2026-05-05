@@ -3883,6 +3883,13 @@ func main() {
 	tracksHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Tracks API registered at /api/tracks")
 
+	// System status and occupancy REST API
+	statusHandler := api.NewStatusHandler(startupTotalStart, func() int { return len(ingestSrv.GetConnectedNodes()) })
+	statusHandler.SetProcessorManager(pm)
+	statusHandler.SetZonesManager(zonesMgr)
+	statusHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Status API registered at /api/status and /api/occupancy")
+
 	// Diurnal baseline REST API
 	diurnalHandler := api.NewDiurnalHandlerFromSignal(pm)
 	diurnalHandler.RegisterRoutes(r)
