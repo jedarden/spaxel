@@ -223,24 +223,30 @@ func (s *SettingsHandler) Delete(key string) error {
 // defaultSettings defines the default values for all known settings.
 // These are returned when a key hasn't been set in the database.
 var defaultSettings = map[string]interface{}{
-	"fusion_rate_hz":        10.0,    // Fusion loop rate in Hz
-	"grid_cell_m":           0.2,     // Fresnel grid cell size in meters
-	"delta_rms_threshold":   0.02,    // Motion detection threshold
-	"tau_s":                 30.0,    // EMA baseline time constant in seconds
-	"fresnel_decay":         2.0,     // Fresnel zone weight decay rate
-	"n_subcarriers":         16,      // Number of subcarriers for NBVI selection
-	"breathing_sensitivity": 0.005,   // Breathing detection threshold (radians RMS)
-	"motion_threshold":      0.05,    // Smooth deltaRMS threshold for motion gating
-	"dwell_seconds":         30,      // Default dwell trigger duration in seconds
-	"vacant_seconds":        300,     // Default vacant trigger duration in seconds
-	"max_tracked_blobs":     20,      // Maximum number of blobs to track simultaneously
-	"replay_retention_hours": 48,      // CSI replay buffer retention in hours
-	"replay_max_mb":         360,     // CSI replay buffer max size in MB
-	"security_mode":         false,   // Security mode enabled state
+	"fusion_rate_hz":        10.0,   // Fusion loop rate in Hz
+	"grid_cell_m":           0.2,    // Fresnel grid cell size in meters
+	"delta_rms_threshold":   0.02,   // Motion detection threshold
+	"tau_s":                 30.0,   // EMA baseline time constant in seconds
+	"fresnel_decay":         2.0,    // Fresnel zone weight decay rate
+	"n_subcarriers":         16,     // Number of subcarriers for NBVI selection
+	"breathing_sensitivity": 0.005,  // Breathing detection threshold (radians RMS)
+	"motion_threshold":      0.05,   // Smooth deltaRMS threshold for motion gating
+	"dwell_seconds":         30,     // Default dwell trigger duration in seconds
+	"vacant_seconds":        300,    // Default vacant trigger duration in seconds
+	"max_tracked_blobs":     20,     // Maximum number of blobs to track simultaneously
+	"replay_retention_hours": 48,     // CSI replay buffer retention in hours
+	"replay_max_mb":         360,    // CSI replay buffer max size in MB
+	"security_mode":         false,  // Security mode enabled state
 	"security_mode_armed_at": nil,    // Timestamp when security mode was armed
-	"events_archive_days":   90,      // Events archive retention in days
-	"quiet_hours_start":     "",      // Quiet hours start time (HH:MM format)
-	"quiet_hours_end":       "",      // Quiet hours end time (HH:MM format)
+	"events_archive_days":   90,     // Events archive retention in days
+	"quiet_hours_start":     "",     // Quiet hours start time (HH:MM format)
+	"quiet_hours_end":       "",     // Quiet hours end time (HH:MM format)
+	// Auto-update settings
+	"auto_update_enabled":           false, // Auto-update mode enabled
+	"quiet_window_start":           "02:00", // Auto-update quiet window start (HH:MM)
+	"quiet_window_end":             "05:00", // Auto-update quiet window end (HH:MM)
+	"canary_duration_min":          10,     // Canary monitoring duration in minutes
+	"auto_update_quality_threshold": 0.05,  // Quality degradation threshold (0-1)
 }
 
 // RegisterRoutes registers settings endpoints on the given router.
@@ -440,6 +446,53 @@ func validateSettings(settings map[string]interface{}) error {
 	if v, ok := settings["events_archive_days"]; ok {
 		if f, ok := asFloat64(v); !ok || f < 1 || f > 365 {
 			return &ValidationError{Key: "events_archive_days", Reason: "must be between 1 and 365"}
+		}
+	}
+
+	// Validate quiet_window_start: HH:MM format
+	if v, ok := settings["quiet_window_start"]; ok {
+		if s, ok := v.(string); ok {
+			if s != "" {
+				if _, err := time.Parse("15:04", s); err != nil {
+					return &ValidationError{Key: "quiet_window_start", Reason: "must be in HH:MM format or empty"}
+				}
+			}
+		} else {
+			return &ValidationError{Key: "quiet_window_start", Reason: "must be a string in HH:MM format"}
+		}
+	}
+
+	// Validate quiet_window_end: HH:MM format
+	if v, ok := settings["quiet_window_end"]; ok {
+		if s, ok := v.(string); ok {
+			if s != "" {
+				if _, err := time.Parse("15:04", s); err != nil {
+					return &ValidationError{Key: "quiet_window_end", Reason: "must be in HH:MM format or empty"}
+				}
+			}
+		} else {
+			return &ValidationError{Key: "quiet_window_end", Reason: "must be a string in HH:MM format"}
+		}
+	}
+
+	// Validate auto_update_enabled: boolean
+	if v, ok := settings["auto_update_enabled"]; ok {
+		if _, ok := v.(bool); !ok {
+			return &ValidationError{Key: "auto_update_enabled", Reason: "must be a boolean"}
+		}
+	}
+
+	// Validate canary_duration_min: 5-60
+	if v, ok := settings["canary_duration_min"]; ok {
+		if f, ok := asFloat64(v); !ok || f < 5 || f > 60 {
+			return &ValidationError{Key: "canary_duration_min", Reason: "must be between 5 and 60"}
+		}
+	}
+
+	// Validate auto_update_quality_threshold: 0.01-0.5
+	if v, ok := settings["auto_update_quality_threshold"]; ok {
+		if f, ok := asFloat64(v); !ok || f < 0.01 || f > 0.5 {
+			return &ValidationError{Key: "auto_update_quality_threshold", Reason: "must be between 0.01 and 0.5"}
 		}
 	}
 

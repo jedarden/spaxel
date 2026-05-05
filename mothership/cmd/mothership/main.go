@@ -3896,6 +3896,82 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 	})
 
+	// Auto-update manager with canary strategy and quiet window
+	var autoUpdateMgr *ota.AutoUpdateManager
+	if err := startup.SubsystemStart(startupCtx, "Auto-update manager", func(ctx context.Context) error {
+		autoUpdateMgr = ota.NewAutoUpdateManager(otaSrv, otaMgr, zonesTz)
+
+		// Wire up settings provider
+		autoUpdateMgr.SetSettingsProvider(settingsHandler)
+
+		// Wire up quality provider from link weather diagnostics
+		if weatherDiagnostics != nil {
+			qualityProvider := autoupdate.NewQualityProvider(weatherDiagnostics)
+			autoUpdateMgr.SetQualityProvider(qualityProvider)
+		}
+
+		// Wire up node provider from fleet registry
+		if fleetReg != nil {
+			nodeProvider := autoupdate.NewNodeProviderWithConnected(fleetReg, weatherDiagnostics, fleetMgr)
+			autoUpdateMgr.SetNodeProvider(nodeProvider)
+		}
+
+		// Wire up event notifier
+		autoUpdateMgr.SetEventNotifier(autoupdate.NewEventNotifier())
+
+		// Wire up zone vacancy checker
+		zoneVacancyChecker := autoupdate.NewZoneVacancyChecker(10 * time.Minute)
+		if zonesMgr != nil {
+			// Set function to get all zone IDs
+			zoneVacancyChecker.SetAllZonesGetter(func() []string {
+				zones := zonesMgr.GetAllZones()
+				ids := make([]string, 0, len(zones))
+				for _, z := range zones {
+					if z.Enabled {
+						ids = append(ids, z.ID)
+					}
+				}
+				return ids
+			})
+
+			// Set function to get occupancy for a specific zone
+			zoneVacancyChecker.SetZoneOccupancyGetter(func(zoneID string) (int, time.Time, bool) {
+				occ := zonesMgr.GetZoneOccupancy(zoneID)
+				if occ == nil {
+					return 0, time.Time{}, false
+				}
+				return occ.Count, occ.LastUpdated, true
+			})
+		}
+		autoUpdateMgr.SetZoneVacancyChecker(zoneVacancyChecker)
+
+		// Set dashboard broadcaster for real-time progress updates
+		autoUpdateMgr.SetDashboardBroadcaster(&autoUpdateDashboardBroadcaster{hub: dashboardHub})
+
+		// Start background loop
+		autoUpdateMgr.Start(ctx)
+
+		return nil
+	}); err != nil {
+		log.Printf("[WARN] Failed to start auto-update manager: %v", err)
+	} else {
+		defer func() {
+			if autoUpdateMgr != nil {
+				autoUpdateMgr.Stop()
+			}
+		}()
+		log.Printf("[INFO] Auto-update manager started (canary strategy, quiet window)")
+
+		// Auto-update REST API
+		if autoUpdateMgr != nil {
+			autoAPIHandler := ota.NewAutoAPIHandler(autoUpdateMgr, zonesTz)
+			autoAPIHandler.RegisterRoutes(r)
+			log.Printf("[INFO] Auto-update API registered")
+
+				// Wire up firmware upload callback to trigger auto-update check
+				otaSrv.SetUploadCallback(autoUpdateMgr.OnFirmwareUploaded)
+		}
+
 	// Provisioning API (used by onboarding wizard)
 	_, msPortStr, _ := net.SplitHostPort(cfg.BindAddr)
 	msPort, _ := strconv.Atoi(msPortStr)
@@ -4238,24 +4314,25 @@ func (a *zoneStateAdapter) GetAllPortals() []dashboard.PortalSnapshot {
 	result := make([]dashboard.PortalSnapshot, 0, len(portals))
 	for _, p := range portals {
 		result = append(result, dashboard.PortalSnapshot{
-			ID:     p.ID,
-			Name:   p.Name,
-			ZoneA:  p.ZoneAID,
-			ZoneB:  p.ZoneBID,
-			P1X:    p.P1X,
-			P1Y:    p.P1Y,
-			P1Z:    p.P1Z,
-			P2X:    p.P2X,
-			P2Y:    p.P2Y,
-			P2Z:    p.P2Z,
-			P3X:    p.P3X,
-			P3Y:    p.P3Y,
-			P3Z:    p.P3Z,
-			NX:     p.NX,
-			NY:     p.NY,
-			NZ:     p.NZ,
-			Width:  p.Width,
-			Height: p.Height,
+			ID:      p.ID,
+			Name:    p.Name,
+			ZoneA:   p.ZoneAID,
+			ZoneB:   p.ZoneBID,
+			P1X:     p.P1X,
+			P1Y:     p.P1Y,
+			P1Z:     p.P1Z,
+			P2X:     p.P2X,
+			P2Y:     p.P2Y,
+			P2Z:     p.P2Z,
+			P3X:     p.P3X,
+			P3Y:     p.P3Y,
+			P3Z:     p.P3Z,
+			NX:      p.NX,
+			NY:      p.NY,
+			NZ:      p.NZ,
+			Width:   p.Width,
+			Height:  p.Height,
+			Enabled: p.Enabled,
 		})
 	}
 	return result
