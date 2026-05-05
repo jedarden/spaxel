@@ -77,6 +77,7 @@ type Portal struct {
 
 // CrossingEvent represents a detected portal crossing.
 type CrossingEvent struct {
+	ID          int64     `json:"id"`           // Database row ID
 	PortalID    string    `json:"portal_id"`
 	BlobID      int       `json:"blob_id"`
 	Direction   int       `json:"direction"` // 1 = A->B, -1 = B->A
@@ -317,6 +318,11 @@ func (m *Manager) loadPortals() error {
 // Close closes the database.
 func (m *Manager) Close() error {
 	return m.db.Close()
+}
+
+// DB returns the underlying SQLite database connection for testing and direct access.
+func (m *Manager) DB() *sql.DB {
+	return m.db
 }
 
 // SetOnCrossing sets the callback for crossing events.
@@ -864,7 +870,7 @@ func (m *Manager) GetRecentCrossings(limit int) []CrossingEvent {
 	defer m.mu.RUnlock()
 
 	rows, err := m.db.Query(`
-		SELECT portal_id, blob_id, direction, from_zone, to_zone, timestamp, identity
+		SELECT id, portal_id, blob_id, direction, from_zone, to_zone, timestamp, identity
 		FROM crossing_events
 		ORDER BY timestamp DESC
 		LIMIT ?
@@ -879,7 +885,49 @@ func (m *Manager) GetRecentCrossings(limit int) []CrossingEvent {
 	for rows.Next() {
 		var event CrossingEvent
 		var ts int64
-		if err := rows.Scan(&event.PortalID, &event.BlobID, &event.Direction, &event.FromZone, &event.ToZone, &ts, &event.Identity); err != nil {
+		if err := rows.Scan(&event.ID, &event.PortalID, &event.BlobID, &event.Direction, &event.FromZone, &event.ToZone, &ts, &event.Identity); err != nil {
+			continue
+		}
+		event.Timestamp = time.UnixMilli(ts)
+		events = append(events, event)
+	}
+	return events
+}
+
+// GetPortalCrossings returns crossing events for a specific portal with cursor pagination.
+// The before parameter is a Unix millisecond timestamp for cursor pagination (exclusive).
+// If before is 0, returns the most recent crossings.
+func (m *Manager) GetPortalCrossings(portalID string, limit int, before int64) []CrossingEvent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	query := `
+		SELECT id, portal_id, blob_id, direction, from_zone, to_zone, timestamp, identity
+		FROM crossing_events
+		WHERE portal_id = ?
+	`
+	args := []interface{}{portalID}
+
+	if before > 0 {
+		query += ` AND timestamp < ?`
+		args = append(args, before)
+	}
+
+	query += ` ORDER BY timestamp DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := m.db.Query(query, args...)
+	if err != nil {
+		log.Printf("[WARN] Failed to query portal crossings: %v", err)
+		return nil
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var events []CrossingEvent
+	for rows.Next() {
+		var event CrossingEvent
+		var ts int64
+		if err := rows.Scan(&event.ID, &event.PortalID, &event.BlobID, &event.Direction, &event.FromZone, &event.ToZone, &ts, &event.Identity); err != nil {
 			continue
 		}
 		event.Timestamp = time.UnixMilli(ts)

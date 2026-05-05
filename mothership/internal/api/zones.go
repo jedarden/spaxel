@@ -636,6 +636,32 @@ func (h *ZonesHandler) getPortalCrossings(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	events := h.mgr.GetRecentCrossings(limit)
-	writeJSON(w, http.StatusOK, events)
+	var before int64
+	if beforeStr := r.URL.Query().Get("before"); beforeStr != "" {
+		if n, err := strconv.ParseInt(beforeStr, 10, 64); err == nil {
+			before = n
+		}
+	}
+
+	events := h.mgr.GetPortalCrossings(id, limit, before)
+
+	response := make([]crossingResponse, 0, len(events))
+	for _, e := range events {
+		direction := "a_to_b"
+		if e.Direction == -1 {
+			direction = "b_to_a"
+		}
+		response = append(response, crossingResponse{
+			ID:        e.ID,
+			PortalID:  e.PortalID,
+			BlobID:    e.BlobID,
+			Direction: direction,
+			FromZone:  e.FromZone,
+			ToZone:    e.ToZone,
+			Timestamp: e.Timestamp,
+			Person:    e.Identity,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
