@@ -67,6 +67,8 @@ func (h *Handler) SetMigrationDeadlineProvider(p MigrationDeadlineProvider) {
 //	POST   /api/nodes/{mac}/identify — blink LED for identification
 //	POST   /api/nodes/{mac}/reboot   — reboot node
 //	POST   /api/nodes/{mac}/ota      — trigger OTA update
+//	POST   /api/nodes/{mac}/disable  — disable node (set role to IDLE)
+//	POST   /api/nodes/{mac}/enable   — enable node (restore prior role)
 //	POST   /api/nodes/update-all     — OTA update all nodes
 //	POST   /api/nodes/rebaseline-all — re-baseline all links
 //	POST   /api/nodes/virtual        — add a virtual planning node
@@ -87,6 +89,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/nodes/{mac}/locate", h.identifyNode) // alias for identify
 	r.Post("/api/nodes/{mac}/reboot", h.rebootNode)
 	r.Post("/api/nodes/{mac}/ota", h.triggerNodeOTA)
+	r.Post("/api/nodes/{mac}/disable", h.disableNode)
+	r.Post("/api/nodes/{mac}/enable", h.enableNode)
 	r.Post("/api/nodes/update-all", h.updateAllNodes)
 	r.Post("/api/nodes/rebaseline-all", h.rebaselineAllNodes)
 	r.Post("/api/nodes/virtual", h.addVirtualNode)
@@ -327,7 +331,7 @@ func (h *Handler) getNode(w http.ResponseWriter, r *http.Request) {
 }
 
 var validRoles = map[string]bool{
-	"tx": true, "rx": true, "tx_rx": true, "passive": true, "virtual": true,
+	"tx": true, "rx": true, "tx_rx": true, "passive": true, "virtual": true, "idle": true,
 }
 
 type setRoleRequest struct {
@@ -754,5 +758,101 @@ func (h *Handler) triggerNodeOTA(w http.ResponseWriter, r *http.Request) {
 		"target_mac":   mac,
 		"target_label": node.Name,
 		"version":      req.Version,
+	})
+}
+
+// disableNode sets a node's role to IDLE, saving its prior role for restoration.
+func (h *Handler) disableNode(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// Verify node exists and get its current state.
+	node, err := h.mgr.registry.GetNode(mac)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Don't disable if already IDLE.
+	if node.Role == "idle" {
+		writeJSON(w, map[string]bool{"ok": true})
+		return
+	}
+
+	// Save current role before disabling.
+	if err := h.mgr.registry.SetNodeRoleBeforeDisable(mac, node.Role); err != nil {
+		log.Printf("[WARN] fleet: failed to save role_before_disable for %s: %v", mac, err)
+	}
+
+	// Set role to IDLE.
+	if err := h.mgr.OverrideRole(mac, "idle"); err != nil {
+		http.Error(w, "failed to disable node", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"ok":          true,
+		"mac":         mac,
+		"prior_role":  node.Role,
+		"current_role": "idle",
+	})
+}
+
+// enableNode restores a node's role from its saved prior role.
+func (h *Handler) enableNode(w http.ResponseWriter, r *http.Request) {
+	mac := chi.URLParam(r, "mac")
+
+	// Verify node exists.
+	node, err := h.mgr.registry.GetNode(mac)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the saved role before disable.
+	priorRole, err := h.mgr.registry.GetNodeRoleBeforeDisable(mac)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// If no saved role, use a sensible default based on current state.
+	if priorRole == "" {
+		if node.Role == "idle" {
+			// Node was disabled before we started saving prior_role.
+			// Default to "rx" as a safe fallback.
+			priorRole = "rx"
+		} else {
+			// Node isn't idle, just return current state.
+			writeJSON(w, map[string]interface{}{
+				"ok":          true,
+				"mac":         mac,
+				"current_role": node.Role,
+				"note":        "node already enabled",
+			})
+			return
+		}
+	}
+
+	// Restore the prior role.
+	if err := h.mgr.OverrideRole(mac, priorRole); err != nil {
+		http.Error(w, "failed to enable node", http.StatusInternalServerError)
+		return
+	}
+
+	// Clear the saved role.
+	if err := h.mgr.registry.SetNodeRoleBeforeDisable(mac, ""); err != nil {
+		log.Printf("[WARN] fleet: failed to clear role_before_disable for %s: %v", mac, err)
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"ok":          true,
+		"mac":         mac,
+		"restored_role": priorRole,
 	})
 }

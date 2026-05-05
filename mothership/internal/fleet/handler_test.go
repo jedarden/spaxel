@@ -2191,3 +2191,322 @@ func TestFleetListUnpairedNotInRegistry(t *testing.T) {
 		t.Errorf("Unregistered unpaired node: expected default role 'rx', got '%s'", unregNode.Role)
 	}
 }
+
+// ─── Disable node endpoint tests ───────────────────────────────────────────────────
+
+func TestHandlerDisableNode(t *testing.T) {
+	tests := []struct {
+		name           string
+		mac            string
+		initialRole    string
+		nodeExists     bool
+		wantStatus     int
+		expectedRole   string
+		expectedPrior  string
+	}{
+		{
+			name:          "successful disable from tx",
+			mac:           "AA:BB:CC:DD:EE:FF",
+			initialRole:   "tx",
+			nodeExists:    true,
+			wantStatus:    http.StatusOK,
+			expectedRole:  "idle",
+			expectedPrior: "tx",
+		},
+		{
+			name:          "successful disable from rx",
+			mac:           "AA:BB:CC:DD:EE:FF",
+			initialRole:   "rx",
+			nodeExists:    true,
+			wantStatus:    http.StatusOK,
+			expectedRole:  "idle",
+			expectedPrior: "rx",
+		},
+		{
+			name:          "successful disable from tx_rx",
+			mac:           "AA:BB:CC:DD:EE:FF",
+			initialRole:   "tx_rx",
+			nodeExists:    true,
+			wantStatus:    http.StatusOK,
+			expectedRole:  "idle",
+			expectedPrior: "tx_rx",
+		},
+		{
+			name:          "node already idle returns success",
+			mac:           "AA:BB:CC:DD:EE:FF",
+			initialRole:   "idle",
+			nodeExists:    true,
+			wantStatus:    http.StatusOK,
+			expectedRole:  "idle",
+			expectedPrior: "",
+		},
+		{
+			name:        "node not found",
+			mac:         "AA:BB:CC:DD:EE:FF",
+			initialRole: "tx",
+			nodeExists:  false,
+			wantStatus:  http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if tt.nodeExists {
+				reg.UpsertNode(tt.mac, "1.0.0", "ESP32-S3")
+				reg.SetNodeLabel(tt.mac, "Test Node")
+				reg.SetNodeRole(tt.mac, tt.initialRole)
+			}
+
+			mgr := NewManager(reg)
+			h := &Handler{mgr: mgr}
+
+			req := httptest.NewRequest("POST", "/api/nodes/"+tt.mac+"/disable", nil)
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("mac", tt.mac)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			w := httptest.NewRecorder()
+			h.disableNode(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("disableNode() status = %v, want %v", w.Code, tt.wantStatus)
+			}
+
+			if tt.wantStatus == http.StatusOK && tt.nodeExists && tt.initialRole != "idle" {
+				var resp map[string]interface{}
+				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+					t.Fatalf("Failed to decode response: %v", err)
+				}
+
+				if resp["ok"] != true {
+					t.Errorf("Expected ok to be true, got %v", resp["ok"])
+				}
+
+				if resp["current_role"] != tt.expectedRole {
+					t.Errorf("Expected current_role to be %s, got %v", tt.expectedRole, resp["current_role"])
+				}
+
+				if resp["prior_role"] != tt.expectedPrior {
+					t.Errorf("Expected prior_role to be %s, got %v", tt.expectedPrior, resp["prior_role"])
+				}
+
+				// Verify the role was saved to role_before_disable
+				savedRole, err := reg.GetNodeRoleBeforeDisable(tt.mac)
+				if err != nil {
+					t.Errorf("Failed to get role_before_disable: %v", err)
+				}
+				if savedRole != tt.expectedPrior {
+					t.Errorf("Expected role_before_disable to be %s, got %s", tt.expectedPrior, savedRole)
+				}
+			}
+		})
+	}
+}
+
+// ─── Enable node endpoint tests ───────────────────────────────────────────────────
+
+func TestHandlerEnableNode(t *testing.T) {
+	tests := []struct {
+		name              string
+		mac               string
+		initialRole       string
+		savedPriorRole    string
+		nodeExists        bool
+		wantStatus        int
+		expectedRole      string
+		expectedNote      string
+	}{
+		{
+			name:           "successful enable from idle with saved prior role",
+			mac:            "AA:BB:CC:DD:EE:FF",
+			initialRole:    "idle",
+			savedPriorRole: "tx",
+			nodeExists:     true,
+			wantStatus:     http.StatusOK,
+			expectedRole:   "tx",
+		},
+		{
+			name:           "successful enable from idle with rx saved",
+			mac:            "AA:BB:CC:DD:EE:FF",
+			initialRole:    "idle",
+			savedPriorRole: "rx",
+			nodeExists:     true,
+			wantStatus:     http.StatusOK,
+			expectedRole:   "rx",
+		},
+		{
+			name:           "successful enable from idle with tx_rx saved",
+			mac:            "AA:BB:CC:DD:EE:FF",
+			initialRole:    "idle",
+			savedPriorRole: "tx_rx",
+			nodeExists:     true,
+			wantStatus:     http.StatusOK,
+			expectedRole:   "tx_rx",
+		},
+		{
+			name:           "enable idle node with no saved role defaults to rx",
+			mac:            "AA:BB:CC:DD:EE:FF",
+			initialRole:    "idle",
+			savedPriorRole: "",
+			nodeExists:     true,
+			wantStatus:     http.StatusOK,
+			expectedRole:   "rx",
+		},
+		{
+			name:           "node already enabled returns current state",
+			mac:            "AA:BB:CC:DD:EE:FF",
+			initialRole:    "tx",
+			savedPriorRole: "",
+			nodeExists:     true,
+			wantStatus:     http.StatusOK,
+			expectedRole:   "tx",
+			expectedNote:   "node already enabled",
+		},
+		{
+			name:           "node not found",
+			mac:            "AA:BB:CC:DD:EE:FF",
+			initialRole:    "idle",
+			savedPriorRole: "tx",
+			nodeExists:     false,
+			wantStatus:     http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if tt.nodeExists {
+				reg.UpsertNode(tt.mac, "1.0.0", "ESP32-S3")
+				reg.SetNodeLabel(tt.mac, "Test Node")
+				reg.SetNodeRole(tt.mac, tt.initialRole)
+				if tt.savedPriorRole != "" {
+					reg.SetNodeRoleBeforeDisable(tt.mac, tt.savedPriorRole)
+				}
+			}
+
+			mgr := NewManager(reg)
+			h := &Handler{mgr: mgr}
+
+			req := httptest.NewRequest("POST", "/api/nodes/"+tt.mac+"/enable", nil)
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("mac", tt.mac)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			w := httptest.NewRecorder()
+			h.enableNode(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("enableNode() status = %v, want %v", w.Code, tt.wantStatus)
+			}
+
+			if tt.wantStatus == http.StatusOK && tt.nodeExists {
+				var resp map[string]interface{}
+				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+					t.Fatalf("Failed to decode response: %v", err)
+				}
+
+				if resp["ok"] != true {
+					t.Errorf("Expected ok to be true, got %v", resp["ok"])
+				}
+
+				// When node is already enabled, response contains current_role instead of restored_role
+				roleKey := "restored_role"
+				if tt.expectedNote != "" {
+					roleKey = "current_role"
+					if resp["note"] != tt.expectedNote {
+						t.Errorf("Expected note to be %s, got %v", tt.expectedNote, resp["note"])
+					}
+				}
+
+				if resp[roleKey] != tt.expectedRole {
+					t.Errorf("Expected %s to be %s, got %v", roleKey, tt.expectedRole, resp[roleKey])
+				}
+
+				// Verify the node's current role was updated
+				node, err := reg.GetNode(tt.mac)
+				if err != nil {
+					t.Errorf("Failed to get node after enable: %v", err)
+				} else if node.Role != tt.expectedRole {
+					t.Errorf("Expected node role to be %s, got %s", tt.expectedRole, node.Role)
+				}
+			}
+		})
+	}
+}
+
+// TestHandlerDisableEnableRoundTrip tests the full disable/enable cycle.
+func TestHandlerDisableEnableRoundTrip(t *testing.T) {
+	reg := newTestRegistry(t)
+	mac := "AA:BB:CC:DD:EE:FF"
+
+	// Setup node with initial role
+	reg.UpsertNode(mac, "1.0.0", "ESP32-S3")
+	reg.SetNodeLabel(mac, "Test Node")
+	reg.SetNodeRole(mac, "tx")
+
+	mgr := NewManager(reg)
+	h := &Handler{mgr: mgr}
+
+	// Disable the node
+	req := httptest.NewRequest("POST", "/api/nodes/"+mac+"/disable", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("mac", mac)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	h.disableNode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("disableNode() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	// Verify role is now idle
+	node, err := reg.GetNode(mac)
+	if err != nil {
+		t.Fatalf("Failed to get node after disable: %v", err)
+	}
+	if node.Role != "idle" {
+		t.Errorf("Expected role to be idle after disable, got %s", node.Role)
+	}
+
+	// Verify prior role was saved
+	savedRole, err := reg.GetNodeRoleBeforeDisable(mac)
+	if err != nil {
+		t.Fatalf("Failed to get role_before_disable: %v", err)
+	}
+	if savedRole != "tx" {
+		t.Errorf("Expected role_before_disable to be tx, got %s", savedRole)
+	}
+
+	// Enable the node
+	req = httptest.NewRequest("POST", "/api/nodes/"+mac+"/enable", nil)
+	rctx = chi.NewRouteContext()
+	rctx.URLParams.Add("mac", mac)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w = httptest.NewRecorder()
+	h.enableNode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("enableNode() status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	// Verify role was restored
+	node, err = reg.GetNode(mac)
+	if err != nil {
+		t.Fatalf("Failed to get node after enable: %v", err)
+	}
+	if node.Role != "tx" {
+		t.Errorf("Expected role to be tx after enable, got %s", node.Role)
+	}
+
+	// Verify role_before_disable was cleared
+	savedRole, err = reg.GetNodeRoleBeforeDisable(mac)
+	if err != nil {
+		t.Fatalf("Failed to get role_before_disable after enable: %v", err)
+	}
+	if savedRole != "" {
+		t.Errorf("Expected role_before_disable to be cleared after enable, got %s", savedRole)
+	}
+}
