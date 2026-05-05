@@ -31,6 +31,7 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/db"
 	"github.com/spaxel/mothership/internal/diagnostics"
+	"github.com/spaxel/mothership/internal/doctor"
 	"github.com/spaxel/mothership/internal/eventbus"
 	"github.com/spaxel/mothership/internal/events"
 	"github.com/spaxel/mothership/internal/explainability"
@@ -511,6 +512,8 @@ func main() {
 	settingsHandler := api.NewSettingsHandler(mainDB)
 	settingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Settings API registered at /api/settings")
+
+		// Note: Doctor API is registered after mdnsServer initialization
 
 	// Phase 6: Integration Settings REST API (MQTT + system webhook)
 	// Note: mqttClient and webhookPublisher are wired below after they are initialized.
@@ -4066,6 +4069,45 @@ func main() {
 				log.Printf("[INFO] mDNS advertising %s._spaxel._tcp.local:8080", cfg.MDNSName)
 			}
 		}
+	}
+
+	// Phase 6: Pre-flight diagnostics API
+	// Get install secret from database for doctor checker
+	var installSecret []byte
+	err = mainDB.QueryRow("SELECT install_secret FROM auth WHERE id = 1").Scan(&installSecret)
+	if err != nil {
+		log.Printf("[WARN] Failed to load install secret for doctor: %v", err)
+		installSecret = nil
+	}
+
+	doctorChecker := doctor.New(doctor.Config{
+		DB:               mainDB,
+		DataDir:          cfg.DataDir,
+		FirmwareDir:      cfg.SeedFirmwareDir,
+		MDNSEnabled:      cfg.MDNSEnabled,
+		MQTTBroker:       cfg.MQTTBroker,
+		NTPServer:        cfg.NTPServer,
+		InstallSecret:    installSecret,
+		FleetGetNodes:    func() ([]doctor.NodeInfo, error) {
+			nodes, err := fleetReg.GetAllNodes()
+			if err != nil {
+				return nil, err
+			}
+			result := make([]doctor.NodeInfo, len(nodes))
+			for i, n := range nodes {
+				result[i] = doctor.NodeInfo{MAC: n.MAC}
+			}
+			return result, nil
+		},
+		MDNSIsRegistered: func() bool {
+			return mdnsServer != nil
+		},
+	})
+	if authHandler != nil {
+		r.Get("/api/doctor", doctorChecker.Handler(authHandler.RequireAuth))
+		log.Printf("[INFO] Doctor diagnostics API registered at /api/doctor")
+	} else {
+		log.Printf("[WARN] Auth handler not available, doctor endpoint requires auth")
 	}
 
 	srv := &http.Server{
