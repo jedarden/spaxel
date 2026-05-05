@@ -193,12 +193,12 @@ func NewStore(dbPath string) (*Store, error) {
 
 	// Enable foreign keys
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("enable foreign keys: %w", err)
 	}
 
 	if err := s.init(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("init store: %w", err)
 	}
 
@@ -278,7 +278,7 @@ func (s *Store) load() error {
 	if err != nil {
 		return fmt.Errorf("query triggers: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var t Trigger
@@ -335,7 +335,7 @@ func (s *Store) load() error {
 	if err != nil {
 		return fmt.Errorf("query trigger_state: %w", err)
 	}
-	defer stateRows.Close()
+	defer stateRows.Close() //nolint:errcheck
 
 	for stateRows.Next() {
 		var triggerID string
@@ -590,8 +590,9 @@ func (s *Store) evaluateEnter(t *Trigger, state *TriggerState, blobs []BlobPos, 
 
 	for _, blob := range blobs {
 		// Check person filter
+		// TODO: Filter by person ID when blob has person info
 		if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
-			// TODO: Filter by person ID when blob has person info
+			_ = blob.PersonID // Placeholder for person filter implementation
 		}
 
 		blobState := state.Blobs[blob.ID]
@@ -903,7 +904,7 @@ func (s *Store) GetRecentFirings(limit int) []FiringRecord {
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []FiringRecord
 	for rows.Next() {
@@ -945,8 +946,9 @@ type WebhookLogEntry struct {
 
 // BlobPos represents a blob's position for trigger evaluation.
 type BlobPos struct {
-	ID int
-	X, Y, Z float64
+	ID       int
+	PersonID string
+	X, Y, Z  float64
 }
 
 // IsInVolume is a convenience function to test if a point is in a trigger's volume.
@@ -1061,7 +1063,7 @@ func (s *Store) GetWebhookLog(triggerID string, limit int) []WebhookLogEntry {
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var entries []WebhookLogEntry
 	for rows.Next() {
