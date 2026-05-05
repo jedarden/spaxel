@@ -239,24 +239,6 @@ func (rc *RepositioningComputer) CalculateGDOPImprovement(nodeMAC string, target
 		return 0
 	}
 
-	// Build list of positions with the node at its new position
-	positions := make([]NodePosition, 0, len(allPositions))
-	for mac, pos := range allPositions {
-		if mac == nodeMAC {
-			positions = append(positions, NodePosition{
-				MAC: mac,
-				X:   targetPos.X,
-				Z:   targetPos.Z,
-			})
-		} else {
-			positions = append(positions, NodePosition{
-				MAC: mac,
-				X:   pos.X,
-				Z:   pos.Z,
-			})
-		}
-	}
-
 	// Compute new worst GDOP
 	virtualNode := &NodePosition{MAC: nodeMAC, X: targetPos.X, Z: targetPos.Z}
 	fixedPositions := make([]NodePosition, 0)
