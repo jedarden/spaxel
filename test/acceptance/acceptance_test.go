@@ -234,8 +234,8 @@ func (h *TestHarness) RunSimulator(ctx context.Context, args []string) error {
 	allArgs := append(defaultArgs, args...)
 
 	h.SimulatorCmd = exec.CommandContext(ctx, simBin, allArgs...)
-	h.SimulatorCmd.Stdout = io.Discard
-	h.SimulatorCmd.Stderr = io.Discard
+	h.SimulatorCmd.Stdout = io.MultiWriter(os.Stderr, h.stderrBuf)
+	h.SimulatorCmd.Stderr = io.MultiWriter(os.Stderr, h.stderrBuf)
 
 	if err := h.SimulatorCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start simulator: %w", err)

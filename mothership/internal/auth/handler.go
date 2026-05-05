@@ -163,13 +163,38 @@ func (h *Handler) initializeAuth() error {
 }
 
 // RegisterRoutes registers auth routes with the given router.
-func (h *Handler) RegisterRoutes(mux interface{ HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) }) {
-	mux.HandleFunc("GET /api/auth/status", h.handleStatus)
-	mux.HandleFunc("GET /api/auth/install-secret", h.handleInstallSecret)
-	mux.HandleFunc("POST /api/auth/setup", h.handleSetup)
-	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
-	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
-	mux.HandleFunc("POST /api/auth/change-pin", h.RequireAuth(h.handleChangePIN))
+// The router must support Get/Post methods (e.g., chi.Router).
+func (h *Handler) RegisterRoutes(r interface{}) {
+	// Type assertion for chi.Router
+	type chiRouter interface {
+		Get(pattern string, handlerFn http.HandlerFunc)
+		Post(pattern string, handlerFn http.HandlerFunc)
+	}
+	router, ok := r.(chiRouter)
+	if !ok {
+		// Fallback to HandleFunc interface (older pattern)
+		type handleFuncRouter interface {
+			HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+		}
+		if hfRouter, ok := r.(handleFuncRouter); ok {
+			hfRouter.HandleFunc("GET /api/auth/status", h.handleStatus)
+			hfRouter.HandleFunc("GET /api/auth/install-secret", h.handleInstallSecret)
+			hfRouter.HandleFunc("POST /api/auth/setup", h.handleSetup)
+			hfRouter.HandleFunc("POST /api/auth/login", h.handleLogin)
+			hfRouter.HandleFunc("POST /api/auth/logout", h.handleLogout)
+			hfRouter.HandleFunc("POST /api/auth/change-pin", h.RequireAuth(h.handleChangePIN))
+			return
+		}
+		log.Printf("[WARN] Auth handler: unsupported router type")
+		return
+	}
+
+	router.Get("/api/auth/status", h.handleStatus)
+	router.Get("/api/auth/install-secret", h.handleInstallSecret)
+	router.Post("/api/auth/setup", h.handleSetup)
+	router.Post("/api/auth/login", h.handleLogin)
+	router.Post("/api/auth/logout", h.handleLogout)
+	router.Post("/api/auth/change-pin", h.RequireAuth(h.handleChangePIN))
 }
 
 // handleStatus returns whether a PIN is configured.

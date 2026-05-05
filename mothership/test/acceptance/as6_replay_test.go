@@ -18,6 +18,7 @@
 package acceptance
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -279,7 +280,7 @@ func AS6_ParameterSliderReprocess(t *testing.T) {
 			resp, err := http.Post(
 				srv.URL+"/api/replay/session/"+sessionID+"/params",
 				"application/json",
-				body,
+				bytes.NewReader(body),
 			)
 			if err != nil {
 				t.Fatalf("Failed to set parameter: %v", err)
@@ -341,7 +342,7 @@ func AS6_ApplyToLive(t *testing.T) {
 	resp, err := http.Post(
 		srv.URL+"/api/replay/session/"+sessionID+"/params",
 		"application/json",
-		body,
+		bytes.NewReader(body),
 	)
 	if err != nil {
 		t.Fatalf("Failed to set replay params: %v", err)
@@ -489,7 +490,7 @@ func AS6_BackToLiveResumesDetection(t *testing.T) {
 	// Seek to some point in history
 	seekBody := map[string]interface{}{"target_ms": time.Now().Add(-1*time.Hour).UnixMilli()}
 	body, _ := json.Marshal(seekBody)
-	http.Post(srv.URL+"/api/replay/session/"+sessionID+"/seek", "application/json", body)
+	http.Post(srv.URL+"/api/replay/session/"+sessionID+"/seek", "application/json", bytes.NewReader(body))
 
 	// Stop replay session (Back to Live)
 	deleteResp, err := http.Post(
@@ -554,7 +555,7 @@ func AS6_ReplayIsolation(t *testing.T) {
 	// Seek back in time
 	seekBody := map[string]interface{}{"target_ms": time.Now().Add(-2*time.Hour).UnixMilli()}
 	body, _ := json.Marshal(seekBody)
-	http.Post(srv.URL+"/api/replay/session/"+sessionID+"/seek", "application/json", body)
+	http.Post(srv.URL+"/api/replay/session/"+sessionID+"/seek", "application/json", bytes.NewReader(body))
 
 	// Verify live blobs are still current (not showing replay data)
 	liveBlobs := getBlobsResponse(t, srv.URL)
@@ -803,13 +804,15 @@ func AS6_Integration(t *testing.T) {
 
 	// Test seek performance
 	sessionID, _ := session["id"].(string)
-	targetMS := startMS + durationMS/2 // Seek to middle
+
+	seekBody := map[string]interface{}{"target_ms": time.Now().UnixMilli()}
+	body, _ := json.Marshal(seekBody)
 
 	startSeek := time.Now()
 	seekResp, err := http.Post(
 		mothershipURL+"/api/replay/session/"+sessionID+"/seek",
 		"application/json",
-		nil,
+		bytes.NewReader(body),
 	)
 	if err != nil {
 		t.Fatalf("Seek failed: %v", err)

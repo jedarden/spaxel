@@ -21,7 +21,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 	"time"
 )

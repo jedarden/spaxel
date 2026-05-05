@@ -54,12 +54,12 @@ func TestAS6_ReplayShowsRecordedHistory(t *testing.T) {
 	}
 
 	// Run simulator for 60 seconds to generate CSI data
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
 		"--rate", "20",
-		"--duration", "30",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
@@ -160,11 +160,11 @@ func TestAS6_ReplayBlobsWithFlag(t *testing.T) {
 	}
 
 	// Run simulator to generate data
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
-		"--duration", "20",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
@@ -193,6 +193,7 @@ func TestAS6_ReplayBlobsWithFlag(t *testing.T) {
 
 	// Stop simulator
 	simCancel()
+
 
 	t.Run("ReplayBlobsHaveFlag", func(t *testing.T) {
 		// Wait a moment for replay to be ready
@@ -250,11 +251,11 @@ func TestAS6_SeekReplay(t *testing.T) {
 	}
 
 	// Generate data
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
-		"--duration", "15",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
@@ -361,11 +362,11 @@ func TestAS6_BackToLive(t *testing.T) {
 	}
 
 	// Generate data
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
-		"--duration", "15",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
@@ -497,11 +498,11 @@ func TestAS6_Replay30SecondWindow(t *testing.T) {
 	}
 
 	// Run simulator for 60 seconds to generate CSI data
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
-		"--duration", "30",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}

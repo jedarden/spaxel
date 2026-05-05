@@ -45,11 +45,12 @@ func TestAS3_FallDetection(t *testing.T) {
 	}
 
 	// Run simulator with fall scenario
-	simCtx, simCancel := context.WithTimeout(ctx, 3*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
-		"--duration", "60",
+		"--duration", "0", // Run until cancelled
 		"--scenario", "fall",
 		"--fall-delay", "5s",
 		"--fall-duration", "800ms",
@@ -57,7 +58,6 @@ func TestAS3_FallDetection(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for fall alert
 	t.Run("FallAlertGenerated", func(t *testing.T) {
@@ -133,18 +133,18 @@ func TestAS3_FallAlertSeverity(t *testing.T) {
 	}
 
 	// Run simulator with fall scenario
-	simCtx, simCancel := context.WithTimeout(ctx, 3*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
-		"--duration", "60",
+		"--duration", "0", // Run until cancelled
 		"--scenario", "fall",
 		"--fall-delay", "5s",
 		"--stillness", "10s",
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for fall alert
 	fallAlert, err := h.WaitForEvent(ctx, "fall_alert", 45*time.Second)

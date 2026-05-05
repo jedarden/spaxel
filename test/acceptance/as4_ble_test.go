@@ -57,16 +57,16 @@ func TestAS4_BLEIdentityResolution(t *testing.T) {
 	})
 
 	// Run simulator with BLE enabled
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
-		"--duration", "30",
+		"--duration", "0", // Run until cancelled
 		"--ble",
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for identity matching
 	t.Run("IdentityResolved", func(t *testing.T) {
@@ -182,16 +182,16 @@ func TestAS4_MultipleBLEIdentities(t *testing.T) {
 	t.Log("AS-4: Multiple BLE devices registered")
 
 	// Run simulator with BLE and 2 walkers
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "2",
-		"--duration", "30",
+		"--duration", "0", // Run until cancelled
 		"--ble",
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for identities to be resolved
 	time.Sleep(15 * time.Second)

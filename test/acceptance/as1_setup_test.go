@@ -69,24 +69,23 @@ func TestAS1_FirstTimeSetup(t *testing.T) {
 		}
 	})
 
-	// Step 5: Start simulator with 1 node
-	t.Run("StartSimulator", func(t *testing.T) {
-		simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	// Step 5: Start simulator with 1 node and verify it appears
+	t.Run("StartSimulatorAndVerifyNode", func(t *testing.T) {
+		// Use a longer context for the simulator
+		simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
 		defer simCancel()
 
 		if err := h.RunSimulator(simCtx, []string{
 			"--nodes", "1",
-			"--duration", "30",
+			"--duration", "0", // Run until cancelled (no auto-stop)
 		}); err != nil {
 			t.Fatalf("Failed to start simulator: %v", err)
 		}
 
-		// Wait for simulator to start
-		time.Sleep(5 * time.Second)
-	})
+		// Wait for simulator to start and connect
+		time.Sleep(3 * time.Second)
 
-	// Step 6: Verify node appears in /api/nodes within 30 seconds
-	t.Run("VerifyNodeOnline", func(t *testing.T) {
+		// Verify node appears in /api/nodes within 30 seconds
 		node, err := h.WaitForNode(ctx, "")
 		if err != nil {
 			t.Fatalf("Node did not appear within 30 seconds: %v", err)
@@ -138,12 +137,12 @@ func TestAS1_SetupTimeUnder5Minutes(t *testing.T) {
 		t.Fatalf("Failed to set PIN: %v", err)
 	}
 
-	// Start simulator
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
-	if err := h.RunSimulator(simCtx, []string{"--nodes", "1", "--duration", "30"}); err != nil {
+	// Start simulator - run until cancelled
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
+	if err := h.RunSimulator(simCtx, []string{"--nodes", "1", "--duration", "0"}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for node
 	if _, err := h.WaitForNode(ctx, ""); err != nil {
