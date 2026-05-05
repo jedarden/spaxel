@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/dashboard"
@@ -822,23 +824,161 @@ func TestGetPortalCrossings(t *testing.T) {
 	})
 
 	tests := []struct {
-		name     string
-		portalID string
-		wantCode int
+		name       string
+		portalID   string
+		wantCode   int
+		query      string // query string to append
+		wantCount  int    // expected number of crossings in response
+		wantFields bool   // whether to verify field presence
 	}{
-		{"existing portal", "p1", http.StatusOK},
-		{"nonexistent portal", "nope", http.StatusNotFound},
+		{"existing portal - empty", "p1", http.StatusOK, "", 0, false},
+		{"nonexistent portal", "nope", http.StatusNotFound, "", 0, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := setupRouter(h)
-			req := httptest.NewRequest("GET", "/api/portals/"+tt.portalID+"/crossings", nil)
+			req := httptest.NewRequest("GET", "/api/portals/"+tt.portalID+"/crossings"+tt.query, nil)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)
 
 			if rr.Code != tt.wantCode {
-				t.Errorf("Expected %d, got %d", tt.wantCode, rr.Code)
+				t.Errorf("Expected %d, got %d: %s", tt.wantCode, rr.Code, rr.Body.String())
+			}
+
+			if tt.wantCode == http.StatusOK {
+				var result []crossingResponse
+				if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+					t.Fatalf("Failed to decode response: %v", err)
+				}
+				if len(result) != tt.wantCount {
+					t.Errorf("Expected %d crossings, got %d", tt.wantCount, len(result))
+				}
+			}
+		})
+	}
+}
+
+// TestGetPortalCrossingsWithData tests GET /api/portals/{id}/crossings with actual crossing data.
+func TestGetPortalCrossingsWithData(t *testing.T) {
+	h, cleanup := newTestHandler(t)
+	defer cleanup()
+
+	h.mgr.CreateZone(&zones.Zone{ID: "z1", Name: "Kitchen", MinX: 0, MinY: 0, MinZ: 0, MaxX: 1, MaxY: 1, MaxZ: 1})
+	h.mgr.CreateZone(&zones.Zone{ID: "z2", Name: "Hallway", MinX: 1, MinY: 0, MinZ: 0, MaxX: 2, MaxY: 1, MaxZ: 1})
+	h.mgr.CreatePortal(&zones.Portal{
+		ID: "p1", Name: "Kitchen Door", ZoneAID: "z1", ZoneBID: "z2",
+		P1X: 1, P1Y: 0, P1Z: 0, P2X: 1, P2Y: 0.5, P2Z: 0, P3X: 1, P3Y: 0.5, P3Z: 1,
+		Width: 1, Height: 1,
+	})
+
+	// Insert test crossing data directly into the database
+	nowMs := time.Now().UnixMilli()
+	_, err := h.mgr.DB().Exec(`
+		INSERT INTO crossing_events (portal_id, blob_id, direction, from_zone, to_zone, timestamp, identity)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, "p1", 1, 1, "z1", "z2", nowMs-3000, "Alice")
+	if err != nil {
+		t.Fatalf("Failed to insert crossing: %v", err)
+	}
+	_, err = h.mgr.DB().Exec(`
+		INSERT INTO crossing_events (portal_id, blob_id, direction, from_zone, to_zone, timestamp, identity)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, "p1", 2, -1, "z2", "z1", nowMs-2000, "")
+	if err != nil {
+		t.Fatalf("Failed to insert crossing: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		query     string
+		wantCount int
+		wantDirs  []string // expected directions in order
+	}{
+		{
+			name:      "default parameters",
+			query:     "",
+			wantCount: 2,
+			wantDirs:  []string{"b_to_a", "a_to_b"},
+		},
+		{
+			name:      "limit 1",
+			query:     "?limit=1",
+			wantCount: 1,
+			wantDirs:  []string{"b_to_a"},
+		},
+		{
+			name:      "before cursor pagination",
+			query:     "?before=" + strconv.FormatInt(nowMs-2500, 10),
+			wantCount: 1,
+			wantDirs:  []string{"a_to_b"},
+		},
+		{
+			name:      "limit with before",
+			query:     "?limit=1&before=" + strconv.FormatInt(nowMs-2500, 10),
+			wantCount: 1,
+			wantDirs:  []string{"a_to_b"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupRouter(h)
+			req := httptest.NewRequest("GET", "/api/portals/p1/crossings"+tt.query, nil)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("Expected 200, got %d: %s", rr.Code, rr.Body.String())
+			}
+
+			var result []crossingResponse
+			if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+				t.Fatalf("Failed to decode response: %v", err)
+			}
+
+			if len(result) != tt.wantCount {
+				t.Errorf("Expected %d crossings, got %d", tt.wantCount, len(result))
+			}
+
+			// Check all fields
+			for i, r := range result {
+				// Verify ID is set (database row ID should be >= 1)
+				if r.ID == 0 {
+					t.Errorf("Crossing %d: ID should be non-zero", i)
+				}
+				// Verify PortalID
+				if r.PortalID != "p1" {
+					t.Errorf("Crossing %d: expected PortalID 'p1', got %s", i, r.PortalID)
+				}
+				// Verify BlobID
+				if r.BlobID == 0 {
+					t.Errorf("Crossing %d: BlobID should be non-zero", i)
+				}
+				// Verify direction
+				gotDirs := make([]string, len(result))
+				gotDirs[i] = r.Direction
+				// Verify Timestamp
+				if r.Timestamp.IsZero() {
+					t.Errorf("Crossing %d: Timestamp should not be zero", i)
+				}
+				// Verify zone fields
+				if r.FromZone == "" {
+					t.Errorf("Crossing %d: FromZone should not be empty", i)
+				}
+				if r.ToZone == "" {
+					t.Errorf("Crossing %d: ToZone should not be empty", i)
+				}
+			}
+
+			// Check directions match expected
+			gotDirs := make([]string, len(result))
+			for i, r := range result {
+				gotDirs[i] = r.Direction
+			}
+
+			if !sliceEqual(gotDirs, tt.wantDirs) {
+				t.Errorf("Got directions %v, want %v", gotDirs, tt.wantDirs)
 			}
 		})
 	}
@@ -1321,4 +1461,17 @@ func TestNoBroadcastWithoutBroadcaster(t *testing.T) {
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("Expected 201 without broadcaster, got %d: %s", rr.Code, rr.Body.String())
 	}
+}
+
+// sliceEqual compares two string slices for equality.
+func sliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -1361,6 +1361,198 @@ func TestZoneTransitionWebSocket_Broadcast(t *testing.T) {
 	}
 }
 
+// --- GetPortalCrossings tests ---
+
+func TestGetPortalCrossings(t *testing.T) {
+	tests := []struct {
+		name       string
+		crossings  []struct {
+			portalID string
+			blobID   int
+			dir      int    // 1 = A->B, -1 = B->A
+			fromZone string
+			toZone   string
+			tsMs     int64
+			identity string
+		}
+		queryPortal string
+		limit       int
+		before      int64
+		wantCount   int
+		wantDirs    []string // expected direction strings in order
+	}{
+		{
+			name: "returns all crossings for portal",
+			crossings: []struct {
+				portalID string
+				blobID   int
+				dir      int
+				fromZone string
+				toZone   string
+				tsMs     int64
+				identity string
+			}{
+				{"p1", 1, 1, "kitchen", "hallway", 3000, "Alice"},
+				{"p1", 2, -1, "hallway", "kitchen", 2000, ""},
+				{"p1", 1, 1, "kitchen", "hallway", 1000, "Bob"},
+				{"p2", 3, 1, "living", "hallway", 2500, "Charlie"},
+			},
+			queryPortal: "p1",
+			limit:       50,
+			before:      0,
+			wantCount:   3,
+			wantDirs:    []string{"a_to_b", "b_to_a", "a_to_b"},
+		},
+		{
+			name: "respects limit parameter",
+			crossings: []struct {
+				portalID string
+				blobID   int
+				dir      int
+				fromZone string
+				toZone   string
+				tsMs     int64
+				identity string
+			}{
+				{"p1", 1, 1, "kitchen", "hallway", 3000, "Alice"},
+				{"p1", 2, -1, "hallway", "kitchen", 2000, ""},
+				{"p1", 3, 1, "kitchen", "hallway", 1000, "Bob"},
+			},
+			queryPortal: "p1",
+			limit:       2,
+			before:      0,
+			wantCount:   2,
+			wantDirs:    []string{"a_to_b", "b_to_a"},
+		},
+		{
+			name: "respects before cursor pagination",
+			crossings: []struct {
+				portalID string
+				blobID   int
+				dir      int
+				fromZone string
+				toZone   string
+				tsMs     int64
+				identity string
+			}{
+				{"p1", 1, 1, "kitchen", "hallway", 3000, "Alice"},
+				{"p1", 2, -1, "hallway", "kitchen", 2000, ""},
+				{"p1", 3, 1, "kitchen", "hallway", 1000, "Bob"},
+			},
+			queryPortal: "p1",
+			limit:       50,
+			before:      2500, // only return events before 2500ms
+			wantCount:   2,
+			wantDirs:    []string{"b_to_a", "a_to_b"},
+		},
+		{
+			name: "returns empty for nonexistent portal",
+			crossings: []struct {
+				portalID string
+				blobID   int
+				dir      int
+				fromZone string
+				toZone   string
+				tsMs     int64
+				identity string
+			}{
+				{"p1", 1, 1, "kitchen", "hallway", 1000, "Alice"},
+			},
+			queryPortal: "nonexistent",
+			limit:       50,
+			before:      0,
+			wantCount:   0,
+			wantDirs:    []string{},
+		},
+		{
+			name: "returns empty when no crossings",
+			crossings: []struct {
+				portalID string
+				blobID   int
+				dir      int
+				fromZone string
+				toZone   string
+				tsMs     int64
+				identity string
+			}{},
+			queryPortal: "p1",
+			limit:       50,
+			before:      0,
+			wantCount:   0,
+			wantDirs:    []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, cleanup := setupManager(t, time.UTC)
+			defer cleanup()
+
+			// Create portal
+			if err := m.CreatePortal(&Portal{
+				ID: "p1", Name: "Kitchen Door",
+				ZoneAID: "kitchen", ZoneBID: "hallway",
+				P1X: 0, P1Y: 0, P1Z: 0,
+				P2X: 1, P2Y: 0, P2Z: 0,
+				P3X: 1, P3Y: 0, P3Z: 1,
+				Width: 1, Height: 1,
+			}); err != nil {
+				t.Fatalf("CreatePortal: %v", err)
+			}
+
+			// Insert crossings directly into DB
+			for _, c := range tt.crossings {
+				_, err := m.db.Exec(`
+					INSERT INTO crossing_events (portal_id, blob_id, direction, from_zone, to_zone, timestamp, identity)
+					VALUES (?, ?, ?, ?, ?, ?, ?)
+				`, c.portalID, c.blobID, c.dir, c.fromZone, c.toZone, c.tsMs, c.identity)
+				if err != nil {
+					t.Fatalf("Insert crossing: %v", err)
+				}
+			}
+
+			// Query crossings
+			events := m.GetPortalCrossings(tt.queryPortal, tt.limit, tt.before)
+
+			if len(events) != tt.wantCount {
+				t.Errorf("got %d events, want %d", len(events), tt.wantCount)
+			}
+
+			// Check directions
+			gotDirs := make([]string, len(events))
+			for i, e := range events {
+				wantDir := "a_to_b"
+				if e.Direction == -1 {
+					wantDir = "b_to_a"
+				}
+				gotDirs[i] = wantDir
+
+				// Verify portal ID matches
+				if e.PortalID != tt.queryPortal {
+					t.Errorf("event[%d].PortalID = %s, want %s", i, e.PortalID, tt.queryPortal)
+				}
+			}
+
+			if !sliceEqual(gotDirs, tt.wantDirs) {
+				t.Errorf("got directions %v, want %v", gotDirs, tt.wantDirs)
+			}
+		})
+	}
+}
+
+// sliceEqual compares two string slices for equality.
+func sliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // --- Helper ---
 
 // nowMsSinceMidnight returns a Unix ms timestamp the given duration after midnight today.
