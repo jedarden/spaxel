@@ -27,12 +27,16 @@ type FirmwareMeta struct {
 	UploadedAt time.Time `json:"uploaded_at"`
 }
 
+// FirmwareUploadCallback is called when new firmware is uploaded.
+type FirmwareUploadCallback func(filename string)
+
 // Server serves firmware binaries and tracks available versions.
 type Server struct {
-	mu          sync.RWMutex
-	firmwareDir string
-	firmware    map[string]*FirmwareMeta
-	latestFile  string
+	mu            sync.RWMutex
+	firmwareDir   string
+	firmware      map[string]*FirmwareMeta
+	latestFile    string
+	uploadCallback FirmwareUploadCallback
 }
 
 // NewServer creates a firmware server backed by firmwareDir.
@@ -146,6 +150,13 @@ func (s *Server) FirmwareDir() string {
 	return s.firmwareDir
 }
 
+// SetUploadCallback sets the callback to be invoked when new firmware is uploaded.
+func (s *Server) SetUploadCallback(cb FirmwareUploadCallback) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.uploadCallback = cb
+}
+
 // HandleList serves GET /api/firmware — JSON array of available firmware versions.
 func (s *Server) HandleList(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
@@ -237,4 +248,12 @@ func (s *Server) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[INFO] ota: uploaded %s (sha256=%s)", filename, meta.SHA256)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(meta)
+
+	// Notify callback if set (triggers auto-update check)
+	s.mu.RLock()
+	cb := s.uploadCallback
+	s.mu.RUnlock()
+	if cb != nil {
+		go cb(filename)
+	}
 }
