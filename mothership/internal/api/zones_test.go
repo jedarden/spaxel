@@ -466,6 +466,103 @@ func TestGetZoneHistory(t *testing.T) {
 	}
 }
 
+// TestGetZoneHistoryWithData tests GET /api/zones/{id}/history with actual history data.
+func TestGetZoneHistoryWithData(t *testing.T) {
+	h, cleanup := newTestHandler(t)
+	defer cleanup()
+
+	h.mgr.CreateZone(&zones.Zone{ID: "kitchen", Name: "Kitchen", MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5})
+
+	// Insert test history data directly into the database
+	// Use UTC since the manager was created with nil tz (defaults to UTC)
+	now := time.Now().UTC()
+	currentHourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC)
+
+	// Insert 3 hourly snapshots with varying occupancy
+	for i := 0; i < 3; i++ {
+		hourTs := currentHourStart.Add(time.Duration(-i) * time.Hour).UnixMilli()
+		count := 2 - i // 2, 1, 0 people
+		people := "[]"
+		if count > 0 {
+			if count == 2 {
+				people = `["Alice","Bob"]`
+			} else {
+				people = `["Alice"]`
+			}
+		}
+		_, err := h.mgr.DB().Exec(`
+			INSERT INTO zone_history (zone_id, hour_ts, count, people, created_at)
+			VALUES (?, ?, ?, ?, ?)
+		`, "kitchen", hourTs, count, people, time.Now().UnixMilli())
+		if err != nil {
+			t.Fatalf("Failed to insert zone history: %v", err)
+		}
+	}
+
+	tests := []struct {
+		name      string
+		query     string
+		wantCount int
+		wantFirst map[string]interface{} // expected first entry values
+	}{
+		{
+			name:      "default 24h period",
+			query:     "",
+			wantCount: 24,
+			wantFirst: map[string]interface{}{"count": 2},
+		},
+		{
+			name:      "7d period",
+			query:     "?period=7d",
+			wantCount: 24 * 7,
+			wantFirst: map[string]interface{}{"count": 2},
+		},
+		{
+			name:      "30d period",
+			query:     "?period=30d",
+			wantCount: 24 * 30,
+			wantFirst: map[string]interface{}{"count": 2},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupRouter(h)
+			req := httptest.NewRequest("GET", "/api/zones/kitchen/history"+tt.query, nil)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("Expected 200, got %d: %s", rr.Code, rr.Body.String())
+			}
+
+			var result []historyEntry
+			if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+				t.Fatalf("Failed to decode response: %v", err)
+			}
+
+			if len(result) != tt.wantCount {
+				t.Errorf("Expected %d entries, got %d", tt.wantCount, len(result))
+			}
+
+			// Verify first entry has data
+			if len(result) > 0 && result[0].Count != 2 {
+				t.Errorf("Expected first entry count=2, got %d", result[0].Count)
+			}
+
+			// Verify people array is present (may be empty)
+			if len(result) > 0 && result[0].People == nil {
+				t.Error("Expected people array to be non-nil")
+			}
+
+			// Verify timestamp is set
+			if len(result) > 0 && result[0].Timestamp == 0 {
+				t.Error("Expected non-zero timestamp")
+			}
+		})
+	}
+}
+
 // ── Portals ─────────────────────────────────────────────────────────────────────
 
 // TestListPortals tests GET /api/portals.
