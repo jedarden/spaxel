@@ -26,7 +26,7 @@ func makeFrame(size int) []byte {
 
 func TestNewStore(t *testing.T) {
 	s, _ := tempStore(t, 1)
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	if s.writePos != headerSize {
 		t.Errorf("writePos = %d, want %d", s.writePos, headerSize)
@@ -38,7 +38,7 @@ func TestNewStore(t *testing.T) {
 
 func TestBasicAppend(t *testing.T) {
 	s, _ := tempStore(t, 1)
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	frame := makeFrame(152) // typical 64-subcarrier frame
 	if err := s.Append(1000, frame); err != nil {
@@ -59,7 +59,7 @@ func TestBasicAppend(t *testing.T) {
 
 func TestMultipleAppends(t *testing.T) {
 	s, _ := tempStore(t, 1)
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	frame := makeFrame(152)
 	for i := 0; i < 5; i++ {
@@ -79,7 +79,7 @@ func TestWrapAround(t *testing.T) {
 	// direct manipulation for testing. Instead, use a small-but-valid maxMB.
 	// 1 MB data area fits floor(1MB / (10+152)) = ~6501 frames.
 	s, _ := tempStore(t, 1)
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	frame := makeFrame(152)
 	recordSize := recordOverhead + int64(len(frame))
@@ -130,14 +130,14 @@ func TestCrashRecovery(t *testing.T) {
 	}
 	savedWrite := s1.writePos
 	savedOldest := s1.oldestPos
-	s1.Close()
+	s1.Close() //nolint:errcheck
 
 	// Reopen should restore state
 	s2, err := NewRecordingStore(path, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s2.Close()
+	defer s2.Close() //nolint:errcheck
 
 	if s2.writePos != savedWrite {
 		t.Errorf("writePos after reopen = %d, want %d", s2.writePos, savedWrite)
@@ -153,7 +153,7 @@ func TestEvictionMaintainsData(t *testing.T) {
 	// a tiny 1MB store (already tested above). Simulate eviction
 	// explicitly by calling evictOne after appending.
 	s, _ := tempStore(t, 1)
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	frame := makeFrame(100)
 
@@ -187,7 +187,7 @@ func TestInvalidMagicStartsFresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("should recover from bad magic: %v", err)
 	}
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	if s.writePos != headerSize {
 		t.Errorf("writePos = %d after bad magic, want %d", s.writePos, headerSize)
@@ -196,7 +196,7 @@ func TestInvalidMagicStartsFresh(t *testing.T) {
 
 func TestFrameTooLarge(t *testing.T) {
 	s, _ := tempStore(t, 1)
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	oversized := make([]byte, maxFrameBytes+1)
 	if err := s.Append(0, oversized); err == nil {

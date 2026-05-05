@@ -189,7 +189,7 @@ func (c *NtfyClient) Send(msg NtfyMessage) error {
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// Check response
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

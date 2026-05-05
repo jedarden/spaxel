@@ -122,7 +122,7 @@ func (c *WebhookClient) Send(payload WebhookPayload) error {
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// Check response - accept 2xx status codes
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

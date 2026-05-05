@@ -21,14 +21,14 @@ func TestHandlerUploadAndGetImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -72,7 +72,7 @@ func TestHandlerUploadAndGetImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writer.Close()
+	writer.Close() //nolint:errcheck
 
 	req := httptest.NewRequest("POST", "/api/floorplan/image", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -81,7 +81,7 @@ func TestHandlerUploadAndGetImage(t *testing.T) {
 	h.uploadImage(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("uploadImage status = %d, want %d", resp.StatusCode, http.StatusOK)
@@ -89,7 +89,7 @@ func TestHandlerUploadAndGetImage(t *testing.T) {
 
 	// Parse response
 	var uploadResp map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 	if uploadResp["ok"] != "true" {
@@ -103,7 +103,7 @@ func TestHandlerUploadAndGetImage(t *testing.T) {
 	h.getImage(w, req)
 
 	resp = w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("getImage status = %d, want %d", resp.StatusCode, http.StatusOK)
@@ -119,14 +119,14 @@ func TestHandlerCalibrate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -166,14 +166,14 @@ func TestHandlerCalibrate(t *testing.T) {
 	h.calibrate(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("calibrate status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
 	var calResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&calResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&calResp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 	if calResp["ok"] != "true" {
@@ -198,14 +198,14 @@ func TestHandlerGetCalibrationNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema (empty)
 	_, err = db.Exec(`
@@ -235,7 +235,7 @@ func TestHandlerGetCalibrationNotFound(t *testing.T) {
 	h.getCalibration(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("getCalibration status = %d, want %d", resp.StatusCode, http.StatusNotFound)
@@ -248,14 +248,14 @@ func TestHandlerUploadTooLarge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -291,7 +291,7 @@ func TestHandlerUploadTooLarge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writer.Close()
+	writer.Close() //nolint:errcheck
 
 	req := httptest.NewRequest("POST", "/api/floorplan/image", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -300,7 +300,7 @@ func TestHandlerUploadTooLarge(t *testing.T) {
 	h.uploadImage(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Errorf("uploadImage status = %d, want %d", resp.StatusCode, http.StatusRequestEntityTooLarge)
@@ -313,14 +313,14 @@ func TestHandlerGetCalibration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -359,14 +359,14 @@ func TestHandlerGetCalibration(t *testing.T) {
 	h.getCalibration(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("getCalibration status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
 	var calResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&calResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&calResp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -385,14 +385,14 @@ func TestHandlerGetFloorplanEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -422,14 +422,14 @@ func TestHandlerGetFloorplanEmpty(t *testing.T) {
 	h.getFloorplan(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("getFloorplan status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
 	var fpResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&fpResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&fpResp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -444,14 +444,14 @@ func TestGetCalibration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -504,14 +504,14 @@ func TestGetCalibrationNotSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema (empty)
 	_, err = db.Exec(`
@@ -550,14 +550,14 @@ func TestGetImagePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create handler
 	h := NewHandler(db, tmpDir)
@@ -590,14 +590,14 @@ func TestUploadImageMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -623,7 +623,7 @@ func TestUploadImageMissingFile(t *testing.T) {
 	// Test upload without file field
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	writer.Close()
+	writer.Close() //nolint:errcheck
 
 	req := httptest.NewRequest("POST", "/api/floorplan/image", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -632,7 +632,7 @@ func TestUploadImageMissingFile(t *testing.T) {
 	h.uploadImage(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("uploadImage status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
@@ -645,14 +645,14 @@ func TestCalibrateInvalidDistance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -692,7 +692,7 @@ func TestCalibrateInvalidDistance(t *testing.T) {
 	h.calibrate(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("calibrate status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
@@ -705,14 +705,14 @@ func TestCalibratePointsTooClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -752,7 +752,7 @@ func TestCalibratePointsTooClose(t *testing.T) {
 	h.calibrate(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("calibrate status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
@@ -765,14 +765,14 @@ func TestGetImageNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create test database
 	db, err := sql.Open("sqlite", filepath.Join(tmpDir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema
 	_, err = db.Exec(`
@@ -802,7 +802,7 @@ func TestGetImageNotFound(t *testing.T) {
 	h.getImage(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("getImage status = %d, want %d", resp.StatusCode, http.StatusNotFound)

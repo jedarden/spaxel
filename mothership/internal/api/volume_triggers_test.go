@@ -88,7 +88,7 @@ func TestVolumeListTriggers(t *testing.T) {
 			}
 
 			var result []TriggerResponse
-			if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode response: %v", err)
 			}
 			if len(result) != tt.wantLen {
@@ -189,7 +189,7 @@ func TestVolumeCreateTrigger(t *testing.T) {
 			}
 
 			var created TriggerResponse
-			if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&created); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode response: %v", err)
 			}
 			if created.ID == "" {
@@ -215,7 +215,7 @@ func TestVolumeCreateTriggerAssignsID(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	var first TriggerResponse
-	json.NewDecoder(w.Body).Decode(&first)
+	json.NewDecoder(w.Body).Decode(&first) //nolint:errcheck
 
 	body2 := `{"name":"Second","shape":{"type":"box","x":0,"y":0,"z":0,"w":1,"d":1,"h":1},"condition":"dwell"}`
 	req2 := httptest.NewRequest("POST", "/api/triggers", bytes.NewReader([]byte(body2)))
@@ -224,7 +224,7 @@ func TestVolumeCreateTriggerAssignsID(t *testing.T) {
 	router.ServeHTTP(w2, req2)
 
 	var second TriggerResponse
-	json.NewDecoder(w2.Body).Decode(&second)
+	json.NewDecoder(w2.Body).Decode(&second) //nolint:errcheck
 
 	if first.ID == second.ID {
 		t.Errorf("expected different IDs, both got %q", first.ID)
@@ -283,7 +283,7 @@ func TestVolumeGetTrigger(t *testing.T) {
 			}
 
 			var result TriggerResponse
-			if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode: %v", err)
 			}
 			if result.Name != "Get Me" {
@@ -405,7 +405,7 @@ func TestVolumeUpdateTrigger(t *testing.T) {
 			}
 
 			var updated TriggerResponse
-			if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&updated); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode: %v", err)
 			}
 			if updated.Name != tt.wantName {
@@ -487,7 +487,7 @@ func TestVolumeDeleteTrigger(t *testing.T) {
 			w2 := httptest.NewRecorder()
 			router.ServeHTTP(w2, req2)
 			var result []TriggerResponse
-			json.NewDecoder(w2.Body).Decode(&result)
+			json.NewDecoder(w2.Body).Decode(&result) //nolint:errcheck
 			if len(result) != tt.wantLen {
 				t.Errorf("expected %d triggers remaining, got %d", tt.wantLen, len(result))
 			}
@@ -516,7 +516,7 @@ func TestVolumeTriggerCRUDRoundTrip(t *testing.T) {
 	}
 
 	var created TriggerResponse
-	json.NewDecoder(w.Body).Decode(&created)
+	json.NewDecoder(w.Body).Decode(&created) //nolint:errcheck
 	createdID := created.ID
 
 	// 2. List and verify
@@ -524,7 +524,7 @@ func TestVolumeTriggerCRUDRoundTrip(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	router.ServeHTTP(w2, req2)
 	var triggers []TriggerResponse
-	json.NewDecoder(w2.Body).Decode(&triggers)
+	json.NewDecoder(w2.Body).Decode(&triggers) //nolint:errcheck
 	if len(triggers) != 1 {
 		t.Fatalf("after create: expected 1 trigger, got %d", len(triggers))
 	}
@@ -540,7 +540,7 @@ func TestVolumeTriggerCRUDRoundTrip(t *testing.T) {
 		t.Fatalf("get: expected 200, got %d", w3.Code)
 	}
 	var fetched TriggerResponse
-	json.NewDecoder(w3.Body).Decode(&fetched)
+	json.NewDecoder(w3.Body).Decode(&fetched) //nolint:errcheck
 	if fetched.Condition != "dwell" {
 		t.Errorf("get: expected condition 'dwell', got %s", fetched.Condition)
 	}
@@ -560,7 +560,7 @@ func TestVolumeTriggerCRUDRoundTrip(t *testing.T) {
 	w5 := httptest.NewRecorder()
 	router.ServeHTTP(w5, req5)
 	var afterUpdate TriggerResponse
-	json.NewDecoder(w5.Body).Decode(&afterUpdate)
+	json.NewDecoder(w5.Body).Decode(&afterUpdate) //nolint:errcheck
 	if afterUpdate.Name != "Updated Trip" {
 		t.Errorf("after update: expected name 'Updated Trip', got %s", afterUpdate.Name)
 	}
@@ -588,7 +588,7 @@ func TestVolumeTriggerCRUDRoundTrip(t *testing.T) {
 	req8 := httptest.NewRequest("GET", "/api/triggers", nil)
 	w8 := httptest.NewRecorder()
 	router.ServeHTTP(w8, req8)
-	json.NewDecoder(w8.Body).Decode(&triggers)
+	json.NewDecoder(w8.Body).Decode(&triggers) //nolint:errcheck
 	if len(triggers) != 0 {
 		t.Errorf("after delete: expected 0 triggers, got %d", len(triggers))
 	}
@@ -602,7 +602,7 @@ func TestTestTriggerEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Create a trigger with a webhook action
 	trigger := &volume.Trigger{
@@ -635,7 +635,7 @@ func TestTestTriggerEndpoint(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"ok":true}`))
 	}))
-	defer mockServer.Close()
+	defer mockServer.Close() //nolint:errcheck
 
 	// Replace the action URL with the mock server URL
 	tg, _ := handler.store.Get(id)
@@ -653,7 +653,7 @@ func TestTestTriggerEndpoint(t *testing.T) {
 	}
 
 	var result WebhookTestResult
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -680,7 +680,7 @@ func TestTestTrigger_ReturnsErrorOnMissingURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "no url trigger",
@@ -711,7 +711,7 @@ func TestTestTrigger_ReturnsErrorOnMissingURL(t *testing.T) {
 	}
 
 	var result WebhookTestResult
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -730,13 +730,13 @@ func TestTestTrigger_4xxInTestDoesNotDisable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Mock server that always returns 404
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
-	defer mockServer.Close()
+	defer mockServer.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "4xx test trigger",
@@ -780,7 +780,7 @@ func TestEnableEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "test enable",
@@ -829,7 +829,7 @@ func TestGetWebhookLogEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "log test",
@@ -861,7 +861,7 @@ func TestGetWebhookLogEndpoint(t *testing.T) {
 	}
 
 	var entries []volume.WebhookLogEntry
-	if err := json.NewDecoder(w.Body).Decode(&entries); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&entries); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -883,16 +883,16 @@ func TestWebhookPayloadSchema(t *testing.T) {
 	// Create a mock server to capture the payload
 	var receivedPayload map[string]interface{}
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedPayload)
+		json.NewDecoder(r.Body).Decode(&receivedPayload) //nolint:errcheck
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer mockServer.Close()
+	defer mockServer.Close() //nolint:errcheck
 
 	handler, err := NewVolumeTriggersHandler(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "payload test",
@@ -946,13 +946,13 @@ func Test5xxDoesNotDisableTrigger(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
-	defer mockServer.Close()
+	defer mockServer.Close() //nolint:errcheck
 
 	handler, err := NewVolumeTriggersHandler(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "5xx test",
@@ -999,13 +999,13 @@ func Test4xxDisablesTrigger(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
-	defer mockServer.Close()
+	defer mockServer.Close() //nolint:errcheck
 
 	handler, err := NewVolumeTriggersHandler(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "4xx test",
@@ -1052,13 +1052,13 @@ func Test2xxResetsErrorCount(t *testing.T) {
 		// Return 500 first, then 200
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer mockServer.Close()
+	defer mockServer.Close() //nolint:errcheck
 
 	handler, err := NewVolumeTriggersHandler(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	trigger := &volume.Trigger{
 		Name: "2xx reset test",
@@ -1113,13 +1113,13 @@ func TestTimeoutDoesNotDisable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer listener.Close() //nolint:errcheck
 
 	handler, err := NewVolumeTriggersHandler(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Use a very short timeout for testing
 	handler.httpClient.Timeout = 100 * time.Millisecond

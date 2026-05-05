@@ -218,7 +218,7 @@ func QueryEvents(db *sql.DB, params QueryParams) ([]Event, string, bool, error) 
 	if err != nil {
 		return nil, "", false, fmt.Errorf("query events: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var events []Event
 	for rows.Next() {
@@ -294,7 +294,7 @@ func RunArchiveJob(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	// Get count of events to be archived
 	var count int
@@ -395,17 +395,12 @@ func InsertAlertEvent(db *sql.DB, eventType EventType, zone string, person strin
 
 // InsertSystemEvent is a convenience function for inserting system events.
 func InsertSystemEvent(db *sql.DB, message string, detail map[string]interface{}) (int64, error) {
-	detailJSON, err := json.Marshal(detail)
-	if err != nil {
-		return 0, fmt.Errorf("marshal detail: %w", err)
-	}
-
 	if detail == nil {
 		detail = make(map[string]interface{})
 	}
 	detail["message"] = message
 
-	detailJSON, err = json.Marshal(detail)
+	detailJSON, err := json.Marshal(detail)
 	if err != nil {
 		return 0, fmt.Errorf("marshal detail with message: %w", err)
 	}

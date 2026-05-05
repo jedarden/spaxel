@@ -148,7 +148,7 @@ func (h *NotificationAlertHandler) SendWebhook(event events.AnomalyEvent, immedi
 	if err != nil {
 		return fmt.Errorf("send webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
@@ -193,7 +193,7 @@ func (h *NotificationAlertHandler) SendEscalation(event events.AnomalyEvent) err
 	if err != nil {
 		return fmt.Errorf("send escalation: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("escalation returned status %d", resp.StatusCode)

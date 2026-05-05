@@ -25,7 +25,7 @@ func setupTestDB(t *testing.T, dir, name, ddl string) {
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 	if _, err := db.Exec(ddl); err != nil {
 		t.Fatalf("exec ddl: %v", err)
 	}
@@ -44,7 +44,7 @@ func doBackupRequest(t *testing.T, dir, version string) []byte {
 	handler.HandleBackup(rec, req)
 
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d; want 200", resp.StatusCode)
@@ -88,7 +88,7 @@ func readZipEntry(t *testing.T, data []byte, name string) []byte {
 			if err != nil {
 				t.Fatalf("open zip entry %s: %v", name, err)
 			}
-			defer rc.Close()
+			defer rc.Close() //nolint:errcheck
 			buf, err := io.ReadAll(rc)
 			if err != nil {
 				t.Fatalf("read zip entry %s: %v", name, err)
@@ -110,7 +110,7 @@ func TestBackupHandler_Headers(t *testing.T) {
 	handler.HandleBackup(rec, req)
 
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d; want 200", resp.StatusCode)
@@ -232,7 +232,7 @@ func TestBackupHandler_DBIntegrity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open restored db: %v", err)
 	}
-	defer rdb.Close()
+	defer rdb.Close() //nolint:errcheck
 
 	var ok string
 	if err := rdb.QueryRow("PRAGMA quick_check(1)").Scan(&ok); err != nil {
@@ -251,7 +251,7 @@ func TestBackupHandler_DBIntegrity(t *testing.T) {
 		t.Errorf("row count = %d; want 2 (WAL data should be included)", count)
 	}
 
-	db.Close()
+	db.Close() //nolint:errcheck
 }
 
 func TestBackupHandler_SimultaneousWrite(t *testing.T) {
@@ -263,7 +263,7 @@ func TestBackupHandler_SimultaneousWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	db.Exec("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT)")
 	db.Exec("INSERT INTO t VALUES(1,'original')")
@@ -291,7 +291,7 @@ func TestBackupHandler_SimultaneousWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open restored db: %v", err)
 	}
-	defer rdb.Close()
+	defer rdb.Close() //nolint:errcheck
 
 	var ok string
 	if err := rdb.QueryRow("PRAGMA quick_check(1)").Scan(&ok); err != nil {

@@ -23,7 +23,7 @@ func TestServiceCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if service == nil {
 		t.Fatal("NewService() returned nil")
@@ -37,7 +37,7 @@ func TestGetSetQuietHours(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	qh := QuietHoursConfig{
 		Enabled:   true,
@@ -70,7 +70,7 @@ func TestIsQuietHoursNoCrossing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Disable quiet hours — isQuietHours should return false
 	if err := service.SetQuietHours(QuietHoursConfig{Enabled: false}); err != nil {
@@ -102,7 +102,7 @@ func TestIsQuietHoursMidnightCrossing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Quiet hours 22:00 – 07:00 (cross midnight)
 	if err := service.SetQuietHours(QuietHoursConfig{
@@ -130,7 +130,7 @@ func TestExtendedServiceBatchingConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	bc := BatchingConfig{
 		Enabled:          true,
@@ -163,7 +163,7 @@ func TestGetChannels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Initially empty
 	if len(service.GetChannels()) != 0 {
@@ -195,7 +195,7 @@ func TestAddRemoveChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	cc := ChannelConfig{
 		Type:    ChannelWebhook,
@@ -233,14 +233,14 @@ func TestNtfyDelivery(t *testing.T) {
 		capturedBody = string(body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_ntfy.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("ntfy1", ChannelConfig{
 		Type:    ChannelNtfy,
@@ -287,14 +287,14 @@ func TestNtfyDeliveryWithImage(t *testing.T) {
 		capturedImageHeader = r.Header.Get("X-Image")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_ntfy_img.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("ntfy1", ChannelConfig{
 		Type:    ChannelNtfy,
@@ -348,14 +348,14 @@ func TestWebhookDelivery(t *testing.T) {
 		json.Unmarshal(body, &capturedPayload)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_webhook.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -426,14 +426,14 @@ func TestWebhookCustomHeaders(t *testing.T) {
 		capturedAuthHeader = r.Header.Get("X-Custom-Auth")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_webhook_headers.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -458,14 +458,14 @@ func TestWebhookErrorResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_webhook_err.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -488,14 +488,14 @@ func TestSendUrgentPriorityImmediate(t *testing.T) {
 		sent = true
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_urgent.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Enable quiet hours covering now
 	if err := service.SetQuietHours(QuietHoursConfig{
@@ -541,14 +541,14 @@ func TestBatchFlush(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_batch.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -582,7 +582,7 @@ func TestExtendedServiceMergeNotifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	notifs := []Notification{
 		{Title: "Alice entered Kitchen", Body: "From Hallway", Priority: int(PriorityLow)},
@@ -620,7 +620,7 @@ func TestExtendedServiceFloorPlanThumbnail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	zones := []struct {
 		ID, Name, Color string
@@ -666,7 +666,7 @@ func TestBaseServiceFloorPlanThumbnail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	blobs := []struct {
 		X, Y, Z  float64
@@ -705,7 +705,7 @@ func TestExtendedServiceQueueForBatching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	// Small batch window for the test
 	ext.SetBatchingConfig(BatchingConfig{
@@ -749,7 +749,7 @@ func TestExtendedServiceMaxBatchSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	ext.SetBatchingConfig(BatchingConfig{
 		Enabled:          true,
@@ -790,7 +790,7 @@ func TestExtendedServiceSendBriefing(t *testing.T) {
 		capturedTitle, _ = payload["title"].(string)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_briefing.db"
 	base, err := NewService(dbPath)
@@ -801,7 +801,7 @@ func TestExtendedServiceSendBriefing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	if err := base.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -825,14 +825,14 @@ func TestNotificationHistory(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_history.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -858,7 +858,7 @@ func TestFloorPlanThumbnailDimensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	tests := []struct {
 		name          string
@@ -906,7 +906,7 @@ func TestExtendedFloorPlanThumbnailDimensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	data, err := ext.GenerateFloorPlanThumbnailExtended(300, 300, nil, nil)
 	if err != nil {
@@ -937,7 +937,7 @@ func TestFloorPlanThumbnailBlobColors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	tests := []struct {
 		name     string
@@ -1026,7 +1026,7 @@ func TestFloorPlanZoneBoundaryPixels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	zones := []struct {
 		ID, Name, Color string
@@ -1153,14 +1153,14 @@ func TestGotifyDelivery(t *testing.T) {
 		json.Unmarshal(body, &capturedPayload)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_gotify.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	if err := service.AddChannel("gotify1", ChannelConfig{
 		Type:    ChannelGotify,
@@ -1200,14 +1200,14 @@ func TestSendWithDisabledChannel(t *testing.T) {
 		sent = true
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_disabled.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Add disabled channel
 	if err := service.AddChannel("wh1", ChannelConfig{
@@ -1233,14 +1233,14 @@ func TestExtendedServiceOnSendCallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_callback.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	service.SetOnSend(func(channel string, notif Notification, success bool) {
 		callbackChannel = channel
@@ -1272,7 +1272,7 @@ func TestSetRoomConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// SetRoomConfig should not panic
 	service.SetRoomConfig(nil)
@@ -1291,7 +1291,7 @@ func TestSetFloorPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Set a floor plan image
 	pngData := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
@@ -1316,7 +1316,7 @@ func TestSendWithPriority(t *testing.T) {
 		json.Unmarshal(body, &capturedPayload)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_send_priority.db"
 	base, err := NewService(dbPath)
@@ -1327,7 +1327,7 @@ func TestSendWithPriority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	if err := base.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -1360,7 +1360,7 @@ func TestGetHistoryExtended(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_hist_ext.db"
 	base, err := NewService(dbPath)
@@ -1371,7 +1371,7 @@ func TestGetHistoryExtended(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	if err := base.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -1402,7 +1402,7 @@ func TestPushoverMissingCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Add pushover channel without token/user — should fail with credential error
 	if err := service.AddChannel("po1", ChannelConfig{
@@ -1432,7 +1432,7 @@ func TestExtendedServiceIsQuietHoursAlwaysFalse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	// ExtendedService.isQuietHours always returns false (delegates to future impl)
 	if ext.isQuietHours() {
@@ -1451,7 +1451,7 @@ func TestCheckMorningDigestEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	// With empty queue, checkMorningDigest should not send anything
 	ext.checkMorningDigest()
@@ -1475,7 +1475,7 @@ func TestSendMorningDigestWithQueuedEvents(t *testing.T) {
 		json.Unmarshal(body, &capturedPayload)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_digest_send.db"
 	base, err := NewService(dbPath)
@@ -1486,7 +1486,7 @@ func TestSendMorningDigestWithQueuedEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	if err := base.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -1548,7 +1548,7 @@ func TestBatching3LowEventsProduces1Merged(t *testing.T) {
 		sentCount++
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_3low.db"
 	base, err := NewService(dbPath)
@@ -1559,7 +1559,7 @@ func TestBatching3LowEventsProduces1Merged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	if err := base.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -1607,7 +1607,7 @@ func TestBatchingUrgentBypassesBatch(t *testing.T) {
 		sentCount++
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_urgent_batch.db"
 	base, err := NewService(dbPath)
@@ -1618,7 +1618,7 @@ func TestBatchingUrgentBypassesBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	if err := base.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,
@@ -1670,14 +1670,14 @@ func TestQuietHoursLowSuppressedUrgentDelivered(t *testing.T) {
 		sentNotifications++
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_qh_urgent.db"
 	service, err := NewService(dbPath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer service.Close()
+	defer service.Close() //nolint:errcheck
 
 	// Enable quiet hours covering the full day (always in quiet hours)
 	if err := service.SetQuietHours(QuietHoursConfig{
@@ -1733,7 +1733,7 @@ func TestCheckMorningDigestSendsWhenQueued(t *testing.T) {
 		digestSent = true
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	dbPath := t.TempDir() + "/test_digest_check.db"
 	base, err := NewService(dbPath)
@@ -1744,7 +1744,7 @@ func TestCheckMorningDigestSendsWhenQueued(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExtendedService() error = %v", err)
 	}
-	defer ext.Close()
+	defer ext.Close() //nolint:errcheck
 
 	if err := base.AddChannel("wh1", ChannelConfig{
 		Type:    ChannelWebhook,

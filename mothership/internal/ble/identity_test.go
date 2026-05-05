@@ -79,7 +79,7 @@ func TestTriangulationWithThreeNodes(t *testing.T) {
 
 	// Create registry and RSSI cache
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 
@@ -125,7 +125,7 @@ func TestTriangulationWithSingleNode(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -157,7 +157,7 @@ func TestTriangulationWithTwoNodes(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -194,7 +194,7 @@ func TestNearestBlobAssignment(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -252,7 +252,7 @@ func TestConfidenceGate(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -296,7 +296,7 @@ func TestHighConfidenceAssignment(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -353,7 +353,7 @@ func TestBLEOnlyPlaceholderTrack(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -414,7 +414,7 @@ func TestIdentityPersistence(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -489,7 +489,7 @@ func TestIdentityHandoffOnMACRotation(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)
@@ -619,7 +619,7 @@ func TestMultipleDevicesSamePerson(t *testing.T) {
 	}
 
 	reg := setupTestRegistryForIdentity(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	cache := NewRSSICache(30 * time.Second)
 	matcher := NewIdentityMatcher(reg, cache, mockNodes)

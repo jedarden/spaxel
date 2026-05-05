@@ -265,7 +265,7 @@ func (r *RotationDetector) compareRSSIProximity(oldReadings, newReadings []*RSSI
 	timeGap := oldestNew.Timestamp.Sub(mostRecentOld.Timestamp)
 
 	// Time factor: smaller gap = higher score
-	timeScore := 1.0
+	var timeScore float64
 	if timeGap < 0 {
 		timeGap = -timeGap
 	}
@@ -274,7 +274,7 @@ func (r *RotationDetector) compareRSSIProximity(oldReadings, newReadings []*RSSI
 		timeScore = 0.1
 	} else {
 		// Linear decay from 1.0 to 0.5 over the window
-		timeScore = 1.0 - (0.5 * float64(timeGap) / float64(RotationTimeWindow))
+		timeScore = 1.0 - (0.5*float64(timeGap)/float64(RotationTimeWindow))
 	}
 
 	// Check for same-node observations (strongest signal)

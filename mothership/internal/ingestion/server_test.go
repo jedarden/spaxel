@@ -195,7 +195,7 @@ func TestMalformedCounter_ConnectionCloseIntegration(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ingestServer.HandleNodeWS(w, r)
 	}))
-	defer httpServer.Close()
+	defer httpServer.Close() //nolint:errcheck
 
 	// Convert http:// to ws://
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
@@ -206,7 +206,7 @@ func TestMalformedCounter_ConnectionCloseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	// Send a hello message first
 	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`
@@ -277,7 +277,7 @@ func TestTokenValidation_ValidToken(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ingestServer.HandleNodeWS(w, r)
 	}))
-	defer httpServer.Close()
+	defer httpServer.Close() //nolint:errcheck
 
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
 	dialer := websocket.Dialer{}
@@ -285,7 +285,7 @@ func TestTokenValidation_ValidToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"good-token"}`
 	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
@@ -323,7 +323,7 @@ func TestTokenValidation_MissingToken(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ingestServer.HandleNodeWS(w, r)
 	}))
-	defer httpServer.Close()
+	defer httpServer.Close() //nolint:errcheck
 
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
 	dialer := websocket.Dialer{}
@@ -331,7 +331,7 @@ func TestTokenValidation_MissingToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	// Hello without token field
 	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`
@@ -357,7 +357,7 @@ func TestTokenValidation_WrongToken(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ingestServer.HandleNodeWS(w, r)
 	}))
-	defer httpServer.Close()
+	defer httpServer.Close() //nolint:errcheck
 
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
 	dialer := websocket.Dialer{}
@@ -365,7 +365,7 @@ func TestTokenValidation_WrongToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"wrong-token"}`
 	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
@@ -388,7 +388,7 @@ func TestTokenValidation_NoValidator(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ingestServer.HandleNodeWS(w, r)
 	}))
-	defer httpServer.Close()
+	defer httpServer.Close() //nolint:errcheck
 
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
 	dialer := websocket.Dialer{}
@@ -396,7 +396,7 @@ func TestTokenValidation_NoValidator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	// Hello without any token
 	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`
@@ -508,7 +508,7 @@ func TestMigrationWindow(t *testing.T) {
 			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				ingestServer.HandleNodeWS(w, r)
 			}))
-			defer httpServer.Close()
+			defer httpServer.Close() //nolint:errcheck
 
 			wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
 			dialer := websocket.Dialer{}
@@ -516,7 +516,7 @@ func TestMigrationWindow(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to connect: %v", err)
 			}
-			defer conn.Close()
+			defer conn.Close() //nolint:errcheck
 
 			if err := conn.WriteMessage(websocket.TextMessage, []byte(tt.helloJSON)); err != nil {
 				t.Fatalf("Failed to send hello: %v", err)
@@ -630,7 +630,7 @@ func TestTokenValidation_UnprovisionedNodeCannotPostCSI(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ingestServer.HandleNodeWS(w, r)
 	}))
-	defer httpServer.Close()
+	defer httpServer.Close() //nolint:errcheck
 
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
 	dialer := websocket.Dialer{}
@@ -638,7 +638,7 @@ func TestTokenValidation_UnprovisionedNodeCannotPostCSI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	// Send hello without token
 	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`

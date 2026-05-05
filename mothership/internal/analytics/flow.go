@@ -306,7 +306,7 @@ func (f *FlowAccumulator) insertTrajectories(segments []TrajectorySegment) error
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO trajectory_segments (id, person_id, from_x, from_y, from_z, to_x, to_y, to_z, speed, timestamp)
@@ -315,7 +315,7 @@ func (f *FlowAccumulator) insertTrajectories(segments []TrajectorySegment) error
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	ts := time.Now().UnixNano() / 1e6
 	for _, seg := range segments {
@@ -345,7 +345,7 @@ func (f *FlowAccumulator) upsertDwell(dwell []DwellAccumulator) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO dwell_accumulator (grid_x, grid_y, person_id, count, dwell_ms, last_updated)
@@ -358,7 +358,7 @@ func (f *FlowAccumulator) upsertDwell(dwell []DwellAccumulator) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for _, d := range dwell {
 		var personID interface{} = d.PersonID
@@ -418,7 +418,7 @@ func (f *FlowAccumulator) ComputeFlowMap(personID *string, since, until *time.Ti
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	// Accumulate flow vectors per cell
 	cellVectors := make(map[string]struct {
@@ -514,7 +514,7 @@ func (f *FlowAccumulator) ComputeDwellHeatmap(personID *string) (*DwellHeatmap, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var cells []DwellCell
 	maxCount := 0
@@ -770,7 +770,7 @@ func (f *FlowAccumulator) saveCorridors(corridors []DetectedCorridor) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	// Clear old corridors
 	if _, err := tx.Exec("DELETE FROM detected_corridors"); err != nil {
@@ -785,7 +785,7 @@ func (f *FlowAccumulator) saveCorridors(corridors []DetectedCorridor) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	ts := time.Now().UnixNano() / 1e6
 	for _, c := range corridors {
@@ -814,7 +814,7 @@ func (f *FlowAccumulator) GetCorridors() ([]DetectedCorridor, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var corridors []DetectedCorridor
 	for rows.Next() {

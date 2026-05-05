@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	mrand "math/rand"
-	"time"
 )
 
 // GDOPResult contains GDOP computation results for a single cell
@@ -549,8 +548,7 @@ func OptimizeNodePositions(space *Space, numNodes int, iterations int) *NodeSet 
 				corners[i],
 			)
 		} else {
-			// Add random position
-			mrand.Seed(time.Now().UnixNano())
+			// Add random position (Go 1.20+ automatically seeds global generator)
 			pos := Point{
 				X: minX + mrand.Float64()*(maxX-minX),
 				Y: minY + mrand.Float64()*(maxY-minY),

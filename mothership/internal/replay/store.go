@@ -69,7 +69,7 @@ func NewRecordingStore(path string, maxMB int) (*RecordingStore, error) {
 
 	info, err := f.Stat()
 	if err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -78,7 +78,7 @@ func NewRecordingStore(path string, maxMB int) (*RecordingStore, error) {
 			// Grow file to new size if needed
 			if info.Size() < fileSize {
 				if terr := f.Truncate(fileSize); terr != nil {
-					f.Close()
+					f.Close() //nolint:errcheck
 					return nil, terr
 				}
 			}
@@ -91,11 +91,11 @@ func NewRecordingStore(path string, maxMB int) (*RecordingStore, error) {
 	s.oldestPos = 0
 	s.wrapPos = 0
 	if err := f.Truncate(fileSize); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 		return nil, err
 	}
 	if err := s.syncHeader(); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 		return nil, err
 	}
 	return s, nil

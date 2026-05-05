@@ -428,7 +428,7 @@ func TestHandlerGetSystemMode(t *testing.T) {
 	}
 
 	var resp systemModeResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -509,7 +509,7 @@ func TestHandlerSetSystemMode(t *testing.T) {
 
 			if tt.wantStatus == http.StatusOK {
 				var resp systemModeResponse
-				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 
@@ -556,7 +556,7 @@ func TestHandlerListFleet(t *testing.T) {
 	}
 
 	var resp fleetListResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	nodes := resp.Nodes
@@ -599,7 +599,7 @@ func TestHandlerListFleetEmpty(t *testing.T) {
 	}
 
 	var resp fleetListResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -657,7 +657,7 @@ func TestHandlerGetNode(t *testing.T) {
 
 			if tt.wantStatus == http.StatusOK {
 				var node NodeRecord
-				if err := json.NewDecoder(w.Body).Decode(&node); err != nil {
+				if err := json.NewDecoder(w.Body).Decode(&node); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 				if node.MAC != tt.mac {
@@ -1139,7 +1139,7 @@ func TestHandlerUpdateAllNodes(t *testing.T) {
 			}
 
 			var resp map[string]interface{}
-			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 
@@ -1180,7 +1180,7 @@ func TestHandlerExportConfig(t *testing.T) {
 	}
 
 	var config map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&config); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&config); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -1273,7 +1273,7 @@ func TestHandlerRebaselineAllNodes(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -1526,7 +1526,7 @@ func TestFleetTableRendering(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	nodes := resp.Nodes
@@ -1657,7 +1657,7 @@ func TestFleetNodeFields(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	nodes := resp.Nodes
@@ -1758,7 +1758,7 @@ func TestFleetWithVirtualNodes(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	nodes := resp.Nodes
@@ -1815,7 +1815,7 @@ func TestFleetWithNoNodes(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -1854,7 +1854,7 @@ func TestFleetNodeStatusOffline(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	nodes := resp.Nodes
@@ -1907,7 +1907,7 @@ func TestFleetWithUnpairedNode(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -1978,7 +1978,7 @@ func TestFleetAllUnpaired(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	nodes := resp.Nodes
@@ -2025,7 +2025,7 @@ func TestFleetListMigrationWindowActive(t *testing.T) {
 	}
 
 	var resp fleetListFullResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -2069,7 +2069,7 @@ func TestFleetListMigrationWindowClosed(t *testing.T) {
 	}
 
 	var resp fleetListFullResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -2106,7 +2106,7 @@ func TestFleetListNoMigrationWindow(t *testing.T) {
 	}
 
 	var resp fleetListFullResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -2151,7 +2151,7 @@ func TestFleetListUnpairedNotInRegistry(t *testing.T) {
 	}
 
 	var resp fleetListResp
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 

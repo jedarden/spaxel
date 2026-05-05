@@ -26,7 +26,7 @@ func tempStore(t *testing.T) (*VirtualNodeStore, string) {
 // TestNewVirtualNodeStore tests store creation
 func TestNewVirtualNodeStore(t *testing.T) {
 	store, tmpDir := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Check that data directory was created
 	if _, err := os.Stat(tmpDir); err != nil {
@@ -51,7 +51,7 @@ func TestNewVirtualNodeStore(t *testing.T) {
 // TestVirtualNodeStore_CreateNode tests basic node creation
 func TestVirtualNodeStore_CreateNode(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create a virtual node
 	position := NewPoint(1.0, 2.0, 1.5)
@@ -101,7 +101,7 @@ func TestVirtualNodeStore_CreateNode(t *testing.T) {
 // TestVirtualNodeStore_CreateAPNode tests AP node creation
 func TestVirtualNodeStore_CreateAPNode(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(0, 0, 2.5)
 	state, err := store.CreateAPNode("ap-1", "Router", "AA:BB:CC:DD:EE:FF", 6, position)
@@ -128,7 +128,7 @@ func TestVirtualNodeStore_CreateAPNode(t *testing.T) {
 // TestVirtualNodeStore_DuplicateID tests duplicate node ID rejection
 func TestVirtualNodeStore_DuplicateID(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "First", position)
@@ -146,7 +146,7 @@ func TestVirtualNodeStore_DuplicateID(t *testing.T) {
 // TestVirtualNodeStore_InvalidPosition tests position validation
 func TestVirtualNodeStore_InvalidPosition(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Position outside space bounds (default space is 6x5x2.5)
 	invalidPos := NewPoint(10.0, 10.0, 10.0)
@@ -160,7 +160,7 @@ func TestVirtualNodeStore_InvalidPosition(t *testing.T) {
 // TestVirtualNodeStore_GetNode tests node retrieval
 func TestVirtualNodeStore_GetNode(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -188,7 +188,7 @@ func TestVirtualNodeStore_GetNode(t *testing.T) {
 // TestVirtualNodeStore_UpdateNodePosition tests position updates
 func TestVirtualNodeStore_UpdateNodePosition(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -221,7 +221,7 @@ func TestVirtualNodeStore_UpdateNodePosition(t *testing.T) {
 // TestVirtualNodeStore_UpdateNodeRole tests role updates
 func TestVirtualNodeStore_UpdateNodeRole(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -245,7 +245,7 @@ func TestVirtualNodeStore_UpdateNodeRole(t *testing.T) {
 // TestVirtualNodeStore_SetNodeEnabled tests enable/disable
 func TestVirtualNodeStore_SetNodeEnabled(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -279,7 +279,7 @@ func TestVirtualNodeStore_SetNodeEnabled(t *testing.T) {
 // TestVirtualNodeStore_UpdateNodeMetadata tests metadata updates
 func TestVirtualNodeStore_UpdateNodeMetadata(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -312,7 +312,7 @@ func TestVirtualNodeStore_UpdateNodeMetadata(t *testing.T) {
 // TestVirtualNodeStore_Tags tests tag management
 func TestVirtualNodeStore_Tags(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -363,7 +363,7 @@ func TestVirtualNodeStore_Tags(t *testing.T) {
 // TestVirtualNodeStore_DeleteNode tests node deletion
 func TestVirtualNodeStore_DeleteNode(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -397,7 +397,7 @@ func TestVirtualNodeStore_DeleteNode(t *testing.T) {
 // TestVirtualNodeStore_ListNodes tests listing nodes
 func TestVirtualNodeStore_ListNodes(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create multiple nodes
 	for i := 1; i <= 5; i++ {
@@ -433,7 +433,7 @@ func TestVirtualNodeStore_ListNodes(t *testing.T) {
 // TestVirtualNodeStore_ListNodesByType tests filtering by type
 func TestVirtualNodeStore_ListNodesByType(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create virtual nodes
 	for i := 1; i <= 3; i++ {
@@ -471,7 +471,7 @@ func TestVirtualNodeStore_ListNodesByType(t *testing.T) {
 // TestVirtualNodeStore_ListNodesByTag tests filtering by tag
 func TestVirtualNodeStore_ListNodesByTag(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create nodes with different tags
 	for i := 1; i <= 3; i++ {
@@ -506,7 +506,7 @@ func TestVirtualNodeStore_ListNodesByTag(t *testing.T) {
 // TestVirtualNodeStore_Clear tests clearing all nodes
 func TestVirtualNodeStore_Clear(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create some nodes
 	for i := 1; i <= 3; i++ {
@@ -569,7 +569,7 @@ func TestVirtualNodeStore_Persistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create second store: %v", err)
 	}
-	defer store2.Close()
+	defer store2.Close() //nolint:errcheck
 
 	// Verify loaded state
 	if store2.Count() != 1 {
@@ -597,7 +597,7 @@ func TestVirtualNodeStore_Persistence(t *testing.T) {
 // TestVirtualNodeStore_UpdateSpace tests space updates
 func TestVirtualNodeStore_UpdateSpace(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create a node
 	position := NewPoint(1.0, 2.0, 1.5)
@@ -656,7 +656,7 @@ func TestVirtualNodeStore_UpdateSpace(t *testing.T) {
 // TestVirtualNodeStore_ToNodeSet tests conversion to NodeSet
 func TestVirtualNodeStore_ToNodeSet(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create various nodes
 	position := NewPoint(1.0, 2.0, 1.5)
@@ -698,7 +698,7 @@ func TestVirtualNodeStore_ToNodeSet(t *testing.T) {
 // TestVirtualNodeStore_ImportFromNodeSet tests importing from NodeSet
 func TestVirtualNodeStore_ImportFromNodeSet(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create a NodeSet
 	nodeSet := NewNodeSet()
@@ -729,7 +729,7 @@ func TestVirtualNodeStore_ImportFromNodeSet(t *testing.T) {
 // TestVirtualNodeStore_Summary tests summary generation
 func TestVirtualNodeStore_Summary(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create various nodes
 	store.CreateVirtualNode("node-1", "Node 1", NewPoint(1.0, 1.0, 1.5))
@@ -821,7 +821,7 @@ func TestVirtualNodeStore_Close(t *testing.T) {
 // TestVirtualNodeStore_Immutability tests that returned states are copies
 func TestVirtualNodeStore_Immutability(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	position := NewPoint(1.0, 2.0, 1.5)
 	_, err := store.CreateVirtualNode("node-1", "Test Node", position)
@@ -872,7 +872,7 @@ func TestVirtualNodeStore_Immutability(t *testing.T) {
 // TestVirtualNodeStore_StateIsolation tests that each node's state is independent
 func TestVirtualNodeStore_StateIsolation(t *testing.T) {
 	store, _ := tempStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create two nodes
 	_, err := store.CreateVirtualNode("node-1", "Node 1", NewPoint(1.0, 1.0, 1.5))

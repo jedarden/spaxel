@@ -399,14 +399,14 @@ func TestCSVOutput(t *testing.T) {
 	}
 
 	csvWriter.WriteRow(walkers, nodes, nil)
-	csvWriter.Close()
+	csvWriter.Close() //nolint:errcheck
 
 	// Read back and verify
 	file, err := os.Open(csvPath)
 	if err != nil {
 		t.Fatalf("Failed to open CSV: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()

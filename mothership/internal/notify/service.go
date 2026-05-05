@@ -115,7 +115,7 @@ func NewService(dbPath string) (*Service, error) {
 	}
 
 	if err := s.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func (s *Service) loadChannels() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var cc ChannelConfig
@@ -481,7 +481,7 @@ func (s *Service) sendNtfy(cc *ChannelConfig, notif Notification) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("ntfy returned status %d", resp.StatusCode)
@@ -508,7 +508,7 @@ func (s *Service) sendPushover(cc *ChannelConfig, notif Notification) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("pushover returned status %d", resp.StatusCode)
@@ -548,7 +548,7 @@ func (s *Service) sendGotify(cc *ChannelConfig, notif Notification) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("gotify returned status %d", resp.StatusCode)
@@ -599,7 +599,7 @@ func (s *Service) sendWebhook(cc *ChannelConfig, notif Notification) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
@@ -635,9 +635,8 @@ func (s *Service) GenerateFloorPlanThumbnail(width, height int, blobs []struct {
 	scaleZ := float64(height) / roomD
 
 	// Draw floor plan if available
-	if len(floorPlan) > 0 {
-		// Would decode and draw, but skip for simplicity
-	}
+	// TODO: decode and draw floor plan image background
+	_ = floorPlan // Used when TODO is implemented
 
 	// Draw blobs
 	for _, blob := range blobs {
@@ -726,7 +725,7 @@ func (s *Service) GetHistory(limit int) []struct {
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var history []struct {
 		Channel   string

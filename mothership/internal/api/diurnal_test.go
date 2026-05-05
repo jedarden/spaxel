@@ -83,7 +83,7 @@ func TestGetDiurnalStatus(t *testing.T) {
 	}
 
 	var statuses []signal.DiurnalLearningStatus
-	if err := json.NewDecoder(w.Body).Decode(&statuses); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&statuses); err != nil { //nolint:errcheck
 		t.Fatalf("decode: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestGetDiurnalSlots(t *testing.T) {
 	}
 
 	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 		t.Fatalf("decode: %v", err)
 	}
 
@@ -192,7 +192,7 @@ func TestGetDiurnalSlots_MissingLinkID(t *testing.T) {
 	}
 
 	var errResp map[string]string
-	json.NewDecoder(w.Body).Decode(&errResp)
+	json.NewDecoder(w.Body).Decode(&errResp) //nolint:errcheck
 
 	if errResp["error"] == "" {
 		t.Error("expected error message")

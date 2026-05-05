@@ -121,7 +121,7 @@ func TestSpatialWeightLearner_GetSpatialWeight_BilinearInterpolation(t *testing.
 	if err != nil {
 		t.Fatalf("Failed to create learner: %v", err)
 	}
-	defer learner.Close()
+	defer learner.Close() //nolint:errcheck
 
 	// Set weights at grid corners for a specific link
 	linkID := "test-link-1"
@@ -172,7 +172,7 @@ func TestSpatialWeightLearner_GetSpatialWeight_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create learner: %v", err)
 	}
-	defer learner.Close()
+	defer learner.Close() //nolint:errcheck
 
 	// Test unknown link returns default weight of 1.0
 	result := learner.GetSpatialWeight("unknown-link", 5.0, 5.0)
@@ -202,7 +202,7 @@ func TestSpatialWeightLearner_ProcessSample_SGD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create learner: %v", err)
 	}
-	defer learner.Close()
+	defer learner.Close() //nolint:errcheck
 
 	linkID := "link-test-1"
 	zoneX, zoneY := 2, 2
@@ -261,7 +261,7 @@ func TestSpatialWeightLearner_WeightClipping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create learner: %v", err)
 	}
-	defer learner.Close()
+	defer learner.Close() //nolint:errcheck
 
 	linkID := "clip-test-link"
 
@@ -292,7 +292,7 @@ func TestGroundTruthStore_SampleCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	personID := "test-person"
 
@@ -360,13 +360,13 @@ func TestGroundTruthCollector_CollectionGates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := NewSpatialWeightLearner(swPath, DefaultSpatialWeightLearnerConfig())
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	collector := NewGroundTruthCollector(gtStore, swLearner)
 
@@ -417,7 +417,7 @@ func TestValidationChecker_ShouldAcceptUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	// Add some samples for validation
 	for i := 0; i < 10; i++ {
@@ -460,7 +460,7 @@ func TestValidationChecker_ShouldAcceptUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create learner: %v", err)
 	}
-	defer learner.Close()
+	defer learner.Close() //nolint:errcheck
 
 	// Without learned weights, weighted error should be similar to baseline
 	weighted, err := checker.ComputeWeightedError(learner)
@@ -500,14 +500,14 @@ func TestSpatialWeightLearner_PersistAndLoad(t *testing.T) {
 		t.Fatalf("PersistWeights failed: %v", err)
 	}
 
-	learner1.Close()
+	learner1.Close() //nolint:errcheck
 
 	// Create new learner and verify weights are loaded
 	learner2, err := NewSpatialWeightLearner(dbPath, config)
 	if err != nil {
 		t.Fatalf("Failed to create learner2: %v", err)
 	}
-	defer learner2.Close()
+	defer learner2.Close() //nolint:errcheck
 
 	// Check weights were loaded
 	weight1 := learner2.GetSpatialWeight("link1", 0.0, 0.0)
@@ -530,7 +530,7 @@ func TestSpatialWeightIntegrator_AdjustLinkMotion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create learner: %v", err)
 	}
-	defer learner.Close()
+	defer learner.Close() //nolint:errcheck
 
 	// Set a weight
 	learner.mu.Lock()
@@ -571,7 +571,7 @@ func TestGetWeightStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create learner: %v", err)
 	}
-	defer learner.Close()
+	defer learner.Close() //nolint:errcheck
 
 	// Initially no weights
 	stats := learner.GetWeightStats()

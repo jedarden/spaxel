@@ -91,7 +91,7 @@ func NewFeedbackStore(dbPath string) (*FeedbackStore, error) {
 	}
 
 	if err := store.initSchema(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -199,7 +199,7 @@ func (s *FeedbackStore) GetUnprocessedFeedback() ([]FeedbackRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []FeedbackRecord
 	for rows.Next() {
@@ -242,7 +242,7 @@ func (s *FeedbackStore) MarkFeedbackProcessed(ids []string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	now := time.Now().Unix()
 
@@ -254,7 +254,7 @@ func (s *FeedbackStore) MarkFeedbackProcessed(ids []string) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for _, id := range ids {
 		if _, err := stmt.Exec(now, id); err != nil {
@@ -319,7 +319,7 @@ func (s *FeedbackStore) GetFalsePositiveFrames(linkID string, window time.Durati
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var frames []FalsePositiveFrame
 	for rows.Next() {
@@ -358,7 +358,7 @@ func (s *FeedbackStore) GetFalseNegativeFrames(linkID string, window time.Durati
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var frames []FalseNegativeFrame
 	for rows.Next() {
@@ -426,7 +426,7 @@ func (s *FeedbackStore) GetAccuracyHistory(scopeType, scopeID string, weeks int)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []AccuracyRecord
 	for rows.Next() {
@@ -464,7 +464,7 @@ func (s *FeedbackStore) GetAllAccuracyRecords(week string) ([]AccuracyRecord, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []AccuracyRecord
 	for rows.Next() {
@@ -518,7 +518,7 @@ func (s *FeedbackStore) GetFeedbackStats() (map[string]interface{}, error) {
 		GROUP BY feedback_type
 	`)
 	if err == nil {
-		defer typeRows.Close()
+		defer typeRows.Close() //nolint:errcheck
 		byType := make(map[string]int)
 		for typeRows.Next() {
 			var ft string
@@ -555,7 +555,7 @@ func (s *FeedbackStore) GetFeedbackByEvent(eventID string) ([]FeedbackRecord, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []FeedbackRecord
 	for rows.Next() {
@@ -599,7 +599,7 @@ func (s *FeedbackStore) GetFeedbackInTimeRange(start, end time.Time) ([]Feedback
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []FeedbackRecord
 	for rows.Next() {
@@ -656,7 +656,7 @@ func (s *FeedbackStore) GetUniqueScopeIDs(scopeType string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var ids []string
 	for rows.Next() {

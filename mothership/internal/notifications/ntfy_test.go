@@ -56,7 +56,7 @@ func TestNtfyClientSend(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL
@@ -118,7 +118,7 @@ func TestNtfyClientSendWithToken(t *testing.T) {
 		receivedAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("private-topic")
 	client.URL = server.URL
@@ -146,7 +146,7 @@ func TestNtfyClientSendWithImage(t *testing.T) {
 		receivedAttach = r.Header.Get("Attach")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL
@@ -207,7 +207,7 @@ func TestNtfyClientSendErrorCases(t *testing.T) {
 			w.WriteHeader(http.StatusBadGateway)
 			w.Write([]byte("Bad gateway"))
 		}))
-		defer server.Close()
+		defer server.Close() //nolint:errcheck
 
 		client := NewNtfyClient("test-topic")
 		client.URL = server.URL
@@ -248,7 +248,7 @@ func TestNtfyClientDefaults(t *testing.T) {
 		receivedTags = r.Header.Get("Tags")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL
@@ -316,7 +316,7 @@ func TestNtfyMessageAllFields(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyTopic("test-topic")
 	client.URL = server.URL
@@ -363,7 +363,7 @@ func TestNtfyInvalidPriority(t *testing.T) {
 		receivedPriority = r.Header.Get("Priority")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL
@@ -396,7 +396,7 @@ func TestNtfyClientValidPriorities(t *testing.T) {
 				receivedPriority = r.Header.Get("Priority")
 				w.WriteHeader(http.StatusOK)
 			}))
-			defer server.Close()
+			defer server.Close() //nolint:errcheck
 
 			client := NewNtfyClient("test-topic")
 			client.URL = server.URL
@@ -426,7 +426,7 @@ func TestNtfyClientMessageFieldPriority(t *testing.T) {
 		receivedPriority = r.Header.Get("Priority")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL
@@ -457,7 +457,7 @@ func TestNtfyClientEmptyMessage(t *testing.T) {
 		receivedBody = bodyBuf.String()
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL
@@ -485,7 +485,7 @@ func TestNtfyClientCustomURL(t *testing.T) {
 		receivedHost = r.Host
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.SetURL(server.URL) // Use custom URL
@@ -512,7 +512,7 @@ func TestNtfyClientClickHeader(t *testing.T) {
 		receivedClick = r.Header.Get("Click")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL
@@ -541,7 +541,7 @@ func TestNtfyClientEmailHeader(t *testing.T) {
 		receivedEmail = r.Header.Get("Email")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewNtfyClient("test-topic")
 	client.URL = server.URL

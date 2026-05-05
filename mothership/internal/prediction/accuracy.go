@@ -100,7 +100,7 @@ func NewAccuracyTracker(dbPath string) (*AccuracyTracker, error) {
 	}
 
 	if err := t.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -184,7 +184,7 @@ func (t *AccuracyTracker) loadPendingPredictions() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var p RecordedPrediction
@@ -391,7 +391,7 @@ func (t *AccuracyTracker) GetAllAccuracyStats() ([]AccuracyStats, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var personIDs []string
 	for rows.Next() {
@@ -493,7 +493,7 @@ func (t *AccuracyTracker) ComputeZoneOccupancyPatterns() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	type zoneHour struct {
 		zoneID     string
@@ -562,7 +562,7 @@ func (t *AccuracyTracker) ComputeZoneOccupancyPatterns() error {
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback()
+		defer tx.Rollback() //nolint:errcheck
 
 		for _, p := range patterns {
 			_, err := tx.Exec(`

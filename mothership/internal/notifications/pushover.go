@@ -228,7 +228,7 @@ func (c *PushoverClient) Send(msg PushoverMessage) error {
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// Check response
 	respBody, err := io.ReadAll(resp.Body)

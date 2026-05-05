@@ -248,10 +248,6 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 			}
 
 			// Add to all contributions with zone info
-			contribution := (ld.deltaRMS * ld.weight)
-			if totalActivation > 0 {
-				contribution /= totalActivation
-			}
 			allContributions = append(allContributions, LinkContribution{
 				LinkID:       ld.linkID,
 				NodeMAC:      ld.nodeMAC,

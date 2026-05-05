@@ -65,7 +65,7 @@ func NewSettingsHandlerWithPath(dbPath string) (*SettingsHandler, error) {
 	var tableName string
 	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'").Scan(&tableName)
 	if err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -96,7 +96,7 @@ func (s *SettingsHandler) load() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	// Clear existing cache
 	s.cache = make(map[string]interface{})

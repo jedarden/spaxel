@@ -20,7 +20,7 @@ func TestLocalizationHandler_getWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create components
 	gtStore, err := localization.NewGroundTruthStore(
@@ -30,7 +30,7 @@ func TestLocalizationHandler_getWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -39,13 +39,13 @@ func TestLocalizationHandler_getWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -71,7 +71,7 @@ func TestLocalizationHandler_getWeights(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func TestLocalizationHandler_getLinkWeight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -98,7 +98,7 @@ func TestLocalizationHandler_getLinkWeight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -107,13 +107,13 @@ func TestLocalizationHandler_getLinkWeight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -139,7 +139,7 @@ func TestLocalizationHandler_getLinkWeight(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -160,7 +160,7 @@ func TestLocalizationHandler_resetWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -169,7 +169,7 @@ func TestLocalizationHandler_resetWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -178,13 +178,13 @@ func TestLocalizationHandler_resetWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -213,7 +213,7 @@ func TestLocalizationHandler_resetWeights(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestLocalizationHandler_getSpatialWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -242,7 +242,7 @@ func TestLocalizationHandler_getSpatialWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -251,13 +251,13 @@ func TestLocalizationHandler_getSpatialWeights(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -283,7 +283,7 @@ func TestLocalizationHandler_getSpatialWeights(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -301,7 +301,7 @@ func TestLocalizationHandler_getSpatialWeightsForZone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -310,7 +310,7 @@ func TestLocalizationHandler_getSpatialWeightsForZone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -319,7 +319,7 @@ func TestLocalizationHandler_getSpatialWeightsForZone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	// Set some weights for testing using the public API
 	// Note: We can't directly set weights without unexported methods,
@@ -342,7 +342,7 @@ func TestLocalizationHandler_getSpatialWeightsForZone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -368,7 +368,7 @@ func TestLocalizationHandler_getSpatialWeightsForZone(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -394,7 +394,7 @@ func TestLocalizationHandler_getGroundTruthSamples(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -403,7 +403,7 @@ func TestLocalizationHandler_getGroundTruthSamples(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	// Add some test samples
 	for i := 0; i < 5; i++ {
@@ -431,13 +431,13 @@ func TestLocalizationHandler_getGroundTruthSamples(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -463,7 +463,7 @@ func TestLocalizationHandler_getGroundTruthSamples(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -487,7 +487,7 @@ func TestLocalizationHandler_getGroundTruthStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -496,7 +496,7 @@ func TestLocalizationHandler_getGroundTruthStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	// Add test samples
 	sample := localization.GroundTruthSample{
@@ -522,13 +522,13 @@ func TestLocalizationHandler_getGroundTruthStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -554,7 +554,7 @@ func TestLocalizationHandler_getGroundTruthStats(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -578,7 +578,7 @@ func TestLocalizationHandler_getAccuracyHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -587,7 +587,7 @@ func TestLocalizationHandler_getAccuracyHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -596,13 +596,13 @@ func TestLocalizationHandler_getAccuracyHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -628,7 +628,7 @@ func TestLocalizationHandler_getAccuracyHistory(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -646,7 +646,7 @@ func TestLocalizationHandler_getLearningProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -655,7 +655,7 @@ func TestLocalizationHandler_getLearningProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -664,13 +664,13 @@ func TestLocalizationHandler_getLearningProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -696,7 +696,7 @@ func TestLocalizationHandler_getLearningProgress(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -714,7 +714,7 @@ func TestLocalizationHandler_getSelfImprovingStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -723,7 +723,7 @@ func TestLocalizationHandler_getSelfImprovingStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -732,13 +732,13 @@ func TestLocalizationHandler_getSelfImprovingStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -764,7 +764,7 @@ func TestLocalizationHandler_getSelfImprovingStatus(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -785,7 +785,7 @@ func TestLocalizationHandler_processLearning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -794,7 +794,7 @@ func TestLocalizationHandler_processLearning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -803,13 +803,13 @@ func TestLocalizationHandler_processLearning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -835,7 +835,7 @@ func TestLocalizationHandler_processLearning(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -853,7 +853,7 @@ func TestLocalizationHandler_getImprovementHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	gtStore, err := localization.NewGroundTruthStore(
 		filepath.Join(tmpDir, "groundtruth.db"),
@@ -862,7 +862,7 @@ func TestLocalizationHandler_getImprovementHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ground truth store: %v", err)
 	}
-	defer gtStore.Close()
+	defer gtStore.Close() //nolint:errcheck
 
 	swLearner, err := localization.NewSpatialWeightLearner(
 		filepath.Join(tmpDir, "spatial_weights.db"),
@@ -871,13 +871,13 @@ func TestLocalizationHandler_getImprovementHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create spatial weight learner: %v", err)
 	}
-	defer swLearner.Close()
+	defer swLearner.Close() //nolint:errcheck
 
 	wStore, err := localization.NewWeightStore(filepath.Join(tmpDir, "weights.db"))
 	if err != nil {
 		t.Fatalf("Failed to create weight store: %v", err)
 	}
-	defer wStore.Close()
+	defer wStore.Close() //nolint:errcheck
 
 	config := localization.DefaultSelfImprovingLocalizerConfig()
 	sil := localization.NewSelfImprovingLocalizer(config)
@@ -903,7 +903,7 @@ func TestLocalizationHandler_getImprovementHistory(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 

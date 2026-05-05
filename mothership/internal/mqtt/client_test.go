@@ -400,7 +400,7 @@ func TestHTTPWebhookClient(t *testing.T) {
 		receivedRequest = true
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	// Test sending webhook
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -415,7 +415,7 @@ func TestHTTPWebhookClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HTTP request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Status = %d, want 200", resp.StatusCode)

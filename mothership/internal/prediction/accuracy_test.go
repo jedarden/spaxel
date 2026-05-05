@@ -13,13 +13,13 @@ func TestAccuracyTracker_RecordAndEvaluate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	tracker, err := NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer tracker.Close()
+	defer tracker.Close() //nolint:errcheck
 
 	// Record a prediction
 	err = tracker.RecordPrediction("person1", "zone_a", "zone_b", 0.8, 15*time.Minute)
@@ -45,13 +45,13 @@ func TestAccuracyTracker_EvaluatePending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	tracker, err := NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer tracker.Close()
+	defer tracker.Close() //nolint:errcheck
 
 	// The tracker's horizon is 15 minutes, so predictions won't be evaluated
 	// until their target time has passed. For this test, we just verify
@@ -82,13 +82,13 @@ func TestAccuracyTracker_GetAccuracyStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	tracker, err := NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer tracker.Close()
+	defer tracker.Close() //nolint:errcheck
 
 	// Initially should return nil or empty stats for unknown person
 	stats, err := tracker.GetAccuracyStats("unknown_person", 15)
@@ -105,13 +105,13 @@ func TestAccuracyTracker_GetOverallAccuracy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	tracker, err := NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer tracker.Close()
+	defer tracker.Close() //nolint:errcheck
 
 	// Initially should return 0 accuracy with 0 predictions
 	accuracy, total, err := tracker.GetOverallAccuracy()
@@ -132,13 +132,13 @@ func TestAccuracyTracker_ZoneOccupancy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	tracker, err := NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer tracker.Close()
+	defer tracker.Close() //nolint:errcheck
 
 	// Record zone occupancy
 	now := time.Now()
@@ -248,13 +248,13 @@ func TestAccuracyTracker_Cleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	tracker, err := NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer tracker.Close()
+	defer tracker.Close() //nolint:errcheck
 
 	// Cleanup should work even with no predictions
 	err = tracker.CleanupOldPredictions()

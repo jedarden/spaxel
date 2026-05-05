@@ -18,7 +18,7 @@ func TestWriteAndReadFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
 
@@ -61,7 +61,7 @@ func TestReadFromWithSince(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
 
@@ -102,7 +102,7 @@ func TestAvailableRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
 
@@ -145,7 +145,7 @@ func TestAvailableRangeNoData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	_, _, err = mgr.AvailableRange("AA:BB:CC:DD:EE:FF:11:22:33:44:55:66")
 	if err == nil {
@@ -163,7 +163,7 @@ func TestMultipleLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	link1 := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
 	link2 := "AA:BB:CC:DD:EE:FF:AA:BB:CC:DD:EE:FF"
@@ -203,7 +203,7 @@ func TestBufferFullDrop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
 
@@ -247,7 +247,7 @@ func TestConcurrentWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
 
@@ -319,7 +319,7 @@ func TestCleanupRetention(t *testing.T) {
 		t.Error("new segment file should still exist")
 	}
 
-	mgr.Close()
+	mgr.Close() //nolint:errcheck
 }
 
 func TestCleanupMaxBytesPerLink(t *testing.T) {
@@ -371,7 +371,7 @@ func TestCleanupMaxBytesPerLink(t *testing.T) {
 		t.Errorf("total size %d exceeds MaxBytesPerLink 150 after cleanup", totalSize)
 	}
 
-	mgr.Close()
+	mgr.Close() //nolint:errcheck
 }
 
 func TestWriteAfterClose(t *testing.T) {
@@ -385,7 +385,7 @@ func TestWriteAfterClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mgr.Close()
+	mgr.Close() //nolint:errcheck
 
 	// Write after close should be a no-op, not panic.
 	mgr.Write("AA:BB:CC:DD:EE:FF:11:22:33:44:55:66", []byte("should-not-write"))
@@ -401,7 +401,7 @@ func TestSegmentRotation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mgr.Close()
+	defer mgr.Close() //nolint:errcheck
 
 	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
 

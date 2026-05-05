@@ -244,7 +244,6 @@ func SuggestedNodes(s *Space, count int) *NodeSet {
 
 		// Last node can be AP for passive radar
 		if i == count-1 {
-			role = RoleTX
 			ns.AddAPNode(
 				fmt.Sprintf("node-%d", i),
 				fmt.Sprintf("Node %d", i+1),

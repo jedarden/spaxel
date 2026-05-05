@@ -102,7 +102,7 @@ func NewPatternLearner(dbPath string) (*PatternLearner, error) {
 		);
 	`)
 	if err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("create pattern tables: %w", err)
 	}
 
@@ -111,7 +111,7 @@ func NewPatternLearner(dbPath string) (*PatternLearner, error) {
 	err = db.QueryRow(`SELECT value_json FROM settings WHERE key = 'pattern_learning_start_ms'`).Scan(&startMs)
 	if err == sql.ErrNoRows {
 		pl.startTime = time.Now()
-		db.Exec(`INSERT INTO settings (key, value_json) VALUES ('pattern_learning_start_ms', ?)`,
+		db.Exec(`INSERT INTO settings (key, value_json) VALUES ('pattern_learning_start_ms', ?)`, //nolint:errcheck
 			time.Now().UnixMilli())
 	} else if err == nil {
 		pl.startTime = time.UnixMilli(startMs)
@@ -133,7 +133,7 @@ func (pl *PatternLearner) loadPatterns() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		slot := &PatternSlot{}

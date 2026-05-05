@@ -88,7 +88,7 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "file field required", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	// Read entire file into memory for validation and saving
 	// multipart.File doesn't support Seek, so we need to buffer
@@ -147,7 +147,7 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 
 	// Return success with image URL
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"ok":       "true",
 		"image_url": "/floorplan/image.png",
 	})
@@ -238,7 +238,7 @@ func (h *Handler) calibrate(w http.ResponseWriter, r *http.Request) {
 	metersPerPixel := req.DistanceM / pixelDist
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok":               "true",
 		"meters_per_pixel": metersPerPixel,
 		"rotation_deg":     req.RotationDeg,
@@ -279,7 +279,7 @@ func (h *Handler) getCalibration(w http.ResponseWriter, r *http.Request) {
 	metersPerPixel := rec.DistanceM / pixelDist
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"cal_ax":           rec.CalAX,
 		"cal_ay":           rec.CalAY,
 		"cal_bx":           rec.CalBX,
@@ -306,7 +306,7 @@ func (h *Handler) getFloorplan(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		// Return empty state
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"image_url":   nil,
 			"calibration": nil,
 		})
@@ -344,7 +344,7 @@ func (h *Handler) getFloorplan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"image_url":   imageURL,
 		"calibration": calibration,
 	})

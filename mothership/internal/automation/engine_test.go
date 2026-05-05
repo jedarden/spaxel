@@ -110,7 +110,7 @@ func newTestEngine(t *testing.T) (*Engine, string) {
 	}
 
 	t.Cleanup(func() {
-		engine.Close()
+		engine.Close() //nolint:errcheck
 		os.RemoveAll(tmpDir)
 	})
 
@@ -418,11 +418,11 @@ func TestWebhookDispatch(t *testing.T) {
 	var receivedPayload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&payload)
+		json.NewDecoder(r.Body).Decode(&payload) //nolint:errcheck
 		receivedPayload = payload
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	automation := &Automation{
 		ID:          "test-webhook",
@@ -482,7 +482,7 @@ func TestWebhookRetry(t *testing.T) {
 		// Second call succeeds
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	automation := &Automation{
 		ID:          "test-retry",
@@ -567,11 +567,11 @@ func TestTestFireMode(t *testing.T) {
 	var receivedPayload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&payload)
+		json.NewDecoder(r.Body).Decode(&payload) //nolint:errcheck
 		receivedPayload = payload
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	automation := &Automation{
 		ID:          "test-testfire",
@@ -616,7 +616,7 @@ func TestFireCountIncrement(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	automation := &Automation{
 		ID:          "test-firecount",
@@ -750,7 +750,7 @@ func TestActionLog(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	automation := &Automation{
 		ID:          "test-log",

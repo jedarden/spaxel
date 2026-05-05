@@ -23,14 +23,14 @@ func TestAnalyticsHandler_GetFlowMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create flow accumulator and add test data
 	flowAcc := analytics.NewFlowAccumulator(db, 0.25)
@@ -62,7 +62,7 @@ func TestAnalyticsHandler_GetFlowMap(t *testing.T) {
 	}
 
 	var flowMap analytics.FlowMap
-	if err := json.NewDecoder(w.Body).Decode(&flowMap); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&flowMap); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestAnalyticsHandler_GetFlowMap(t *testing.T) {
 	}
 
 	var personFlowMap analytics.FlowMap
-	if err := json.NewDecoder(w.Body).Decode(&personFlowMap); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&personFlowMap); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -118,14 +118,14 @@ func TestAnalyticsHandler_GetDwellHeatmap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create flow accumulator and add test dwell data
 	flowAcc := analytics.NewFlowAccumulator(db, 0.25)
@@ -158,7 +158,7 @@ func TestAnalyticsHandler_GetDwellHeatmap(t *testing.T) {
 	}
 
 	var heatmap analytics.DwellHeatmap
-	if err := json.NewDecoder(w.Body).Decode(&heatmap); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&heatmap); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestAnalyticsHandler_GetDwellHeatmap(t *testing.T) {
 	}
 
 	var personHeatmap analytics.DwellHeatmap
-	if err := json.NewDecoder(w.Body).Decode(&personHeatmap); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&personHeatmap); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -196,14 +196,14 @@ func TestAnalyticsHandler_GetCorridors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create flow accumulator and add test corridor data
 	flowAcc := analytics.NewFlowAccumulator(db, 0.25)
@@ -252,7 +252,7 @@ func TestAnalyticsHandler_GetCorridors(t *testing.T) {
 	} else {
 		// Wrapped in object
 		var response map[string]interface{}
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -275,14 +275,14 @@ func TestAnalyticsHandler_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create handler
 	handler := NewAnalyticsHandler(db, 0.25)
@@ -299,7 +299,7 @@ func TestAnalyticsHandler_Integration(t *testing.T) {
 		}
 
 		var flowMap analytics.FlowMap
-		if err := json.NewDecoder(w.Body).Decode(&flowMap); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&flowMap); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -320,7 +320,7 @@ func TestAnalyticsHandler_Integration(t *testing.T) {
 		}
 
 		var heatmap analytics.DwellHeatmap
-		if err := json.NewDecoder(w.Body).Decode(&heatmap); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&heatmap); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -352,7 +352,7 @@ func TestAnalyticsHandler_Integration(t *testing.T) {
 			}
 		} else {
 			var response map[string]interface{}
-			if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 			// Just verify we got a valid response
@@ -387,7 +387,7 @@ func TestAnalyticsHandler_Integration(t *testing.T) {
 		}
 
 		var flowMap analytics.FlowMap
-		if err := json.NewDecoder(w.Body).Decode(&flowMap); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&flowMap); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -405,7 +405,7 @@ func TestAnalyticsHandler_Integration(t *testing.T) {
 		}
 
 		var heatmap analytics.DwellHeatmap
-		if err := json.NewDecoder(w.Body).Decode(&heatmap); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&heatmap); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -423,7 +423,7 @@ func TestAnalyticsHandler_Integration(t *testing.T) {
 		}
 
 		var aliceHeatmap analytics.DwellHeatmap
-		if err := json.NewDecoder(w.Body).Decode(&aliceHeatmap); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&aliceHeatmap); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -440,14 +440,14 @@ func TestAnalyticsHandler_RegisterRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	handler := NewAnalyticsHandler(db, 0.25)
 
@@ -463,14 +463,14 @@ func TestAnalyticsHandler_ContentHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	handler := NewAnalyticsHandler(db, 0.25)
 
@@ -492,14 +492,14 @@ func TestAnalyticsHandler_ErrorHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	handler := NewAnalyticsHandler(db, 0.25)
 

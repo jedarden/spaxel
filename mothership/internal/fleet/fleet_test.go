@@ -85,7 +85,7 @@ func newTestRegistry(t *testing.T) *Registry {
 	if err != nil {
 		t.Fatalf("NewRegistry: %v", err)
 	}
-	t.Cleanup(func() { reg.Close() })
+	t.Cleanup(func() { reg.Close() }) //nolint:errcheck
 	return reg
 }
 

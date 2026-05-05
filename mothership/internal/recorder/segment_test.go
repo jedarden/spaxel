@@ -123,7 +123,7 @@ func TestWriteAndScan(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	f.Close()
+	f.Close() //nolint:errcheck
 
 	// Scan all records.
 	var scanned []struct {
@@ -167,7 +167,7 @@ func TestScanSegmentFrom(t *testing.T) {
 	WriteRecord(f, 1000, []byte("a"))
 	WriteRecord(f, 2000, []byte("b"))
 	WriteRecord(f, 3000, []byte("c"))
-	f.Close()
+	f.Close() //nolint:errcheck
 
 	// Scan from 2000 — should get "b" and "c".
 	var result [][]byte
@@ -202,7 +202,7 @@ func TestScanStopEarly(t *testing.T) {
 	WriteRecord(f, 1000, []byte("a"))
 	WriteRecord(f, 2000, []byte("b"))
 	WriteRecord(f, 3000, []byte("c"))
-	f.Close()
+	f.Close() //nolint:errcheck
 
 	count := 0
 	err = ScanSegment(path, func(_ int64, _ []byte) bool {
@@ -226,7 +226,7 @@ func TestScanEmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	f.Close() //nolint:errcheck
 
 	count := 0
 	err = ScanSegment(path, func(_ int64, _ []byte) bool {
@@ -257,7 +257,7 @@ func TestScanCorruptRecord(t *testing.T) {
 	binary.BigEndian.PutUint32(buf[:], 100)
 	f.Write(buf[:])
 	f.Write([]byte{0xFF, 0xFF})
-	f.Close()
+	f.Close() //nolint:errcheck
 
 	err = ScanSegment(path, func(_ int64, _ []byte) bool {
 		return true

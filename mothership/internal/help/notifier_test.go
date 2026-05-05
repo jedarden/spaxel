@@ -13,7 +13,7 @@ import (
 // TestNotifierFireAndRetrieve tests firing a notification and retrieving it.
 func TestNotifierFireAndRetrieve(t *testing.T) {
 	db := createTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {
@@ -58,7 +58,7 @@ func TestNotifierFireAndRetrieve(t *testing.T) {
 // TestNotifierAcknowledge tests acknowledging a notification.
 func TestNotifierAcknowledge(t *testing.T) {
 	db := createTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {
@@ -91,7 +91,7 @@ func TestNotifierAcknowledge(t *testing.T) {
 // TestNotifierQuietHours tests that notifications are suppressed during quiet hours.
 func TestNotifierQuietHours(t *testing.T) {
 	db := createTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {
@@ -158,7 +158,7 @@ func TestNotifierContentHelpers(t *testing.T) {
 // TestNotifierFireWithAction tests firing notifications with action buttons.
 func TestNotifierFireWithAction(t *testing.T) {
 	db := createTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {

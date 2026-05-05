@@ -168,7 +168,7 @@ func NewManager(dbPath string, tz *time.Location) (*Manager, error) {
 	}
 
 	if err := m.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -260,7 +260,7 @@ func (m *Manager) loadZones() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var enabled, isChildrenZone int
@@ -295,7 +295,7 @@ func (m *Manager) loadPortals() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var enabled int
@@ -873,7 +873,7 @@ func (m *Manager) GetRecentCrossings(limit int) []CrossingEvent {
 		log.Printf("[WARN] Failed to query crossings: %v", err)
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var events []CrossingEvent
 	for rows.Next() {
@@ -988,7 +988,7 @@ func (m *Manager) reconcileOccupancy() {
 		}
 		persistedOcc = append(persistedOcc, p)
 	}
-	rows.Close()
+	rows.Close() //nolint:errcheck
 
 	// Step 2: Compute net portal crossings since midnight
 	crossRows, err := m.db.Query(`
@@ -1000,7 +1000,7 @@ func (m *Manager) reconcileOccupancy() {
 		log.Printf("[WARN] Failed to query portal crossings since midnight: %v", err)
 		return
 	}
-	defer crossRows.Close()
+	defer crossRows.Close() //nolint:errcheck
 
 	netPerZone := make(map[string]int)
 	for crossRows.Next() {

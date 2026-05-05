@@ -64,7 +64,7 @@ func TestListZones(t *testing.T) {
 	}
 
 	var result []zoneWithOcc
-	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	if len(result) != 2 {
@@ -113,7 +113,7 @@ func TestListZonesEmpty(t *testing.T) {
 	}
 
 	var result []zoneWithOcc
-	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	if len(result) != 0 {
@@ -175,7 +175,7 @@ func TestCreateZone(t *testing.T) {
 			}
 
 			var created zoneWithOcc
-			if err := json.NewDecoder(rr.Body).Decode(&created); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&created); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 			// For auto-generated IDs, check prefix; otherwise check exact match
@@ -235,7 +235,7 @@ func TestCreateZoneInvalid(t *testing.T) {
 			}
 
 			var errResp map[string]string
-			if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode error: %v", err)
 			}
 			if errResp["error"] == "" {
@@ -296,7 +296,7 @@ func TestUpdateZone(t *testing.T) {
 			}
 
 			var updated zoneWithOcc
-			if err := json.NewDecoder(rr.Body).Decode(&updated); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&updated); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 			if updated.Name != tt.wantName {
@@ -311,7 +311,7 @@ func TestUpdateZone(t *testing.T) {
 			rr2 := httptest.NewRecorder()
 			r.ServeHTTP(rr2, req2)
 			var allZones []zoneWithOcc
-			json.NewDecoder(rr2.Body).Decode(&allZones)
+			json.NewDecoder(rr2.Body).Decode(&allZones) //nolint:errcheck
 			found := false
 			for _, z := range allZones {
 				if z.ID == tt.setup.ID {
@@ -412,7 +412,7 @@ func TestDeleteZone(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	r.ServeHTTP(rr2, req2)
 	var allZones []zoneWithOcc
-	json.NewDecoder(rr2.Body).Decode(&allZones)
+	json.NewDecoder(rr2.Body).Decode(&allZones) //nolint:errcheck
 	if len(allZones) != 1 {
 		t.Errorf("Expected 1 zone after delete, got %d", len(allZones))
 	}
@@ -497,7 +497,7 @@ func TestListPortals(t *testing.T) {
 	}
 
 	var result []portalWithZones
-	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	if len(result) != 1 {
@@ -544,7 +544,7 @@ func TestCreatePortal(t *testing.T) {
 	}
 
 	var created portalWithZones
-	if err := json.NewDecoder(rr.Body).Decode(&created); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&created); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	if created.ID != "door1" {
@@ -592,7 +592,7 @@ func TestCreatePortalAutoID(t *testing.T) {
 	}
 
 	var created portalWithZones
-	json.NewDecoder(rr.Body).Decode(&created)
+	json.NewDecoder(rr.Body).Decode(&created) //nolint:errcheck
 	if created.ID == "" {
 		t.Error("Expected auto-generated ID, got empty")
 	}
@@ -690,7 +690,7 @@ func TestUpdatePortal(t *testing.T) {
 	}
 
 	var result portalWithZones
-	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 	if result.Name != "New Door" {
@@ -787,7 +787,7 @@ func TestDeletePortal(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	r.ServeHTTP(rr2, req2)
 	var result []portalWithZones
-	json.NewDecoder(rr2.Body).Decode(&result)
+	json.NewDecoder(rr2.Body).Decode(&result) //nolint:errcheck
 	if len(result) != 0 {
 		t.Errorf("Expected 0 portals after delete, got %d", len(result))
 	}
@@ -873,7 +873,7 @@ func TestPortalNormalComputed(t *testing.T) {
 	}
 
 	var created portalWithZones
-	json.NewDecoder(rr.Body).Decode(&created)
+	json.NewDecoder(rr.Body).Decode(&created) //nolint:errcheck
 
 	// Normal should point in roughly +X direction
 	if created.NX <= 0 {
@@ -911,7 +911,7 @@ func TestZoneCRUDRoundTrip(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	r.ServeHTTP(rr2, req2)
 	var zonesList []zoneWithOcc
-	json.NewDecoder(rr2.Body).Decode(&zonesList)
+	json.NewDecoder(rr2.Body).Decode(&zonesList) //nolint:errcheck
 	if len(zonesList) != 1 {
 		t.Fatalf("After create: expected 1 zone, got %d", len(zonesList))
 	}
@@ -936,7 +936,7 @@ func TestZoneCRUDRoundTrip(t *testing.T) {
 	req4 := httptest.NewRequest("GET", "/api/zones", nil)
 	rr4 := httptest.NewRecorder()
 	r.ServeHTTP(rr4, req4)
-	json.NewDecoder(rr4.Body).Decode(&zonesList)
+	json.NewDecoder(rr4.Body).Decode(&zonesList) //nolint:errcheck
 	if zonesList[0].Name != "Updated" {
 		t.Errorf("After update: expected name 'Updated', got %s", zonesList[0].Name)
 	}
@@ -953,7 +953,7 @@ func TestZoneCRUDRoundTrip(t *testing.T) {
 	req6 := httptest.NewRequest("GET", "/api/zones", nil)
 	rr6 := httptest.NewRecorder()
 	r.ServeHTTP(rr6, req6)
-	json.NewDecoder(rr6.Body).Decode(&zonesList)
+	json.NewDecoder(rr6.Body).Decode(&zonesList) //nolint:errcheck
 	if len(zonesList) != 0 {
 		t.Errorf("After delete: expected 0 zones, got %d", len(zonesList))
 	}
@@ -990,7 +990,7 @@ func TestPortalCRUDRoundTrip(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	r.ServeHTTP(rr2, req2)
 	var portals []portalWithZones
-	json.NewDecoder(rr2.Body).Decode(&portals)
+	json.NewDecoder(rr2.Body).Decode(&portals) //nolint:errcheck
 	if len(portals) != 1 {
 		t.Fatalf("Expected 1 portal after create, got %d", len(portals))
 	}
@@ -1009,7 +1009,7 @@ func TestPortalCRUDRoundTrip(t *testing.T) {
 
 	// Verify updated
 	var updated portalWithZones
-	json.NewDecoder(rr3.Body).Decode(&updated)
+	json.NewDecoder(rr3.Body).Decode(&updated) //nolint:errcheck
 	if updated.Name != "Big Door" {
 		t.Errorf("Expected name 'Big Door', got %s", updated.Name)
 	}
@@ -1026,7 +1026,7 @@ func TestPortalCRUDRoundTrip(t *testing.T) {
 	req5 := httptest.NewRequest("GET", "/api/portals", nil)
 	rr5 := httptest.NewRecorder()
 	r.ServeHTTP(rr5, req5)
-	json.NewDecoder(rr5.Body).Decode(&portals)
+	json.NewDecoder(rr5.Body).Decode(&portals) //nolint:errcheck
 	if len(portals) != 0 {
 		t.Errorf("Expected 0 portals after delete, got %d", len(portals))
 	}

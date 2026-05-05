@@ -537,5 +537,5 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write(data)
+	_, _ = w.Write(data); //nolint:errcheck
 }

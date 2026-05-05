@@ -17,7 +17,7 @@ func TestHealthStore_New(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	if store == nil {
 		t.Fatal("store is nil")
@@ -37,7 +37,7 @@ func TestHealthStore_LogHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	entry := HealthLogEntry{
 		LinkID:           "link-001",
@@ -65,7 +65,7 @@ func TestHealthStore_LogHealthBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	entries := []HealthLogEntry{
 		{
@@ -112,7 +112,7 @@ func TestHealthStore_GetHealthHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Log entries at different times
 	now := time.Now()
@@ -153,7 +153,7 @@ func TestHealthStore_GetHealthHistory_NoData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	history, err := store.GetHealthHistory("nonexistent", time.Hour)
 	if err != nil {
@@ -173,7 +173,7 @@ func TestHealthStore_GetRecentHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Log entries for multiple links
 	for _, linkID := range []string{"link-001", "link-002"} {
@@ -212,7 +212,7 @@ func TestHealthStore_RecordAndGetFeedback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	event := FeedbackEventRecord{
 		LinkID:    "link-001",
@@ -254,7 +254,7 @@ func TestHealthStore_GetFeedbackEvents_Window(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Record events at different times
 	now := time.Now()
@@ -287,7 +287,7 @@ func TestHealthStore_PruneOldHealthLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Log an entry with a timestamp 2 seconds in the past
 	entry := HealthLogEntry{
@@ -323,7 +323,7 @@ func TestHealthStore_GetAllLinkIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Log entries for multiple links
 	for _, linkID := range []string{"link-003", "link-001", "link-002"} {
@@ -361,7 +361,7 @@ func TestHealthStore_DailyAggregation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Log entries for yesterday (use Unix timestamp directly)
 	yesterday := time.Now().Add(-24 * time.Hour)
@@ -402,7 +402,7 @@ func TestHealthStore_GetAllWeeklyTrends(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Log and aggregate for multiple links
 	yesterday := time.Now().Add(-24 * time.Hour)
@@ -437,7 +437,7 @@ func TestHealthStore_EmptyBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Empty batch should succeed
 	err = store.LogHealthBatch([]HealthLogEntry{})
@@ -454,7 +454,7 @@ func TestHealthStore_LogHealthEntryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHealthStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	original := HealthLogEntry{
 		LinkID:           "link-001",

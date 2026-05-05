@@ -72,7 +72,7 @@ func runMigrate(ctx context.Context, args []string) error {
 		if err != nil {
 			return fmt.Errorf("create migrator: %w", err)
 		}
-		defer migrator.Close()
+		defer migrator.Close() //nolint:errcheck
 
 		log.Printf("[INFO] Pruning old backups in %s", filepath.Join(*dataDir, "backups"))
 		migrator.PruneOldBackups()

@@ -163,7 +163,7 @@ func TestListSessions(t *testing.T) {
 			}
 
 			var resp map[string]interface{}
-			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 
@@ -348,7 +348,7 @@ func TestStartSession(t *testing.T) {
 			}
 
 			var resp map[string]interface{}
-			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 
@@ -385,7 +385,7 @@ func TestStopSession(t *testing.T) {
 				r.ServeHTTP(rr, req)
 
 				var resp map[string]interface{}
-				json.NewDecoder(rr.Body).Decode(&resp)
+				json.NewDecoder(rr.Body).Decode(&resp) //nolint:errcheck
 				return resp["session_id"].(string)
 			},
 			body:       stopSessionRequest{SessionID: "replay-1"},
@@ -475,7 +475,7 @@ func TestStopSession(t *testing.T) {
 			}
 
 			var resp map[string]interface{}
-			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 
@@ -512,7 +512,7 @@ func TestSeek(t *testing.T) {
 				r.ServeHTTP(rr, req)
 
 				var resp map[string]interface{}
-				json.NewDecoder(rr.Body).Decode(&resp)
+				json.NewDecoder(rr.Body).Decode(&resp) //nolint:errcheck
 				return resp["session_id"].(string)
 			},
 			body: seekRequest{
@@ -547,7 +547,7 @@ func TestSeek(t *testing.T) {
 				r.ServeHTTP(rr, req)
 
 				var resp map[string]interface{}
-				json.NewDecoder(rr.Body).Decode(&resp)
+				json.NewDecoder(rr.Body).Decode(&resp) //nolint:errcheck
 				return resp["session_id"].(string)
 			},
 			body: seekRequest{
@@ -574,7 +574,7 @@ func TestSeek(t *testing.T) {
 				r.ServeHTTP(rr, req)
 
 				var resp map[string]interface{}
-				json.NewDecoder(rr.Body).Decode(&resp)
+				json.NewDecoder(rr.Body).Decode(&resp) //nolint:errcheck
 				return resp["session_id"].(string)
 			},
 			body: seekRequest{
@@ -623,7 +623,7 @@ func TestSeek(t *testing.T) {
 			}
 
 			var resp map[string]interface{}
-			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 
@@ -665,7 +665,7 @@ func TestTune(t *testing.T) {
 				r.ServeHTTP(rr, req)
 
 				var resp map[string]interface{}
-				json.NewDecoder(rr.Body).Decode(&resp)
+				json.NewDecoder(rr.Body).Decode(&resp) //nolint:errcheck
 				return resp["session_id"].(string)
 			},
 			body: tuneRequest{
@@ -715,7 +715,7 @@ func TestTune(t *testing.T) {
 				r.ServeHTTP(rr, req)
 
 				var resp map[string]interface{}
-				json.NewDecoder(rr.Body).Decode(&resp)
+				json.NewDecoder(rr.Body).Decode(&resp) //nolint:errcheck
 				return resp["session_id"].(string)
 			},
 			body: tuneRequest{
@@ -793,7 +793,7 @@ func TestTune(t *testing.T) {
 			}
 
 			var resp map[string]interface{}
-			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 
@@ -827,7 +827,7 @@ func TestReplaySessionLifecycle(t *testing.T) {
 	}
 
 	var startResp map[string]interface{}
-	if err := json.NewDecoder(rr.Body).Decode(&startResp); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&startResp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode start response: %v", err)
 	}
 
@@ -875,7 +875,7 @@ func TestReplaySessionLifecycle(t *testing.T) {
 	}
 
 	var listResp map[string]interface{}
-	if err := json.NewDecoder(rr.Body).Decode(&listResp); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&listResp); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode list response: %v", err)
 	}
 
@@ -909,7 +909,7 @@ func TestReplaySessionLifecycle(t *testing.T) {
 		t.Fatalf("List after stop: expected 200, got %d", rr.Code)
 	}
 
-	json.NewDecoder(rr.Body).Decode(&listResp)
+	json.NewDecoder(rr.Body).Decode(&listResp) //nolint:errcheck
 	sessions, _ = listResp["sessions"].([]interface{})
 	if len(sessions) != 0 {
 		t.Errorf("Expected 0 sessions after stop, got %d", len(sessions))
@@ -935,7 +935,7 @@ func TestMultipleSessions(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	var resp1 map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&resp1)
+	json.NewDecoder(rr.Body).Decode(&resp1) //nolint:errcheck
 	sessionID1 := resp1["session_id"].(string)
 
 	startBody, _ = json.Marshal(startSessionRequest{
@@ -948,7 +948,7 @@ func TestMultipleSessions(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	var resp2 map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&resp2)
+	json.NewDecoder(rr.Body).Decode(&resp2) //nolint:errcheck
 	sessionID2 := resp2["session_id"].(string)
 
 	// Verify both sessions exist
@@ -957,7 +957,7 @@ func TestMultipleSessions(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	var listResp map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&listResp)
+	json.NewDecoder(rr.Body).Decode(&listResp) //nolint:errcheck
 	sessions, _ := listResp["sessions"].([]interface{})
 
 	if len(sessions) != 2 {
@@ -978,7 +978,7 @@ func TestMultipleSessions(t *testing.T) {
 	rr = httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
-	json.NewDecoder(rr.Body).Decode(&listResp)
+	json.NewDecoder(rr.Body).Decode(&listResp) //nolint:errcheck
 	sessions, _ = listResp["sessions"].([]interface{})
 
 	if len(sessions) != 1 {
@@ -999,7 +999,7 @@ func TestMultipleSessions(t *testing.T) {
 	rr = httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
-	json.NewDecoder(rr.Body).Decode(&listResp)
+	json.NewDecoder(rr.Body).Decode(&listResp) //nolint:errcheck
 	sessions, _ = listResp["sessions"].([]interface{})
 
 	if len(sessions) != 0 {
@@ -1305,7 +1305,7 @@ func TestJumpToTime(t *testing.T) {
 			}
 
 			var resp map[string]interface{}
-			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 

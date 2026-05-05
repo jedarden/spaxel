@@ -92,7 +92,7 @@ func ScanSegment(path string, fn func(recvTimeNS int64, frame []byte) bool) erro
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 	return scanReader(f, fn)
 }
 
@@ -102,7 +102,7 @@ func ScanSegmentFrom(path string, sinceNS int64, fn func(recvTimeNS int64, frame
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 	return scanReader(f, func(recvTimeNS int64, frame []byte) bool {
 		if recvTimeNS < sinceNS {
 			return true // skip

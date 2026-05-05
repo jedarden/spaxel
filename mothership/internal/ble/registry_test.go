@@ -12,14 +12,14 @@ func TestNewRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "ble.db")
 	reg, err := NewRegistry(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create registry: %v", err)
 	}
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Verify database file was created
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -29,7 +29,7 @@ func TestNewRegistry(t *testing.T) {
 
 func TestProcessRelayMessage(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create sample BLE observations
 	devices := []BLEObservation{
@@ -190,7 +190,7 @@ func TestDeviceTypeDetection(t *testing.T) {
 
 func TestArchiveStale(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create a device and process it
 	devices := []BLEObservation{
@@ -235,7 +235,7 @@ func TestArchiveStale(t *testing.T) {
 
 func TestPeople(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create a person
 	person, err := reg.CreatePerson("Alice", "#ff5722")
@@ -287,7 +287,7 @@ func TestPeople(t *testing.T) {
 
 func TestAssignToPerson(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create a person
 	person, _ := reg.CreatePerson("Alice", "#ff5722")
@@ -340,7 +340,7 @@ func TestAssignToPerson(t *testing.T) {
 
 func TestDeletePerson(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create a person and device
 	person, _ := reg.CreatePerson("Alice", "#ff5722")
@@ -374,7 +374,7 @@ func TestDeletePerson(t *testing.T) {
 
 func TestDetectPossibleDuplicates(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create two devices with the same name (MAC rotation scenario)
 	devices := []BLEObservation{
@@ -425,7 +425,7 @@ func TestDetectPossibleDuplicates(t *testing.T) {
 
 func TestMergeDevices(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create two devices
 	devices := []BLEObservation{
@@ -466,7 +466,7 @@ func TestMergeDevices(t *testing.T) {
 
 func TestArchiveDevice(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create a device
 	devices := []BLEObservation{
@@ -525,7 +525,7 @@ func TestRSSICache(t *testing.T) {
 
 func TestGetPeopleWithDevices(t *testing.T) {
 	reg := setupTestRegistry(t)
-	defer reg.Close()
+	defer reg.Close() //nolint:errcheck
 
 	// Create two people
 	person1, _ := reg.CreatePerson("Alice", "#ff5722")

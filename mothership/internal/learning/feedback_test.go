@@ -12,14 +12,14 @@ func TestNewFeedbackStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "learning.db")
 	store, err := NewFeedbackStore(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create feedback store: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Verify database file was created
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -29,7 +29,7 @@ func TestNewFeedbackStore(t *testing.T) {
 
 func TestRecordFeedback(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Record a true positive
 	feedback := FeedbackRecord{
@@ -62,7 +62,7 @@ func TestRecordFeedback(t *testing.T) {
 
 func TestGetUnprocessedFeedback(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Record multiple feedback entries
 	for i := 0; i < 3; i++ {
@@ -90,7 +90,7 @@ func TestGetUnprocessedFeedback(t *testing.T) {
 
 func TestMarkFeedbackProcessed(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Record feedback
 	feedback := FeedbackRecord{
@@ -133,7 +133,7 @@ func TestMarkFeedbackProcessed(t *testing.T) {
 
 func TestFalsePositiveFrameStorage(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Add false positive frame
 	frame := FalsePositiveFrame{
@@ -167,7 +167,7 @@ func TestFalsePositiveFrameStorage(t *testing.T) {
 
 func TestFalseNegativeFrameStorage(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Add false negative frame
 	frame := FalseNegativeFrame{
@@ -203,7 +203,7 @@ func TestFalseNegativeFrameStorage(t *testing.T) {
 
 func TestSaveAccuracyRecord(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	record := AccuracyRecord{
 		Week:       GetWeekString(time.Now()),
@@ -273,7 +273,7 @@ func TestAccuracyMetrics(t *testing.T) {
 
 func TestGetFeedbackStats(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Record various feedback types
 	types := []FeedbackType{TruePositive, FalsePositive, FalseNegative, TruePositive}
@@ -307,7 +307,7 @@ func TestGetFeedbackStats(t *testing.T) {
 
 func TestGetFeedbackByEvent(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Record feedback for specific event
 	store.RecordFeedback(FeedbackRecord{
@@ -358,7 +358,7 @@ func TestGetWeekString(t *testing.T) {
 
 func TestFeedbackProcessor(t *testing.T) {
 	store := setupTestFeedbackStore(t)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create processor
 	config := DefaultProcessorConfig()

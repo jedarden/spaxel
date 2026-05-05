@@ -32,7 +32,7 @@ func NewBaselineStore(dbPath string) (*BaselineStore, error) {
 	}
 
 	if err := store.initSchema(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -100,7 +100,7 @@ func (s *BaselineStore) SaveAllBaselines(baselines map[string]*BaselineSnapshot)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	now := time.Now().Unix()
 	stmt, err := tx.Prepare(`
@@ -110,7 +110,7 @@ func (s *BaselineStore) SaveAllBaselines(baselines map[string]*BaselineSnapshot)
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for linkID, snapshot := range baselines {
 		valuesJSON, err := json.Marshal(snapshot.Values)
@@ -168,7 +168,7 @@ func (s *BaselineStore) LoadAllBaselines() (map[string]*BaselineSnapshot, error)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	result := make(map[string]*BaselineSnapshot)
 	for rows.Next() {
@@ -204,7 +204,7 @@ func (s *BaselineStore) SaveDiurnal(linkID string, snapshot *DiurnalSnapshot) er
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	// Save meta
 	_, err = tx.Exec(`
@@ -223,7 +223,7 @@ func (s *BaselineStore) SaveDiurnal(linkID string, snapshot *DiurnalSnapshot) er
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for slot := 0; slot < DiurnalSlots; slot++ {
 		valuesJSON, err := json.Marshal(snapshot.SlotValues[slot])
@@ -260,7 +260,7 @@ func (s *BaselineStore) saveDiurnalTx(linkID string, snapshot *DiurnalSnapshot) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	// Save meta
 	_, err = tx.Exec(`
@@ -279,7 +279,7 @@ func (s *BaselineStore) saveDiurnalTx(linkID string, snapshot *DiurnalSnapshot) 
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for slot := 0; slot < DiurnalSlots; slot++ {
 		valuesJSON, err := json.Marshal(snapshot.SlotValues[slot])
@@ -330,7 +330,7 @@ func (s *BaselineStore) LoadDiurnal(linkID string, nSub int) (*DiurnalSnapshot, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var slot int
@@ -365,7 +365,7 @@ func (s *BaselineStore) LoadAllDiurnal(nSub int) (map[string]*DiurnalSnapshot, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	linkMetas := make(map[string]time.Time)
 	for rows.Next() {
@@ -480,7 +480,7 @@ func (s *BaselineStore) DeleteDiurnal(linkID string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	_, err = tx.Exec(`DELETE FROM diurnal_meta WHERE link_id = ?`, linkID)
 	if err != nil {

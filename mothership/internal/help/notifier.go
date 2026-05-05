@@ -217,7 +217,7 @@ func (n *Notifier) GetPendingNotifications() ([]FeatureNotification, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var notifications []FeatureNotification
 	for rows.Next() {

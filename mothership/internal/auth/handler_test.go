@@ -19,14 +19,14 @@ func TestHandler_StatusNotConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create handler
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Test status endpoint
 	req := httptest.NewRequest("GET", "/api/auth/status", nil)
@@ -39,7 +39,7 @@ func TestHandler_StatusNotConfigured(t *testing.T) {
 
 	// Should return pin_configured: false
 	var resp map[string]bool
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -54,14 +54,14 @@ func TestHandler_SetupPIN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create handler
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Test setup with valid PIN
 	reqBody := `{"pin": "1234"}`
@@ -120,13 +120,13 @@ func TestHandler_SetupPINInvalid(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer db.Close()
+			defer db.Close() //nolint:errcheck
 
 			h, err := NewHandler(Config{DB: db})
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer h.Close()
+			defer h.Close() //nolint:errcheck
 
 			reqBody := `{"pin": "` + tt.pin + `"}`
 			req := httptest.NewRequest("POST", "/api/auth/setup", strings.NewReader(reqBody))
@@ -146,13 +146,13 @@ func TestHandler_SetupPINAlreadyConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// First setup should succeed
 	reqBody := `{"pin": "1234"}`
@@ -181,13 +181,13 @@ func TestHandler_LoginInvalidPIN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Setup PIN first
 	reqBody := `{"pin": "1234"}`
@@ -213,13 +213,13 @@ func TestHandler_LoginValidPIN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Setup PIN first
 	reqBody := `{"pin": "1234"}`
@@ -259,13 +259,13 @@ func TestHandler_ValidateSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Setup and login
 	reqBody := `{"pin": "1234"}`
@@ -306,13 +306,13 @@ func TestHandler_ValidateSessionInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Test with no cookie
 	req := httptest.NewRequest("GET", "/api/test", nil)
@@ -336,13 +336,13 @@ func TestHandler_Logout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Setup and login
 	reqBody := `{"pin": "1234"}`
@@ -431,13 +431,13 @@ func TestInstallSecret_GeneratedOnFirstRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Verify secret was stored
 	secret, err := h.GetInstallSecret()
@@ -461,7 +461,7 @@ func TestInstallSecret_EnvVarOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	knownSecret := "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
 	t.Setenv("SPAXEL_INSTALL_SECRET", knownSecret)
@@ -470,7 +470,7 @@ func TestInstallSecret_EnvVarOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Verify the stored secret matches the env var
 	secret, err := h.GetInstallSecret()
@@ -489,7 +489,7 @@ func TestInstallSecret_EnvVarInvalidHex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	t.Setenv("SPAXEL_INSTALL_SECRET", "zzzz-invalid-hex")
 
@@ -514,7 +514,7 @@ func TestInstallSecret_EnvVarWrongLength(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer db.Close()
+			defer db.Close() //nolint:errcheck
 
 			t.Setenv("SPAXEL_INSTALL_SECRET", tt.secret)
 
@@ -548,14 +548,14 @@ func TestInstallSecret_PersistedAcrossRestarts(t *testing.T) {
 	}
 
 	// Close first handler
-	h1.Close()
+	h1.Close() //nolint:errcheck
 
 	// Second handler: should load same secret from DB (no env var set)
 	h2, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h2.Close()
+	defer h2.Close() //nolint:errcheck
 
 	secret2, err := h2.GetInstallSecret()
 	if err != nil {
@@ -572,13 +572,13 @@ func TestInstallSecret_NodeTokenDerivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	tests := []struct {
 		name  string
@@ -617,13 +617,13 @@ func TestHandleInstallSecret_FirstRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// First run (no PIN configured): should return secret without auth
 	req := httptest.NewRequest("GET", "/api/auth/install-secret", nil)
@@ -635,7 +635,7 @@ func TestHandleInstallSecret_FirstRun(t *testing.T) {
 	}
 
 	var resp map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -649,13 +649,13 @@ func TestHandleInstallSecret_AfterPINSet_Unauthorized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Configure PIN
 	reqBody := `{"pin": "1234"}`
@@ -679,13 +679,13 @@ func TestHandleInstallSecret_AfterPINSet_Authorized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Configure PIN and get session
 	reqBody := `{"pin": "1234"}`
@@ -717,7 +717,7 @@ func TestHandleInstallSecret_AfterPINSet_Authorized(t *testing.T) {
 	}
 
 	var resp map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -731,13 +731,13 @@ func TestHandler_ChangePIN_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Setup PIN first
 	reqBody := `{"pin": "1234"}`
@@ -772,7 +772,7 @@ func TestHandler_ChangePIN_Success(t *testing.T) {
 	}
 
 	var resp map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -815,13 +815,13 @@ func TestHandler_ChangePIN_WrongOldPIN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Setup PIN first
 	reqBody := `{"pin": "1234"}`
@@ -872,13 +872,13 @@ func TestHandler_ChangePIN_Unauthenticated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	h, err := NewHandler(Config{DB: db})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	// Setup PIN first
 	reqBody := `{"pin": "1234"}`
@@ -921,13 +921,13 @@ func TestHandler_ChangePIN_InvalidNewPIN(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer db.Close()
+			defer db.Close() //nolint:errcheck
 
 			h, err := NewHandler(Config{DB: db})
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer h.Close()
+			defer h.Close() //nolint:errcheck
 
 			// Setup PIN first
 			reqBody := `{"pin": "1234"}`

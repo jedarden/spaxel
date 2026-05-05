@@ -217,7 +217,7 @@ func (m *FeatureMonitor) getPersonsWithPredictionModels() []string {
 		log.Printf("[WARN] Failed to query prediction models: %v", err)
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var persons []string
 	for rows.Next() {

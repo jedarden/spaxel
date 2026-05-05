@@ -292,7 +292,7 @@ func NewEngine(dbPath string) (*Engine, error) {
 	}
 
 	if err := e.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -378,7 +378,7 @@ func (e *Engine) loadAutomations() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		a := &Automation{}
@@ -437,7 +437,7 @@ func (e *Engine) loadVolumes() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		v := &TriggerVolume{}
@@ -896,7 +896,7 @@ func (e *Engine) triggerAutomation(a *Automation, event Event, now time.Time, te
 	// Update fire count
 	a.FireCount++
 	a.LastFired = now
-	e.db.Exec(`UPDATE automations SET last_fired=?, fire_count=? WHERE id=?`,
+	_, _ = e.db.Exec(`UPDATE automations SET last_fired=?, fire_count=? WHERE id=?`,
 		now.UnixNano(), a.FireCount, a.ID)
 
 	// Build event data
@@ -1076,7 +1076,7 @@ func (e *Engine) executeWebhook(action Action, payload []byte, result *ActionRes
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 500 {
 		return fmt.Errorf("server error: status %d", resp.StatusCode)
@@ -1460,7 +1460,7 @@ func (e *Engine) GetRecentActionLog(limit int) []struct {
 		log.Printf("[WARN] Failed to query action log: %v", err)
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var results []struct {
 		AutomationID  string

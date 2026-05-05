@@ -80,7 +80,7 @@ func TestShutdown_AllSteps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create events table for the test
 	_, err = db.Exec(`
@@ -161,7 +161,7 @@ func TestShutdown_WithErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	mockBaseline := &mockBaselineFlusher{err: context.DeadlineExceeded}
 	mockRecording := &mockRecordingSyncer{err: context.DeadlineExceeded}

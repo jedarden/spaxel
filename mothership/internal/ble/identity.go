@@ -171,7 +171,7 @@ func (m *IdentityMatcher) triangulateAllDevices(now time.Time) []*TriangulatedDe
 		if processed[dev.Addr] {
 			// Update alias last_seen timestamp if this is an alias
 			if addr != dev.Addr {
-				m.registry.UpdateAliasLastSeen(addr)
+				_ = m.registry.UpdateAliasLastSeen(addr); //nolint:errcheck // best-effort
 			}
 			continue
 		}
@@ -188,7 +188,7 @@ func (m *IdentityMatcher) triangulateAllDevices(now time.Time) []*TriangulatedDe
 
 		// Update alias last_seen timestamp
 		if addr != dev.Addr {
-			m.registry.UpdateAliasLastSeen(addr)
+			_ = m.registry.UpdateAliasLastSeen(addr); //nolint:errcheck // best-effort
 		}
 
 		// Find most recent observation age

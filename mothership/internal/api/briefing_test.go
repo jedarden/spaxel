@@ -18,13 +18,13 @@ func TestBriefingHandler_GetBriefing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	handler, err := NewBriefingHandler(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Create a test briefing first
 	date := time.Now().Format("2006-01-02")
@@ -49,7 +49,7 @@ func TestBriefingHandler_GetBriefing(t *testing.T) {
 	}
 
 	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 		t.Fatal(err)
 	}
 
@@ -67,13 +67,13 @@ func TestBriefingHandler_GenerateBriefing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	handler, err := NewBriefingHandler(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	r := chi.NewRouter()
 	handler.RegisterRoutes(r)
@@ -102,13 +102,13 @@ func TestBriefingHandler_GetLatest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	handler, err := NewBriefingHandler(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	r := chi.NewRouter()
 	handler.RegisterRoutes(r)

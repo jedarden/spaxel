@@ -36,7 +36,7 @@ func NewWeightStore(path string) (*WeightStore, error) {
 	}
 
 	if err := store.initSchema(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -82,7 +82,7 @@ func (s *WeightStore) SaveWeights(weights *LearnedWeights) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO link_weights
@@ -93,7 +93,7 @@ func (s *WeightStore) SaveWeights(weights *LearnedWeights) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	now := time.Now()
 
@@ -124,7 +124,7 @@ func (s *WeightStore) SaveWeights(weights *LearnedWeights) error {
 	if err != nil {
 		return err
 	}
-	defer metaStmt.Close()
+	defer metaStmt.Close() //nolint:errcheck
 
 	_, err = metaStmt.Exec("last_save", now.Format(time.RFC3339))
 	if err != nil {
@@ -149,7 +149,7 @@ func (s *WeightStore) LoadWeights() (*LearnedWeights, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	weights.mu.Lock()
 	defer weights.mu.Unlock()

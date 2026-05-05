@@ -126,7 +126,7 @@ func TestListEvents_DefaultPagination(t *testing.T) {
 	}
 
 	var resp eventsResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("decode: %v", err)
 	}
 
@@ -154,7 +154,7 @@ func TestListEvents_CustomLimit(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if len(resp.Events) != 10 {
 		t.Errorf("got %d events, want 10", len(resp.Events))
@@ -177,7 +177,7 @@ func TestListEvents_LimitClampedToMax(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if len(resp.Events) != 100 {
 		t.Errorf("got %d events, want 100 (all events since <500)", len(resp.Events))
@@ -196,7 +196,7 @@ func TestListEvents_Empty(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if len(resp.Events) != 0 {
 		t.Errorf("got %d events, want 0", len(resp.Events))
@@ -224,7 +224,7 @@ func TestListEvents_DescendingOrder(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// Events should be in descending timestamp order
 	for i := 1; i < len(resp.Events); i++ {
@@ -259,7 +259,7 @@ func TestListEvents_FilterByType(t *testing.T) {
 			h.listEvents(w, req)
 
 			var resp eventsResponse
-			json.NewDecoder(w.Body).Decode(&resp)
+			json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 			if resp.TotalFiltered != tc.wantCount {
 				t.Errorf("total_filtered = %d, want %d", resp.TotalFiltered, tc.wantCount)
@@ -316,7 +316,7 @@ func TestListEvents_FilterByTypes(t *testing.T) {
 			}
 
 			var resp eventsResponse
-			json.NewDecoder(w.Body).Decode(&resp)
+			json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 			if resp.TotalFiltered != tc.wantCount {
 				t.Errorf("total_filtered = %d, want %d", resp.TotalFiltered, tc.wantCount)
@@ -383,7 +383,7 @@ func TestListEvents_TypesPagination(t *testing.T) {
 		h.listEvents(w, req)
 
 		var resp eventsResponse
-		json.NewDecoder(w.Body).Decode(&resp)
+		json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 		for _, ev := range resp.Events {
 			allIDs = append(allIDs, ev.ID)
@@ -424,7 +424,7 @@ func TestListEvents_TypesWithZoneAndPerson(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// All detection events have zone=Kitchen (seed correlates type and zone by i%5)
 	if resp.TotalFiltered != 20 {
@@ -454,7 +454,7 @@ func TestListEvents_CombinedThreeFilters(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// detection events where zone=Kitchen AND person=Alice
 	// seedEvents correlates type/zone/person by i%5: all detection events have zone=Kitchen, person=Alice
@@ -489,7 +489,7 @@ func TestListEvents_TypesTakesPrecedenceOverSimpleMode(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// Should return 20 system events (node_online doesn't exist in seeded data)
 	if resp.TotalFiltered != 20 {
@@ -515,7 +515,7 @@ func TestListEvents_FilterByZone(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Zone != "Kitchen" {
@@ -536,7 +536,7 @@ func TestListEvents_FilterByPerson(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Person != "Alice" {
@@ -559,7 +559,7 @@ func TestListEvents_FilterByAfter(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if resp.TotalFiltered != 6 { // events 4..9
 		t.Errorf("total_filtered = %d, want 6", resp.TotalFiltered)
@@ -597,7 +597,7 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	h.listEvents(w, req)
 
 	var page1 eventsResponse
-	json.NewDecoder(w.Body).Decode(&page1)
+	json.NewDecoder(w.Body).Decode(&page1) //nolint:errcheck
 
 	if len(page1.Events) != 30 {
 		t.Fatalf("page 1: got %d events, want 30", len(page1.Events))
@@ -615,7 +615,7 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	h.listEvents(w, req)
 
 	var page2 eventsResponse
-	json.NewDecoder(w.Body).Decode(&page2)
+	json.NewDecoder(w.Body).Decode(&page2) //nolint:errcheck
 
 	if len(page2.Events) != 30 {
 		t.Fatalf("page 2: got %d events, want 30", len(page2.Events))
@@ -635,7 +635,7 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	h.listEvents(w, req)
 
 	var page3 eventsResponse
-	json.NewDecoder(w.Body).Decode(&page3)
+	json.NewDecoder(w.Body).Decode(&page3) //nolint:errcheck
 
 	if len(page3.Events) != 30 {
 		t.Fatalf("page 3: got %d events, want 30", len(page3.Events))
@@ -647,7 +647,7 @@ func TestListEvents_CursorPagination(t *testing.T) {
 	h.listEvents(w, req)
 
 	var page4 eventsResponse
-	json.NewDecoder(w.Body).Decode(&page4)
+	json.NewDecoder(w.Body).Decode(&page4) //nolint:errcheck
 
 	if len(page4.Events) != 10 {
 		t.Fatalf("page 4: got %d events, want 10", len(page4.Events))
@@ -690,7 +690,7 @@ func TestListEvents_ConsistentPagination(t *testing.T) {
 	h.listEvents(w, req)
 
 	var all eventsResponse
-	json.NewDecoder(w.Body).Decode(&all)
+	json.NewDecoder(w.Body).Decode(&all) //nolint:errcheck
 
 	// Fetch same events via paginated requests
 	var paginated []*Event
@@ -705,7 +705,7 @@ func TestListEvents_ConsistentPagination(t *testing.T) {
 		h.listEvents(w, req)
 
 		var page eventsResponse
-		json.NewDecoder(w.Body).Decode(&page)
+		json.NewDecoder(w.Body).Decode(&page) //nolint:errcheck
 		paginated = append(paginated, page.Events...)
 		cursor = page.Cursor
 		if !page.HasMore {
@@ -739,7 +739,7 @@ func TestListEvents_CombinedFilters(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Type != "detection" {
@@ -786,7 +786,7 @@ func TestListEvents_FTS5Search(t *testing.T) {
 			h.listEvents(w, req)
 
 			var resp eventsResponse
-			json.NewDecoder(w.Body).Decode(&resp)
+			json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 			if resp.TotalFiltered != tc.wantCount {
 				t.Errorf("total_filtered = %d, want %d (query=%q)", resp.TotalFiltered, tc.wantCount, tc.query)
@@ -812,7 +812,7 @@ func TestListEvents_FTS5SearchPagination(t *testing.T) {
 	h.listEvents(w, req)
 
 	var page1 eventsResponse
-	json.NewDecoder(w.Body).Decode(&page1)
+	json.NewDecoder(w.Body).Decode(&page1) //nolint:errcheck
 
 	if len(page1.Events) != 10 {
 		t.Fatalf("page 1: got %d, want 10", len(page1.Events))
@@ -827,7 +827,7 @@ func TestListEvents_FTS5SearchPagination(t *testing.T) {
 	h.listEvents(w, req)
 
 	var page2 eventsResponse
-	json.NewDecoder(w.Body).Decode(&page2)
+	json.NewDecoder(w.Body).Decode(&page2) //nolint:errcheck
 
 	if len(page2.Events) != 10 {
 		t.Fatalf("page 2: got %d, want 10", len(page2.Events))
@@ -857,7 +857,7 @@ func TestListEvents_FTS5SearchWithFilter(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Type != "detection" {
@@ -881,7 +881,7 @@ func TestGetEvent_Found(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -935,7 +935,7 @@ func TestGetEvent_NotFound(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["error"] != "event not found" {
 		t.Errorf("error = %q, want 'event not found'", resp["error"])
 	}
@@ -959,7 +959,7 @@ func TestGetEvent_InvalidID(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["error"] != "invalid event id" {
 		t.Errorf("error = %q, want 'invalid event id'", resp["error"])
 	}
@@ -978,7 +978,7 @@ func TestGetEvent_HTTPHandler_Found(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -998,7 +998,7 @@ func TestGetEvent_HTTPHandler_Found(t *testing.T) {
 	}
 
 	var ev Event
-	json.NewDecoder(w.Body).Decode(&ev)
+	json.NewDecoder(w.Body).Decode(&ev) //nolint:errcheck
 
 	if ev.ID != eventID {
 		t.Errorf("id = %d, want %d", ev.ID, eventID)
@@ -1165,7 +1165,7 @@ func BenchmarkListEvents_FTS5_1000(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	base := time.Now()
 	for i := 0; i < 1000; i++ {
@@ -1189,7 +1189,7 @@ func BenchmarkListEvents_Pagination_1000(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer h.Close()
+	defer h.Close() //nolint:errcheck
 
 	base := time.Now()
 	for i := 0; i < 1000; i++ {
@@ -1218,7 +1218,7 @@ func TestFTSRebuildOnStartup(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		h.LogEvent("system", base.Add(time.Duration(i)*time.Second), "", "", 0, `{"rebuild":"test"}`, "info")
 	}
-	h.Close()
+	h.Close() //nolint:errcheck
 
 	// Drop the FTS table (simulating corruption)
 	_ = os.Remove(filepath.Join(dir, "events.db-wal"))
@@ -1229,7 +1229,7 @@ func TestFTSRebuildOnStartup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h2.Close()
+	defer h2.Close() //nolint:errcheck
 
 	// Search should still work after rebuild
 	req := httptest.NewRequest("GET", "/api/events?q=rebuild&limit=100", nil)
@@ -1237,7 +1237,7 @@ func TestFTSRebuildOnStartup(t *testing.T) {
 	h2.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if resp.TotalFiltered != 10 {
 		t.Errorf("after rebuild: total_filtered = %d, want 10", resp.TotalFiltered)
@@ -1260,7 +1260,7 @@ func TestListEvents_SinceParameter(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if resp.TotalFiltered != 6 { // events 4..9
 		t.Errorf("total_filtered = %d, want 6", resp.TotalFiltered)
@@ -1286,7 +1286,7 @@ func TestListEvents_UntilParameter(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if resp.TotalFiltered != 6 { // events 0..5
 		t.Errorf("total_filtered = %d, want 6", resp.TotalFiltered)
@@ -1313,7 +1313,7 @@ func TestListEvents_SinceAndUntil(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	if resp.TotalFiltered != 6 { // events 2..7
 		t.Errorf("total_filtered = %d, want 6", resp.TotalFiltered)
@@ -1348,7 +1348,7 @@ func TestListEvents_PersonIDAlias(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Person != "Alice" {
@@ -1370,7 +1370,7 @@ func TestListEvents_ZoneIDAlias(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Zone != "Kitchen" {
@@ -1392,7 +1392,7 @@ func TestListEvents_ZoneTakesPrecedence(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Zone != "Kitchen" {
@@ -1414,7 +1414,7 @@ func TestListEvents_PersonIDTakesPrecedence(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	for _, ev := range resp.Events {
 		if ev.Person != "Alice" {
@@ -1449,7 +1449,7 @@ func TestListEvents_SimpleModeFiltersSystemEvents(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// Should only return user-facing events (zone_entry, zone_exit, portal_crossing, fall_alert, anomaly, security_alert, sleep_session_end)
 	// Should exclude: node_online, node_offline, ota_update, baseline_changed, system
@@ -1488,7 +1488,7 @@ func TestListEvents_ExpertModeShowsAllEvents(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// Should return all events
 	if resp.TotalFiltered != 4 {
@@ -1534,7 +1534,7 @@ func TestListEvents_DefaultModeIsSimple(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// Should exclude system events in simple mode
 	for _, ev := range resp.Events {
@@ -1570,7 +1570,7 @@ func TestListEvents_ModeWithTypeFilter(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// Should return the requested system type even in simple mode when explicitly requested
 	if resp.TotalFiltered != 1 {
@@ -1612,7 +1612,7 @@ func TestListEvents_ModeWithCombinedFilters(t *testing.T) {
 	h.listEvents(w, req)
 
 	var resp eventsResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 
 	// Should only return zone_entry and zone_exit for Alice in Kitchen (exclude system events)
 	if resp.TotalFiltered != 2 {
@@ -1644,7 +1644,7 @@ func TestPostEventFeedback_ValidFeedbackCorrect(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -1672,7 +1672,7 @@ func TestPostEventFeedback_ValidFeedbackCorrect(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["ok"] != true {
 		t.Errorf("ok = %v, want true", resp["ok"])
 	}
@@ -1692,7 +1692,7 @@ func TestPostEventFeedback_ValidFeedbackIncorrect(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -1720,7 +1720,7 @@ func TestPostEventFeedback_ValidFeedbackIncorrect(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["ok"] != true {
 		t.Errorf("ok = %v, want true", resp["ok"])
 	}
@@ -1740,7 +1740,7 @@ func TestPostEventFeedback_ValidFeedbackMissed(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -1776,7 +1776,7 @@ func TestPostEventFeedback_ValidFeedbackMissed(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["ok"] != true {
 		t.Errorf("ok = %v, want true", resp["ok"])
 	}
@@ -1808,7 +1808,7 @@ func TestPostEventFeedback_EventNotFound(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["error"] != "event not found" {
 		t.Errorf("error = %q, want 'event not found'", resp["error"])
 	}
@@ -1840,7 +1840,7 @@ func TestPostEventFeedback_InvalidEventID(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["error"] != "invalid event id" {
 		t.Errorf("error = %q, want 'invalid event id'", resp["error"])
 	}
@@ -1860,7 +1860,7 @@ func TestPostEventFeedback_InvalidFeedbackType(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -1888,7 +1888,7 @@ func TestPostEventFeedback_InvalidFeedbackType(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if !strings.Contains(resp["error"], "invalid feedback type") {
 		t.Errorf("error = %q, want error containing 'invalid feedback type'", resp["error"])
 	}
@@ -1908,7 +1908,7 @@ func TestPostEventFeedback_InvalidRequestBody(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -1929,7 +1929,7 @@ func TestPostEventFeedback_InvalidRequestBody(t *testing.T) {
 	}
 
 	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck
 	if resp["error"] != "invalid request body" {
 		t.Errorf("error = %q, want 'invalid request body'", resp["error"])
 	}
@@ -1949,7 +1949,7 @@ func TestPostEventFeedback_WithFeedbackHandler(t *testing.T) {
 	h.listEvents(w, req)
 
 	var listResp eventsResponse
-	json.NewDecoder(w.Body).Decode(&listResp)
+	json.NewDecoder(w.Body).Decode(&listResp) //nolint:errcheck
 	if len(listResp.Events) == 0 {
 		t.Fatal("no events returned")
 	}
@@ -2042,7 +2042,7 @@ func TestListEvents_LoadMoreWith500Plus(t *testing.T) {
 	}
 
 	var page1 eventsResponse
-	if err := json.NewDecoder(w.Body).Decode(&page1); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&page1); err != nil { //nolint:errcheck
 		t.Fatalf("decode page 1: %v", err)
 	}
 
@@ -2069,7 +2069,7 @@ func TestListEvents_LoadMoreWith500Plus(t *testing.T) {
 	}
 
 	var page2 eventsResponse
-	if err := json.NewDecoder(w.Body).Decode(&page2); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&page2); err != nil { //nolint:errcheck
 		t.Fatalf("decode page 2: %v", err)
 	}
 

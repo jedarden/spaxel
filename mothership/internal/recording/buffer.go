@@ -99,7 +99,7 @@ func NewBuffer(path string, maxMB int, retention time.Duration) (*Buffer, error)
 
 	info, err := f.Stat()
 	if err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func NewBuffer(path string, maxMB int, retention time.Duration) (*Buffer, error)
 		if herr := b.readHeader(); herr == nil && b.headerValid() {
 			if info.Size() < fileSize {
 				if terr := f.Truncate(fileSize); terr != nil {
-					f.Close()
+					f.Close() //nolint:errcheck
 					return nil, terr
 				}
 			}
@@ -120,11 +120,11 @@ func NewBuffer(path string, maxMB int, retention time.Duration) (*Buffer, error)
 	b.oldestPos = 0
 	b.wrapPos = 0
 	if err := f.Truncate(fileSize); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 		return nil, err
 	}
 	if err := b.syncHeader(); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 		return nil, err
 	}
 	return b, nil

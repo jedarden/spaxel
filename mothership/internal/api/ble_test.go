@@ -51,7 +51,7 @@ func TestListBLEDevices(t *testing.T) {
 	})
 
 	// Create a person and assign one device
-	person, err := registry.CreatePerson("Alice", "#ff0000")
+	person, err := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 	if err != nil {
 		t.Fatalf("CreatePerson: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestListBLEDevices(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -102,7 +102,7 @@ func TestListBLEDevicesRegistered(t *testing.T) {
 	})
 
 	// Create a person and assign one device
-	person, _ := registry.CreatePerson("Alice", "#ff0000")
+	person, _ := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 	registry.UpdateDevice("AA:BB:CC:DD:EE:01", map[string]interface{}{
 		"person_id": person.ID,
 		"name":      "Alice's Phone",
@@ -118,7 +118,7 @@ func TestListBLEDevicesRegistered(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&result)
+	json.NewDecoder(rr.Body).Decode(&result) //nolint:errcheck
 	devices := result["devices"].([]interface{})
 
 	// Should only return the registered device
@@ -141,7 +141,7 @@ func TestListBLEDevicesDiscovered(t *testing.T) {
 	})
 
 	// Create a person and assign one device
-	person, _ := registry.CreatePerson("Alice", "#ff0000")
+	person, _ := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 	registry.UpdateDevice("AA:BB:CC:DD:EE:01", map[string]interface{}{
 		"person_id": person.ID,
 	})
@@ -156,7 +156,7 @@ func TestListBLEDevicesDiscovered(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&result)
+	json.NewDecoder(rr.Body).Decode(&result) //nolint:errcheck
 	devices := result["devices"].([]interface{})
 
 	// Should only return unregistered devices
@@ -180,7 +180,7 @@ func TestListBLEDevicesEmpty(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&result)
+	json.NewDecoder(rr.Body).Decode(&result) //nolint:errcheck
 	devices := result["devices"].([]interface{})
 	if len(devices) != 0 {
 		t.Errorf("Expected 0 devices, got %d", len(devices))
@@ -207,7 +207,7 @@ func TestGetBLEDevice(t *testing.T) {
 	}
 
 	var device ble.DeviceRecord
-	if err := json.NewDecoder(rr.Body).Decode(&device); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&device); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -287,7 +287,7 @@ func TestUpdateBLEDevice(t *testing.T) {
 			}
 
 			var device ble.DeviceRecord
-			if err := json.NewDecoder(rr.Body).Decode(&device); err != nil {
+			if err := json.NewDecoder(rr.Body).Decode(&device); err != nil { //nolint:errcheck
 				t.Fatalf("Failed to decode response: %v", err)
 			}
 
@@ -308,7 +308,7 @@ func TestUpdateBLEDeviceAssignToPerson(t *testing.T) {
 		{Addr: "AA:BB:CC:DD:EE:01", Name: "iPhone", MfrID: 0x004C, RSSIdBm: -45},
 	})
 
-	person, err := registry.CreatePerson("Alice", "#ff0000")
+	person, err := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 	if err != nil {
 		t.Fatalf("CreatePerson: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestUpdateBLEDeviceAssignToPerson(t *testing.T) {
 	}
 
 	var device ble.DeviceRecord
-	json.NewDecoder(rr.Body).Decode(&device)
+	json.NewDecoder(rr.Body).Decode(&device) //nolint:errcheck
 
 	if device.Label != "Alice's Phone" {
 		t.Errorf("Expected label 'Alice's Phone', got %s", device.Label)
@@ -340,7 +340,7 @@ func TestUpdateBLEDeviceAssignToPerson(t *testing.T) {
 	r.ServeHTTP(rr2, req2)
 
 	var device2 ble.DeviceRecord
-	json.NewDecoder(rr2.Body).Decode(&device2)
+	json.NewDecoder(rr2.Body).Decode(&device2) //nolint:errcheck
 
 	if device2.Label != "Alice's Phone" {
 		t.Errorf("After GET: expected label 'Alice's Phone', got %s", device2.Label)
@@ -496,7 +496,7 @@ func TestPreregisterBLEDevice(t *testing.T) {
 	}
 
 	var device ble.DeviceRecord
-	if err := json.NewDecoder(rr.Body).Decode(&device); err != nil {
+	if err := json.NewDecoder(rr.Body).Decode(&device); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -574,7 +574,7 @@ func TestGetDeviceHistory(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&result)
+	json.NewDecoder(rr.Body).Decode(&result) //nolint:errcheck
 
 	if result["mac"] != mac {
 		t.Errorf("Expected mac %s, got %v", mac, result["mac"])
@@ -611,8 +611,8 @@ func TestListPeople(t *testing.T) {
 	defer cleanup()
 
 	// Create people
-	registry.CreatePerson("Alice", "#ff0000")
-	registry.CreatePerson("Bob", "#0000ff")
+	registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
+	registry.CreatePerson("Bob", "#0000ff") //nolint:errcheck
 
 	r := setupBLERouter(h)
 	req := httptest.NewRequest("GET", "/api/people", nil)
@@ -624,7 +624,7 @@ func TestListPeople(t *testing.T) {
 	}
 
 	var people []map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&people)
+	json.NewDecoder(rr.Body).Decode(&people) //nolint:errcheck
 
 	if len(people) != 2 {
 		t.Fatalf("Expected 2 people, got %d", len(people))
@@ -648,7 +648,7 @@ func TestCreatePerson(t *testing.T) {
 	}
 
 	var person map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&person)
+	json.NewDecoder(rr.Body).Decode(&person) //nolint:errcheck
 
 	if person["name"] != "Charlie" {
 		t.Errorf("Expected name 'Charlie', got %v", person["name"])
@@ -678,7 +678,7 @@ func TestCreatePersonDefaultColor(t *testing.T) {
 	}
 
 	var person map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&person)
+	json.NewDecoder(rr.Body).Decode(&person) //nolint:errcheck
 
 	// Default color should be #3b82f6
 	if person["color"] != "#3b82f6" {
@@ -691,7 +691,7 @@ func TestGetPerson(t *testing.T) {
 	h, registry, cleanup := newTestBLEHandler(t)
 	defer cleanup()
 
-	person, _ := registry.CreatePerson("Alice", "#ff0000")
+	person, _ := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 
 	r := setupBLERouter(h)
 	req := httptest.NewRequest("GET", "/api/people/"+person.ID, nil)
@@ -703,7 +703,7 @@ func TestGetPerson(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&result)
+	json.NewDecoder(rr.Body).Decode(&result) //nolint:errcheck
 
 	if result["name"] != "Alice" {
 		t.Errorf("Expected name 'Alice', got %v", result["name"])
@@ -718,7 +718,7 @@ func TestUpdatePerson(t *testing.T) {
 	h, registry, cleanup := newTestBLEHandler(t)
 	defer cleanup()
 
-	person, _ := registry.CreatePerson("Alice", "#ff0000")
+	person, _ := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 
 	r := setupBLERouter(h)
 	body := `{"name": "Alice Smith", "color": "#ff5500"}`
@@ -732,7 +732,7 @@ func TestUpdatePerson(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&result)
+	json.NewDecoder(rr.Body).Decode(&result) //nolint:errcheck
 
 	if result["name"] != "Alice Smith" {
 		t.Errorf("Expected name 'Alice Smith', got %v", result["name"])
@@ -747,7 +747,7 @@ func TestDeletePerson(t *testing.T) {
 	h, registry, cleanup := newTestBLEHandler(t)
 	defer cleanup()
 
-	person, _ := registry.CreatePerson("Alice", "#ff0000")
+	person, _ := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 
 	r := setupBLERouter(h)
 	req := httptest.NewRequest("DELETE", "/api/people/"+person.ID, nil)

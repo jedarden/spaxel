@@ -136,10 +136,10 @@ func (h *TestHarness) WaitForHealth(ctx context.Context) error {
 			if err != nil {
 				continue
 			}
-			defer resp.Body.Close()
+			defer resp.Body.Close() //nolint:errcheck
 
 			var health HealthResponse
-			if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+			if err := json.NewDecoder(resp.Body).Decode(&health); err != nil { //nolint:errcheck
 				continue
 			}
 
@@ -208,10 +208,10 @@ func (h *TestHarness) GetNodes(ctx context.Context) ([]Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var nodes []NodeRecord
-	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil { //nolint:errcheck
 		return nil, err
 	}
 
@@ -293,10 +293,10 @@ func (h *TestHarness) GetEvents(ctx context.Context, eventType string, limit int
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var events EventsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil { //nolint:errcheck
 		return nil, err
 	}
 
@@ -329,7 +329,7 @@ func (h *TestHarness) WatchDashboardWS(ctx context.Context, duration time.Durati
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to dashboard WS: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	blobCounts := make([]int, 0)
 	ticker := time.NewTicker(1 * time.Second)
@@ -390,9 +390,9 @@ func (h *TestHarness) AssertDuringRun(ctx context.Context, duration time.Duratio
 			// Check health - assert status=='ok' throughout entire run
 			resp, err := http.Get(h.APIURL + "/healthz")
 			if err == nil {
-				defer resp.Body.Close()
+				defer resp.Body.Close() //nolint:errcheck
 				var health HealthResponse
-				if err := json.NewDecoder(resp.Body).Decode(&health); err == nil {
+				if err := json.NewDecoder(resp.Body).Decode(&health); err == nil { //nolint:errcheck
 					if health.Status != "ok" {
 						return fmt.Errorf("health check failed at %ds: status=%s", elapsed, health.Status)
 					}
@@ -444,7 +444,7 @@ func (h *TestHarness) SimulateNode(ctx context.Context, mac string, duration tim
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	// Send hello message
 	hello := map[string]interface{}{
@@ -616,10 +616,10 @@ func TestMothershipHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get health: %v", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var health HealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode health: %v", err)
 	}
 

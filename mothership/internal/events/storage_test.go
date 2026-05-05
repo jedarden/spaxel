@@ -12,7 +12,7 @@ import (
 // TestStorageSubscriberBasicFunctionality verifies the subscriber can be started and stopped.
 func TestStorageSubscriberBasicFunctionality(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	bus := NewEventBus(10)
 	subscriber := NewStorageSubscriber(db, bus)
@@ -64,7 +64,7 @@ func TestStorageSubscriberBasicFunctionality(t *testing.T) {
 // TestStorageSubscriberAllEventTypes verifies that all event types are correctly stored.
 func TestStorageSubscriberAllEventTypes(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	bus := NewEventBus(10)
 	subscriber := NewStorageSubscriber(db, bus)
@@ -407,7 +407,7 @@ func TestStorageSubscriberQueueOverflow(t *testing.T) {
 // TestStorageSubscriberConcurrentEvents verifies concurrent event handling.
 func TestStorageSubscriberConcurrentEvents(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	bus := NewEventBus(100)
 	subscriber := NewStorageSubscriber(db, bus)
@@ -463,7 +463,7 @@ func TestStorageSubscriberConcurrentEvents(t *testing.T) {
 // TestStorageSubscriberStats verifies the stats method returns correct information.
 func TestStorageSubscriberStats(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	bus := NewEventBus(10)
 	subscriber := NewStorageSubscriber(db, bus)
@@ -497,7 +497,7 @@ func TestStorageSubscriberStats(t *testing.T) {
 // TestStorageSubscriberDrain verifies remaining events are processed on stop.
 func TestStorageSubscriberDrain(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	bus := NewEventBus(10)
 	subscriber := NewStorageSubscriber(db, bus)
@@ -532,7 +532,7 @@ func TestStorageSubscriberDrain(t *testing.T) {
 // TestStorageSubscriberNonBlocking verifies publishing never blocks.
 func TestStorageSubscriberNonBlocking(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	bus := NewEventBus(10)
 	subscriber := NewStorageSubscriber(db, bus)
@@ -567,7 +567,7 @@ func TestStorageSubscriberNonBlocking(t *testing.T) {
 // TestStorageSubscriberMultipleSubscribers verifies multiple subscribers work together.
 func TestStorageSubscriberMultipleSubscribers(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	bus := NewEventBus(10)
 

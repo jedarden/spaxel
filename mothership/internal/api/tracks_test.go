@@ -35,7 +35,7 @@ func TestListTracks_NoBlobs(t *testing.T) {
 	}
 
 	var tracks []Track
-	if err := json.NewDecoder(w.Body).Decode(&tracks); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&tracks); err != nil { //nolint:errcheck
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestListTracks_WithBlobs(t *testing.T) {
 	}
 
 	var tracks []Track
-	if err := json.NewDecoder(w.Body).Decode(&tracks); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&tracks); err != nil { //nolint:errcheck
 		t.Fatalf("failed to decode response: %v", err)
 	}
 

@@ -51,7 +51,7 @@ func TestPublishEvent(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	// Create publisher with test server URL
 	cfg := Config{
@@ -118,7 +118,7 @@ func TestPublishEventDisabled(t *testing.T) {
 		callCount++
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	cfg := Config{
 		URL:     server.URL,
@@ -161,7 +161,7 @@ func TestRetryOn5xx(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		}
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	cfg := Config{
 		URL:        server.URL,
@@ -242,7 +242,7 @@ func TestTestWebhook(t *testing.T) {
 		receivedPayload = string(bodyBytes)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	cfg := Config{
 		URL:     server.URL,
@@ -308,7 +308,7 @@ func TestConcurrentPublishing(t *testing.T) {
 		callCount++
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	cfg := Config{
 		URL:     server.URL,
@@ -377,7 +377,7 @@ func TestAllEventTypes(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&payload)
+		json.NewDecoder(r.Body).Decode(&payload) //nolint:errcheck
 
 		mu.Lock()
 		eventType, _ := payload["event_type"].(string)
@@ -386,7 +386,7 @@ func TestAllEventTypes(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	cfg := Config{
 		URL:     server.URL,
