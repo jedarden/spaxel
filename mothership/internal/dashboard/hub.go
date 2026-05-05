@@ -550,6 +550,7 @@ type blobJSON struct {
 	PersonColor        string       `json:"person_color,omitempty"`
 	IdentityConfidence float64      `json:"identity_confidence,omitempty"`
 	IdentitySource     string       `json:"identity_source,omitempty"`
+	Replay             bool         `json:"replay"` // true when blob is from time-travel replay
 }
 
 // BroadcastLocUpdate sends localisation results to all dashboard clients.
@@ -1294,6 +1295,7 @@ func (h *Hub) BroadcastReplayBlobs(blobs []replay.BlobUpdate, timestampMS int64)
 			PersonColor:        b.PersonColor,
 			IdentityConfidence: b.IdentityConfidence,
 			IdentitySource:     b.IdentitySource,
+			Replay:             true, // Mark as replay blob
 		}
 	}
 

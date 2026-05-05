@@ -387,6 +387,20 @@
     border-color: var(--border-strong);
 }
 
+.tuning-btn-primary {
+    background: linear-gradient(135deg, var(--ok) 0%, var(--ok) 100%);
+    color: var(--slate-1);
+    border: 1px solid var(--ok);
+    font-weight: 600;
+}
+
+.tuning-btn-primary:hover {
+    background: var(--ok-muted);
+    border-color: var(--ok);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--ok-border);
+}
+
 /* ----- Responsive Adjustments ----- */
 @media (max-width: 768px) {
     .replay-control-bar {

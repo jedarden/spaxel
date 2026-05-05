@@ -634,6 +634,7 @@
 
                     <div class="tuning-actions">
                         <button id="tune-apply-btn" class="tuning-btn">Apply Parameters</button>
+                        <button id="tune-apply-live-btn" class="tuning-btn tuning-btn-primary">Apply to Live</button>
                         <button id="tune-reset-btn" class="tuning-btn tuning-btn-secondary">Reset to Live</button>
                     </div>
                 </div>
@@ -642,6 +643,7 @@
 
         // Attach event listeners
         panel.querySelector('#tune-apply-btn').addEventListener('click', applyTuningParams);
+        panel.querySelector('#tune-apply-live-btn').addEventListener('click', applyToLive);
         panel.querySelector('#tune-reset-btn').addEventListener('click', resetTuningParams);
 
         // Update value displays on slider change
@@ -722,6 +724,54 @@
             console.error('[Replay] Failed to tune parameters:', err);
             if (window.SpaxelApp) {
                 SpaxelApp.showToast('Failed to update parameters: ' + err.message, 'error');
+            }
+        });
+    }
+
+    function applyToLive() {
+        const panel = document.getElementById('replay-tuning-panel');
+        if (!panel) return;
+
+        const params = {
+            delta_rms_threshold: parseFloat(panel.querySelector('#tune-threshold').value),
+            tau_s: parseFloat(panel.querySelector('#tune-tau').value),
+            fresnel_decay: parseFloat(panel.querySelector('#tune-fresnel').value),
+            n_subcarriers: parseInt(panel.querySelector('#tune-subcarriers').value, 10),
+            breathing_sensitivity: parseFloat(panel.querySelector('#tune-breathing').value),
+        };
+
+        if (!state.activeSessionId) {
+            if (window.SpaxelApp) {
+                SpaxelApp.showToast('No active replay session. Cannot apply to live.', 'error');
+            }
+            return;
+        }
+
+        fetch('/api/replay/apply-live', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: state.activeSessionId
+            })
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Failed to apply to live: ' + res.statusText);
+            }
+            return res.json();
+        })
+        .then(data => {
+            console.log('[Replay] Applied to live:', data);
+            if (window.SpaxelApp) {
+                SpaxelApp.showToast('Parameters applied to live pipeline', 'success');
+            }
+            // Hide panel after applying
+            panel.style.display = 'none';
+        })
+        .catch(err => {
+            console.error('[Replay] Failed to apply to live:', err);
+            if (window.SpaxelApp) {
+                SpaxelApp.showToast('Failed to apply to live: ' + err.message, 'error');
             }
         });
     }
