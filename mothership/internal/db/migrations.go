@@ -83,6 +83,11 @@ func AllMigrations() []Migration {
 			Description: "add feature_notifications table for feature discovery",
 			Up:          migration_015_add_feature_notifications,
 		},
+		{
+			Version:     16,
+			Description: "add crossing_events table for portal crossing log",
+			Up:          migration_016_add_crossing_events_table,
+		},
 	}
 }
 
@@ -842,6 +847,27 @@ func migration_015_add_feature_notifications(tx *sql.Tx) error {
 		fired_at INTEGER NOT NULL,
 		acknowledged_at INTEGER
 	);
+	`
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// migration_016_add_crossing_events_table creates the crossing_events table
+// for portal crossing log with cursor pagination support.
+func migration_016_add_crossing_events_table(tx *sql.Tx) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS crossing_events (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		portal_id   TEXT NOT NULL,
+		blob_id     INTEGER,
+		direction   INTEGER NOT NULL,
+		from_zone   TEXT,
+		to_zone     TEXT,
+		timestamp   INTEGER NOT NULL,
+		identity    TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_crossing_events_portal ON crossing_events(portal_id, timestamp DESC);
+	CREATE INDEX IF NOT EXISTS idx_crossing_events_timestamp ON crossing_events(timestamp DESC);
 	`
 	_, err := tx.Exec(schema)
 	return err
