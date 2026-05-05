@@ -3,6 +3,7 @@ package zones
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -187,74 +188,6 @@ func NewManager(dbPath string, tz *time.Location) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) migrate() error {
-	_, err := m.db.Exec(`
-		CREATE TABLE IF NOT EXISTS zones (
-			id        TEXT PRIMARY KEY,
-			name     TEXT    NOT NULL DEFAULT '',
-			color    TEXT    NOT NULL DEFAULT '#4fc3f7',
-			min_x     REAL    NOT NULL DEFAULT 0,
-			min_y     REAL    NOT NULL DEFAULT 0,
-			min_z     REAL    NOT NULL DEFAULT 0,
-			max_x     REAL    NOT NULL DEFAULT 1,
-			max_y     REAL    NOT NULL DEFAULT 1,
-			max_z     REAL    NOT NULL DEFAULT 1,
-			enabled  INTEGER NOT NULL DEFAULT 1,
-			zone_type TEXT   NOT NULL DEFAULT 'normal',
-			is_children_zone INTEGER NOT NULL DEFAULT 0,
-			created_at INTEGER NOT NULL DEFAULT 0
-		);
-
-		CREATE TABLE IF NOT EXISTS portals (
-			id        TEXT PRIMARY KEY,
-			name     TEXT    NOT NULL DEFAULT '',
-			zone_a_id TEXT    NOT NULL DEFAULT '',
-			zone_b_id TEXT    NOT NULL DEFAULT '',
-			p1_x      REAL    NOT NULL DEFAULT 0,
-			p1_y      REAL    NOT NULL DEFAULT 0,
-			p1_z      REAL    NOT NULL DEFAULT 0,
-			p2_x      REAL    NOT NULL DEFAULT 0,
-			p2_y      REAL    NOT NULL DEFAULT 0,
-			p2_z      REAL    NOT NULL DEFAULT 0,
-			p3_x      REAL    NOT NULL DEFAULT 0,
-			p3_y      REAL    NOT NULL DEFAULT 0,
-			p3_z      REAL    NOT NULL DEFAULT 0,
-			n_x      REAL    NOT NULL DEFAULT 0,
-			n_y      REAL    NOT NULL DEFAULT 0,
-			n_z      REAL    NOT NULL DEFAULT 0,
-			width    REAL    NOT NULL DEFAULT 1,
-			height   REAL    NOT NULL DEFAULT 2,
-			enabled  INTEGER NOT NULL DEFAULT 1,
-			created_at INTEGER NOT NULL DEFAULT 0
-		);
-
-		CREATE TABLE IF NOT EXISTS crossing_events (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			portal_id   TEXT    NOT NULL,
-			blob_id     INTEGER NOT NULL,
-			direction  INTEGER NOT NULL,
-			from_zone  TEXT    NOT NULL,
-			to_zone    TEXT    NOT NULL,
-			timestamp  INTEGER NOT NULL,
-			identity   TEXT    DEFAULT ''
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_crossing_time ON crossing_events(timestamp);
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Add zone_type column if it doesn't exist (migration for existing databases)
-	m.db.Exec(`ALTER TABLE zones ADD COLUMN zone_type TEXT NOT NULL DEFAULT 'normal'`)
-	m.db.Exec(`ALTER TABLE zones ADD COLUMN is_children_zone INTEGER NOT NULL DEFAULT 0`)
-
-	// Add last_known_occupancy column for restart reconciliation
-	m.db.Exec(`ALTER TABLE zones ADD COLUMN last_known_occupancy INTEGER NOT NULL DEFAULT 0`)
-	m.db.Exec(`ALTER TABLE zones ADD COLUMN occupancy_updated_at INTEGER`)
-
-	return nil
-}
 
 func (m *Manager) loadZones() error {
 	rows, err := m.db.Query(`SELECT id, name, color, min_x, min_y, min_z, max_x, max_y, max_z, enabled, zone_type, is_children_zone, created_at FROM zones`)
@@ -1242,39 +1175,88 @@ type HistoryEntry struct {
 }
 
 // GetZoneHistory returns hourly occupancy buckets for a zone by querying
-// crossing_events from SQLite. It computes net entry count per hour window.
+// the zone_history table. Returns the most recent hourly buckets,
+// ordered from newest to oldest.
+//
+// Each bucket represents the occupancy snapshot taken at the start of each hour.
+// If no snapshot exists for an hour, a zero-count entry is returned.
 func (m *Manager) GetZoneHistory(zoneID string, hours int) []HistoryEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	now := time.Now()
-	entries := make([]HistoryEntry, hours)
+	now := time.Now().In(m.tz)
+	currentHourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, m.tz)
+	currentHourStartMs := currentHourStart.UnixMilli()
 
-	// Build hourly buckets from now backwards
-	for i := 0; i < hours; i++ {
-		bucketEnd := now.Add(-time.Duration(i) * time.Hour)
-		bucketStart := bucketEnd.Add(-time.Hour)
-		entries[i] = HistoryEntry{
-			Timestamp: bucketEnd.UnixNano() / 1e6,
-			Count:     0,
-			People:    []string{},
+	// Calculate the earliest hour timestamp to include
+	earliestHourStartMs := currentHourStartMs - int64(hours-1)*3600000
+
+	// Query zone_history for hourly snapshots
+	rows, err := m.db.Query(`
+		SELECT hour_ts, count, people
+		FROM zone_history
+		WHERE zone_id = ? AND hour_ts >= ?
+		ORDER BY hour_ts DESC
+	`, zoneID, earliestHourStartMs)
+	if err != nil {
+		log.Printf("[WARN] Failed to query zone history: %v", err)
+		result := make([]HistoryEntry, hours)
+		for i := 0; i < hours; i++ {
+			hourTs := currentHourStart.Add(time.Duration(-i) * time.Hour).UnixMilli()
+			result[i] = HistoryEntry{
+				Timestamp: hourTs,
+				Count:     0,
+				People:    []string{},
+			}
+		}
+		return result
+	}
+	defer rows.Close()
+
+	// Build map of hour_ts -> history entry
+	hourMap := make(map[int64]HistoryEntry)
+	for rows.Next() {
+		var hourTs int64
+		var count int
+		var peopleJSON string
+		if err := rows.Scan(&hourTs, &count, &peopleJSON); err != nil {
+			log.Printf("[WARN] Failed to scan zone history: %v", err)
+			continue
 		}
 
-		// Query net crossings into this zone during this bucket
-		var netIn int
-		row := m.db.QueryRow(`
-			SELECT
-				COALESCE(SUM(CASE WHEN to_zone = ? THEN 1 ELSE 0 END), 0)
-				- COALESCE(SUM(CASE WHEN from_zone = ? THEN 1 ELSE 0 END), 0)
-			FROM crossing_events
-			WHERE timestamp >= ? AND timestamp < ?
-		`, zoneID, zoneID, bucketStart.UnixMilli(), bucketEnd.UnixMilli())
-		if err := row.Scan(&netIn); err == nil && netIn > 0 {
-			entries[i].Count = netIn
+		// Parse people JSON
+		var people []string
+		if peopleJSON != "" && peopleJSON != "[]" {
+			if err := json.Unmarshal([]byte(peopleJSON), &people); err != nil {
+				people = []string{}
+			}
+		}
+
+		hourMap[hourTs] = HistoryEntry{
+			Timestamp: hourTs,
+			Count:     count,
+			People:    people,
 		}
 	}
 
-	return entries
+	// Build result array from newest to oldest, filling missing hours with zero entries
+	result := make([]HistoryEntry, hours)
+	for i := 0; i < hours; i++ {
+		hourTs := currentHourStart.Add(time.Duration(-i) * time.Hour).UnixMilli()
+
+		if entry, ok := hourMap[hourTs]; ok {
+			result[i] = entry
+		} else {
+			// No snapshot for this hour, return zero entry
+			result[i] = HistoryEntry{
+				Timestamp: hourTs,
+				Count:     0,
+				People:    []string{},
+			}
+		}
+	}
+
+	return result
 }
 
 // GetOccupancyStatus returns the status map for all zones.
