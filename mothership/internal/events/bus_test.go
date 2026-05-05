@@ -375,7 +375,7 @@ func TestEventBusClose(t *testing.T) {
 	ch1 := bus.Subscribe(BusMotionDetected)
 	ch2 := bus.Subscribe(BusFallDetected)
 
-	bus.Close()
+	bus.Close() //nolint:errcheck
 
 	// Channels should be closed
 	select {

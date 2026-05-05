@@ -157,7 +157,7 @@ func (h *Handler) initializeAuth() error {
 
 	// Print ONCE to stdout
 	secretHex := hex.EncodeToString(installSecret)
-	fmt.Fprintf(os.Stdout, "[SPAXEL] Installation secret: %s. Shown once — save to a safe place.\n", secretHex)
+	_, _ = fmt.Fprintf(os.Stdout, "[SPAXEL] Installation secret: %s. Shown once — save to a safe place.\n", secretHex) //nolint:errcheck // stdout write
 
 	return nil
 }
@@ -184,7 +184,7 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{
+	_ = json.NewEncoder(w).Encode(map[string]bool{ //nolint:errcheck // HTTP response
 		"pin_configured": pinBcrypt.Valid,
 	})
 }
@@ -214,7 +214,7 @@ func (h *Handler) handleInstallSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:errcheck // HTTP response
 		"install_secret": hex.EncodeToString(secret),
 	})
 }
@@ -296,7 +296,7 @@ func (h *Handler) handleSetup(w http.ResponseWriter, r *http.Request) {
 	h.setSessionCookie(w, sessionID)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"ok": "true"}) //nolint:errcheck // HTTP response
 }
 
 // handleLogin authenticates a user with their PIN.
@@ -354,7 +354,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[INFO] Successful login from %s", r.RemoteAddr)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"ok": "true"}) //nolint:errcheck // HTTP response
 }
 
 // handleLogout clears the session cookie and deletes the session.
@@ -385,7 +385,7 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[INFO] Logout from %s", r.RemoteAddr)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"ok": "true"}) //nolint:errcheck // HTTP response
 }
 
 // handleChangePIN changes the user's PIN.
@@ -468,7 +468,7 @@ func (h *Handler) handleChangePIN(w http.ResponseWriter, r *http.Request) {
 	// (session tokens are independent of PIN)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"ok": "true"}) //nolint:errcheck // HTTP response
 }
 
 // createSession creates a new session and returns the session ID.
@@ -761,7 +761,7 @@ func (h *Handler) Middleware(next http.Handler) http.Handler {
 		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws/") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "authentication required"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "authentication required"}) //nolint:errcheck // HTTP response
 			return
 		}
 

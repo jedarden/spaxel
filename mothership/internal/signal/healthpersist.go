@@ -34,7 +34,7 @@ func NewHealthStore(dbPath string) (*HealthStore, error) {
 	}
 
 	if err := store.initSchema(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -158,7 +158,7 @@ func (s *HealthStore) LogHealthBatch(entries []HealthLogEntry) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO link_health_log
@@ -168,7 +168,7 @@ func (s *HealthStore) LogHealthBatch(entries []HealthLogEntry) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for _, entry := range entries {
 		_, err = stmt.Exec(entry.LinkID, entry.Timestamp.Unix(), entry.SNR, entry.PhaseStability,
@@ -198,7 +198,7 @@ func (s *HealthStore) GetHealthHistory(linkID string, window time.Duration) ([]H
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var entries []HealthLogEntry
 	for rows.Next() {
@@ -230,7 +230,7 @@ func (s *HealthStore) GetRecentHealth(limit int) (map[string][]HealthLogEntry, e
 	if err != nil {
 		return nil, err
 	}
-	defer linkRows.Close()
+	defer linkRows.Close() //nolint:errcheck
 
 	var linkIDs []string
 	for linkRows.Next() {
@@ -270,7 +270,7 @@ func (s *HealthStore) GetRecentHealth(limit int) (map[string][]HealthLogEntry, e
 			entry.IsQuietPeriod = isQuiet != 0
 			entries = append(entries, entry)
 		}
-		rows.Close()
+		rows.Close() //nolint:errcheck
 
 		// Reverse to get chronological order
 		for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
@@ -329,7 +329,7 @@ func (s *HealthStore) GetWeeklyTrend(linkID string) ([]DailyHealthSummary, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var summaries []DailyHealthSummary
 	for rows.Next() {
@@ -365,7 +365,7 @@ func (s *HealthStore) GetAllWeeklyTrends() (map[string][]DailyHealthSummary, err
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	result := make(map[string][]DailyHealthSummary)
 	for rows.Next() {
@@ -414,7 +414,7 @@ func (s *HealthStore) GetFeedbackEvents(linkID string, window time.Duration) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var events []FeedbackEventRecord
 	for rows.Next() {
@@ -501,7 +501,7 @@ func (s *HealthStore) GetAllLinkIDs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var linkIDs []string
 	for rows.Next() {

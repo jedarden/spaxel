@@ -59,7 +59,7 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 		return nil, fmt.Errorf("create lock file: %w", err)
 	}
 	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		lockFile.Close()
+		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("acquire flock on %s (another instance running?): %w", lockPath, err)
 	}
 	done()
@@ -69,14 +69,14 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 	done = startup.Phase(2, "SQLite")
 	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)")
 	if err != nil {
-		lockFile.Close()
+		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	db.SetMaxOpenConns(1) // SQLite is single-writer
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		lockFile.Close()
+		db.Close() //nolint:errcheck
+		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
@@ -86,14 +86,14 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 	if err != nil || integrityResult != "ok" {
 		corruptPath := dbPath + ".corrupt." + time.Now().Format("20060102-150405")
 		log.Printf("[WARN] SQLite integrity check failed (%s), moving to %s and starting fresh", integrityResult, corruptPath)
-		db.Close()
+		db.Close() //nolint:errcheck
 		if renameErr := os.Rename(dbPath, corruptPath); renameErr != nil {
-			lockFile.Close()
+			lockFile.Close() //nolint:errcheck
 			return nil, fmt.Errorf("move corrupt database: %w", renameErr)
 		}
 		db, err = sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)")
 		if err != nil {
-			lockFile.Close()
+			lockFile.Close() //nolint:errcheck
 			return nil, fmt.Errorf("open fresh sqlite: %w", err)
 		}
 		db.SetMaxOpenConns(1)
@@ -108,16 +108,16 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 		BackupRetention: 90 * 24 * time.Hour,
 	})
 	if err != nil {
-		db.Close()
-		lockFile.Close()
+		db.Close() //nolint:errcheck
+		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("create migrator: %w", err)
 	}
 	migrator.Register(AllMigrations()...)
 
 	current, err := migrator.CurrentVersion(ctx)
 	if err != nil {
-		db.Close()
-		lockFile.Close()
+		db.Close() //nolint:errcheck
+		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("get current version: %w", err)
 	}
 
@@ -128,8 +128,8 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 	}
 
 	if err := migrator.Migrate(ctx); err != nil {
-		db.Close()
-		lockFile.Close()
+		db.Close() //nolint:errcheck
+		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
 
@@ -147,8 +147,8 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 	startup.CheckTimeout(ctx)
 	done = startup.Phase(4, "Config & secrets")
 	if err := ensureInstallSecret(ctx, db); err != nil {
-		db.Close()
-		lockFile.Close()
+		db.Close() //nolint:errcheck
+		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("ensure install secret: %w", err)
 	}
 	done()
@@ -195,7 +195,7 @@ func RunMigrations(dataDir, dbName string) error {
 	if err != nil {
 		return err
 	}
-	defer migrator.Close()
+	defer migrator.Close() //nolint:errcheck
 
 	migrator.Register(AllMigrations()...)
 
@@ -235,7 +235,7 @@ func CurrentVersion(dataDir, dbName string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer migrator.Close()
+	defer migrator.Close() //nolint:errcheck
 
 	return migrator.CurrentVersion(ctx)
 }

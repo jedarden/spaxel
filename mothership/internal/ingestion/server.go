@@ -188,6 +188,16 @@ func NewServer() *Server {
 	}
 }
 
+// writeWSMessage sends a WebSocket message with error logging.
+// Returns true if successful, false otherwise.
+func writeWSMessage(conn *websocket.Conn, messageTyp int, data []byte) bool {
+	if err := conn.WriteMessage(messageTyp, data); err != nil {
+		log.Printf("[WARN] WebSocket write error: %v", err)
+		return false
+	}
+	return true
+}
+
 // SetDashboardBroadcaster sets the callback for broadcasting CSI frames
 func (s *Server) SetDashboardBroadcaster(broadcaster CSIBroadcaster) {
 	s.mu.Lock()
@@ -445,21 +455,21 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		log.Printf("[WARN] Failed to read hello: %v", err)
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		return
 	}
 
 	parsed, err := ParseJSONMessage(msg)
 	if err != nil {
 		s.sendReject(conn, "invalid hello format")
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		return
 	}
 
 	hello, ok := parsed.(*HelloMessage)
 	if !ok {
 		s.sendReject(conn, "expected hello first")
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		return
 	}
 
@@ -486,7 +496,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 					log.Printf("[WARN] Node %s rejected: invalid token", hello.MAC)
 				}
 				s.sendReject(conn, "invalid_token")
-				conn.Close()
+				conn.Close() //nolint:errcheck
 				return
 			}
 		}
@@ -494,7 +504,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	if existing, exists := s.connections[hello.MAC]; exists {
-		existing.Conn.Close()
+		existing.Conn.Close() //nolint:errcheck
 	}
 	s.connections[hello.MAC] = nc
 	s.malformedCounts[hello.MAC] = &malformedCounter{}
@@ -539,7 +549,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 // handleMessages processes incoming WebSocket messages
 func (s *Server) handleMessages(nc *NodeConnection) {
 	defer func() {
-		nc.Conn.Close()
+		nc.Conn.Close() //nolint:errcheck
 		s.mu.Lock()
 		delete(s.connections, nc.MAC)
 		delete(s.malformedCounts, nc.MAC)
@@ -764,7 +774,7 @@ func (s *Server) recordMalformed(mac string) {
 			// Send close message with specific error text
 			nc.Conn.WriteMessage(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Excessive malformed frames — possible firmware bug"))
-			nc.Conn.Close()
+			nc.Conn.Close() //nolint:errcheck
 			nc.writeMu.Unlock()
 		}
 	}
@@ -852,7 +862,7 @@ func (s *Server) Shutdown(ctx context.Context) {
 	for mac, nc := range s.connections {
 		nc.writeMu.Lock()
 		nc.Conn.WriteMessage(websocket.TextMessage, data)
-		nc.Conn.Close()
+		nc.Conn.Close() //nolint:errcheck
 		nc.writeMu.Unlock()
 		delete(s.connections, mac)
 	}
@@ -872,7 +882,7 @@ func (s *Server) CloseAllConnections() error {
 		// Send normal close frame (1000)
 		nc.Conn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "mothership shutting down"))
-		nc.Conn.Close()
+		nc.Conn.Close() //nolint:errcheck
 		nc.writeMu.Unlock()
 		delete(s.connections, mac)
 	}

@@ -26,7 +26,7 @@ func setupManager(t *testing.T, tz *time.Location) (*Manager, func()) {
 		t.Fatalf("NewManager: %v", err)
 	}
 	cleanup := func() {
-		m.Close()
+		m.Close() //nolint:errcheck
 		os.Remove(dbPath)
 	}
 	return m, cleanup
@@ -662,14 +662,14 @@ func TestEndToEnd_RestoreOccupancyAfterRestart(t *testing.T) {
 	if err := m1.PersistOccupancy(); err != nil {
 		t.Fatalf("PersistOccupancy: %v", err)
 	}
-	m1.Close()
+	m1.Close() //nolint:errcheck
 
 	// Phase 2: "Restart" — open same DB, reconcile
 	m2, err := NewManager(dbPath, tz)
 	if err != nil {
 		t.Fatalf("NewManager (phase 2): %v", err)
 	}
-	defer m2.Close()
+	defer m2.Close() //nolint:errcheck
 
 	occ := m2.GetZoneOccupancy("kitchen")
 	if occ == nil {
@@ -733,14 +733,14 @@ func TestEndToEnd_RestoreWithCrossings(t *testing.T) {
 		ToZone:    "hallway",
 		Timestamp: now,
 	})
-	m1.Close()
+	m1.Close() //nolint:errcheck
 
 	// Phase 2: Restart and reconcile
 	m2, err := NewManager(dbPath, tz)
 	if err != nil {
 		t.Fatalf("NewManager (restart): %v", err)
 	}
-	defer m2.Close()
+	defer m2.Close() //nolint:errcheck
 
 	kitchenOcc := m2.GetZoneOccupancy("kitchen")
 	if kitchenOcc == nil {

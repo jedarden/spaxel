@@ -194,7 +194,7 @@ func (m *Migrator) applyMigration(ctx context.Context, mig Migration) error {
 
 	defer func() {
 		if tx != nil {
-			tx.Rollback()
+			_ = tx.Rollback() //nolint:errcheck
 		}
 	}()
 

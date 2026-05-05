@@ -235,7 +235,7 @@ func NewRegistry(dbPath string) (*Registry, error) {
 		rssiCache: NewRSSICache(30 * time.Second),
 	}
 	if err := r.migrate(); err != nil {
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -538,7 +538,7 @@ func (r *Registry) GetDevices(includeArchived bool) ([]DeviceRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var devices []DeviceRecord
 	for rows.Next() {
@@ -590,7 +590,7 @@ func (r *Registry) GetRegisteredDevices(includeArchived bool) ([]DeviceRecord, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var devices []DeviceRecord
 	for rows.Next() {
@@ -626,7 +626,7 @@ func (r *Registry) GetDiscoveredDevices(includeArchived bool) ([]DeviceRecord, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var devices []DeviceRecord
 	for rows.Next() {
@@ -657,7 +657,7 @@ func (r *Registry) GetDeviceSightingHistory(mac string, limit int) ([]SightingHi
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var entries []SightingHistoryEntry
 	for rows.Next() {
@@ -766,7 +766,7 @@ func (r *Registry) GetDevicesSeenInHours(hours int, includeArchived bool) ([]Dev
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var devices []DeviceRecord
 	for rows.Next() {
@@ -841,7 +841,7 @@ func (r *Registry) GetPeople() ([]Person, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var people []Person
 	for rows.Next() {
@@ -912,7 +912,7 @@ func (r *Registry) GetPersonDevices(personID string) ([]DeviceRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var devices []DeviceRecord
 	for rows.Next() {
@@ -1030,7 +1030,7 @@ func (r *Registry) MergeDevices(mac1, mac2 string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	var device2Name, device2PersonID sql.NullString
 	err = tx.QueryRow(`SELECT name, person_id FROM ble_devices WHERE mac = ?`, mac2).Scan(&device2Name, &device2PersonID)
@@ -1039,10 +1039,10 @@ func (r *Registry) MergeDevices(mac1, mac2 string) error {
 	}
 
 	if device2Name.Valid && device2Name.String != "" {
-		tx.Exec(`UPDATE ble_devices SET name = ? WHERE mac = ? AND name = ''`, device2Name.String, mac1)
+		_, _ = tx.Exec(`UPDATE ble_devices SET name = ? WHERE mac = ? AND name = ''`, device2Name.String, mac1)
 	}
 	if device2PersonID.Valid && device2PersonID.String != "" {
-		tx.Exec(`UPDATE ble_devices SET person_id = ? WHERE mac = ? AND person_id IS NULL`, device2PersonID.String, mac1)
+		_, _ = tx.Exec(`UPDATE ble_devices SET person_id = ? WHERE mac = ? AND person_id IS NULL`, device2PersonID.String, mac1)
 	}
 
 	if _, err := tx.Exec(`DELETE FROM ble_devices WHERE mac = ?`, mac2); err != nil {
@@ -1099,7 +1099,7 @@ func (r *Registry) GetAllPersonDevices() ([]DeviceRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var devices []DeviceRecord
 	for rows.Next() {
@@ -1221,7 +1221,7 @@ func (r *Registry) GetAliases(canonicalAddr string) ([]BLEDeviceAlias, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var aliases []BLEDeviceAlias
 	for rows.Next() {
@@ -1247,7 +1247,7 @@ func (r *Registry) GetAllAliases() (map[string][]BLEDeviceAlias, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	result := make(map[string][]BLEDeviceAlias)
 	for rows.Next() {

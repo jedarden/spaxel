@@ -18,14 +18,14 @@ func openTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	t.Cleanup(func() { os.RemoveAll(tmpDir) }) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { db.Close() }) //nolint:errcheck
 
 	// Create required tables
 	_, err = db.Exec(`
@@ -58,13 +58,13 @@ func newTestLearner(t *testing.T) *PatternLearner {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	t.Cleanup(func() { os.RemoveAll(tmpDir) }) //nolint:errcheck
 
 	pl, err := NewPatternLearner(filepath.Join(tmpDir, "patterns.db"))
 	if err != nil {
 		t.Fatalf("NewPatternLearner: %v", err)
 	}
-	t.Cleanup(func() { pl.Close() })
+	t.Cleanup(func() { pl.Close() }) //nolint:errcheck
 	return pl
 }
 
@@ -254,7 +254,7 @@ func TestPatternLearner_ObserveAndUpdate_Persists(t *testing.T) {
 	pl := newTestLearner(t)
 
 	for i := 0; i < 50; i++ {
-		if err := pl.ObserveAndUpdate("zone-1", 12, 0, 2, 0); err != nil {
+		if err := pl.ObserveAndUpdate("zone-1", 12, 0, 2, 0); err != nil { //nolint:errcheck
 			t.Fatalf("ObserveAndUpdate: %v", err)
 		}
 	}
@@ -282,7 +282,7 @@ func TestPatternLearner_ObserveAndUpdate_WithVariance(t *testing.T) {
 	pl := newTestLearner(t)
 
 	for i := 0; i < 50; i++ {
-		if err := pl.ObserveAndUpdate("zone-1", 12, 0, i%5, 0); err != nil {
+		if err := pl.ObserveAndUpdate("zone-1", 12, 0, i%5, 0); err != nil { //nolint:errcheck
 			t.Fatalf("ObserveAndUpdate: %v", err)
 		}
 	}
@@ -305,7 +305,7 @@ func TestPatternLearner_OutlierProtection(t *testing.T) {
 	pl := newTestLearner(t)
 
 	for i := 0; i < 50; i++ {
-		if err := pl.ObserveAndUpdate("zone-1", 12, 0, 0, 0); err != nil {
+		if err := pl.ObserveAndUpdate("zone-1", 12, 0, 0, 0); err != nil { //nolint:errcheck
 			t.Fatalf("ObserveAndUpdate: %v", err)
 		}
 	}
@@ -315,7 +315,7 @@ func TestPatternLearner_OutlierProtection(t *testing.T) {
 	countBefore := slotBefore.SampleCount
 
 	// Outlier should be skipped
-	if err := pl.ObserveAndUpdate("zone-1", 12, 0, 100, 0.6); err != nil {
+	if err := pl.ObserveAndUpdate("zone-1", 12, 0, 100, 0.6); err != nil { //nolint:errcheck
 		t.Fatalf("ObserveAndUpdate: %v", err)
 	}
 
@@ -332,7 +332,7 @@ func TestPatternLearner_OutlierProtection_AfterMultipleAnomalies(t *testing.T) {
 	pl := newTestLearner(t)
 
 	for i := 0; i < 50; i++ {
-		pl.ObserveAndUpdate("zone-1", 12, 0, 1, 0)
+		pl.ObserveAndUpdate("zone-1", 12, 0, 1, 0) //nolint:errcheck
 	}
 
 	slot := pl.GetPattern("zone-1", 12, 0)
@@ -340,7 +340,7 @@ func TestPatternLearner_OutlierProtection_AfterMultipleAnomalies(t *testing.T) {
 
 	// Inject 3 synthetic anomalies
 	for i := 0; i < 3; i++ {
-		pl.ObserveAndUpdate("zone-1", 12, 0, 50, 1.0)
+		pl.ObserveAndUpdate("zone-1", 12, 0, 50, 1.0) //nolint:errcheck
 	}
 
 	slot = pl.GetPattern("zone-1", 12, 0)
@@ -378,7 +378,7 @@ func TestPatternLearner_AnomalyScoring(t *testing.T) {
 	pl.SetLearningStartTime(time.Now().Add(-8 * 24 * time.Hour))
 
 	for i := 0; i < 50; i++ {
-		pl.ObserveAndUpdate("zone-1", 3, 0, 0, 0)
+		pl.ObserveAndUpdate("zone-1", 3, 0, 0, 0) //nolint:errcheck
 	}
 
 	result := pl.ComputeAnomalyScore("zone-1", 3, 0, 0)
@@ -406,7 +406,7 @@ func TestPatternLearner_AnomalyScoring_ZScoreBased(t *testing.T) {
 	pl.SetLearningStartTime(time.Now().Add(-8 * 24 * time.Hour))
 
 	for i := 0; i < 50; i++ {
-		pl.ObserveAndUpdate("zone-1", 14, 0, 1+i%2, 0)
+		pl.ObserveAndUpdate("zone-1", 14, 0, 1+i%2, 0) //nolint:errcheck
 	}
 
 	slot := pl.GetPattern("zone-1", 14, 0)
@@ -429,8 +429,8 @@ func TestPatternLearner_GetPatterns(t *testing.T) {
 	pl := newTestLearner(t)
 
 	for i := 0; i < 50; i++ {
-		pl.ObserveAndUpdate("zone-1", 12, 0, 2, 0)
-		pl.ObserveAndUpdate("zone-2", 12, 0, 3, 0)
+		pl.ObserveAndUpdate("zone-1", 12, 0, 2, 0) //nolint:errcheck
+		pl.ObserveAndUpdate("zone-2", 12, 0, 3, 0) //nolint:errcheck
 	}
 
 	all := pl.GetPatterns("")
@@ -452,7 +452,7 @@ func TestPatternLearner_SurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	t.Cleanup(func() { os.RemoveAll(tmpDir) }) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "patterns.db")
 
@@ -465,13 +465,13 @@ func TestPatternLearner_SurvivesRestart(t *testing.T) {
 		pl1.ObserveAndUpdate("zone-1", 12, 0, 2, 0)
 	}
 
-	pl1.Close()
+	pl1.Close() //nolint:errcheck
 
 	pl2, err := NewPatternLearner(dbPath)
 	if err != nil {
 		t.Fatalf("NewPatternLearner after restart: %v", err)
 	}
-	defer pl2.Close()
+	defer pl2.Close() //nolint:errcheck
 
 	if !pl2.IsSlotReady("zone-1", 12, 0) {
 		t.Error("expected slot to be ready after reload from DB")
@@ -511,7 +511,7 @@ func TestPatternLearner_AlertThresholds(t *testing.T) {
 			pl := newTestLearner(t)
 
 			for _, obs := range tt.observations {
-				pl.ObserveAndUpdate("zone-1", 14, 0, obs, 0)
+				pl.ObserveAndUpdate("zone-1", 14, 0, obs, 0) //nolint:errcheck
 			}
 
 			result := pl.ComputeAnomalyScore("zone-1", 14, 0, tt.testCount)
@@ -531,7 +531,7 @@ func TestPatternLearner_NaNInf_NeverProduced(t *testing.T) {
 	observations := []int{0, 100, 0, 100, 0, 100, 1, 99, 50, 0}
 	for i := 0; i < 5; i++ {
 		for _, obs := range observations {
-			pl.ObserveAndUpdate("zone-1", 14, 0, obs, 0)
+			pl.ObserveAndUpdate("zone-1", 14, 0, obs, 0) //nolint:errcheck
 		}
 	}
 
@@ -562,7 +562,7 @@ func TestPatternLearner_NoAlertsDuringColdStart(t *testing.T) {
 	pl := newTestLearner(t)
 
 	for i := 0; i < 100; i++ {
-		pl.ObserveAndUpdate("zone-1", 3, 0, 50, 0)
+		pl.ObserveAndUpdate("zone-1", 3, 0, 50, 0) //nolint:errcheck
 	}
 
 	if !pl.IsColdStart() {
@@ -618,7 +618,7 @@ func TestPatternLearner_HourlyUpdate_OutlierProtectionInUpdate(t *testing.T) {
 	pl := newTestLearner(t)
 
 	for i := 0; i < 50; i++ {
-		pl.ObserveAndUpdate("zone-1", 12, 0, 1, 0)
+		pl.ObserveAndUpdate("zone-1", 12, 0, 1, 0) //nolint:errcheck
 	}
 
 	slotBefore := pl.GetPattern("zone-1", 12, 0)

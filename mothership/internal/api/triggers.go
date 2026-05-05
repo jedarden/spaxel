@@ -63,7 +63,7 @@ func NewTriggersHandler(dbPath string) (*TriggersHandler, error) {
 	}
 
 	if err := t.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -99,7 +99,7 @@ func (t *TriggersHandler) load() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var trigger Trigger
@@ -570,7 +570,7 @@ func (t *TriggersHandler) EvaluateTriggers(blobs []BlobPos) []string {
 			VolumeID       string `json:"volume_id,omitempty"`
 		}
 		if len(trigger.ConditionParams) > 0 && string(trigger.ConditionParams) != "{}" {
-			json.Unmarshal(trigger.ConditionParams, &params)
+			_ = json.Unmarshal(trigger.ConditionParams, &params) //nolint:errcheck // use defaults on parse failure
 		}
 
 		shouldFire := false
@@ -613,7 +613,7 @@ func (t *TriggersHandler) EvaluateTriggers(blobs []BlobPos) []string {
 			now := time.Now()
 			trigger.LastFired = &now
 			trigger.Elapsed = 0
-			t.db.Exec(`UPDATE triggers SET last_fired = ? WHERE id = ?`, now.UnixNano(), trigger.ID)
+			_, _ = t.db.Exec(`UPDATE triggers SET last_fired = ? WHERE id = ?`, now.UnixNano(), trigger.ID) //nolint:errcheck // best-effort update
 		}
 	}
 

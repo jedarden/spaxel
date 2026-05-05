@@ -17,7 +17,7 @@ func TestBaselineStore_New(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	if store == nil {
 		t.Fatal("store is nil")
@@ -37,7 +37,7 @@ func TestBaselineStore_SaveAndLoadBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	snapshot := &BaselineSnapshot{
 		Values:     []float64{1.0, 2.0, 3.0, 4.0, 5.0},
@@ -82,7 +82,7 @@ func TestBaselineStore_LoadNonexistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	loaded, err := store.LoadBaseline("nonexistent")
 	if err != nil {
@@ -102,7 +102,7 @@ func TestBaselineStore_SaveAllAndLoadAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	baselines := map[string]*BaselineSnapshot{
 		"link-001": {
@@ -156,7 +156,7 @@ func TestBaselineStore_DeleteBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	snapshot := &BaselineSnapshot{
 		Values:     []float64{1.0, 2.0},
@@ -185,7 +185,7 @@ func TestBaselineStore_PruneStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	snapshot := &BaselineSnapshot{
 		Values:     []float64{1.0, 2.0},
@@ -222,7 +222,7 @@ func TestBaselineStore_SaveAndLoadDiurnal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	nSub := 3
 	snapshot := &DiurnalSnapshot{
@@ -278,7 +278,7 @@ func TestBaselineStore_LoadNonexistentDiurnal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	loaded, err := store.LoadDiurnal("nonexistent", 3)
 	if err != nil {
@@ -298,7 +298,7 @@ func TestBaselineStore_SaveAllAndLoadAllDiurnal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	nSub := 2
 
@@ -330,7 +330,7 @@ func TestBaselineStore_DeleteDiurnal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	nSub := 2
 	snapshot := createTestDiurnalSnapshot("link-001", nSub)
@@ -356,7 +356,7 @@ func TestBaselineStore_OverwriteBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Save first version
 	snapshot1 := &BaselineSnapshot{
@@ -397,7 +397,7 @@ func TestBaselineStore_EmptyBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBaselineStore: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Save and load an empty baseline
 	snapshot := &BaselineSnapshot{

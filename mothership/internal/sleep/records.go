@@ -160,7 +160,7 @@ func (s *SleepRecordStore) Query(person string, limit int) ([]SleepRecord, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return scanSleepRecords(rows)
 }
@@ -212,7 +212,7 @@ func (s *SleepRecordStore) GetLatestAnomalyRecords(limit int) ([]SleepRecord, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return scanSleepRecords(rows)
 }

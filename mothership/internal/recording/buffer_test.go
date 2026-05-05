@@ -27,7 +27,7 @@ func makeFrame(size int) []byte {
 
 func TestNewBuffer(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	if b.writePos != headerSize {
 		t.Errorf("writePos = %d, want %d", b.writePos, headerSize)
@@ -42,7 +42,7 @@ func TestNewBuffer(t *testing.T) {
 
 func TestAppendAndScan(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	now := time.Now().UnixNano()
 	frame := makeFrame(152)
@@ -70,7 +70,7 @@ func TestAppendAndScan(t *testing.T) {
 
 func TestScanPreservesOrder(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	base := time.Now().UnixNano()
 	frame := makeFrame(50)
@@ -98,7 +98,7 @@ func TestScanPreservesOrder(t *testing.T) {
 
 func TestTimeBasedPruningOnAppend(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	// Write three frames with timestamps 2 hours ago.
 	old := time.Now().Add(-2 * time.Hour).UnixNano()
@@ -130,7 +130,7 @@ func TestTimeBasedPruningOnAppend(t *testing.T) {
 
 func TestExplicitPrune(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	// Write frames with timestamps 2 hours ago.
 	old := time.Now().Add(-2 * time.Hour).UnixNano()
@@ -161,7 +161,7 @@ func TestExplicitPrune(t *testing.T) {
 func TestScanRange(t *testing.T) {
 	// Use 24h retention so no frames get pruned during the test.
 	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	// Use a fixed base time so the test is deterministic.
 	base := time.Unix(1_000_000, 0)
@@ -199,7 +199,7 @@ func TestScanRange(t *testing.T) {
 
 func TestScanRangeBeforeData(t *testing.T) {
 	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	base := time.Unix(1_000_000, 0)
 	frame := makeFrame(50)
@@ -220,7 +220,7 @@ func TestScanRangeBeforeData(t *testing.T) {
 
 func TestScanRangeAfterData(t *testing.T) {
 	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	base := time.Unix(1_000_000, 0)
 	frame := makeFrame(50)
@@ -241,7 +241,7 @@ func TestScanRangeAfterData(t *testing.T) {
 
 func TestScanRangeInvalidRange(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	now := time.Now()
 	err := b.ScanRange(now.Add(time.Hour), now, func(_ int64, _ []byte) bool { return true })
@@ -252,7 +252,7 @@ func TestScanRangeInvalidRange(t *testing.T) {
 
 func TestScanRangeEarlyStop(t *testing.T) {
 	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	base := time.Unix(1_000_000, 0)
 	frame := makeFrame(50)
@@ -288,14 +288,14 @@ func TestCrashRecovery(t *testing.T) {
 	}
 	savedWrite := b1.writePos
 	savedOldest := b1.oldestPos
-	b1.Close()
+	b1.Close() //nolint:errcheck
 
 	// Reopen should restore state from the header.
 	b2, err := NewBuffer(path, 1, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer b2.Close()
+	defer b2.Close() //nolint:errcheck
 
 	if b2.writePos != savedWrite {
 		t.Errorf("writePos after reopen = %d, want %d", b2.writePos, savedWrite)
@@ -317,7 +317,7 @@ func TestCrashRecovery(t *testing.T) {
 
 func TestWrapAround(t *testing.T) {
 	b, _ := tempBuffer(t, 1, 48*time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	frame := makeFrame(152)
 	recordSize := recordOverhead + int64(len(frame))
@@ -344,7 +344,7 @@ func TestWrapAround(t *testing.T) {
 
 func TestStorageBounded(t *testing.T) {
 	b, _ := tempBuffer(t, 1, 48*time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	frame := makeFrame(100)
 	recordSize := recordOverhead + int64(len(frame))
@@ -368,7 +368,7 @@ func TestRetentionEnvVar(t *testing.T) {
 
 	// Pass 0 so that the env var is the only non-default source.
 	b, _ := tempBuffer(t, 1, 0)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	if b.Retention() != 24*time.Hour {
 		t.Errorf("retention = %v, want 24h (from env var)", b.Retention())
@@ -379,7 +379,7 @@ func TestRetentionEnvVarInvalidFallsBack(t *testing.T) {
 	t.Setenv(RetentionEnvVar, "not-a-duration")
 
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	// Invalid env var should fall back to the parameter value.
 	if b.Retention() != time.Hour {
@@ -399,7 +399,7 @@ func TestInvalidMagicStartsFresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("should recover from bad magic: %v", err)
 	}
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	if b.writePos != headerSize {
 		t.Errorf("writePos = %d after bad magic, want %d", b.writePos, headerSize)
@@ -411,7 +411,7 @@ func TestInvalidMagicStartsFresh(t *testing.T) {
 
 func TestFrameTooLarge(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	oversized := make([]byte, maxFrameBytes+1)
 	if err := b.Append(0, oversized); err == nil {
@@ -421,7 +421,7 @@ func TestFrameTooLarge(t *testing.T) {
 
 func TestScanReadBackData(t *testing.T) {
 	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close()
+	defer b.Close() //nolint:errcheck
 
 	base := time.Now().UnixNano()
 	frames := [][]byte{

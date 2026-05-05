@@ -120,7 +120,7 @@ func TestStore_EvaluateEnter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test enter",
@@ -181,7 +181,7 @@ func TestStore_EvaluateLeave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test leave",
@@ -231,7 +231,7 @@ func TestStore_EvaluateDwell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	durationSec := 1
 	trigger := &Trigger{
@@ -309,7 +309,7 @@ func TestStore_EvaluateDwell_Accuracy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	durationSec := 3
 	trigger := &Trigger{
@@ -365,7 +365,7 @@ func TestStore_EvaluateDwell_Cylinder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	durationSec := 1
 	trigger := &Trigger{
@@ -409,7 +409,7 @@ func TestStore_EvaluateLeave_BlobDisappears(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test leave disappear",
@@ -447,7 +447,7 @@ func TestStore_EvaluateVacant_Cancelled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	durationSec := 2
 	trigger := &Trigger{
@@ -501,7 +501,7 @@ func TestStore_MultipleBlobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test multi-blob enter",
@@ -682,7 +682,7 @@ func TestStore_NilDurationParams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Dwell with no duration — should not fire
 	dwellTrigger := &Trigger{
@@ -737,7 +737,7 @@ func TestStore_DisabledTrigger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "disabled trigger",
@@ -768,7 +768,7 @@ func TestStore_FiringCallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	var receivedEvents []FiredEvent
 	store.SetOnFired(func(event FiredEvent) {
@@ -824,7 +824,7 @@ func TestStore_BlobVolumeTracking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	box1 := &Trigger{
 		Name: "box1",
@@ -883,7 +883,7 @@ func TestStore_EvaluateCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	threshold := 2
 	trigger := &Trigger{
@@ -942,7 +942,7 @@ func TestStore_EvaluateVacant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	durationSec := 1
 	trigger := &Trigger{
@@ -1012,7 +1012,7 @@ func TestStore_CRUD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	// Create
 	trigger := &Trigger{
@@ -1091,7 +1091,7 @@ func TestStore_TimeConstraint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test time constraint",
@@ -1187,7 +1187,7 @@ func TestStore_ErrorCountManagement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test error count",
@@ -1249,7 +1249,7 @@ func TestStore_DisableTriggerWithError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test 4xx disable",
@@ -1296,7 +1296,7 @@ func TestStore_EnableTriggerClearsErrorState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test re-enable",
@@ -1342,7 +1342,7 @@ func TestStore_ErrorCountResetsOnFirst2xx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test reset on 2xx",
@@ -1383,7 +1383,7 @@ func TestStore_WebhookLogAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "audit trigger",
@@ -1443,7 +1443,7 @@ func TestStore_5xxDoesNotDisable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test 5xx no disable",
@@ -1481,7 +1481,7 @@ func TestStore_DisabledTriggerSkippedInEvaluate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	trigger := &Trigger{
 		Name: "test disabled skip",
@@ -1542,14 +1542,14 @@ func TestStore_ErrorStatePersistsAcrossRestart(t *testing.T) {
 	store1.IncrementErrorCount(id)
 	store1.DisableTriggerWithError(id, "HTTP 403 forbidden")
 
-	store1.Close()
+	store1.Close() //nolint:errcheck
 
 	// Reopen store
 	store2, err := NewStore(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store2.Close()
+	defer store2.Close() //nolint:errcheck
 
 	tg, err := store2.Get(id)
 	if err != nil {

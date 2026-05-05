@@ -45,14 +45,14 @@ func TestWebhookSendBasic(t *testing.T) {
 		receivedUserAgent = r.Header.Get("User-Agent")
 
 		var payload WebhookPayload
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil { //nolint:errcheck
 			t.Errorf("Failed to decode payload: %v", err)
 		}
 		receivedPayload = payload
 
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewWebhookClient(server.URL)
 
@@ -85,10 +85,10 @@ func TestWebhookSendWithAllFields(t *testing.T) {
 	var receivedPayload WebhookPayload
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedPayload)
+		json.NewDecoder(r.Body).Decode(&receivedPayload) //nolint:errcheck
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewWebhookClient(server.URL)
 
@@ -183,10 +183,10 @@ func TestWebhookSendWithPNGImage(t *testing.T) {
 	var receivedPayload WebhookPayload
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedPayload)
+		json.NewDecoder(r.Body).Decode(&receivedPayload) //nolint:errcheck
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewWebhookClient(server.URL)
 
@@ -245,7 +245,7 @@ func TestWebhookSendErrorCases(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Internal server error"))
 		}))
-		defer server.Close()
+		defer server.Close() //nolint:errcheck
 
 		client := NewWebhookClient(server.URL)
 		payload := NewWebhookPayload("test", "test")
@@ -289,7 +289,7 @@ func TestWebhookCustomHeaders(t *testing.T) {
 		receivedHeader = r.Header.Get("X-Custom-Header")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewWebhookClient(server.URL)
 	client.SetHeader("X-Custom-Header", "test-value-123")
@@ -421,10 +421,10 @@ func TestWebhookTimestampFields(t *testing.T) {
 	var receivedPayload WebhookPayload
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedPayload)
+		json.NewDecoder(r.Body).Decode(&receivedPayload) //nolint:errcheck
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewWebhookClient(server.URL)
 
@@ -562,7 +562,7 @@ func TestWebhookMethodOverride(t *testing.T) {
 		receivedMethod = r.Method
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewWebhookClient(server.URL)
 	client.Method = "PUT"
@@ -583,7 +583,7 @@ func TestWebhookNilHTTPClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewWebhookClient(server.URL)
 	client.HTTPClient = nil // Explicitly set to nil

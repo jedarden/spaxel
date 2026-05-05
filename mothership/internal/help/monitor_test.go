@@ -12,7 +12,7 @@ import (
 // TestFeatureMonitorBasic tests the basic monitor functionality.
 func TestFeatureMonitorBasic(t *testing.T) {
 	db := createMonitorTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {
@@ -61,7 +61,7 @@ func TestFeatureMonitorBasic(t *testing.T) {
 // TestFeatureMonitorMultipleFeatures tests monitoring multiple features.
 func TestFeatureMonitorMultipleFeatures(t *testing.T) {
 	db := createMonitorTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {
@@ -135,7 +135,7 @@ func TestFeatureMonitorMultipleFeatures(t *testing.T) {
 // TestFeatureMonitorPredictionPerPerson tests per-person prediction readiness.
 func TestFeatureMonitorPredictionPerPerson(t *testing.T) {
 	db := createMonitorTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Set up prediction_models table with some persons
 	setupPredictionModels(t, db)
@@ -197,7 +197,7 @@ func TestFeatureMonitorPredictionPerPerson(t *testing.T) {
 // TestFeatureMonitorQuietHours tests that notifications respect quiet hours.
 func TestFeatureMonitorQuietHours(t *testing.T) {
 	db := createMonitorTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {
@@ -364,7 +364,7 @@ func TestGetPersonNotificationMessage(t *testing.T) {
 // TestFeatureMonitorIdempotent tests that notifications fire only once.
 func TestFeatureMonitorIdempotent(t *testing.T) {
 	db := createMonitorTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	notifier, err := NewNotifier(db)
 	if err != nil {

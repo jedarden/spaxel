@@ -40,7 +40,7 @@ func TestNewEngine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -64,7 +64,7 @@ func TestStartSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Write some test data
 	now := time.Now().UnixNano()
@@ -113,7 +113,7 @@ func TestStartSessionClampsRange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Write test data with known timestamps
 	baseTime := time.Unix(1_000_000, 0).UnixNano()
@@ -157,7 +157,7 @@ func TestStartSessionRejectsInvalidRange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -180,7 +180,7 @@ func TestStopSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -210,7 +210,7 @@ func TestStopSessionNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -229,7 +229,7 @@ func TestSeek(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Write test data
 	baseTime := time.Unix(1_000_000, 0).UnixNano()
@@ -278,7 +278,7 @@ func TestSeekClampsToSessionRange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -315,7 +315,7 @@ func TestPlay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Write test data
 	baseTime := time.Unix(1_000_000, 0).UnixNano()
@@ -369,7 +369,7 @@ func TestPause(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -397,7 +397,7 @@ func TestSetSpeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -425,7 +425,7 @@ func TestSetParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)
@@ -468,7 +468,7 @@ func TestGetTimestampRange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	broadcaster := &mockBroadcaster{}
 	engine := NewEngine(buffer, broadcaster)

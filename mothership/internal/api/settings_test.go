@@ -25,7 +25,7 @@ func TestSettingsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create settings table
 	_, err = db.Exec(`
@@ -66,7 +66,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var settings map[string]interface{}
-				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 
@@ -95,7 +95,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var settings map[string]interface{}
-				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 
@@ -117,7 +117,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var settings map[string]interface{}
-				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 
@@ -145,7 +145,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var settings map[string]interface{}
-				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 
@@ -164,7 +164,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var errResp map[string]string
-				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode error response: %v", err)
 				}
 
@@ -183,7 +183,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var errResp map[string]string
-				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode error response: %v", err)
 				}
 
@@ -202,7 +202,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var errResp map[string]string
-				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode error response: %v", err)
 				}
 
@@ -221,7 +221,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var errResp map[string]string
-				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode error response: %v", err)
 				}
 
@@ -240,7 +240,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var errResp map[string]string
-				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode error response: %v", err)
 				}
 
@@ -259,7 +259,7 @@ func TestSettingsHandler(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var errResp map[string]string
-				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode error response: %v", err)
 				}
 
@@ -277,7 +277,7 @@ func TestSettingsHandler(t *testing.T) {
 				// This test should run after the POST test above
 				// Just verify we can get settings without error
 				var settings map[string]interface{}
-				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil {
+				if err := json.NewDecoder(rr.Body).Decode(&settings); err != nil { //nolint:errcheck
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 
@@ -329,7 +329,7 @@ func TestSettingsGetSingle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create settings table
 	_, err = db.Exec(`
@@ -400,7 +400,7 @@ func TestSettingsSetAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create settings table
 	_, err = db.Exec(`
@@ -451,7 +451,7 @@ func TestSettingsDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create settings table
 	_, err = db.Exec(`
@@ -658,24 +658,24 @@ func TestSettingsPersistence(t *testing.T) {
 		)
 	`)
 	if err != nil {
-		db1.Close()
+		db1.Close() //nolint:errcheck
 		t.Fatalf("Failed to create settings table: %v", err)
 	}
 
 	handler1 := NewSettingsHandler(db1)
 	err = handler1.Set("persistent_key", "persistent_value")
 	if err != nil {
-		db1.Close()
+		db1.Close() //nolint:errcheck
 		t.Fatalf("Failed to set value: %v", err)
 	}
-	db1.Close()
+	db1.Close() //nolint:errcheck
 
 	// Second handler (simulates restart)
 	db2, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to reopen database: %v", err)
 	}
-	defer db2.Close()
+	defer db2.Close() //nolint:errcheck
 
 	handler2 := NewSettingsHandler(db2)
 	val, exists := handler2.GetSingle("persistent_key")
@@ -697,7 +697,7 @@ func TestNewSettingsHandlerLoadFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Handler should still be created (load fails but doesn't crash)
 	handler := NewSettingsHandler(db)

@@ -89,7 +89,7 @@ func NewModelStore(dbPath string) (*ModelStore, error) {
 	}
 
 	if err := s.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -195,7 +195,7 @@ func (s *ModelStore) GetTransitions(personID string, hourOfWeek int) ([]ZoneTran
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var transitions []ZoneTransition
 	for rows.Next() {
@@ -221,7 +221,7 @@ func (s *ModelStore) GetTransitionsForSlot(personID, fromZoneID string, hourOfWe
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var transitions []ZoneTransition
 	for rows.Next() {
@@ -246,7 +246,7 @@ func (s *ModelStore) GetDwellTimes(personID, zoneID string, hourOfWeek int) ([]f
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var times []float64
 	for rows.Next() {
@@ -268,7 +268,7 @@ func (s *ModelStore) SaveTransitionProbabilities(probs []TransitionProbability) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	now := time.Now().UnixNano()
 	for _, p := range probs {
@@ -294,7 +294,7 @@ func (s *ModelStore) SaveDwellTimeStats(stats []DwellTimeStats) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	now := time.Now().UnixNano()
 	for _, s := range stats {
@@ -343,7 +343,7 @@ func (s *ModelStore) GetTransitionProbabilitiesForFromZone(personID, fromZoneID 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var probs []TransitionProbability
 	for rows.Next() {
@@ -451,7 +451,7 @@ func (s *ModelStore) GetAllPersonZoneEntries() (map[string]struct {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	entries := make(map[string]struct {
 		ZoneID    string
@@ -507,7 +507,7 @@ func (s *ModelStore) RecomputeProbabilities() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	type groupKey struct {
 		personID   string
@@ -551,7 +551,7 @@ func (s *ModelStore) RecomputeProbabilities() error {
 			destCounts = append(destCounts, dc)
 			totalCount += dc.count
 		}
-		transRows.Close()
+		transRows.Close() //nolint:errcheck
 
 		if totalCount == 0 {
 			continue
@@ -597,7 +597,7 @@ func (s *ModelStore) RecomputeDwellTimes() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	type groupKey struct {
 		personID   string

@@ -26,7 +26,7 @@ func TestNotificationsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notifications handler: %v", err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Create a test router
 	router := chi.NewRouter()
@@ -42,7 +42,7 @@ func TestNotificationsHandler(t *testing.T) {
 		}
 
 		var resp notificationConfigResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -80,7 +80,7 @@ func TestNotificationsHandler(t *testing.T) {
 		}
 
 		var resp notificationConfigResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -127,7 +127,7 @@ func TestNotificationsHandler(t *testing.T) {
 		}
 
 		var errResp map[string]string
-		if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode error response: %v", err)
 		}
 
@@ -181,7 +181,7 @@ func TestNotificationsHandler(t *testing.T) {
 		}
 
 		var resp notificationConfigResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -227,7 +227,7 @@ func TestNotificationsHandler(t *testing.T) {
 		}
 
 		var resp testNotificationResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -517,14 +517,14 @@ func TestNotificationsHandlerPersistence(t *testing.T) {
 		t.Fatalf("Failed to set channel: %v", err)
 	}
 
-	h1.Close()
+	h1.Close() //nolint:errcheck
 
 	// Create second handler with same database - should load persisted channels
 	h2, err := NewNotificationsHandler(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create second handler: %v", err)
 	}
-	defer h2.Close()
+	defer h2.Close() //nolint:errcheck
 
 	channels := h2.GetChannels()
 
@@ -566,7 +566,7 @@ func TestNotificationsHandlerSendNotification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notifications handler: %v", err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Set up a mock sender
 	mockSender := &mockNotifySender{}
@@ -609,7 +609,7 @@ func TestNewNotificationsHandlerWithPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create handler: %v", err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Verify the database file was created
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -680,7 +680,7 @@ func TestNotificationsTestEndpointIntegration(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	// Create a temporary database
 	tmpDir := t.TempDir()
@@ -690,7 +690,7 @@ func TestNotificationsTestEndpointIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notifications handler: %v", err)
 	}
-	defer handler.Close()
+	defer handler.Close() //nolint:errcheck
 
 	// Set up an ntfy channel pointing to the mock server
 	err = handler.SetChannel("ntfy", true, map[string]string{
@@ -739,7 +739,7 @@ func TestNotificationsTestEndpointIntegration(t *testing.T) {
 		}
 
 		var resp testNotificationResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -783,12 +783,12 @@ func TestNotificationsTestEndpointIntegration(t *testing.T) {
 		var receivedPayload map[string]interface{}
 		webhookServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			serverCalled = true
-			if err := json.NewDecoder(r.Body).Decode(&receivedPayload); err != nil {
+			if err := json.NewDecoder(r.Body).Decode(&receivedPayload); err != nil { //nolint:errcheck
 				t.Errorf("Failed to decode webhook payload: %v", err)
 			}
 			w.WriteHeader(http.StatusOK)
 		}))
-		defer webhookServer.Close()
+		defer webhookServer.Close() //nolint:errcheck
 
 		// Set up a webhook channel pointing to the mock server
 		err = handler.SetChannel("webhook", true, map[string]string{
@@ -823,7 +823,7 @@ func TestNotificationsTestEndpointIntegration(t *testing.T) {
 		}
 
 		var resp testNotificationResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
@@ -892,7 +892,7 @@ func (a *ntfyNotifyAdapter) Send(title, body string, data map[string]interface{}
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("ntfy returned status %d", resp.StatusCode)
@@ -938,7 +938,7 @@ func (a *webhookNotifyAdapter) Send(title, body string, data map[string]interfac
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)

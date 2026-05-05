@@ -507,11 +507,15 @@ func (m *Monitor) ShouldPushMorningSummary() (bool, map[string]interface{}) {
 				}
 				// Add breathing rate range
 				if report.Metrics.MinBreathingRate > 0 {
-					summaryMap["metrics"].(map[string]interface{})["min_breathing_rate"] = report.Metrics.MinBreathingRate
-					summaryMap["metrics"].(map[string]interface{})["max_breathing_rate"] = report.Metrics.MaxBreathingRate
+					if metrics, ok := summaryMap["metrics"].(map[string]interface{}); ok {
+						metrics["min_breathing_rate"] = report.Metrics.MinBreathingRate
+						metrics["max_breathing_rate"] = report.Metrics.MaxBreathingRate
+					}
 				}
 				if report.Metrics.PersonalAvgBPM > 0 {
-					summaryMap["metrics"].(map[string]interface{})["personal_avg_bpm"] = report.Metrics.PersonalAvgBPM
+					if metrics, ok := summaryMap["metrics"].(map[string]interface{}); ok {
+						metrics["personal_avg_bpm"] = report.Metrics.PersonalAvgBPM
+					}
 				}
 				return true, summaryMap
 			}

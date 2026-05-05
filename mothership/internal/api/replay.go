@@ -190,7 +190,7 @@ func (h *ReplayHandler) scanTimestamps(oldest, newest *int64) {
 
 	// Scan for oldest and newest
 	store := h.worker.GetStore()
-	store.Scan(func(recvTimeNS int64, frame []byte) bool {
+	_ = store.Scan(func(recvTimeNS int64, frame []byte) bool { //nolint:errcheck // scan errors acceptable for timestamp query
 		recvMS := recvTimeNS / 1e6
 		if *oldest == 0 || recvMS < *oldest {
 			*oldest = recvMS

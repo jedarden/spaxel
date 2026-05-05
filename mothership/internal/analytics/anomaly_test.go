@@ -115,14 +115,14 @@ func setupTestDetector(t *testing.T) (*Detector, *testAlertHandler) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	t.Cleanup(func() { os.RemoveAll(tmpDir) }) //nolint:errcheck
 
 	config := DefaultAnomalyScoreConfig()
 	detector, err := NewDetector(filepath.Join(tmpDir, "anomaly.db"), config)
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
-	t.Cleanup(func() { detector.Close() })
+	t.Cleanup(func() { detector.Close() }) //nolint:errcheck
 
 	// Set up providers
 	detector.SetZoneProvider(&testZoneProvider{
@@ -362,7 +362,7 @@ func TestAnomaly_AcknowledgeCancelsTimers(t *testing.T) {
 	}
 
 	// Acknowledge it
-	err := detector.AcknowledgeAnomaly(event.ID, "expected", "test_user")
+	err := detector.AcknowledgeAnomaly(event.ID, "expected", "test_user") //nolint:errcheck
 	if err != nil {
 		t.Fatalf("Failed to acknowledge anomaly: %v", err)
 	}
@@ -622,7 +622,7 @@ func TestAnomaly_AlertChainNormalMode(t *testing.T) {
 	}
 
 	// Acknowledge to clean up timers
-	detector.AcknowledgeAnomaly(event.ID, "expected", "test_user")
+	detector.AcknowledgeAnomaly(event.ID, "expected", "test_user") //nolint:errcheck
 }
 
 // TestAnomaly_AlertChainSecurityMode tests that all alerts fire immediately in security mode.
@@ -672,7 +672,7 @@ func TestAnomaly_AcknowledgementCancelsTimers(t *testing.T) {
 	}
 
 	// Immediately acknowledge
-	err := detector.AcknowledgeAnomaly(event.ID, "false_alarm", "test_user")
+	err := detector.AcknowledgeAnomaly(event.ID, "false_alarm", "test_user") //nolint:errcheck
 	if err != nil {
 		t.Fatalf("Failed to acknowledge: %v", err)
 	}
@@ -771,7 +771,7 @@ func TestAnomaly_GetActiveAnomaliesAfterCreate(t *testing.T) {
 	}
 
 	// Acknowledge it
-	detector.AcknowledgeAnomaly(event.ID, "expected", "test_user")
+	detector.AcknowledgeAnomaly(event.ID, "expected", "test_user") //nolint:errcheck
 
 	// Should have 0 unacknowledged anomalies (acknowledged ones are filtered)
 	active = detector.GetActiveAnomalies()

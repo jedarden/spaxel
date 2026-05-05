@@ -89,7 +89,7 @@ func (s *Server) computeMeta(filename string) *FirmwareMeta {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	stat, err := f.Stat()
 	if err != nil {
@@ -207,7 +207,7 @@ func (s *Server) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing 'firmware' field", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	filename := filepath.Base(header.Filename)
 	if !strings.HasSuffix(filename, ".bin") || strings.ContainsAny(filename, "/\\") {
@@ -221,7 +221,7 @@ func (s *Server) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to save firmware", http.StatusInternalServerError)
 		return
 	}
-	defer out.Close()
+	defer out.Close() //nolint:errcheck
 
 	if _, err := io.Copy(out, file); err != nil {
 		http.Error(w, "write error", http.StatusInternalServerError)

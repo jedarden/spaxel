@@ -22,7 +22,7 @@ func newTestManagerWithQuietHoursDisabled(cfg Config) (*NotificationManager, err
 		MorningDigest:    false,
 	})
 	if err != nil {
-		m.Close()
+		m.Close() //nolint:errcheck
 		return nil, err
 	}
 	return m, nil
@@ -36,7 +36,7 @@ func TestNewManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	if m == nil {
 		t.Fatal("New() returned nil")
@@ -61,7 +61,7 @@ func TestConfigPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set custom config
 	cfg := NotificationConfig{
@@ -131,7 +131,7 @@ func TestNotifyUrgentImmediate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	event := Event{
 		Type:     FallDetected,
@@ -169,7 +169,7 @@ func TestNotifyHighImmediate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	event := Event{
 		Type:     AnomalyAlert,
@@ -201,7 +201,7 @@ func TestBatching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Send multiple low priority events
 	for i := 0; i < 3; i++ {
@@ -258,7 +258,7 @@ func TestBatchMaxSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Send exactly max batch size events
 	for i := 0; i < 3; i++ {
@@ -300,7 +300,7 @@ func TestQuietHoursQueueing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time
 	cfg := NotificationConfig{
@@ -361,7 +361,7 @@ func TestQuietHoursHighPriority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time
 	cfg := NotificationConfig{
@@ -421,7 +421,7 @@ func TestUrgentBypassesAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours and enable batching
 	cfg := NotificationConfig{
@@ -483,7 +483,7 @@ func TestQuietDaysBitmask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours for only the current day
 	cfg := NotificationConfig{
@@ -532,7 +532,7 @@ func TestMediumPriorityBatching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Send medium priority events
 	for i := 0; i < 2; i++ {
@@ -576,7 +576,7 @@ func TestGetHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Send some events - Urgent is sent immediately, Low/Medium are batched
 	events := []Event{
@@ -644,7 +644,7 @@ func TestFlush(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to queue events
 	cfg := NotificationConfig{
@@ -696,7 +696,7 @@ func TestCreateSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	events := []*Event{
 		{Type: ZoneEnter, Priority: Low, Title: "Event 1"},
@@ -736,7 +736,7 @@ func TestSingleEventBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	event := Event{
 		Type:     ZoneEnter,
@@ -770,7 +770,7 @@ func TestNotifyWithTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	expectedTime := time.Date(2024, 4, 10, 12, 30, 0, 0, time.UTC)
 	event := Event{
@@ -798,7 +798,7 @@ func TestGetPendingCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Initially all zeros
 	low, medium, digest := m.GetPendingCount()
@@ -840,7 +840,7 @@ func TestSetAndGetConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Test default config
 	defaultCfg := m.GetConfig()
@@ -917,7 +917,7 @@ func TestSetSendCallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set callback after creation
 	m.SetSendCallback(func(e Event) {
@@ -955,7 +955,7 @@ func TestBatchingThreeLowEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Send 3 LOW events rapidly (within 1 second)
 	for i := 0; i < 3; i++ {
@@ -1022,7 +1022,7 @@ func TestBatchingUrgentBypassesBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Send some LOW events first
 	for i := 0; i < 2; i++ {
@@ -1092,7 +1092,7 @@ func TestQuietHoursLowQueued(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to 22:00-07:00
 	cfg := NotificationConfig{
@@ -1168,7 +1168,7 @@ func TestQuietHoursUrgentDelivered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time
 	now := time.Now().In(loc)
@@ -1237,7 +1237,7 @@ func TestMorningDigestDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Enable morning digest
 	cfg := NotificationConfig{
@@ -1325,7 +1325,7 @@ func TestMorningDigestNotSentWhenDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Disable morning digest
 	cfg := NotificationConfig{
@@ -1404,7 +1404,7 @@ func TestHighPriorityDuringQuietHours(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time
 	cfg := NotificationConfig{
@@ -1459,7 +1459,7 @@ func TestMediumPriorityDuringQuietHours(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours
 	cfg := NotificationConfig{
@@ -1511,7 +1511,7 @@ func TestQuietHoursNotActiveOutsideWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to NOT include current time
 	now := time.Now().In(loc)
@@ -1564,7 +1564,7 @@ func TestBatchingPrioritySeparation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Send LOW events
 	for i := 0; i < 2; i++ {
@@ -1615,7 +1615,7 @@ func TestQuietHoursGate_LowAt23pmQueued(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to 22:00-07:00
 	cfg := NotificationConfig{
@@ -1712,7 +1712,7 @@ func TestQuietHoursGate_UrgentAt23pmDelivered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to 22:00-07:00 (so 23:00 is during quiet hours)
 	cfg := NotificationConfig{
@@ -1795,7 +1795,7 @@ func TestQuietHoursGate_MediumAt23pmQueued(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to 22:00-07:00
 	cfg := NotificationConfig{
@@ -1860,7 +1860,7 @@ func TestQuietHoursGate_HighAt23pmDelivered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time (simulating 23:00 during 22:00-07:00 window)
 	now := time.Now().In(loc)
@@ -1946,7 +1946,7 @@ func TestMorningDigestOncePerDay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Enable morning digest
 	cfg := NotificationConfig{
@@ -2011,7 +2011,7 @@ func TestMorningDigestEmptyNotSent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Enable morning digest
 	cfg := NotificationConfig{
@@ -2052,7 +2052,7 @@ func TestIsQuietHoursEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Test with morning digest disabled
 	cfg := NotificationConfig{
@@ -2110,7 +2110,7 @@ func TestMorningDigestIncludesAllEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time FIRST, before any other config
 	now := time.Now().In(loc)
@@ -2195,7 +2195,7 @@ func TestMorningDigestClearedAfterSend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time FIRST
 	now := time.Now().In(loc)
@@ -2288,7 +2288,7 @@ func TestMorningDigestWithMixedPriorities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time FIRST
 	now := time.Now().In(loc)
@@ -2349,7 +2349,7 @@ func TestMorningDigestTitleFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer m.Close()
+	defer m.Close() //nolint:errcheck
 
 	// Set quiet hours to cover current time FIRST
 	now := time.Now().In(loc)

@@ -62,7 +62,7 @@ func NewNotificationsHandler(dbPath string) (*NotificationsHandler, error) {
 	}
 
 	if err := n.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -90,7 +90,7 @@ func (n *NotificationsHandler) load() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var nc NotificationChannel

@@ -572,9 +572,8 @@ func (ss *SleepSession) handleStateChange(timestamp time.Time, from, to SleepSta
 		ss.sleepPeriods = append(ss.sleepPeriods, *ss.currentPeriod)
 
 		// Count interruptions (transitions to restless or awake during sleep)
-		if to == SleepStateRestless || to == SleepStateAwake {
-			// This will be counted in metrics calculation
-		}
+		// Note: Interruptions are counted in metrics calculation elsewhere
+		_ = to // State used in comment; checked but no action needed here
 	}
 
 	// Start new period

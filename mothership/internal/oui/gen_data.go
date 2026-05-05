@@ -27,7 +27,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to download OUI registry: %v\n", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Fprintf(os.Stderr, "HTTP error: %s\n", resp.Status)

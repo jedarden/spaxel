@@ -21,7 +21,7 @@ func TestNotificationSettingsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -30,7 +30,7 @@ func TestNotificationSettingsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create handler
 	handler := NewNotificationSettingsHandler(db)
@@ -50,7 +50,7 @@ func TestNotificationSettingsHandler(t *testing.T) {
 		}
 
 		var response notificationSettingsResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 			t.Fatal(err)
 		}
 
@@ -98,7 +98,7 @@ func TestNotificationSettingsHandler(t *testing.T) {
 		}
 
 		var response notificationSettingsResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 			t.Fatal(err)
 		}
 
@@ -140,7 +140,7 @@ func TestNotificationSettingsHandler(t *testing.T) {
 		}
 
 		var response notificationSettingsResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 			t.Fatal(err)
 		}
 
@@ -212,7 +212,7 @@ func TestNotificationSettingsHandler(t *testing.T) {
 		}
 
 		var response notificationSettingsResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 			t.Fatal(err)
 		}
 
@@ -278,7 +278,7 @@ func TestNotificationSettingsHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil { //nolint:errcheck
 			t.Fatal(err)
 		}
 
@@ -305,7 +305,7 @@ func openTestDB(dbPath string) (*sql.DB, error) {
 		);
 	`)
 	if err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 

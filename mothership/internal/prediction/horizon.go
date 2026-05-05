@@ -118,10 +118,6 @@ func (h *HorizonPredictor) PredictAtHorizon(personID, currentZoneID string, hori
 	// Check data age
 	dataAge := h.store.GetDataAge()
 	if dataAge < MinimumDataAge {
-		daysRemaining := int(MinimumDataAge-dataAge + 23*time.Hour) / int(24*time.Hour)
-		if daysRemaining < 0 {
-			daysRemaining = 0
-		}
 		prediction.DataConfidence = "insufficient_data"
 		prediction.SampleCount = 0
 		prediction.ModelReady = false

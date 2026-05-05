@@ -87,16 +87,16 @@ func (s *Server) HandleDashboardWS(w http.ResponseWriter, r *http.Request) {
 // readPump handles incoming messages from the dashboard client
 func (s *Server) readPump(conn *websocket.Conn, client *Client) {
 	defer func() {
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		s.hub.Unregister(client)
 	}()
 
 	// Set read deadline
-	conn.SetReadDeadline(time.Now().Add(dashboardReadDeadline))
+	_ = conn.SetReadDeadline(time.Now().Add(dashboardReadDeadline)) //nolint:errcheck
 
 	// Set pong handler to reset deadline
 	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(dashboardReadDeadline))
+		_ = conn.SetReadDeadline(time.Now().Add(dashboardReadDeadline)) //nolint:errcheck
 		return nil
 	})
 
@@ -164,7 +164,7 @@ func (s *Server) handleReplaySeek(cmd map[string]interface{}) {
 
 	// Forward to replay handler if available
 	if s.hub.replayHandler != nil {
-		s.hub.replayHandler.SeekTo(targetMS)
+		_ = s.hub.replayHandler.SeekTo(targetMS) //nolint:errcheck
 	}
 }
 
@@ -183,7 +183,7 @@ func (s *Server) handleReplayPlay(cmd map[string]interface{}) {
 
 	// Forward to replay handler if available
 	if s.hub.replayHandler != nil {
-		s.hub.replayHandler.Play(speed)
+		_ = s.hub.replayHandler.Play(speed) //nolint:errcheck
 	}
 }
 
@@ -191,7 +191,7 @@ func (s *Server) handleReplayPlay(cmd map[string]interface{}) {
 func (s *Server) handleReplayPause(cmd map[string]interface{}) {
 	// Forward to replay handler if available
 	if s.hub.replayHandler != nil {
-		s.hub.replayHandler.Pause()
+		_ = s.hub.replayHandler.Pause() //nolint:errcheck
 	}
 }
 
@@ -228,7 +228,7 @@ func (s *Server) handleReplaySetParams(cmd map[string]interface{}) {
 
 	// Forward to replay handler if available
 	if s.hub.replayHandler != nil {
-		s.hub.replayHandler.SetParams(params)
+		_ = s.hub.replayHandler.SetParams(params) //nolint:errcheck
 	}
 }
 
@@ -240,7 +240,7 @@ func (s *Server) handleReplayApplyToLive(cmd map[string]interface{}) {
 
 	// Forward to replay handler if available
 	if s.hub.replayHandler != nil {
-		s.hub.replayHandler.ApplyToLive()
+		_ = s.hub.replayHandler.ApplyToLive() //nolint:errcheck
 	}
 }
 
@@ -259,7 +259,7 @@ func (s *Server) handleReplaySetSpeed(cmd map[string]interface{}) {
 
 	// Forward to replay handler if available
 	if s.hub.replayHandler != nil {
-		s.hub.replayHandler.SetSpeed(speed)
+		_ = s.hub.replayHandler.SetSpeed(speed) //nolint:errcheck
 	}
 }
 
@@ -268,16 +268,16 @@ func (s *Server) writePump(conn *websocket.Conn, client *Client) {
 	ticker := time.NewTicker(dashboardPingInterval)
 	defer func() {
 		ticker.Stop()
-		conn.Close()
+		conn.Close() //nolint:errcheck
 	}()
 
 	for {
 		select {
 		case message, ok := <-client.send:
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second)) //nolint:errcheck
 			if !ok {
 				// Hub closed the channel
-				conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = conn.WriteMessage(websocket.CloseMessage, []byte{}) //nolint:errcheck
 				return
 			}
 
@@ -299,7 +299,7 @@ func (s *Server) writePump(conn *websocket.Conn, client *Client) {
 			}
 
 		case <-ticker.C:
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second)) //nolint:errcheck
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

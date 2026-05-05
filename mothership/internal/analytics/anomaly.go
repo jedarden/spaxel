@@ -262,7 +262,7 @@ func NewDetector(dbPath string, config AnomalyScoreConfig) (*Detector, error) {
 	}
 
 	if err := d.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -278,7 +278,7 @@ func NewDetector(dbPath string, config AnomalyScoreConfig) (*Detector, error) {
 }
 
 func (d *Detector) migrate() error {
-	_, err := d.db.Exec(`
+	_, err := d.db.Exec(` //nolint:errcheck
 		CREATE TABLE IF NOT EXISTS behaviour_slots (
 			hour_of_week    INTEGER NOT NULL,
 			zone_id         TEXT    NOT NULL,
@@ -373,7 +373,7 @@ func (d *Detector) loadBehaviourModel() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		slot := &NormalBehaviourSlot{
@@ -403,7 +403,7 @@ func (d *Detector) loadBehaviourModel() error {
 	if err != nil {
 		return err
 	}
-	defer dwellRows.Close()
+	defer dwellRows.Close() //nolint:errcheck
 
 	for dwellRows.Next() {
 		slot := &DwellBehaviourSlot{}
@@ -427,7 +427,7 @@ func (d *Detector) loadLearningState() error {
 	if err == sql.ErrNoRows {
 		// Initialize learning start time
 		d.learningStartTime = time.Now()
-		d.db.Exec(`INSERT INTO learning_state (key, value) VALUES ('learning_start', ?)`, time.Now().UnixNano())
+		d.db.Exec(`INSERT INTO learning_state (key, value) VALUES ('learning_start', ?)`, time.Now().UnixNano()) //nolint:errcheck
 		return nil
 	}
 	if err != nil {
@@ -458,7 +458,7 @@ func (d *Detector) loadLearningState() error {
 	if err != nil {
 		return err
 	}
-	defer deviceRows.Close()
+	defer deviceRows.Close() //nolint:errcheck
 
 	for deviceRows.Next() {
 		var mac string
@@ -567,15 +567,15 @@ func (d *Detector) SetSecurityMode(mode SecurityMode, reason string) {
 	}
 
 	// Persist to database
-	d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode', ?)`, string(mode))
+	d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode', ?)`, string(mode)) //nolint:errcheck
 
 	if mode == SecurityModeArmed || mode == SecurityModeArmedStay {
 		// Record armed timestamp for persistence across restarts
-		d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode_armed_at', ?)`, time.Now().UnixNano())
+		d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode_armed_at', ?)`, time.Now().UnixNano()) //nolint:errcheck
 		d.manualOverrideUntil = time.Time{}
 	} else {
 		// Clear armed timestamp on disarm
-		d.db.Exec(`DELETE FROM learning_state WHERE key = 'security_mode_armed_at'`)
+		d.db.Exec(`DELETE FROM learning_state WHERE key = 'security_mode_armed_at'`) //nolint:errcheck
 	}
 }
 
@@ -780,7 +780,7 @@ func (d *Detector) setSystemMode(newMode events.SystemMode, reason, personName s
 	}
 
 	// Persist to database
-	d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode', ?)`, string(d.securityMode))
+	d.db.Exec(`INSERT OR REPLACE INTO learning_state (key, value) VALUES ('security_mode', ?)`, string(d.securityMode)) //nolint:errcheck
 
 	log.Printf("[INFO] System mode changed: %s -> %s (reason: %s)", oldMode, newMode, reason)
 
@@ -899,7 +899,7 @@ func (d *Detector) ProcessBLEDevice(mac string, rssi int, isSecurityMode bool) *
 	// Track first seen time for this device
 	if _, exists := d.deviceFirstSeen[mac]; !exists {
 		d.deviceFirstSeen[mac] = now
-		d.db.Exec(`INSERT OR REPLACE INTO device_first_seen (mac, first_seen_ns) VALUES (?, ?)`,
+		d.db.Exec(`INSERT OR REPLACE INTO device_first_seen (mac, first_seen_ns) VALUES (?, ?)`, //nolint:errcheck
 			mac, now.UnixNano())
 	}
 
@@ -1152,7 +1152,7 @@ func (d *Detector) cleanupStaleCooldowns() {
 
 func (d *Detector) recordOccupancySample(hourOfWeek int, zoneID string, personCount int, bleDevices []string, timestamp time.Time) {
 	devicesJSON, _ := jsonMarshal(bleDevices)
-	_, err := d.db.Exec(`
+	_, err := d.db.Exec(` //nolint:errcheck
 		INSERT INTO occupancy_samples (hour_of_week, zone_id, person_count, ble_devices, timestamp)
 		VALUES (?, ?, ?, ?, ?)
 	`, hourOfWeek, zoneID, personCount, string(devicesJSON), timestamp.UnixNano())
@@ -1162,7 +1162,7 @@ func (d *Detector) recordOccupancySample(hourOfWeek int, zoneID string, personCo
 }
 
 func (d *Detector) recordDwellSample(hourOfWeek int, zoneID, personID string, dwellDuration time.Duration, timestamp time.Time) {
-	_, err := d.db.Exec(`
+	_, err := d.db.Exec(` //nolint:errcheck
 		INSERT INTO dwell_samples (hour_of_week, zone_id, person_id, dwell_ns, timestamp)
 		VALUES (?, ?, ?, ?, ?)
 	`, hourOfWeek, zoneID, personID, dwellDuration.Nanoseconds(), timestamp.UnixNano())
@@ -1172,7 +1172,7 @@ func (d *Detector) recordDwellSample(hourOfWeek int, zoneID, personID string, dw
 }
 
 func (d *Detector) persistAnomaly(event *events.AnomalyEvent) {
-	_, err := d.db.Exec(`
+	_, err := d.db.Exec(` //nolint:errcheck
 		INSERT INTO anomaly_events (
 			id, type, score, description, timestamp,
 			zone_id, zone_name, blob_id, person_id, person_name,
@@ -1201,14 +1201,14 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 	// T+0: Dashboard alarm (immediate - handled by UI via callback)
 	// Fire alert handler immediately for dashboard
 	if d.alertHandler != nil {
-		go d.alertHandler.SendAlert(*event, isSecurityMode)
+		go d.alertHandler.SendAlert(*event, isSecurityMode) //nolint:errcheck
 	}
 
 	if isSecurityMode {
 		// Security mode: all alerts fire immediately
 		if d.alertHandler != nil {
-			d.alertHandler.SendWebhook(*event, true)
-			d.alertHandler.SendEscalation(*event)
+			d.alertHandler.SendWebhook(*event, true) //nolint:errcheck
+			d.alertHandler.SendEscalation(*event) //nolint:errcheck
 		}
 		event.AlertSent = true
 		event.WebhookSent = true
@@ -1226,7 +1226,7 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 			defer d.mu.Unlock()
 			if anomaly, exists := d.activeAnomalies[event.ID]; exists && !anomaly.Acknowledged {
 				if d.alertHandler != nil {
-					d.alertHandler.SendAlert(*anomaly, false)
+					d.alertHandler.SendAlert(*anomaly, false) //nolint:errcheck
 				}
 				anomaly.AlertSent = true
 				anomaly.AlertSentAt = time.Now()
@@ -1240,7 +1240,7 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 			defer d.mu.Unlock()
 			if anomaly, exists := d.activeAnomalies[event.ID]; exists && !anomaly.Acknowledged {
 				if d.alertHandler != nil {
-					d.alertHandler.SendWebhook(*anomaly, false)
+					d.alertHandler.SendWebhook(*anomaly, false) //nolint:errcheck
 				}
 				anomaly.WebhookSent = true
 				anomaly.WebhookSentAt = time.Now()
@@ -1254,7 +1254,7 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 			defer d.mu.Unlock()
 			if anomaly, exists := d.activeAnomalies[event.ID]; exists && !anomaly.Acknowledged {
 				if d.alertHandler != nil {
-					d.alertHandler.SendEscalation(*anomaly)
+					d.alertHandler.SendEscalation(*anomaly) //nolint:errcheck
 				}
 				anomaly.EscalationSent = true
 				anomaly.EscalationSentAt = time.Now()
@@ -1267,7 +1267,7 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 }
 
 func (d *Detector) updateAnomalyAlertState(event *events.AnomalyEvent) {
-	d.db.Exec(`
+ _, _ = d.db.Exec(` //nolint:errcheck
 		UPDATE anomaly_events SET
 			alert_sent = ?, alert_sent_at = ?,
 			webhook_sent = ?, webhook_sent_at = ?,
@@ -1310,7 +1310,7 @@ func (d *Detector) AcknowledgeAnomaly(anomalyID, feedback, acknowledgedBy string
 	event.AcknowledgedBy = acknowledgedBy
 
 	// Update database
-	_, err := d.db.Exec(`
+	_, err := d.db.Exec(` //nolint:errcheck
 		UPDATE anomaly_events SET
 			acknowledged = 1,
 			acknowledged_at = ?,
@@ -1415,7 +1415,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 		}
 		slots = append(slots, s)
 	}
-	rows.Close()
+	rows.Close() //nolint:errcheck
 
 	for _, s := range slots {
 		slot := &NormalBehaviourSlot{
@@ -1448,7 +1448,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 					}
 				}
 			}
-			bleRows.Close()
+			bleRows.Close() //nolint:errcheck
 
 			// Only include devices seen > 50% of the time
 			if totalSamples > 0 {
@@ -1463,7 +1463,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 
 		// Upsert to database
 		devicesJSON, _ := jsonMarshal(slot.TypicalBLEDevices)
-		d.db.Exec(`
+  _, _ = d.db.Exec(` //nolint:errcheck
 			INSERT INTO behaviour_slots (hour_of_week, zone_id, expected_occupancy, typical_person_count, sample_count, typical_ble_devices)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(hour_of_week, zone_id) DO UPDATE SET
@@ -1490,7 +1490,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 	if err != nil {
 		return err
 	}
-	defer dwellRows.Close()
+	defer dwellRows.Close() //nolint:errcheck
 
 	for dwellRows.Next() {
 		slot := &DwellBehaviourSlot{}
@@ -1502,7 +1502,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 		slot.MeanDwellDuration = time.Duration(meanNS)
 		slot.StdDwellDuration = time.Duration(stdNS)
 
-		d.db.Exec(`
+  _, _ = d.db.Exec(` //nolint:errcheck
 			INSERT INTO dwell_slots (hour_of_week, zone_id, person_id, mean_dwell_ns, std_dwell_ns, sample_count)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(hour_of_week, zone_id, person_id) DO UPDATE SET
@@ -1571,7 +1571,7 @@ func (d *Detector) QueryAnomalyEvents(since time.Time, limit int) ([]*events.Ano
 	if err != nil {
 		return nil, fmt.Errorf("query anomaly events: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var result []*events.AnomalyEvent
 	for rows.Next() {

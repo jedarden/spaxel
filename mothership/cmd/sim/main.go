@@ -44,19 +44,28 @@ const (
 
 var (
 	// CLI flags
-	flagMothership = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
-	flagToken      = flag.String("token", "", "Provisioning token (auto-generated if empty)")
-	flagNodes      = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
-	flagWalkers    = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
-	flagRate       = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
-	flagDuration   = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
-	flagSeed       = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
-	flagSpace      = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
-	flagBLE        = flag.Bool("ble", false, "Include synthetic BLE advertisements")
-	flagVerify     = flag.Bool("verify", false, "Verify blob detection after duration")
-	flagNoiseSigma = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
-	flagOutputCSV  = flag.String("output-csv", "", "Write ground truth to CSV file")
-	flagChannel   = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
+	flagMothership  = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
+	flagToken       = flag.String("token", "", "Provisioning token (auto-generated if empty)")
+	flagNodes       = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
+	flagWalkers     = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
+	flagRate        = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
+	flagDuration    = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
+	flagSeed        = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
+	flagSpace       = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
+	flagBLE         = flag.Bool("ble", false, "Include synthetic BLE advertisements")
+	flagVerify      = flag.Bool("verify", false, "Verify blob detection after duration")
+	flagNoiseSigma  = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
+	flagOutputCSV   = flag.String("output-csv", "", "Write ground truth to CSV file")
+	flagChannel     = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
+
+	// Scenario flags
+	flagScenario     = flag.String("scenario", "normal", "Scenario type: normal, fall, ota, bag-on-couch")
+	flagFallDelay    = flag.Duration("fall-delay", 5*time.Second, "Delay before fall triggers (fall scenario)")
+	flagFallDuration = flag.Duration("fall-duration", 800*time.Millisecond, "Fall duration (fall scenario)")
+	flagStillness    = flag.Duration("stillness", 15*time.Second, "Stillness duration after fall (fall scenario)")
+	flagOTAVersion   = flag.String("ota-version", "sim-1.1.0", "Target firmware version (OTA scenario)")
+	flagOTASize      = flag.Int64("ota-size", 1024*1024, "Firmware size in bytes (OTA scenario)")
+	flagOTAFailure   = flag.Bool("ota-failure", false, "Simulate OTA boot failure for rollback (OTA scenario)")
 )
 
 // walls is populated from repeated --wall flags
@@ -168,6 +177,7 @@ func main() {
 
 	log.Printf("[SIM] Configuration:")
 	log.Printf("[SIM]   Mothership: %s", *flagMothership)
+	log.Printf("[SIM]   Scenario: %s", *flagScenario)
 	log.Printf("[SIM]   Nodes: %d", *flagNodes)
 	log.Printf("[SIM]   Walkers: %d", *flagWalkers)
 	log.Printf("[SIM]   Rate: %d Hz", *flagRate)
@@ -175,6 +185,28 @@ func main() {
 	log.Printf("[SIM]   Space: %.1fx%.1fx%.1f m", space.Width, space.Depth, space.Height)
 	log.Printf("[SIM]   Walls: %d", len(walls))
 	log.Printf("[SIM]   BLE: %v", *flagBLE)
+
+	// Create scenario configuration
+	scenarioConfig := &ScenarioConfig{
+		Type:      ScenarioType(*flagScenario),
+		StartedAt: time.Now(),
+		FallParams: FallScenarioParams{
+			TriggerAfter:      *flagFallDelay,
+			DescentDuration:   *flagFallDuration,
+			StillnessDuration: *flagStillness,
+			MinVelocity:       -1.5, // Below -1.5 m/s threshold
+			MinZDrop:          0.8,  // At least 0.8m drop
+			EndZ:              0.3,  // Floor level
+		},
+		OTAParams: OTAScenarioParams{
+			UpdateAfter:      10 * time.Second,
+			FirmwareSize:     *flagOTASize,
+			NewVersion:       *flagOTAVersion,
+			RebootDelay:      3 * time.Second,
+			BootFailDuration: 30 * time.Second,
+			SimulateFailure:  *flagOTAFailure,
+		},
+	}
 
 	// Create context for shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -191,7 +223,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("[SIM] Failed to open CSV file: %v", err)
 		}
-		defer csvWriter.Close()
+		defer func() { _ = csvWriter.Close() }() //nolint:errcheck
 		log.Printf("[SIM] Writing ground truth to %s", *flagOutputCSV)
 	}
 
@@ -207,7 +239,7 @@ func main() {
 
 	// Main simulation loop
 	simulationComplete := make(chan struct{})
-	go runSimulation(ctx, nodes, walkers, space, rng, csvWriter, stats, simulationComplete)
+	go runSimulation(ctx, nodes, walkers, space, rng, csvWriter, stats, simulationComplete, scenarioConfig)
 
 	// Wait for completion or interrupt
 	select {
@@ -402,7 +434,7 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 
 		helloBytes, err := json.Marshal(hello)
 		if err != nil {
-			conn.Close()
+			conn.Close() //nolint:errcheck
 			return fmt.Errorf("node %d marshal hello: %w", node.ID, err)
 		}
 
@@ -411,26 +443,26 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 		node.mu.Unlock()
 
 		if err != nil {
-			conn.Close()
+			conn.Close() //nolint:errcheck
 			return fmt.Errorf("node %d send hello: %w", node.ID, err)
 		}
 
 		// Wait for role assignment
-		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second)) //nolint:errcheck
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			conn.Close()
+			conn.Close() //nolint:errcheck
 			return fmt.Errorf("node %d read role: %w", node.ID, err)
 		}
 
 		var roleMsg map[string]interface{}
 		if err := json.Unmarshal(message, &roleMsg); err != nil {
-			conn.Close()
+			conn.Close() //nolint:errcheck
 			return fmt.Errorf("node %d parse role: %w", node.ID, err)
 		}
 
 		if roleMsg["type"] == "reject" {
-			conn.Close()
+			conn.Close() //nolint:errcheck
 			return fmt.Errorf("node %d rejected: %v", node.ID, roleMsg["reason"])
 		}
 
@@ -473,14 +505,14 @@ func provisionToken() (string, error) {
 	if err == nil && resp.StatusCode == http.StatusOK {
 		var result map[string]interface{}
 		if json.NewDecoder(resp.Body).Decode(&result) == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if token, ok := result["node_token"].(string); ok && token != "" {
 				return token, nil
 			}
 		}
 	}
 	if resp != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	// Fallback: generate synthetic token
@@ -494,9 +526,9 @@ func closeAllNodes(nodes []*VirtualNode) {
 	for _, node := range nodes {
 		if node.Conn != nil {
 			node.mu.Lock()
-			node.Conn.WriteMessage(websocket.CloseMessage,
+			node.Conn.WriteMessage(websocket.CloseMessage, //nolint:errcheck
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "sim shutdown"))
-			node.Conn.Close()
+			node.Conn.Close() //nolint:errcheck
 			node.mu.Unlock()
 		}
 	}
@@ -586,7 +618,7 @@ func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
 			return
 		}
 
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second)) //nolint:errcheck
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			select {
@@ -628,7 +660,7 @@ func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
 }
 
 // runSimulation runs the main CSI generation loop
-func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker, space *Space, rng *rand.Rand, csvWriter *CSVWriter, stats *Stats, done chan<- struct{}) {
+func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker, space *Space, rng *rand.Rand, csvWriter *CSVWriter, stats *Stats, done chan<- struct{}, scenario *ScenarioConfig) {
 	defer close(done)
 
 	ticker := time.NewTicker(time.Duration(1000/(*flagRate)) * time.Millisecond)
@@ -637,13 +669,45 @@ func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker,
 	frameNum := 0
 	lastBLETime := time.Now()
 
+	// Initialize fall scenario state
+	var fallState *FallScenarioState
+	if scenario.Type == ScenarioFall || scenario.Type == ScenarioBagOnCouch {
+		if len(walkers) > 0 {
+			fallState = &FallScenarioState{
+				Walker: walkers[0],
+				State:  "walking",
+			}
+			if scenario.Type == ScenarioBagOnCouch {
+				// For bag-on-couch, start with a lower position
+				walkers[0].Position.Z = 1.0
+				walkers[0].Velocity.Z = -0.2 // Slow descent
+			}
+		}
+	}
+
+	// Track scenario timing
+	scenarioStarted := false
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// Handle fall scenario timing
+			if fallState != nil && !scenarioStarted && time.Since(scenario.StartedAt) >= scenario.FallParams.TriggerAfter {
+				if scenario.Type == ScenarioFall {
+					fallState.StartFall(scenario.FallParams)
+					scenarioStarted = true
+				}
+			}
+
 			// Update walker positions
-			updateWalkers(walkers, space, rng)
+			if fallState != nil {
+				dt := 1.0 / float64(*flagRate)
+				fallState.UpdateForFallScenario(dt, scenario.FallParams, space, rng)
+			} else {
+				updateWalkers(walkers, space, rng)
+			}
 
 			// Write to CSV
 			if csvWriter != nil {

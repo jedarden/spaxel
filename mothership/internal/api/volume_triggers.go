@@ -841,9 +841,9 @@ func (h *VolumeTriggersHandler) doWebhookPost(url string, data []byte, params ma
 	if err != nil {
 		return 0, latencyMs, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	// Drain body to allow connection reuse
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck // best-effort drain
 
 	return resp.StatusCode, latencyMs, nil
 }

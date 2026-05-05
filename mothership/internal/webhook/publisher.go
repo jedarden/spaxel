@@ -179,7 +179,7 @@ func (p *Publisher) sendOnce(url string, jsonData []byte, eventType string) erro
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// Check for 5xx errors (retryable)
 	if resp.StatusCode >= 500 {

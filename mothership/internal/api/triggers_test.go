@@ -125,7 +125,7 @@ func TestListTriggers(t *testing.T) {
 			}
 
 			var result []Trigger
-			if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode: %v", err)
 			}
 			if len(result) != tt.wantLen {
@@ -239,7 +239,7 @@ func TestCreateTrigger(t *testing.T) {
 			}
 
 			var created Trigger
-			if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&created); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode: %v", err)
 			}
 			if created.ID != tt.wantID {
@@ -299,7 +299,7 @@ func TestCreateTriggerPersists(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 
 	var result []Trigger
-	json.NewDecoder(w2.Body).Decode(&result)
+	json.NewDecoder(w2.Body).Decode(&result) //nolint:errcheck
 	if len(result) != 1 {
 		t.Fatalf("after reload: expected 1 trigger, got %d", len(result))
 	}
@@ -388,7 +388,7 @@ func TestUpdateTrigger(t *testing.T) {
 			}
 
 			var updated Trigger
-			if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&updated); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode: %v", err)
 			}
 			if updated.Name != tt.wantName {
@@ -496,7 +496,7 @@ func TestUpdateTriggerPersists(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 
 	var result []Trigger
-	json.NewDecoder(w2.Body).Decode(&result)
+	json.NewDecoder(w2.Body).Decode(&result) //nolint:errcheck
 	if len(result) != 1 {
 		t.Fatalf("after reload: expected 1 trigger, got %d", len(result))
 	}
@@ -558,7 +558,7 @@ func TestDeleteTrigger(t *testing.T) {
 			w2 := httptest.NewRecorder()
 			r.ServeHTTP(w2, req2)
 			var result []Trigger
-			json.NewDecoder(w2.Body).Decode(&result)
+			json.NewDecoder(w2.Body).Decode(&result) //nolint:errcheck
 			if len(result) != tt.wantLen {
 				t.Errorf("expected %d triggers after delete, got %d", tt.wantLen, len(result))
 			}
@@ -699,7 +699,7 @@ func TestTriggerCRUDRoundTrip(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	var triggers []Trigger
-	json.NewDecoder(w2.Body).Decode(&triggers)
+	json.NewDecoder(w2.Body).Decode(&triggers) //nolint:errcheck
 	if len(triggers) != 1 {
 		t.Fatalf("after create: expected 1 trigger, got %d", len(triggers))
 	}
@@ -721,7 +721,7 @@ func TestTriggerCRUDRoundTrip(t *testing.T) {
 	req4 := httptest.NewRequest("GET", "/api/triggers", nil)
 	w4 := httptest.NewRecorder()
 	r.ServeHTTP(w4, req4)
-	json.NewDecoder(w4.Body).Decode(&triggers)
+	json.NewDecoder(w4.Body).Decode(&triggers) //nolint:errcheck
 	if triggers[0].Name != "Updated Trip" {
 		t.Errorf("after update: expected name 'Updated Trip', got %s", triggers[0].Name)
 	}
@@ -741,7 +741,7 @@ func TestTriggerCRUDRoundTrip(t *testing.T) {
 	req6 := httptest.NewRequest("GET", "/api/triggers", nil)
 	w6 := httptest.NewRecorder()
 	r.ServeHTTP(w6, req6)
-	json.NewDecoder(w6.Body).Decode(&triggers)
+	json.NewDecoder(w6.Body).Decode(&triggers) //nolint:errcheck
 	if len(triggers) != 0 {
 		t.Errorf("after delete: expected 0 triggers, got %d", len(triggers))
 	}

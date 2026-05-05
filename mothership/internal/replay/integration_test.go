@@ -31,7 +31,7 @@ func TestSeekPerformance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Write 180,000 frames at 50 Hz (20ms apart)
 	baseTime := time.Now().Add(-48 * time.Hour).UnixNano()
@@ -96,7 +96,7 @@ func TestReplayIdenticalProcessing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Create test CSI frames with known characteristics
 	// Frame: 24-byte header + 128*2 bytes I/Q data
@@ -169,7 +169,7 @@ func TestParameterSliderReprocess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Create test frames with known motion patterns
 	baseTime := time.Now().UnixNano()
@@ -299,7 +299,7 @@ func TestLivePipelineIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Create a mock live broadcaster
 	liveBroadcaster := &mockBroadcaster{}
@@ -362,7 +362,7 @@ func TestSeekAccuracy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Write frames at known timestamps
 	baseTime := time.Unix(1_000_000, 0).UnixNano()
@@ -445,7 +445,7 @@ func TestTimelineEventMarkers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Write frames spanning 60 seconds
 	baseTime := time.Now().Add(-60 * time.Second).UnixNano()
@@ -503,7 +503,7 @@ func TestBackToLiveResumesDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
-	defer buffer.Close()
+	defer buffer.Close() //nolint:errcheck
 
 	// Create engine
 	broadcaster := &mockBroadcaster{}

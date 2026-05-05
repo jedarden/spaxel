@@ -81,7 +81,7 @@ func NewGenerator(dbPath string) (*Generator, error) {
 		// Unwrap if it's JSON
 		if strings.HasPrefix(weatherURL, `"`) {
 			var url string
-			json.Unmarshal([]byte(weatherURL), &url)
+			_ = json.Unmarshal([]byte(weatherURL), &url); //nolint:errcheck
 			weatherURL = url
 		}
 	}
@@ -100,7 +100,7 @@ func NewGenerator(dbPath string) (*Generator, error) {
 			UNIQUE(date, person)
 		)
 	`); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("create briefings table: %w", err)
 	}
 
@@ -297,7 +297,7 @@ func (g *Generator) generateAlertBlock(nightStart, nightEnd time.Time, person st
 		log.Printf("[DEBUG] Alert query error: %v", err)
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var alerts []string
 	for rows.Next() {
@@ -361,7 +361,7 @@ func (g *Generator) generateSleepBlock(date, person string) *Section {
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var sleepRecords []struct {
 		Duration      sql.NullInt32
@@ -536,7 +536,7 @@ func (g *Generator) generateAnomalyBlock(nightStart, nightEnd time.Time, person 
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var anomalies []string
 	for rows.Next() {
@@ -731,7 +731,7 @@ func (g *Generator) generateOvernightEventsBlock(nightStart, nightEnd time.Time,
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var events []struct {
 		Type       string
@@ -852,7 +852,7 @@ func (g *Generator) generateWeatherBlock() *Section {
 		log.Printf("[WARN] Failed to fetch weather: %v", err)
 		return nil
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[WARN] Weather API returned status %d", resp.StatusCode)

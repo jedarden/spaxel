@@ -100,7 +100,7 @@ func NewSpatialWeightLearner(dbPath string, config SpatialWeightLearnerConfig) (
 	}
 
 	if err := learner.initSchema(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -153,7 +153,7 @@ func (l *SpatialWeightLearner) loadWeightsIntoCache() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var linkID string
@@ -517,7 +517,7 @@ func (l *SpatialWeightLearner) PersistWeights() error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	now := time.Now().Unix()
 
@@ -529,7 +529,7 @@ func (l *SpatialWeightLearner) PersistWeights() error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for linkID, zones := range l.weightCache {
 		for zoneX, rows := range zones {

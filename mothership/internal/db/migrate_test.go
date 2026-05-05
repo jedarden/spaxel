@@ -71,7 +71,7 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 
 	// Close and re-open - second migration should be a no-op
-	migrator1.Close()
+	migrator1.Close() //nolint:errcheck
 
 	migrator2, err := NewMigrator(filepath.Join(dataDir, dbName), Config{
 		DataDir: dataDir,
@@ -94,7 +94,7 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Errorf("After second migrate: version = %d, want %d (unchanged)", version2, version1)
 	}
 
-	migrator2.Close()
+	migrator2.Close() //nolint:errcheck
 }
 
 // TestMigrateFromV1 tests migrating from v1 to the current version.
@@ -108,7 +108,7 @@ func TestMigrateFromV1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open sqlite: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Create schema_migrations table and insert v1
 	_, err = db.ExecContext(ctx, `
@@ -138,7 +138,7 @@ func TestMigrateFromV1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create v1 schema: %v", err)
 	}
-	db.Close()
+	db.Close() //nolint:errcheck
 
 	// Now run migrations - should apply v2 through v5
 	migrator, err := NewMigrator(dbPath, Config{
@@ -181,7 +181,7 @@ func TestMigrateFromV1(t *testing.T) {
 		}
 	}
 
-	migrator.Close()
+	migrator.Close() //nolint:errcheck
 }
 
 // TestMigrationRollback verifies that a failed migration rolls back
@@ -255,7 +255,7 @@ func TestMigrationRollback(t *testing.T) {
 		t.Error("test_table should not exist after rollback")
 	}
 
-	migrator.Close()
+	migrator.Close() //nolint:errcheck
 }
 
 // TestPendingMigrations verifies that pending migrations are correctly identified.
@@ -307,7 +307,7 @@ func TestPendingMigrations(t *testing.T) {
 		}
 	}
 
-	migrator.Close()
+	migrator.Close() //nolint:errcheck
 }
 
 // TestPreMigrationBackup verifies that a backup is created before migration.
@@ -321,7 +321,7 @@ func TestPreMigrationBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open sqlite: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	_, err = db.ExecContext(ctx, `
 		CREATE TABLE schema_migrations (
@@ -336,7 +336,7 @@ func TestPreMigrationBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create initial schema: %v", err)
 	}
-	db.Close()
+	db.Close() //nolint:errcheck
 
 	// Run migration - should create backup
 	migrator, err := NewMigrator(dbPath, Config{
@@ -380,7 +380,7 @@ func TestPreMigrationBackup(t *testing.T) {
 		t.Error("No pre-upgrade backup file found")
 	}
 
-	migrator.Close()
+	migrator.Close() //nolint:errcheck
 }
 
 // TestCurrentVersion tests getting the current schema version.
@@ -445,18 +445,18 @@ func TestCurrentVersion(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Open sqlite: %v", err)
 			}
-			defer db.Close()
+			defer db.Close() //nolint:errcheck
 
 			if err := tt.setupFunc(db, t); err != nil {
 				t.Fatalf("setupFunc: %v", err)
 			}
-			db.Close()
+			db.Close() //nolint:errcheck
 
 			migrator, err := NewMigrator(dbPath, Config{DataDir: dataDir})
 			if err != nil {
 				t.Fatalf("NewMigrator: %v", err)
 			}
-			defer migrator.Close()
+			defer migrator.Close() //nolint:errcheck
 
 			version, err := migrator.CurrentVersion(ctx)
 			if (err != nil) != tt.wantErr {
@@ -520,7 +520,7 @@ func TestBackupPruning(t *testing.T) {
 		t.Error("Recent backup file should still exist")
 	}
 
-	migrator.Close()
+	migrator.Close() //nolint:errcheck
 }
 
 // TestOpenDBFullSequence tests the full OpenDB startup sequence.
@@ -531,7 +531,7 @@ func TestOpenDBFullSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenDB: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Verify database is usable
 	var version int

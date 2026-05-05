@@ -185,7 +185,7 @@ func TestRotationDetectionFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRegistry() failed: %v", err)
 	}
-	defer registry.Close()
+	defer registry.Close() //nolint:errcheck
 
 	cache := NewRSSICache(2 * time.Minute)
 	detector := NewRotationDetector(registry, cache)
@@ -193,7 +193,7 @@ func TestRotationDetectionFlow(t *testing.T) {
 	now := time.Now()
 
 	// Create a person and device
-	person, err := registry.CreatePerson("Alice", "#ff0000")
+	person, err := registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
 	if err != nil {
 		t.Fatalf("CreatePerson() failed: %v", err)
 	}

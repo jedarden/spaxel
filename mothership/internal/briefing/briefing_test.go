@@ -130,7 +130,7 @@ func setupTestDB(t *testing.T) (*sql.DB, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	f.Close() //nolint:errcheck
 	dbPath := f.Name()
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -182,14 +182,14 @@ func setupTestDB(t *testing.T) (*sql.DB, string) {
 
 func TestBriefing_GenerateEmpty(t *testing.T) {
 	db, dbPath := setupTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 	defer os.Remove(dbPath)
 
 	g, err := NewGenerator(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer g.Close()
+	defer g.Close() //nolint:errcheck
 
 	b, err := g.Generate("2024-03-15", "")
 	if err != nil {
@@ -207,7 +207,7 @@ func TestBriefing_GenerateEmpty(t *testing.T) {
 
 func TestBriefing_GenerateWithSleep(t *testing.T) {
 	db, dbPath := setupTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 	defer os.Remove(dbPath)
 
 	// Insert a sleep record
@@ -223,7 +223,7 @@ func TestBriefing_GenerateWithSleep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer g.Close()
+	defer g.Close() //nolint:errcheck
 
 	b, err := g.Generate("2024-03-15", "Alice")
 	if err != nil {
@@ -237,14 +237,14 @@ func TestBriefing_GenerateWithSleep(t *testing.T) {
 
 func TestBriefing_SaveAndGet(t *testing.T) {
 	db, dbPath := setupTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 	defer os.Remove(dbPath)
 
 	g, err := NewGenerator(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer g.Close()
+	defer g.Close() //nolint:errcheck
 
 	b := &Briefing{
 		Date:        "2024-03-15",
@@ -270,14 +270,14 @@ func TestBriefing_SaveAndGet(t *testing.T) {
 
 func TestBriefing_ShouldGenerate(t *testing.T) {
 	db, dbPath := setupTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 	defer os.Remove(dbPath)
 
 	g, err := NewGenerator(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer g.Close()
+	defer g.Close() //nolint:errcheck
 
 	// Initially should generate
 	if !g.ShouldGenerate("2024-03-15", "") {
@@ -301,7 +301,7 @@ func TestBriefing_ShouldGenerate(t *testing.T) {
 
 func TestBriefing_GenerateWithAlerts(t *testing.T) {
 	db, dbPath := setupTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 	defer os.Remove(dbPath)
 
 	// Insert a fall alert event
@@ -327,7 +327,7 @@ func TestBriefing_GenerateWithAlerts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer g.Close()
+	defer g.Close() //nolint:errcheck
 
 	b, err := g.Generate("2024-03-15", "Alice")
 	if err != nil {

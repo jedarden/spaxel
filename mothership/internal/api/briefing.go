@@ -35,7 +35,7 @@ func NewBriefingHandler(dataDir string) (*BriefingHandler, error) {
 	// Open database connection for settings persistence
 	db, err := sql.Open("sqlite", dataDir+"/spaxel.db")
 	if err != nil {
-		gen.Close()
+		gen.Close() //nolint:errcheck
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)

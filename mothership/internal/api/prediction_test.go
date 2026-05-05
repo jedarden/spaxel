@@ -48,20 +48,20 @@ func TestPredictionHandler_getPredictions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	// Create prediction components
 	store, err := prediction.NewModelStore(filepath.Join(tmpDir, "predictions.db"))
 	if err != nil {
 		t.Fatalf("Failed to create model store: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	accuracy, err := prediction.NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer accuracy.Close()
+	defer accuracy.Close() //nolint:errcheck
 
 	predictor := prediction.NewPredictor(store)
 	horizon := prediction.NewHorizonPredictor(store, accuracy)
@@ -102,7 +102,7 @@ func TestPredictionHandler_getPredictions(t *testing.T) {
 	}
 
 	var predictions []prediction.PersonPrediction
-	if err := json.NewDecoder(w.Body).Decode(&predictions); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&predictions); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -118,19 +118,19 @@ func TestPredictionHandler_getStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	store, err := prediction.NewModelStore(filepath.Join(tmpDir, "predictions.db"))
 	if err != nil {
 		t.Fatalf("Failed to create model store: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	accuracy, err := prediction.NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer accuracy.Close()
+	defer accuracy.Close() //nolint:errcheck
 
 	predictor := prediction.NewPredictor(store)
 	history := prediction.NewHistoryUpdater(store)
@@ -150,7 +150,7 @@ func TestPredictionHandler_getStats(t *testing.T) {
 	}
 
 	var stats map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&stats); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&stats); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -172,19 +172,19 @@ func TestPredictionHandler_getAccuracyOverall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	store, err := prediction.NewModelStore(filepath.Join(tmpDir, "predictions.db"))
 	if err != nil {
 		t.Fatalf("Failed to create model store: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	accuracy, err := prediction.NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer accuracy.Close()
+	defer accuracy.Close() //nolint:errcheck
 
 	predictor := prediction.NewPredictor(store)
 	history := prediction.NewHistoryUpdater(store)
@@ -204,7 +204,7 @@ func TestPredictionHandler_getAccuracyOverall(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -233,19 +233,19 @@ func TestPredictionHandler_getHorizonPredictions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	store, err := prediction.NewModelStore(filepath.Join(tmpDir, "predictions.db"))
 	if err != nil {
 		t.Fatalf("Failed to create model store: %v", err)
 	}
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	accuracy, err := prediction.NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer accuracy.Close()
+	defer accuracy.Close() //nolint:errcheck
 
 	predictor := prediction.NewPredictor(store)
 	horizon := prediction.NewHorizonPredictor(store, accuracy)
@@ -283,7 +283,7 @@ func TestPredictionHandler_getHorizonPredictions(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil { //nolint:errcheck
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
@@ -304,13 +304,13 @@ func TestLogPredictionAccuracy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	accuracy, err := prediction.NewAccuracyTracker(filepath.Join(tmpDir, "accuracy.db"))
 	if err != nil {
 		t.Fatalf("Failed to create accuracy tracker: %v", err)
 	}
-	defer accuracy.Close()
+	defer accuracy.Close() //nolint:errcheck
 
 	// Record some predictions
 	_ = accuracy.RecordPrediction("person1", "zone_a", "zone_b", 0.8, 15*time.Minute)

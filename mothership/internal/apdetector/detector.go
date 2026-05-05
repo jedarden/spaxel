@@ -269,7 +269,7 @@ func (d *Detector) emitAPChangeAlert(oldAP, newAP *APInfo) {
 
 	detailJSON, _ := json.Marshal(detail)
 
-	_, err := d.db.Exec(`
+	_, err := d.db.Exec(` //nolint:errcheck
 		INSERT INTO events (timestamp_ms, type, zone, detail_json, severity)
 		VALUES (?, 'ap_changed', 'system', ?, 'warning')
 	`, time.Now().UnixNano(), string(detailJSON))
@@ -322,7 +322,7 @@ func bssidToBytes(bssid string) []byte {
 	bytes := make([]byte, 6)
 	for i, part := range parts {
 		var b uint8
-		fmt.Sscanf(part, "%x", &b)
+		_, _ = fmt.Sscanf(part, "%x", &b) //nolint:errcheck // invalid hex just means invalid MAC, handled elsewhere
 		bytes[i] = b
 	}
 

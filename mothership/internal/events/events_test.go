@@ -86,7 +86,7 @@ func openTestDB(t *testing.T) *sql.DB {
 
 func TestInsertEvent(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	tests := []struct {
 		name      string
@@ -188,7 +188,7 @@ func TestInsertEvent(t *testing.T) {
 
 func TestQueryEvents(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Insert test data
 	now := time.Now().UnixMilli()
@@ -353,7 +353,7 @@ func TestQueryEvents(t *testing.T) {
 
 func TestQueryEventsFTS(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Insert test data with searchable content
 	now := time.Now().UnixMilli()
@@ -424,7 +424,7 @@ func TestQueryEventsFTS(t *testing.T) {
 
 func TestRunArchiveJob(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	now := time.Now().UnixMilli()
 	oldCutoff := now - ArchiveDaysMs - 1000  // Older than archive threshold
@@ -508,7 +508,7 @@ func TestRunArchiveJob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query remaining events: %v", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	for rows.Next() {
 		var eType string
@@ -539,7 +539,7 @@ func TestRunArchiveJob(t *testing.T) {
 
 func TestRunArchiveJobEmpty(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Run archive job on empty database
 	err := RunArchiveJob(db)
@@ -560,7 +560,7 @@ func TestRunArchiveJobEmpty(t *testing.T) {
 
 func TestGetEventByID(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Insert a test event
 	id, err := InsertEvent(db, Event{
@@ -618,7 +618,7 @@ func TestGetEventByID(t *testing.T) {
 
 func TestInsertDetectionEvent(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	id, err := InsertDetectionEvent(db, "Kitchen", "Alice", 42, map[string]interface{}{
 		"confidence": 0.85,
@@ -663,7 +663,7 @@ func TestInsertDetectionEvent(t *testing.T) {
 
 func TestInsertAlertEvent(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	id, err := InsertAlertEvent(db, EventTypeFallAlert, "Bathroom", "Alice", SeverityAlert, map[string]interface{}{
 		"z_velocity": -1.8,
@@ -691,7 +691,7 @@ func TestInsertAlertEvent(t *testing.T) {
 
 func TestInsertSystemEvent(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	id, err := InsertSystemEvent(db, "Mothership started", nil)
 	if err != nil {
@@ -717,7 +717,7 @@ func TestInsertSystemEvent(t *testing.T) {
 
 func TestStartArchiveScheduler(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	// Start the scheduler with a done channel
 	done := make(chan struct{})
@@ -735,7 +735,7 @@ func TestStartArchiveScheduler(t *testing.T) {
 
 func TestStartArchiveScheduler_StopsOnDone(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	done := make(chan struct{})
 

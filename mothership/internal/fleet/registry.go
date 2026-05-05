@@ -82,7 +82,7 @@ func NewRegistry(dbPath string) (*Registry, error) {
 
 	r := &Registry{db: conn}
 	if err := r.migrate(); err != nil {
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -301,7 +301,7 @@ func (r *Registry) GetAllNodes() ([]NodeRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var nodes []NodeRecord
 	for rows.Next() {
@@ -350,7 +350,7 @@ func (r *Registry) GetOptimisationHistory(limit int) ([]OptimisationHistoryRecor
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []OptimisationHistoryRecord
 	for rows.Next() {

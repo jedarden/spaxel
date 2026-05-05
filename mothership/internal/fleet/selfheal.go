@@ -281,7 +281,7 @@ func (shm *SelfHealManager) OnNodeDisconnected(mac string) {
 	// Record to history
 	nodesBeforeJSON, _ := json.Marshal(onlineList)
 	nodesAfterJSON, _ := json.Marshal(remainingNodes)
-	shm.registry.AddOptimisationHistory(OptimisationHistoryRecord{
+	_ = shm.registry.AddOptimisationHistory(OptimisationHistoryRecord{
 		Timestamp:       time.Now(),
 		TriggerReason:   "node_disconnected:" + mac,
 		MeanGDOPBefore:  gdopBefore,
@@ -416,7 +416,7 @@ func (shm *SelfHealManager) optimiseAndApply(triggerReason string, connectedNode
 	// Record to history
 	nodesBeforeJSON, _ := json.Marshal(onlineList)
 	nodesAfterJSON, _ := json.Marshal(nodes)
-	shm.registry.AddOptimisationHistory(OptimisationHistoryRecord{
+	_ = shm.registry.AddOptimisationHistory(OptimisationHistoryRecord{
 		Timestamp:       time.Now(),
 		TriggerReason:   triggerReason,
 		MeanGDOPBefore:  gdopBefore,

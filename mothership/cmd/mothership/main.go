@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/analytics"
 	"github.com/spaxel/mothership/internal/api"
+	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/automation"
 	"github.com/spaxel/mothership/internal/ble"
 	appconfig "github.com/spaxel/mothership/internal/config"
@@ -104,6 +105,12 @@ func (a *securityStateAdapter) GetLearningProgress() float64 {
 
 func (a *securityStateAdapter) IsModelReady() bool {
 	return a.detector.IsModelReady()
+}
+
+// closeQuietly closes a resource and ignores any error.
+// Used in defer statements where cleanup errors are not actionable.
+func closeQuietly(c io.Closer) {
+	_ = c.Close()
 }
 
 // briefingZoneAdapter adapts zones.Manager to implement briefing.ZoneProvider.
@@ -452,7 +459,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to open main database: %v", err)
 	}
-	defer mainDB.Close()
+	defer closeQuietly(mainDB)
 	startup.CheckTimeout(startupCtx)
 	log.Printf("[INFO] Main database at %s", filepath.Join(cfg.DataDir, "spaxel.db"))
 
@@ -490,6 +497,15 @@ func main() {
 		Shedder:      shedder,
 	})
 	r.Get("/healthz", healthChecker.Handler(version))
+
+	// Phase 6: Auth REST API (PIN-based dashboard authentication)
+	authHandler, err := auth.NewHandler(auth.Config{DB: mainDB})
+	if err != nil {
+		log.Printf("[WARN] Failed to create auth handler: %v", err)
+	} else {
+		authHandler.RegisterRoutes(r)
+		log.Printf("[INFO] Auth API registered at /api/auth/*")
+	}
 
 	// Phase 6: Settings REST API
 	settingsHandler := api.NewSettingsHandler(mainDB)
@@ -557,7 +573,7 @@ func main() {
 			adapter := replay.NewBufferAdapter(buf)
 			replayStore = adapter
 			ingestSrv.SetReplayStore(adapter)
-			defer buf.Close()
+			defer closeQuietly(buf)
 			log.Printf("[INFO] CSI recording buffer at %s (%d MB max, retention=%v)",
 				filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB, buf.Retention())
 		}
@@ -584,7 +600,7 @@ func main() {
 		log.Printf("[WARN] Failed to create recorder: %v (per-link recording disabled)", err)
 	} else {
 		ingestSrv.SetRecorder(recMgr)
-		defer recMgr.Close()
+		defer closeQuietly(recMgr)
 		log.Printf("[INFO] Per-link CSI recorder at %s (retention=%dh, max=%dMB/link)",
 			recorderDir, recorder.DefaultConfig(recorderDir).RetentionHours,
 			recorder.DefaultConfig(recorderDir).MaxBytesPerLink/1<<20)
@@ -595,7 +611,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to open fleet registry: %v", err)
 	}
-	defer fleetReg.Close()
+	defer closeQuietly(fleetReg)
 	log.Printf("[INFO] Fleet registry at %s", filepath.Join(cfg.DataDir, "fleet.db"))
 
 	// Phase 5: Subsystems — start all managers with 5s per-subsystem timeout
@@ -611,7 +627,7 @@ func main() {
 	}); err != nil {
 		log.Printf("[WARN] Failed to open BLE registry: %v", err)
 	} else {
-		defer bleRegistry.Close()
+		defer closeQuietly(bleRegistry)
 		log.Printf("[INFO] BLE registry at %s", filepath.Join(cfg.DataDir, "ble.db"))
 	}
 
@@ -639,7 +655,7 @@ func main() {
 	}); err != nil {
 		log.Printf("[WARN] Failed to open zones database: %v", err)
 	} else {
-		defer zonesMgr.Close()
+		defer closeQuietly(zonesMgr)
 		log.Printf("[INFO] Zones manager at %s", filepath.Join(cfg.DataDir, "zones.db"))
 	}
 
@@ -648,7 +664,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open analytics database: %v", err)
 	} else {
-		defer flowAccumulator.Close()
+		defer closeQuietly(flowAccumulator)
 		log.Printf("[INFO] Flow analytics at %s", filepath.Join(cfg.DataDir, "analytics.db"))
 	}
 
@@ -661,7 +677,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open anomaly detector: %v", err)
 	} else {
-		defer anomalyDetector.Close()
+		defer closeQuietly(anomalyDetector)
 		log.Printf("[INFO] Anomaly detector at %s (learning period: 7 days)", filepath.Join(cfg.DataDir, "anomaly.db"))
 
 		// Start periodic model updates (every 6 hours)
@@ -674,7 +690,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open automation database: %v", err)
 	} else {
-		defer automationEngine.Close()
+		defer closeQuietly(automationEngine)
 		log.Printf("[INFO] Automation engine at %s", filepath.Join(cfg.DataDir, "automation.db"))
 	}
 
@@ -707,7 +723,7 @@ func main() {
 		log.Printf("[WARN] Failed to create briefing handler: %v", err)
 		briefingHandler = nil
 	} else {
-		defer briefingHandler.Close()
+		defer closeQuietly(briefingHandler)
 		log.Printf("[INFO] Morning briefing handler initialized")
 	}
 
@@ -735,7 +751,7 @@ func main() {
 		if personName == "" {
 			personName = linkID
 		}
-		sleepHandler.SaveRecord(personName, report)
+		if err := sleepHandler.SaveRecord(personName, report); err != nil { log.Printf("[WARN] Failed to save sleep record: %v", err) }
 
 		// Send notification for morning report
 		body := fmt.Sprintf("Sleep quality: %s (%.0f/100)", report.Metrics.QualityRating, report.Metrics.OverallScore)
@@ -793,7 +809,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open prediction store: %v", err)
 	} else {
-		defer predictionStore.Close()
+		defer closeQuietly(predictionStore)
 		log.Printf("[INFO] Prediction store at %s", filepath.Join(cfg.DataDir, "prediction.db"))
 
 		// Create history updater
@@ -809,7 +825,7 @@ func main() {
 		if err != nil {
 			log.Printf("[WARN] Failed to open accuracy tracker: %v", err)
 		} else {
-			defer predictionAccuracy.Close()
+			defer closeQuietly(predictionAccuracy)
 			log.Printf("[INFO] Prediction accuracy tracker at %s", filepath.Join(cfg.DataDir, "prediction_accuracy.db"))
 		}
 
@@ -832,7 +848,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open notification database: %v", err)
 	} else {
-		defer notifyService.Close()
+		defer closeQuietly(notifyService)
 		log.Printf("[INFO] Notification service at %s", filepath.Join(cfg.DataDir, "notify.db"))
 
 		// Set room config provider for floor plan thumbnails
@@ -924,7 +940,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open weight store: %v (learning persistence disabled)", err)
 	} else {
-		defer weightStore.Close()
+		defer closeQuietly(weightStore)
 		savedWeights, loadErr := weightStore.LoadWeights()
 		if loadErr != nil {
 			log.Printf("[WARN] Failed to load saved weights: %v", loadErr)
@@ -960,7 +976,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open ground truth store: %v", err)
 	} else {
-		defer groundTruthStore.Close()
+		defer func() { _ = groundTruthStore.Close() }()
 		log.Printf("[INFO] Ground truth store at %s", filepath.Join(cfg.DataDir, "groundtruth.db"))
 
 		// Create spatial weight learner
@@ -971,7 +987,7 @@ func main() {
 		if err != nil {
 			log.Printf("[WARN] Failed to create spatial weight learner: %v", err)
 		} else {
-			defer spatialWeightLearner.Close()
+			defer func() { _ = spatialWeightLearner.Close() }()
 			log.Printf("[INFO] Spatial weight learner initialized (min samples: %d, improvement threshold: %.0f%%)",
 				localization.DefaultSpatialWeightLearnerConfig().MinZoneSamples,
 				localization.DefaultSpatialWeightLearnerConfig().ImprovementThreshold*100)
@@ -1000,7 +1016,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open learning database: %v", err)
 	} else {
-		defer feedbackStore.Close()
+		defer func() { _ = feedbackStore.Close() }()
 		log.Printf("[INFO] Learning feedback store at %s", filepath.Join(cfg.DataDir, "learning.db"))
 
 		// Create feedback processor
@@ -1076,7 +1092,7 @@ func main() {
 	if err == nil {
 		// Parse webhook config from JSON
 		var webhookCfg map[string]interface{}
-		json.Unmarshal([]byte(webhookURL), &webhookCfg)
+		_ = json.Unmarshal([]byte(webhookURL), &webhookCfg)
 		if url, ok := webhookCfg["url"].(string); ok {
 			webhookURL = url
 		}
@@ -1373,7 +1389,7 @@ func main() {
 		}
 		// Store in persistent registry
 		if bleRegistry != nil {
-			bleRegistry.ProcessRelayMessage(nodeMAC, observations)
+			if err := bleRegistry.ProcessRelayMessage(nodeMAC, observations); err != nil { log.Printf("[WARN] Failed to process BLE relay: %v", err) }
 		}
 	})
 
@@ -1396,7 +1412,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to create volume triggers handler: %v", err)
 	} else {
-		defer volumeTriggersHandler.Close()
+		defer func() { _ = volumeTriggersHandler.Close() }()
 		volumeTriggersHandler.SetWSBroadcaster(dashboardHub)
 		log.Printf("[INFO] Volume triggers handler initialized")
 	}
@@ -1575,7 +1591,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open baseline store: %v (persistence disabled)", err)
 	} else {
-		defer baselineStore.Close()
+		defer func() { _ = baselineStore.Close() }()
 		// Restore saved baselines
 		if err := baselineStore.RestoreAll(pm, 64); err != nil {
 			log.Printf("[WARN] Failed to restore baselines: %v", err)
@@ -1590,7 +1606,7 @@ func main() {
 	if err != nil {
 		log.Printf("[WARN] Failed to open health store: %v (health persistence disabled)", err)
 	} else {
-		defer healthStore.Close()
+		defer func() { _ = healthStore.Close() }()
 		healthStore.StartPeriodicTasks(ctx)
 		log.Printf("[INFO] Health persistence enabled at %s", filepath.Join(cfg.DataDir, "health.db"))
 
@@ -2024,12 +2040,12 @@ func main() {
 				},
 				Timestamp: time.Now(),
 			}
-			notifyService.Send(notif)
+			notifyService.Send(notif) //nolint:errcheck
 		}
 
 		// Publish to MQTT
 		if mqttClient != nil && mqttClient.IsConnected() {
-			mqttClient.UpdateBinarySensorState("fall_detected", true)
+			mqttClient.UpdateBinarySensorState("fall_detected", true) //nolint:errcheck
 		}
 
 		// Trigger automation event
@@ -2088,12 +2104,12 @@ func main() {
 					},
 					Timestamp: time.Now(),
 				}
-				notifyService.Send(notif)
+				notifyService.Send(notif) //nolint:errcheck
 			}
 
 			// Update MQTT zone occupancy
 			if mqttClient != nil && mqttClient.IsConnected() {
-				mqttClient.UpdateZoneOccupancy(event.ToZone, zonesMgr.GetZoneOccupancy(event.ToZone).Count)
+				mqttClient.UpdateZoneOccupancy(event.ToZone, zonesMgr.GetZoneOccupancy(event.ToZone).Count) //nolint:errcheck
 			}
 
 			// Trigger automation events
@@ -2132,7 +2148,7 @@ func main() {
 
 			// Record zone transition for presence prediction
 			if predictionHistory != nil && personID != "" {
-				predictionHistory.PersonZoneChange(personID, event.FromZone, event.ToZone, event.BlobID, time.Now())
+				predictionHistory.PersonZoneChange(personID, event.FromZone, event.ToZone, event.BlobID, time.Now()) //nolint:errcheck
 			}
 
 			// Broadcast portal crossing event to dashboard
@@ -2431,7 +2447,7 @@ func main() {
 			if mqttClient != nil && mqttClient.IsConnected() && bleRegistry != nil {
 				people, _ := bleRegistry.GetPeople()
 				for _, person := range people {
-					mqttClient.PublishPredictionSensors(person.ID, person.Name)
+					mqttClient.PublishPredictionSensors(person.ID, person.Name) //nolint:errcheck
 				}
 			}
 
@@ -2450,13 +2466,13 @@ func main() {
 							if zoneName == "" {
 								zoneName = pred.PredictedNextZoneID
 							}
-							mqttClient.UpdatePredictionState(
-								pred.PersonID,
-								zoneName,
-								pred.DataConfidence,
-								pred.PredictionConfidence,
-								pred.EstimatedTransitionMinutes,
-							)
+							mqttClient.UpdatePredictionState( //nolint:errcheck
+							pred.PersonID,
+							zoneName,
+							pred.DataConfidence,
+							pred.PredictionConfidence,
+							pred.EstimatedTransitionMinutes,
+						)
 						}
 
 						// Also publish horizon predictions (15-minute Monte Carlo)
@@ -2475,7 +2491,7 @@ func main() {
 									"zone_probabilities": hpred.ZoneProbabilities,
 								}
 								if data, err := json.Marshal(payload); err == nil {
-									mqttClient.Publish(topic, data)
+									mqttClient.Publish(topic, data) //nolint:errcheck
 								}
 							}
 						}
@@ -3404,7 +3420,7 @@ func main() {
 				zoneID := chi.URLParam(r, "zoneID")
 				hourStr := chi.URLParam(r, "hour")
 				hourOfWeek := 0
-				fmt.Sscanf(hourStr, "%d", &hourOfWeek)
+				_, _ = fmt.Sscanf(hourStr, "%d", &hourOfWeek)
 				if hourOfWeek < 0 || hourOfWeek > 167 {
 					http.Error(w, "hour must be 0-167", http.StatusBadRequest)
 					return
@@ -3590,7 +3606,7 @@ func main() {
 			if engine != nil {
 				engine.SetLearnedWeights(localization.NewLearnedWeights())
 				if weightStore != nil {
-					weightStore.SaveWeights(localization.NewLearnedWeights())
+					weightStore.SaveWeights(localization.NewLearnedWeights()) //nolint:errcheck
 				}
 			}
 			writeJSON(w, map[string]string{"status": "reset"})
@@ -3861,7 +3877,7 @@ func main() {
 	r.Get("/firmware/{filename}", otaSrv.HandleServe)
 	r.Get("/api/firmware/progress", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(otaMgr.GetProgress())
+		_ = json.NewEncoder(w).Encode(otaMgr.GetProgress())
 	})
 	r.Post("/api/firmware/ota-all", func(w http.ResponseWriter, r *http.Request) {
 		// Rolling update of all connected nodes
@@ -3874,7 +3890,7 @@ func main() {
 		}()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 	})
 
 	// Provisioning API (used by onboarding wizard)
@@ -4078,7 +4094,7 @@ func main() {
 	req, reqErr := http.NewRequestWithContext(healthCtx, http.MethodGet, healthURL, nil)
 	if reqErr == nil {
 		if resp, err := http.DefaultClient.Do(req); err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				log.Printf("[INFO] Health check passed (HTTP %d)", resp.StatusCode)
 			} else {
@@ -4123,7 +4139,7 @@ func main() {
 
 	// Wire up node connection closer
 	shutdownMgr.SetNodeCloser(shutdown.NewIngestionServerCloser(func() error {
-		ingestSrv.CloseAllConnections()
+		ingestSrv.CloseAllConnections() //nolint:errcheck
 		return nil
 	}))
 
@@ -4147,7 +4163,7 @@ func main() {
 
 	// mDNS shutdown
 	if mdnsServer != nil {
-		mdnsServer.Shutdown()
+		mdnsServer.Shutdown() //nolint:errcheck
 	}
 
 	// Persist zone occupancy for restart reconciliation
@@ -4526,7 +4542,7 @@ func (a *anomalyAlertAdapter) SendAlert(event events.AnomalyEvent, immediate boo
 			},
 			Timestamp: time.Now(),
 		}
-		a.notifyService.Send(notif)
+		a.notifyService.Send(notif) //nolint:errcheck
 	}
 	return nil
 }
@@ -4550,7 +4566,7 @@ func (a *anomalyAlertAdapter) SendEscalation(event events.AnomalyEvent) error {
 			},
 			Timestamp: time.Now(),
 		}
-		a.notifyService.Send(notif)
+		a.notifyService.Send(notif) //nolint:errcheck
 	}
 	return nil
 }
@@ -4777,12 +4793,12 @@ func copyFileToPath(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 	_, err = io.Copy(out, in)
 	return err
 }

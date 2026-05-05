@@ -64,7 +64,7 @@ func NewStorage(dataDir string) (*Storage, error) {
 	}
 
 	if err := s.migrate(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -314,7 +314,7 @@ func (s *Storage) getWakeEpisodes(sessionID string) ([]WakeEpisode, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var episodes []WakeEpisode
 	for rows.Next() {
@@ -351,7 +351,7 @@ func (s *Storage) GetSessionsByDateRange(start, end time.Time) ([]*SleepSessionR
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return s.scanSessions(rows)
 }
@@ -378,7 +378,7 @@ func (s *Storage) GetSessionsByPerson(personID string, limit int) ([]*SleepSessi
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return s.scanSessions(rows)
 }
@@ -405,7 +405,7 @@ func (s *Storage) GetSessionsByLink(linkID string, limit int) ([]*SleepSessionRe
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return s.scanSessions(rows)
 }
@@ -427,7 +427,7 @@ func (s *Storage) GetRecentSessions(limit int) ([]*SleepSessionRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return s.scanSessions(rows)
 }

@@ -50,7 +50,7 @@ func (h *BackupHandler) HandleBackup(w http.ResponseWriter, r *http.Request) {
 
 	// We write directly into the response — no temp file on disk.
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	defer zw.Close() //nolint:errcheck
 
 	// 1. Back up every .db file found in dataDir using the Online Backup API.
 	if err := h.backupDatabases(zw); err != nil {
@@ -66,7 +66,7 @@ func (h *BackupHandler) HandleBackup(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Include VERSION file.
 	if fw, err := zw.Create("VERSION"); err == nil {
-		fw.Write([]byte(h.version + "\n"))
+		_, _ = fw.Write([]byte(h.version + "\n")) //nolint:errcheck // write to in-memory buffer, failure is non-critical
 	}
 
 	if err := zw.Close(); err != nil {
@@ -122,13 +122,13 @@ func (h *BackupHandler) backupOneDB(zw *zip.Writer, dbPath, zipName string) erro
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		return fmt.Errorf("conn: %w", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	var backupBytes []byte
 
@@ -152,7 +152,7 @@ func (h *BackupHandler) backupOneDB(zw *zip.Writer, dbPath, zipName string) erro
 		for {
 			more, err := bck.Step(pagesPerStep)
 			if err != nil {
-				bck.Finish()
+				_ = bck.Finish() //nolint:errcheck // cleanup in error path
 				return fmt.Errorf("backup step: %w", err)
 			}
 			if !more {
@@ -165,7 +165,7 @@ func (h *BackupHandler) backupOneDB(zw *zip.Writer, dbPath, zipName string) erro
 		if err != nil {
 			return fmt.Errorf("backup commit: %w", err)
 		}
-		defer dstConn.Close()
+		defer dstConn.Close() //nolint:errcheck
 
 		// Serialize the in-memory database to bytes.
 		ser, ok := dstConn.(interface {

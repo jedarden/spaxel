@@ -151,7 +151,7 @@ func (s *Storage) flush() {
 		return
 	}
 
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO events (timestamp_ms, type, zone, person, blob_id, detail_json, severity)
@@ -161,7 +161,7 @@ func (s *Storage) flush() {
 		log.Printf("[ERROR] Timeline storage prepare statement: %v", err)
 		return
 	}
-	defer stmt.Close()
+	defer stmt.Close() //nolint:errcheck
 
 	for _, e := range batch {
 		var detailJSON string

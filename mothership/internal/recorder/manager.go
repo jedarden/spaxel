@@ -183,7 +183,7 @@ func (m *Manager) AvailableRange(linkID string) (start, end time.Time, err error
 
 // Close gracefully shuts down the manager, flushing all pending writes
 // and stopping the cleanup goroutine.
-func (m *Manager) Close() {
+func (m *Manager) Close() error {
 	close(m.done)
 
 	m.mu.Lock()
@@ -193,6 +193,7 @@ func (m *Manager) Close() {
 	m.mu.Unlock()
 
 	m.wg.Wait()
+	return nil
 }
 
 func (m *Manager) getOrCreateLink(linkID string) *linkRecorder {
@@ -233,7 +234,7 @@ func (m *Manager) linkWriter(lr *linkRecorder) {
 	flush := func() {
 		if writer != nil {
 			writer.Sync()
-			writer.Close()
+			writer.Close() //nolint:errcheck
 			writer = nil
 		}
 	}

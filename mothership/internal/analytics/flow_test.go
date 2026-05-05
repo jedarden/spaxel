@@ -21,20 +21,20 @@ func TestFlowAccumulator_TrajectorySampling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Test: track moves 0.25m -> segment recorded
 	// First update establishes the waypoint
@@ -44,7 +44,7 @@ func TestFlowAccumulator_TrajectorySampling(t *testing.T) {
 	fa.AddTrackUpdate("track-1", 0.25, 0, 0, 0.25, 0, 0, "person1")
 
 	// Flush buffers
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// Verify segment was recorded by checking the database directly
 	var segmentCount int
@@ -61,7 +61,7 @@ func TestFlowAccumulator_TrajectorySampling(t *testing.T) {
 	fa.AddTrackUpdate("track-2", 0.05, 0, 0, 0.05, 0, 0, "person2")
 
 	// Flush buffers
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// This small movement should not create a new segment (0.05 < 0.2 threshold)
 	var track2Count int
@@ -86,20 +86,20 @@ func TestFlowAccumulator_FlowVectorAveraging(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Create 5 segments all pointing East (positive X direction)
 	for i := 0; i < 5; i++ {
@@ -109,7 +109,7 @@ func TestFlowAccumulator_FlowVectorAveraging(t *testing.T) {
 	}
 
 	// Flush buffers
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// The flow vectors should average to approximately (1, 0) direction
 	// Since all segments point in the same direction
@@ -138,20 +138,20 @@ func TestFlowAccumulator_DwellAccumulation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Create 100 stationary updates at the same location
 	gridX := 5
@@ -168,7 +168,7 @@ func TestFlowAccumulator_DwellAccumulation(t *testing.T) {
 	}
 
 	// Flush buffers
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// Get dwell heatmap
 	heatmap, err := fa.ComputeDwellHeatmap(nil)
@@ -197,20 +197,20 @@ func TestFlowAccumulator_CorridorDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Create 20 aligned segments in adjacent cells (simulating a corridor)
 	// All moving in +X direction
@@ -222,7 +222,7 @@ func TestFlowAccumulator_CorridorDetection(t *testing.T) {
 	}
 
 	// Flush buffers
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// Run corridor detection
 	_, err = fa.DetectCorridors()
@@ -247,20 +247,20 @@ func TestFlowAccumulator_TimeRangeFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Create multiple tracks that all move through the same cells to accumulate
 	// enough segments per cell
@@ -273,7 +273,7 @@ func TestFlowAccumulator_TimeRangeFiltering(t *testing.T) {
 	}
 
 	// Flush buffers
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// Query with time range: since 8 days ago (should include recent data)
 	since := time.Now().AddDate(0, 0, -8)
@@ -294,27 +294,27 @@ func TestFlowAccumulator_PruneOldSegments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Create a segment
 	fa.AddTrackUpdate("track-1", 0, 0, 0, 1, 0, 0, "")
 	fa.AddTrackUpdate("track-1", 1, 0, 0, 1, 0, 0, "")
 
 	// Flush buffers
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// Check segment was recorded
 	var countBefore int
@@ -382,20 +382,20 @@ func TestFlowAccumulator_RemoveTrack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Add a track at origin (establishes waypoint)
 	fa.AddTrackUpdate("track-1", 0, 0, 0, 0.25, 0, 0, "person1")
@@ -407,7 +407,7 @@ func TestFlowAccumulator_RemoveTrack(t *testing.T) {
 	fa.AddTrackUpdate("track-1", 0.25, 0, 0, 0.25, 0, 0, "person1")
 	// Add another update to create a segment
 	fa.AddTrackUpdate("track-1", 0.5, 0, 0, 0.25, 0, 0, "person1")
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// Should have a segment since we have two updates after removal
 	var count int
@@ -425,20 +425,20 @@ func TestFlowAccumulator_PersonFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	fa := NewFlowAccumulator(db, testGridCellSize)
 	if err := fa.InitSchema(); err != nil {
 		t.Fatalf("Failed to init schema: %v", err)
 	}
-	defer fa.Close()
+	defer fa.Close() //nolint:errcheck
 
 	// Create segments for person1
 	fa.AddTrackUpdate("track-1", 0, 0, 0, 0.3, 0, 0, "person1")
@@ -452,7 +452,7 @@ func TestFlowAccumulator_PersonFiltering(t *testing.T) {
 	fa.AddTrackUpdate("track-3", 2, 0, 0, 0.3, 0, 0, "")
 	fa.AddTrackUpdate("track-3", 2.3, 0, 0, 0.3, 0, 0, "")
 
-	fa.Flush()
+	fa.Flush() //nolint:errcheck
 
 	// Query all flow
 	allFlow, err := fa.ComputeFlowMap(nil, nil, nil)

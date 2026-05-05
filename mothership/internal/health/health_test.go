@@ -181,7 +181,7 @@ func TestHealthCheckSheddingLevelJSON(t *testing.T) {
 			handler(w, req)
 
 			var resp Response
-			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 				t.Fatalf("failed to decode: %v", err)
 			}
 
@@ -215,7 +215,7 @@ func TestHealthCheckHandler(t *testing.T) {
 	}
 
 	var resp Response
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
@@ -243,7 +243,7 @@ func TestHealthCheckHandlerDegraded(t *testing.T) {
 	}
 
 	var resp Response
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
 		t.Fatalf("failed to decode response: %v", err)
 	}
 

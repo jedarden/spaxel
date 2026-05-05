@@ -87,7 +87,7 @@ func NewGroundTruthStore(dbPath string, config GroundTruthStoreConfig) (*GroundT
 	}
 
 	if err := store.initSchema(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, err
 	}
 
@@ -273,7 +273,7 @@ func (s *GroundTruthStore) GetSamplesForZone(gridX, gridY int, limit int) ([]Gro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return s.scanSamples(rows)
 }
@@ -297,7 +297,7 @@ func (s *GroundTruthStore) GetRecentSamples(limit int) ([]GroundTruthSample, err
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return s.scanSamples(rows)
 }
@@ -321,7 +321,7 @@ func (s *GroundTruthStore) GetSamplesInTimeRange(start, end time.Time) ([]Ground
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	return s.scanSamples(rows)
 }
@@ -374,7 +374,7 @@ func (s *GroundTruthStore) GetZoneSampleCounts() (map[[2]int]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	counts := make(map[[2]int]int)
 	for rows.Next() {
@@ -411,7 +411,7 @@ func (s *GroundTruthStore) GetSampleCountByPerson() (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	counts := make(map[string]int)
 	for rows.Next() {
@@ -451,7 +451,7 @@ func (s *GroundTruthStore) ComputeWeeklyAccuracy(week string) error {
 	if err != nil {
 		return fmt.Errorf("query samples: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	// Group by person
 	personErrors := make(map[string][]float64)
@@ -548,7 +548,7 @@ func (s *GroundTruthStore) GetPositionAccuracyHistory(weeks int) ([]PositionAccu
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var records []PositionAccuracyRecord
 	for rows.Next() {

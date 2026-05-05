@@ -52,7 +52,7 @@ func TestPushoverSendBasic(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":1,"request":"test-id"}`))
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("test-app-token", "test-user-key")
 	client.APIURL = server.URL
@@ -120,7 +120,7 @@ func TestPushoverSendBasic(t *testing.T) {
 				t.Errorf("User = %s, want 'test-user-key'", valueStr)
 			}
 		}
-		part.Close()
+		part.Close() //nolint:errcheck
 	}
 
 	if !foundMessage {
@@ -147,7 +147,7 @@ func TestPushoverSendWithTitle(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("test-app-token", "test-user-key")
 	client.APIURL = server.URL
@@ -191,7 +191,7 @@ func TestPushoverSendWithTitle(t *testing.T) {
 				t.Errorf("Title = %s, want 'Test Title'", string(value))
 			}
 		}
-		part.Close()
+		part.Close() //nolint:errcheck
 	}
 
 	if !foundTitle {
@@ -213,7 +213,7 @@ func TestPushoverSendWithPriority(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			}))
 			serverURL := server.URL
-			defer server.Close()
+			defer server.Close() //nolint:errcheck
 
 			client := NewPushoverClient("test-app-token", "test-user-key")
 			client.APIURL = serverURL
@@ -258,7 +258,7 @@ func TestPushoverSendWithPriority(t *testing.T) {
 						t.Errorf("Priority = %s, want %s", string(value), expected)
 					}
 				}
-				part.Close()
+				part.Close() //nolint:errcheck
 			}
 
 			if !foundPriority {
@@ -276,7 +276,7 @@ func TestPushoverSendWithPNGAttachment(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("test-app-token", "test-user-key")
 	client.APIURL = server.URL
@@ -325,7 +325,7 @@ func TestPushoverSendInvalidPNG(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("test-app-token", "test-user-key")
 	client.APIURL = server.URL
@@ -359,7 +359,7 @@ func TestPushoverEmergencySettings(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("test-app-token", "test-user-key")
 	client.APIURL = server.URL
@@ -426,7 +426,7 @@ func TestPushoverEmergencySettings(t *testing.T) {
 				t.Errorf("Expire = %s, want '3600'", valueStr)
 			}
 		}
-		part.Close()
+		part.Close() //nolint:errcheck
 	}
 
 	if !foundPriority {
@@ -483,7 +483,7 @@ func TestPushoverSendErrorCases(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(`{"error":"invalid token"}`))
 		}))
-		defer server.Close()
+		defer server.Close() //nolint:errcheck
 
 		client := NewPushoverClient("app-token", "user-key")
 		client.APIURL = server.URL
@@ -539,7 +539,7 @@ func TestPushoverClientDefaults(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("app-token", "user-key")
 	client.APIURL = server.URL
@@ -606,7 +606,7 @@ func TestPushoverClientDefaults(t *testing.T) {
 				t.Errorf("Sound = %s, want 'alarm'", valueStr)
 			}
 		}
-		part.Close()
+		part.Close() //nolint:errcheck
 	}
 
 	if !foundTitle {
@@ -668,7 +668,7 @@ func TestPushoverSendWithAllOptions(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("app-token", "user-key")
 	client.APIURL = server.URL
@@ -725,7 +725,7 @@ func TestPushoverSendWithAllOptions(t *testing.T) {
 
 		fieldName := part.FormName()
 		if fieldName == "" {
-			part.Close()
+			part.Close() //nolint:errcheck
 			continue
 		}
 
@@ -738,7 +738,7 @@ func TestPushoverSendWithAllOptions(t *testing.T) {
 			}
 			foundFields[fieldName] = true
 		}
-		part.Close()
+		part.Close() //nolint:errcheck
 	}
 
 	// Verify all expected fields were found
@@ -758,7 +758,7 @@ func TestPushoverRetryExpireClamping(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("app-token", "user-key")
 	client.APIURL = server.URL
@@ -819,7 +819,7 @@ func TestPushoverRetryExpireClamping(t *testing.T) {
 				t.Errorf("Expire should be clamped to 10800, got: %s", valueStr)
 			}
 		}
-		part.Close()
+		part.Close() //nolint:errcheck
 	}
 
 	if !foundRetry {
@@ -835,7 +835,7 @@ func TestPushoverEmptyHTTPClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("app-token", "user-key")
 	client.APIURL = server.URL
@@ -859,7 +859,7 @@ func TestPushoverPriorityClamping(t *testing.T) {
 		receivedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	client := NewPushoverClient("app-token", "user-key")
 	client.APIURL = server.URL
@@ -903,7 +903,7 @@ func TestPushoverPriorityClamping(t *testing.T) {
 				t.Errorf("Invalid priority should be clamped to 0, got: %s", string(value))
 			}
 		}
-		part.Close()
+		part.Close() //nolint:errcheck
 	}
 
 	if !foundPriority {
@@ -926,5 +926,5 @@ func TestPushoverWriteFieldHelper(t *testing.T) {
 		t.Errorf("WriteField() error = %v", err)
 	}
 
-	writer.Close()
+	writer.Close() //nolint:errcheck
 }

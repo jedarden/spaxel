@@ -15,7 +15,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("BasicStorage", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		// Publish an event
 		eventbus.PublishDefault(eventbus.Event{
@@ -79,7 +79,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("NeverBlocksPublishers", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		// Publish many events rapidly - should never block
 		done := make(chan bool)
@@ -105,7 +105,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("DropOldestOnOverflow", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		// Publish more events than queue size
 		for i := 0; i < queueSize+100; i++ {
@@ -141,7 +141,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("AllEventTypesStored", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		eventTypes := []string{
 			eventbus.TypeDetection,
@@ -178,7 +178,7 @@ func TestTimelineStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Query event types: %v", err)
 		}
-		defer rows.Close()
+		defer rows.Close() //nolint:errcheck
 
 		var storedTypes []string
 		for rows.Next() {
@@ -197,7 +197,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("EventsStoredWithinOneSecond", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		// Publish an event
 		publishTime := time.Now()
@@ -234,7 +234,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("StringDetailHandling", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		// Publish event with string detail (from eventbus)
 		detailJSON := `{"message":"test message","value":42}`
@@ -292,7 +292,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("Stats", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		// Initial stats
 		stats := storage.Stats()
@@ -320,7 +320,7 @@ func TestTimelineStorage(t *testing.T) {
 	t.Run("ConcurrentWrites", func(t *testing.T) {
 		db := setupTestDB(t)
 		storage := New(db)
-		defer storage.Close()
+		defer storage.Close() //nolint:errcheck
 
 		// Publish events from multiple goroutines
 		const numGoroutines = 10
@@ -395,7 +395,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	// SQLite in-memory databases are per-connection. Enforce a single connection
 	// so all operations (schema creation, inserts, queries) share the same database.
 	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { db.Close() }) //nolint:errcheck
 
 	// Create the events table
 	_, err = db.Exec(`

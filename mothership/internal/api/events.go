@@ -100,7 +100,7 @@ func NewEventsHandler(dbPath string) (*EventsHandler, error) {
 		return nil, fmt.Errorf("open events db: %w", err)
 	}
 	if err := createEventsSchema(db); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("init events schema: %w", err)
 	}
 	log.Printf("[INFO] Events handler initialized (own DB: %s)", dbPath)
@@ -117,13 +117,13 @@ func NewEventsHandlerFromDB(db *sql.DB) *EventsHandler {
 // Close releases resources. If the handler owns the DB connection, it closes it.
 func (e *EventsHandler) Close() {
 	if e.ownsDB {
-		e.db.Close()
+		e.db.Close() //nolint:errcheck
 	}
 }
 
 // Archive runs the archive job to move old events to the archive table.
 func (e *EventsHandler) Archive(_ interface{}) {
-	events.RunArchiveJob(e.db)
+	_ = events.RunArchiveJob(e.db) //nolint:errcheck // errors logged internally
 }
 
 // createEventsSchema creates the events, events_archive, and FTS5 tables.
@@ -463,7 +463,7 @@ func (e *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "failed to query events")
 		return
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	events := make([]*Event, 0, limit)
 	for rows.Next() {

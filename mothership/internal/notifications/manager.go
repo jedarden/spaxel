@@ -145,7 +145,7 @@ func New(cfg Config) (*NotificationManager, error) {
 	}
 
 	if err := m.initDB(); err != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("init database: %w", err)
 	}
 
@@ -630,7 +630,7 @@ func (m *NotificationManager) GetHistory(limit int) ([]map[string]interface{}, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var history []map[string]interface{}
 	for rows.Next() {

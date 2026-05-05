@@ -235,8 +235,9 @@ func ValidateRSSI(rssi int8, distance float64) bool {
 }
 
 // ValidateIQValues checks that I/Q values are in valid int8 range
+// Note: int8 values are always in range, but we check for sensible CSI values
 func ValidateIQValues(i, q int8) bool {
-	return i >= -127 && i <= 127 && q >= -127 && q <= 127
+	return i >= -127 && q >= -127 // Upper bound implicit in int8 type
 }
 
 // IsInFresnelZones checks if a point is within the first N Fresnel zones
