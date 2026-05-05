@@ -13,6 +13,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
+
+	"github.com/spaxel/mothership/internal/render"
 )
 
 // NotificationsHandler manages notification delivery channels.
@@ -312,6 +314,7 @@ func (n *NotificationsHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/notifications/config", n.handleGetConfig)
 	r.Post("/api/notifications/config", n.handleSetConfig)
 	r.Post("/api/notifications/test", n.handleSendTest)
+	r.Get("/api/notifications/preview", n.handlePreview)
 }
 
 // notificationConfigResponse is the response for channel configuration requests.
@@ -433,6 +436,73 @@ func (n *NotificationsHandler) handleSendTest(w http.ResponseWriter, r *http.Req
 		Status:  "sent",
 		Message: "Test notification sent successfully",
 	})
+}
+
+// handlePreview handles GET /api/notifications/preview
+// Returns a rendered test image for UI development and QA.
+// Query params:
+//   - type: notification type (fall, anomaly, zone_enter, sleep)
+//   - person: person name (optional, defaults to "Alice")
+func (n *NotificationsHandler) handlePreview(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	notifType := r.URL.Query().Get("type")
+	personName := r.URL.Query().Get("person")
+
+	// Set defaults
+	if personName == "" {
+		personName = "Alice"
+	}
+
+	// Define test zones
+	zones := []render.Zone{
+		{ID: "kitchen", Name: "Kitchen", X: 0, Y: 0, W: 4, D: 3, Color: "#4fc3f7"},
+		{ID: "living", Name: "Living", X: 4, Y: 0, W: 5, D: 4, Color: "#81c784"},
+		{ID: "hallway", Name: "Hallway", X: 4, Y: 4, W: 2, D: 2, Color: "#ffb74d"},
+		{ID: "bedroom", Name: "Bedroom", X: 6, Y: 4, W: 3, D: 3, Color: "#ba68c8"},
+	}
+
+	// Define test person
+	person := render.Person{
+		Name:      personName,
+		X:         2.0,
+		Y:         1.5,
+		Z:         1.0,
+		Color:     "#4488ff",
+		Confidence: 0.85,
+		IsFall:    false,
+	}
+
+	var pngData []byte
+	var err error
+
+	// Generate thumbnail based on notification type
+	switch notifType {
+	case "fall":
+		pngData, err = render.GenerateFallDetectedThumbnail(10.0, 8.0, zones, person, "Kitchen")
+	case "anomaly":
+		pngData, err = render.GenerateAnomalyAlertThumbnail(10.0, 8.0, zones, "Living")
+	case "zone_enter":
+		pngData, err = render.GenerateZoneEnterThumbnail(10.0, 8.0, zones, person, "Kitchen")
+	case "sleep":
+		person.Z = 0.5 // Sleeping position
+		pngData, err = render.GenerateSleepSummaryThumbnail(10.0, 8.0, zones, person, "7h 23m")
+	default:
+		// Default to fall detection preview
+		pngData, err = render.GenerateFallDetectedThumbnail(10.0, 8.0, zones, person, "Kitchen")
+	}
+
+	if err != nil {
+		log.Printf("[ERROR] Failed to generate preview thumbnail: %v", err)
+		http.Error(w, "failed to generate preview", http.StatusInternalServerError)
+		return
+	}
+
+	// Set headers and write PNG data
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	if _, err := w.Write(pngData); err != nil {
+		log.Printf("[ERROR] Failed to write preview response: %v", err)
+	}
 }
 
 // ── Notification sending (called by automation engine) ────────────────────────────
