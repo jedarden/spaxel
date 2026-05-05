@@ -44,9 +44,9 @@ func (a *qualityProviderAdapter) GetLinkQuality(linkID string) float64 {
 	return report.Confidence
 }
 
-// nodeConnectedGetter is the interface needed to get connected nodes.
+// NodeConnectedGetter is the interface needed to get connected nodes.
 // This is implemented by fleet.Manager.
-type nodeConnectedGetter interface {
+type NodeConnectedGetter interface {
 	GetConnectedMACs() []string
 }
 
@@ -54,7 +54,7 @@ type nodeConnectedGetter interface {
 type nodeProviderAdapter struct {
 	registry *fleet.Registry
 	weather  *fleet.LinkWeatherDiagnostics
-	connGetter nodeConnectedGetter
+	connGetter NodeConnectedGetter
 }
 
 // NewNodeProvider creates an ota.NodeProvider from fleet.Registry and fleet.Manager.
@@ -66,7 +66,7 @@ func NewNodeProvider(registry *fleet.Registry, weather *fleet.LinkWeatherDiagnos
 }
 
 // NewNodeProviderWithConnected creates an ota.NodeProvider with a connected nodes getter.
-func NewNodeProviderWithConnected(registry *fleet.Registry, weather *fleet.LinkWeatherDiagnostics, connGetter nodeConnectedGetter) ota.NodeProvider {
+func NewNodeProviderWithConnected(registry *fleet.Registry, weather *fleet.LinkWeatherDiagnostics, connGetter NodeConnectedGetter) ota.NodeProvider {
 	return &nodeProviderAdapter{
 		registry:  registry,
 		weather:   weather,
@@ -76,7 +76,7 @@ func NewNodeProviderWithConnected(registry *fleet.Registry, weather *fleet.LinkW
 
 // SetConnectedGetter sets the source for connected node MACs.
 // This should be the fleet.Manager which implements GetConnectedMACs().
-func (p *nodeProviderAdapter) SetConnectedGetter(getter nodeConnectedGetter) {
+func (p *nodeProviderAdapter) SetConnectedGetter(getter NodeConnectedGetter) {
 	p.connGetter = getter
 }
 

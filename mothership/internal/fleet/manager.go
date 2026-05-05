@@ -646,3 +646,14 @@ func (m *Manager) IsManualOverrideActive() bool {
 	defer m.mu.RUnlock()
 	return time.Now().Before(m.manualOverrideUntil)
 }
+
+// GetConnectedMACs returns the MACs of currently-connected nodes.
+// Delegates to the NodeStateNotifier.
+func (m *Manager) GetConnectedMACs() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.notifier == nil {
+		return nil
+	}
+	return m.notifier.GetConnectedMACs()
+}
