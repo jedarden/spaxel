@@ -239,7 +239,10 @@ func AS3_ConfirmationWindow(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Verify no fall alert
-	resp, _ := http.Get(srv.URL + "/api/events?type=fall_alert")
+	resp, err := http.Get(srv.URL + "/api/events?type=fall_alert")
+	if err != nil {
+		t.Fatalf("Failed to get events: %v", err)
+	}
 	defer resp.Body.Close()
 
 	var result map[string]interface{}

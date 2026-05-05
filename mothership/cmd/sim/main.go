@@ -242,17 +242,23 @@ func main() {
 	go runSimulation(ctx, nodes, walkers, space, rng, csvWriter, stats, simulationComplete, scenarioConfig)
 
 	// Wait for completion or interrupt
+	var durationTimer <-chan time.Time
+	if *flagDuration > 0 {
+		durationTimer = time.After(time.Duration(*flagDuration) * time.Second)
+	} else {
+		// Never timeout if duration is 0
+		durationTimer = make(chan time.Time)
+	}
+
 	select {
 	case <-simulationComplete:
 		log.Printf("[SIM] Simulation completed")
 	case <-sigChan:
 		log.Printf("[SIM] Interrupted by user")
 		cancel()
-	case <-time.After(time.Duration(*flagDuration) * time.Second):
-		if *flagDuration > 0 {
-			log.Printf("[SIM] Duration elapsed")
-			cancel()
-		}
+	case <-durationTimer:
+		log.Printf("[SIM] Duration elapsed")
+		cancel()
 	}
 
 	// Verify blob count if requested

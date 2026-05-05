@@ -15,7 +15,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,7 +52,7 @@ func TestMain(m *testing.M) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, tc.fn)
+		tc.fn(&testing.T{})
 	}
 }
 

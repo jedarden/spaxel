@@ -40,19 +40,19 @@ func TestAS2_WalkingDetection(t *testing.T) {
 	}
 
 	// Run simulator with 2 nodes, 1 walker
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "1",
 		"--rate", "20",
-		"--duration", "60",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
-	// Wait for simulator to start
-	time.Sleep(2 * time.Second)
+	// Wait for simulator to start and send data
+	time.Sleep(3 * time.Second)
 
 	// Monitor blobs for 60 seconds
 	t.Run("MonitorBlobsDuringWalk", func(t *testing.T) {
@@ -141,16 +141,16 @@ func TestAS2_BlobCountMatchesWalkers(t *testing.T) {
 	}
 
 	// Run simulator with 2 nodes, 2 walkers
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "2",
 		"--walkers", "2",
 		"--rate", "20",
-		"--duration", "30",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for detection to stabilize
 	time.Sleep(10 * time.Second)

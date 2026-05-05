@@ -49,18 +49,18 @@ func TestAS5_OTAUpdateSucceeds(t *testing.T) {
 	}
 
 	// Start simulator with 1 node, OTA scenario
-	simCtx, simCancel := context.WithTimeout(ctx, 4*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "1",
 		"--walkers", "0",
-		"--duration", "60",
+		"--duration", "0", // Run until cancelled
 		"--scenario", "ota",
 		"--ota-version", "sim-1.1.0",
 		"--ota-size", "1048576", // 1MB
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for node to connect
 	node, err := h.WaitForNode(ctx, "")
@@ -184,18 +184,18 @@ func TestAS5_OTARollbackOnBadFirmware(t *testing.T) {
 	}
 
 	// Start simulator with OTA failure scenario
-	simCtx, simCancel := context.WithTimeout(ctx, 4*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel()
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "1",
 		"--walkers", "0",
-		"--duration", "60",
+		"--duration", "0", // Run until cancelled
 		"--scenario", "ota",
 		"--ota-version", "sim-1.2.0-bad",
 		"--ota-failure", // Simulates boot failure
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	defer simCancel()
 
 	// Wait for node to connect initially
 	node, err := h.WaitForNode(ctx, "")
@@ -309,15 +309,14 @@ func TestAS5_VerifiedBadgePath(t *testing.T) {
 	}
 
 	// Run normal scenario first to establish baseline
-	simCtx, simCancel := context.WithTimeout(ctx, 2*time.Minute)
+	simCtx, simCancel := context.WithTimeout(ctx, 90*time.Second)
 	if err := h.RunSimulator(simCtx, []string{
 		"--nodes", "1",
 		"--walkers", "0",
-		"--duration", "10",
+		"--duration", "0", // Run until cancelled
 	}); err != nil {
 		t.Fatalf("Failed to start simulator: %v", err)
 	}
-	simCancel()
 
 	// Wait for node
 	node, err := h.WaitForNode(ctx, "")
@@ -328,18 +327,24 @@ func TestAS5_VerifiedBadgePath(t *testing.T) {
 	initialVersion, _ := node["firmware_version"].(string)
 	t.Logf("Initial version: %s", initialVersion)
 
+	// Stop first simulator before starting OTA scenario
+	simCancel()
+
+	// Wait a moment for clean disconnect
+	time.Sleep(1 * time.Second)
+
 	// Now run OTA scenario
-	simCtx2, simCancel2 := context.WithTimeout(ctx, 3*time.Minute)
+	simCtx2, simCancel2 := context.WithTimeout(ctx, 90*time.Second)
+	defer simCancel2()
 	if err := h.RunSimulator(simCtx2, []string{
 		"--nodes", "1",
 		"--walkers", "0",
-		"--duration", "30",
+		"--duration", "0", // Run until cancelled
 		"--scenario", "ota",
 		"--ota-version", "sim-1.1.0-verified",
 	}); err != nil {
 		t.Fatalf("Failed to start OTA simulator: %v", err)
 	}
-	defer simCancel2()
 
 	// Wait for update to complete
 	time.Sleep(20 * time.Second)
