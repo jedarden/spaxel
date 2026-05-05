@@ -527,6 +527,16 @@ func main() {
 	notificationSettingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Notification settings API registered at /api/settings/notifications")
 
+	// Phase 6: Notifications REST API (channels, preview, test)
+	notificationsHandler, err := api.NewNotificationsHandler(filepath.Join(cfg.DataDir, "notifications.db"))
+	if err != nil {
+		log.Printf("[WARN] Failed to create notifications handler: %v", err)
+	} else {
+		defer notificationsHandler.Close()
+		notificationsHandler.RegisterRoutes(r)
+		log.Printf("[INFO] Notifications API registered at /api/notifications/*")
+	}
+
 	// Phase 6: Feature discovery notifications
 	// Notifier manages one-time feature discovery notifications with quiet hours support
 	featureNotifier, err := featurehelp.NewNotifier(mainDB)

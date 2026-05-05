@@ -304,6 +304,107 @@ func TestNotificationsHandler(t *testing.T) {
 			t.Errorf("Expected body 'Custom Body', got '%s'", mockSender.body)
 		}
 	})
+
+	t.Run("GET /api/notifications/preview - fall detection", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications/preview?type=fall&person=Bob", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		ct := w.Header().Get("Content-Type")
+		if ct != "image/png" {
+			t.Errorf("Expected Content-Type 'image/png', got '%s'", ct)
+		}
+
+		// Verify PNG data was returned (PNG magic bytes)
+		body := w.Body.Bytes()
+		if len(body) < 8 {
+			t.Fatalf("Expected PNG data, got %d bytes", len(body))
+		}
+		// PNG magic bytes: 137 80 78 71 13 10 26 10
+		if body[0] != 0x89 || body[1] != 0x50 || body[2] != 0x4e || body[3] != 0x47 {
+			t.Errorf("Expected PNG magic bytes, got %x %x %x %x", body[0], body[1], body[2], body[3])
+		}
+	})
+
+	t.Run("GET /api/notifications/preview - zone_enter", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications/preview?type=zone_enter&person=Alice", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		ct := w.Header().Get("Content-Type")
+		if ct != "image/png" {
+			t.Errorf("Expected Content-Type 'image/png', got '%s'", ct)
+		}
+	})
+
+	t.Run("GET /api/notifications/preview - anomaly", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications/preview?type=anomaly", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		ct := w.Header().Get("Content-Type")
+		if ct != "image/png" {
+			t.Errorf("Expected Content-Type 'image/png', got '%s'", ct)
+		}
+	})
+
+	t.Run("GET /api/notifications/preview - sleep", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications/preview?type=sleep", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		ct := w.Header().Get("Content-Type")
+		if ct != "image/png" {
+			t.Errorf("Expected Content-Type 'image/png', got '%s'", ct)
+		}
+	})
+
+	t.Run("GET /api/notifications/preview - default (no type)", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications/preview", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Default should return fall detection preview
+		body := w.Body.Bytes()
+		if len(body) < 8 {
+			t.Fatalf("Expected PNG data, got %d bytes", len(body))
+		}
+		// Verify PNG magic bytes
+		if body[0] != 0x89 || body[1] != 0x50 || body[2] != 0x4e || body[3] != 0x47 {
+			t.Errorf("Expected PNG magic bytes, got %x %x %x %x", body[0], body[1], body[2], body[3])
+		}
+	})
+
+	t.Run("GET /api/notifications/preview - cache control", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications/preview?type=fall", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		cc := w.Header().Get("Cache-Control")
+		if cc != "no-cache, no-store, must-revalidate" {
+			t.Errorf("Expected Cache-Control 'no-cache, no-store, must-revalidate', got '%s'", cc)
+		}
+	})
 }
 
 // mockNotifySender is a test implementation of NotifySender.
