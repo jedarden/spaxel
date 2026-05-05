@@ -7,21 +7,21 @@ import (
 )
 
 func TestPathLoss(t *testing.T) {
-	pm := NewPropagationModel(DefaultSpace())
+	pm := NewPhysicsModel(DefaultSpace())
 
 	tests := []struct {
 		distance float64
 		expected float64 // Approximate expected path loss
 	}{
-		{1.0, 40.0},    // At reference distance
-		{2.0, 46.0},    // 2x distance = +6 dB
-		{10.0, 60.0},   // 10x distance = +20 dB
-		{100.0, 80.0},  // 100x distance = +40 dB
+		{1.0, 40.0},   // At reference distance
+		{2.0, 46.0},   // 2x distance = +6 dB
+		{10.0, 60.0},  // 10x distance = +20 dB
+		{100.0, 80.0}, // 100x distance = +40 dB
 	}
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("distance=%.1f", tt.distance), func(t *testing.T) {
-			loss := pm.PathLoss(tt.distance)
+			loss := pm.PathLossdB(tt.distance)
 			// Allow small floating point error
 			if math.Abs(loss-tt.expected) > 1.0 {
 				t.Errorf("Distance %f: expected loss ~%f dB, got %f dB", tt.distance, tt.expected, loss)
@@ -30,19 +30,10 @@ func TestPathLoss(t *testing.T) {
 	}
 }
 
-func TestWallLoss(t *testing.T) {
-	space := &Space{
-		Walls: []WallSegment{
-			{
-				ID:       "wall-1",
-				Material: MaterialDrywall,
-				P1:       NewPoint(2, 0, 0),
-				P2:       NewPoint(2, 10, 0),
-				Height:   2.5,
-			},
-		},
-	}
-	pm := NewPropagationModel(space)
+func TestWallAttenuation(t *testing.T) {
+	pm := NewPhysicsModel(DefaultSpace())
+	// Add a wall at x=2
+	pm.AddWall(2, 0, 2, 10, 3.0) // drywall
 
 	tests := []struct {
 		name     string
@@ -65,7 +56,7 @@ func TestWallLoss(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			loss := pm.WallLoss(tt.from, tt.to)
+			loss := pm.WallAttenuation(tt.from, tt.to)
 			if loss != tt.expected {
 				t.Errorf("Expected loss %f, got %f", tt.expected, loss)
 			}
@@ -73,23 +64,22 @@ func TestWallLoss(t *testing.T) {
 	}
 }
 
-func TestReceivedPower(t *testing.T) {
+func TestExpectedRSSI(t *testing.T) {
 	pm := NewPropagationModel(DefaultSpace())
 
 	tx := NewPoint(0, 0, 2)
 	rx := NewPoint(5, 0, 2)
-	txPower := 20.0 // dBm
 
-	power := pm.ReceivedPower(tx, rx, txPower)
+	rssi := pm.ExpectedRSSI(tx, rx)
 
-	// Power should be less than TX power
-	if power > txPower {
-		t.Errorf("Received power %f dBm should be less than TX power %f dBm", power, txPower)
+	// RSSI should be in realistic range [-90, -30]
+	if rssi < -90 || rssi > -30 {
+		t.Errorf("RSSI %d is outside realistic range [-90, -30]", rssi)
 	}
 
-	// Power should be reasonable (not too weak, not negative infinity)
-	if power < -100 || power > txPower {
-		t.Errorf("Received power %f dBm is out of reasonable range", power)
+	// RSSI should be less than TX power (-30 dBm)
+	if rssi > -30 {
+		t.Errorf("RSSI %d should be less than TX power -30 dBm", rssi)
 	}
 }
 
@@ -108,7 +98,7 @@ func TestAmplitudeAt(t *testing.T) {
 	}
 }
 
-func TestPhaseAt(t *testing.T) {
+func TestPhaseAtSubcarrier(t *testing.T) {
 	pm := NewPropagationModel(DefaultSpace())
 
 	tx := NewPoint(0, 0, 2)
@@ -117,7 +107,7 @@ func TestPhaseAt(t *testing.T) {
 
 	// Test multiple subcarriers
 	for k := 0; k < 10; k++ {
-		phase := pm.PhaseAt(tx, rx, walker, k)
+		phase := pm.PhaseAtSubcarrier(tx, rx, walker, k, 0)
 
 		// Phase should be in [-π, π]
 		if phase < -math.Pi || phase > math.Pi {
@@ -127,22 +117,21 @@ func TestPhaseAt(t *testing.T) {
 }
 
 func TestDeltaRMS(t *testing.T) {
-	pm := NewPropagationModel(DefaultSpace())
+	pm := NewPhysicsModel(DefaultSpace())
 
 	tx := NewPoint(0, 0, 2)
 	rx := NewPoint(5, 0, 2)
 	walker := NewPoint(2.5, 0, 1.7)
 
-	baseline := pm.AmplitudeAt(tx, rx, NewPoint(-1000, -1000, 0))
-	deltaRMS := pm.DeltaRMS(tx, rx, walker, baseline)
+	deltaRMS := pm.DeltaRMS(tx, rx, walker)
 
 	// DeltaRMS should be positive
 	if deltaRMS < 0 {
 		t.Errorf("DeltaRMS %f should be non-negative", deltaRMS)
 	}
 
-	// Walker at midpoint should produce significant delta
-	if deltaRMS < 0.01 {
+	// Walker at midpoint should produce significant delta (in zone 1)
+	if deltaRMS < 0.1 {
 		t.Errorf("DeltaRMS %f seems too low for walker at midpoint", deltaRMS)
 	}
 }
@@ -183,37 +172,25 @@ func TestFresnelZoneNumber(t *testing.T) {
 	}
 }
 
-func TestIsInFirstFresnelZone(t *testing.T) {
+func TestIsInFresnelZones(t *testing.T) {
 	tx := NewPoint(0, 0, 2)
 	rx := NewPoint(6, 0, 2)
 
 	// Points on direct path should be in first Fresnel zone
 	midpoint := NewPoint(3, 0, 2)
-	if !IsInFirstFresnelZone(tx, rx, midpoint) {
+	if !IsInFresnelZones(tx, rx, midpoint, 1) {
 		t.Error("Midpoint should be in first Fresnel zone")
 	}
 
-	// Points far from direct path should not be
+	// Points far from direct path should not be in first zone
 	farPoint := NewPoint(3, 10, 2)
-	if IsInFirstFresnelZone(tx, rx, farPoint) {
+	if IsInFresnelZones(tx, rx, farPoint, 1) {
 		t.Error("Far point from direct path should not be in first Fresnel zone")
 	}
-}
-
-func TestIsInFresnelZones(t *testing.T) {
-	tx := NewPoint(0, 0, 2)
-	rx := NewPoint(6, 0, 2)
-	midpoint := NewPoint(3, 0, 2)
 
 	// Midpoint should be in first 3 zones
 	if !IsInFresnelZones(tx, rx, midpoint, 3) {
 		t.Error("Midpoint should be in first 3 Fresnel zones")
-	}
-
-	// Far point should not be in first 1 zone
-	farPoint := NewPoint(3, 10, 2)
-	if IsInFresnelZones(tx, rx, farPoint, 1) {
-		t.Error("Far point should not be in first Fresnel zone")
 	}
 }
 
@@ -226,8 +203,6 @@ func TestGenerateAllLinks(t *testing.T) {
 	links := GenerateAllLinks(nodes)
 
 	// With 3 TXRX nodes, should have 6 links (each direction)
-	// Actually, with all nodes as TXRX, each ordered pair is a link
-	// Node 1 -> Node 2, Node 1 -> Node 3, Node 2 -> Node 1, Node 2 -> Node 3, Node 3 -> Node 1, Node 3 -> Node 2
 	expectedMinLinks := 6 // At minimum
 
 	if len(links) < expectedMinLinks {
@@ -238,34 +213,6 @@ func TestGenerateAllLinks(t *testing.T) {
 	for _, link := range links {
 		if link.TX.ID == link.RX.ID {
 			t.Errorf("Found self-link: %s -> %s", link.TX.ID, link.RX.ID)
-		}
-	}
-}
-
-func TestSimulateCSIData(t *testing.T) {
-	pm := NewPropagationModel(DefaultSpace())
-
-	nodes := NewNodeSet()
-	nodes.AddVirtualNode("node-1", "Node 1", NewPoint(0, 0, 2))
-	nodes.AddVirtualNode("node-2", "Node 2", NewPoint(5, 0, 2))
-
-	walkers := NewWalkerSet()
-	walkers.AddRandomWalker("walker-1", NewPoint(2.5, 0, 1.7), 1.0)
-
-	links := GenerateAllLinks(nodes)
-	threshold := 0.02
-
-	results := pm.SimulateCSIData(links, walkers.All(), threshold)
-
-	// Should have some active links
-	if len(results) == 0 {
-		t.Error("Expected some active links with walker present")
-	}
-
-	// All results should have deltaRMS >= threshold
-	for linkID, deltaRMS := range results {
-		if deltaRMS < threshold {
-			t.Errorf("Link %s: deltaRMS %f below threshold %f", linkID, deltaRMS, threshold)
 		}
 	}
 }
@@ -437,8 +384,8 @@ func TestMinimumNodeCount(t *testing.T) {
 
 	// Test different GDOP targets
 	tests := []struct {
-		targetGDOP  float64
-		minNodes    int
+		targetGDOP float64
+		minNodes   int
 	}{
 		{2.0, 1}, // Excellent coverage
 		{4.0, 1}, // Good coverage
@@ -457,9 +404,9 @@ func TestMinimumNodeCount(t *testing.T) {
 
 func TestExpectedAccuracy(t *testing.T) {
 	tests := []struct {
-		gdop           float64
-		minAccuracy    float64
-		maxAccuracy    float64
+		gdop        float64
+		minAccuracy float64
+		maxAccuracy float64
 	}{
 		{1.0, 0.4, 0.6},  // GDOP 1: ~0.5m
 		{2.0, 0.8, 1.2},  // GDOP 2: ~1.0m
@@ -819,124 +766,143 @@ func TestGetBestCoverageCells(t *testing.T) {
 	}
 }
 
-func TestGenerateCSIFrame(t *testing.T) {
-	pm := NewPropagationModel(DefaultSpace())
+func TestEngineRunSimulation(t *testing.T) {
+	space := DefaultSpace()
+	engine := NewEngine(space)
+
+	// Add some virtual nodes
+	nodes := SuggestedNodes(space, 4)
+	for _, node := range nodes.All() {
+		err := engine.AddVirtualNode(node)
+		if err != nil {
+			t.Fatalf("Failed to add virtual node: %v", err)
+		}
+	}
+
+	// Add a walker
+	walker := &SimWalker{
+		ID:       "walker-1",
+		Type:     WalkerTypeRandomWalk,
+		Position: NewPoint(3, 2.5, 1.7),
+		Velocity: NewPoint(0.1, 0.1, 0),
+	}
+	engine.AddWalker(walker)
+
+	// Run simulation
+	result := engine.RunSimulation()
+
+	// Verify results
+	if result == nil {
+		t.Fatal("Expected non-nil simulation result")
+	}
+
+	// Should have some data
+	if len(result.GridDimensions) != 3 {
+		t.Errorf("Expected 3 grid dimensions, got %d", len(result.GridDimensions))
+	}
+
+	if len(result.GDOPMap) == 0 {
+		t.Error("Expected non-empty GDOP map")
+	}
+
+	if result.CoverageScore < 0 || result.CoverageScore > 100 {
+		t.Errorf("Coverage score %f outside [0, 100] range", result.CoverageScore)
+	}
+}
+
+func TestPhysicsModelDeltaRMS(t *testing.T) {
+	pm := NewPhysicsModel(DefaultSpace())
+
+	tx := NewPoint(0, 0, 2)
+	rx := NewPoint(5, 0, 2)
+
+	// Test at midpoint (zone 1)
+	walker := NewPoint(2.5, 0, 1.7)
+	deltaRMS := pm.DeltaRMS(tx, rx, walker)
+
+	// Zone 1 should have high deltaRMS
+	if deltaRMS < 0.1 {
+		t.Errorf("Zone 1 deltaRMS %f too low", deltaRMS)
+	}
+}
+
+func TestPhysicsModelPhaseAtSubcarrier(t *testing.T) {
+	pm := NewPhysicsModel(DefaultSpace())
 
 	tx := NewPoint(0, 0, 2)
 	rx := NewPoint(5, 0, 2)
 	walker := NewPoint(2.5, 0, 1.7)
 
-	frame := pm.GenerateCSIFrame(tx, rx, walker, 0)
+	// Test multiple subcarriers
+	for k := 0; k < 10; k++ {
+		phase := pm.PhaseAtSubcarrier(tx, rx, walker, k, 0)
 
-	// Verify frame structure
-	if len(frame.NodeMAC) != 6 {
-		t.Errorf("Expected 6-byte NodeMAC, got %d", len(frame.NodeMAC))
-	}
-	if len(frame.PeerMAC) != 6 {
-		t.Errorf("Expected 6-byte PeerMAC, got %d", len(frame.PeerMAC))
-	}
-	if frame.NSub != 64 {
-		t.Errorf("Expected 64 subcarriers, got %d", frame.NSub)
-	}
-	if len(frame.Subcarriers) != 64 {
-		t.Errorf("Expected 64 subcarrier values, got %d", len(frame.Subcarriers))
-	}
-
-	// Verify RSSI is in realistic range
-	if frame.RSSI < -90 || frame.RSSI > -30 {
-		t.Errorf("RSSI %d is outside realistic range [-90, -30]", frame.RSSI)
-	}
-
-	// Verify noise floor
-	if frame.NoiseFloor != -95 {
-		t.Errorf("Expected noise floor -95, got %d", frame.NoiseFloor)
-	}
-
-	// Verify channel
-	if frame.Channel < 1 || frame.Channel > 14 {
-		t.Errorf("Channel %d is invalid", frame.Channel)
-	}
-}
-
-func TestGenerateCSIFrames(t *testing.T) {
-	pm := NewPropagationModel(DefaultSpace())
-
-	nodes := NewNodeSet()
-	nodes.AddVirtualNode("tx", "TX", NewPoint(0, 0, 2))
-	nodes.AddVirtualNode("rx", "RX", NewPoint(5, 0, 2))
-
-	links := GenerateAllLinks(nodes)
-	if len(links) == 0 {
-		t.Fatal("Expected at least one link")
-	}
-
-	walker := NewPoint(2.5, 0, 1.7)
-
-	frames := pm.GenerateCSIFrames(links[0], walker, 10, 20)
-
-	if len(frames) != 10 {
-		t.Errorf("Expected 10 frames, got %d", len(frames))
-	}
-
-	// Verify timestamps are monotonically increasing
-	for i := 1; i < len(frames); i++ {
-		if frames[i].TimestampUs <= frames[i-1].TimestampUs {
-			t.Errorf("Frame %d timestamp %d <= frame %d timestamp %d",
-				i, frames[i].TimestampUs, i-1, frames[i-1].TimestampUs)
-		}
-	}
-
-	// Verify interval is correct (50μs at 20Hz)
-	expectedInterval := uint64(1000000 / 20)
-	for i := 1; i < len(frames); i++ {
-		actualInterval := frames[i].TimestampUs - frames[i-1].TimestampUs
-		if actualInterval != expectedInterval {
-			t.Errorf("Frame %d interval is %d, expected %d", i, actualInterval, expectedInterval)
+		// Phase should be in [-π, π]
+		if phase < -math.Pi || phase > math.Pi {
+			t.Errorf("Subcarrier %d: phase %f is outside [-π, π]", k, phase)
 		}
 	}
 }
 
-func TestComputeLinkMetrics(t *testing.T) {
-	pm := NewPropagationModel(DefaultSpace())
+func TestComputeFresnelModulation(t *testing.T) {
+	tx := NewPoint(0, 0, 2)
+	rx := NewPoint(6, 0, 2)
 
-	nodes := NewNodeSet()
-	nodes.AddVirtualNode("tx", "TX", NewPoint(0, 0, 2))
-	nodes.AddVirtualNode("rx", "RX", NewPoint(5, 0, 2))
-
-	links := GenerateAllLinks(nodes)
-	if len(links) == 0 {
-		t.Fatal("Expected at least one link")
-	}
-
-	// Create walker positions along a path
-	positions := []Point{
-		NewPoint(1, 0, 1.7),
-		NewPoint(2, 0, 1.7),
-		NewPoint(3, 0, 1.7),
-		NewPoint(4, 0, 1.7),
+	// Zone 1 (on direct path) - maximum modulation
+	midpoint := NewPoint(3, 0, 2)
+	modulation := ComputeFresnelModulation(tx, rx, midpoint)
+	if modulation != 1.0 {
+		t.Errorf("Zone 1 should have modulation 1.0, got %f", modulation)
 	}
 
-	metrics := pm.ComputeLinkMetrics(links[0], positions, 100)
+	// Far from direct path - low modulation
+	farPoint := NewPoint(3, 10, 2)
+	farModulation := ComputeFresnelModulation(tx, rx, farPoint)
+	if farModulation >= modulation {
+		t.Errorf("Far point should have lower modulation than midpoint")
+	}
+}
 
-	// Verify metrics are in valid ranges
-	if metrics.AvgRSSI < -90 || metrics.AvgRSSI > -20 {
-		t.Errorf("AvgRSSI %f is outside realistic range", metrics.AvgRSSI)
+func TestComputeLinkQuality(t *testing.T) {
+	// Well-spread nodes should have good quality
+	nodes := []Point{
+		NewPoint(0, 0, 2),
+		NewPoint(10, 0, 2),
+		NewPoint(0, 10, 2),
+		NewPoint(10, 10, 2),
 	}
-	if metrics.RSSIStdDev < 0 {
-		t.Errorf("RSSIStdDev %f is negative", metrics.RSSIStdDev)
-	}
-	if metrics.AvgDeltaRMS < 0 {
-		t.Errorf("AvgDeltaRMS %f is negative", metrics.AvgDeltaRMS)
-	}
-	if metrics.PacketDelivery < 0 || metrics.PacketDelivery > 1 {
-		t.Errorf("PacketDelivery %f is outside [0, 1] range", metrics.PacketDelivery)
-	}
-	if metrics.LinkQuality < 0 || metrics.LinkQuality > 1 {
-		t.Errorf("LinkQuality %f is outside [0, 1] range", metrics.LinkQuality)
+	quality := ComputeLinkQuality(nodes)
+	if quality < 0.5 {
+		t.Errorf("Well-spread nodes should have quality >= 0.5, got %f", quality)
 	}
 
-	// Link with walker in middle should have good deltaRMS
-	if metrics.AvgDeltaRMS < 0.01 {
-		t.Errorf("AvgDeltaRMS %f seems too low for walker in middle of link", metrics.AvgDeltaRMS)
+	// Clustered nodes should have poor quality
+	clustered := []Point{
+		NewPoint(5, 5, 2),
+		NewPoint(5.1, 5, 2),
+		NewPoint(5, 5.1, 2),
+		NewPoint(5.1, 5.1, 2),
+	}
+	clusterQuality := ComputeLinkQuality(clustered)
+	if clusterQuality >= quality {
+		t.Errorf("Clustered nodes should have lower quality than spread nodes")
+	}
+}
+
+func TestValidateRSSI(t *testing.T) {
+	pm := NewPhysicsModel(DefaultSpace())
+
+	// Test various distances
+	distances := []float64{1.0, 5.0, 10.0, 20.0}
+	for _, dist := range distances {
+		rssi := pm.ComputeRSSI(dist)
+		if !ValidateRSSI(rssi, dist) {
+			t.Errorf("RSSI %d at distance %f should be valid", rssi, dist)
+		}
+	}
+
+	// Invalid RSSI for distance
+	if ValidateRSSI(-30, 100.0) {
+		t.Error("RSSI -30 at 100m distance should be invalid")
 	}
 }
