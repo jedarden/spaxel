@@ -129,9 +129,11 @@ func (h *ReplayHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/replay/stop", h.stopSession)
 	r.Post("/api/replay/seek", h.seek)
 	r.Post("/api/replay/tune", h.tune)
+	r.Patch("/api/replay/params", h.patchParams)
 	r.Post("/api/replay/set-speed", h.setSpeed)
 	r.Post("/api/replay/set-state", h.setState)
 	r.Post("/api/replay/jump-to-time", h.jumpToTime)
+	r.Post("/api/replay/apply-live", h.applyLive)
 
 	// Session state endpoint for polling
 	r.Get("/api/replay/session/{id}", h.getSessionState)
@@ -452,6 +454,70 @@ func (h *ReplayHandler) tune(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// patchParams handles PATCH /api/replay/params.
+// Updates pipeline parameters for the active replay session (RESTful partial update).
+// This endpoint accepts partial parameter updates and re-runs the pipeline on recorded CSI.
+func (h *ReplayHandler) patchParams(w http.ResponseWriter, r *http.Request) {
+	var req tuneRequest // Reuse tuneRequest structure
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	// If no session_id provided, use active session
+	if req.SessionID == "" {
+		h.mu.RLock()
+		req.SessionID = h.activeSessionID
+		h.mu.RUnlock()
+
+		if req.SessionID == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no active replay session"})
+			return
+		}
+	}
+
+	if _, err := h.worker.GetSession(req.SessionID); err != nil {
+		if err.Error() == "session not found" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "session not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Build params map
+	params := make(map[string]interface{})
+	if req.DeltaRMSThreshold != nil {
+		params["delta_rms_threshold"] = *req.DeltaRMSThreshold
+	}
+	if req.TauS != nil {
+		params["tau_s"] = *req.TauS
+	}
+	if req.FresnelDecay != nil {
+		params["fresnel_decay"] = *req.FresnelDecay
+	}
+	if req.Subcarriers != nil {
+		params["n_subcarriers"] = *req.Subcarriers
+	}
+	if req.BreathingSensitivity != nil {
+		params["breathing_sensitivity"] = *req.BreathingSensitivity
+	}
+
+	// Update params and re-run pipeline on recorded CSI
+	if err := h.worker.UpdateParams(req.SessionID, params); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[INFO] Replay session params updated via PATCH: %s params=%+v", req.SessionID, params)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "updated",
+		"params":  params,
+		"session": req.SessionID,
+	})
+}
+
 // setSpeedRequest represents the request body for POST /api/replay/set-speed.
 type setSpeedRequest struct {
 	// SessionID is the ID of the session to modify.
@@ -697,6 +763,44 @@ func (h *ReplayHandler) jumpToTime(w http.ResponseWriter, r *http.Request) {
 		"from_ms":      fromMS,
 		"to_ms":        toMS,
 		"state":        "paused",
+	})
+}
+
+// applyLiveRequest represents the request body for POST /api/replay/apply-live.
+type applyLiveRequest struct {
+	// SessionID is the ID of the replay session to apply parameters from.
+	SessionID string `json:"session_id"`
+}
+
+// applyLive handles POST /api/replay/apply-live.
+// Applies the current replay session's parameters to the live pipeline.
+func (h *ReplayHandler) applyLive(w http.ResponseWriter, r *http.Request) {
+	var req applyLiveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	if req.SessionID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "session_id is required"})
+		return
+	}
+
+	// Apply the replay session's parameters to live via the existing ApplyToLive method
+	if err := h.ApplyToLive(); err != nil {
+		if err.Error() == "no active replay session" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no active replay session"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[INFO] Replay parameters applied to live: session=%s", req.SessionID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "applied",
+		"session": req.SessionID,
 	})
 }
 
