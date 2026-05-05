@@ -3,6 +3,7 @@
  *
  * Provides UI for firmware updates: list available versions,
  * trigger rolling updates, display progress, and show rollback warnings.
+ * Also includes auto-update settings with canary strategy and quiet window.
  */
 
 (function() {
@@ -13,7 +14,19 @@
         firmwareList: [],
         progress: {},
         pollInterval: null,
-        otaInProgress: false
+        otaInProgress: false,
+        autoUpdate: {
+            enabled: false,
+            state: 'idle',
+            canaryNode: null,
+            baselineQuality: 0,
+            quietWindowStart: '02:00',
+            quietWindowEnd: '05:00',
+            canaryDurationMin: 10,
+            qualityThreshold: 0.05,
+            isInQuietWindow: false,
+            nextQuietWindowStart: null
+        }
     };
 
     // ============================================
