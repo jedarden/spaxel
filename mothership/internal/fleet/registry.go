@@ -143,6 +143,7 @@ func (r *Registry) migrate() error {
 		"ALTER TABLE nodes ADD COLUMN went_offline_at INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE nodes ADD COLUMN health_score REAL NOT NULL DEFAULT 0",
 		"ALTER TABLE nodes ADD COLUMN manufacturer TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE nodes ADD COLUMN role_before_disable TEXT NOT NULL DEFAULT ''",
 	}
 	for _, m := range migrations {
 		_, _ = r.db.Exec(m) // Ignore errors (column may already exist)
@@ -216,6 +217,22 @@ func (r *Registry) SetNodeHealthScore(mac string, score float64) error {
 func (r *Registry) GetNodePreviousRole(mac string) (string, error) {
 	var role string
 	err := r.db.QueryRow(`SELECT previous_role FROM nodes WHERE mac=?`, mac).Scan(&role)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return role, err
+}
+
+// SetNodeRoleBeforeDisable saves the current role before disabling the node.
+func (r *Registry) SetNodeRoleBeforeDisable(mac, role string) error {
+	_, err := r.db.Exec(`UPDATE nodes SET role_before_disable=? WHERE mac=?`, role, mac)
+	return err
+}
+
+// GetNodeRoleBeforeDisable returns the role saved before disabling the node.
+func (r *Registry) GetNodeRoleBeforeDisable(mac string) (string, error) {
+	var role string
+	err := r.db.QueryRow(`SELECT role_before_disable FROM nodes WHERE mac=?`, mac).Scan(&role)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
