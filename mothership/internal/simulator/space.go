@@ -316,3 +316,28 @@ func (s *Space) Validate() error {
 	}
 	return nil
 }
+
+// FresnelZoneNumber computes the Fresnel zone number for a point relative to a TX-RX link.
+// Returns the zone number (1-based), where zone 1 is the first Fresnel ellipsoid.
+// Points outside the 5th Fresnel zone return a large number.
+func FresnelZoneNumber(tx, rx, point Point) int {
+	// Compute path length excess over direct path
+	// ΔL = |P-TX| + |P-RX| - |TX-RX|
+	d1 := tx.Distance(point)
+	d2 := point.Distance(rx)
+	direct := tx.Distance(rx)
+	deltaL := d1 + d2 - direct
+
+	// Zone number = ceil(ΔL / (λ/2))
+	// Use HalfWavelength constant = Wavelength / 2
+	zone := int(math.Ceil(deltaL / HalfWavelength))
+
+	// Clamp to reasonable range for computation
+	if zone < 1 {
+		return 1
+	}
+	if zone > 5 {
+		return 5 // Points beyond zone 5 are treated as zone 5
+	}
+	return zone
+}

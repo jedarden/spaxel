@@ -3,6 +3,7 @@ package simulator
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 )
 
@@ -262,4 +263,87 @@ func SuggestedNodes(s *Space, count int) *NodeSet {
 	}
 
 	return ns
+}
+
+// GenerateAllLinks creates all possible links between nodes in the set.
+// For TX/RX or TX_RX nodes, this creates bidirectional links.
+// For passive radar (AP nodes), creates links from AP to each RX node.
+func GenerateAllLinks(ns *NodeSet) []Link {
+	enabled := ns.Enabled()
+	links := make([]Link, 0)
+
+	for _, tx := range enabled {
+		for _, rx := range enabled {
+			// Skip self-links
+			if tx.ID == rx.ID {
+				continue
+			}
+
+			// Determine if this link should exist based on roles
+			if shouldCreateLink(tx, rx) {
+				links = append(links, Link{TX: tx, RX: rx})
+			}
+		}
+	}
+
+	return links
+}
+
+// shouldCreateLink determines if a link should be created between two nodes
+// based on their roles. Links are created when:
+// - TX node -> RX node
+// - TX_RX node -> any other node (bidirectional communication)
+// - AP node -> RX node (passive radar)
+func shouldCreateLink(tx, rx *Node) bool {
+	// AP (passive radar TX) to RX/TX_RX/Passive
+	if tx.IsAP() {
+		return rx.Role == RoleRX || rx.Role == RoleTXRX || rx.Role == RolePassive
+	}
+
+	// Regular TX to RX/TX_RX
+	if tx.Role == RoleTX {
+		return rx.Role == RoleRX || rx.Role == RoleTXRX
+	}
+
+	// TX_RX can both TX and RX, so link to any RX/TX_RX
+	if tx.Role == RoleTXRX {
+		return rx.Role == RoleRX || rx.Role == RoleTXRX
+	}
+
+	// RX nodes don't transmit
+	if tx.Role == RoleRX {
+		return false
+	}
+
+	// Passive nodes don't transmit (unless they're also RX)
+	if tx.Role == RolePassive {
+		return false
+	}
+
+	return false
+}
+
+// MinimumNodeCount estimates the minimum number of nodes needed for
+// reasonable coverage of the given space.
+// This is a heuristic based on space dimensions.
+// Note: The actual implementation is in gdop.go to avoid duplication.
+func MinimumNodeCountFromNode(s *Space, targetGDOP float64) int {
+	width, depth, _ := s.Dimensions()
+	area := width * depth
+
+	// Heuristic: one node per 25 m² for basic coverage
+	// This is based on the Fresnel zone size (~5m radius per node)
+	minNodes := int(math.Ceil(area / 25.0))
+
+	// At least 2 nodes needed for any localization
+	if minNodes < 2 {
+		minNodes = 2
+	}
+
+	// For better GDOP (< 4), add more nodes
+	if targetGDOP < 4.0 {
+		minNodes = int(math.Ceil(float64(minNodes) * 1.5))
+	}
+
+	return minNodes
 }
