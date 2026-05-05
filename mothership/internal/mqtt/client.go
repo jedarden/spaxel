@@ -842,6 +842,32 @@ func (c *Client) SubscribeToSystemMode(handler func(mode string)) error {
 	})
 }
 
+// SubscribeToRebaseline subscribes to re-baseline command topic.
+// The handler receives a zone name or "all" to re-baseline all zones.
+func (c *Client) SubscribeToRebaseline(handler func(zone string)) error {
+	topic := fmt.Sprintf("%s/command/rebaseline", c.config.TopicPrefix)
+
+	return c.Subscribe(topic, func(_ string, payload []byte) {
+		zone := string(payload)
+		if zone != "" {
+			handler(zone)
+		}
+	})
+}
+
+// SubscribeToSecurityMode subscribes to security mode command topic.
+// The handler receives "arm" or "disarm" commands.
+func (c *Client) SubscribeToSecurityMode(handler func(action string)) error {
+	topic := fmt.Sprintf("%s/command/security_mode", c.config.TopicPrefix)
+
+	return c.Subscribe(topic, func(_ string, payload []byte) {
+		action := string(payload)
+		if action == "arm" || action == "disarm" {
+			handler(action)
+		}
+	})
+}
+
 // RemovePersonDiscovery removes a person's HA auto-discovery entity.
 func (c *Client) RemovePersonDiscovery(personID string) error {
 	entityID := fmt.Sprintf("spaxel_%s_%s_presence", c.config.MothershipID, personID)
