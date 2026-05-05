@@ -26,6 +26,7 @@ import (
 	"github.com/spaxel/mothership/internal/api"
 	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/automation"
+	"github.com/spaxel/mothership/internal/autoupdate"
 	"github.com/spaxel/mothership/internal/ble"
 	appconfig "github.com/spaxel/mothership/internal/config"
 	"github.com/spaxel/mothership/internal/dashboard"
@@ -3946,7 +3947,7 @@ func main() {
 		autoUpdateMgr.SetZoneVacancyChecker(zoneVacancyChecker)
 
 		// Set dashboard broadcaster for real-time progress updates
-		autoUpdateMgr.SetDashboardBroadcaster(&autoUpdateDashboardBroadcaster{hub: dashboardHub})
+		otaMgr.SetDashboardBroadcaster(autoupdate.NewDashboardBroadcaster(dashboardHub))
 
 		// Start background loop
 		autoUpdateMgr.Start(ctx)
@@ -3970,6 +3971,7 @@ func main() {
 
 				// Wire up firmware upload callback to trigger auto-update check
 				otaSrv.SetUploadCallback(autoUpdateMgr.OnFirmwareUploaded)
+		}
 		}
 
 	// Provisioning API (used by onboarding wizard)
