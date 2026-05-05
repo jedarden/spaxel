@@ -1,6 +1,7 @@
 package zones
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1560,4 +1561,164 @@ func nowMsSinceMidnight(d time.Duration) int64 {
 	now := time.Now().UTC()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	return midnight.Add(d).UnixMilli()
+}
+
+// --- GetZoneHistory tests ---
+
+func TestGetZoneHistory(t *testing.T) {
+	now := time.Now().UTC()
+
+	// currentHourStart is the start of the current hour (same as GetZoneHistory uses)
+	currentHourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC)
+
+	// hourStart returns the timestamp for the start of an hour bucket, offset from currentHourStart
+	hourStart := func(offset time.Duration) int64 {
+		return currentHourStart.Add(offset).UnixMilli()
+	}
+
+	tests := []struct {
+		name       string
+		history    []struct {
+			hourTs int64    // hour bucket timestamp
+			count  int      // occupancy count
+			people []string // people list (will be JSON-serialized)
+		}
+		hours      int
+		wantCounts []int     // expected counts per hour bucket (newest to oldest)
+		wantPeople [][]string // expected people per hour bucket (newest to oldest)
+	}{
+		{
+			name: "empty history",
+			history: []struct {
+				hourTs int64
+				count  int
+				people []string
+			}{},
+			hours:      3,
+			wantCounts: []int{0, 0, 0},
+			wantPeople: [][]string{{}, {}, {}},
+		},
+		{
+			name: "one entry per hour",
+			history: []struct {
+				hourTs int64
+				count  int
+				people []string
+			}{
+				{hourStart(0), 1, []string{"alice"}},
+				{hourStart(-1 * time.Hour), 1, []string{"bob"}},
+				{hourStart(-2 * time.Hour), 1, []string{"charlie"}},
+			},
+			hours:      3,
+			wantCounts: []int{1, 1, 1},
+			wantPeople: [][]string{{"alice"}, {"bob"}, {"charlie"}},
+		},
+		{
+			name: "multiple people in hour",
+			history: []struct {
+				hourTs int64
+				count  int
+				people []string
+			}{
+				{hourStart(0), 3, []string{"alice", "bob", "charlie"}},
+				{hourStart(-1 * time.Hour), 2, []string{"dave", "eve"}},
+			},
+			hours:      3,
+			wantCounts: []int{3, 2, 0},
+			wantPeople: [][]string{{"alice", "bob", "charlie"}, {"dave", "eve"}, {}},
+		},
+		{
+			name: "missing hours filled with zeros",
+			history: []struct {
+				hourTs int64
+				count  int
+				people []string
+			}{
+				{hourStart(0), 1, []string{"alice"}},
+				{hourStart(-3 * time.Hour), 2, []string{"bob", "charlie"}},
+			},
+			hours:      6,
+			wantCounts: []int{1, 0, 0, 2, 0, 0},
+			wantPeople: [][]string{{"alice"}, {}, {}, {"bob", "charlie"}, {}, {}},
+		},
+		{
+			name: "empty people arrays",
+			history: []struct {
+				hourTs int64
+				count  int
+				people []string
+			}{
+				{hourStart(0), 0, []string{}},
+				{hourStart(-1 * time.Hour), 0, []string{}},
+			},
+			hours:      3,
+			wantCounts: []int{0, 0, 0},
+			wantPeople: [][]string{{}, {}, {}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, cleanup := setupManager(t, time.UTC)
+			defer cleanup()
+
+			// Create zone
+			zone := &Zone{
+				ID: "kitchen", Name: "Kitchen",
+				MinX: 0, MinY: 0, MinZ: 0,
+				MaxX: 10, MaxY: 10, MaxZ: 3,
+				Enabled: true,
+			}
+			if err := m.CreateZone(zone); err != nil {
+				t.Fatalf("CreateZone: %v", err)
+			}
+
+			// Insert zone history records directly into DB
+			for _, h := range tt.history {
+				peopleJSON, _ := json.Marshal(h.people)
+				_, err := m.db.Exec(`
+					INSERT INTO zone_history (zone_id, hour_ts, count, people, created_at)
+					VALUES (?, ?, ?, ?, ?)
+				`, "kitchen", h.hourTs, h.count, string(peopleJSON), now.UnixMilli())
+				if err != nil {
+					t.Fatalf("Insert zone history: %v", err)
+				}
+			}
+
+			// Small sleep to ensure time.Now() in GetZoneHistory is past the test's now
+			time.Sleep(10 * time.Millisecond)
+
+			// Query history
+			history := m.GetZoneHistory("kitchen", tt.hours)
+
+			if len(history) != tt.hours {
+				t.Fatalf("got %d entries, want %d", len(history), tt.hours)
+			}
+
+			// Verify counts and people (entries are newest to oldest)
+			for i := 0; i < tt.hours; i++ {
+				if history[i].Count != tt.wantCounts[i] {
+					t.Errorf("hour %d (newest to oldest): got count %d, want %d",
+						i, history[i].Count, tt.wantCounts[i])
+				}
+				if !equalStringSlices(history[i].People, tt.wantPeople[i]) {
+					t.Errorf("hour %d (newest to oldest): got people %v, want %v",
+						i, history[i].People, tt.wantPeople[i])
+				}
+			}
+		})
+	}
+}
+
+// equalStringSlices compares two string slices for equality
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
