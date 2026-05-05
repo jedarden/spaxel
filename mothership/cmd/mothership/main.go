@@ -1361,6 +1361,25 @@ func main() {
 				}
 			}
 		}()
+
+		// Start hourly zone history snapshot recording
+		go func() {
+			ticker := time.NewTicker(1 * time.Hour)
+			defer ticker.Stop()
+
+			// Record initial snapshot on startup
+			zonesMgr.RecordZoneHistorySnapshot()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					zonesMgr.RecordZoneHistorySnapshot()
+				}
+			}
+		}()
+		log.Printf("[INFO] Zone history snapshot recording started (hourly)")
 	}
 
 	// Wire ingestion → dashboard for CSI, motion, and event broadcasts
