@@ -623,3 +623,25 @@ func (lp *LinkProcessor) GetLinkCompositeConfidence(packetRateRatio float64) flo
 
 	return lp.diurnal.CompositeConfidence(packetRateRatio)
 }
+
+// ResetBaselines resets baselines for all links
+func (pm *ProcessorManager) ResetBaselines() {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	for _, processor := range pm.processors {
+		processor.Reset()
+	}
+}
+
+// ResetBaselinesForLinks resets baselines for specific link IDs
+func (pm *ProcessorManager) ResetBaselinesForLinks(linkIDs []string) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	for _, linkID := range linkIDs {
+		if processor, exists := pm.processors[linkID]; exists {
+			processor.Reset()
+		}
+	}
+}

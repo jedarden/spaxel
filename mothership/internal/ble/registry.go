@@ -216,6 +216,11 @@ type Registry struct {
 	db        *sql.DB
 	rssiCache *RSSICache
 	mu        sync.RWMutex
+
+	// Callbacks for person CRUD events (for HA auto-discovery)
+	onPersonCreated func(person *Person)
+	onPersonUpdated func(person *Person)
+	onPersonDeleted func(personID string)
 }
 
 // NewRegistry opens or creates the BLE device database.
@@ -240,6 +245,27 @@ func NewRegistry(dbPath string) (*Registry, error) {
 	}
 
 	return r, nil
+}
+
+// SetOnPersonCreated sets the callback for person creation events.
+func (r *Registry) SetOnPersonCreated(cb func(person *Person)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onPersonCreated = cb
+}
+
+// SetOnPersonUpdated sets the callback for person update events.
+func (r *Registry) SetOnPersonUpdated(cb func(person *Person)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onPersonUpdated = cb
+}
+
+// SetOnPersonDeleted sets the callback for person deletion events.
+func (r *Registry) SetOnPersonDeleted(cb func(personID string)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onPersonDeleted = cb
 }
 
 func (r *Registry) migrate() error {
@@ -827,12 +853,19 @@ func (r *Registry) CreatePerson(name, color string) (Person, error) {
 		return Person{}, err
 	}
 
-	return Person{
+	person := Person{
 		ID:        id,
 		Name:      name,
 		Color:     color,
 		CreatedAt: time.Unix(0, now),
-	}, nil
+	}
+
+	// Fire callback if set
+	if cb := r.onPersonCreated; cb != nil {
+		cb(&person)
+	}
+
+	return person, nil
 }
 
 // GetPeople returns all people.
@@ -872,21 +905,38 @@ func (r *Registry) GetPerson(id string) (*Person, error) {
 
 // UpdatePerson updates a person's name and/or color.
 func (r *Registry) UpdatePerson(id, name, color string) error {
+	var err error
 	if name != "" && color != "" {
-		_, err := r.db.Exec(`UPDATE people SET name = ?, color = ? WHERE id = ?`, name, color, id)
-		return err
+		_, err = r.db.Exec(`UPDATE people SET name = ?, color = ? WHERE id = ?`, name, color, id)
 	} else if name != "" {
-		_, err := r.db.Exec(`UPDATE people SET name = ? WHERE id = ?`, name, id)
-		return err
+		_, err = r.db.Exec(`UPDATE people SET name = ? WHERE id = ?`, name, id)
 	} else if color != "" {
-		_, err := r.db.Exec(`UPDATE people SET color = ? WHERE id = ?`, color, id)
+		_, err = r.db.Exec(`UPDATE people SET color = ? WHERE id = ?`, color, id)
+	} else {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
+
+	// Fetch and fire callback if set
+	person, err := r.GetPerson(id)
+	if err == nil {
+		if cb := r.onPersonUpdated; cb != nil {
+			cb(person)
+		}
+	}
+
 	return nil
 }
 
 // DeletePerson soft-deletes a person (retains historical data).
 func (r *Registry) DeletePerson(id string) error {
+	// Fire callback before deletion (if set)
+	if cb := r.onPersonDeleted; cb != nil {
+		cb(id)
+	}
+
 	// Unassign all devices from this person first
 	if _, err := r.db.Exec(`UPDATE ble_devices SET person_id = NULL WHERE person_id = ?`, id); err != nil {
 		return err

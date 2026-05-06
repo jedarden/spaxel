@@ -74,6 +74,12 @@ type EntityConfig struct {
 	Icon         string
 }
 
+// EventPublisherer is an interface for publishing HA auto-discovery configs.
+// Implemented by mqtt.EventPublisher.
+type EventPublisherer interface {
+	PublishInitialDiscovery()
+}
+
 // Client provides MQTT connectivity and Home Assistant integration.
 type Client struct {
 	mu     sync.RWMutex
@@ -86,8 +92,10 @@ type Client struct {
 	publishedEntities map[string]bool // entity ID -> published
 
 	// Callbacks
-	onConnect    func()
-	onDisconnect func()
+	onConnect           func()
+	onDisconnect        func()
+	onInitialDiscovery func() // Called on MQTT connect to publish initial discovery configs
+	eventPublisher      EventPublisherer // Optional EventPublisher for initial discovery
 }
 
 // NewClient creates a new MQTT client.
@@ -175,11 +183,20 @@ func NewClient(cfg Config) (*Client, error) {
 
 		// Publish discovery configs on reconnect
 		if cfg.DiscoveryEnabled {
-			go c.publishAllDiscoveryConfigs()
+			go c.publishAllDiscoveryConfigs(nil, nil)
 		}
 
 		if cb != nil {
 			go cb()
+		}
+
+		// Call event publisher's initial discovery if set
+		c.mu.Lock()
+		ep := c.eventPublisher
+		c.mu.Unlock()
+
+		if ep != nil {
+			go ep.PublishInitialDiscovery()
 		}
 	}
 
@@ -242,6 +259,20 @@ func (c *Client) SetOnConnect(cb func()) {
 func (c *Client) SetOnDisconnect(cb func()) {
 	c.mu.Lock()
 	c.onDisconnect = cb
+	c.mu.Unlock()
+}
+
+// SetOnInitialDiscovery sets callback for publishing initial discovery configs on connect.
+func (c *Client) SetOnInitialDiscovery(cb func()) {
+	c.mu.Lock()
+	c.onInitialDiscovery = cb
+	c.mu.Unlock()
+}
+
+// SetEventPublisher sets the event publisher for initial discovery publishing.
+func (c *Client) SetEventPublisher(ep EventPublisherer) {
+	c.mu.Lock()
+	c.eventPublisher = ep
 	c.mu.Unlock()
 }
 
@@ -508,16 +539,54 @@ func (c *Client) UpdatePredictionState(personID string, predictedZone, dataConfi
 	return c.UpdateSensorState(transitionID, fmt.Sprintf("%.1f", estimatedMinutes))
 }
 
-// publishAllDiscoveryConfigs re-publishes all discovery configs.
-func (c *Client) publishAllDiscoveryConfigs() {
-	// This is called on reconnect to ensure entities remain in HA
-	// The actual entities are published as people/devices are registered
-
+// publishAllDiscoveryConfigs re-publishes all discovery configs for zones and persons.
+func (c *Client) publishAllDiscoveryConfigs(zones []ZoneConfig, persons []PersonConfig) {
 	c.mu.RLock()
 	entities := len(c.publishedEntities)
 	c.mu.RUnlock()
 
-	log.Printf("[DEBUG] MQTT: Re-publishing %d discovery configs", entities)
+	log.Printf("[DEBUG] MQTT: Re-publishing %d existing discovery configs, adding %d zones + %d persons",
+		entities, len(zones), len(persons))
+
+	// Publish discovery configs for all zones
+	for _, zone := range zones {
+		if err := c.PublishZoneOccupancyDiscovery(zone.ID, zone.Name); err != nil {
+			log.Printf("[WARN] Failed to publish zone occupancy discovery for %s: %v", zone.Name, err)
+		}
+		if err := c.PublishZoneBinaryDiscovery(zone.ID, zone.Name); err != nil {
+			log.Printf("[WARN] Failed to publish zone binary discovery for %s: %v", zone.Name, err)
+		}
+	}
+
+	// Publish discovery configs for all persons
+	for _, person := range persons {
+		if err := c.PublishPersonPresenceDiscovery(person.ID, person.Name); err != nil {
+			log.Printf("[WARN] Failed to publish person discovery for %s: %v", person.Name, err)
+		}
+	}
+
+	// Publish system-wide discovery configs
+	if err := c.PublishFallDetectionDiscovery(); err != nil {
+		log.Printf("[WARN] Failed to publish fall detection discovery: %v", err)
+	}
+	if err := c.PublishSystemHealthDiscovery(); err != nil {
+		log.Printf("[WARN] Failed to publish system health discovery: %v", err)
+	}
+	if err := c.PublishSystemModeDiscovery(); err != nil {
+		log.Printf("[WARN] Failed to publish system mode discovery: %v", err)
+	}
+}
+
+// ZoneConfig represents zone data for discovery publishing.
+type ZoneConfig struct {
+	ID   string
+	Name string
+}
+
+// PersonConfig represents person data for discovery publishing.
+type PersonConfig struct {
+	ID   string
+	Name string
 }
 
 // RemoveEntity removes an entity from HA.
@@ -980,7 +1049,9 @@ func (c *Client) UpdateConfig(ctx context.Context, newCfg Config) error {
 			}
 
 			if c.config.DiscoveryEnabled {
-				go clientRef.publishAllDiscoveryConfigs()
+				// Only publish system-wide discovery configs; zone/person discovery
+				// is handled by EventPublisher.PublishInitialDiscovery()
+				go clientRef.publishAllDiscoveryConfigs(nil, nil)
 			}
 
 			if cb != nil {
@@ -1036,7 +1107,7 @@ func (c *Client) PublishDiscoveryNow() error {
 		return fmt.Errorf("MQTT not connected")
 	}
 
-	c.publishAllDiscoveryConfigs()
+	c.publishAllDiscoveryConfigs(nil, nil)
 	return nil
 }
 
