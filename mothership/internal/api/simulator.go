@@ -563,7 +563,32 @@ func (h *SimulatorHandler) GetShoppingList(w http.ResponseWriter, r *http.Reques
 	nodes := h.nodes
 	h.mu.RUnlock()
 
-	shoppingList := simulator.GenerateShoppingList(space, nodes)
+	// Generate links for GDOP computation
+	links := simulator.GenerateAllLinks(nodes)
+
+	// Compute GDOP coverage for accuracy estimation
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+	config := simulator.GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.2,
+	}
+	gdopComp := simulator.NewGDOPComputer(links, config)
+	results := gdopComp.ComputeAll()
+
+	coverageScore := gdopComp.CoverageScore(results)
+	avgGDOP := gdopComp.AverageGDOP(results)
+
+	// Create a basic accuracy report from GDOP data
+	accuracyReport := simulator.AccuracyReport{
+		MedianError: avgGDOP * 0.5, // Estimate: 50% of GDOP as median error
+		DetectionRate: math.Min(coverageScore/100, 1.0),
+	}
+
+	// Use the full shopping list implementation from accuracy.go
+	shoppingList := simulator.GenerateShoppingListFromResults(space, nodes, coverageScore, accuracyReport)
 	respondJSON(w, http.StatusOK, shoppingList)
 }
 

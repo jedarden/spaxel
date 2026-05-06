@@ -637,7 +637,7 @@
             return;
         }
 
-        updateStatus('Starting simulation...');
+        updateStatus('Running simulation...');
 
         try {
             const response = await fetch('/api/simulator/simulate', {
@@ -645,42 +645,50 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     duration_sec: CONFIG.defaultDurationSec,
-                    tick_rate_hz: CONFIG.tickRateHz,
+                    rate_hz: CONFIG.tickRateHz,
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to start simulation');
+            if (!response.ok) throw new Error('Failed to run simulation');
 
             const data = await response.json();
-            state.simulationRunning = true;
-            state.simulationPaused = false;
-            state.simulationTime = 0;
+            state.simulationResults = data;
 
-            // Update UI
-            if (elements.simulateBtn) elements.simulateBtn.disabled = true;
-            if (elements.stopBtn) elements.stopBtn.disabled = false;
+            // Update UI with results
+            displaySimulationResults(data);
 
-            // Start progress update
-            startProgressLoop();
-
-            // Poll for results
-            pollSimulationResults();
-
-            console.log('[Simulate] Simulation started');
+            updateStatus('Simulation complete');
+            console.log('[Simulate] Simulation complete:', data);
         } catch (err) {
-            console.error('[Simulate] Failed to start simulation:', err);
+            console.error('[Simulate] Failed to run simulation:', err);
             updateStatus('Error: ' + err.message);
         }
+    }
+
+    function displaySimulationResults(data) {
+        // Update metrics
+        if (data.link_activity) {
+            const activeLinks = Object.values(data.link_activity).filter(v => v > 0.02).length;
+            if (elements.metricBlobs) {
+                elements.metricBlobs.textContent = activeLinks + ' active links';
+            }
+        }
+
+        // Update GDOP if not already shown
+        if (!state.showGDOP && state.nodes.length >= 2) {
+            toggleGDOP();
+        } else if (state.showGDOP) {
+            updateGDOP();
+        }
+
+        // Fetch and display shopping list
+        fetchShoppingList();
     }
 
     function stopSimulation() {
         state.simulationRunning = false;
         state.simulationPaused = false;
         state.simulationTime = 0;
-
-        // Update UI
-        if (elements.simulateBtn) elements.simulateBtn.disabled = false;
-        if (elements.stopBtn) elements.stopBtn.disabled = true;
 
         updateStatus('Simulation stopped');
 
@@ -691,6 +699,7 @@
         stopSimulation();
         state.nodes = [];
         state.walkers = [];
+        state.simulationResults = null;
         renderNodes();
         clearSimulationMeshes();
         clearGDOPMesh();
@@ -699,90 +708,182 @@
         if (elements.metricGdop) elements.metricGdop.textContent = '--';
         if (elements.metricBlobs) elements.metricBlobs.textContent = '--';
 
+        // Hide shopping list
+        const shoppingContainer = document.getElementById('sim-shopping');
+        if (shoppingContainer) {
+            shoppingContainer.style.display = 'none';
+        }
+
         updateStatus('Simulation reset');
 
         console.log('[Simulate] Simulation reset');
     }
 
-    function startProgressLoop() {
-        const interval = setInterval(() => {
-            if (!state.simulationRunning) {
-                clearInterval(interval);
-                return;
-            }
-
-            if (!state.simulationPaused) {
-                state.simulationTime += 0.1;
-            }
-        }, 100);
-    }
-
-    async function pollSimulationResults() {
-        const pollInterval = setInterval(async () => {
-            if (!state.simulationRunning) {
-                clearInterval(pollInterval);
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/simulator/status');
-                if (!response.ok) return;
-
-                const data = await response.json();
-
-                // Update walker positions
-                if (data.walker_positions) {
-                    data.walker_positions.forEach(pos => {
-                        const walker = state.walkers.find(w => w.id === pos.id);
-                        if (walker) {
-                            walker.position = pos.position;
-                            updateWalkerVisualization(walker);
-                        }
-                    });
-                }
-
-                // Check if simulation complete
-                if (data.state === 'complete' || data.state === 'stopped') {
-                    clearInterval(pollInterval);
-                    await fetchSimulationResults();
-                }
-            } catch (err) {
-                console.error('[Simulate] Failed to poll results:', err);
-            }
-        }, 200);
-    }
-
-    async function fetchSimulationResults() {
+    // ============================================
+    // Shopping List
+    // ============================================
+    async function fetchShoppingList() {
         try {
-            const response = await fetch('/api/simulator/results');
-            if (!response.ok) throw new Error('Failed to fetch results');
+            const response = await fetch('/api/simulator/shopping-list');
+            if (!response.ok) throw new Error('Failed to fetch shopping list');
 
             const data = await response.json();
-            state.simulationResults = data;
+            displayShoppingList(data);
 
-            displayResults(data);
-            stopSimulation();
-
-            console.log('[Simulate] Simulation results:', data);
+            console.log('[Simulate] Shopping list:', data);
         } catch (err) {
-            console.error('[Simulate] Failed to fetch results:', err);
+            console.error('[Simulate] Failed to fetch shopping list:', err);
         }
     }
 
-    function displayResults(data) {
-        if (elements.metricCoverage && data.coverage_score) {
-            elements.metricCoverage.textContent = (data.coverage_score * 100).toFixed(0) + '%';
+    function displayShoppingList(data) {
+        const shoppingContainer = document.getElementById('sim-shopping');
+        const contentContainer = document.getElementById('shopping-list-content');
+        if (!shoppingContainer || !contentContainer) return;
+
+        shoppingContainer.style.display = 'block';
+
+        let html = '';
+
+        // Summary
+        html += `<div style="margin-bottom:12px;padding:8px;background:var(--bg-hover);border-radius:4px;">`;
+        html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px;">`;
+        html += `<span style="font-size:var(--text-sm);color:var(--text-secondary);">Minimum Nodes:</span>`;
+        html += `<span style="font-size:var(--text-sm);font-weight:600;">${data.minimum_nodes}</span>`;
+        html += `</div>`;
+        html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px;">`;
+        html += `<span style="font-size:var(--text-sm);color:var(--text-secondary);">Recommended Nodes:</span>`;
+        html += `<span style="font-size:var(--text-sm);font-weight:600;color:var(--blue-9);">${data.recommended_nodes}</span>`;
+        html += `</div>`;
+        html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px;">`;
+        html += `<span style="font-size:var(--text-sm);color:var(--text-secondary);">Expected Accuracy:</span>`;
+        html += `<span style="font-size:var(--text-sm);font-weight:600;">±${data.expected_accuracy_m.toFixed(1)}m</span>`;
+        html += `</div>`;
+        html += `<div style="display:flex;justify-content:space-between;">`;
+        html += `<span style="font-size:var(--text-sm);color:var(--text-secondary);">Coverage:</span>`;
+        html += `<span style="font-size:var(--text-sm);font-weight:600;">${data.coverage_percent.toFixed(0)}%</span>`;
+        html += `</div>`;
+        html += `</div>`;
+
+        // Hardware list
+        if (data.hardware_list && data.hardware_list.length > 0) {
+            html += `<div style="margin-bottom:12px;">`;
+            html += `<h5 style="margin:0 0 8px 0;font-size:var(--text-sm);color:var(--text-secondary);">Hardware Needed:</h5>`;
+            data.hardware_list.forEach(item => {
+                html += `<div style="padding:6px;background:var(--bg-hover);border-radius:4px;margin-bottom:4px;font-size:var(--text-sm);">${item}</div>`;
+            });
+            html += `</div>`;
         }
 
-        if (elements.metricGdop && data.mean_gdop) {
-            elements.metricGdop.textContent = data.mean_gdop < 9999 ? data.mean_gdop.toFixed(2) : '∞';
+        // Estimated cost
+        if (data.estimated_cost_usd !== undefined) {
+            html += `<div style="margin-bottom:12px;padding:8px;background:var(--bg-hover);border-radius:4px;">`;
+            html += `<div style="display:flex;justify-content:space-between;">`;
+            html += `<span style="font-size:var(--text-sm);color:var(--text-secondary);">Estimated Cost:</span>`;
+            html += `<span style="font-size:var(--text-sm);font-weight:600;color:var(--ok);">$${data.estimated_cost_usd.toFixed(0)}</span>`;
+            html += `</div>`;
+            html += `</div>`;
         }
 
-        if (elements.metricBlobs && data.blob_count !== undefined) {
-            elements.metricBlobs.textContent = data.blob_count;
+        // Recommended additions
+        if (data.recommended_additions && data.recommended_additions.length > 0) {
+            html += `<div style="margin-bottom:12px;">`;
+            html += `<h5 style="margin:0 0 8px 0;font-size:var(--text-sm);color:var(--text-secondary);">Suggested Additions:</h5>`;
+            data.recommended_additions.forEach(add => {
+                html += `<div style="padding:8px;background:var(--bg-hover);border-radius:4px;margin-bottom:4px;border-left:3px solid var(--blue-9);">`;
+                html += `<div style="font-size:var(--text-sm);font-weight:600;margin-bottom:4px;">${add.name}</div>`;
+                html += `<div style="font-size:var(--text-2xs);color:var(--text-muted);margin-bottom:2px;">`;
+                html += `Position: (${add.position.x.toFixed(1)}, ${add.position.y.toFixed(1)}, ${add.position.z.toFixed(1)})`;
+                html += `</div>`;
+                html += `<div style="font-size:var(--text-2xs);color:var(--text-muted);">`;
+                html += `Placement: ${add.height} | Improvement: +${(add.estimated_improvement * 100).toFixed(0)}%`;
+                html += `</div>`;
+                html += `</div>`;
+            });
+            html += `</div>`;
         }
 
-        updateStatus('Simulation complete');
+        // Coverage gaps
+        if (data.coverage_gaps && data.coverage_gaps.length > 0) {
+            html += `<div style="margin-bottom:12px;">`;
+            html += `<h5 style="margin:0 0 8px 0;font-size:var(--text-sm);color:var(--alert);">Coverage Gaps Found:</h5>`;
+            html += `<div style="font-size:var(--text-2xs);color:var(--text-muted);margin-bottom:8px;">`;
+            html += `${data.coverage_gaps.length} area(s) with poor or no coverage`;
+            html += `</div>`;
+            html += `</div>`;
+        }
+
+        // Amazon search link
+        if (data.amazon_search_url) {
+            html += `<a href="${data.amazon_search_url}" target="_blank" style="display:block;padding:8px;background:var(--blue-9);color:var(--text-on-accent);text-align:center;text-decoration:none;border-radius:4px;font-size:var(--text-sm);margin-top:8px;">`;
+            html += `Search Hardware on Amazon &nearr;`;
+            html += `</a>`;
+        }
+
+        contentContainer.innerHTML = html;
+
+        // Attach handler for "Add node here" button
+        const addHereBtn = document.getElementById('btn-add-node-here');
+        if (addHereBtn) {
+            addHereBtn.onclick = addNodeAtWorstCoverage;
+        }
+
+        // Store coverage gaps for "Add node here" feature
+        state.coverageGaps = data.coverage_gaps || [];
+    }
+
+    // ============================================
+    // Add Node at Worst Coverage Spot
+    // ============================================
+    function addNodeAtWorstCoverage() {
+        if (!state.coverageGaps || state.coverageGaps.length === 0) {
+            updateStatus('No coverage gaps detected. Run simulation first.');
+            return;
+        }
+
+        // Get the first (worst) coverage gap
+        const worstGap = state.coverageGaps[0];
+
+        // Generate virtual MAC address
+        _virtualNodeCounter++;
+        const mac = 'AA:BB:CC:' +
+            (_virtualNodeCounter & 0xFF).toString(16).padStart(2, '0').toUpperCase() + ':' +
+            ((_virtualNodeCounter >> 8) & 0xFF).toString(16).padStart(2, '0').toUpperCase() + ':' +
+            ((_virtualNodeCounter >> 16) & 0xFF).toString(16).padStart(2, '0').toUpperCase();
+
+        const id = 'node_' + Date.now() + '_' + _virtualNodeCounter;
+        const node = {
+            id: id,
+            mac: mac,
+            name: 'Gap Coverage Node ' + (state.nodes.length + 1),
+            type: 'virtual',
+            node_type: 'esp32',
+            virtual: true,
+            position: {
+                x: worstGap.x,
+                y: worstGap.y,
+                z: worstGap.z,
+            },
+            role: 'tx_rx',
+            enabled: true,
+        };
+
+        state.nodes.push(node);
+        renderNodes();
+        updateNodeVisualization(node);
+        rebuildLinkLines();
+
+        // Highlight the new node in 3D
+        selectNode(id);
+
+        // Update GDOP
+        if (state.showGDOP) {
+            updateGDOP();
+        }
+
+        updateStatus(`Added node at worst coverage spot (${worstGap.x.toFixed(1)}, ${worstGap.y.toFixed(1)}, ${worstGap.z.toFixed(1)})`);
+
+        console.log('[Simulate] Added node at worst coverage:', node);
     }
 
     // ============================================
