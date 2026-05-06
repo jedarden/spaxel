@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spaxel/mothership/internal/simulator"
 )
 
 const (
@@ -59,6 +60,11 @@ var (
 	flagChannel     = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
 	flagWalkerType  = flag.String("walker-type", "random", "Walker type: random, path, node-to-node")
 	flagPathFile    = flag.String("path-file", "", "JSON file containing walker paths")
+
+	// GDOP and shopping list flags
+	flagGDOPOverlay = flag.Bool("gdop-overlay", false, "Output GDOP overlay data as JSON to stdout")
+	flagShoppingList = flag.Bool("shopping-list", false, "Output shopping list as JSON to stdout")
+	flagCellSize    = flag.Float64("cell-size", 0.2, "GDOP grid cell size in meters")
 
 	// Scenario flags
 	flagScenario     = flag.String("scenario", "normal", "Scenario type: normal, fall, ota, bag-on-couch")
@@ -166,6 +172,11 @@ type Space struct {
 	Width, Depth, Height float64
 }
 
+// Bounds returns the bounding box of the space
+func (s *Space) Bounds() (minX, minY, minZ, maxX, maxY, maxZ float64) {
+	return 0, 0, 0, s.Width, s.Depth, s.Height
+}
+
 // WallMaterial defines the type of wall material
 type WallMaterial string
 
@@ -239,6 +250,28 @@ func main() {
 	log.Printf("[SIM]   Space: %.1fx%.1fx%.1f m", space.Width, space.Depth, space.Height)
 	log.Printf("[SIM]   Walls: %d", len(walls))
 	log.Printf("[SIM]   BLE: %v", *flagBLE)
+
+	// Output GDOP overlay if requested
+	if *flagGDOPOverlay {
+		if err := outputGDOPOverlay(space, nodes, *flagCellSize); err != nil {
+			log.Fatalf("[SIM] Failed to output GDOP overlay: %v", err)
+		}
+	}
+
+	// Output shopping list if requested
+	if *flagShoppingList {
+		if err := outputShoppingList(space, nodes); err != nil {
+			log.Fatalf("[SIM] Failed to output shopping list: %v", err)
+		}
+	}
+
+	// If only output was requested, exit here
+	if *flagGDOPOverlay || *flagShoppingList {
+		if !*flagVerify && *flagDuration == 0 {
+			log.Printf("[SIM] Output complete (no simulation requested)")
+			os.Exit(0)
+		}
+	}
 
 	// Create scenario configuration
 	scenarioConfig := &ScenarioConfig{
@@ -1166,4 +1199,146 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// toSimulatorPoint converts a main.Point to simulator.Point
+func toSimulatorPoint(p Point) simulator.Point {
+	return simulator.Point{X: p.X, Y: p.Y, Z: p.Z}
+}
+
+// toSimulatorSpace converts a main.Space to simulator.Space
+func toSimulatorSpace(s *Space) *simulator.Space {
+	return &simulator.Space{
+		ID:   "sim-space",
+		Name: "Simulation Space",
+		Rooms: []simulator.Room{{
+			ID:   "room-1",
+			Name: "Main Room",
+			MinX: 0, MinY: 0, MinZ: 0,
+			MaxX: s.Width, MaxY: s.Depth, MaxZ: s.Height,
+		}},
+	}
+}
+
+// outputGDOPOverlay computes and outputs GDOP overlay data as JSON
+func outputGDOPOverlay(space *Space, nodes []*VirtualNode, cellSize float64) error {
+	// Convert to simulator types
+	simSpace := toSimulatorSpace(space)
+	nodeSet := simulator.NewNodeSet()
+	for _, vn := range nodes {
+		simPos := toSimulatorPoint(vn.Position)
+		nodeID := fmt.Sprintf("node-%d", vn.ID)
+		nodeName := fmt.Sprintf("Node %d", vn.ID)
+		nodeSet.AddVirtualNode(nodeID, nodeName, simPos)
+	}
+
+	// Generate links
+	links := simulator.GenerateAllLinks(nodeSet)
+
+	if len(links) < 2 {
+		return fmt.Errorf("need at least 2 nodes for GDOP computation")
+	}
+
+	// Get space bounds from simulator space
+	minX, minY, _, maxX, maxY, _ := simSpace.Bounds()
+
+	// Create GDOP computer
+	config := simulator.GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: cellSize,
+	}
+	gdopComp := simulator.NewGDOPComputer(links, config)
+
+	// Compute GDOP for all cells
+	results := gdopComp.ComputeAll()
+
+	// Convert to heatmap data
+	heatmapData := gdopComp.ToHeatmapData(results)
+
+	// Get average GDOP, handling infinity
+	avgGDOP := gdopComp.AverageGDOP(results)
+	avgGDOPOutput := "Infinity"
+	if !math.IsInf(avgGDOP, 0) {
+		avgGDOPOutput = fmt.Sprintf("%.2f", avgGDOP)
+	}
+
+	// Output JSON
+	output := map[string]interface{}{
+		"type":            "gdop_overlay",
+		"space_dimensions": map[string]float64{
+			"width_m":  space.Width,
+			"depth_m":  space.Depth,
+			"height_m": space.Height,
+		},
+		"grid_dimensions": []int{heatmapData.Width, heatmapData.Depth, 1},
+		"cell_size_m":    cellSize,
+		"origin":         map[string]float64{"x": heatmapData.OriginX, "y": heatmapData.OriginY},
+		"gdop_values":    heatmapData.GDOPValues,
+		"qualities":      heatmapData.Qualities,
+		"colors":         heatmapData.Colors,
+		"accuracy_map":   heatmapData.AccuracyMap,
+		"coverage_score": gdopComp.CoverageScore(results),
+		"average_gdop":   avgGDOPOutput,
+		"quality_counts": gdopComp.QualityCounts(results),
+		"dead_zones":     gdopComp.FindDeadZones(results),
+		"links":          links,
+		"timestamp":      time.Now().Format(time.RFC3339),
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(output)
+}
+
+// outputShoppingList generates and outputs the shopping list as JSON
+func outputShoppingList(space *Space, nodes []*VirtualNode) error {
+	// Convert to simulator types
+	simSpace := toSimulatorSpace(space)
+	nodeSet := simulator.NewNodeSet()
+	for _, vn := range nodes {
+		simPos := toSimulatorPoint(vn.Position)
+		nodeID := fmt.Sprintf("node-%d", vn.ID)
+		nodeName := fmt.Sprintf("Node %d", vn.ID)
+		nodeSet.AddVirtualNode(nodeID, nodeName, simPos)
+	}
+
+	// Generate basic coverage info (no walkers for static shopping list)
+	links := simulator.GenerateAllLinks(nodeSet)
+	minX, minY, _, maxX, maxY, _ := simSpace.Bounds()
+
+	gdopComp := simulator.NewGDOPComputer(links, simulator.GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.2,
+	})
+	results := gdopComp.ComputeAll()
+	coverageScore := gdopComp.CoverageScore(results)
+
+	// Create accuracy report (default values since no simulation run)
+	accuracy := simulator.AccuracyReport{
+		MedianError: 1.0,
+		MeanError:   1.2,
+		MaxError:    2.5,
+		P95Error:    2.0,
+	}
+
+	// Generate shopping list
+	shoppingList := simulator.GenerateShoppingListFromResults(simSpace, nodeSet, coverageScore, accuracy)
+
+	// Output JSON
+	output := map[string]interface{}{
+		"type":     "shopping_list",
+		"list":     shoppingList,
+		"timestamp": time.Now().Format(time.RFC3339),
+		"note":     "This is a pre-deployment estimate. Actual accuracy may vary based on environment.",
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(output)
 }
