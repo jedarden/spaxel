@@ -408,10 +408,16 @@
 
         // Handle loc_update messages (event-driven blob updates)
         if (data.type === 'loc_update') {
+            const previousBlobCount = currentState.blobs.length;
             if (data.blobs) {
                 currentState.blobs = data.blobs;
             }
             currentState.lastUpdate = new Date();
+
+            // Check for first person detection (for morning briefing)
+            if (previousBlobCount === 0 && currentState.blobs.length > 0 && window.SpaxelAmbientBriefing) {
+                window.SpaxelAmbientBriefing.onFirstDetection();
+            }
 
             // Update renderer state
             if (renderer) {
@@ -446,6 +452,8 @@
 
         // Handle delta messages (no type field - incremental updates)
         if (!data.type) {
+            const previousBlobCount = currentState.blobs.length;
+
             if (data.blobs) {
                 currentState.blobs = data.blobs;
             }
@@ -478,6 +486,11 @@
             }
 
             currentState.lastUpdate = new Date();
+
+            // Check for first person detection (for morning briefing)
+            if (previousBlobCount === 0 && currentState.blobs.length > 0 && window.SpaxelAmbientBriefing) {
+                window.SpaxelAmbientBriefing.onFirstDetection();
+            }
 
             // Update renderer state
             if (renderer) {
