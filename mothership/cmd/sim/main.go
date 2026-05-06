@@ -316,7 +316,8 @@ func main() {
 
 	// Start statistics reporter
 	stats := &Stats{StartTime: time.Now()}
-	go reportStats(ctx, stats)
+	httpBaseURL := getHTTPBaseURL(*flagMothership)
+	go reportStats(ctx, stats, httpBaseURL)
 
 	// Connect all nodes to mothership
 	if err := connectNodes(ctx, nodes); err != nil {
@@ -358,7 +359,7 @@ func main() {
 	}
 
 	// Print final statistics
-	printFinalStats(stats, len(walkers))
+	printFinalStats(stats, len(walkers), httpBaseURL)
 }
 
 // parseSpace parses space dimensions from WxDxH format
@@ -1158,8 +1159,8 @@ func sendBLEMessages(nodes []*VirtualNode, walkers []*Walker) {
 	}
 }
 
-// reportStats periodically prints statistics
-func reportStats(ctx context.Context, stats *Stats) {
+// reportStats periodically prints statistics including blob counts
+func reportStats(ctx context.Context, stats *Stats, httpBaseURL string) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -1172,18 +1173,54 @@ func reportStats(ctx context.Context, stats *Stats) {
 			elapsed := now.Sub(stats.StartTime).Seconds()
 			framesSent := stats.FramesSent.Load()
 
+			// Fetch blob count from mothership
+			blobCount := fetchBlobCount(httpBaseURL)
+
 			if elapsed > 0 {
 				fps := float64(framesSent) / elapsed
-				log.Printf("[SIM] Stats: frames=%d fps=%.1f elapsed=%.1fs", framesSent, fps, elapsed)
+				log.Printf("[SIM] Stats: frames=%d fps=%.1f blobs=%d elapsed=%.1fs", framesSent, fps, blobCount, elapsed)
 			}
 		}
 	}
 }
 
+// fetchBlobCount queries the mothership for current blob count
+func fetchBlobCount(baseURL string) int {
+	if baseURL == "" {
+		return 0
+	}
+
+	// Ensure we have the correct API endpoint
+	blobsURL := strings.TrimSuffix(baseURL, "/ws")
+	blobsURL = strings.TrimSuffix(blobsURL, "/")
+	blobsURL += "/api/blobs"
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(blobsURL)
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0
+	}
+
+	var blobs []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&blobs); err != nil {
+		return 0
+	}
+
+	return len(blobs)
+}
+
 // printFinalStats prints final simulation statistics
-func printFinalStats(stats *Stats, walkerCount int) {
+func printFinalStats(stats *Stats, walkerCount int, httpBaseURL string) {
 	elapsed := time.Since(stats.StartTime).Seconds()
 	framesSent := stats.FramesSent.Load()
+
+	// Fetch final blob count
+	blobCount := fetchBlobCount(httpBaseURL)
 
 	log.Printf("[SIM] Final Statistics:")
 	log.Printf("[SIM]   Frames sent: %d", framesSent)
@@ -1192,6 +1229,7 @@ func printFinalStats(stats *Stats, walkerCount int) {
 		log.Printf("[SIM]   Average FPS: %.1f", float64(framesSent)/elapsed)
 	}
 	log.Printf("[SIM]   Walkers: %d", walkerCount)
+	log.Printf("[SIM]   Blobs detected: %d", blobCount)
 }
 
 func min(a, b int) int {
@@ -1218,6 +1256,35 @@ func toSimulatorSpace(s *Space) *simulator.Space {
 			MaxX: s.Width, MaxY: s.Depth, MaxZ: s.Height,
 		}},
 	}
+}
+
+// getHTTPBaseURL converts a WebSocket URL to an HTTP base URL for API calls
+func getHTTPBaseURL(wsURL string) string {
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		return ""
+	}
+
+	if u.Scheme == "ws" {
+		u.Scheme = "http"
+	} else if u.Scheme == "wss" {
+		u.Scheme = "https"
+	}
+
+	// Remove /ws path if present
+	path := u.Path
+	if strings.Contains(path, "/ws") {
+		if idx := strings.Index(path, "/ws"); idx != -1 {
+			u.Path = path[:idx]
+		}
+	} else if strings.HasSuffix(path, "/ws") {
+		u.Path = strings.TrimSuffix(path, "/ws")
+	}
+
+	// Ensure trailing slash is removed for consistent URL construction
+	u.Path = strings.TrimSuffix(u.Path, "/")
+
+	return u.String()
 }
 
 // outputGDOPOverlay computes and outputs GDOP overlay data as JSON
