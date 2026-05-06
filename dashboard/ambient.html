@@ -63,6 +63,7 @@
     </div><!-- /.app-shell -->
 
     <!-- Ambient Mode -->
+    <script src="js/auth.js"></script>
     <script src="js/ambient_renderer.js"></script>
     <script src="js/ambient_briefing.js"></script>
     <script src="js/ambient.js"></script>
@@ -72,7 +73,7 @@
         (function() {
             'use strict';
 
-            // Wait for auth to complete
+            // Wait for DOM to be ready
             document.addEventListener('DOMContentLoaded', function() {
                 // Check authentication first
                 if (window.SpaxelAuth) {
@@ -83,7 +84,7 @@
                                 window.SpaxelAmbientMode.enable();
                             }
                         } else {
-                            // Redirect to main dashboard for authentication
+                            // Show PIN entry or redirect
                             window.location.href = '/';
                         }
                     }).catch(function() {
@@ -91,8 +92,11 @@
                         window.location.href = '/';
                     });
                 } else {
-                    // Auth module not loaded, redirect
-                    window.location.href = '/';
+                    // Auth module not loaded, try to enable ambient mode anyway
+                    // WebSocket will fail authentication if not logged in
+                    if (window.SpaxelAmbientMode) {
+                        window.SpaxelAmbientMode.enable();
+                    }
                 }
             });
         })();

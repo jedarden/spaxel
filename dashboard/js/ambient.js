@@ -372,7 +372,7 @@
      */
     function handleWebSocketMessage(data) {
         // Handle snapshot message (first message on connect)
-        if (data.type === 'snapshot' || (!data.type && data.blobs !== undefined)) {
+        if (data.type === 'snapshot') {
             // Full snapshot
             if (data.zones) currentState.zones = data.zones;
             if (data.blobs) currentState.blobs = data.blobs;
@@ -406,45 +406,88 @@
             return;
         }
 
-        // Handle incremental updates
-        if (data.blobs) {
-            currentState.blobs = data.blobs;
+        // Handle loc_update messages (event-driven blob updates)
+        if (data.type === 'loc_update') {
+            if (data.blobs) {
+                currentState.blobs = data.blobs;
+            }
+            currentState.lastUpdate = new Date();
+
+            // Update renderer state
+            if (renderer) {
+                renderer.updateState(currentState);
+            }
+
+            // Update UI
+            updateStatus();
+            return;
         }
-        if (data.zones) {
-            currentState.zones = data.zones;
+
+        // Handle event-driven messages
+        if (data.type === 'alert' || data.type === 'anomaly_detected' || data.type === 'fall_alert') {
+            // Add to alerts
+            const exists = currentState.alerts.some(a => a.id === data.id);
+            if (!exists) {
+                currentState.alerts.push(data);
+            }
+            currentState.lastUpdate = new Date();
+            checkAlerts();
+            return;
         }
-        if (data.portals) {
-            currentState.portals = data.portals;
+
+        // Handle system_mode_change for security mode
+        if (data.type === 'system_mode_change') {
+            if (data.security_mode !== undefined) {
+                currentState.securityMode = data.security_mode;
+            }
+            updateStatus();
+            return;
         }
-        if (data.nodes) {
-            currentState.nodes = data.nodes;
-            currentState.nodesOnline = currentState.nodes.filter(n => n.status === 'online').length;
-            currentState.nodesTotal = currentState.nodes.length;
-        }
-        if (data.events && data.events.length > 0) {
-            // Add new alerts
-            data.events.forEach(event => {
-                if (event.type === 'alert' || event.type === 'fall_alert' || event.type === 'anomaly') {
-                    // Check if alert already exists
-                    const exists = currentState.alerts.some(a => a.id === event.id);
-                    if (!exists) {
-                        currentState.alerts.push(event);
+
+        // Handle delta messages (no type field - incremental updates)
+        if (!data.type) {
+            if (data.blobs) {
+                currentState.blobs = data.blobs;
+            }
+            if (data.zones) {
+                currentState.zones = data.zones;
+            }
+            if (data.portals) {
+                currentState.portals = data.portals;
+            }
+            if (data.nodes) {
+                currentState.nodes = data.nodes;
+                currentState.nodesOnline = currentState.nodes.filter(n => n.status === 'online').length;
+                currentState.nodesTotal = currentState.nodes.length;
+            }
+            if (data.events && data.events.length > 0) {
+                // Add new alerts
+                data.events.forEach(event => {
+                    if (event.type === 'alert' || event.type === 'fall_alert' || event.type === 'anomaly') {
+                        // Check if alert already exists
+                        const exists = currentState.alerts.some(a => a.id === event.id);
+                        if (!exists) {
+                            currentState.alerts.push(event);
+                        }
                     }
-                }
-            });
+                });
+            }
+            // Handle security_mode in delta
+            if (data.security_mode !== undefined) {
+                currentState.securityMode = data.security_mode;
+            }
+
+            currentState.lastUpdate = new Date();
+
+            // Update renderer state
+            if (renderer) {
+                renderer.updateState(currentState);
+            }
+
+            // Update UI
+            updateStatus();
+            checkAlerts();
         }
-
-        currentState.lastUpdate = new Date();
-
-        // Update renderer state
-        if (renderer) {
-            renderer.updateState(currentState);
-        }
-
-        // Update UI
-        updateStatus();
-        checkAlerts();
-    }
 
     // ============================================
     // Status Updates

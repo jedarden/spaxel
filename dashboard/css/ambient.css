@@ -35,7 +35,8 @@ body.ambient-mode {
     font-family: var(--font-body);
     background: var(--ambient-bg-day);
     color: var(--ambient-text-day);
-    transition: background 1s ease, color 1s ease;
+    /* Smooth transition for time-of-day changes */
+    transition: background 2s ease-in-out, color 2s ease-in-out;
 }
 
 /* Hide all non-ambient elements */
@@ -147,69 +148,81 @@ body.ambient-mode {
 
 /* ===== Time of Day Themes ===== */
 
-/* Morning (6-10am): bright, cool */
+/* Morning (6-10am): bright, cool - cheerful start */
 .ambient-mode.time-morning {
-    background: var(--ambient-bg-morning);
-    color: var(--ambient-text-morning);
+    background: #e0f2fe; /* Light sky blue */
+    color: #0c4a6e;
 }
 
 .ambient-mode.time-morning .ambient-status {
-    color: var(--ambient-text-morning);
+    color: #0c4a6e;
 }
 
 .ambient-mode.time-morning .ambient-person {
-    background: var(--ambient-person-bg-morning);
-    color: var(--ambient-accent-morning);
+    background: #7dd3fc; /* Light blue */
+    color: #0284c7;
+}
+
+.ambient-mode.time-morning .ambient-canvas {
+    box-shadow: 0 4px 20px rgba(14, 165, 233, 0.2);
 }
 
 /* Day (10am-6pm): neutral, clean */
 .ambient-mode.time-day {
-    background: var(--ambient-bg-day);
-    color: var(--ambient-text-day);
+    background: #ffffff;
+    color: #1d1d1f;
 }
 
 .ambient-mode.time-day .ambient-status {
-    color: var(--ambient-text-day);
+    color: #1d1d1f;
 }
 
 .ambient-mode.time-day .ambient-person {
-    background: var(--ambient-person-bg-day);
-    color: var(--ambient-accent-day);
+    background: #3b82f6; /* Blue */
+    color: #1e40af;
 }
 
-/* Evening (6-10pm): warm, amber tones */
+.ambient-mode.time-day .ambient-canvas {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Evening (6-10pm): warm amber tones - relaxing */
 .ambient-mode.time-evening {
-    background: var(--ambient-bg-evening);
-    color: var(--ambient-text-evening);
+    background: #1c1507; /* Dark warm brown */
+    color: #fef3e7;
 }
 
 .ambient-mode.time-evening .ambient-status {
-    color: var(--ambient-text-evening);
+    color: #fef3e7;
 }
 
 .ambient-mode.time-evening .ambient-person {
-    background: var(--ambient-person-bg-evening);
-    color: var(--ambient-accent-evening);
+    background: #f59e0b; /* Amber */
+    color: #78350f;
 }
 
-/* Night (10pm-6am): very dim, minimal */
+.ambient-mode.time-evening .ambient-canvas {
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
+}
+
+/* Night (10pm-6am): very dim, minimal - OLED-safe */
 .ambient-mode.time-night {
-    background: var(--ambient-bg-night);
-    color: var(--ambient-text-night);
+    background: #000000; /* Pure black for OLED */
+    color: #6b7280; /* Dim gray */
 }
 
 .ambient-mode.time-night .ambient-status {
-    color: var(--ambient-text-night);
-    opacity: 0.5;
+    color: #6b7280;
+    opacity: 0.4;
 }
 
 .ambient-mode.time-night .ambient-person {
-    background: var(--ambient-person-bg-night);
-    color: var(--ambient-accent-night);
+    background: #4b5563; /* Dim gray */
+    color: #9ca3af;
 }
 
 .ambient-mode.time-night .ambient-canvas {
-    box-shadow: var(--shadow);
+    box-shadow: none;
 }
 
 /* ===== Ambient Person Indicators ===== */
@@ -304,6 +317,9 @@ body.ambient-mode {
     justify-content: center;
     padding: var(--space-10);
     animation: alert-fade-in 0.5s ease-out;
+    /* Pulsing red border effect */
+    border: 8px solid #dc2626;
+    animation: alert-fade-in 0.5s ease-out, alert-pulse-border 1s ease-in-out infinite;
 }
 
 @keyframes alert-fade-in {
@@ -312,6 +328,17 @@ body.ambient-mode {
     }
     to {
         opacity: 1;
+    }
+}
+
+@keyframes alert-pulse-border {
+    0%, 100% {
+        border-color: #dc2626;
+        box-shadow: inset 0 0 20px rgba(220, 38, 38, 0.5);
+    }
+    50% {
+        border-color: #ef4444;
+        box-shadow: inset 0 0 40px rgba(239, 68, 68, 0.8);
     }
 }
 
