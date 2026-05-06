@@ -154,6 +154,21 @@
             downloadCSV();
         });
 
+        // Re-baseline button
+        elements.rebaselineBtn.addEventListener('click', () => {
+            rebaselineAll();
+        });
+
+        // Export button
+        elements.exportBtn.addEventListener('click', () => {
+            exportConfig();
+        });
+
+        // Import button
+        elements.importBtn.addEventListener('click', () => {
+            showImportModal();
+        });
+
         // Select all checkbox
         elements.selectAllCheckbox.addEventListener('change', (e) => {
             toggleSelectAll(e.target.checked);
@@ -237,6 +252,20 @@
         elements.removeConfirmBtn.addEventListener('click', () => {
             confirmRemove();
         });
+
+        // Import file input change
+        if (elements.importFileInput) {
+            elements.importFileInput.addEventListener('change', (e) => {
+                handleImportFile(e.target.files[0]);
+            });
+        }
+
+        // Import confirm
+        if (elements.importConfirmBtn) {
+            elements.importConfirmBtn.addEventListener('click', () => {
+                confirmImport();
+            });
+        }
     }
 
     // ============================================
@@ -968,6 +997,72 @@
         }
     }
 
+    async function rebaselineAll() {
+        if (!confirm('Re-baseline all links?\n\nThis will reset all link baselines. Make sure the space is empty during the 60-second calibration window.')) {
+            return;
+        }
+
+        try {
+            showToast('Starting re-baseline for all links...', 'info');
+
+            const response = await fetch('/api/nodes/rebaseline-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            showToast('Re-baseline started for all links', 'success');
+            fetchFleetData();
+
+        } catch (error) {
+            console.error('[FleetPage] Re-baseline failed:', error);
+            showToast('Failed to start re-baseline', 'error');
+        }
+    }
+
+    async function exportConfig() {
+        try {
+            const response = await fetch('/api/export');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `spaxel-config-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('Configuration exported', 'success');
+
+        } catch (error) {
+            console.error('[FleetPage] Export failed:', error);
+            showToast('Failed to export configuration', 'error');
+        }
+    }
+
+    function showImportModal() {
+        // Reset the import modal state
+        if (elements.importFileInput) {
+            elements.importFileInput.value = '';
+        }
+        if (elements.importInfo) {
+            elements.importInfo.style.display = 'none';
+        }
+        if (elements.importConfirmBtn) {
+            elements.importConfirmBtn.disabled = true;
+        }
+        openModal('import-modal');
+    }
+
     function showRoleModal() {
         const count = state.selectedNodes.size;
         elements.roleNodeCount.textContent = count;
@@ -1075,6 +1170,65 @@
             console.error('[FleetPage] Remove failed:', error);
             showToast('Failed to remove nodes', 'error');
         }
+    }
+
+    let importData = null;
+
+    async function handleImportFile(file) {
+        if (!file) {
+            return;
+        }
+
+        if (!file.name.endsWith('.json')) {
+            showToast('Please select a JSON file', 'warning');
+            return;
+        }
+
+        try {
+            const text = await file.text();
+            importData = JSON.parse(text);
+
+            // Show import info
+            elements.importFilename.textContent = file.name;
+            elements.importNodesCount.textContent = importData.nodes ? importData.nodes.length : 0;
+            elements.importInfo.style.display = '';
+            elements.importConfirmBtn.disabled = false;
+
+        } catch (error) {
+            console.error('[FleetPage] Failed to parse import file:', error);
+            showToast('Invalid JSON file', 'error');
+            importData = null;
+        }
+    }
+
+    async function confirmImport() {
+        if (!importData) {
+            return;
+        }
+
+        closeModal('import-modal');
+
+        try {
+            const response = await fetch('/api/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(importData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            showToast(`Configuration imported: ${result.imported.nodes || 0} nodes`, 'success');
+            fetchFleetData();
+
+        } catch (error) {
+            console.error('[FleetPage] Import failed:', error);
+            showToast('Failed to import configuration', 'error');
+        }
+
+        importData = null;
     }
 
     function showMoreActions(button, mac) {

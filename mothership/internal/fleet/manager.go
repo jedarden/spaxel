@@ -15,7 +15,8 @@ type NodeStateNotifier interface {
 	// SendRoleToMAC sends a role assignment message to a connected node.
 	SendRoleToMAC(mac, role, passiveBSSID string)
 	// SendConfigToMAC sends a rate config to a connected node.
-	SendConfigToMAC(mac string, rateHz int, varianceThreshold float64)
+	// txSlotUS is the TX slot offset in microseconds (0 means no stagger).
+	SendConfigToMAC(mac string, rateHz int, txSlotUS int, varianceThreshold float64)
 	// SendIdentifyToMAC sends an LED blink command to a connected node.
 	// Returns false if the node is not connected.
 	SendIdentifyToMAC(mac string, durationMS int) bool
@@ -103,19 +104,30 @@ type Manager struct {
 
 	// Callback for mode changes
 	onModeChange func(events.SystemModeChangeEvent)
+
+	// Collision detection and adaptive re-stagger
+	collisionDetector   *CollisionDetector
+	collisionCheckTick  time.Duration
 }
 
 // NewManager creates a fleet manager backed by registry.
 func NewManager(reg *Registry) *Manager {
-	return &Manager{
-		registry:          reg,
-		online:            make(map[string]struct{}),
-		healTick:          60 * time.Second,
-		systemMode:        events.ModeHome,
-		autoAwayConfig:    DefaultAutoAwayConfig(),
-		lastDeviceSeen:    make(map[string]time.Time),
-		modeCheckInterval: 30 * time.Second,
+	m := &Manager{
+		registry:           reg,
+		online:             make(map[string]struct{}),
+		healTick:           60 * time.Second,
+		systemMode:         events.ModeHome,
+		autoAwayConfig:     DefaultAutoAwayConfig(),
+		lastDeviceSeen:     make(map[string]time.Time),
+		modeCheckInterval:  30 * time.Second,
+		collisionDetector:  NewCollisionDetector(),
+		collisionCheckTick: 10 * time.Second,
 	}
+	// Set up re-stagger callback
+	m.collisionDetector.SetRestaggerCallback(func() {
+		m.AdaptiveRestagger()
+	})
+	return m
 }
 
 // SetNotifier sets the ingestion server callback.
@@ -170,12 +182,17 @@ func (m *Manager) Run(ctx context.Context) {
 	ticker := time.NewTicker(m.healTick)
 	defer ticker.Stop()
 
+	collisionTicker := time.NewTicker(m.collisionCheckTick)
+	defer collisionTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			m.selfHeal()
+		case <-collisionTicker.C:
+			m.checkCollisions()
 		}
 	}
 }
@@ -294,9 +311,11 @@ func (m *Manager) rebalanceRoles() {
 	nTX := len(newTX)
 	for i, mac := range online {
 		role := "rx"
-		for _, txMAC := range newTX {
+		txIndex := -1
+		for j, txMAC := range newTX {
 			if mac == txMAC {
 				role = "tx"
+				txIndex = j
 				break
 			}
 		}
@@ -305,23 +324,35 @@ func (m *Manager) rebalanceRoles() {
 		}
 
 		_ = m.registry.SetNodeRole(mac, role) //nolint:errcheck
+
 		// Stagger TX slot: divide 1s into nTX slots.
 		rateHz := 20
 		txSlotUS := 0
-		if role == "tx" && nTX > 1 {
+		if (role == "tx" || role == "tx_rx") && nTX > 1 {
 			slotUS := 1000000 / (rateHz * nTX)
-			txSlotUS = i * slotUS
+			// Use TX index for proper staggering
+			if txIndex >= 0 {
+				txSlotUS = txIndex * slotUS
+			} else {
+				// For tx_rx role, use node index
+				txSlotUS = i * slotUS
+			}
 		}
-		_ = txSlotUS // will send via config when we have the param available
+
+		// Update collision detector tracking
+		m.updateTXNodeCollisionTrackingLocked(mac, role)
+
 		notifier.SendRoleToMAC(mac, role, "")
+		notifier.SendConfigToMAC(mac, rateHz, txSlotUS, 0.02)
 	}
 }
 
 // applyRoleAndConfig sends role and rate config to a single node.
 func (m *Manager) applyRoleAndConfig(mac, role string) {
-	m.mu.RLock()
+	m.mu.Lock()
 	notifier := m.notifier
-	m.mu.RUnlock()
+	txNodes := m.txNodes
+	m.mu.Unlock()
 
 	if notifier == nil {
 		return
@@ -330,9 +361,31 @@ func (m *Manager) applyRoleAndConfig(mac, role string) {
 	notifier.SendRoleToMAC(mac, role, "")
 
 	rateHz := 20
-	if role == "rx" || role == "tx_rx" {
-		notifier.SendConfigToMAC(mac, rateHz, 0.02)
+
+	// Compute txSlotUS for TX nodes
+	txSlotUS := 0
+	if role == "tx" || role == "tx_rx" {
+		// Find the index of this MAC in the TX nodes list
+		txIndex := -1
+		for i, txMAC := range txNodes {
+			if txMAC == mac {
+				txIndex = i
+				break
+			}
+		}
+
+		// Calculate stagger offset if we have multiple TX nodes
+		numTX := len(txNodes)
+		if numTX > 1 && txIndex >= 0 {
+			slotUS := 1_000_000 / (rateHz * numTX)
+			txSlotUS = txIndex * slotUS
+		}
 	}
+
+	// Register/unregister with collision detector based on role
+	m.updateTXNodeCollisionTracking(mac, role)
+
+	notifier.SendConfigToMAC(mac, rateHz, txSlotUS, 0.02)
 }
 
 // selfHeal checks for mismatched roles and re-pushes config if needed.
@@ -656,4 +709,101 @@ func (m *Manager) GetConnectedMACs() []string {
 		return nil
 	}
 	return m.notifier.GetConnectedMACs()
+}
+
+// ─── Collision Detection & Adaptive Re-Stagger ─────────────────────────────────
+
+// GetCollisionDetector returns the collision detector for integration with ingestion.
+func (m *Manager) GetCollisionDetector() *CollisionDetector {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.collisionDetector
+}
+
+// checkCollisions checks the collision rate and triggers re-stagger if needed.
+func (m *Manager) checkCollisions() {
+	m.mu.RLock()
+	cd := m.collisionDetector
+	m.mu.RUnlock()
+
+	if cd != nil {
+		cd.CheckAndTriggerRestagger()
+	}
+}
+
+// AdaptiveRestagger performs adaptive re-stagger of TX slot assignments.
+// This is called when the collision rate exceeds the threshold.
+func (m *Manager) AdaptiveRestagger() {
+	log.Printf("[INFO] fleet: Performing adaptive re-stagger due to high collision rate")
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.notifier == nil {
+		log.Printf("[WARN] fleet: Cannot re-stagger - no notifier configured")
+		return
+	}
+
+	// Get current TX nodes
+	txMACs := make([]string, 0, len(m.txNodes))
+	for _, mac := range m.txNodes {
+		if _, online := m.online[mac]; online {
+			txMACs = append(txMACs, mac)
+		}
+	}
+
+	if len(txMACs) < 2 {
+		log.Printf("[DEBUG] fleet: Skipping re-stagger - fewer than 2 TX nodes")
+		return
+	}
+
+	// Generate new stagger offsets
+	rateHz := 20 // Default rate Hz
+	newOffsets := GetRestaggerOffsets(txMACs, rateHz)
+
+	// Push updated config to all TX nodes
+	for _, mac := range txMACs {
+		txSlotUS := newOffsets[mac]
+		m.notifier.SendConfigToMAC(mac, rateHz, txSlotUS, 0.02)
+		log.Printf("[INFO] fleet: Re-staggered %s to tx_slot_us=%d", mac, txSlotUS)
+	}
+
+	log.Printf("[INFO] fleet: Adaptive re-stagger complete - %d TX nodes updated", len(txMACs))
+}
+
+// updateTXNodeCollisionTracking updates the collision detector's TX node registration
+// when a node's role changes.
+func (m *Manager) updateTXNodeCollisionTracking(mac string, role string) {
+	m.mu.RLock()
+	cd := m.collisionDetector
+	m.mu.RUnlock()
+
+	if cd == nil {
+		return
+	}
+
+	// Unregister first (in case role is changing)
+	cd.UnregisterTXNode(mac)
+
+	// Register as TX if role is tx or tx_rx
+	if role == "tx" || role == "tx_rx" {
+		cd.RegisterTXNode(mac)
+	}
+}
+
+// updateTXNodeCollisionTrackingLocked updates the collision detector's TX node registration
+// when a node's role changes. Caller must hold m.mu.
+func (m *Manager) updateTXNodeCollisionTrackingLocked(mac string, role string) {
+	cd := m.collisionDetector
+	if cd == nil {
+		return
+	}
+
+	// Unregister first (in case role is changing)
+	cd.UnregisterTXNode(mac)
+
+	// Register as TX if role is tx or tx_rx
+	if role == "tx" || role == "tx_rx" {
+		cd.RegisterTXNode(mac)
+	}
 }
