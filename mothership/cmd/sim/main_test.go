@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"math"
 	"math/rand"
 	"os"
@@ -516,6 +517,14 @@ func TestWallFlagParsing(t *testing.T) {
 		t.Errorf("Wall 1: got %+v", walls[1])
 	}
 
+	// Check default material (drywall) and attenuation
+	if walls[0].Material != MaterialDrywall {
+		t.Errorf("Wall 0 material = %v, want drywall", walls[0].Material)
+	}
+	if walls[0].Attenuation != 3.0 {
+		t.Errorf("Wall 0 attenuation = %v, want 3.0", walls[0].Attenuation)
+	}
+
 	// Test invalid format
 	if err := f.Set("1,2,3"); err == nil {
 		t.Error("Expected error for 3-part wall spec")
@@ -529,6 +538,7 @@ func TestWalkerBounce(t *testing.T) {
 
 	walker := &Walker{
 		ID:       0,
+		Type:     WalkerTypeRandomWalk,
 		Position: Point{X: 0.1, Y: 2.5, Z: 1.7}, // Near left wall
 		Velocity: Point{X: -1.0, Y: 0, Z: 0},     // Moving left
 		Speed:    1.0,
@@ -546,5 +556,454 @@ func TestWalkerBounce(t *testing.T) {
 	}
 	if walker.Position.Y < 0 || walker.Position.Y > space.Depth {
 		t.Errorf("Walker Y=%v outside room [0, %v]", walker.Position.Y, space.Depth)
+	}
+}
+
+// TestPathFollowing tests that walkers follow a predefined path
+func TestPathFollowing(t *testing.T) {
+	space := &Space{Width: 5, Depth: 5, Height: 2.5}
+
+	// Create a rectangular path
+	path := []Point{
+		{X: 0.5, Y: 0.5, Z: 1.7},
+		{X: 4.5, Y: 0.5, Z: 1.7},
+		{X: 4.5, Y: 4.5, Z: 1.7},
+		{X: 0.5, Y: 4.5, Z: 1.7},
+	}
+
+	walker := &Walker{
+		ID:       0,
+		Type:     WalkerTypePathFollow,
+		Path:     path,
+		PathIdx:  0,
+		Speed:    1.0,
+		Height:   1.7,
+		Position: path[0], // Initialize at first waypoint
+	}
+
+	// Run updates - should move along path
+	for i := 0; i < 100; i++ {
+		updatePathWalker(walker, 0.1)
+	}
+
+	// Walker should have moved from starting position
+	if walker.Position == path[0] {
+		t.Error("Walker should have moved from starting position")
+	}
+
+	// Walker should remain within room bounds
+	if walker.Position.X < 0 || walker.Position.X > space.Width {
+		t.Errorf("Walker X=%v outside room [0, %v]", walker.Position.X, space.Width)
+	}
+	if walker.Position.Y < 0 || walker.Position.Y > space.Depth {
+		t.Errorf("Walker Y=%v outside room [0, %v]", walker.Position.Y, space.Depth)
+	}
+}
+
+// TestNodeToNodeTraversal tests node-to-node walker movement
+func TestNodeToNodeTraversal(t *testing.T) {
+	space := &Space{Width: 5, Depth: 5, Height: 2.5}
+
+	nodes := []*VirtualNode{
+		{ID: 0, Position: Point{X: 0.5, Y: 0.5, Z: 2.0}},
+		{ID: 1, Position: Point{X: 4.5, Y: 0.5, Z: 2.0}},
+		{ID: 2, Position: Point{X: 2.5, Y: 4.5, Z: 2.0}},
+	}
+
+	walker := &Walker{
+		ID:       0,
+		Type:     WalkerTypeNodeToNode,
+		Nodes:    nodes,
+		NodeIdx:  1, // Target is second node
+		Speed:    1.0,
+		Height:   1.7,
+		Position: nodes[0].Position, // Initialize at first node
+	}
+
+	// Move towards second node
+	for i := 0; i < 100; i++ {
+		updateNodeToNodeWalker(walker, 0.1, space)
+		// Break if we've moved to the next node
+		if walker.NodeIdx != 1 {
+			break
+		}
+	}
+
+	// Walker should have progressed toward the target
+	distToTarget := math.Sqrt(
+		math.Pow(walker.Position.X-nodes[1].Position.X, 2) +
+			math.Pow(walker.Position.Y-nodes[1].Position.Y, 2))
+	if distToTarget > 1.0 {
+		t.Errorf("Walker should be closer to target; distance=%v", distToTarget)
+	}
+}
+
+// TestPathFileLoading tests loading paths from JSON file
+func TestPathFileLoading(t *testing.T) {
+	tmpDir := t.TempDir()
+	pathFile := filepath.Join(tmpDir, "paths.json")
+
+	// Create test path file
+	paths := []PathDefinition{
+		{
+			Waypoints: []Point{
+				{X: 0, Y: 0, Z: 1.7},
+				{X: 1, Y: 0, Z: 1.7},
+				{X: 1, Y: 1, Z: 1.7},
+				{X: 0, Y: 1, Z: 1.7},
+			},
+		},
+	}
+
+	data, err := json.Marshal(paths)
+	if err != nil {
+		t.Fatalf("Failed to marshal paths: %v", err)
+	}
+
+	if err := os.WriteFile(pathFile, data, 0644); err != nil {
+		t.Fatalf("Failed to write path file: %v", err)
+	}
+
+	// Load paths
+	loaded, err := loadPathsFromFile(pathFile)
+	if err != nil {
+		t.Fatalf("Failed to load paths: %v", err)
+	}
+
+	if len(loaded) != 1 {
+		t.Errorf("Expected 1 path, got %d", len(loaded))
+	}
+
+	if len(loaded[0]) != 4 {
+		t.Errorf("Expected 4 waypoints, got %d", len(loaded[0]))
+	}
+}
+
+// TestPathFileInvalid tests error handling for invalid path files
+func TestPathFileInvalid(t *testing.T) {
+	tmpDir := t.TempDir()
+	pathFile := filepath.Join(tmpDir, "invalid.json")
+
+	// Write invalid JSON
+	if err := os.WriteFile(pathFile, []byte("not valid json"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	_, err := loadPathsFromFile(pathFile)
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+}
+
+// TestDefaultPathWalker tests default rectangular path walker creation
+func TestDefaultPathWalker(t *testing.T) {
+	space := &Space{Width: 5, Depth: 5, Height: 2.5}
+
+	walkers := createDefaultPathWalkers(1, space)
+
+	if len(walkers) != 1 {
+		t.Fatalf("Expected 1 walker, got %d", len(walkers))
+	}
+
+	walker := walkers[0]
+
+	if walker.Type != WalkerTypePathFollow {
+		t.Errorf("Expected path-following walker, got %v", walker.Type)
+	}
+
+	if len(walker.Path) != 4 {
+		t.Errorf("Expected 4 waypoints in default path, got %d", len(walker.Path))
+	}
+
+	// Verify path forms a rectangle around the room
+	path := walker.Path
+	margin := 0.5
+
+	// First point: bottom-left
+	if path[0].X != margin || path[0].Y != margin {
+		t.Errorf("First waypoint should be bottom-left: got %v", path[0])
+	}
+
+	// Second point: bottom-right
+	if path[1].X != space.Width-margin || path[1].Y != margin {
+		t.Errorf("Second waypoint should be bottom-right: got %v", path[1])
+	}
+
+	// Third point: top-right
+	if path[2].X != space.Width-margin || path[2].Y != space.Depth-margin {
+		t.Errorf("Third waypoint should be top-right: got %v", path[2])
+	}
+
+	// Fourth point: top-left
+	if path[3].X != margin || path[3].Y != space.Depth-margin {
+		t.Errorf("Fourth waypoint should be top-left: got %v", path[3])
+	}
+}
+
+// TestReflectionPointVerticalWall tests reflection point calculation for vertical walls
+func TestReflectionPointVerticalWall(t *testing.T) {
+	// Vertical wall at x=2.5 from y=0 to y=5
+	wall := Wall{X1: 2.5, Y1: 0, X2: 2.5, Y2: 5, Material: MaterialDrywall, Attenuation: 3.0}
+
+	// TX and RX on opposite sides of the wall, at different Y positions
+	// This should create a valid reflection
+	tx := Point{X: 1, Y: 1, Z: 2}
+	rx := Point{X: 3, Y: 3, Z: 2}
+
+	reflPoint, ok := findReflectionPoint(tx, rx, wall)
+	if !ok {
+		t.Fatal("Failed to find reflection point")
+	}
+
+	// Reflection point should be on the wall at x=2.5
+	if reflPoint.X != 2.5 {
+		t.Errorf("Reflection X = %v, want 2.5", reflPoint.X)
+	}
+
+	// Y should be between 0 and 5
+	if reflPoint.Y < 0 || reflPoint.Y > 5 {
+		t.Errorf("Reflection Y = %v outside wall bounds [0, 5]", reflPoint.Y)
+	}
+
+	// Z should be average of TX and RX Z
+	expectedZ := (tx.Z + rx.Z) / 2.0
+	if math.Abs(reflPoint.Z-expectedZ) > 1e-6 {
+		t.Errorf("Reflection Z = %v, want %v", reflPoint.Z, expectedZ)
+	}
+}
+
+// TestReflectionPointHorizontalWall tests reflection point calculation for horizontal walls
+func TestReflectionPointHorizontalWall(t *testing.T) {
+	// Horizontal wall at y=2.5 from x=0 to x=5
+	wall := Wall{X1: 0, Y1: 2.5, X2: 5, Y2: 2.5, Material: MaterialDrywall, Attenuation: 3.0}
+
+	// TX and RX on opposite sides of the wall, at different X positions
+	tx := Point{X: 1, Y: 1, Z: 2}
+	rx := Point{X: 3, Y: 3, Z: 2}
+
+	reflPoint, ok := findReflectionPoint(tx, rx, wall)
+	if !ok {
+		t.Fatal("Failed to find reflection point")
+	}
+
+	// Reflection point should be on the wall at y=2.5
+	if reflPoint.Y != 2.5 {
+		t.Errorf("Reflection Y = %v, want 2.5", reflPoint.Y)
+	}
+
+	// X should be between 0 and 5
+	if reflPoint.X < 0 || reflPoint.X > 5 {
+		t.Errorf("Reflection X = %v outside wall bounds [0, 5]", reflPoint.X)
+	}
+
+	// Z should be average of TX and RX Z
+	expectedZ := (tx.Z + rx.Z) / 2.0
+	if math.Abs(reflPoint.Z-expectedZ) > 1e-6 {
+		t.Errorf("Reflection Z = %v, want %v", reflPoint.Z, expectedZ)
+	}
+}
+
+// TestReflectionPointOutOfBounds tests that reflections outside wall bounds fail
+func TestReflectionPointOutOfBounds(t *testing.T) {
+	// Vertical wall at x=2.5 from y=0 to y=2 (walker Y=2.5 is outside bounds)
+	wall := Wall{X1: 2.5, Y1: 0, X2: 2.5, Y2: 2, Material: MaterialDrywall, Attenuation: 3.0}
+
+	tx := Point{X: 1, Y: 2.5, Z: 2}
+	rx := Point{X: 4, Y: 2.5, Z: 2}
+
+	_, ok := findReflectionPoint(tx, rx, wall)
+	if ok {
+		t.Error("Expected no reflection point for out-of-bounds Y")
+	}
+}
+
+// TestReflectPointAcrossLine tests point reflection across a line
+func TestReflectPointAcrossLine(t *testing.T) {
+	p := Point{X: 1, Y: 1, Z: 0}
+	lineStart := Point{X: 0, Y: 0, Z: 0}
+	lineEnd := Point{X: 2, Y: 0, Z: 0} // Horizontal line at y=0
+
+	refl := reflectPointAcrossLine(p, lineStart, lineEnd)
+
+	// Point (1,1) reflected across y=0 should be (1,-1)
+	if refl.X != 1 {
+		t.Errorf("Refl X = %v, want 1", refl.X)
+	}
+	if refl.Y != -1 {
+		t.Errorf("Refl Y = %v, want -1", refl.Y)
+	}
+}
+
+// TestLineIntersection tests line segment intersection
+func TestLineIntersection(t *testing.T) {
+	tests := []struct {
+		name   string
+		p1, p2 Point // First line segment
+		p3, p4 Point // Second line segment
+		wantOK bool
+		wantX  float64
+		wantY  float64
+	}{
+		{
+			name:  "Crossing lines",
+			p1:    Point{X: 0, Y: 0, Z: 0},
+			p2:    Point{X: 2, Y: 2, Z: 0},
+			p3:    Point{X: 0, Y: 2, Z: 0},
+			p4:    Point{X: 2, Y: 0, Z: 0},
+			wantOK: true,
+			wantX:  1,
+			wantY:  1,
+		},
+		{
+			name:  "Parallel lines",
+			p1:    Point{X: 0, Y: 0, Z: 0},
+			p2:    Point{X: 1, Y: 0, Z: 0},
+			p3:    Point{X: 0, Y: 1, Z: 0},
+			p4:    Point{X: 1, Y: 1, Z: 0},
+			wantOK: false,
+		},
+		{
+			name:  "Non-intersecting segments",
+			p1:    Point{X: 0, Y: 0, Z: 0},
+			p2:    Point{X: 1, Y: 0, Z: 0},
+			p3:    Point{X: 2, Y: 0, Z: 0},
+			p4:    Point{X: 3, Y: 0, Z: 0},
+			wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pt, ok := lineIntersection(tt.p1, tt.p2, tt.p3, tt.p4)
+			if ok != tt.wantOK {
+				t.Errorf("lineIntersection() ok = %v, want %v", ok, tt.wantOK)
+				return
+			}
+			if tt.wantOK {
+				if math.Abs(pt.X-tt.wantX) > 1e-6 {
+					t.Errorf("X = %v, want %v", pt.X, tt.wantX)
+				}
+				if math.Abs(pt.Y-tt.wantY) > 1e-6 {
+					t.Errorf("Y = %v, want %v", pt.Y, tt.wantY)
+				}
+			}
+		})
+	}
+}
+
+// TestWallMaterialProperties tests that different wall materials have correct attenuation
+func TestWallMaterialProperties(t *testing.T) {
+	walls = nil // Reset
+
+	f := &wallFlag{}
+
+	// Test drywall (default)
+	if err := f.Set("0,0,5,0"); err != nil {
+		t.Fatalf("Failed to parse drywall wall: %v", err)
+	}
+	if len(walls) != 1 || walls[0].Attenuation != 3.0 {
+		t.Errorf("Drywall attenuation = %v, want 3.0", walls[0].Attenuation)
+	}
+	if walls[0].Material != MaterialDrywall {
+		t.Errorf("Material = %v, want drywall", walls[0].Material)
+	}
+
+	// Test brick
+	walls = nil
+	if err := f.Set("0,1,5,1,brick"); err != nil {
+		t.Fatalf("Failed to parse brick wall: %v", err)
+	}
+	if walls[0].Attenuation != 10.0 {
+		t.Errorf("Brick attenuation = %v, want 10.0", walls[0].Attenuation)
+	}
+
+	// Test concrete
+	walls = nil
+	if err := f.Set("0,2,5,2,concrete"); err != nil {
+		t.Fatalf("Failed to parse concrete wall: %v", err)
+	}
+	if walls[0].Attenuation != 10.0 {
+		t.Errorf("Concrete attenuation = %v, want 10.0", walls[0].Attenuation)
+	}
+
+	// Test glass
+	walls = nil
+	if err := f.Set("0,3,5,3,glass"); err != nil {
+		t.Fatalf("Failed to parse glass wall: %v", err)
+	}
+	if walls[0].Attenuation != 2.0 {
+		t.Errorf("Glass attenuation = %v, want 2.0", walls[0].Attenuation)
+	}
+
+	// Test metal
+	walls = nil
+	if err := f.Set("0,4,5,4,metal"); err != nil {
+		t.Fatalf("Failed to parse metal wall: %v", err)
+	}
+	if walls[0].Attenuation != 20.0 {
+		t.Errorf("Metal attenuation = %v, want 20.0", walls[0].Attenuation)
+	}
+
+	// Test invalid material
+	walls = nil
+	if err := f.Set("0,5,5,5,invalid"); err == nil {
+		t.Error("Expected error for invalid material")
+	}
+}
+
+// TestTwoRayModel tests that CSI includes both direct and reflected contributions
+func TestTwoRayModel(t *testing.T) {
+	tx := &VirtualNode{ID: 0, Position: Point{X: 1, Y: 1, Z: 2}}
+	rx := &VirtualNode{ID: 1, Position: Point{X: 3, Y: 3, Z: 2}}
+	walkers := []*Walker{{ID: 0, Position: Point{X: 2, Y: 2, Z: 1.7}}}
+
+	// No walls - should only have direct path
+	ampNoWall, _ := computeCSIForWalkers(tx, rx, walkers, nil)
+	if ampNoWall <= 0 {
+		t.Errorf("Amplitude with no wall = %v, want > 0", ampNoWall)
+	}
+
+	// Add a wall positioned to create a valid reflection
+	// Wall from (0,0) to (0,5) - vertical wall at x=0
+	walls := []Wall{{X1: 0, Y1: 0, X2: 0, Y2: 5, Material: MaterialDrywall, Attenuation: 3.0}}
+	ampWithWall, _ := computeCSIForWalkers(tx, rx, walkers, walls)
+
+	// The reflection should affect the CSI - check that amplitude is non-zero
+	if ampWithWall <= 0 {
+		t.Errorf("Amplitude with wall = %v, want > 0", ampWithWall)
+	}
+
+	// Verify that computeFirstOrderReflection actually returns values when there's a valid wall geometry
+	reflAmp, reflPhase := computeFirstOrderReflection(tx.Position, rx.Position, walkers[0].Position, walls)
+	if reflAmp == 0 && reflPhase == 0 {
+		t.Error("Expected non-zero reflection contribution with wall present (valid geometry)")
+	}
+
+	// Test with wall positioned such that no valid reflection exists
+	// Use a wall where the reflection point would fall outside the wall segment bounds
+	// TX at (1,1), RX at (3,3), vertical wall at x=2 from y=10 to y=15
+	// The reflection of TX across x=2 would be at (3,1). The line from (3,1) to (3,3)
+	// is vertical at x=3, which never intersects the wall at x=2.
+	wallsFar := []Wall{{X1: 2, Y1: 10, X2: 2, Y2: 15, Material: MaterialDrywall, Attenuation: 3.0}}
+	_, reflPhaseFar := computeFirstOrderReflection(tx.Position, rx.Position, walkers[0].Position, wallsFar)
+	if reflPhaseFar != 0 {
+		t.Error("Expected zero reflection contribution with wall that doesn't create valid reflection geometry")
+	}
+}
+
+// TestPathLossModel tests the log-distance path loss calculation
+func TestPathLossModel(t *testing.T) {
+	tx := Point{X: 0, Y: 0, Z: 2}
+	rx := Point{X: 0, Y: 0, Z: 2}
+	walker := Point{X: 1, Y: 0, Z: 1.7}
+
+	// Close walker should produce higher amplitude than far walker
+	closeAmp, _ := computeDirectPath(tx, rx, walker, nil)
+
+	farWalker := Point{X: 10, Y: 0, Z: 1.7}
+	farAmp, _ := computeDirectPath(tx, rx, farWalker, nil)
+
+	if farAmp >= closeAmp {
+		t.Errorf("Far walker amplitude %v >= close walker amplitude %v", farAmp, closeAmp)
 	}
 }
