@@ -14,15 +14,15 @@
     // ============================================
     const RENDER_INTERVAL_MS = 500;  // 2 Hz = one frame every 500ms
     const LERP_FACTOR = 0.2;          // 20% of remaining distance per frame
-    const AUTO_DIM_TIMEOUT_MS = 60000; // 60 seconds of no presence in ambient zone
+    const AUTO_DIM_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of no presence in ambient zone
     const ALERT_PULSE_INTERVAL_MS = 1000; // 1 Hz pulse for alert mode
 
-    // Time-of-day palette colors
+    // Time-of-day palette colors (matching CSS)
     const TIME_COLORS = {
-        morning: { bg: '#f0f4f8', text: '#1a365d', accent: '#4299e1' },   // 6-10am
-        day:     { bg: '#ffffff', text: '#1d1d1f', accent: '#0066cc' },   // 10am-6pm
-        evening: { bg: '#1c1507', text: '#fef3e7', accent: '#ed8936' },  // 6-10pm
-        night:   { bg: '#040404', text: '#e0e0e0', accent: '#4fc3f7' }    // 10pm-6am
+        morning: { bg: '#e0f2fe', text: '#0c4a6e', accent: '#0284c7' },   // 6-10am: bright sky blue
+        day:     { bg: '#ffffff', text: '#1d1d1f', accent: '#3b82f6' },   // 10am-6pm: neutral white
+        evening: { bg: '#1c1507', text: '#fef3e7', accent: '#f59e0b' },  // 6-10pm: warm amber
+        night:   { bg: '#000000', text: '#6b7280', accent: '#9ca3af' }    // 10pm-6am: OLED-safe black
     };
 
     // ============================================
@@ -391,9 +391,24 @@
 
     function drawAlertMode(ctx, width, height) {
         // Pulsing red background for alert mode
-        const pulseColor = alertPulseState ? '#dc2626' : '#991b1b';
-        ctx.fillStyle = pulseColor;
+        const pulseIntensity = alertPulseState ? 1.0 : 0.7;
+
+        // Create gradient background
+        const gradient = ctx.createRadialGradient(
+            width / 2, height / 2, 0,
+            width / 2, height / 2, Math.max(width, height) / 2
+        );
+        gradient.addColorStop(0, `rgba(220, 38, 38, ${pulseIntensity})`);
+        gradient.addColorStop(1, `rgba(127, 29, 29, ${pulseIntensity * 0.8})`);
+
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
+
+        // Draw pulsing border
+        const borderWidth = 8 + (pulseIntensity * 4); // 8-12px
+        ctx.strokeStyle = `rgba(255, 255, 255, ${pulseIntensity})`;
+        ctx.lineWidth = borderWidth;
+        ctx.strokeRect(0, 0, width, height);
 
         // Draw alert text
         const alert = currentState.alerts[0];
@@ -403,7 +418,8 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            const title = alert.type === 'fall_alert' ? 'FALL DETECTED' : 'ALERT';
+            const title = alert.type === 'fall_alert' ? 'FALL DETECTED' :
+                          alert.type === 'anomaly' ? 'ANOMALY' : 'ALERT';
             const message = formatAlertMessage(alert);
 
             ctx.fillText(title, width / 2, height / 2 - 30);
@@ -416,10 +432,14 @@
             const buttonX = (width - buttonWidth) / 2;
             const buttonY = height / 2 + 80;
 
-            ctx.fillStyle = '#ffffff';
+            // Button background with glow
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.9 + pulseIntensity * 0.1})`;
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+            ctx.shadowBlur = 10;
             ctx.beginPath();
             ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
             ctx.fill();
+            ctx.shadowBlur = 0;
 
             ctx.fillStyle = '#dc2626';
             ctx.font = 'bold 20px -apple-system, BlinkMacSystemFont, sans-serif';
@@ -607,8 +627,10 @@
 
             // Get person color
             let blobColor = '#6b7280'; // Grey for unknown
-            if (blob.person) {
-                blobColor = getPersonColor(blob.person);
+            // Handle both person_label (from backend) and person (for consistency)
+            const personName = blob.person_label || blob.person || null;
+            if (personName) {
+                blobColor = getPersonColor(personName);
             }
 
             // Draw person blob
@@ -618,7 +640,7 @@
             ctx.fill();
 
             // Draw name label above
-            const name = blob.person ? getFirstName(blob.person) : '?';
+            const name = personName ? getFirstName(personName) : '?';
             ctx.fillStyle = '#ffffff';
             ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
             ctx.textAlign = 'center';
