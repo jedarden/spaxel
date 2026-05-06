@@ -5,20 +5,157 @@
  */
 
 /* ============================================
-   Simulator Panel
+   Simulator Container
    ============================================ */
-.simulator-panel {
-    position: fixed;
-    top: 44px; /* Below status bar */
-    right: 0;
-    width: 380px;
-    max-height: calc(100vh - 44px);
+#simulator-container {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 44px); /* Below header */
+}
+
+.simulator-scene {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.gdop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* ============================================
+   Simulator Panels
+   ============================================ */
+.sim-panel {
+    position: absolute;
+    width: 320px;
+    max-height: calc(100vh - 100px);
     background: var(--bg-page);
-    border-left: 1px solid var(--slate-5);
+    border: 1px solid var(--slate-6);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
     overflow-y: auto;
-    overflow-x: hidden;
-    z-index: 100;
-    box-shadow: -2px 0 10px var(--shadow);
+    z-index: 50;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.sim-panel h3 {
+    margin: 0 0 var(--space-3) 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sim-panel--controls {
+    top: var(--space-4);
+    left: var(--space-4);
+}
+
+.sim-panel--space {
+    top: var(--space-4);
+    right: var(--space-4);
+}
+
+.sim-panel--nodes {
+    bottom: var(--space-4);
+    left: var(--space-4);
+    max-height: 250px;
+}
+
+.sim-panel--results {
+    bottom: var(--space-4);
+    right: var(--space-4);
+    max-height: 200px;
+}
+
+/* ============================================
+   Space Form
+   ============================================ */
+.sim-space__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.sim-space__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.sim-space__row label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.sim-space__row input[type="number"] {
+    width: 70px;
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-hover);
+    border: 1px solid var(--slate-6);
+    border-radius: var(--radius-control);
+    color: var(--text-on-accent);
+    font-size: var(--text-sm);
+}
+
+/* ============================================
+   Node List
+   ============================================ */
+.sim-nodes__list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: var(--space-3);
+}
+
+.sim-nodes__add {
+    margin-bottom: var(--space-3);
+}
+
+.sim-nodes__suggestions {
+    margin-top: var(--space-3);
+    padding: var(--space-2);
+    background: var(--bg-hover);
+    border-radius: var(--radius-control);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+/* ============================================
+   Results Metrics
+   ============================================ */
+.sim-results__metrics {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.sim-metric {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-2);
+    background: var(--bg-hover);
+    border-radius: var(--radius-control);
+}
+
+.sim-metric__label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.sim-metric__value {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    font-weight: 600;
 }
 
 .simulator-panel::-webkit-scrollbar {
@@ -268,6 +405,21 @@
 
 .sim-item-delete:hover {
     background: var(--alert-bg);
+}
+
+.sim-item.selected {
+    background: var(--blue-9);
+    border-color: var(--blue-9);
+}
+
+.sim-item.selected .sim-item-name {
+    color: var(--text-on-accent);
+    font-weight: 600;
+}
+
+.sim-item.selected .sim-item-position {
+    color: var(--text-on-accent);
+    opacity: 0.8;
 }
 
 /* ============================================
