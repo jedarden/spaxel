@@ -91,6 +91,9 @@
             // Header actions
             refreshBtn: document.getElementById('fleet-refresh-btn'),
             updateAllBtn: document.getElementById('fleet-update-all-btn'),
+            rebaselineBtn: document.getElementById('fleet-rebaseline-btn'),
+            exportBtn: document.getElementById('fleet-export-btn'),
+            importBtn: document.getElementById('fleet-import-btn'),
             downloadBtn: document.getElementById('fleet-download-btn'),
 
             // Empty state
@@ -114,6 +117,16 @@
             removeConfirmBtn: document.getElementById('remove-confirm-btn'),
             removeNodeCount: document.getElementById('remove-node-count'),
             removeNodeList: document.getElementById('remove-node-list'),
+
+            // Import modal elements
+            importModal: document.getElementById('import-modal'),
+            importFileInput: document.getElementById('import-file-input'),
+            importConfirmBtn: document.getElementById('import-confirm-btn'),
+            importInfo: document.getElementById('import-info'),
+            importFilename: document.getElementById('import-filename'),
+            importNodesCount: document.getElementById('import-nodes-count'),
+            // Hidden file input for export
+            exportFileInput: document.getElementById('export-file-input'),
 
             // Unpaired elements
             unpairedSummary: document.getElementById('fleet-unpaired-summary'),

@@ -60,13 +60,25 @@
                     <span class="icon">&#x21BB;</span>
                     <span class="label">Refresh</span>
                 </button>
+                <button id="fleet-rebaseline-btn" class="btn btn-secondary" title="Re-baseline all links">
+                    <span class="icon">&#x21BB;</span>
+                    <span class="label">Re-baseline All</span>
+                </button>
                 <button id="fleet-update-all-btn" class="btn btn-action" title="Update all nodes to latest firmware">
                     <span class="icon">&#x2191;</span>
                     <span class="label">Update All</span>
                 </button>
+                <button id="fleet-export-btn" class="btn btn-secondary" title="Export configuration">
+                    <span class="icon">&#x2193;</span>
+                    <span class="label">Export</span>
+                </button>
+                <button id="fleet-import-btn" class="btn btn-secondary" title="Import configuration">
+                    <span class="icon">&#x2191;</span>
+                    <span class="label">Import</span>
+                </button>
                 <button id="fleet-download-btn" class="btn btn-secondary" title="Download CSV report">
                     <span class="icon">&#x2193;</span>
-                    <span class="label">Download Report</span>
+                    <span class="label">CSV Report</span>
                 </button>
             </div>
         </header>
@@ -139,6 +151,9 @@
                         </th>
                         <th class="col-uptime sortable" data-sort="uptime">
                             Uptime
+                        </th>
+                        <th class="col-position sortable" data-sort="position">
+                            Position
                         </th>
                         <th class="col-role sortable" data-sort="role">
                             Role
@@ -260,6 +275,28 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary modal-close" data-modal="remove-modal">Cancel</button>
                 <button class="btn btn-danger" id="remove-confirm-btn">Remove Nodes</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="import-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Import Configuration</h3>
+                <button class="modal-close" data-modal="import-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Select a configuration file to import. This will replace all nodes, zones, and settings.</p>
+                <input type="file" id="import-file-input" accept=".json" class="file-input">
+                <div class="import-info" id="import-info" style="display: none;">
+                    <p><strong>File:</strong> <span id="import-filename"></span></p>
+                    <p><strong>Nodes:</strong> <span id="import-nodes-count">0</span></p>
+                    <p class="import-warning-text">This action cannot be undone. Existing configuration will be replaced.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close" data-modal="import-modal">Cancel</button>
+                <button class="btn btn-primary" id="import-confirm-btn" disabled>Import</button>
             </div>
         </div>
     </div>
