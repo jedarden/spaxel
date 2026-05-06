@@ -32,6 +32,20 @@
   --blue-11: #68bdfa;
   --blue-12: #aedcff;
 
+  /* ── Radix Purple (sleep/special) ── */
+  --purple-1:  #17111d;
+  --purple-2:  #211a27;
+  --purple-3:  #2a2135;
+  --purple-4:  #342844;
+  --purple-5:  #3e2f54;
+  --purple-6:  #483865;
+  --purple-7:  #584177;
+  --purple-8:  #6d4d8f;
+  --purple-9:  #8257a5;
+  --purple-10: #9d71bd;
+  --purple-11: #b483d5;
+  --purple-12: #d6bbf2;
+
   /* ── Semantic state ── */
   --ok:   #46a758;   /* green-9 */
   --warn: #e5a00d;   /* amber-9 */
@@ -76,6 +90,7 @@
   --border-default: rgba(255, 255, 255, 0.08);
   --border-subtle:  rgba(255, 255, 255, 0.04);
   --border-strong:  rgba(255, 255, 255, 0.15);
+  --border-color: var(--border-default);
 
   /* ── Typography ── */
   --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
