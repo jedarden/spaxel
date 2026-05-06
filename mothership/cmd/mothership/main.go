@@ -1330,10 +1330,16 @@ func main() {
 
 	// Adaptive rate controller
 	rateCtrl := ingestion.NewRateController(func(mac string, rateHz int, varianceThreshold float64) {
-		ingestSrv.SendConfigToMAC(mac, rateHz, varianceThreshold)
+		ingestSrv.SendConfigToMAC(mac, rateHz, 0, varianceThreshold)
 	})
 	ingestSrv.SetRateController(rateCtrl)
 	go rateCtrl.Run(ctx)
+
+	// Wire TX slot collision detection
+	// The fleet manager's collision detector tracks frame arrivals from TX nodes
+	// and triggers adaptive re-stagger when collision rate exceeds 5%
+	ingestSrv.SetCollisionDetector(fleetMgr.GetCollisionDetector())
+	log.Printf("[INFO] TX slot collision detection enabled (threshold: 5%% over 60s window)")
 
 	// Dashboard hub and server
 	dashboardHub = dashboard.NewHub()
@@ -1403,7 +1409,7 @@ func main() {
 	shedder.SetPreviousRate(20) // default rate before any Level 3 event
 	shedder.SetRatePushCallback(func(rateHz int) {
 		for _, mac := range ingestSrv.GetConnectedNodes() {
-			ingestSrv.SendConfigToMAC(mac, rateHz, 0.02)
+			ingestSrv.SendConfigToMAC(mac, rateHz, 0, 0.02)
 		}
 		log.Printf("[INFO] Load shed rate push — %d Hz to %d nodes", rateHz, len(ingestSrv.GetConnectedNodes()))
 	})

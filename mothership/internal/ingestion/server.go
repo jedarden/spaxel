@@ -119,6 +119,14 @@ type Server struct {
 	bleHandler           BLEHandler
 	apDetector           *apdetector.Detector
 
+	// CollisionDetector for TX slot collision detection
+	// Interface type to avoid circular import
+	collisionDetector interface {
+		RegisterTXNode(mac string)
+		UnregisterTXNode(mac string)
+		RecordFrameArrival(txMAC, linkID string, recvTime time.Time)
+	}
+
 	// Load shedding
 	shedder    *loadshed.Shedder
 	frameGauge chan struct{} // bounded gauge for tracking in-flight frames
@@ -275,6 +283,17 @@ func (s *Server) SetAPDetector(detector *apdetector.Detector) {
 	s.mu.Unlock()
 }
 
+// SetCollisionDetector sets the TX slot collision detector.
+func (s *Server) SetCollisionDetector(detector interface {
+	RegisterTXNode(mac string)
+	UnregisterTXNode(mac string)
+	RecordFrameArrival(txMAC, linkID string, recvTime time.Time)
+}) {
+	s.mu.Lock()
+	s.collisionDetector = detector
+	s.mu.Unlock()
+}
+
 // SetMigrationDeadline sets the deadline until which nodes with missing/invalid tokens
 // are accepted but flagged as Unpaired. After the deadline (or if deadline is zero),
 // nodes without valid tokens are rejected.
@@ -318,15 +337,16 @@ func (s *Server) isChannelOverHalfFull() bool {
 }
 
 // SendConfigToMAC sends a rate config command to a connected node by MAC.
+// txSlotUS is the TX slot offset in microseconds (0 means no stagger).
 // varianceThreshold > 0 enables on-device amplitude variance monitoring.
-func (s *Server) SendConfigToMAC(mac string, rateHz int, varianceThreshold float64) {
+func (s *Server) SendConfigToMAC(mac string, rateHz int, txSlotUS int, varianceThreshold float64) {
 	s.mu.RLock()
 	nc, ok := s.connections[mac]
 	s.mu.RUnlock()
 	if !ok {
 		return
 	}
-	s.sendConfig(nc, rateHz, 0, varianceThreshold, "")
+	s.sendConfig(nc, rateHz, txSlotUS, varianceThreshold, "")
 }
 
 // SendNTPServerToMAC sends an NTP server configuration to a connected node by MAC.
@@ -613,6 +633,7 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 	replay := s.replayStore
 	rec := s.recorder
 	pm := s.processorMgr
+	cd := s.collisionDetector
 	s.mu.RUnlock()
 
 	// 1. Record raw frame to disk before any processing.
@@ -624,6 +645,13 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 	}
 	if rec != nil {
 		rec.Write(frame.LinkID(), data)
+	}
+
+	// Record frame arrival for collision detection (TX node is peer_mac)
+	if cd != nil {
+		// The TX node is the peer_mac (the transmitter)
+		txMAC := frame.PeerMACString()
+		cd.RecordFrameArrival(txMAC, frame.LinkID(), recvTime)
 	}
 
 	// 2. Get or create ring buffer.

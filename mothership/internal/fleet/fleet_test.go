@@ -31,7 +31,7 @@ func (m *mockNotifier) SendRoleToMAC(mac, role, _ string) {
 	m.mu.Unlock()
 }
 
-func (m *mockNotifier) SendConfigToMAC(mac string, rateHz int, _ float64) {
+func (m *mockNotifier) SendConfigToMAC(mac string, rateHz int, txSlotUS int, _ float64) {
 	m.mu.Lock()
 	m.configSent[mac] = rateHz
 	m.mu.Unlock()
