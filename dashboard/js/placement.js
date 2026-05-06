@@ -366,6 +366,52 @@ const Placement = (function () {
         if (event.key === 'g' || event.key === 'G') {
             toggleGDOP();
         }
+        // Space bar: place virtual node at camera target position
+        if (event.key === ' ' || event.code === 'Space') {
+            event.preventDefault();
+            placeVirtualNodeAtCameraTarget();
+        }
+    }
+
+    // ── Place virtual node at camera target ─────────────────────────────────────
+    // Places a new virtual node at the intersection of the camera ray with the ground plane
+
+    function placeVirtualNodeAtCameraTarget() {
+        if (!_roomConfig) {
+            console.warn('[Placement] No room config, cannot place node');
+            return;
+        }
+
+        // Calculate intersection with ground plane (y = 0)
+        var raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), _camera);
+
+        // Create a ground plane at y=0 for intersection
+        var groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        var intersection = new THREE.Vector3();
+        raycaster.ray.intersectPlane(groundPlane, intersection);
+
+        if (!intersection) {
+            console.warn('[Placement] No intersection with ground plane');
+            return;
+        }
+
+        // Clamp to room bounds
+        var ox = _roomConfig.origin_x || 0;
+        var oz = _roomConfig.origin_z || 0;
+        var x = Math.max(ox, Math.min(ox + _roomConfig.width, intersection.x));
+        var z = Math.max(oz, Math.min(oz + _roomConfig.depth, intersection.z));
+
+        // Set height to a reasonable default (80% of room height or 1.5m minimum)
+        var y = Math.max(1.5, _roomConfig.height * 0.8);
+
+        // Generate a name for the virtual node
+        var nodeName = 'Virtual Node ' + (_nodeMACs.length + 1);
+
+        // Add the virtual node
+        addVirtualNode(nodeName, x, y, z);
+
+        console.log('[Placement] Placed virtual node at:', { x: x, y: y, z: z });
     }
 
     // ── REST API calls ───────────────────────────────────────────────────────
