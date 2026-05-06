@@ -77,15 +77,34 @@
      * @returns {Object} Ellipsoid parameters: { center, semiAxes, rotation, lambda, d, a, b }
      */
     function calculateFresnelEllipsoid(tx, rx, channel) {
+        return calculateFresnelEllipsoidForZone(tx, rx, channel, 1);
+    }
+
+    /**
+     * Calculate Fresnel zone ellipsoid parameters for a specific zone number.
+     * Based on the nth Fresnel zone geometry.
+     *
+     * For the nth Fresnel zone:
+     * - Semi-major axis: a = (d + n*lambda/2) / 2
+     * - Semi-minor axis: b = sqrt(a^2 - (d/2)^2)
+     *
+     * @param {THREE.Vector3} tx - Transmitter position
+     * @param {THREE.Vector3} rx - Receiver position
+     * @param {number} channel - WiFi channel number (for wavelength)
+     * @param {number} zoneNumber - Fresnel zone number (1-based, typically 1-5)
+     * @returns {Object} Ellipsoid parameters: { center, semiAxes, rotation, lambda, d, a, b, zoneNumber }
+     */
+    function calculateFresnelEllipsoidForZone(tx, rx, channel, zoneNumber) {
         // Get wavelength based on channel
         const lambda = getWavelengthForChannel(channel);
 
         // Direct distance between TX and RX
         const d = tx.distanceTo(rx);
 
-        // First Fresnel zone ellipsoid parameters
-        // Semi-major axis: a = (d + lambda/2) / 2
-        const a = (d + lambda / 2) / 2;
+        // nth Fresnel zone ellipsoid parameters
+        // Semi-major axis: a = (d + n*lambda/2) / 2
+        const n = Math.max(1, zoneNumber);
+        const a = (d + n * lambda / 2) / 2;
 
         // Semi-minor axis: b = sqrt(a^2 - (d/2)^2)
         // Using the property that for a prolate spheroid with foci at tx and rx:
@@ -109,6 +128,7 @@
             d: d,
             a: a,
             b: b,
+            zoneNumber: n,
             channel: channel
         };
     }
@@ -121,7 +141,7 @@
      * @param {THREE.Vector3} rx - Receiver position
      * @param {number} channel - WiFi channel number
      * @param {number} color - Color hex value (e.g., 0x4FC3F7 for blue)
-     * @param {Object} options - Optional settings { wireframeOpacity, fillOpacity }
+     * @param {Object} options - Optional settings { wireframeOpacity, fillOpacity, zoneNumber }
      * @returns {Object} Object containing { wireframe, fill, data } meshes
      */
     function FresnelEllipsoid(tx, rx, channel, color, options) {
@@ -133,9 +153,10 @@
         options = options || {};
         const wireframeOpacity = options.wireframeOpacity !== undefined ? options.wireframeOpacity : CONFIG.wireframeOpacity;
         const fillOpacity = options.fillOpacity !== undefined ? options.fillOpacity : CONFIG.fillOpacity;
+        const zoneNumber = options.zoneNumber || 1;
 
-        // Calculate ellipsoid geometry
-        const ellipsoid = calculateFresnelEllipsoid(tx, rx, channel);
+        // Calculate ellipsoid geometry for the specified zone
+        const ellipsoid = calculateFresnelEllipsoidForZone(tx, rx, channel, zoneNumber);
 
         // Determine segment count based on viewport (mobile optimization)
         const isMobile = window.innerWidth < CONFIG.mobileViewportWidth;
@@ -183,6 +204,7 @@
             tx: tx.clone(),
             rx: rx.clone(),
             channel: channel,
+            zoneNumber: ellipsoid.zoneNumber,
             lambda: ellipsoid.lambda,
             d: ellipsoid.d,
             a: ellipsoid.a,
@@ -246,14 +268,70 @@
         }
     }
 
+    /**
+     * Add multiple Fresnel zone ellipsoids (zones 1-maxZone) for a single link.
+     * Creates wireframe-only ellipsoids for zones 2-5 to avoid visual clutter.
+     *
+     * @param {THREE.Vector3} tx - Transmitter position
+     * @param {THREE.Vector3} rx - Receiver position
+     * @param {number} channel - WiFi channel number
+     * @param {number} maxZone - Maximum zone number to create (default 5)
+     * @param {Object} options - Optional settings { zone1Color, zoneColors, wireframeOpacity }
+     * @returns {Array} Array of ellipsoid objects, one per zone
+     */
+    function addFresnelEllipsoidMultiZone(tx, rx, channel, maxZone, options) {
+        if (!_scene) {
+            console.warn('[Fresnel] Scene not initialized. Call Fresnel.init(scene) first.');
+            return [];
+        }
+
+        maxZone = maxZone || 5;
+        options = options || {};
+
+        // Zone 1 is green (most sensitive)
+        const zone1Color = options.zone1Color || 0x66bb6a;
+
+        // Colors for zones 2-5 (gradient from cyan to blue)
+        const zoneColors = options.zoneColors || [0x4dd0e1, 0x26c6da, 0x00bcd4, 0x0097a7];
+
+        const wireframeOpacity = options.wireframeOpacity !== undefined ? options.wireframeOpacity : CONFIG.wireframeOpacity;
+        const fillOpacity = options.fillOpacity !== undefined ? options.fillOpacity : CONFIG.fillOpacity;
+
+        const ellipsoids = [];
+
+        for (let n = 1; n <= maxZone; n++) {
+            const color = (n === 1) ? zone1Color : (zoneColors[n - 2] || 0x0097a7);
+
+            // For zones 2+, use wireframe only to reduce visual clutter
+            const zoneOptions = {
+                wireframeOpacity: wireframeOpacity,
+                fillOpacity: (n === 1) ? fillOpacity : 0,  // No fill for zones 2+
+                zoneNumber: n
+            };
+
+            const ellipsoid = FresnelEllipsoid(tx, rx, channel, color, zoneOptions);
+            if (ellipsoid) {
+                if (_scene) {
+                    _scene.add(ellipsoid.wireframe);
+                    if (ellipsoid.fill) _scene.add(ellipsoid.fill);
+                }
+                ellipsoids.push(ellipsoid);
+            }
+        }
+
+        return ellipsoids;
+    }
+
     // ============================================
     // Public API
     // ============================================
     window.Fresnel = {
         init: init,
         calculateFresnelEllipsoid: calculateFresnelEllipsoid,
+        calculateFresnelEllipsoidForZone: calculateFresnelEllipsoidForZone,
         FresnelEllipsoid: FresnelEllipsoid,
         addFresnelEllipsoid: addFresnelEllipsoid,
+        addFresnelEllipsoidMultiZone: addFresnelEllipsoidMultiZone,
         removeFresnelEllipsoid: removeFresnelEllipsoid,
         // Configuration access
         CONFIG: CONFIG
