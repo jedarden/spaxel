@@ -1071,8 +1071,15 @@ func main() {
 
 				// Start MQTT event publisher for HA integration
 				mqttEventPublisher := mqtt.NewEventPublisher(mqttClient)
+				mqttEventPublisher.SetZonesManager(zonesMgr)
+				mqttEventPublisher.SetBLERegistry(bleRegistry)
 				mqttEventPublisher.Start()
 				defer mqttEventPublisher.Stop()
+
+				// Set up callback to publish initial HA discovery configs when MQTT connects
+				mqttClient.SetOnConnect(func() {
+					mqttEventPublisher.PublishInitialDiscovery()
+				})
 
 				// Subscribe to system mode commands from MQTT
 				if err := mqttClient.SubscribeToSystemMode(func(mode string) {
@@ -1126,6 +1133,67 @@ func main() {
 					})
 				}); err != nil {
 					log.Printf("[WARN] Failed to subscribe to re-baseline commands: %v", err)
+				}
+
+				// Subscribe to TypeSystem events for re-baseline handling
+				eventbus.SubscribeDefault(func(e eventbus.Event) {
+					if e.Type == eventbus.TypeSystem && e.Detail != nil {
+										detail, ok := e.Detail.(map[string]interface{})
+										if !ok {
+											return
+										}
+										if action, ok := detail["action"].(string); ok && action == "rebaseline" {
+							zone := ""
+											if z, ok := detail["zone"].(string); ok {
+								zone = z
+							}
+							log.Printf("[INFO] Processing re-baseline request from MQTT: zone=%s", zone)
+
+							if zone == "all" {
+								pm.ResetBaselines()
+								log.Printf("[INFO] Reset all baselines")
+							} else {
+								// For zone-specific rebaseline, we would need zone-to-link mapping
+								// For now, reset all and log the zone
+								pm.ResetBaselines()
+								log.Printf("[INFO] Reset all baselines (zone-specific not yet implemented, treating as 'all')")
+							}
+						}
+					}
+				})
+
+				// Wire zone manager callbacks to MQTT event publisher for HA auto-discovery
+				if zonesMgr != nil {
+					zonesMgr.SetOnZoneCreated(func(zone *zones.Zone) {
+						_ = mqttEventPublisher.PublishZoneDiscovery(zone.ID, zone.Name)
+						log.Printf("[INFO] Published HA discovery for created zone: %s", zone.Name)
+					})
+					zonesMgr.SetOnZoneUpdated(func(zone *zones.Zone) {
+						_ = mqttEventPublisher.PublishZoneDiscovery(zone.ID, zone.Name)
+						log.Printf("[INFO] Published HA discovery for updated zone: %s", zone.Name)
+					})
+					zonesMgr.SetOnZoneDeleted(func(zoneID string) {
+						_ = mqttEventPublisher.RemoveZoneDiscovery(zoneID)
+						log.Printf("[INFO] Removed HA discovery for deleted zone: %s", zoneID)
+					})
+					log.Printf("[INFO] Zone manager callbacks wired to MQTT event publisher")
+				}
+
+				// Wire BLE registry callbacks to MQTT event publisher for HA auto-discovery
+				if bleRegistry != nil {
+					bleRegistry.SetOnPersonCreated(func(person *ble.Person) {
+						_ = mqttEventPublisher.PublishPersonDiscovery(person.ID, person.Name)
+						log.Printf("[INFO] Published HA discovery for created person: %s", person.Name)
+					})
+					bleRegistry.SetOnPersonUpdated(func(person *ble.Person) {
+						_ = mqttEventPublisher.PublishPersonDiscovery(person.ID, person.Name)
+						log.Printf("[INFO] Published HA discovery for updated person: %s", person.Name)
+					})
+					bleRegistry.SetOnPersonDeleted(func(personID string) {
+						_ = mqttEventPublisher.RemovePersonDiscovery(personID)
+						log.Printf("[INFO] Removed HA discovery for deleted person: %s", personID)
+					})
+					log.Printf("[INFO] BLE registry callbacks wired to MQTT event publisher")
 				}
 
 				log.Printf("[INFO] MQTT event publisher started")

@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/eventbus"
+	"github.com/spaxel/mothership/internal/zones"
 )
 
 // EventPublisher subscribes to the internal event bus and publishes events to MQTT.
@@ -24,6 +26,10 @@ type EventPublisher struct {
 	// System health ticker
 	healthTicker *time.Ticker
 	healthDone   chan struct{}
+
+	// Zone and person managers for initial discovery publishing
+	zonesMgr *zones.Manager
+	bleReg   *ble.Registry
 }
 
 // NewEventPublisher creates a new MQTT event publisher.
@@ -37,6 +43,20 @@ func NewEventPublisher(client *Client) *EventPublisher {
 		stopped:      make(chan struct{}),
 		healthDone:   make(chan struct{}),
 	}
+}
+
+// SetZonesManager sets the zones manager for initial discovery publishing.
+func (p *EventPublisher) SetZonesManager(zm *zones.Manager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.zonesMgr = zm
+}
+
+// SetBLERegistry sets the BLE registry for initial discovery publishing.
+func (p *EventPublisher) SetBLERegistry(reg *ble.Registry) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.bleReg = reg
 }
 
 // Start begins subscribing to events and publishing them to MQTT.
@@ -448,6 +468,54 @@ func (p *EventPublisher) PublishSystemMode(mode string) {
 	}
 }
 
+// PublishInitialDiscovery publishes HA auto-discovery configs for all existing zones and persons.
+// This should be called when MQTT connects to ensure all entities are discovered.
+func (p *EventPublisher) PublishInitialDiscovery() {
+	p.mu.RLock()
+	zm := p.zonesMgr
+	reg := p.bleReg
+	p.mu.RUnlock()
+
+	if !p.client.IsConnected() {
+		return
+	}
+
+	// Publish discovery for all zones
+	if zm != nil {
+		zones := zm.GetAllZones()
+		for _, z := range zones {
+			if err := p.PublishZoneDiscovery(z.ID, z.Name); err != nil {
+				log.Printf("[WARN] Failed to publish initial zone discovery for %s: %v", z.Name, err)
+			}
+		}
+		log.Printf("[INFO] MQTT: Published initial discovery for %d zones", len(zones))
+	}
+
+	// Publish discovery for all persons
+	if reg != nil {
+		people, err := reg.GetPeople()
+		if err == nil {
+			for _, person := range people {
+				if err := p.PublishPersonDiscovery(person.ID, person.Name); err != nil {
+					log.Printf("[WARN] Failed to publish initial person discovery for %s: %v", person.Name, err)
+				}
+			}
+			log.Printf("[INFO] MQTT: Published initial discovery for %d persons", len(people))
+		}
+	}
+
+	// Publish system-wide discovery configs
+	if err := p.PublishFallDiscovery(); err != nil {
+		log.Printf("[WARN] Failed to publish fall detection discovery: %v", err)
+	}
+	if err := p.PublishSystemHealthDiscovery(); err != nil {
+		log.Printf("[WARN] Failed to publish system health discovery: %v", err)
+	}
+	if err := p.PublishSystemModeDiscovery(); err != nil {
+		log.Printf("[WARN] Failed to publish system mode discovery: %v", err)
+	}
+}
+
 // SubscribeToSystemMode subscribes to system mode commands from MQTT.
 // The handler will be called when HA sends a mode change command.
 func (p *EventPublisher) SubscribeToSystemMode(handler func(mode string)) error {
@@ -459,4 +527,30 @@ func (p *EventPublisher) SubscribeToSystemMode(handler func(mode string)) error 
 	}
 
 	return p.client.SubscribeToSystemMode(handler)
+}
+
+// SubscribeToRebaseline subscribes to re-baseline commands from MQTT.
+// The handler receives a zone name or "all" to re-baseline all zones.
+func (p *EventPublisher) SubscribeToRebaseline(handler func(zone string)) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.client.IsConnected() {
+		return nil
+	}
+
+	return p.client.SubscribeToRebaseline(handler)
+}
+
+// SubscribeToSecurityMode subscribes to security mode commands from MQTT.
+// The handler receives "arm" or "disarm" commands.
+func (p *EventPublisher) SubscribeToSecurityMode(handler func(action string)) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.client.IsConnected() {
+		return nil
+	}
+
+	return p.client.SubscribeToSecurityMode(handler)
 }

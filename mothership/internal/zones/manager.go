@@ -132,9 +132,12 @@ type Manager struct {
 	tz           *time.Location
 
 	// Callbacks
-	onCrossing  func(CrossingEvent)
-	onZoneEntry  func(ZoneTransitionEvent)
-	onZoneExit   func(ZoneTransitionEvent)
+	onCrossing    func(CrossingEvent)
+	onZoneEntry   func(ZoneTransitionEvent)
+	onZoneExit    func(ZoneTransitionEvent)
+	onZoneCreated func(zone *Zone)
+	onZoneUpdated func(zone *Zone)
+	onZoneDeleted func(zoneID string)
 }
 
 // NewManager creates a new zones manager. If tz is nil, UTC is used.
@@ -279,6 +282,24 @@ func (m *Manager) SetOnZoneExit(cb func(ZoneTransitionEvent)) {
 	m.mu.Unlock()
 }
 
+func (m *Manager) SetOnZoneCreated(cb func(zone *Zone)) {
+	m.mu.Lock()
+	m.onZoneCreated = cb
+	m.mu.Unlock()
+}
+
+func (m *Manager) SetOnZoneUpdated(cb func(zone *Zone)) {
+	m.mu.Lock()
+	m.onZoneUpdated = cb
+	m.mu.Unlock()
+}
+
+func (m *Manager) SetOnZoneDeleted(cb func(zoneID string)) {
+	m.mu.Lock()
+	m.onZoneDeleted = cb
+	m.mu.Unlock()
+}
+
 // CreateZone creates a new zone.
 func (m *Manager) CreateZone(zone *Zone) error {
 	m.mu.Lock()
@@ -300,6 +321,12 @@ func (m *Manager) CreateZone(zone *Zone) error {
 
 	zone.CreatedAt = time.Unix(0, now)
 	m.zones[zone.ID] = zone
+
+	// Call zone created callback
+	if m.onZoneCreated != nil {
+		m.onZoneCreated(zone)
+	}
+
 	return nil
 }
 
@@ -322,6 +349,12 @@ func (m *Manager) UpdateZone(zone *Zone) error {
 	}
 
 	m.zones[zone.ID] = zone
+
+	// Call zone updated callback
+	if m.onZoneUpdated != nil {
+		m.onZoneUpdated(zone)
+	}
+
 	return nil
 }
 
@@ -337,6 +370,12 @@ func (m *Manager) DeleteZone(id string) error {
 
 	delete(m.zones, id)
 	delete(m.occupancy, id)
+
+	// Call zone deleted callback (must be called before releasing lock since we need the zone data)
+	if m.onZoneDeleted != nil {
+		m.onZoneDeleted(id)
+	}
+
 	return nil
 }
 
