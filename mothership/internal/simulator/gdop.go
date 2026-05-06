@@ -399,8 +399,13 @@ func (gc *GDOPComputer) ToHeatmapData(results [][]GDOPResult) *GDOPHeatmapData {
 			color := GDOPColorMap(result.GDOP)
 			data.Colors[idx] = []uint8{color.R, color.G, color.B}
 
-			// Expected accuracy
-			data.AccuracyMap[idx] = ExpectedAccuracy(result.GDOP)
+			// Expected accuracy (use 9999.0 for infinity)
+			accuracy := ExpectedAccuracy(result.GDOP)
+			if math.IsInf(accuracy, 0) {
+				data.AccuracyMap[idx] = 9999.0
+			} else {
+				data.AccuracyMap[idx] = accuracy
+			}
 		}
 	}
 

@@ -4,6 +4,7 @@ package simulator
 import (
 	"fmt"
 	"math"
+	mrand "math/rand"
 )
 
 // AccuracyEstimator computes accuracy metrics from simulation results.
@@ -298,22 +299,51 @@ func (re *RecommendationEngine) Generate(space *Space, nodes *NodeSet, gdopMap [
 
 // ShoppingList contains hardware recommendations.
 type ShoppingList struct {
-	MinimumNodes     int      `json:"minimum_nodes"`
-	RecommendedNodes int      `json:"recommended_nodes"`
-	ExpectedAccuracy float64  `json:"expected_accuracy_m"`
-	CoveragePercent  float64  `json:"coverage_percent"`
-	HardwareList     []string `json:"hardware_list"`
-	AmazonSearchURL  string   `json:"amazon_search_url"`
-	OptimalPositions []Point  `json:"optimal_positions,omitempty"`
+	MinimumNodes      int       `json:"minimum_nodes"`
+	RecommendedNodes  int       `json:"recommended_nodes"`
+	ExpectedAccuracy   float64   `json:"expected_accuracy_m"`
+	CoveragePercent   float64   `json:"coverage_percent"`
+	HardwareList      []string  `json:"hardware_list"`
+	AmazonSearchURL   string    `json:"amazon_search_url"`
+	OptimalPositions  []Point   `json:"optimal_positions,omitempty"`
+	CoverageGaps     []Point   `json:"coverage_gaps,omitempty"`      // Positions with poor coverage
+	RecommendedAdditions []NodeAddition `json:"recommended_additions,omitempty"` // Specific nodes to add
+	EstimatedCost     float64   `json:"estimated_cost_usd,omitempty"` // Estimated hardware cost in USD
+	SpaceDimensions   SpaceDimensions `json:"space_dimensions"` // Space dimensions for reference
+}
+
+// SpaceDimensions describes the space dimensions
+type SpaceDimensions struct {
+	Width  float64 `json:"width_m"`
+	Depth  float64 `json:"depth_m"`
+	Height float64 `json:"height_m"`
+	Area   float64 `json:"area_m2"`
+	Volume float64 `json:"volume_m3"`
+}
+
+// NodeAddition represents a specific node to add with position and role
+type NodeAddition struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Position    Point   `json:"position"`
+	Role        string  `json:"role"`
+	Height      string  `json:"height_description"` // e.g., "ceiling", "wall", "desk"
+	Improvement float64 `json:"estimated_improvement"` // 0-1, estimated coverage improvement
 }
 
 // GenerateShoppingListFromResults creates a shopping list from simulation results.
 func GenerateShoppingListFromResults(space *Space, nodes *NodeSet, coverageScore float64, accuracy AccuracyReport) ShoppingList {
 	nodeCount := nodes.Count()
 
+	// Space dimensions
+	minX, minY, _, maxX, maxY, maxZ := space.Bounds()
+	width := maxX - minX
+	depth := maxY - minY
+	height := maxZ - minY
+	area := width * depth
+	volume := width * depth * height
+
 	// Minimum nodes based on space dimensions
-	minX, minY, _, maxX, maxY, _ := space.Bounds()
-	area := (maxX - minX) * (maxY - minY)
 	minNodes := int(math.Ceil(area / 30.0)) // ~30 m² per node for fair coverage
 
 	// Recommended nodes based on desired accuracy
@@ -338,22 +368,185 @@ func GenerateShoppingListFromResults(space *Space, nodes *NodeSet, coverageScore
 		}
 	}
 
-	// Hardware list
+	// Generate optimal positions (corner + mixed heights)
+	optimalPositions := generateOptimalPositions(space, recNodes)
+
+	// Find coverage gaps using GDOP analysis
+	coverageGaps := findCoverageGaps(space, nodes)
+
+	// Generate recommended additions
+	recommendedAdditions := generateNodeAdditions(space, nodes, coverageGaps)
+
+	// Hardware list with quantities
 	hardware := make([]string, 0)
-	hardware = append(hardware, fmt.Sprintf("%d × ESP32-S3 Development Board", recNodes))
-	hardware = append(hardware, fmt.Sprintf("%d × USB-C Power Supply (5V 1A)", recNodes))
+	hardware = append(hardware, fmt.Sprintf("%d × ESP32-S3 Development Board (with PSRAM 8MB)", recNodes))
+	hardware = append(hardware, fmt.Sprintf("%d × USB-C Power Supply (5V 2A)", recNodes))
 	hardware = append(hardware, fmt.Sprintf("%d × USB-C Cable (1-2m)", recNodes))
-	hardware = append(hardware, fmt.Sprintf("%d × Adhesive Cable Clips for routing", recNodes*4))
+	hardware = append(hardware, fmt.Sprintf("%d × Adhesive Cable Clips (for mounting)", recNodes*4))
+	hardware = append(hardware, fmt.Sprintf("%d × 3D Printed Case (optional)", recNodes))
+
+	// Estimated cost (as of 2025)
+	estimatedCost := float64(recNodes)*15.0 + // ESP32-S3 dev board
+		float64(recNodes)*8.0 +              // Power supply
+		float64(recNodes)*3.0 +              // USB cable
+		float64(recNodes)*2.0               // Cable clips
 
 	// Amazon search URL (non-affiliate)
-	searchURL := fmt.Sprintf("https://www.amazon.com/s?k=esp32-s3+devkit+usb-c")
+	searchURL := fmt.Sprintf("https://www.amazon.com/s?k=esp32-s3+devkit+usb-c+psram")
 
 	return ShoppingList{
-		MinimumNodes:     minNodes,
-		RecommendedNodes: recNodes,
-		ExpectedAccuracy:  expectedAccuracy,
-		CoveragePercent:   coverageScore,
-		HardwareList:      hardware,
-		AmazonSearchURL:   searchURL,
+		MinimumNodes:       minNodes,
+		RecommendedNodes:   recNodes,
+		ExpectedAccuracy:   expectedAccuracy,
+		CoveragePercent:    coverageScore,
+		HardwareList:       hardware,
+		AmazonSearchURL:    searchURL,
+		OptimalPositions:   optimalPositions,
+		CoverageGaps:       coverageGaps,
+		RecommendedAdditions: recommendedAdditions,
+		EstimatedCost:      estimatedCost,
+		SpaceDimensions: SpaceDimensions{
+			Width:  width,
+			Depth:  depth,
+			Height: height,
+			Area:   area,
+			Volume: volume,
+		},
 	}
+}
+
+// generateOptimalPositions generates optimal node positions for a given count
+func generateOptimalPositions(space *Space, count int) []Point {
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+	positions := make([]Point, 0, count)
+
+	// Strategy: place nodes at corners and mid-points, with mixed heights
+	corners := []Point{
+		{X: minX + 0.5, Y: minY + 0.5, Z: 2.2},  // Low corner, high
+		{X: maxX - 0.5, Y: minY + 0.5, Z: 2.2},  // Low corner, high
+		{X: minX + 0.5, Y: maxY - 0.5, Z: 2.2},  // Low corner, high
+		{X: maxX - 0.5, Y: maxY - 0.5, Z: 2.2},  // Low corner, high
+		{X: (minX + maxX) / 2, Y: minY + 0.5, Z: 2.5}, // Mid wall, high
+		{X: (minX + maxX) / 2, Y: maxY - 0.5, Z: 2.5}, // Mid wall, high
+		{X: minX + 0.5, Y: (minY + maxY) / 2, Z: 0.3},  // Mid wall, low
+		{X: maxX - 0.5, Y: (minY + maxY) / 2, Z: 0.3},  // Mid wall, low
+	}
+
+	for i := 0; i < count; i++ {
+		if i < len(corners) {
+			positions = append(positions, corners[i])
+		} else {
+			// Add random position for extra nodes
+			positions = append(positions, Point{
+				X: minX + mrand.Float64()*(maxX-minX),
+				Y: minY + mrand.Float64()*(maxY-minY),
+				Z: 0.3 + mrand.Float64()*2.0, // Mixed height
+			})
+		}
+	}
+
+	return positions
+}
+
+// findCoverageGaps finds positions with poor GDOP (coverage gaps)
+func findCoverageGaps(space *Space, nodes *NodeSet) []Point {
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+	links := GenerateAllLinks(nodes)
+
+	if len(links) < 2 {
+		// No links means no coverage - return center of space as gap
+		return []Point{{X: (minX + maxX) / 2, Y: (minY + maxY) / 2, Z: 1.0}}
+	}
+
+	gdopComp := NewGDOPComputer(links, GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.2,
+	})
+
+	results := gdopComp.ComputeAll()
+	gaps := make([]Point, 0)
+
+	// Find cells with poor or no coverage
+	for _, row := range results {
+		for _, cell := range row {
+			if cell.Quality == "poor" || cell.Quality == "none" {
+				gaps = append(gaps, Point{X: cell.X, Y: cell.Y, Z: cell.Z})
+			}
+		}
+	}
+
+	// Limit to top 10 worst coverage gaps
+	if len(gaps) > 10 {
+		gaps = gaps[:10]
+	}
+
+	return gaps
+}
+
+// generateNodeAdditions creates specific node addition recommendations
+func generateNodeAdditions(space *Space, nodes *NodeSet, gaps []Point) []NodeAddition {
+	additions := make([]NodeAddition, 0)
+	minX, minY, _, maxX, maxY, _ := space.Bounds()
+
+	// If we have coverage gaps, suggest adding nodes there
+	for i, gap := range gaps {
+		if i >= 3 {
+			break // Limit to 3 gap-based additions
+		}
+
+		heightDesc := "ceiling"
+		if gap.Z < 1.0 {
+			heightDesc = "wall mount"
+		} else if gap.Z > 2.0 {
+			heightDesc = "ceiling"
+		} else {
+			heightDesc = "high wall"
+		}
+
+		additions = append(additions, NodeAddition{
+			ID:          fmt.Sprintf("node-gap-%d", i+1),
+			Name:        fmt.Sprintf("Gap Coverage Node %d", i+1),
+			Position:    gap,
+			Role:        "tx_rx",
+			Height:      heightDesc,
+			Improvement: 0.2 + float64(3-i)*0.05, // Later gaps have lower priority
+		})
+	}
+
+	// Suggest corner nodes if we have few nodes
+	if nodes.Count() < 4 {
+		corners := CornerPositions(space)
+		for i := nodes.Count(); i < 4 && i < len(corners); i++ {
+			heightDesc := "ceiling"
+			if corners[i].Z < 1.0 {
+				heightDesc = "low"
+			}
+
+			additions = append(additions, NodeAddition{
+				ID:          fmt.Sprintf("node-corner-%d", i+1),
+				Name:        fmt.Sprintf("Corner Node %d", i+1),
+				Position:    corners[i],
+				Role:        "tx_rx",
+				Height:      heightDesc,
+				Improvement: 0.15,
+			})
+		}
+	}
+
+	// If no specific additions, suggest a center node
+	if len(additions) == 0 {
+		additions = append(additions, NodeAddition{
+			ID:          "node-center-1",
+			Name:        "Center Node",
+			Position:    Point{X: (minX + maxX) / 2, Y: (minY + maxY) / 2, Z: 2.0},
+			Role:        "tx_rx",
+			Height:      "ceiling",
+			Improvement: 0.1,
+		})
+	}
+
+	return additions
 }
