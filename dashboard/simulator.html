@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Spaxel — Simulator</title>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/panels.css">
+    <link rel="stylesheet" href="css/simulator.css">
+    <style>
+        .simulator-header__link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: var(--text-sm);
+        }
+        .simulator-header__link:hover {
+            color: var(--text-primary);
+        }
+        #sim-status {
+            color: var(--text-secondary);
+            flex: 1;
+            text-align: center;
+            font-size: var(--text-sm);
+        }
+    </style>
+</head>
+<body class="has-mobile-nav">
+    <div class="app-shell app-shell--live">
+
+    <nav class="app-header setup-header">
+        <a href="/" class="simulator-header__link">&larr; Home</a>
+        <span style="color:var(--text-primary);font-weight:600;">Pre-Deployment Simulator</span>
+        <span id="sim-status"></span>
+        <a href="/setup" class="simulator-header__link">Setup</a>
+    </nav>
+
+    <main class="app-main">
+        <div id="simulator-container">
+            <!-- 3D Scene Container -->
+            <div id="scene-container" class="simulator-scene"></div>
+
+            <!-- GDOP Overlay Container -->
+            <canvas id="gdop-canvas" class="gdop-overlay"></canvas>
+
+            <!-- Simulation Controls Panel -->
+            <div id="sim-controls" class="sim-panel sim-panel--controls">
+                <h3>Simulation Controls</h3>
+                <div class="sim-controls__row">
+                    <button id="btn-simulate" class="sim-btn sim-btn--primary">Run Simulation</button>
+                    <button id="btn-stop" class="sim-btn sim-btn--danger">Stop</button>
+                    <button id="btn-reset" class="sim-btn">Reset</button>
+                </div>
+                <div class="sim-controls__row">
+                    <label for="sim-duration">Duration (s):</label>
+                    <input type="number" id="sim-duration" value="60" min="10" max="300">
+                </div>
+                <div class="sim-controls__row">
+                    <label for="sim-walkers">Walkers:</label>
+                    <input type="number" id="sim-walkers" value="3" min="1" max="10">
+                </div>
+                <div class="sim-controls__row">
+                    <label>
+                        <input type="checkbox" id="sim-show-paths">
+                        Show walker paths
+                    </label>
+                </div>
+            </div>
+
+            <!-- Space Configuration Panel -->
+            <div id="space-panel" class="sim-panel sim-panel--space">
+                <h3>Space Configuration</h3>
+                <div class="sim-space__form">
+                    <div class="sim-space__row">
+                        <label for="space-width">Width (m):</label>
+                        <input type="number" id="space-width" value="10" min="3" max="50" step="0.5">
+                    </div>
+                    <div class="sim-space__row">
+                        <label for="space-depth">Depth (m):</label>
+                        <input type="number" id="space-depth" value="8" min="3" max="50" step="0.5">
+                    </div>
+                    <div class="sim-space__row">
+                        <label for="space-height">Height (m):</label>
+                        <input type="number" id="space-height" value="2.5" min="2" max="10" step="0.1">
+                    </div>
+                    <button id="btn-apply-space" class="sim-btn">Apply Space</button>
+                </div>
+            </div>
+
+            <!-- Node Placement Panel -->
+            <div id="node-panel" class="sim-panel sim-panel--nodes">
+                <h3>Node Placement</h3>
+                <div class="sim-nodes__list" id="node-list"></div>
+                <div class="sim-nodes__add">
+                    <button id="btn-add-node" class="sim-btn sim-btn--primary">+ Add Virtual Node</button>
+                </div>
+                <div class="sim-nodes__suggestions" id="node-suggestions"></div>
+            </div>
+
+            <!-- Results Panel -->
+            <div id="results-panel" class="sim-panel sim-panel--results">
+                <h3>Simulation Results</h3>
+                <div class="sim-results__metrics">
+                    <div class="sim-metric">
+                        <span class="sim-metric__label">Coverage Score:</span>
+                        <span class="sim-metric__value" id="metric-coverage">--</span>
+                    </div>
+                    <div class="sim-metric">
+                        <span class="sim-metric__label">Avg GDOP:</span>
+                        <span class="sim-metric__value" id="metric-gdop">--</span>
+                    </div>
+                    <div class="sim-metric">
+                        <span class="sim-metric__label">Blobs Detected:</span>
+                        <span class="sim-metric__value" id="metric-blobs">--</span>
+                    </div>
+                </div>
+                <div class="sim-results__gdop-legend">
+                    <h4>GDOP Quality</h4>
+                    <div class="gdop-legend">
+                        <span class="gdop-legend__item gdop-excellent">Excellent (&lt;2)</span>
+                        <span class="gdop-legend__item gdop-good">Good (2-4)</span>
+                        <span class="gdop-legend__item gdop-fair">Fair (4-6)</span>
+                        <span class="gdop-legend__item gdop-poor">Poor (&gt;6)</span>
+                    </div>
+                </div>
+                <div class="sim-results__recommendations" id="sim-recommendations"></div>
+            </div>
+
+            <!-- Walker Visualization -->
+            <div id="walkers-container" class="sim-walkers"></div>
+        </div>
+    </main>
+
+    </div><!-- /.app-shell -->
+
+    <!-- Mobile bottom nav -->
+    <nav class="app-mobile-nav" aria-label="Main navigation">
+        <ul class="app-mobile-nav__list">
+            <li class="app-mobile-nav__item">
+                <a href="/" class="app-mobile-nav__link">
+                    <span>&#x1F3E0;</span> Home
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/live" class="app-mobile-nav__link">
+                    <span>&#x26F6;</span> Live
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/fleet" class="app-mobile-nav__link">
+                    <span>&#x1F4E1;</span> Fleet
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/simulator" class="app-mobile-nav__link app-mobile-nav__link--active">
+                    <span>&#x1F4CA;</span> Sim
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+
+    <!-- 3D Visualization Layer -->
+    <script src="js/viz3d.js"></script>
+
+    <!-- Core simulator script -->
+    <script src="js/simulate.js"></script>
+
+    <script>
+        // Initialize simulator on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof SpaxelSimulator !== 'undefined' && SpaxelSimulator.init) {
+                SpaxelSimulator.init();
+            }
+        });
+    </script>
+</body>
+</html>
