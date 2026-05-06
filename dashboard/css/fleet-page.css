@@ -1051,6 +1051,64 @@ body.fleet-page {
     font-size: var(--text-sm);
 }
 
+/* Import Modal */
+.file-input {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-control);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-4);
+}
+
+.file-input:focus {
+    outline: none;
+    border-color: var(--blue-9);
+}
+
+.import-info {
+    margin-top: var(--space-4);
+    padding: var(--space-3);
+    background: var(--overlay);
+    border-radius: var(--radius-control);
+    font-size: var(--text-sm);
+}
+
+.import-info p {
+    margin: var(--space-2) 0;
+}
+
+.import-warning-text {
+    color: var(--alert);
+    font-size: var(--text-sm);
+}
+
+/* Position Column */
+.col-position {
+    min-width: 100px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+}
+
+.position-link {
+    color: var(--blue-9);
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.position-link:hover {
+    color: var(--blue-10);
+    text-decoration: underline;
+}
+
+.position-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* ============================================
    Toast Notifications
    ============================================ */
