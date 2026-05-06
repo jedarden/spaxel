@@ -119,13 +119,36 @@
                 <div class="sim-results__gdop-legend">
                     <h4>GDOP Quality</h4>
                     <div class="gdop-legend">
-                        <span class="gdop-legend__item gdop-excellent">Excellent (&lt;2)</span>
-                        <span class="gdop-legend__item gdop-good">Good (2-4)</span>
-                        <span class="gdop-legend__item gdop-fair">Fair (4-6)</span>
-                        <span class="gdop-legend__item gdop-poor">Poor (&gt;6)</span>
+                        <div class="gdop-legend-item" data-quality="excellent">
+                            <span class="gdop-legend-color"></span>
+                            <span class="gdop-legend-label">Excellent (&lt;2)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="good">
+                            <span class="gdop-legend-color"></span>
+                            <span class="gdop-legend-label">Good (2-4)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="fair">
+                            <span class="gdop-legend-color"></span>
+                            <span class="gdop-legend-label">Fair (4-8)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="poor">
+                            <span class="gdop-legend-color"></span>
+                            <span class="gdop-legend-label">Poor (&gt;8)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="none">
+                            <span class="gdop-legend-color"></span>
+                            <span class="gdop-legend-label">None</span>
+                        </div>
                     </div>
                 </div>
                 <div class="sim-results__recommendations" id="sim-recommendations"></div>
+                <div class="sim-results__shopping" id="sim-shopping" style="display:none;">
+                    <h4>Shopping List</h4>
+                    <div id="shopping-list-content"></div>
+                    <button id="btn-add-node-here" class="sim-btn sim-btn--primary" style="margin-top:8px;">
+                        + Add Node at Worst Coverage Spot
+                    </button>
+                </div>
             </div>
 
             <!-- Walker Visualization -->
