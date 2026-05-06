@@ -57,6 +57,8 @@ var (
 	flagNoiseSigma  = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
 	flagOutputCSV   = flag.String("output-csv", "", "Write ground truth to CSV file")
 	flagChannel     = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
+	flagWalkerType  = flag.String("walker-type", "random", "Walker type: random, path, node-to-node")
+	flagPathFile    = flag.String("path-file", "", "JSON file containing walker paths")
 
 	// Scenario flags
 	flagScenario     = flag.String("scenario", "normal", "Scenario type: normal, fall, ota, bag-on-couch")
@@ -76,9 +78,10 @@ type wallFlag struct{}
 
 func (w *wallFlag) String() string { return "" }
 func (w *wallFlag) Set(value string) error {
+	// Format: x1,y1,x2,y2[:material]
 	parts := strings.Split(value, ",")
-	if len(parts) != 4 {
-		return fmt.Errorf("expected x1,y1,x2,y2 format, got: %s", value)
+	if len(parts) < 4 {
+		return fmt.Errorf("expected x1,y1,x2,y2[:material] format, got: %s", value)
 	}
 	x1, err := strconv.ParseFloat(parts[0], 64)
 	if err != nil {
@@ -96,7 +99,27 @@ func (w *wallFlag) Set(value string) error {
 	if err != nil {
 		return fmt.Errorf("invalid y2: %w", err)
 	}
-	walls = append(walls, Wall{X1: x1, Y1: y1, X2: x2, Y2: y2, Attenuation: 3.0})
+
+	// Parse material (default: drywall)
+	material := MaterialDrywall
+	attenuation := 3.0
+	if len(parts) >= 5 {
+		material = WallMaterial(strings.ToLower(parts[4]))
+		switch material {
+		case MaterialDrywall:
+			attenuation = 3.0
+		case MaterialBrick, MaterialConcrete:
+			attenuation = 10.0
+		case MaterialGlass:
+			attenuation = 2.0
+		case MaterialMetal:
+			attenuation = 20.0
+		default:
+			return fmt.Errorf("unknown material: %s (use: drywall, brick, concrete, glass, metal)", parts[4])
+		}
+	}
+
+	walls = append(walls, Wall{X1: x1, Y1: y1, X2: x2, Y2: y2, Material: material, Attenuation: attenuation})
 	return nil
 }
 
@@ -110,6 +133,15 @@ type VirtualNode struct {
 	mu       sync.Mutex
 }
 
+// WalkerType defines how a walker moves
+type WalkerType string
+
+const (
+	WalkerTypeRandomWalk  WalkerType = "random"
+	WalkerTypePathFollow  WalkerType = "path"
+	WalkerTypeNodeToNode  WalkerType = "node-to-node"
+)
+
 // Walker represents a simulated person
 type Walker struct {
 	ID       int
@@ -117,6 +149,11 @@ type Walker struct {
 	Velocity Point
 	Speed    float64
 	Height   float64
+	Type     WalkerType
+	Path     []Point    // For path-following mode
+	PathIdx  int        // Current position along path
+	Nodes    []*VirtualNode // For node-to-node mode
+	NodeIdx  int        // Current target node index
 }
 
 // Point represents a 3D position
@@ -129,10 +166,22 @@ type Space struct {
 	Width, Depth, Height float64
 }
 
-// Wall represents a wall segment
+// WallMaterial defines the type of wall material
+type WallMaterial string
+
+const (
+	MaterialDrywall  WallMaterial = "drywall"
+	MaterialBrick    WallMaterial = "brick"
+	MaterialConcrete WallMaterial = "concrete"
+	MaterialGlass    WallMaterial = "glass"
+	MaterialMetal    WallMaterial = "metal"
+)
+
+// Wall represents a wall segment with material properties
 type Wall struct {
 	X1, Y1, X2, Y2 float64
-	Attenuation     float64
+	Material        WallMaterial
+	Attenuation     float64 // dB loss
 }
 
 // Stats tracks simulation statistics
@@ -172,8 +221,13 @@ func main() {
 	// Create virtual nodes
 	nodes := createVirtualNodes(*flagNodes, space, rng)
 
-	// Create walkers
+	// Create walkers (may be nil for node-to-node mode)
 	walkers := createWalkers(*flagWalkers, space, rng)
+
+	// For node-to-node mode, create walkers after nodes exist
+	if WalkerType(*flagWalkerType) == WalkerTypeNodeToNode {
+		walkers = createNodeToNodeWalkers(*flagWalkers, nodes)
+	}
 
 	log.Printf("[SIM] Configuration:")
 	log.Printf("[SIM]   Mothership: %s", *flagMothership)
@@ -344,11 +398,24 @@ func generateMAC(id int) [6]byte {
 
 // createWalkers creates synthetic walkers
 func createWalkers(count int, space *Space, rng *rand.Rand) []*Walker {
+	walkerType := WalkerType(*flagWalkerType)
+
+	if walkerType == WalkerTypePathFollow {
+		return createPathWalkers(count, space)
+	}
+
+	if walkerType == WalkerTypeNodeToNode {
+		// Will be created after nodes are initialized
+		return nil
+	}
+
+	// Default: random walk
 	walkers := make([]*Walker, count)
 
 	for i := 0; i < count; i++ {
 		walkers[i] = &Walker{
-			ID: i,
+			ID:   i,
+			Type: WalkerTypeRandomWalk,
 			Position: Point{
 				X: rng.Float64() * space.Width,
 				Y: rng.Float64() * space.Depth,
@@ -365,6 +432,126 @@ func createWalkers(count int, space *Space, rng *rand.Rand) []*Walker {
 	}
 
 	return walkers
+}
+
+// createPathWalkers creates walkers that follow predefined paths
+func createPathWalkers(count int, space *Space) []*Walker {
+	if *flagPathFile == "" {
+		log.Printf("[SIM] Path-following mode requires --path-file, using default rectangular path")
+		return createDefaultPathWalkers(count, space)
+	}
+
+	// Load paths from JSON file
+	paths, err := loadPathsFromFile(*flagPathFile)
+	if err != nil {
+		log.Fatalf("[SIM] Failed to load paths from %s: %v", *flagPathFile, err)
+	}
+
+	walkers := make([]*Walker, count)
+	for i := 0; i < count; i++ {
+		// Use path modulo count to allow fewer paths than walkers
+		pathIdx := i % len(paths)
+		walkers[i] = &Walker{
+			ID:      i,
+			Type:    WalkerTypePathFollow,
+			Path:    paths[pathIdx],
+			PathIdx: 0,
+			Speed:   1.0,
+			Height:  1.7,
+		}
+		if len(paths[pathIdx]) > 0 {
+			walkers[i].Position = paths[pathIdx][0]
+		}
+	}
+
+	return walkers
+}
+
+// createDefaultPathWalkers creates walkers following a default rectangular perimeter path
+func createDefaultPathWalkers(count int, space *Space) []*Walker {
+	margin := 0.5
+	path := []Point{
+		{X: margin, Y: margin, Z: 1.7},
+		{X: space.Width - margin, Y: margin, Z: 1.7},
+		{X: space.Width - margin, Y: space.Depth - margin, Z: 1.7},
+		{X: margin, Y: space.Depth - margin, Z: 1.7},
+	}
+
+	walkers := make([]*Walker, count)
+	for i := 0; i < count; i++ {
+		startIdx := (i * len(path) / count) % len(path)
+		walkers[i] = &Walker{
+			ID:      i,
+			Type:    WalkerTypePathFollow,
+			Path:    path,
+			PathIdx: startIdx,
+			Speed:   0.8 + 0.4*float64(i)/float64(count),
+			Height:  1.7,
+		}
+		if len(path) > 0 {
+			walkers[i].Position = path[startIdx]
+		}
+	}
+
+	return walkers
+}
+
+// createNodeToNodeWalkers creates walkers that traverse between virtual nodes
+func createNodeToNodeWalkers(count int, nodes []*VirtualNode) []*Walker {
+	if len(nodes) < 2 {
+		log.Fatalf("[SIM] Node-to-node mode requires at least 2 nodes")
+	}
+
+	walkers := make([]*Walker, count)
+	for i := 0; i < count; i++ {
+		walkers[i] = &Walker{
+			ID:      i,
+			Type:    WalkerTypeNodeToNode,
+			Nodes:   nodes,
+			NodeIdx: 1, // Target is second node
+			Speed:   1.0,
+			Height:  1.7,
+		}
+		// Start at first node
+		if len(nodes) > 0 {
+			walkers[i].Position = nodes[0].Position
+		}
+	}
+
+	return walkers
+}
+
+// PathDefinition defines a walker path in JSON format
+type PathDefinition struct {
+	Waypoints []Point `json:"waypoints"` // Ordered list of points to visit
+}
+
+// loadPathsFromFile loads walker paths from a JSON file
+func loadPathsFromFile(filename string) ([][]Point, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var paths []PathDefinition
+	if err := json.Unmarshal(data, &paths); err != nil {
+		return nil, err
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no paths defined in file")
+	}
+
+	result := make([][]Point, len(paths))
+	for i, pathDef := range paths {
+		if len(pathDef.Waypoints) == 0 {
+			return nil, fmt.Errorf("path %d has no waypoints", i)
+		}
+		result[i] = pathDef.Waypoints
+	}
+
+	log.Printf("[SIM] Loaded %d paths from %s", len(result), filename)
+	return result, nil
 }
 
 // connectNodes connects all virtual nodes to the mothership.
@@ -753,49 +940,139 @@ func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker,
 	}
 }
 
-// updateWalkers updates walker positions with random walk
+// updateWalkers updates walker positions based on their movement type
 func updateWalkers(walkers []*Walker, space *Space, rng *rand.Rand) {
 	dt := 1.0 / float64(*flagRate)
 
 	for _, walker := range walkers {
-		walker.Position.X += walker.Velocity.X * dt
-		walker.Position.Y += walker.Velocity.Y * dt
-
-		// Bounce off walls
-		margin := 0.2
-		if walker.Position.X < margin {
-			walker.Position.X = margin
-			walker.Velocity.X *= -1
+		switch walker.Type {
+		case WalkerTypePathFollow:
+			updatePathWalker(walker, dt)
+		case WalkerTypeNodeToNode:
+			updateNodeToNodeWalker(walker, dt, space)
+		case WalkerTypeRandomWalk:
+			updateRandomWalker(walker, dt, space, rng)
 		}
-		if walker.Position.X > space.Width-margin {
-			walker.Position.X = space.Width - margin
-			walker.Velocity.X *= -1
-		}
-		if walker.Position.Y < margin {
-			walker.Position.Y = margin
-			walker.Velocity.Y *= -1
-		}
-		if walker.Position.Y > space.Depth-margin {
-			walker.Position.Y = space.Depth - margin
-			walker.Velocity.Y *= -1
-		}
-
-		// Random velocity perturbation
-		perturbation := 0.1
-		walker.Velocity.X += (rng.Float64() - 0.5) * perturbation
-		walker.Velocity.Y += (rng.Float64() - 0.5) * perturbation
-
-		// Clamp velocity
-		speed := walker.Speed * (0.5 + rng.Float64()*0.5)
-		currentSpeed := math.Sqrt(walker.Velocity.X*walker.Velocity.X + walker.Velocity.Y*walker.Velocity.Y)
-		if currentSpeed > 0 {
-			walker.Velocity.X = (walker.Velocity.X / currentSpeed) * speed
-			walker.Velocity.Y = (walker.Velocity.Y / currentSpeed) * speed
-		}
-
-		// Keep Z at person height
-		walker.Position.Z = walker.Height
 	}
+}
+
+// updateRandomWalker implements random walk motion
+func updateRandomWalker(walker *Walker, dt float64, space *Space, rng *rand.Rand) {
+	walker.Position.X += walker.Velocity.X * dt
+	walker.Position.Y += walker.Velocity.Y * dt
+
+	// Bounce off walls
+	margin := 0.2
+	if walker.Position.X < margin {
+		walker.Position.X = margin
+		walker.Velocity.X *= -1
+	}
+	if walker.Position.X > space.Width-margin {
+		walker.Position.X = space.Width - margin
+		walker.Velocity.X *= -1
+	}
+	if walker.Position.Y < margin {
+		walker.Position.Y = margin
+		walker.Velocity.Y *= -1
+	}
+	if walker.Position.Y > space.Depth-margin {
+		walker.Position.Y = space.Depth - margin
+		walker.Velocity.Y *= -1
+	}
+
+	// Random velocity perturbation
+	perturbation := 0.1
+	walker.Velocity.X += (rng.Float64() - 0.5) * perturbation
+	walker.Velocity.Y += (rng.Float64() - 0.5) * perturbation
+
+	// Clamp velocity
+	speed := walker.Speed * (0.5 + rng.Float64()*0.5)
+	currentSpeed := math.Sqrt(walker.Velocity.X*walker.Velocity.X + walker.Velocity.Y*walker.Velocity.Y)
+	if currentSpeed > 0 {
+		walker.Velocity.X = (walker.Velocity.X / currentSpeed) * speed
+		walker.Velocity.Y = (walker.Velocity.Y / currentSpeed) * speed
+	}
+
+	walker.Position.Z = walker.Height
+}
+
+// updatePathWalker implements path-following motion
+func updatePathWalker(walker *Walker, dt float64) {
+	if len(walker.Path) == 0 {
+		return
+	}
+
+	target := walker.Path[walker.PathIdx]
+	dx := target.X - walker.Position.X
+	dy := target.Y - walker.Position.Y
+	dz := target.Z - walker.Position.Z
+	dist := math.Sqrt(dx*dx + dy*dy + dz*dz)
+
+	// If very close to target, move to next waypoint
+	if dist < 0.1 {
+		walker.PathIdx = (walker.PathIdx + 1) % len(walker.Path)
+		return
+	}
+
+	// Move towards target at constant speed
+	moveDist := walker.Speed * dt
+	if moveDist > dist {
+		moveDist = dist
+	}
+
+	t := moveDist / dist
+	walker.Position.X += dx * t
+	walker.Position.Y += dy * t
+
+	// Update velocity vector for consistency
+	if dist > 0 {
+		walker.Velocity.X = (dx / dist) * walker.Speed
+		walker.Velocity.Y = (dy / dist) * walker.Speed
+		walker.Velocity.Z = (dz / dist) * walker.Speed
+	}
+}
+
+// updateNodeToNodeWalker implements traversal between virtual nodes
+func updateNodeToNodeWalker(walker *Walker, dt float64, space *Space) {
+	if len(walker.Nodes) < 2 {
+		updateRandomWalker(walker, dt, space, rand.New(rand.NewSource(time.Now().UnixNano())))
+		return
+	}
+
+	targetNode := walker.Nodes[walker.NodeIdx]
+	targetPos := targetNode.Position
+
+	dx := targetPos.X - walker.Position.X
+	dy := targetPos.Y - walker.Position.Y
+	dz := targetPos.Z - walker.Position.Z
+	dist := math.Sqrt(dx*dx + dy*dy + dz*dz)
+
+	// Check if we've arrived at the target node (horizontal distance)
+	horizontalDist := math.Sqrt(dx*dx + dy*dy)
+	if horizontalDist < 0.3 {
+		// Move to next node
+		walker.NodeIdx = (walker.NodeIdx + 1) % len(walker.Nodes)
+		return
+	}
+
+	// Move towards target node
+	moveDist := walker.Speed * dt
+	if moveDist > horizontalDist {
+		moveDist = horizontalDist
+	}
+
+	t := moveDist / horizontalDist
+	walker.Position.X += dx * t
+	walker.Position.Y += dy * t
+
+	// Update velocity vector
+	if horizontalDist > 0 {
+		walker.Velocity.X = (dx / horizontalDist) * walker.Speed
+		walker.Velocity.Y = (dy / horizontalDist) * walker.Speed
+		walker.Velocity.Z = (dz / dist) * walker.Speed
+	}
+
+	walker.Position.Z = walker.Height
 }
 
 // sendBLEMessages sends synthetic BLE scan results
