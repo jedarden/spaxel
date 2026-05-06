@@ -1196,6 +1196,11 @@ func main() {
 		}
 
 		briefingHandler.SetProviders(zoneProvider, personProvider, predictionProvider, healthProvider)
+
+		// Wire briefing dashboard adapter to hub for morning briefing push
+		briefingDashboardAdapter := briefing.NewDashboardAdapter(briefingHandler.GetGenerator())
+		dashboardHub.SetBriefingProvider(briefingDashboardAdapter)
+
 		log.Printf("[INFO] Briefing providers wired up")
 	}
 
