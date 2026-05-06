@@ -2430,6 +2430,7 @@
 
     /**
      * Handle mouse move events for Fresnel ellipsoid hover detection.
+     * Fixed to raycast against both wireframe and fill meshes for reliable detection.
      */
     function onFresnelMouseMove(event) {
         if (!state.fresnelDebugVisible) return;
@@ -2447,23 +2448,43 @@
             // ellipsoids is an array of ellipsoid objects (zones 1-5 for this link)
             if (Array.isArray(ellipsoids)) {
                 ellipsoids.forEach(function(ellipsoid) {
-                    if (ellipsoid.fill) {
-                        var result = state.fresnelRaycaster.intersectObject(ellipsoid.fill, true);
-                        if (result.length > 0) {
-                            intersects.push(result[0]);
+                    // Raycast against both wireframe and fill for reliable detection
+                    // Wireframe is always present even when fill has 0 opacity (zones 2+)
+                    if (ellipsoid.wireframe) {
+                        var wireResult = state.fresnelRaycaster.intersectObject(ellipsoid.wireframe, true);
+                        if (wireResult.length > 0) {
+                            intersects.push(wireResult[0]);
+                        }
+                    }
+                    if (ellipsoid.fill && ellipsoid.fill.material.opacity > 0) {
+                        var fillResult = state.fresnelRaycaster.intersectObject(ellipsoid.fill, true);
+                        if (fillResult.length > 0) {
+                            intersects.push(fillResult[0]);
                         }
                     }
                 });
-            } else if (ellipsoids && ellipsoids.fill) {
+            } else if (ellipsoids) {
                 // Legacy: single ellipsoid
-                var result = state.fresnelRaycaster.intersectObject(ellipsoids.fill, true);
-                if (result.length > 0) {
-                    intersects.push(result[0]);
+                if (ellipsoids.wireframe) {
+                    var wireResult = state.fresnelRaycaster.intersectObject(ellipsoids.wireframe, true);
+                    if (wireResult.length > 0) {
+                        intersects.push(wireResult[0]);
+                    }
+                }
+                if (ellipsoids.fill && ellipsoids.fill.material.opacity > 0) {
+                    var fillResult = state.fresnelRaycaster.intersectObject(ellipsoids.fill, true);
+                    if (fillResult.length > 0) {
+                        intersects.push(fillResult[0]);
+                    }
                 }
             }
         });
 
         if (intersects.length > 0) {
+            // Sort by distance to get the closest intersection
+            intersects.sort(function(a, b) {
+                return a.distance - b.distance;
+            });
             var intersect = intersects[0];
             var linkID = intersect.object.userData.linkID;
 
