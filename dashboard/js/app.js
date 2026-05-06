@@ -2319,6 +2319,7 @@
     /**
      * Rebuild Fresnel zone ellipsoids for all active links.
      * Called when the overlay is toggled on or when links change.
+     * Shows zones 1-5 for each link, with zone 1 as green wireframe.
      */
     function rebuildFresnelDebugEllipsoids() {
         if (!state.fresnelDebugVisible) return;
@@ -2332,6 +2333,9 @@
 
         // Get node positions from Viz3D
         var nodeMeshes = (window.Viz3D && Viz3D.getNodeMeshes) ? Viz3D.getNodeMeshes() : new Map();
+
+        // Configuration: number of Fresnel zones to show (1-5)
+        var maxZones = state.fresnelMaxZones || 5;
 
         // Create ellipsoids for each active link
         state.links.forEach(function(link, linkID) {
@@ -2352,41 +2356,61 @@
             // Get channel from link's last CSI frame (default to 6 for 2.4 GHz)
             var channel = link.channel || 6;
 
-            // Get per-link health score from Viz3D
-            var healthScore = 0.5;
-            if (window.Viz3D && Viz3D.getLinkHealth) {
-                var healthData = Viz3D.getLinkHealth(linkID);
-                if (healthData) healthScore = healthData.score;
-            }
-            var color = getFresnelHealthColor(healthScore);
+            // Create multiple Fresnel zones (1-5) for this link
+            // Zone 1 is green (most sensitive), zones 2-5 are cyan-to-blue gradient
+            var ellipsoids = window.Fresnel.addFresnelEllipsoidMultiZone(tx, rx, channel, maxZones, {
+                zone1Color: 0x66bb6a,  // Green for zone 1
+                wireframeOpacity: 0.5,   // Reduced opacity for better visibility
+                fillOpacity: 0.08         // Low fill opacity
+            });
 
-            // Create Fresnel ellipsoid
-            var ellipsoid = window.Fresnel.addFresnelEllipsoid(tx, rx, channel, color);
-            if (ellipsoid) {
-                // Store link info in userData for interactions
-                ellipsoid.wireframe.userData.linkID = linkID;
-                ellipsoid.wireframe.userData.txMAC = txMAC;
-                ellipsoid.wireframe.userData.rxMAC = rxMAC;
-                ellipsoid.wireframe.userData.healthScore = healthScore;
-                ellipsoid.fill.userData.linkID = linkID;
-                ellipsoid.fill.userData.txMAC = txMAC;
-                ellipsoid.fill.userData.rxMAC = rxMAC;
-                ellipsoid.fill.userData.healthScore = healthScore;
+            if (ellipsoids && ellipsoids.length > 0) {
+                // Store link info in userData for interactions on each ellipsoid
+                ellipsoids.forEach(function(ellipsoid, index) {
+                    var zoneNumber = index + 1;
+                    if (ellipsoid.wireframe) {
+                        ellipsoid.wireframe.userData.linkID = linkID;
+                        ellipsoid.wireframe.userData.zoneNumber = zoneNumber;
+                        ellipsoid.wireframe.userData.txMAC = txMAC;
+                        ellipsoid.wireframe.userData.rxMAC = rxMAC;
+                    }
+                    if (ellipsoid.fill) {
+                        ellipsoid.fill.userData.linkID = linkID;
+                        ellipsoid.fill.userData.zoneNumber = zoneNumber;
+                        ellipsoid.fill.userData.txMAC = txMAC;
+                        ellipsoid.fill.userData.rxMAC = rxMAC;
+                    }
+                });
 
-                state.fresnelEllipsoids.set(linkID, ellipsoid);
+                // Store array of ellipsoids for this link
+                state.fresnelEllipsoids.set(linkID, ellipsoids);
             }
         });
 
-        console.log('[Fresnel Debug] Created ' + state.fresnelEllipsoids.size + ' Fresnel ellipsoids');
+        // Count total ellipsoids created
+        var totalEllipsoids = 0;
+        state.fresnelEllipsoids.forEach(function(ellipsoids) {
+            totalEllipsoids += ellipsoids.length;
+        });
+        console.log('[Fresnel Debug] Created ' + totalEllipsoids + ' Fresnel ellipsoids for ' + state.fresnelEllipsoids.size + ' links');
     }
 
     /**
      * Clear all Fresnel debug ellipsoids from the scene.
      */
     function clearFresnelDebugEllipsoids() {
-        state.fresnelEllipsoids.forEach(function(ellipsoid) {
-            if (window.Fresnel) {
-                window.Fresnel.removeFresnelEllipsoid(ellipsoid);
+        state.fresnelEllipsoids.forEach(function(ellipsoids) {
+            if (Array.isArray(ellipsoids)) {
+                ellipsoids.forEach(function(ellipsoid) {
+                    if (window.Fresnel) {
+                        window.Fresnel.removeFresnelEllipsoid(ellipsoid);
+                    }
+                });
+            } else if (ellipsoids) {
+                // Legacy: single ellipsoid per link
+                if (window.Fresnel) {
+                    window.Fresnel.removeFresnelEllipsoid(ellipsoids);
+                }
             }
         });
         state.fresnelEllipsoids.clear();
@@ -2419,10 +2443,23 @@
         state.fresnelRaycaster.setFromCamera(state.fresnelMouse, camera);
 
         var intersects = [];
-        state.fresnelEllipsoids.forEach(function(ellipsoid) {
-            var result = state.fresnelRaycaster.intersectObject(ellipsoid.fill, true);
-            if (result.length > 0) {
-                intersects.push(result[0]);
+        state.fresnelEllipsoids.forEach(function(ellipsoids) {
+            // ellipsoids is an array of ellipsoid objects (zones 1-5 for this link)
+            if (Array.isArray(ellipsoids)) {
+                ellipsoids.forEach(function(ellipsoid) {
+                    if (ellipsoid.fill) {
+                        var result = state.fresnelRaycaster.intersectObject(ellipsoid.fill, true);
+                        if (result.length > 0) {
+                            intersects.push(result[0]);
+                        }
+                    }
+                });
+            } else if (ellipsoids && ellipsoids.fill) {
+                // Legacy: single ellipsoid
+                var result = state.fresnelRaycaster.intersectObject(ellipsoids.fill, true);
+                if (result.length > 0) {
+                    intersects.push(result[0]);
+                }
             }
         });
 
@@ -2522,10 +2559,11 @@
         }
 
         var link = state.links.get(linkID);
-        var ellipsoid = state.fresnelEllipsoids.get(linkID);
-        if (!link || !ellipsoid) return;
+        var ellipsoids = state.fresnelEllipsoids.get(linkID);
+        if (!link || !ellipsoids || !Array.isArray(ellipsoids) || ellipsoids.length === 0) return;
 
-        var data = ellipsoid.data;
+        // Get data from the first ellipsoid (zone 1)
+        var data = ellipsoids[0].data;
         var healthScore = 0.5;
         if (window.Viz3D && Viz3D.getLinkHealth) {
             var healthData = Viz3D.getLinkHealth(linkID);
@@ -2539,11 +2577,15 @@
         var txLabel = txNode ? (txNode.name || txNode.mac) : txMAC;
         var rxLabel = rxNode ? (rxNode.name || rxNode.mac) : rxMAC;
 
+        // Count how many zones are shown
+        var zoneCount = ellipsoids.length;
+
         tooltip.innerHTML =
             '<strong>Link:</strong> ' + txLabel + ' to ' + rxLabel + '<br>' +
-            '<strong>Fresnel radius at midpoint:</strong> ' + data.b.toFixed(2) + ' m<br>' +
+            '<strong>Fresnel zones:</strong> ' + zoneCount + ' (zone 1 shown in green)<br>' +
+            '<strong>Zone 1 radius at midpoint:</strong> ' + data.b.toFixed(2) + ' m<br>' +
             '<strong>Link distance:</strong> ' + data.d.toFixed(2) + ' m<br>' +
-            '<strong>Wavelength:</strong> ' + data.lambda.toFixed(3) + ' m (ch ' + data.channel + ')<br>' +
+            '<strong>Wavelength:</strong> ' + (data.lambda * 1000).toFixed(1) + ' mm (ch ' + data.channel + ')<br>' +
             '<strong>Link health:</strong> ' + Math.round(healthScore * 100) + '%';
 
         tooltip.style.display = 'block';
