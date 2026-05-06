@@ -260,6 +260,10 @@ body.simple-mode {
     display: none;
 }
 
+.morning-briefing-card {
+    border-top: 3px solid var(--blue-9);
+}
+
 .sleep-summary-header {
     display: flex;
     align-items: center;
@@ -322,6 +326,58 @@ body.simple-mode {
 .simple-sleep__poor {
     color: var(--alert);
     font-weight: 500;
+}
+
+/* ── Morning Briefing Sections ─────────────────────────────────────────────────── */
+.simple-briefing-section {
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: var(--bg-hover);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.simple-briefing-section--sleep {
+    background: rgba(76, 175, 80, 0.08);
+    border-left: 3px solid var(--ok);
+}
+
+.simple-briefing-section--overnight_events {
+    background: rgba(245, 158, 11, 0.08);
+    border-left: 3px solid var(--warn);
+}
+
+.simple-briefing-section--system_health {
+    background: rgba(100, 116, 139, 0.08);
+    border-left: 3px solid var(--slate-8);
+}
+
+.simple-briefing-section--predictions {
+    background: rgba(59, 130, 246, 0.08);
+    border-left: 3px solid var(--blue-8);
+}
+
+.simple-briefing-section--alert {
+    background: rgba(229, 72, 77, 0.08);
+    border-left: 3px solid var(--alert);
+    padding: 12px;
+}
+
+.simple-briefing-section--people {
+    background: rgba(59, 130, 246, 0.08);
+    border-left: 3px solid var(--blue-9);
+}
+
+.simple-briefing-section--anomaly {
+    background: rgba(245, 158, 11, 0.08);
+    border-left: 3px solid var(--warn);
+}
+
+.simple-briefing-section--learning {
+    background: rgba(16, 185, 129, 0.08);
+    border-left: 3px solid var(--teal-9);
 }
 
 /* ── Room Cards Section ───────────────────────────────────────────────────── */

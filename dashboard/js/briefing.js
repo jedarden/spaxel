@@ -13,6 +13,7 @@
         currentBriefing: null,
         isVisible: false,
         isDismissed: false,
+        autoDismissTimer: null,
         settings: {
             enabled: true,
             time: '07:00',
@@ -268,10 +269,32 @@
         if (elements.indicator) {
             elements.indicator.classList.remove('visible');
         }
+
+        // Clear any existing auto-dismiss timer
+        if (briefingState.autoDismissTimer) {
+            clearTimeout(briefingState.autoDismissTimer);
+        }
+
+        // Set up auto-dismiss timer (10 seconds)
+        briefingState.autoDismissTimer = setTimeout(function() {
+            if (briefingState.isVisible && !briefingState.isDismissed) {
+                hideBriefing();
+                // Show indicator that briefing was auto-dismissed
+                if (elements.indicator && briefingState.currentBriefing) {
+                    elements.indicator.classList.add('visible');
+                }
+            }
+        }, 10000); // 10 seconds
     }
 
     // Hide briefing card
     function hideBriefing() {
+        // Clear auto-dismiss timer
+        if (briefingState.autoDismissTimer) {
+            clearTimeout(briefingState.autoDismissTimer);
+            briefingState.autoDismissTimer = null;
+        }
+
         if (elements.card) {
             elements.card.classList.remove('visible');
             briefingState.isVisible = false;
@@ -283,6 +306,12 @@
 
     // Dismiss briefing for today
     function dismissBriefing() {
+        // Clear auto-dismiss timer
+        if (briefingState.autoDismissTimer) {
+            clearTimeout(briefingState.autoDismissTimer);
+            briefingState.autoDismissTimer = null;
+        }
+
         hideBriefing();
         briefingState.isDismissed = true;
 

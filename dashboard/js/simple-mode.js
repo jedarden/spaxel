@@ -517,26 +517,74 @@
     }
 
     // ============================================
-    // Sleep Summary
+    // Morning Briefing (includes sleep summary)
     // ============================================
     function loadSleepSummary() {
-        fetch('/api/sleep/summary')
+        // First try to load the full morning briefing
+        const today = new Date().toISOString().split('T')[0];
+
+        fetch('/api/briefing/today')
             .then(function(response) {
-                if (!response.ok) return null;
-                return response.json();
+                if (!response.ok) {
+                    // Fall back to sleep summary if briefing not available
+                    return fetch('/api/sleep/summary').then(r => r.json()).then(data => ({ type: 'sleep', data: data }));
+                }
+                return response.json().then(briefing => ({ type: 'briefing', data: briefing }));
             })
-            .then(function(data) {
-                if (!data || !data.date) {
+            .then(function(result) {
+                if (!result || !result.data) {
                     if (dom.sleepCard) dom.sleepCard.hidden = true;
                     return;
                 }
 
-                state.sleepData = data;
-                renderSleepSummary();
+                if (result.type === 'briefing') {
+                    renderMorningBriefing(result.data);
+                } else {
+                    state.sleepData = result.data;
+                    renderSleepSummary();
+                }
             })
             .catch(function(error) {
-                console.error('[Simple Mode] Error loading sleep summary:', error);
+                console.error('[Simple Mode] Error loading morning briefing:', error);
+                if (dom.sleepCard) dom.sleepCard.hidden = true;
             });
+    }
+
+    function renderMorningBriefing(briefing) {
+        if (!dom.sleepCard || !dom.sleepContent) return;
+
+        // Update date header
+        const dateEl = document.getElementById('sleep-date');
+        if (dateEl) {
+            const date = new Date(briefing.date || Date.now());
+            dateEl.textContent = date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        // Build HTML from briefing sections or content
+        let html = '';
+        if (briefing.sections && briefing.sections.length > 0) {
+            briefing.sections.forEach(function(section) {
+                html += '<div class="simple-briefing-section simple-briefing-section--' + section.type + '">' +
+                    escapeHtml(section.content) +
+                    '</div>';
+            });
+        } else if (briefing.content) {
+            // Parse content into paragraphs
+            const paragraphs = briefing.content.split('\n\n').filter(p => p.trim());
+            paragraphs.forEach(function(p) {
+                html += '<div class="simple-briefing-section">' + escapeHtml(p) + '</div>';
+            });
+        } else {
+            html = '<p>No briefing data available.</p>';
+        }
+
+        dom.sleepContent.innerHTML = html;
+        dom.sleepCard.hidden = false;
+        dom.sleepCard.classList.add('morning-briefing-card');
     }
 
     function renderSleepSummary() {
