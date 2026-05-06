@@ -8,26 +8,45 @@ import (
 // PropagationModel computes expected CSI amplitude using a two-ray model
 // (direct path + first-order reflections) with wall attenuation.
 type PropagationModel struct {
-	space   *Space
-	txPower float64 // Transmit power in dBm (default -30)
+	space           *Space
+	txPower         float64 // Transmit power in dBm (default -30)
+	reflectionCoeff float64 // Reflection coefficient (power, dimensionless)
 }
 
 // NewPropagationModel creates a new propagation model for the given space.
 func NewPropagationModel(space *Space) *PropagationModel {
 	return &PropagationModel{
-		space:   space,
-		txPower: -30.0, // Default TX power
+		space:           space,
+		txPower:         -30.0, // Default TX power
+		reflectionCoeff: 0.3,   // Default reflection coefficient
 	}
+}
+
+// SetTXPower sets the transmit power in dBm
+func (pm *PropagationModel) SetTXPower(power float64) {
+	pm.txPower = power
+}
+
+// SetReflectionCoefficient sets the reflection coefficient (power ratio)
+func (pm *PropagationModel) SetReflectionCoefficient(coeff float64) {
+	pm.reflectionCoeff = coeff
+}
+
+// RayResult represents the result of a ray propagation computation
+type RayResult struct {
+	PathLength    float64 // Total path length in meters
+	Power         float64 // Linear power (mW-equivalent)
+	Phase         float64 // Phase in radians
+	ReflectionIdx int     // 0 = direct, 1+ = reflection index
 }
 
 // AmplitudeAt computes the expected CSI amplitude at a walker position
 // for a link between TX and RX nodes. This is the primary method used
 // by the simulator to generate synthetic CSI data.
 //
-// The model uses:
-// 1. Log-distance path loss: PL(d) = 40 + 20*log10(d) dB
-// 2. Wall attenuation: sum of losses for walls intersecting the direct path
-// 3. First-order reflection: strongest single-bounce reflection off walls
+// The model uses a two-ray propagation model:
+// 1. Direct path: TX -> walker -> RX (bistatic scattering)
+// 2. First-order reflections: TX -> wall/floor/ceiling -> RX
 //
 // Returns a normalized amplitude value suitable for deltaRMS computation.
 func (pm *PropagationModel) AmplitudeAt(tx, rx, walker Point) float64 {
@@ -38,50 +57,311 @@ func (pm *PropagationModel) AmplitudeAt(tx, rx, walker Point) float64 {
 		return 0.0
 	}
 
-	// Calculate direct path distance
-	directPath := tx.Distance(rx) // TX -> RX direct
-	if zone > 5 {
-		// Outside zone 5, no meaningful contribution
-		return 0.0
+	// Compute signal with walker present (scattering model)
+	signalWithWalker := pm.computeSignalStrength(tx, rx, walker)
+
+	// Compute signal without walker (empty room baseline)
+	signalEmptyRoom := pm.computeEmptyRoomSignal(tx, rx)
+
+	// deltaRMS is the relative change
+	// deltaRMS = |amplitude(W) - amplitude(empty_room)| / amplitude(empty_room)
+	if signalEmptyRoom < 1e-9 {
+		// Avoid division by zero
+		return signalWithWalker * 1000.0
 	}
 
-	// Compute path loss in dB
-	pathLossDB := pm.pathLoss(directPath)
+	deltaRMS := math.Abs(signalWithWalker-signalEmptyRoom) / signalEmptyRoom
 
-	// Compute wall attenuation for direct path
-	wallLoss := pm.wallAttenuation(tx, rx, pm.space)
+	// Apply Fresnel zone modulation (zone 1 has highest effect)
+	zoneModulation := fresnelZoneModulation(zone)
+	deltaRMS *= zoneModulation
 
-	// Total received power (dBm)
-	rxPowerDBm := pm.txPower - pathLossDB - wallLoss
+	// Clamp to reasonable range [0, 0.3]
+	if deltaRMS < 0 {
+		deltaRMS = 0
+	}
+	if deltaRMS > 0.3 {
+		deltaRMS = 0.3
+	}
 
-	// Convert dBm to linear power
-	// P(mW) = 10^((dBm + 30)/10)
-	rxPowerLinear := math.Pow(10.0, (rxPowerDBm+30.0)/10.0)
+	return deltaRMS
+}
 
-	// Compute received power with first-order reflection
-	reflectionPower := pm.reflectionPower(tx, rx, walker, pm.space)
+// computeSignalStrength computes the received signal strength when a walker
+// is present at the given position. Uses bistatic scattering model:
+// - Direct path: TX -> walker -> RX
+// - Reflected paths: TX -> wall -> RX
+func (pm *PropagationModel) computeSignalStrength(tx, rx, walker Point) float64 {
+	// Direct bistatic path: TX -> walker -> RX
+	d1 := tx.Distance(walker)
+	d2 := walker.Distance(rx)
+	directPathLen := d1 + d2
+
+	// Path loss for direct path
+	directPathLoss := pm.pathLoss(directPathLen)
+
+	// Wall attenuation for TX->walker and walker->RX segments
+	wallLoss := pm.wallAttenuation(tx, walker, pm.space)
+	wallLoss += pm.wallAttenuation(walker, rx, pm.space)
+
+	// Direct received power (dBm)
+	directPowerDBm := pm.txPower - directPathLoss - wallLoss
+
+	// Convert to linear power
+	directPowerLinear := math.Pow(10.0, (directPowerDBm+30.0)/10.0)
+
+	// Add first-order reflections
+	reflectionPower := pm.computeReflectionPower(tx, rx)
 
 	// Combine direct and reflected power (coherent sum approximation)
 	// In reality, these would interfere, but for simulation we use power addition
-	totalPower := rxPowerLinear + reflectionPower
+	totalPower := directPowerLinear + reflectionPower
 
-	// Add Fresnel zone modulation
-	// Zone 1 has highest sensitivity, zone 5 has lowest
-	zoneModulation := fresnelZoneModulation(zone)
+	return totalPower
+}
 
-	// Normalize to deltaRMS-like value (0-0.2 range typical)
-	// This scaling matches the deltaRMS thresholds used in live detection
-	amplitude := totalPower * zoneModulation * 1000.0
+// computeEmptyRoomSignal computes the received signal strength in an empty room
+// (no walker present). Uses TX -> RX direct path plus reflections.
+func (pm *PropagationModel) computeEmptyRoomSignal(tx, rx Point) float64 {
+	// Direct path length
+	directPathLen := tx.Distance(rx)
 
-	// Clamp to reasonable range
-	if amplitude < 0 {
-		amplitude = 0
+	// Path loss for direct path
+	directPathLoss := pm.pathLoss(directPathLen)
+
+	// Wall attenuation for direct TX->RX path
+	wallLoss := pm.wallAttenuation(tx, rx, pm.space)
+
+	// Direct received power (dBm)
+	directPowerDBm := pm.txPower - directPathLoss - wallLoss
+
+	// Convert to linear power
+	directPowerLinear := math.Pow(10.0, (directPowerDBm+30.0)/10.0)
+
+	// Add first-order reflections
+	reflectionPower := pm.computeReflectionPower(tx, rx)
+
+	// Combine direct and reflected power
+	totalPower := directPowerLinear + reflectionPower
+
+	return totalPower
+}
+
+// computeReflectionPower computes the total power from all first-order reflections.
+// This includes wall reflections, floor reflections, and ceiling reflections.
+// Only the strongest reflection per surface type is retained.
+func (pm *PropagationModel) computeReflectionPower(tx, rx Point) float64 {
+	maxPower := 0.0
+
+	// Try each wall as a potential reflector
+	for _, wall := range pm.space.GetWalls() {
+		reflectionPoint, valid := pm.computeWallReflectionPoint(tx, rx, wall)
+		if !valid {
+			continue
+		}
+
+		// Compute reflected path length
+		dReflect := tx.Distance(reflectionPoint) + reflectionPoint.Distance(rx)
+
+		// Compute path loss for reflected path
+		reflectPathLoss := pm.pathLoss(dReflect)
+
+		// Wall penetration loss (signal passes through wall to reflect, or reflects off surface)
+		// For reflection, we use the material's reflection coefficient
+		// Harder surfaces (metal, concrete) reflect more
+		materialReflectionCoeff := pm.materialReflectionCoefficient(wall.Material)
+
+		// Reflected power
+		// P_refl = P_tx × R × PL(d_refl)
+		reflectionPowerDBm := pm.txPower - reflectPathLoss + 10*math.Log10(materialReflectionCoeff)
+
+		// Convert to linear
+		reflectionPowerLinear := math.Pow(10.0, (reflectionPowerDBm+30.0)/10.0)
+
+		if reflectionPowerLinear > maxPower {
+			maxPower = reflectionPowerLinear
+		}
 	}
-	if amplitude > 0.3 {
-		amplitude = 0.3
+
+	// Floor reflection (Z = 0 plane)
+	if floorPower := pm.computeFloorReflectionPower(tx, rx); floorPower > maxPower {
+		maxPower = floorPower
 	}
 
-	return amplitude
+	// Ceiling reflection (Z = room height)
+	if ceilingPower := pm.computeCeilingReflectionPower(tx, rx); ceilingPower > maxPower {
+		maxPower = ceilingPower
+	}
+
+	return maxPower
+}
+
+// materialReflectionCoefficient returns the reflection coefficient for a material.
+// Higher values = more reflective (less absorption).
+func (pm *PropagationModel) materialReflectionCoefficient(material WallMaterial) float64 {
+	// Base reflection coefficient
+	baseCoeff := pm.reflectionCoeff
+
+	// Modify based on material properties
+	switch material {
+	case MaterialMetal:
+		return 0.9 // Metal reflects most signal
+	case MaterialGlass:
+		return 0.7 // Glass is reflective
+	case MaterialBrick, MaterialConcrete:
+		return 0.5 // Brick/concrete are somewhat reflective
+	case MaterialDrywall:
+		return baseCoeff // Use default
+	default:
+		return baseCoeff
+	}
+}
+
+// computeWallReflectionPoint computes the specular reflection point on a wall segment
+// for a ray from tx to rx. Returns the reflection point and a validity flag.
+func (pm *PropagationModel) computeWallReflectionPoint(tx, rx Point, wall WallSegment) (Point, bool) {
+	// For a vertical wall, we compute the 2D reflection point on the XY plane
+	// and then use the average Z height.
+
+	// Project to 2D (ignore Z for wall reflection calculation)
+	tx2D := Point{X: tx.X, Y: tx.Y}
+	rx2D := Point{X: rx.X, Y: rx.Y}
+	wallP1 := Point{X: wall.P1.X, Y: wall.P1.Y}
+	wallP2 := Point{X: wall.P2.X, Y: wall.P2.Y}
+
+	// Compute specular reflection point using image source method
+	// For a line segment, find the point that minimizes total path length
+
+	// Wall direction vector
+	wallDirX := wallP2.X - wallP1.X
+	wallDirY := wallP2.Y - wallP1.Y
+	wallLen := math.Sqrt(wallDirX*wallDirX + wallDirY*wallDirY)
+	if wallLen < 0.01 {
+		return Point{}, false // Wall too short
+	}
+
+	// Normalize wall direction
+	wallDirX /= wallLen
+	wallDirY /= wallLen
+
+	// Wall normal (perpendicular to wall direction)
+	normalX := -wallDirY
+	normalY := wallDirX
+
+	// Check if TX and RX are on opposite sides of the wall
+	// Vector from wall point to TX
+	txToWallX := tx2D.X - wallP1.X
+	txToWallY := tx2D.Y - wallP1.Y
+
+	// Vector from wall point to RX
+	rxToWallX := rx2D.X - wallP1.X
+	rxToWallY := rx2D.Y - wallP1.Y
+
+	// Check if TX and RX are on same side of infinite line containing wall
+	txSide := txToWallX*normalX + txToWallY*normalY
+	rxSide := rxToWallX*normalX + rxToWallY*normalY
+
+	// For valid reflection, TX and RX should be on same side
+	// (otherwise the signal would pass through the wall, not reflect)
+	if txSide*rxSide < 0 {
+		// Opposite sides - signal would pass through wall
+		// This is handled by wall attenuation, not reflection
+		return Point{}, false
+	}
+
+	// Compute reflection point using projection
+	// The reflection point is where the angle of incidence equals angle of reflection
+	// For a flat wall, this is the point on the wall that the ray would hit
+
+	// Project TX onto wall line
+	txProjX := wallP1.X
+	txProjY := wallP1.Y
+	txToWallDirX := tx2D.X - txProjX
+	txToWallDirY := tx2D.Y - txProjY
+	txProj := txToWallDirX*wallDirX + txToWallDirY*wallDirY
+
+	// Compute reflection point parameter t along wall segment
+	// Using image source method: reflect RX across wall to get RX', then find intersection
+	// For simplicity, use midpoint projection
+	t := txProj
+
+	// Clamp to segment
+	if t < 0 {
+		t = 0
+	} else if t > wallLen {
+		t = wallLen
+	}
+
+	reflectionX := wallP1.X + t*wallDirX
+	reflectionY := wallP1.Y + t*wallDirY
+
+	// Use average Z height for reflection point
+	reflectionZ := (tx.Z + rx.Z) / 2
+
+	// Check if reflection point is within wall height bounds
+	wallMinZ := math.Min(wall.P1.Z, wall.P2.Z)
+	wallMaxZ := math.Max(wall.P1.Z, wall.P2.Z) + wall.Height
+
+	if reflectionZ < wallMinZ || reflectionZ > wallMaxZ {
+		return Point{}, false // Reflection point outside wall height
+	}
+
+	return Point{X: reflectionX, Y: reflectionY, Z: reflectionZ}, true
+}
+
+// computeFloorReflectionPower computes reflection power from the floor (Z=0 plane).
+func (pm *PropagationModel) computeFloorReflectionPower(tx, rx Point) float64 {
+	// Floor reflection point (mirror of average height across Z=0)
+	floorZ := 0.0
+
+	// Reflection point in XY is the midpoint
+	reflectionX := (tx.X + rx.X) / 2
+	reflectionY := (tx.Y + rx.Y) / 2
+
+	reflectionPoint := Point{X: reflectionX, Y: reflectionY, Z: floorZ}
+
+	// Compute reflected path length
+	dReflect := tx.Distance(reflectionPoint) + reflectionPoint.Distance(rx)
+
+	// Path loss for reflected path
+	reflectPathLoss := pm.pathLoss(dReflect)
+
+	// Floor reflection coefficient (concrete/floor)
+	floorCoeff := 0.4 // Typical floor reflection
+
+	// Reflected power
+	reflectionPowerDBm := pm.txPower - reflectPathLoss + 10*math.Log10(floorCoeff)
+	reflectionPowerLinear := math.Pow(10.0, (reflectionPowerDBm+30.0)/10.0)
+
+	return reflectionPowerLinear
+}
+
+// computeCeilingReflectionPower computes reflection power from the ceiling.
+func (pm *PropagationModel) computeCeilingReflectionPower(tx, rx Point) float64 {
+	// Get ceiling height from space bounds
+	_, _, _, _, _, maxZ := pm.space.Bounds()
+	ceilingZ := maxZ
+
+	// Reflection point in XY is the midpoint
+	reflectionX := (tx.X + rx.X) / 2
+	reflectionY := (tx.Y + rx.Y) / 2
+
+	reflectionPoint := Point{X: reflectionX, Y: reflectionY, Z: ceilingZ}
+
+	// Compute reflected path length
+	dReflect := tx.Distance(reflectionPoint) + reflectionPoint.Distance(rx)
+
+	// Path loss for reflected path
+	reflectPathLoss := pm.pathLoss(dReflect)
+
+	// Ceiling reflection coefficient (drywall/ceiling)
+	ceilingCoeff := 0.3 // Typical ceiling reflection
+
+	// Reflected power
+	reflectionPowerDBm := pm.txPower - reflectPathLoss + 10*math.Log10(ceilingCoeff)
+	reflectionPowerLinear := math.Pow(10.0, (reflectionPowerDBm+30.0)/10.0)
+
+	return reflectionPowerLinear
 }
 
 // pathLoss computes path loss in dB using log-distance model.
@@ -99,124 +379,19 @@ func (pm *PropagationModel) pathLoss(distance float64) float64 {
 	return PL0 + 10*n*math.Log10(distance/d0)
 }
 
-// wallAttenuation computes total wall attenuation for the TX->RX path.
-// Returns dB loss from walls intersecting the direct path.
-func (pm *PropagationModel) wallAttenuation(tx, rx Point, space *Space) float64 {
+// wallAttenuation computes total wall attenuation for a path.
+// Returns dB loss from walls intersecting the path.
+func (pm *PropagationModel) wallAttenuation(from, to Point, space *Space) float64 {
 	totalLoss := 0.0
 
 	// Check all walls in the space
 	for _, wall := range space.GetWalls() {
-		if wall.IntersectsLine(tx, rx) {
+		if wall.IntersectsLine(from, to) {
 			totalLoss += WallPenetrationLoss(wall.Material)
 		}
 	}
 
 	return totalLoss
-}
-
-// reflectionPower computes power from the strongest first-order reflection.
-// This simulates signals bouncing off walls before reaching the receiver.
-func (pm *PropagationModel) reflectionPower(tx, rx, walker Point, space *Space) float64 {
-	maxReflectionPower := 0.0
-
-	// Try each wall as a potential reflector
-	for _, wall := range pm.space.GetWalls() {
-		// Compute reflection point on wall segment
-		reflectionPoint, valid := pm.computeReflectionPoint(tx, rx, wall, pm.space)
-		if !valid {
-			continue
-		}
-
-		// Check if reflection path is plausible
-		// TX -> reflection point -> RX
-		dReflect := tx.Distance(reflectionPoint) + reflectionPoint.Distance(rx)
-
-		// Check if walker is near the reflection path
-		// Use a simple proximity check: walker should be within 2m of reflection point
-		if walker.Distance(reflectionPoint) > 2.0 {
-			continue
-		}
-
-		// Compute path loss for reflected path
-	reflectPathLoss := pm.pathLoss(dReflect)
-
-		// Wall reflects some of the signal (not all)
-		// Reflection coefficient R (power): 0.3 for typical indoor surfaces
-		const R = 0.3
-
-		// Reflected power
-		reflectionPowerDBm := pm.txPower - reflectPathLoss - WallPenetrationLoss(wall.Material) + 10*math.Log10(R)
-		reflectionPowerLinear := math.Pow(10.0, (reflectionPowerDBm+30.0)/10.0)
-
-		if reflectionPowerLinear > maxReflectionPower {
-			maxReflectionPower = reflectionPowerLinear
-		}
-	}
-
-	return maxReflectionPower
-}
-
-// computeReflectionPoint computes the specular reflection point on a wall segment
-// for a ray from tx to rx. Returns the reflection point and a validity flag.
-func (pm *PropagationModel) computeReflectionPoint(tx, rx Point, wall WallSegment, space *Space) (Point, bool) {
-	// For a vertical wall (Z variation), we compute the 2D reflection point on the XY plane
-	// and then use the average Z height.
-
-	// Project to 2D (ignore Z for wall reflection calculation)
-	tx2D := Point{X: tx.X, Y: tx.Y}
-	wallP1 := Point{X: wall.P1.X, Y: wall.P1.Y}
-	wallP2 := Point{X: wall.P2.X, Y: wall.P2.Y}
-
-	// Compute reflection using vector math
-	// The reflection point is where the angle of incidence equals angle of reflection
-	// For a line segment, this can be computed geometrically.
-
-	// Wall direction vector
-	wallDir := Point{
-		X: wallP2.X - wallP1.X,
-		Y: wallP2.Y - wallP1.Y,
-	}
-	wallLen := math.Sqrt(wallDir.X*wallDir.X + wallDir.Y*wallDir.Y)
-	if wallLen < 0.01 {
-		return Point{}, false // Wall too short
-	}
-
-	// Normalize wall direction
-	wallDir.X /= wallLen
-	wallDir.Y /= wallLen
-
-	// Compute reflection point using formula for point on line segment
-	// that minimizes total path length
-	// This is a standard specular reflection calculation
-
-	// Vector from P1 to TX
-	v1 := Point{X: tx2D.X - wallP1.X, Y: tx2D.Y - wallP1.Y}
-
-	// Project v1 onto wall direction
-	t := v1.X*wallDir.X + v1.Y*wallDir.Y
-
-	// Reflection point (clamped to segment)
-	if t < 0 {
-		t = 0
-	} else if t > wallLen {
-		t = wallLen
-	}
-
-	reflectionX := wallP1.X + t*wallDir.X
-	reflectionY := wallP1.Y + t*wallDir.Y
-
-	// Use average Z height
-	reflectionZ := (tx.Z + rx.Z) / 2
-
-	// Check if reflection point is within wall height bounds
-	wallMinZ := math.Min(wall.P1.Z, wall.P2.Z)
-	wallMaxZ := math.Max(wall.P1.Z, wall.P2.Z) + wall.Height
-
-	if reflectionZ < wallMinZ || reflectionZ > wallMaxZ {
-		return Point{}, false // Reflection point outside wall height
-	}
-
-	return Point{X: reflectionX, Y: reflectionY, Z: reflectionZ}, true
 }
 
 // fresnelZoneModulation returns the sensitivity modulation factor for a Fresnel zone.
@@ -269,7 +444,7 @@ func (pm *PropagationModel) PhaseAtSubcarrier(tx, rx, walker Point, subcarrierIn
 	phase := 2 * math.Pi * float64(subcarrierIndex) * SubcarrierSpacing * (totalDist / C)
 
 	// Add small temporal variation for realism
-	temporalPhase := 0.1 * math.Sin(2*math.Pi*float64(frameNum)/100.0)
+	temporalPhase := 0.1 * math.Sin(2 * math.Pi * float64(frameNum) / 100.0)
 	phase += temporalPhase
 
 	// Normalize to [-π, π]
@@ -281,4 +456,86 @@ func (pm *PropagationModel) PhaseAtSubcarrier(tx, rx, walker Point, subcarrierIn
 	}
 
 	return phase
+}
+
+// ComputeRays computes all ray paths between TX and RX for detailed analysis.
+// Returns direct ray plus first-order reflections (walls, floor, ceiling).
+func (pm *PropagationModel) ComputeRays(tx, rx Point) []RayResult {
+	rays := make([]RayResult, 0, 1+len(pm.space.GetWalls())+2)
+
+	// Direct ray
+	directDist := tx.Distance(rx)
+	directPathLoss := pm.pathLoss(directDist)
+	directWallLoss := pm.wallAttenuation(tx, rx, pm.space)
+	directPowerDBm := pm.txPower - directPathLoss - directWallLoss
+	directPowerLinear := math.Pow(10.0, (directPowerDBm+30.0)/10.0)
+	directPhase := 2 * math.Pi * directDist / Wavelength
+
+	rays = append(rays, RayResult{
+		PathLength:    directDist,
+		Power:         directPowerLinear,
+		Phase:         directPhase,
+		ReflectionIdx: 0, // Direct path
+	})
+
+	// Wall reflections
+	for _, wall := range pm.space.GetWalls() {
+		reflectionPoint, valid := pm.computeWallReflectionPoint(tx, rx, wall)
+		if !valid {
+			continue
+		}
+
+		dReflect := tx.Distance(reflectionPoint) + reflectionPoint.Distance(rx)
+		reflectPathLoss := pm.pathLoss(dReflect)
+		materialCoeff := pm.materialReflectionCoefficient(wall.Material)
+		reflectionPowerDBm := pm.txPower - reflectPathLoss + 10*math.Log10(materialCoeff)
+		reflectionPowerLinear := math.Pow(10.0, (reflectionPowerDBm+30.0)/10.0)
+		reflectionPhase := 2 * math.Pi * dReflect / Wavelength
+
+		rays = append(rays, RayResult{
+			PathLength:    dReflect,
+			Power:         reflectionPowerLinear,
+			Phase:         reflectionPhase,
+			ReflectionIdx: len(rays),
+		})
+	}
+
+	// Floor reflection
+	_, _, _, _, _, maxZ := pm.space.Bounds()
+	floorZ := 0.0
+	reflectionZ := -((tx.Z + rx.Z) / 2)
+	reflectionPoint := Point{X: (tx.X + rx.X) / 2, Y: (tx.Y + rx.Y) / 2, Z: floorZ}
+	dReflect := tx.Distance(reflectionPoint) + reflectionPoint.Distance(Point{X: reflectionPoint.X, Y: reflectionPoint.Y, Z: reflectionZ})
+	floorCoeff := 0.4
+	floorPathLoss := pm.pathLoss(dReflect)
+	floorPowerDBm := pm.txPower - floorPathLoss + 10*math.Log10(floorCoeff)
+	floorPowerLinear := math.Pow(10.0, (floorPowerDBm+30.0)/10.0)
+	floorPhase := 2 * math.Pi * dReflect / Wavelength
+
+	rays = append(rays, RayResult{
+		PathLength:    dReflect,
+		Power:         floorPowerLinear,
+		Phase:         floorPhase,
+		ReflectionIdx: len(rays),
+	})
+
+	// Ceiling reflection
+	ceilingZ := maxZ
+	reflectionZ = ceilingZ + (ceilingZ - (tx.Z+rx.Z)/2)
+	reflectionPoint = Point{X: (tx.X + rx.X) / 2, Y: (tx.Y + rx.Y) / 2, Z: ceilingZ}
+	dReflect = tx.Distance(reflectionPoint) + reflectionPoint.Distance(Point{X: reflectionPoint.X, Y: reflectionPoint.Y, Z: reflectionZ})
+	ceilingCoeff := 0.3
+	ceilingPathLoss := pm.pathLoss(dReflect)
+	ceilingPowerDBm := pm.txPower - ceilingPathLoss + 10*math.Log10(ceilingCoeff)
+	ceilingPowerLinear := math.Pow(10.0, (ceilingPowerDBm+30.0)/10.0)
+	ceilingPhase := 2 * math.Pi * dReflect / Wavelength
+
+	rays = append(rays, RayResult{
+		PathLength:    dReflect,
+		Power:         ceilingPowerLinear,
+		Phase:         ceilingPhase,
+		ReflectionIdx: len(rays),
+	})
+
+	return rays
 }
