@@ -3168,6 +3168,15 @@
         <!-- Security Status Indicator (managed by SecurityPanel) -->
         <div class="status-item" id="security-status-container"></div>
         <div class="status-item" style="margin-left:auto; gap:6px;">
+            <button id="simple-mode-btn" onclick="window.location.href='/simple'" title="Switch to Simple Mode">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Simple
+            </button>
             <button id="pause-live-btn" onclick="SpaxelReplay && SpaxelReplay.pauseLive()" title="Pause live mode and enter replay">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px;">
                     <rect x="6" y="4" width="4" height="16"></rect>
@@ -4451,27 +4460,21 @@
     <nav class="app-mobile-nav">
         <ul class="app-mobile-nav__list">
             <li class="app-mobile-nav__item">
+                <a href="/simple" class="app-mobile-nav__link" aria-label="Simple mode">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    <span>Simple</span>
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
                 <a href="/live" class="app-mobile-nav__link app-mobile-nav__link--active" aria-label="Live view">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/></svg>
                     <span>Live</span>
                 </a>
             </li>
             <li class="app-mobile-nav__item">
-                <a href="/" class="app-mobile-nav__link" aria-label="Home">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
-                    <span>Home</span>
-                </a>
-            </li>
-            <li class="app-mobile-nav__item">
                 <a href="/fleet" class="app-mobile-nav__link" aria-label="Fleet">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
                     <span>Fleet</span>
-                </a>
-            </li>
-            <li class="app-mobile-nav__item">
-                <a href="/" class="app-mobile-nav__link" aria-label="Home">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
-                    <span>Home</span>
                 </a>
             </li>
         </ul>

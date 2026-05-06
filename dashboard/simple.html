@@ -2,871 +2,121 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Spaxel - Activity Feed</title>
+    <title>Spaxel - Simple Mode</title>
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/layout.css">
-    <link rel="stylesheet" href="css/timeline.css">
-    <link rel="stylesheet" href="css/notifications.css">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: var(--font-body);
-            background: var(--bg-page);
-            color: var(--text-primary);
-            overflow-x: hidden;
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
-        }
-
-        /* Header */
-        .simple-header {
-            position: sticky;
-            top: 0;
-            height: 56px;
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 16px;
-            padding-top: max(0px, env(safe-area-inset-top));
-            z-index: 100;
-        }
-
-        .simple-header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .simple-header .header-icon {
-            width: 24px;
-            height: 24px;
-            color: var(--blue-9);
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .header-btn {
-            background: transparent;
-            border: none;
-            padding: 8px;
-            border-radius: 8px;
-            cursor: pointer;
-            color: var(--text-secondary);
-            transition: background 0.2s;
-        }
-
-        .header-btn:hover {
-            background: var(--bg-hover);
-        }
-
-        .header-btn svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        /* Room Cards Section */
-        .room-cards-section {
-            padding: 16px;
-            background: var(--bg-page);
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .room-cards-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .room-cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 12px;
-        }
-
-        @media (max-width: 480px) {
-            .room-cards-grid {
-                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-                gap: 8px;
-            }
-        }
-
-        .room-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .room-card:hover {
-            border-color: var(--blue-9);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .room-card.occupied {
-            border-color: var(--ok-border);
-            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(76, 175, 80, 0.05) 100%);
-        }
-
-        .room-card.occupied::before {
-            content: '';
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 8px;
-            height: 8px;
-            background: var(--ok);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--ok);
-        }
-
-        .room-card-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .room-card-status {
-            font-size: 12px;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .room-card-occupants {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-top: 8px;
-        }
-
-        .occupant-badge {
-            font-size: 11px;
-            padding: 2px 6px;
-            background: var(--bg-hover);
-            border-radius: 4px;
-            color: var(--text-secondary);
-        }
-
-        .room-card.empty .room-card-status {
-            color: var(--text-muted);
-        }
-
-        /* Loading State */
-        .room-cards-loading {
-            text-align: center;
-            padding: 24px;
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-
-        .room-cards-loading::after {
-            content: '...';
-            animation: dots 1.5s steps(4, end) infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-
-        /* Timeline Section */
-        .timeline-section {
-            background: var(--bg-page);
-            min-height: calc(100vh - 200px);
-        }
-
-        .timeline-header-simple {
-            padding: 16px;
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .timeline-header-simple h2 {
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .filter-btn {
-            background: var(--bg-hover);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s;
-        }
-
-        .filter-btn:hover {
-            background: var(--bg-page);
-            border-color: var(--blue-9);
-        }
-
-        .filter-btn svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        /* Filter Panel */
-        .timeline-filter-panel {
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            padding: 16px;
-            display: none;
-        }
-
-        .timeline-filter-panel.visible {
-            display: block;
-        }
-
-        .filter-group {
-            margin-bottom: 16px;
-        }
-
-        .filter-group:last-child {
-            margin-bottom: 0;
-        }
-
-        .filter-group-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .filter-options {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .filter-checkbox {
-            display: none;
-        }
-
-        .filter-label {
-            padding: 6px 12px;
-            background: var(--bg-hover);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-            user-select: none;
-        }
-
-        .filter-checkbox:checked + .filter-label {
-            background: var(--blue-9);
-            color: white;
-            border-color: var(--blue-9);
-        }
-
-        .filter-select {
-            width: 100%;
-            padding: 10px 12px;
-            background: var(--bg-page);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 14px;
-            color: var(--text-primary);
-            cursor: pointer;
-        }
-
-        .filter-select:focus {
-            outline: none;
-            border-color: var(--blue-9);
-        }
-
-        /* Timeline Container */
-        #timeline-container {
-            padding: 16px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        /* Timeline Event Item */
-        .timeline-event {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-        }
-
-        .timeline-event:hover {
-            border-color: var(--blue-9);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        .timeline-event.selected {
-            border-color: var(--blue-9);
-            background: rgba(59, 130, 246, 0.05);
-        }
-
-        .timeline-event-header {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .event-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .event-icon svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        .event-icon.presence {
-            background: rgba(59, 130, 246, 0.1);
-            color: var(--blue-9);
-        }
-
-        .event-icon.zone {
-            background: rgba(34, 197, 94, 0.1);
-            color: var(--green-9);
-        }
-
-        .event-icon.alert {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--red-9);
-        }
-
-        .event-icon.system {
-            background: rgba(107, 114, 128, 0.1);
-            color: var(--gray-9);
-        }
-
-        .event-icon.learning {
-            background: rgba(168, 85, 247, 0.1);
-            color: var(--purple-9);
-        }
-
-        .timeline-event-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .event-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-
-        .event-meta {
-            font-size: 12px;
-            color: var(--text-secondary);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .event-tag {
-            padding: 2px 6px;
-            background: var(--bg-hover);
-            border-radius: 4px;
-            font-size: 11px;
-        }
-
-        .event-actions {
-            display: flex;
-            gap: 4px;
-        }
-
-        .event-action-btn {
-            background: transparent;
-            border: none;
-            padding: 4px;
-            cursor: pointer;
-            color: var(--text-muted);
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-
-        .event-action-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .event-action-btn.active {
-            color: var(--blue-9);
-        }
-
-        .event-action-btn svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        /* Loading & Empty States */
-        .timeline-loading {
-            text-align: center;
-            padding: 48px 24px;
-            color: var(--text-muted);
-        }
-
-        .timeline-empty {
-            text-align: center;
-            padding: 48px 24px;
-            color: var(--text-muted);
-        }
-
-        .timeline-empty svg {
-            width: 48px;
-            height: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .load-more-btn {
-            width: 100%;
-            padding: 16px;
-            background: var(--bg-hover);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .load-more-btn:hover {
-            background: var(--bg-card);
-            border-color: var(--blue-9);
-            color: var(--blue-9);
-        }
-
-        .load-more-btn.loading {
-            opacity: 0.7;
-            cursor: wait;
-        }
-
-        /* Connection Status Banner */
-        .connection-banner {
-            padding: 8px 16px;
-            background: var(--warn-bg);
-            border-bottom: 1px solid var(--warn-border);
-            color: var(--warn);
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .connection-banner.connected {
-            display: none;
-        }
-
-        /* Responsive */
-        @media (max-width: 640px) {
-            .simple-header {
-                height: 48px;
-                padding: 0 12px;
-            }
-
-            .simple-header h1 {
-                font-size: 18px;
-            }
-
-            .room-cards-section,
-            #timeline-container {
-                padding: 12px;
-            }
-
-            .timeline-event {
-                padding: 10px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="css/simple.css">
 </head>
-<body>
-    <!-- Connection Status Banner -->
-    <div id="connection-banner" class="connection-banner">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-            <line x1="12" y1="2" x2="12" y2="12"></line>
-        </svg>
-        <span>Connecting to Spaxel...</span>
+<body class="simple-mode">
+
+    <!-- ── Connection Status ── -->
+    <div id="connection-status" class="simple-status">
+        <span class="simple-status__dot simple-status__dot--connecting"></span>
+        <span class="simple-status__text">Connecting...</span>
     </div>
 
-    <!-- Header -->
+    <!-- ── Alert Banner ── -->
+    <div id="alert-banner" class="simple-alerts simple-alerts--warning hidden">
+        <div class="simple-alerts__content">
+            <strong id="alert-title">Alert</strong>
+            <span id="alert-message">Alert message here</span>
+        </div>
+        <button id="alert-dismiss" class="simple-alerts__dismiss">Dismiss</button>
+    </div>
+
+    <!-- ── Header ── -->
     <header class="simple-header">
-        <h1>
-            <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="simple-header__logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
-            Activity Feed
-        </h1>
-        <div class="header-actions">
-            <button class="header-btn" id="refresh-btn" title="Refresh">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M23 4v6h-6"></path>
-                    <path d="M1 20v-6h6"></path>
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                </svg>
-            </button>
-            <button class="header-btn" id="mode-toggle-btn" title="Switch to Expert Mode">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-            </button>
+            <span>Spaxel</span>
         </div>
+        <button id="mode-toggle" class="simple-header__toggle" title="Switch to Expert Mode">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Expert
+        </button>
     </header>
 
-    <!-- Room Cards Section -->
-    <section class="room-cards-section">
-        <h2 class="room-cards-title">Rooms</h2>
-        <div id="room-cards-grid" class="room-cards-grid">
-            <div class="room-cards-loading">Loading rooms</div>
-        </div>
-    </section>
+    <!-- ── Main Content ── -->
+    <main class="simple-main">
 
-    <!-- Timeline Section -->
-    <section class="timeline-section">
-        <div class="timeline-header-simple">
-            <h2>Activity</h2>
-            <button class="filter-btn" id="filter-toggle-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                </svg>
-                Filters
-            </button>
-        </div>
+        <!-- ── Quick Actions ── -->
+        <section class="quick-actions-section">
+            <h2 class="section-title">Quick Actions</h2>
+            <div class="quick-actions-grid">
+                <button id="action-security" class="simple-action-btn">
+                    <svg class="simple-action-btn__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span id="security-label">Arm Security</span>
+                </button>
+                <button id="action-rebaseline" class="simple-action-btn">
+                    <svg class="simple-action-btn__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                        <polyline points="9 11 12 14 22 4"></polyline>
+                    </svg>
+                    <span>Re-baseline</span>
+                </button>
+                <button id="action-silence" class="simple-action-btn">
+                    <svg class="simple-action-btn__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93L17.66 6.34C18.5 7.18 19 8.26 19 9.5c0 2.48-2.02 4.5-4.5 4.5S10 11.98 10 9.5c0-.61.16-1.19.45-1.71L7.65 12.59C8.47 14.61 10.36 16 12.5 16c3.59 0 6.5-2.91 6.5-6.5 0-1.63-.61-3.12-1.61-4.28l2.02-2.02c1.44 1.66 2.32 3.83 2.32 6.23 0 4.97-4.03 9-9 9-2.65 0-5.05-1.15-6.71-2.97l1.89-1.88z"></path>
+                    </svg>
+                    <span>Silence Alerts</span>
+                </button>
+            </div>
+        </section>
 
-        <!-- Filter Panel -->
-        <div id="filter-panel" class="timeline-filter-panel">
-            <div class="filter-group">
-                <div class="filter-group-title">Event Types</div>
-                <div class="filter-options">
-                    <input type="checkbox" id="filter-presence" class="filter-checkbox" checked>
-                    <label for="filter-presence" class="filter-label">Presence</label>
-
-                    <input type="checkbox" id="filter-zones" class="filter-checkbox" checked>
-                    <label for="filter-zones" class="filter-label">Zones</label>
-
-                    <input type="checkbox" id="filter-alerts" class="filter-checkbox" checked>
-                    <label for="filter-alerts" class="filter-label">Alerts</label>
-
-                    <input type="checkbox" id="filter-learning" class="filter-checkbox" checked>
-                    <label for="filter-learning" class="filter-label">Learning</label>
+        <!-- ── Sleep Summary Card ── -->
+        <section id="sleep-card" class="sleep-summary-card hidden">
+            <div class="sleep-summary-header">
+                <div class="sleep-summary-title">
+                    <svg class="sleep-summary-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <span>Morning Briefing</span>
                 </div>
+                <span id="sleep-date" class="sleep-summary-date"></span>
             </div>
+            <div id="sleep-content" class="sleep-summary-content"></div>
+        </section>
 
-            <div class="filter-group">
-                <div class="filter-group-title">Person</div>
-                <select id="filter-person" class="filter-select">
-                    <option value="">All People</option>
-                </select>
+        <!-- ── Room Cards ── -->
+        <section class="room-cards-section">
+            <h2 class="section-title">Rooms</h2>
+            <div id="zones-grid" class="zones-grid">
+                <p class="simple-zone-card simple-zone-card--loading">Loading rooms...</p>
             </div>
+        </section>
 
-            <div class="filter-group">
-                <div class="filter-group-title">Room</div>
-                <select id="filter-zone" class="filter-select">
-                    <option value="">All Rooms</option>
-                </select>
+        <!-- ── Activity Feed ── -->
+        <section class="activity-section">
+            <h2 class="section-title">Activity</h2>
+            <div id="activity-feed" class="activity-feed">
+                <p class="simple-feed__empty">Loading activity...</p>
             </div>
+        </section>
 
-            <div class="filter-group">
-                <div class="filter-group-title">Time Range</div>
-                <div class="filter-options">
-                    <button class="filter-label" data-range="today">Today</button>
-                    <button class="filter-label" data-range="7d">7 Days</button>
-                    <button class="filter-label" data-range="30d">30 Days</button>
-                </div>
-            </div>
-        </div>
+        <!-- ── System Status ── -->
+        <footer class="simple-footer">
+            <span id="system-status" class="system-status">Loading...</span>
+        </footer>
 
-        <!-- Timeline Container -->
-        <div id="timeline-container">
-            <div class="timeline-loading">Loading events...</div>
-        </div>
-    </section>
+    </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
 
     <!-- Scripts -->
-    <script type="module">
-        import * as Timeline from './js/timeline.js';
-
-        // ============================================
-        // Simple Page Controller
-        // ============================================
-        const SimplePage = {
-            state: {
-                zones: [],
-                websocket: null,
-                connected: false,
-                filters: {
-                    presence: true,
-                    zones: true,
-                    alerts: true,
-                    learning: true,
-                    person: '',
-                    zone: '',
-                    timeRange: '7d'
-                }
-            },
-
-            init() {
-                this.bindEvents();
-                this.connectWebSocket();
-                this.loadZones();
-                this.loadTimeline();
-                this.startPolling();
-            },
-
-            bindEvents() {
-                // Filter toggle
-                document.getElementById('filter-toggle-btn').addEventListener('click', () => {
-                    document.getElementById('filter-panel').classList.toggle('visible');
-                });
-
-                // Refresh button
-                document.getElementById('refresh-btn').addEventListener('click', () => {
-                    this.loadZones();
-                    Timeline.refresh();
-                });
-
-                // Mode toggle (simple -> expert)
-                document.getElementById('mode-toggle-btn').addEventListener('click', () => {
-                    window.location.href = '/live.html';
-                });
-
-                // Filter checkboxes
-                ['presence', 'zones', 'alerts', 'learning'].forEach(type => {
-                    document.getElementById(`filter-${type}`).addEventListener('change', (e) => {
-                        this.state.filters[type] = e.target.checked;
-                        this.applyFilters();
-                    });
-                });
-
-                // Person filter
-                document.getElementById('filter-person').addEventListener('change', (e) => {
-                    this.state.filters.person = e.target.value;
-                    this.applyFilters();
-                });
-
-                // Zone filter
-                document.getElementById('filter-zone').addEventListener('change', (e) => {
-                    this.state.filters.zone = e.target.value;
-                    this.applyFilters();
-                });
-
-                // Time range buttons
-                document.querySelectorAll('[data-range]').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        document.querySelectorAll('[data-range]').forEach(b => b.style.background = '');
-                        btn.style.background = 'var(--blue-9)';
-                        btn.style.color = 'white';
-                        btn.style.borderColor = 'var(--blue-9)';
-                        this.state.filters.timeRange = btn.dataset.range;
-                        this.loadTimeline();
-                    });
-                });
-            },
-
-            connectWebSocket() {
-                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${wsProtocol}//${window.location.host}/api/dashboard/ws`;
-
-                this.state.websocket = new WebSocket(wsUrl);
-
-                this.state.websocket.onopen = () => {
-                    this.state.connected = true;
-                    document.getElementById('connection-banner').classList.add('connected');
-                };
-
-                this.state.websocket.onclose = () => {
-                    this.state.connected = false;
-                    document.getElementById('connection-banner').classList.remove('connected');
-                    // Reconnect after 3 seconds
-                    setTimeout(() => this.connectWebSocket(), 3000);
-                };
-
-                this.state.websocket.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    this.handleWebSocketMessage(data);
-                };
-            },
-
-            handleWebSocketMessage(data) {
-                if (data.type === 'zone_delta' || data.type === 'zone_change') {
-                    this.loadZones();
-                }
-                if (data.type === 'event' || data.type === 'events_delta') {
-                    Timeline.prependEvent(data.payload || data);
-                }
-            },
-
-            async loadZones() {
-                try {
-                    const response = await fetch('/api/zones');
-                    if (!response.ok) throw new Error('Failed to load zones');
-                    const zones = await response.json();
-                    this.state.zones = zones;
-                    this.renderRoomCards(zones);
-                    this.populateFilterOptions(zones);
-                } catch (error) {
-                    console.error('Error loading zones:', error);
-                    document.getElementById('room-cards-grid').innerHTML =
-                        '<div class="room-cards-loading">Failed to load rooms</div>';
-                }
-            },
-
-            renderRoomCards(zones) {
-                const container = document.getElementById('room-cards-grid');
-
-                if (zones.length === 0) {
-                    container.innerHTML = '<div style="color: var(--text-muted); padding: 24px;">No rooms configured</div>';
-                    return;
-                }
-
-                container.innerHTML = zones.map(zone => {
-                    const isOccupied = zone.occupancy > 0;
-                    const statusText = isOccupied ?
-                        `${zone.occupancy} person${zone.occupancy > 1 ? 's' : ''}` :
-                        'Empty';
-
-                    const occupants = zone.people && zone.people.length > 0 ?
-                        zone.people.map(p => `<span class="occupant-badge">${p}</span>`).join('') : '';
-
-                    return `
-                        <div class="room-card ${isOccupied ? 'occupied' : 'empty'}" data-zone-id="${zone.id}">
-                            <div class="room-card-name">${zone.name}</div>
-                            <div class="room-card-status">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                </svg>
-                                ${statusText}
-                            </div>
-                            ${occupants ? `<div class="room-card-occupants">${occupants}</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
-
-                // Add click handlers for room cards
-                container.querySelectorAll('.room-card').forEach(card => {
-                    card.addEventListener('click', () => {
-                        const zoneId = card.dataset.zoneId;
-                        document.getElementById('filter-zone').value = zoneId;
-                        this.state.filters.zone = zoneId;
-                        this.applyFilters();
-                    });
-                });
-            },
-
-            populateFilterOptions(zones) {
-                const zoneSelect = document.getElementById('filter-zone');
-                const currentValue = zoneSelect.value;
-
-                zoneSelect.innerHTML = '<option value="">All Rooms</option>' +
-                    zones.map(z => `<option value="${z.id}">${z.name}</option>`).join('');
-
-                zoneSelect.value = currentValue;
-            },
-
-            loadTimeline() {
-                // Calculate time range
-                const now = new Date();
-                let since = new Date();
-
-                switch (this.state.filters.timeRange) {
-                    case 'today':
-                        since.setHours(0, 0, 0, 0);
-                        break;
-                    case '7d':
-                        since.setDate(now.getDate() - 7);
-                        break;
-                    case '30d':
-                        since.setDate(now.getDate() - 30);
-                        break;
-                }
-
-                // Initialize timeline with filters
-                Timeline.init({
-                    container: 'timeline-container',
-                    mode: 'simple',
-                    filters: {
-                        categories: this.state.filters,
-                        since: since.toISOString(),
-                        until: now.toISOString()
-                    }
-                });
-            },
-
-            applyFilters() {
-                Timeline.setFilters({
-                    categories: this.state.filters,
-                    person: this.state.filters.person,
-                    zone: this.state.filters.zone
-                });
-            },
-
-            startPolling() {
-                // Poll for zone updates every 30 seconds
-                setInterval(() => {
-                    this.loadZones();
-                }, 30000);
-            }
-        };
-
-        // Initialize on DOM ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => SimplePage.init());
-        } else {
-            SimplePage.init();
-        }
-    </script>
+    <script src="js/simple-mode.js"></script>
 </body>
 </html>
