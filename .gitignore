@@ -39,3 +39,6 @@ mothership/sim
 
 # Node dependencies (regenerated via npm ci)
 node_modules/
+/mothership/mothership
+/mothership/test_goroutine
+/mothership/test_syntax
