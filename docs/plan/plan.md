@@ -3370,6 +3370,74 @@ Pass criteria and fail criteria are listed explicitly under each scenario.
 
 ---
 
+## Installation & Onboarding Test Plan (Simulated ESP32 Devices)
+
+**Goal:** validate the entire new-user journey — fresh install → first-run setup → device onboarding → operational system — with **zero physical hardware**, deterministically, on every release in CI. This complements AS-1 (real ESP32) with an automated hardware-free equivalent. The emulated device is the ESP32-S3 node; the fixture is the `spaxel-sim` CSI/node simulator (built from source via `go build -o spaxel-sim ./cmd/sim` — the binary is a build artifact and is never committed).
+
+### The simulator as a test fixture
+
+`spaxel-sim` emulates one or more ESP32 nodes connecting to a running mothership and behaving like provisioned firmware:
+
+| Flag | Purpose |
+|---|---|
+| `--mothership ws://host:8080/...` | mothership WebSocket endpoint the virtual nodes connect to |
+| `--token <t>` | provisioning token presented at connect (auto-generated if empty) |
+| `--nodes N` | number of virtual ESP32 nodes |
+| `--walkers N` | synthetic people moving through the space (drives CSI + presence) |
+| `--ble` | emit simulated BLE advertisements (device-identity onboarding) |
+| `--rate Hz` / `--space WxDxH` / `--duration s` / `--seed` | CSI rate, room geometry, run length, reproducibility |
+
+**Emulates:** node→mothership WebSocket registration with a token, CSI frame emission, BLE advertisements, walker-driven signal perturbation, multi-node TX scheduling. **Does NOT emulate** (drive these through the REST/BLE-provisioning API with a stub instead of the radio): the physical USB-flash step and the dashboard's BLE Wi-Fi-credential handshake.
+
+### Scenarios (`IO-n`, Pass/Fail explicit, headless in CI, deterministic via `--seed`, fresh ephemeral volume)
+
+**IO-1: Fresh install / first boot**
+**Setup:** mothership container started with an empty data volume.
+**Steps:** GET `/`; complete first-run PIN setup (`POST /api/auth/setup`); poll `/api/health`.
+**Pass:** first-run setup page served (200) while no PIN exists; after setup, migrations run (log "Schema migration applied … All systems ready"), PIN persists, `/api/health` green, first-run detection now reports `pin_configured: true`; the server reaches ready with **no** node attached.
+**Fail:** setup page missing/loops, migrations don't run, or health never green within 30 s.
+
+**IO-2: Idempotent restart & upgrade-in-place**
+**Setup:** a configured install (PIN, >=1 onboarded node, zones).
+**Steps:** stop + restart on the same volume; separately restart on a newer image tag.
+**Pass:** no re-setup prompt; PIN/nodes/zones intact; on the newer image the log shows "Schema migration applied: version X -> Y" exactly once, prior data readable, a pre-upgrade DB backup exists.
+**Fail:** re-setup demanded, data lost, migration runs twice, or no backup written.
+
+**IO-3: Single simulated node onboards end-to-end**
+**Setup:** fresh install past IO-1.
+**Steps:** `spaxel-sim --mothership ws://localhost:8080/... --token $TOKEN --nodes 1 --ble --seed 1`; in the onboarding view accept the node and assign a label + 3D position.
+**Pass:** node connects with the token, transitions discovered->online, appears in `/api/nodes` with online=true within 10 s, and label/position persist (REST + MQTT discovery config published).
+**Fail:** node never online, valid token rejected, or label/position don't persist.
+
+**IO-4: Multi-node fleet bring-up**
+**Steps:** `spaxel-sim --nodes 6 --walkers 0 --ble --seed 1 --duration 120`.
+**Pass:** all 6 reach online; mothership assigns non-overlapping TX slots (no collision warnings in logs); `/api/nodes` shows 6 online; the fleet/coverage view computes a GDOP/coverage estimate; telemetry flows for every node.
+**Fail:** any node stuck offline, TX-slot collisions logged, or fleet view errors.
+
+**IO-5: Device-identity (BLE) onboarding**
+**Steps:** with `--ble`, register a simulated BLE address as a named person; run a walker carrying that identity.
+**Pass:** the BLE advertisement is ingested, the registry resolves it to the name, and a person-entered-zone event + the corresponding MQTT person topic are produced (per the implementation's actual topic scheme).
+**Fail:** BLE adv ignored or identity never resolves.
+
+**IO-6: Full new-user E2E (happy path) — HARD GATE**
+**Steps:** fresh install -> PIN -> onboard a 6-node fleet (IO-4) -> define 2 zones + 1 portal -> `spaxel-sim --nodes 6 --walkers 1 --seed 1 --duration 90`.
+**Pass:** within the run the walker produces a tracked blob, zone-presence and portal-crossing events fire, the timeline records them, and MQTT/HA auto-discovery entities for nodes + zones + persons are published — end-to-end from empty volume to live events, no hardware, no manual IP entry.
+**Fail:** any stage blocks, or no presence/zone events within the run.
+
+**IO-7..IO-11: Failure & edge onboarding** (Pass = graceful, observable handling; Fail = crash/hang/silent drop)
+- **IO-7 Provisioning timeout:** a node that connects then goes silent is marked stale/offline within the heartbeat window and surfaced in fleet status; no mothership crash.
+- **IO-8 Bad/expired token:** `--token bogus` is rejected with a clear error; node never enters the fleet; no zombie row.
+- **IO-9 Duplicate MAC:** two virtual nodes sharing a MAC -> second rejected or deterministically de-duplicated; no duplicate `nodes` rows.
+- **IO-10 Drop mid-onboard:** killing `spaxel-sim` during onboarding leaves the node re-onboardable; no half-provisioned lock.
+- **IO-11 Firmware-version skew:** a node reporting an old firmware version is flagged for OTA; onboarding completes and OTA can be initiated without losing the node (ties to AS-5).
+
+### Automation & resource budget
+
+- All `IO-*` run in CI via the acceptance harness (built from source; never a committed binary) against a container started from the release image, using `--seed` for determinism and `--duration` caps to bound runtime.
+- The simulator must stay within the per-process budgets in **Resource Limits & Performance Budgets**; the CI default (6 nodes + 1 walker, 90 s) must complete in < 2 min on a 4-core runner.
+- **Release gate:** **IO-1, IO-3, IO-4, IO-6 are hard-gate** — a release is blocked if the hardware-free install + onboarding journey fails.
+
+
 ## Anti-Patterns
 
 Things **NOT** to do and why. These are design constraints, not suggestions.
