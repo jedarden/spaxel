@@ -28,3 +28,14 @@ coverage.txt
 tmp/
 temp/
 *.tmp
+
+# Compiled binaries & build artifacts
+/sim
+/spaxel-sim
+/acceptance.test
+spaxel-sim
+mothership/sim
+*.test
+
+# Node dependencies (regenerated via npm ci)
+node_modules/
