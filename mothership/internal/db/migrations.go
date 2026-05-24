@@ -93,6 +93,11 @@ func AllMigrations() []Migration {
 			Description: "add predicted_enter to triggers table CHECK constraint",
 			Up:          migration_017_add_predicted_enter_trigger,
 		},
+		{
+			Version:     18,
+			Description: "add prediction subsystem tables",
+			Up:          migration_018_add_prediction_tables,
+		},
 	}
 }
 
@@ -948,4 +953,116 @@ func migration_017_add_predicted_enter_trigger(tx *sql.Tx) error {
 	}
 
 	return nil
+}
+
+// migration_018_add_prediction_tables creates all prediction subsystem tables.
+// Consolidates prediction.db and prediction_accuracy.db into the main database.
+func migration_018_add_prediction_tables(tx *sql.Tx) error {
+	schema := `
+	-- Zone transition history for probability models
+	CREATE TABLE IF NOT EXISTS zone_transitions_history (
+		id                    TEXT PRIMARY KEY,
+		person_id             TEXT    NOT NULL,
+		from_zone_id          TEXT    NOT NULL,
+		to_zone_id            TEXT    NOT NULL,
+		hour_of_week          INTEGER NOT NULL,
+		dwell_duration_minutes REAL    NOT NULL DEFAULT 0,
+		timestamp             INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_transitions_person_time ON zone_transitions_history(person_id, hour_of_week);
+	CREATE INDEX IF NOT EXISTS idx_transitions_from ON zone_transitions_history(from_zone_id);
+	CREATE INDEX IF NOT EXISTS idx_transitions_timestamp ON zone_transitions_history(timestamp);
+
+	-- Transition probability cache
+	CREATE TABLE IF NOT EXISTS transition_probabilities (
+		person_id     TEXT    NOT NULL,
+		hour_of_week  INTEGER NOT NULL,
+		from_zone_id  TEXT    NOT NULL,
+		to_zone_id    TEXT    NOT NULL,
+		probability   REAL    NOT NULL,
+		count         INTEGER NOT NULL,
+		last_computed INTEGER NOT NULL,
+		PRIMARY KEY (person_id, hour_of_week, from_zone_id, to_zone_id)
+	);
+
+	-- Dwell time statistics cache
+	CREATE TABLE IF NOT EXISTS dwell_times (
+		person_id       TEXT    NOT NULL,
+		zone_id         TEXT    NOT NULL,
+		hour_of_week    INTEGER NOT NULL,
+		mean_minutes    REAL    NOT NULL,
+		stddev_minutes  REAL    NOT NULL,
+		count           INTEGER NOT NULL,
+		last_computed   INTEGER NOT NULL,
+		PRIMARY KEY (person_id, zone_id, hour_of_week)
+	);
+
+	-- Person zone entry tracking
+	CREATE TABLE IF NOT EXISTS person_zone_entry (
+		person_id     TEXT    NOT NULL,
+		zone_id       TEXT    NOT NULL,
+		entry_time    INTEGER NOT NULL,
+		blob_id       INTEGER NOT NULL,
+		PRIMARY KEY (person_id, zone_id)
+	);
+
+	-- Recorded predictions for accuracy tracking
+	CREATE TABLE IF NOT EXISTS recorded_predictions (
+		id                   TEXT PRIMARY KEY,
+		person_id            TEXT    NOT NULL,
+		predicted_at         INTEGER NOT NULL,
+		target_time          INTEGER NOT NULL,
+		current_zone_id      TEXT    NOT NULL,
+		predicted_zone_id    TEXT    NOT NULL,
+		actual_zone_id       TEXT,
+		prediction_confidence REAL   NOT NULL,
+		horizon_minutes      INTEGER NOT NULL,
+		evaluated            INTEGER NOT NULL DEFAULT 0,
+		correct              INTEGER DEFAULT 0,
+		evaluated_at         INTEGER
+	);
+	CREATE INDEX IF NOT EXISTS idx_predictions_person ON recorded_predictions(person_id);
+	CREATE INDEX IF NOT EXISTS idx_predictions_target ON recorded_predictions(target_time);
+	CREATE INDEX IF NOT EXISTS idx_predictions_evaluated ON recorded_predictions(evaluated);
+	CREATE INDEX IF NOT EXISTS idx_predictions_person_target ON recorded_predictions(person_id, target_time);
+
+	-- Accuracy statistics summary
+	CREATE TABLE IF NOT EXISTS accuracy_stats (
+		person_id        TEXT    NOT NULL,
+		horizon_minutes  INTEGER NOT NULL,
+		total_predictions INTEGER NOT NULL,
+		correct_predictions INTEGER NOT NULL,
+		accuracy         REAL    NOT NULL,
+		window_start     INTEGER NOT NULL,
+		window_end       INTEGER NOT NULL,
+		last_updated     INTEGER NOT NULL,
+		PRIMARY KEY (person_id, horizon_minutes)
+	);
+
+	-- Zone occupancy patterns for time-based predictions
+	CREATE TABLE IF NOT EXISTS zone_occupancy_patterns (
+		zone_id            TEXT    NOT NULL,
+		hour_of_week       INTEGER NOT NULL,
+		occupancy_prob     REAL    NOT NULL,
+		mean_dwell_minutes REAL    NOT NULL,
+		stddev_dwell       REAL    NOT NULL,
+		sample_count       INTEGER NOT NULL,
+		last_computed      INTEGER NOT NULL,
+		PRIMARY KEY (zone_id, hour_of_week)
+	);
+
+	-- Zone occupancy history for pattern learning
+	CREATE TABLE IF NOT EXISTS zone_occupancy_history (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		zone_id     TEXT    NOT NULL,
+		person_id   TEXT,
+		enter_time  INTEGER NOT NULL,
+		exit_time   INTEGER,
+		duration_minutes REAL
+	);
+	CREATE INDEX IF NOT EXISTS idx_occupancy_zone ON zone_occupancy_history(zone_id);
+	CREATE INDEX IF NOT EXISTS idx_occupancy_enter ON zone_occupancy_history(enter_time);
+	`
+	_, err := tx.Exec(schema)
+	return err
 }

@@ -71,7 +71,8 @@ type ModelStore struct {
 	firstTransitionTime time.Time
 }
 
-// NewModelStore creates a new prediction model store.
+// NewModelStore creates a new prediction model store with its own database connection.
+// Deprecated: Use NewModelStoreWithDB to share the main database connection.
 func NewModelStore(dbPath string) (*ModelStore, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
@@ -91,6 +92,19 @@ func NewModelStore(dbPath string) (*ModelStore, error) {
 	if err := s.migrate(); err != nil {
 		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+
+	// Load first transition time
+	s.loadFirstTransitionTime()
+
+	return s, nil
+}
+
+// NewModelStoreWithDB creates a new prediction model store using an existing database connection.
+// Tables must have been created by the migration framework.
+func NewModelStoreWithDB(db *sql.DB) (*ModelStore, error) {
+	s := &ModelStore{
+		db: db,
 	}
 
 	// Load first transition time
@@ -182,9 +196,12 @@ func (s *ModelStore) loadFirstTransitionTime() {
 	}
 }
 
-// Close closes the database.
+// Close closes the database if we own it.
 func (s *ModelStore) Close() error {
-	return s.db.Close()
+	if s.path != "" {
+		return s.db.Close()
+	}
+	return nil
 }
 
 // RecordTransition records a zone transition event.

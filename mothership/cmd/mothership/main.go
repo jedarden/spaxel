@@ -874,12 +874,11 @@ func main() {
 	var predictionPredictor *prediction.Predictor
 	var predictionAccuracy *prediction.AccuracyTracker
 	var predictionHorizon *prediction.HorizonPredictor
-	predictionStore, err = prediction.NewModelStore(filepath.Join(cfg.DataDir, "prediction.db"))
+	predictionStore, err = prediction.NewModelStoreWithDB(mainDB)
 	if err != nil {
-		log.Printf("[WARN] Failed to open prediction store: %v", err)
+		log.Printf("[WARN] Failed to initialize prediction store: %v", err)
 	} else {
-		defer closeQuietly(predictionStore)
-		log.Printf("[INFO] Prediction store at %s", filepath.Join(cfg.DataDir, "prediction.db"))
+		log.Printf("[INFO] Prediction store using main database")
 
 		// Create history updater
 		predictionHistory = prediction.NewHistoryUpdater(predictionStore)
@@ -890,12 +889,11 @@ func main() {
 		}
 
 		// Create accuracy tracker
-		predictionAccuracy, err = prediction.NewAccuracyTracker(filepath.Join(cfg.DataDir, "prediction_accuracy.db"))
+		predictionAccuracy, err = prediction.NewAccuracyTrackerWithDB(mainDB)
 		if err != nil {
-			log.Printf("[WARN] Failed to open accuracy tracker: %v", err)
+			log.Printf("[WARN] Failed to initialize accuracy tracker: %v", err)
 		} else {
-			defer closeQuietly(predictionAccuracy)
-			log.Printf("[INFO] Prediction accuracy tracker at %s", filepath.Join(cfg.DataDir, "prediction_accuracy.db"))
+			log.Printf("[INFO] Prediction accuracy tracker using main database")
 		}
 
 		// Create predictor
