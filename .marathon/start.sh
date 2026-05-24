@@ -1,21 +1,32 @@
-#!/bin/bash
-# Start Spaxel marathon coding session with GLM-5 via ZAI proxy
+#!/usr/bin/env bash
+# spaxel Marathon Launcher — claude-code @ GLM-4.7 via ZAI proxy
 #
-# Launches in a dedicated tmux session. The marathon loop runs claude-code
-# configured to use GLM-5 through the ZAI Tailscale proxy.
+# Runs the central marathon-coding skill in a dedicated tmux session against this
+# repo. Each iteration reads .marathon/instruction.md and invokes headless
+# claude-code routed through the ZAI proxy, mirroring the live NEEDLE
+# claude-code-glm-4.7 agent.
+#
+# Usage:
+#   ./.marathon/start.sh                 # session "spaxel-marathon"
+#   ./.marathon/start.sh <session-name>  # custom session name
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MARATHON_DIR="/home/coding/Research/.claude/skills/marathon-coding"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+MARATHON_SKILL="/home/coding/claude-config/skills/marathon-coding"
 INSTRUCTION_FILE="$SCRIPT_DIR/instruction.md"
-SESSION_NAME="spaxel-glm5"
+LOG_DIR="$SCRIPT_DIR/logs"
+SESSION_NAME="${1:-spaxel-marathon}"
 
-# Verify prerequisites
-if ! command -v tmux &>/dev/null; then
-    echo "Error: tmux not installed"
-    exit 1
-fi
+# ZAI proxy — CURRENT endpoint is the apexalgo-iad Traefik vpn-entrypoint, NOT the
+# decommissioned ardenone-hub proxy this repo's old start.sh pointed at. This mirrors
+# the env of the live `claude-code-glm-4.7` NEEDLE agent.
+ZAI_BASE_URL="https://traefik-apexalgo-iad.tail1b1987.ts.net:8444"
+
+command -v tmux >/dev/null 2>&1 || { echo "Error: tmux not installed" >&2; exit 1; }
+[ -x "$MARATHON_SKILL/launcher.sh" ] || { echo "Error: marathon launcher missing: $MARATHON_SKILL/launcher.sh" >&2; exit 1; }
+[ -f "$INSTRUCTION_FILE" ] || { echo "Error: instruction file missing: $INSTRUCTION_FILE" >&2; exit 1; }
 
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     echo "Session '$SESSION_NAME' already exists."
@@ -24,44 +35,57 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     exit 1
 fi
 
-if [ ! -f "$INSTRUCTION_FILE" ]; then
-    echo "Error: Instruction file not found: $INSTRUCTION_FILE"
+# Guard against running concurrently with a NEEDLE worker on the same worktree.
+if pgrep -f "needle run --workspace $REPO_DIR" >/dev/null 2>&1; then
+    echo "Error: a NEEDLE worker is running against $REPO_DIR." >&2
+    echo "       Marathon + NEEDLE share one git worktree → contention." >&2
+    echo "       Stop it first:  needle stop -i <identifier>" >&2
     exit 1
 fi
 
-if [ ! -f "$MARATHON_DIR/launcher.sh" ]; then
-    echo "Error: Marathon launcher not found: $MARATHON_DIR/launcher.sh"
+# Preflight: any HTTP response = proxy is up; only a connection failure aborts.
+if ! curl -sk --max-time 8 -o /dev/null "$ZAI_BASE_URL"; then
+    echo "Error: ZAI proxy at $ZAI_BASE_URL is unreachable." >&2
+    echo "       Check Tailscale + the proxy on apexalgo-iad." >&2
     exit 1
 fi
+
+mkdir -p "$LOG_DIR"
+
+LOOP_CMD="cd '$REPO_DIR' && \
+    unset CLAUDECODE && \
+    export NODE_TLS_REJECT_UNAUTHORIZED=0 && \
+    export ANTHROPIC_BASE_URL='$ZAI_BASE_URL' && \
+    export ANTHROPIC_AUTH_TOKEN='proxy-handles-auth' && \
+    export ANTHROPIC_MODEL='glm-4.7' && \
+    export ANTHROPIC_DEFAULT_OPUS_MODEL='glm-4.7' && \
+    export ANTHROPIC_DEFAULT_SONNET_MODEL='glm-4.7' && \
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL='glm-4.7' && \
+    export CLAUDE_CODE_SUBAGENT_MODEL='glm-4.7' && \
+    export API_TIMEOUT_MS='900000' && \
+    export DISABLE_AUTOUPDATER=1 && \
+    export DISABLE_TELEMETRY=1 && \
+    '$MARATHON_SKILL/launcher.sh' \
+        --prompt '$INSTRUCTION_FILE' \
+        --model glm-4.7 \
+        --delay 10 \
+        --log-dir '$LOG_DIR'"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║         Spaxel Marathon — GLM-5 via ZAI Proxy               ║"
+echo "║          spaxel Marathon — claude-code @ GLM-4.7            ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
-echo ""
-echo "  Model:       GLM-5 (via zai-proxy-hub)"
-echo "  Subagents:   GLM-5-Turbo"
+echo "  Repo:        $REPO_DIR"
 echo "  Instruction: $INSTRUCTION_FILE"
 echo "  Session:     $SESSION_NAME"
-echo "  Working dir: /home/coding/spaxel"
+echo "  Model:       glm-4.7 (all tiers)"
+echo "  Proxy:       $ZAI_BASE_URL"
+echo "  Logs:        $LOG_DIR"
 echo ""
 
-# Create tmux session with GLM-5 env vars and run the marathon launcher
-tmux new-session -d -s "$SESSION_NAME" -c "/home/coding/spaxel" \
-    "export ANTHROPIC_BASE_URL='https://zai-proxy-mcp-ardenone-hub-ts.ardenone.com:8444' && \
-     export ANTHROPIC_AUTH_TOKEN='proxy-handles-auth' && \
-     export NODE_TLS_REJECT_UNAUTHORIZED=0 && \
-     export ANTHROPIC_MODEL='glm-5' && \
-     export ANTHROPIC_DEFAULT_OPUS_MODEL='glm-5' && \
-     export ANTHROPIC_DEFAULT_SONNET_MODEL='glm-5-turbo' && \
-     export ANTHROPIC_DEFAULT_HAIKU_MODEL='glm-4.7' && \
-     export CLAUDE_CODE_SUBAGENT_MODEL='glm-5-turbo' && \
-     export DISABLE_AUTOUPDATER=1 && \
-     export DISABLE_TELEMETRY=1 && \
-     $MARATHON_DIR/launcher.sh --instruction '$INSTRUCTION_FILE' --delay 10 --log-dir '$SCRIPT_DIR/logs'"
+tmux new-session -d -s "$SESSION_NAME" -c "$REPO_DIR" "$LOOP_CMD"
 
-echo "Session started in tmux: $SESSION_NAME"
-echo ""
+echo "Marathon running in tmux session: $SESSION_NAME"
 echo "  Attach:  tmux attach -t $SESSION_NAME"
-echo "  Detach:  Ctrl+B, D"
-echo "  Kill:    tmux kill-session -t $SESSION_NAME"
-echo "  Logs:    $SCRIPT_DIR/logs/"
+echo "  Detach:  Ctrl+B, D (while attached)"
+echo "  Stop:    tmux kill-session -t $SESSION_NAME"
+echo "  Logs:    ls $LOG_DIR/"
