@@ -425,3 +425,118 @@ func TestSegmentRotation(t *testing.T) {
 		t.Errorf("expected 1 segment file, got %d", len(files))
 	}
 }
+
+func TestPauseResumeWrites(t *testing.T) {
+	dir := t.TempDir()
+	mgr, err := NewManager(Config{
+		DataDir:        dir,
+		RetentionHours: 48,
+		BufferSize:     100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mgr.Close() //nolint:errcheck
+
+	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
+
+	// Write some frames before pausing
+	mgr.Write(linkID, []byte("frame-1"))
+	mgr.Write(linkID, []byte("frame-2"))
+	time.Sleep(50 * time.Millisecond)
+
+	// Pause writes
+	mgr.PauseWrites()
+	if !mgr.IsPaused() {
+		t.Error("IsPaused should return true after PauseWrites")
+	}
+
+	// Write while paused - these should be dropped
+	mgr.Write(linkID, []byte("frame-paused-1"))
+	mgr.Write(linkID, []byte("frame-paused-2"))
+	time.Sleep(50 * time.Millisecond)
+
+	// Resume writes
+	mgr.ResumeWrites()
+	if mgr.IsPaused() {
+		t.Error("IsPaused should return false after ResumeWrites")
+	}
+
+	// Write more frames after resuming
+	mgr.Write(linkID, []byte("frame-3"))
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify we only have 3 frames (frame-1, frame-2, frame-3)
+	// The paused frames should have been dropped
+	ch := mgr.ReadFrom(linkID, time.Now().Add(-time.Minute))
+	var frames [][]byte
+	for f := range ch {
+		frames = append(frames, f)
+	}
+
+	if len(frames) != 3 {
+		t.Fatalf("expected 3 frames (2 before pause + 1 after resume), got %d", len(frames))
+	}
+	if string(frames[0]) != "frame-1" {
+		t.Errorf("frame 0 = %q, want %q", frames[0], "frame-1")
+	}
+	if string(frames[1]) != "frame-2" {
+		t.Errorf("frame 1 = %q, want %q", frames[1], "frame-2")
+	}
+	if string(frames[2]) != "frame-3" {
+		t.Errorf("frame 2 = %q, want %q", frames[2], "frame-3")
+	}
+}
+
+func TestConcurrentPauseWrites(t *testing.T) {
+	dir := t.TempDir()
+	mgr, err := NewManager(Config{
+		DataDir:        dir,
+		RetentionHours: 48,
+		BufferSize:     100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mgr.Close() //nolint:errcheck
+
+	linkID := "AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"
+
+	var wg sync.WaitGroup
+
+	// Start goroutines that pause/resume and write concurrently
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				if j%10 == 0 {
+					mgr.PauseWrites()
+				} else if j%10 == 5 {
+					mgr.ResumeWrites()
+				}
+				mgr.Write(linkID, []byte{byte(id), byte(j)})
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// Resume to make sure we're not paused
+	mgr.ResumeWrites()
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify we got some frames (not all, due to pauses)
+	ch := mgr.ReadFrom(linkID, time.Now().Add(-time.Minute))
+	count := 0
+	for range ch {
+		count++
+	}
+
+	// Should have written some frames but not all (some dropped during pause)
+	if count == 0 {
+		t.Error("expected some frames to be written")
+	}
+	if count >= 500 { // 10 * 50
+		t.Errorf("expected fewer than 500 frames due to pauses, got %d", count)
+	}
+}

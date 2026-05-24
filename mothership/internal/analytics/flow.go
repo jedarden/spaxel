@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -17,9 +18,9 @@ import (
 const (
 	// Trajectory sampling thresholds
 	minMovementDistance = 0.2 // meters - only record segment if track moved > 0.2m
-	dwellSpeedThreshold  = 0.1 // m/s - speed below which counts as "dwell"
-	dwellPruneDays       = 90  // days - prune dwell data older than this
-	flowPruneDays        = 90  // days - prune trajectory segments older than this
+	dwellSpeedThreshold = 0.1 // m/s - speed below which counts as "dwell"
+	dwellPruneDays      = 90  // days - prune dwell data older than this
+	flowPruneDays       = 90  // days - prune trajectory segments older than this
 
 	// Flow computation cache duration
 	flowCacheMaxAge = 5 * time.Minute
@@ -28,20 +29,20 @@ const (
 	defaultGridCellM = 0.25 // meters
 
 	// Corridor detection thresholds
-	corridorMinSegments  = 10
-	corridorMaxVariance   = 0.3
-	corridorMinCellCount  = 3
+	corridorMinSegments    = 10
+	corridorMaxVariance    = 0.3
+	corridorMinCellCount   = 3
 	corridorRecomputeHours = 168 // 7 days
 )
 
 // TrajectorySegment represents a single movement segment for a tracked person.
 type TrajectorySegment struct {
-	ID        string    `json:"id"`
-	PersonID  string    `json:"person_id,omitempty"`
+	ID        string     `json:"id"`
+	PersonID  string     `json:"person_id,omitempty"`
 	FromXYZ   [3]float64 `json:"from_xyz"`
 	ToXYZ     [3]float64 `json:"to_xyz"`
-	Speed     float64   `json:"speed"`      // m/s at this step
-	Timestamp time.Time `json:"timestamp"`
+	Speed     float64    `json:"speed"` // m/s at this step
+	Timestamp time.Time  `json:"timestamp"`
 }
 
 // DwellAccumulator tracks stationary time per grid cell.
@@ -49,8 +50,8 @@ type DwellAccumulator struct {
 	GridX       int       `json:"grid_x"`
 	GridY       int       `json:"grid_y"`
 	PersonID    string    `json:"person_id,omitempty"`
-	Count       int       `json:"count"`      // number of stationary observations
-	DwellMs     int64     `json:"dwell_ms"`    // total dwell time in milliseconds
+	Count       int       `json:"count"`    // number of stationary observations
+	DwellMs     int64     `json:"dwell_ms"` // total dwell time in milliseconds
 	LastUpdated time.Time `json:"last_updated"`
 }
 
@@ -58,8 +59,8 @@ type DwellAccumulator struct {
 type FlowCell struct {
 	GridX        int     `json:"grid_x"`
 	GridY        int     `json:"grid_y"`
-	VX           float64 `json:"vx"`           // average X velocity component
-	VY           float64 `json:"vy"`           // average Y velocity component
+	VX           float64 `json:"vx"` // average X velocity component
+	VY           float64 `json:"vy"` // average Y velocity component
 	SegmentCount int     `json:"segment_count"`
 }
 
@@ -73,11 +74,11 @@ type FlowMap struct {
 
 // DwellHeatmap represents dwell time per grid cell.
 type DwellHeatmap struct {
-	Cells     []DwellCell `json:"cells"`
-	CellSizeM float64     `json:"cell_size_m"`
-	MaxCount  int         `json:"max_count"`
-	ComputedAt time.Time  `json:"computed_at"`
-	PersonID  string      `json:"person_id,omitempty"` // if filtered
+	Cells      []DwellCell `json:"cells"`
+	CellSizeM  float64     `json:"cell_size_m"`
+	MaxCount   int         `json:"max_count"`
+	ComputedAt time.Time   `json:"computed_at"`
+	PersonID   string      `json:"person_id,omitempty"` // if filtered
 }
 
 // DwellCell represents dwell data for a single cell in the heatmap.
@@ -90,13 +91,13 @@ type DwellCell struct {
 
 // DetectedCorridor represents a detected corridor region.
 type DetectedCorridor struct {
-	ID                string    `json:"id"`
+	ID                string     `json:"id"`
 	CentroidXYZ       [3]float64 `json:"centroid_xyz"`
 	DominantDirection [2]float64 `json:"dominant_direction_xy"` // normalized vector
-	LengthM           float64   `json:"length_m"`
-	WidthM            float64   `json:"width_m"`
-	CellCount         int       `json:"cell_count"`
-	LastComputed      time.Time `json:"last_computed"`
+	LengthM           float64    `json:"length_m"`
+	WidthM            float64    `json:"width_m"`
+	CellCount         int        `json:"cell_count"`
+	LastComputed      time.Time  `json:"last_computed"`
 }
 
 // cachedFlowMap holds a cached flow map with its creation time.
@@ -108,9 +109,9 @@ type cachedFlowMap struct {
 
 // FlowAccumulator subscribes to TrackManager updates and accumulates trajectory data.
 type FlowAccumulator struct {
-	mu      sync.RWMutex
-	db      *sql.DB
-	ownDB   bool // true if this instance opened the db and should close it
+	mu        sync.RWMutex
+	db        *sql.DB
+	ownDB     bool // true if this instance opened the db and should close it
 	cellSizeM float64
 	flowCache *cachedFlowMap
 	lastPrune time.Time
@@ -122,6 +123,9 @@ type FlowAccumulator struct {
 
 	// Track last waypoint per track for sampling
 	lastWaypoints map[string][3]float64 // track_id -> last position
+
+	// Pause control
+	paused atomic.Bool
 }
 
 // NewFlowAccumulatorFromPath opens a SQLite database at path and creates a new flow accumulator.
@@ -203,7 +207,13 @@ func (f *FlowAccumulator) InitSchema() error {
 
 // AddTrackUpdate processes a track update from the tracker.
 // personID may be empty if identity is unknown.
+// If writes are paused (due to low disk space), the update is ignored.
 func (f *FlowAccumulator) AddTrackUpdate(trackID string, x, y, z, vx, vy, vz float64, personID string) {
+	// Silently drop updates if paused (low disk space)
+	if f.paused.Load() {
+		return
+	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -262,6 +272,22 @@ func (f *FlowAccumulator) RemoveTrack(trackID string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.lastWaypoints, trackID)
+}
+
+// PauseWrites pauses crowd flow accumulation writes.
+// Track updates received while paused are silently dropped.
+func (f *FlowAccumulator) PauseWrites() {
+	f.paused.Store(true)
+}
+
+// ResumeWrites resumes crowd flow accumulation writes.
+func (f *FlowAccumulator) ResumeWrites() {
+	f.paused.Store(false)
+}
+
+// IsPaused returns whether writes are currently paused.
+func (f *FlowAccumulator) IsPaused() bool {
+	return f.paused.Load()
 }
 
 // markFlowDirty marks the flow cache as dirty.
@@ -566,9 +592,9 @@ func (f *FlowAccumulator) DetectCorridors() ([]DetectedCorridor, error) {
 
 	// Find corridor cells (high volume, low angular variance)
 	corridorCells := make(map[string]struct {
-		vx, vy        float64
-		angle         float64
-		segmentCount  int
+		vx, vy       float64
+		angle        float64
+		segmentCount int
 	})
 
 	for _, cell := range flowMap.Cells {
@@ -581,9 +607,9 @@ func (f *FlowAccumulator) DetectCorridors() ([]DetectedCorridor, error) {
 
 		key := cellKey(cell.GridX, cell.GridY)
 		corridorCells[key] = struct {
-			vx, vy         float64
-			angle          float64
-			segmentCount   int
+			vx, vy       float64
+			angle        float64
+			segmentCount int
 		}{
 			vx:           cell.VX,
 			vy:           cell.VY,
@@ -613,18 +639,18 @@ func (f *FlowAccumulator) DetectCorridors() ([]DetectedCorridor, error) {
 // corridorRegion represents a group of adjacent corridor cells.
 type corridorRegion struct {
 	cells map[string]struct {
-		x, y          int
-		vx, vy        float64
-		angle         float64
-		segmentCount  int
+		x, y         int
+		vx, vy       float64
+		angle        float64
+		segmentCount int
 	}
 }
 
 // findConnectedCorridorRegions groups adjacent corridor cells into regions.
 func (f *FlowAccumulator) findConnectedCorridorRegions(cells map[string]struct {
-	vx, vy        float64
-	angle         float64
-	segmentCount  int
+	vx, vy       float64
+	angle        float64
+	segmentCount int
 }) []corridorRegion {
 	visited := make(map[string]bool)
 	regions := []corridorRegion{}
@@ -637,10 +663,10 @@ func (f *FlowAccumulator) findConnectedCorridorRegions(cells map[string]struct {
 		// Start a new region with BFS
 		region := corridorRegion{
 			cells: make(map[string]struct {
-				x, y          int
-				vx, vy        float64
-				angle         float64
-				segmentCount  int
+				x, y         int
+				vx, vy       float64
+				angle        float64
+				segmentCount int
 			}),
 		}
 
@@ -656,10 +682,10 @@ func (f *FlowAccumulator) findConnectedCorridorRegions(cells map[string]struct {
 
 			x, y := parseCellKey(current)
 			region.cells[current] = struct {
-				x, y          int
-				vx, vy        float64
-				angle         float64
-				segmentCount  int
+				x, y         int
+				vx, vy       float64
+				angle        float64
+				segmentCount int
 			}{
 				x:            x,
 				y:            y,
@@ -754,13 +780,13 @@ func (f *FlowAccumulator) buildCorridorFromRegion(region corridorRegion) Detecte
 		float64(maxY-minY)*f.cellSizeM*domVX*domVX)
 
 	return DetectedCorridor{
-		ID:          generateCorridorID(),
-		CentroidXYZ: [3]float64{centroidX, centroidY, 0},
+		ID:                generateCorridorID(),
+		CentroidXYZ:       [3]float64{centroidX, centroidY, 0},
 		DominantDirection: [2]float64{domVX, domVY},
-		LengthM:     lengthM,
-		WidthM:      widthM,
-		CellCount:   len(region.cells),
-		LastComputed: time.Now(),
+		LengthM:           lengthM,
+		WidthM:            widthM,
+		CellCount:         len(region.cells),
+		LastComputed:      time.Now(),
 	}
 }
 
