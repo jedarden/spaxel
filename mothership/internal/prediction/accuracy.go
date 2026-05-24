@@ -24,39 +24,39 @@ const MinPredictionsForAccuracy = 10
 
 // RecordedPrediction represents a prediction made at a specific time.
 type RecordedPrediction struct {
-	ID                      string    `json:"id"`
-	PersonID                string    `json:"person_id"`
-	PredictedAt             time.Time `json:"predicted_at"`
-	TargetTime              time.Time `json:"target_time"`              // When the prediction targets
-	CurrentZoneID           string    `json:"current_zone_id"`
-	PredictedZoneID         string    `json:"predicted_zone_id"`        // Zone predicted at target time
-	ActualZoneID            string    `json:"actual_zone_id,omitempty"` // Actual zone at target time (filled later)
-	PredictionConfidence    float64   `json:"prediction_confidence"`
-	HorizonMinutes          int       `json:"horizon_minutes"`
-	Evaluated               bool      `json:"evaluated"`
-	Correct                 bool      `json:"correct,omitempty"`
-	EvaluatedAt             time.Time `json:"evaluated_at,omitempty"`
+	ID                   string    `json:"id"`
+	PersonID             string    `json:"person_id"`
+	PredictedAt          time.Time `json:"predicted_at"`
+	TargetTime           time.Time `json:"target_time"` // When the prediction targets
+	CurrentZoneID        string    `json:"current_zone_id"`
+	PredictedZoneID      string    `json:"predicted_zone_id"`        // Zone predicted at target time
+	ActualZoneID         string    `json:"actual_zone_id,omitempty"` // Actual zone at target time (filled later)
+	PredictionConfidence float64   `json:"prediction_confidence"`
+	HorizonMinutes       int       `json:"horizon_minutes"`
+	Evaluated            bool      `json:"evaluated"`
+	Correct              bool      `json:"correct,omitempty"`
+	EvaluatedAt          time.Time `json:"evaluated_at,omitempty"`
 }
 
 // AccuracyStats represents accuracy statistics for a person.
 type AccuracyStats struct {
-	PersonID            string    `json:"person_id"`
-	HorizonMinutes      int       `json:"horizon_minutes"`
-	TotalPredictions    int       `json:"total_predictions"`
-	CorrectPredictions  int       `json:"correct_predictions"`
-	Accuracy            float64   `json:"accuracy"`
-	WindowStart         time.Time `json:"window_start"`
-	WindowEnd           time.Time `json:"window_end"`
-	LastUpdated         time.Time `json:"last_updated"`
-	MeetsTarget         bool      `json:"meets_target"` // true if accuracy >= 75%
-	ConfusionMatrix     map[string]map[string]int `json:"confusion_matrix,omitempty"` // actual -> predicted -> count
+	PersonID           string                    `json:"person_id"`
+	HorizonMinutes     int                       `json:"horizon_minutes"`
+	TotalPredictions   int                       `json:"total_predictions"`
+	CorrectPredictions int                       `json:"correct_predictions"`
+	Accuracy           float64                   `json:"accuracy"`
+	WindowStart        time.Time                 `json:"window_start"`
+	WindowEnd          time.Time                 `json:"window_end"`
+	LastUpdated        time.Time                 `json:"last_updated"`
+	MeetsTarget        bool                      `json:"meets_target"`               // true if accuracy >= 75%
+	ConfusionMatrix    map[string]map[string]int `json:"confusion_matrix,omitempty"` // actual -> predicted -> count
 }
 
 // ZoneOccupancyPattern represents typical occupancy patterns for a zone.
 type ZoneOccupancyPattern struct {
 	ZoneID           string    `json:"zone_id"`
 	HourOfWeek       int       `json:"hour_of_week"`
-	OccupancyProb    float64   `json:"occupancy_probability"`    // P(occupied | hour)
+	OccupancyProb    float64   `json:"occupancy_probability"` // P(occupied | hour)
 	MeanDwellMinutes float64   `json:"mean_dwell_minutes"`
 	StddevDwell      float64   `json:"stddev_dwell_minutes"`
 	SampleCount      int       `json:"sample_count"`
@@ -65,9 +65,9 @@ type ZoneOccupancyPattern struct {
 
 // AccuracyTracker tracks prediction accuracy over time.
 type AccuracyTracker struct {
-	mu     sync.RWMutex
-	db     *sql.DB
-	path   string
+	mu   sync.RWMutex
+	db   *sql.DB
+	path string
 
 	// Pending predictions awaiting evaluation
 	pendingPredictions map[string]RecordedPrediction // id -> prediction
@@ -113,63 +113,88 @@ func NewAccuracyTracker(dbPath string) (*AccuracyTracker, error) {
 }
 
 func (t *AccuracyTracker) migrate() error {
+	// Create prediction accuracy schema version tracking table
 	_, err := t.db.Exec(`
-		CREATE TABLE IF NOT EXISTS recorded_predictions (
-			id                   TEXT PRIMARY KEY,
-			person_id            TEXT    NOT NULL,
-			predicted_at         INTEGER NOT NULL,
-			target_time          INTEGER NOT NULL,
-			current_zone_id      TEXT    NOT NULL,
-			predicted_zone_id    TEXT    NOT NULL,
-			actual_zone_id       TEXT,
-			prediction_confidence REAL   NOT NULL,
-			horizon_minutes      INTEGER NOT NULL,
-			evaluated            INTEGER NOT NULL DEFAULT 0,
-			correct              INTEGER DEFAULT 0,
-			evaluated_at         INTEGER
+		CREATE TABLE IF NOT EXISTS prediction_accuracy_schema_version (
+			version INTEGER PRIMARY KEY,
+			applied_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
 		);
-
-		CREATE INDEX IF NOT EXISTS idx_predictions_person ON recorded_predictions(person_id);
-		CREATE INDEX IF NOT EXISTS idx_predictions_target ON recorded_predictions(target_time);
-		CREATE INDEX IF NOT EXISTS idx_predictions_evaluated ON recorded_predictions(evaluated);
-		CREATE INDEX IF NOT EXISTS idx_predictions_person_target ON recorded_predictions(person_id, target_time);
-
-		CREATE TABLE IF NOT EXISTS accuracy_stats (
-			person_id        TEXT    NOT NULL,
-			horizon_minutes  INTEGER NOT NULL,
-			total_predictions INTEGER NOT NULL,
-			correct_predictions INTEGER NOT NULL,
-			accuracy         REAL    NOT NULL,
-			window_start     INTEGER NOT NULL,
-			window_end       INTEGER NOT NULL,
-			last_updated     INTEGER NOT NULL,
-			PRIMARY KEY (person_id, horizon_minutes)
-		);
-
-		CREATE TABLE IF NOT EXISTS zone_occupancy_patterns (
-			zone_id            TEXT    NOT NULL,
-			hour_of_week       INTEGER NOT NULL,
-			occupancy_prob     REAL    NOT NULL,
-			mean_dwell_minutes REAL    NOT NULL,
-			stddev_dwell       REAL    NOT NULL,
-			sample_count       INTEGER NOT NULL,
-			last_computed      INTEGER NOT NULL,
-			PRIMARY KEY (zone_id, hour_of_week)
-		);
-
-		CREATE TABLE IF NOT EXISTS zone_occupancy_history (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			zone_id     TEXT    NOT NULL,
-			person_id   TEXT,
-			enter_time  INTEGER NOT NULL,
-			exit_time   INTEGER,
-			duration_minutes REAL
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_occupancy_zone ON zone_occupancy_history(zone_id);
-		CREATE INDEX IF NOT EXISTS idx_occupancy_enter ON zone_occupancy_history(enter_time);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Check current version
+	var currentVersion int
+	err = t.db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM prediction_accuracy_schema_version`).Scan(&currentVersion)
+	if err != nil {
+		return err
+	}
+
+	// Version 1: initial accuracy tracking tables
+	if currentVersion < 1 {
+		_, err = t.db.Exec(`
+			CREATE TABLE IF NOT EXISTS recorded_predictions (
+				id                   TEXT PRIMARY KEY,
+				person_id            TEXT    NOT NULL,
+				predicted_at         INTEGER NOT NULL,
+				target_time          INTEGER NOT NULL,
+				current_zone_id      TEXT    NOT NULL,
+				predicted_zone_id    TEXT    NOT NULL,
+				actual_zone_id       TEXT,
+				prediction_confidence REAL   NOT NULL,
+				horizon_minutes      INTEGER NOT NULL,
+				evaluated            INTEGER NOT NULL DEFAULT 0,
+				correct              INTEGER DEFAULT 0,
+				evaluated_at         INTEGER
+			);
+			CREATE INDEX IF NOT EXISTS idx_predictions_person ON recorded_predictions(person_id);
+			CREATE INDEX IF NOT EXISTS idx_predictions_target ON recorded_predictions(target_time);
+			CREATE INDEX IF NOT EXISTS idx_predictions_evaluated ON recorded_predictions(evaluated);
+			CREATE INDEX IF NOT EXISTS idx_predictions_person_target ON recorded_predictions(person_id, target_time);
+
+			CREATE TABLE IF NOT EXISTS accuracy_stats (
+				person_id        TEXT    NOT NULL,
+				horizon_minutes  INTEGER NOT NULL,
+				total_predictions INTEGER NOT NULL,
+				correct_predictions INTEGER NOT NULL,
+				accuracy         REAL    NOT NULL,
+				window_start     INTEGER NOT NULL,
+				window_end       INTEGER NOT NULL,
+				last_updated     INTEGER NOT NULL,
+				PRIMARY KEY (person_id, horizon_minutes)
+			);
+
+			CREATE TABLE IF NOT EXISTS zone_occupancy_patterns (
+				zone_id            TEXT    NOT NULL,
+				hour_of_week       INTEGER NOT NULL,
+				occupancy_prob     REAL    NOT NULL,
+				mean_dwell_minutes REAL    NOT NULL,
+				stddev_dwell       REAL    NOT NULL,
+				sample_count       INTEGER NOT NULL,
+				last_computed      INTEGER NOT NULL,
+				PRIMARY KEY (zone_id, hour_of_week)
+			);
+
+			CREATE TABLE IF NOT EXISTS zone_occupancy_history (
+				id          INTEGER PRIMARY KEY AUTOINCREMENT,
+				zone_id     TEXT    NOT NULL,
+				person_id   TEXT,
+				enter_time  INTEGER NOT NULL,
+				exit_time   INTEGER,
+				duration_minutes REAL
+			);
+			CREATE INDEX IF NOT EXISTS idx_occupancy_zone ON zone_occupancy_history(zone_id);
+			CREATE INDEX IF NOT EXISTS idx_occupancy_enter ON zone_occupancy_history(enter_time);
+
+			INSERT INTO prediction_accuracy_schema_version (version) VALUES (1);
+		`)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (t *AccuracyTracker) loadPendingPredictions() error {
