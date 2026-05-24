@@ -588,10 +588,13 @@ func getSchemaVersion(t *testing.T, dataDir string) int {
 
 // IO3_SingleNodeOnboarding verifies a single node can onboard end-to-end.
 // Steps: fresh install past IO-1 -> spaxel-sim --nodes 1 --ble --seed 1
-//        -> accept node in onboarding view -> assign label + 3D position
+//
+//	-> accept node in onboarding view -> assign label + 3D position
+//
 // Pass: node connects with token, transitions discovered->online,
-//       appears in /api/nodes with online=true within 10s,
-//       label/position persist (REST + MQTT discovery config published)
+//
+//	appears in /api/nodes with online=true within 10s,
+//	label/position persist (REST + MQTT discovery config published)
 func IO3_SingleNodeOnboarding(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping IO-3 test in short mode")
@@ -816,8 +819,9 @@ func updateNode(t *testing.T, baseURL, mac, label string, position map[string]fl
 // IO4_MultiNodeFleetBringUp verifies a 6-node fleet can all come online simultaneously.
 // Steps: fresh install -> PIN -> spaxel-sim --nodes 6 --walkers 0 --ble --seed 1 --duration 120
 // Pass: all 6 reach online; mothership assigns non-overlapping TX slots (no collision warnings);
-//       /api/nodes shows 6 online; fleet/coverage view computes GDOP/coverage estimate;
-//       telemetry flows for every node
+//
+//	/api/nodes shows 6 online; fleet/coverage view computes GDOP/coverage estimate;
+//	telemetry flows for every node
 func IO4_MultiNodeFleetBringUp(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping IO-4 test in short mode")
@@ -991,9 +995,12 @@ func IO4_MultiNodeFleetBringUp(t *testing.T) {
 // IO6_FullNewUserE2E verifies the complete new-user journey from fresh install
 // to live tracking events with zones and portals.
 // Steps: fresh install -> PIN -> onboard 6-node fleet -> define 2 zones + 1 portal ->
-//        run spaxel-sim --nodes 6 --walkers 1 --seed 1 --duration 90
+//
+//	run spaxel-sim --nodes 6 --walkers 1 --seed 1 --duration 90
+//
 // Pass: tracked blob, zone-presence + portal-crossing events, timeline entries,
-//       MQTT/HA auto-discovery entities for nodes+zones+persons
+//
+//	MQTT/HA auto-discovery entities for nodes+zones+persons
 func IO6_FullNewUserE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping IO-6 test in short mode")
@@ -1160,15 +1167,15 @@ func IO6_FullNewUserE2E(t *testing.T) {
 
 	// Create portal between zones at x=3 (the shared boundary)
 	portalData := map[string]interface{}{
-		"name":     "Living Room - Kitchen",
-		"zone_a":   zone1ID,
-		"zone_b":   zone2ID,
-		"p1":       map[string]float64{"x": 3, "y": 1, "z": 0},
-		"p2":       map[string]float64{"x": 3, "y": 1, "z": 2.5},
-		"p3":       map[string]float64{"x": 3, "y": 2, "z": 0},
-		"width":    1.0,
-		"height":   2.5,
-		"enabled":  true,
+		"name":    "Living Room - Kitchen",
+		"zone_a":  zone1ID,
+		"zone_b":  zone2ID,
+		"p1":      map[string]float64{"x": 3, "y": 1, "z": 0},
+		"p2":      map[string]float64{"x": 3, "y": 1, "z": 2.5},
+		"p3":      map[string]float64{"x": 3, "y": 2, "z": 0},
+		"width":   1.0,
+		"height":  2.5,
+		"enabled": true,
 	}
 
 	portalBody, _ := json.Marshal(portalData)
