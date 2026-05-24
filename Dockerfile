@@ -52,9 +52,14 @@ RUN go mod download
 # Copy source code
 COPY mothership/ ./
 
+# Copy dashboard files into the mothership cmd/mothership directory for go:embed
+# The go:embed directive in cmd/mothership/main.go references the local dashboard directory
+COPY dashboard/ ./cmd/mothership/dashboard/
+
 # Build the binary with cross-platform support
 # CGO_ENABLED=0 because we use pure-Go SQLite (modernc.org/sqlite)
 # GOOS/GOARCH derived from TARGETPLATFORM for multi-arch builds
+# -tags=embed enables dashboard embedding via go:embed
 ARG VERSION=dev
 ARG TARGETPLATFORM
 RUN CGO_ENABLED=0 \
@@ -62,40 +67,27 @@ RUN CGO_ENABLED=0 \
     GOARCH=$(echo $TARGETPLATFORM | cut -d'/' -f3) \
     go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
+    -tags=embed \
     -o spaxel ./cmd/mothership
 
-# Stage 3: Minimal runtime image
-FROM debian:12-slim
+# Stage 3: Minimal runtime image - distroless nonroot
+# Dashboard is embedded in the Go binary via go:embed, not copied as files
+FROM gcr.io/distroless/static-debian12:nonroot
 ARG TARGETARCH=amd64
 
-# Install wget for health check
-RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && rm -rf /var/lib/apt/lists/*
-
-# Copy the binary
+# Copy the binary (dashboard is embedded via go:embed)
 COPY --from=builder /app/spaxel /spaxel
-
-# Copy dashboard static files (served from filesystem at runtime)
-COPY dashboard/ /dashboard/
 
 # Bake ESP32 firmware into the image so the mothership can seed it on first run.
 # The mothership copies /firmware/*.bin → /data/firmware/ at startup if not present.
 # Firmware is only included on amd64 builds (ESP-IDF is x86_64-only).
-# arm64 users must mount their own firmware via /data volume.
+# For non-amd64 builds, the placeholder from firmware-builder stage is included.
 COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/spaxel-firmware.bin
-# Remove placeholder file if present (non-amd64 builds)
-RUN if [ "$TARGETARCH" != "amd64" ]; then \
-        rm -f /firmware/spaxel-firmware.bin && \
-        echo "# Firmware not available on $TARGETARCH (amd64 only)" > /firmware/README.txt; \
-    fi
 
 VOLUME ["/data"]
 
 # Expose HTTP/WebSocket port
 EXPOSE 8080
-
-# Health check — verifies service responds with status=ok
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD wget -qO- http://localhost:8080/healthz | grep -q '"status":"ok"' || exit 1
 
 # Run as non-root
 ENTRYPOINT ["/spaxel"]

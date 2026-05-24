@@ -4,14 +4,16 @@ package main
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
 	"log"
 	"math"
 	"net"
 	"net/http"
 	"os"
-	"io"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -28,6 +30,7 @@ import (
 	"github.com/spaxel/mothership/internal/automation"
 	"github.com/spaxel/mothership/internal/autoupdate"
 	"github.com/spaxel/mothership/internal/ble"
+	"github.com/spaxel/mothership/internal/briefing"
 	appconfig "github.com/spaxel/mothership/internal/config"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/db"
@@ -39,11 +42,10 @@ import (
 	"github.com/spaxel/mothership/internal/falldetect"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/floorplan"
+	guidedtroubleshoot "github.com/spaxel/mothership/internal/guidedtroubleshoot"
 	"github.com/spaxel/mothership/internal/health"
 	featurehelp "github.com/spaxel/mothership/internal/help"
 	"github.com/spaxel/mothership/internal/ingestion"
-	"github.com/spaxel/mothership/internal/briefing"
-	guidedtroubleshoot "github.com/spaxel/mothership/internal/guidedtroubleshoot"
 	"github.com/spaxel/mothership/internal/learning"
 	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
@@ -52,18 +54,27 @@ import (
 	"github.com/spaxel/mothership/internal/ota"
 	"github.com/spaxel/mothership/internal/prediction"
 	"github.com/spaxel/mothership/internal/provisioning"
-	"github.com/spaxel/mothership/internal/recording"
 	"github.com/spaxel/mothership/internal/recorder"
+	"github.com/spaxel/mothership/internal/recording"
 	"github.com/spaxel/mothership/internal/replay"
 	"github.com/spaxel/mothership/internal/shutdown"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 	"github.com/spaxel/mothership/internal/sleep"
-	"github.com/spaxel/mothership/internal/timeline"
 	"github.com/spaxel/mothership/internal/startup"
+	"github.com/spaxel/mothership/internal/timeline"
 	"github.com/spaxel/mothership/internal/volume"
 	"github.com/spaxel/mothership/internal/webhook"
 	"github.com/spaxel/mothership/internal/zones"
 )
+
+// dashboardFS holds the embedded dashboard files (production builds only).
+// See dashboard_embed.go for the actual embed with //go:embed.
+// For development builds, this is an empty filesystem.
+var dashboardFS embed.FS
+
+// dashboardEmbedded indicates if the dashboard files are embedded in the binary.
+// If false, we fall back to filesystem serving for development.
+var dashboardEmbedded = false
 
 // Phase 5: Configuration constants
 const (
@@ -279,6 +290,47 @@ func findDashboardDir() string {
 	return ""
 }
 
+// serveEmbeddedFile serves a file from the embedded dashboard filesystem,
+// with fallback to filesystem-based serving for development.
+func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, filename string) {
+	if dashboardEmbedded {
+		sub, err := fs.Sub(dashboardFS, "dashboard")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		file, err := sub.Open(filename)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer file.Close()
+		stat, err := file.Stat()
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeContent(w, r, filename, stat.ModTime(), file.(interface {
+			Len() int64
+			io.ReadSeeker
+		}))
+		return
+	}
+
+	// Fallback: serve from filesystem for development
+	staticDir := findDashboardDir()
+	if staticDir == "" {
+		http.NotFound(w, r)
+		return
+	}
+	path := filepath.Join(staticDir, filename)
+	if _, err := os.Stat(path); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, path)
+}
+
 // fleetRoomConfigAdapter adapts fleet.Registry to notify.RoomConfigProvider.
 type fleetRoomConfigAdapter struct {
 	reg *fleet.Registry
@@ -342,11 +394,11 @@ type mqttClientAdapter struct {
 	client *mqtt.Client
 }
 
-func (a *mqttClientAdapter) IsConnected() bool { return a.client.IsConnected() }
-func (a *mqttClientAdapter) GetMothershipID() string { return a.client.GetMothershipID() }
-func (a *mqttClientAdapter) GetConfig() interface{} { return a.client.GetConfig() }
+func (a *mqttClientAdapter) IsConnected() bool                   { return a.client.IsConnected() }
+func (a *mqttClientAdapter) GetMothershipID() string             { return a.client.GetMothershipID() }
+func (a *mqttClientAdapter) GetConfig() interface{}              { return a.client.GetConfig() }
 func (a *mqttClientAdapter) Reconnect(ctx context.Context) error { return a.client.Reconnect(ctx) }
-func (a *mqttClientAdapter) PublishDiscoveryNow() error { return a.client.PublishDiscoveryNow() }
+func (a *mqttClientAdapter) PublishDiscoveryNow() error          { return a.client.PublishDiscoveryNow() }
 func (a *mqttClientAdapter) PublishPersonPresenceDiscovery(personID, personName string) error {
 	return a.client.PublishPersonPresenceDiscovery(personID, personName)
 }
@@ -514,7 +566,7 @@ func main() {
 	settingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Settings API registered at /api/settings")
 
-		// Note: Doctor API is registered after mdnsServer initialization
+	// Note: Doctor API is registered after mdnsServer initialization
 
 	// Phase 6: Integration Settings REST API (MQTT + system webhook)
 	// Note: mqttClient and webhookPublisher are wired below after they are initialized.
@@ -765,7 +817,9 @@ func main() {
 		if personName == "" {
 			personName = linkID
 		}
-		if err := sleepHandler.SaveRecord(personName, report); err != nil { log.Printf("[WARN] Failed to save sleep record: %v", err) }
+		if err := sleepHandler.SaveRecord(personName, report); err != nil {
+			log.Printf("[WARN] Failed to save sleep record: %v", err)
+		}
 
 		// Send notification for morning report
 		body := fmt.Sprintf("Sleep quality: %s (%.0f/100)", report.Metrics.QualityRating, report.Metrics.OverallScore)
@@ -1126,9 +1180,9 @@ func main() {
 						TimestampMs: time.Now().UnixMilli(),
 						Severity:    eventbus.SeverityInfo,
 						Detail: map[string]interface{}{
-							"action":     "rebaseline",
-							"zone":       zone,
-							"source":     "mqtt",
+							"action": "rebaseline",
+							"zone":   zone,
+							"source": "mqtt",
 						},
 					})
 				}); err != nil {
@@ -1138,13 +1192,13 @@ func main() {
 				// Subscribe to TypeSystem events for re-baseline handling
 				eventbus.SubscribeDefault(func(e eventbus.Event) {
 					if e.Type == eventbus.TypeSystem && e.Detail != nil {
-										detail, ok := e.Detail.(map[string]interface{})
-										if !ok {
-											return
-										}
-										if action, ok := detail["action"].(string); ok && action == "rebaseline" {
+						detail, ok := e.Detail.(map[string]interface{})
+						if !ok {
+							return
+						}
+						if action, ok := detail["action"].(string); ok && action == "rebaseline" {
 							zone := ""
-											if z, ok := detail["zone"].(string); ok {
+							if z, ok := detail["zone"].(string); ok {
 								zone = z
 							}
 							log.Printf("[INFO] Processing re-baseline request from MQTT: zone=%s", zone)
@@ -1351,9 +1405,9 @@ func main() {
 	guidedMgr.SetOnQualityIssue(func(zoneID int, quality float64) {
 		// Send WebSocket event to dashboard
 		msg := map[string]interface{}{
-			"type":     "quality_drop",
-			"zone_id":  zoneID,
-			"quality":  quality,
+			"type":    "quality_drop",
+			"zone_id": zoneID,
+			"quality": quality,
 		}
 		data, _ := json.Marshal(msg)
 		if dashboardHub != nil {
@@ -1382,8 +1436,8 @@ func main() {
 		msg := map[string]interface{}{
 			"type":           "calibration_complete",
 			"zone_id":        zoneID,
-			"quality_before":  qualityBefore,
-			"quality_after":   qualityAfter,
+			"quality_before": qualityBefore,
+			"quality_after":  qualityAfter,
 			"links":          0, // TODO: get actual link count
 		}
 		data, _ := json.Marshal(msg)
@@ -1537,7 +1591,9 @@ func main() {
 		}
 		// Store in persistent registry
 		if bleRegistry != nil {
-			if err := bleRegistry.ProcessRelayMessage(nodeMAC, observations); err != nil { log.Printf("[WARN] Failed to process BLE relay: %v", err) }
+			if err := bleRegistry.ProcessRelayMessage(nodeMAC, observations); err != nil {
+				log.Printf("[WARN] Failed to process BLE relay: %v", err)
+			}
 		}
 	})
 
@@ -2615,12 +2671,12 @@ func main() {
 								zoneName = pred.PredictedNextZoneID
 							}
 							mqttClient.UpdatePredictionState( //nolint:errcheck
-							pred.PersonID,
-							zoneName,
-							pred.DataConfidence,
-							pred.PredictionConfidence,
-							pred.EstimatedTransitionMinutes,
-						)
+								pred.PersonID,
+								zoneName,
+								pred.DataConfidence,
+								pred.PredictionConfidence,
+								pred.EstimatedTransitionMinutes,
+							)
 						}
 
 						// Also publish horizon predictions (15-minute Monte Carlo)
@@ -2739,22 +2795,22 @@ func main() {
 		log.Printf("[INFO] Zones and portals API registered at /api/zones/* and /api/portals/*")
 	}
 
-		// Phase 6: BLE REST API
-		if bleRegistry != nil {
-			bleHandler := ble.NewHandler(bleRegistry)
-			bleHandler.RegisterRoutes(r)
-			log.Printf("[INFO] BLE REST API registered at /api/ble/* and /api/people/*")
+	// Phase 6: BLE REST API
+	if bleRegistry != nil {
+		bleHandler := ble.NewHandler(bleRegistry)
+		bleHandler.RegisterRoutes(r)
+		log.Printf("[INFO] BLE REST API registered at /api/ble/* and /api/people/*")
 
-			// BLE identity matches endpoint (not in ble.Handler)
-			r.Get("/api/ble/matches", func(w http.ResponseWriter, r *http.Request) {
-				if identityMatcher == nil {
-					writeJSON(w, []*ble.IdentityMatch{})
-					return
-				}
-				matches := identityMatcher.GetAllMatches()
-				writeJSON(w, matches)
-			})
-		}
+		// BLE identity matches endpoint (not in ble.Handler)
+		r.Get("/api/ble/matches", func(w http.ResponseWriter, r *http.Request) {
+			if identityMatcher == nil {
+				writeJSON(w, []*ble.IdentityMatch{})
+				return
+			}
+			matches := identityMatcher.GetAllMatches()
+			writeJSON(w, matches)
+		})
+	}
 
 	// Phase 6: Automation REST API
 	if automationEngine != nil {
@@ -3117,16 +3173,16 @@ func main() {
 
 		writeJSON(w, map[string]interface{}{
 			"link_id":            linkID,
-			"current_hour":        time.Now().Hour(),
-			"current_minute":      time.Now().Minute(),
-			"is_ready":            diurnal.IsReady(),
-			"is_learning":         diurnal.IsLearning(),
-			"learning_progress":   diurnal.GetLearningProgress(),
-			"overall_confidence":  diurnal.GetOverallConfidence(),
-			"slot_amplitudes":     slotAmplitudes,
-			"slot_confidences":    slotConfidences,
-			"slot_sample_counts":  slotSampleCounts,
-			"created_at":          diurnal.GetCreatedAt(),
+			"current_hour":       time.Now().Hour(),
+			"current_minute":     time.Now().Minute(),
+			"is_ready":           diurnal.IsReady(),
+			"is_learning":        diurnal.IsLearning(),
+			"learning_progress":  diurnal.GetLearningProgress(),
+			"overall_confidence": diurnal.GetOverallConfidence(),
+			"slot_amplitudes":    slotAmplitudes,
+			"slot_confidences":   slotConfidences,
+			"slot_sample_counts": slotSampleCounts,
+			"created_at":         diurnal.GetCreatedAt(),
 		})
 	})
 
@@ -3227,12 +3283,12 @@ func main() {
 		// Build response with diagnosis and current health snapshot
 		response := map[string]interface{}{
 			"diagnosis": map[string]interface{}{
-				"link_id":   diagnosis.LinkID,
-				"rule_id":   diagnosis.RuleID,
-				"severity":  string(diagnosis.Severity),
-				"title":     diagnosis.Title,
-				"detail":    diagnosis.Detail,
-				"advice":    diagnosis.Advice,
+				"link_id":    diagnosis.LinkID,
+				"rule_id":    diagnosis.RuleID,
+				"severity":   string(diagnosis.Severity),
+				"title":      diagnosis.Title,
+				"detail":     diagnosis.Detail,
+				"advice":     diagnosis.Advice,
 				"confidence": diagnosis.ConfidenceScore,
 			},
 		}
@@ -3270,12 +3326,12 @@ func main() {
 
 				if closest != nil {
 					response["health"] = map[string]interface{}{
-						"timestamp":         closest.Timestamp.Unix(),
+						"timestamp":          closest.Timestamp.Unix(),
 						"snr":                closest.SNR,
-						"phase_stability":   closest.PhaseStability,
-						"packet_rate":       closest.PacketRate,
-						"drift_rate":        closest.DriftRate,
-						"composite_score":   closest.CompositeScore,
+						"phase_stability":    closest.PhaseStability,
+						"packet_rate":        closest.PacketRate,
+						"drift_rate":         closest.DriftRate,
+						"composite_score":    closest.CompositeScore,
 						"delta_rms_variance": closest.DeltaRMSVariance,
 						"is_quiet_period":    closest.IsQuietPeriod,
 					}
@@ -4125,10 +4181,10 @@ func main() {
 			autoAPIHandler.RegisterRoutes(r)
 			log.Printf("[INFO] Auto-update API registered")
 
-				// Wire up firmware upload callback to trigger auto-update check
-				otaSrv.SetUploadCallback(autoUpdateMgr.OnFirmwareUploaded)
+			// Wire up firmware upload callback to trigger auto-update check
+			otaSrv.SetUploadCallback(autoUpdateMgr.OnFirmwareUploaded)
 		}
-		}
+	}
 
 	// Provisioning API (used by onboarding wizard)
 	_, msPortStr, _ := net.SplitHostPort(cfg.BindAddr)
@@ -4179,115 +4235,69 @@ func main() {
 
 	// Serve ambient mode page
 	r.Get("/ambient", func(w http.ResponseWriter, r *http.Request) {
-		staticDir := cfg.StaticDir
-		if staticDir == "" {
-			staticDir = findDashboardDir()
-		}
-		if staticDir != "" {
-			ambientPath := filepath.Join(staticDir, "ambient.html")
-			if _, err := os.Stat(ambientPath); err == nil {
-				http.ServeFile(w, r, ambientPath)
-				return
-			}
-		}
-		http.NotFound(w, r)
+		serveEmbeddedFile(w, r, "ambient.html")
 	})
 
 	// Serve fleet status page
 	r.Get("/fleet", func(w http.ResponseWriter, r *http.Request) {
-		staticDir := cfg.StaticDir
-		if staticDir == "" {
-			staticDir = findDashboardDir()
-		}
-		if staticDir != "" {
-			fleetPath := filepath.Join(staticDir, "fleet.html")
-			if _, err := os.Stat(fleetPath); err == nil {
-				http.ServeFile(w, r, fleetPath)
-				return
-			}
-		}
-		http.NotFound(w, r)
+		serveEmbeddedFile(w, r, "fleet.html")
 	})
 
 	r.Get("/live", func(w http.ResponseWriter, r *http.Request) {
-		staticDir := cfg.StaticDir
-		if staticDir == "" {
-			staticDir = findDashboardDir()
-		}
-		if staticDir != "" {
-			livePath := filepath.Join(staticDir, "live.html")
-			if _, err := os.Stat(livePath); err == nil {
-				http.ServeFile(w, r, livePath)
-				return
-			}
-		}
-		http.NotFound(w, r)
+		serveEmbeddedFile(w, r, "live.html")
 	})
 
 	r.Get("/setup", func(w http.ResponseWriter, r *http.Request) {
-		staticDir := cfg.StaticDir
-		if staticDir == "" {
-			staticDir = findDashboardDir()
-		}
-		if staticDir != "" {
-			setupPath := filepath.Join(staticDir, "setup.html")
-			if _, err := os.Stat(setupPath); err == nil {
-				http.ServeFile(w, r, setupPath)
-				return
-			}
-		}
-		http.NotFound(w, r)
+		serveEmbeddedFile(w, r, "setup.html")
 	})
 
 	// Serve simple mode page
 	r.Get("/simple", func(w http.ResponseWriter, r *http.Request) {
+		serveEmbeddedFile(w, r, "simple.html")
+	})
+
+	// Serve dashboard static files from embedded filesystem (go:embed) or fallback to filesystem
+	if dashboardEmbedded {
+		dashboardHTTP, err := fs.Sub(dashboardFS, "dashboard")
+		if err != nil {
+			log.Printf("[WARN] Failed to create dashboard sub filesystem: %v", err)
+		} else {
+			log.Printf("[INFO] Serving dashboard from embedded filesystem")
+			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+				// Try to serve the file, fall back to index.html for SPA routes
+				http.StripPrefix("/", http.FileServer(http.FS(dashboardHTTP))).ServeHTTP(w, r)
+			})
+		}
+	} else {
+		// Fallback to filesystem-based serving for development
 		staticDir := cfg.StaticDir
 		if staticDir == "" {
 			staticDir = findDashboardDir()
 		}
 		if staticDir != "" {
-			simplePath := filepath.Join(staticDir, "simple.html")
-			if _, err := os.Stat(simplePath); err == nil {
-				http.ServeFile(w, r, simplePath)
-				return
+			if _, err := os.Stat(staticDir); err == nil {
+				log.Printf("[INFO] Serving dashboard from filesystem at %s", staticDir)
+				r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+					path := filepath.Join(staticDir, r.URL.Path)
+					if info, err := os.Stat(path); err == nil && info.IsDir() {
+						path = filepath.Join(path, "index.html")
+					}
+					if _, err := os.Stat(path); err == nil {
+						http.ServeFile(w, r, path)
+						return
+					}
+					if filepath.Ext(r.URL.Path) == "" {
+						http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+						return
+					}
+					http.NotFound(w, r)
+				})
+			} else {
+				log.Printf("[WARN] Dashboard directory not found: %s", staticDir)
 			}
-		}
-		http.NotFound(w, r)
-	})
-
-	// Serve dashboard static files
-	staticDir := cfg.StaticDir
-	if staticDir == "" {
-		staticDir = findDashboardDir()
-	}
-
-	if staticDir != "" {
-		if _, err := os.Stat(staticDir); err == nil {
-			log.Printf("[INFO] Serving dashboard from %s", staticDir)
-			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-				path := filepath.Join(staticDir, r.URL.Path)
-
-				if info, err := os.Stat(path); err == nil && info.IsDir() {
-					path = filepath.Join(path, "index.html")
-				}
-
-				if _, err := os.Stat(path); err == nil {
-					http.ServeFile(w, r, path)
-					return
-				}
-
-				if filepath.Ext(r.URL.Path) == "" {
-					http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
-					return
-				}
-
-				http.NotFound(w, r)
-			})
 		} else {
-			log.Printf("[WARN] Dashboard directory not found: %s", staticDir)
+			log.Printf("[WARN] No dashboard directory found, static files not served")
 		}
-	} else {
-		log.Printf("[WARN] No dashboard directory found, static files not served")
 	}
 
 	// Phase 5 complete — all subsystems initialized
@@ -4331,14 +4341,14 @@ func main() {
 	}
 
 	doctorChecker := doctor.New(doctor.Config{
-		DB:               mainDB,
-		DataDir:          cfg.DataDir,
-		FirmwareDir:      cfg.SeedFirmwareDir,
-		MDNSEnabled:      cfg.MDNSEnabled,
-		MQTTBroker:       cfg.MQTTBroker,
-		NTPServer:        cfg.NTPServer,
-		InstallSecret:    installSecret,
-		FleetGetNodes:    func() ([]doctor.NodeInfo, error) {
+		DB:            mainDB,
+		DataDir:       cfg.DataDir,
+		FirmwareDir:   cfg.SeedFirmwareDir,
+		MDNSEnabled:   cfg.MDNSEnabled,
+		MQTTBroker:    cfg.MQTTBroker,
+		NTPServer:     cfg.NTPServer,
+		InstallSecret: installSecret,
+		FleetGetNodes: func() ([]doctor.NodeInfo, error) {
 			nodes, err := fleetReg.GetAllNodes()
 			if err != nil {
 				return nil, err
