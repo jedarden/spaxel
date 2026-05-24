@@ -34,29 +34,20 @@ func (h *FleetHandler) SetUnpairedProvider(p UnpairedProvider) {
 	h.unpairedProvider = p
 }
 
-// RegisterRoutes mounts fleet endpoints on r.
+// RegisterRoutes mounts fleet health/optimisation endpoints on r.
 //
-//	GET  /api/fleet           — all provisioned nodes with full details
 //	GET  /api/fleet/health   — current fleet health status
 //	GET  /api/fleet/history  — recent optimisation history
 //	POST /api/fleet/optimise — trigger manual re-optimisation
 //	GET  /api/fleet/simulate — simulate node removal impact
-//	PATCH /api/nodes/{mac}/label — update node label
-//	POST /api/nodes/{mac}/locate — send identify command
-//	POST /api/nodes/{mac}/role — assign new role
-//	DELETE /api/nodes/{mac} — remove from fleet
+//
+// Node-specific routes (role, label, locate, delete) are handled by fleet.Handler
+// to avoid duplicate route registration.
 func (h *FleetHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/api/fleet", h.getFleet)
 	r.Get("/api/fleet/health", h.getFleetHealth)
 	r.Get("/api/fleet/history", h.getFleetHistory)
 	r.Post("/api/fleet/optimise", h.triggerOptimise)
 	r.Get("/api/fleet/simulate", h.simulateNodeRemoval)
-
-	// Node-specific routes
-	r.Patch("/api/nodes/{mac}/label", h.setNodeLabel)
-	r.Post("/api/nodes/{mac}/locate", h.locateNode)
-	r.Post("/api/nodes/{mac}/role", h.setNodeRole)
-	r.Delete("/api/nodes/{mac}", h.removeNode)
 }
 
 // fleetHealthResponse is the wire format for /api/fleet/health
