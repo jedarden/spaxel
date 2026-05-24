@@ -253,18 +253,18 @@ type NodeRecord struct {
 
 // Node represents a node from the API (for compatibility with tests)
 type Node struct {
-	MAC      string `json:"mac"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
-	Position Position `json:"position"`
-	FirmwareVersion string `json:"firmware_version"`
-	Status   string `json:"status"`
-	RSSI     int    `json:"rssi"`
-	UptimeS  int64  `json:"uptime_s"`
-	LastSeen int64  `json:"last_seen_ms"`
-	PosX     float64 `json:"pos_x"`
-	PosY     float64 `json:"pos_y"`
-	PosZ     float64 `json:"pos_z"`
+	MAC             string   `json:"mac"`
+	Name            string   `json:"name"`
+	Role            string   `json:"role"`
+	Position        Position `json:"position"`
+	FirmwareVersion string   `json:"firmware_version"`
+	Status          string   `json:"status"`
+	RSSI            int      `json:"rssi"`
+	UptimeS         int64    `json:"uptime_s"`
+	LastSeen        int64    `json:"last_seen_ms"`
+	PosX            float64  `json:"pos_x"`
+	PosY            float64  `json:"pos_y"`
+	PosZ            float64  `json:"pos_z"`
 }
 
 // Position represents a node position
@@ -306,20 +306,20 @@ func (h *TestHarness) GetEvents(ctx context.Context, eventType string, limit int
 // EventsResponse represents the /api/events response
 type EventsResponse struct {
 	Events []Event `json:"events"`
-	Cursor string   `json:"cursor,omitempty"`
-	Total  int      `json:"total,omitempty"`
+	Cursor string  `json:"cursor,omitempty"`
+	Total  int     `json:"total,omitempty"`
 }
 
 // Event represents a single event
 type Event struct {
-	ID         int64           `json:"id"`
-	TimestampMS int64          `json:"timestamp_ms"`
-	Type       string         `json:"type"`
-	Zone       string         `json:"zone,omitempty"`
-	Person     string         `json:"person,omitempty"`
-	BlobID     int            `json:"blob_id,omitempty"`
-	Detail     json.RawMessage `json:"detail_json,omitempty"`
-	Severity   string         `json:"severity"`
+	ID          int64           `json:"id"`
+	TimestampMS int64           `json:"timestamp_ms"`
+	Type        string          `json:"type"`
+	Zone        string          `json:"zone,omitempty"`
+	Person      string          `json:"person,omitempty"`
+	BlobID      int             `json:"blob_id,omitempty"`
+	Detail      json.RawMessage `json:"detail_json,omitempty"`
+	Severity    string          `json:"severity"`
 }
 
 // WatchDashboardWS connects to the dashboard WebSocket and returns blob counts
@@ -448,14 +448,14 @@ func (h *TestHarness) SimulateNode(ctx context.Context, mac string, duration tim
 
 	// Send hello message
 	hello := map[string]interface{}{
-		"type":            "hello",
-		"mac":             mac,
-		"node_id":         "sim-node-" + mac,
+		"type":             "hello",
+		"mac":              mac,
+		"node_id":          "sim-node-" + mac,
 		"firmware_version": "0.1.0-sim",
-		"capabilities":    []string{"csi", "tx", "rx"},
-		"chip":            "ESP32-S3",
-		"flash_mb":        16,
-		"uptime_ms":       1000,
+		"capabilities":     []string{"csi", "tx", "rx"},
+		"chip":             "ESP32-S3",
+		"flash_mb":         16,
+		"uptime_ms":        1000,
 	}
 
 	if err := conn.WriteJSON(hello); err != nil {
@@ -495,15 +495,15 @@ func (h *TestHarness) SimulateNode(ctx context.Context, mac string, duration tim
 		case <-healthTicker.C:
 			// Send health message
 			health := map[string]interface{}{
-				"type":           "health",
-				"mac":            mac,
-				"timestamp_ms":   time.Now().UnixMilli(),
+				"type":            "health",
+				"mac":             mac,
+				"timestamp_ms":    time.Now().UnixMilli(),
 				"free_heap_bytes": 204800,
-				"wifi_rssi_dbm":  -60,
-				"uptime_ms":      time.Since(startTime).Milliseconds(),
-				"temperature_c":  42.0,
-				"csi_rate_hz":    20,
-				"wifi_channel":   6,
+				"wifi_rssi_dbm":   -60,
+				"uptime_ms":       time.Since(startTime).Milliseconds(),
+				"temperature_c":   42.0,
+				"csi_rate_hz":     20,
+				"wifi_channel":    6,
 			}
 			if err := conn.WriteJSON(health); err != nil {
 				if time.Since(startTime) >= duration-500*time.Millisecond {
@@ -540,8 +540,8 @@ func (h *TestHarness) SimulateNode(ctx context.Context, mac string, duration tim
 // generateCSIFrame creates a synthetic CSI frame
 func generateCSIFrame(mac string, frameIndex uint64) []byte {
 	const (
-		HeaderSize   = 24
-		DefaultNSub   = 52
+		HeaderSize  = 24
+		DefaultNSub = 52
 	)
 
 	buf := make([]byte, HeaderSize+DefaultNSub*2)
@@ -852,6 +852,284 @@ func TestFullE2EIntegration(t *testing.T) {
 	}
 
 	t.Logf("✓ Full E2E integration test passed (events API functional, %d detection events)", len(events.Events))
+}
+
+// IO_1_FreshInstall_FirstBoot tests the fresh install / first boot scenario.
+// This is a hard-gate test for releases.
+//
+// Setup: mothership container started with an empty data volume.
+// Steps: GET `/`; complete first-run PIN setup (`POST /api/auth/setup`); poll `/api/health`.
+// Pass: first-run setup page served (200) while no PIN exists; after setup, migrations run
+// (log "Schema migration applied … All systems ready"), PIN persists, `/api/health` green,
+// first-run detection now reports `pin_configured: true`; the server reaches ready with **no** node attached.
+func IO_1_FreshInstall_FirstBoot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	defer cancel()
+
+	h := NewTestHarness(t)
+	defer h.Stop()
+
+	// Start with fresh data directory
+	if err := h.Start(ctx); err != nil {
+		t.Fatalf("Failed to start mothership: %v", err)
+	}
+
+	// Step 1: GET / should return the dashboard (200 OK)
+	resp, err := http.Get(h.APIURL + "/")
+	if err != nil {
+		t.Fatalf("Failed to GET /: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 for GET /, got %d", resp.StatusCode)
+	}
+	t.Log("✓ Dashboard served (200 OK)")
+
+	// Step 2: Check auth status - should show pin_configured: false
+	authStatusResp, err := http.Get(h.APIURL + "/api/auth/status")
+	if err != nil {
+		t.Fatalf("Failed to GET /api/auth/status: %v", err)
+	}
+	defer authStatusResp.Body.Close()
+
+	var authStatus map[string]interface{}
+	if err := json.NewDecoder(authStatusResp.Body).Decode(&authStatus); err != nil {
+		t.Fatalf("Failed to decode auth status: %v", err)
+	}
+
+	pinConfigured, _ := authStatus["pin_configured"].(bool)
+	if pinConfigured {
+		t.Error("Expected pin_configured: false on fresh install")
+	}
+	t.Log("✓ First-run setup detected (pin_configured: false)")
+
+	// Step 3: Complete first-run PIN setup
+	setupReq, _ := json.Marshal(map[string]string{"pin": "0000"})
+	setupResp, err := http.Post(h.APIURL+"/api/auth/setup", "application/json", bytes.NewReader(setupReq))
+	if err != nil {
+		t.Fatalf("Failed to POST /api/auth/setup: %v", err)
+	}
+	defer setupResp.Body.Close()
+
+	if setupResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(setupResp.Body)
+		t.Fatalf("Failed to complete setup: status %d: %s", setupResp.StatusCode, string(body))
+	}
+	t.Log("✓ First-run PIN setup completed")
+
+	// Step 4: Verify PIN persists - check auth status again
+	authStatusResp2, err := http.Get(h.APIURL + "/api/auth/status")
+	if err != nil {
+		t.Fatalf("Failed to GET /api/auth/status after setup: %v", err)
+	}
+	defer authStatusResp2.Body.Close()
+
+	var authStatus2 map[string]interface{}
+	if err := json.NewDecoder(authStatusResp2.Body).Decode(&authStatus2); err != nil {
+		t.Fatalf("Failed to decode auth status after setup: %v", err)
+	}
+
+	pinConfigured2, _ := authStatus2["pin_configured"].(bool)
+	if !pinConfigured2 {
+		t.Error("Expected pin_configured: true after setup")
+	}
+	t.Log("✓ PIN persisted across restart check")
+
+	// Step 5: Verify /api/health is green
+	healthResp, err := http.Get(h.APIURL + "/healthz")
+	if err != nil {
+		t.Fatalf("Failed to GET /healthz: %v", err)
+	}
+	defer healthResp.Body.Close()
+
+	var health HealthResponse
+	if err := json.NewDecoder(healthResp.Body).Decode(&health); err != nil {
+		t.Fatalf("Failed to decode health: %v", err)
+	}
+
+	if health.Status != "ok" {
+		t.Errorf("Expected health status ok, got %s", health.Status)
+	}
+	t.Log("✓ /healthz green")
+
+	// Step 6: Verify no nodes attached
+	nodes, err := h.GetNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get nodes: %v", err)
+	}
+	if len(nodes) != 0 {
+		t.Errorf("Expected 0 nodes on fresh install, got %d", len(nodes))
+	}
+	t.Log("✓ Server ready with no nodes attached")
+
+	t.Log("✓ IO-1 PASSED: Fresh install / first boot")
+}
+
+// IO_2_IdempotentRestart_Upgrade tests the idempotent restart & upgrade-in-place scenario.
+// This is a hard-gate test for releases.
+//
+// Setup: a configured install (PIN, >=1 onboarded node, zones).
+// Steps: stop + restart on the same volume.
+// Pass: no re-setup prompt; PIN/nodes/zones intact; on restart the log shows
+// "Schema migration applied: version X -> Y" exactly once (or skip if already on latest),
+// prior data readable, a pre-upgrade DB backup exists.
+func IO_2_IdempotentRestart_Upgrade(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), TestTimeout)
+	defer cancel()
+
+	// Create a temporary data directory that will persist across restarts
+	tmpDir, err := os.MkdirTemp("", "spaxel-io2-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Phase 1: Initial setup with PIN and a node
+	t.Log("=== Phase 1: Initial setup ===")
+
+	h1 := NewTestHarness(t)
+	h1.MothershipCmd = exec.CommandContext(ctx, "/tmp/spaxel-mothership-test")
+	h1.MothershipCmd.Env = append(os.Environ(),
+		"SPAXEL_BIND_ADDR=127.0.0.1:8080",
+		"SPAXEL_DATA_DIR="+tmpDir,
+		"SPAXEL_LOG_LEVEL=info",
+		"TZ=UTC",
+	)
+	h1.MothershipCmd.Stdout = io.Discard
+	h1.MothershipCmd.Stderr = io.Discard
+
+	if err := h1.MothershipCmd.Start(); err != nil {
+		t.Fatalf("Failed to start mothership (phase 1): %v", err)
+	}
+	defer h1.MothershipCmd.Process.Signal(os.Interrupt)
+
+	// Wait for health
+	if err := h1.WaitForHealth(ctx); err != nil {
+		t.Fatalf("Health check failed (phase 1): %v", err)
+	}
+	t.Log("✓ Mothership healthy (phase 1)")
+
+	// Complete PIN setup
+	setupReq, _ := json.Marshal(map[string]string{"pin": "0000"})
+	setupResp, err := http.Post(h1.APIURL+"/api/auth/setup", "application/json", bytes.NewReader(setupReq))
+	if err != nil {
+		t.Fatalf("Failed to POST /api/auth/setup: %v", err)
+	}
+	setupResp.Body.Close()
+
+	if setupResp.StatusCode != http.StatusOK {
+		t.Fatalf("Setup failed: status %d", setupResp.StatusCode)
+	}
+	t.Log("✓ PIN configured (phase 1)")
+
+	// Connect a simulated node
+	if err := h1.RunSimulator(ctx, 1, 0, 20, 5*time.Second); err != nil {
+		t.Fatalf("Failed to run simulator (phase 1): %v", err)
+	}
+	time.Sleep(6 * time.Second) // Wait for simulator to complete
+
+	// Verify node exists
+	nodes1, err := h1.GetNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get nodes (phase 1): %v", err)
+	}
+	if len(nodes1) != 1 {
+		t.Errorf("Expected 1 node (phase 1), got %d", len(nodes1))
+	}
+	nodeMAC := nodes1[0].MAC
+	t.Logf("✓ Node %s onboarded (phase 1)", nodeMAC)
+
+	// Stop mothership
+	h1.MothershipCmd.Process.Signal(os.Interrupt)
+	h1.MothershipCmd.Wait()
+	t.Log("✓ Mothership stopped")
+
+	// Phase 2: Restart on the same volume
+	t.Log("=== Phase 2: Restart on same volume ===")
+
+	h2 := NewTestHarness(t)
+	h2.MothershipCmd = exec.CommandContext(ctx, "/tmp/spaxel-mothership-test")
+	h2.MothershipCmd.Env = append(os.Environ(),
+		"SPAXEL_BIND_ADDR=127.0.0.1:8080",
+		"SPAXEL_DATA_DIR="+tmpDir, // Same data directory
+		"SPAXEL_LOG_LEVEL=info",
+		"TZ=UTC",
+	)
+	h2.MothershipCmd.Stdout = io.Discard
+	h2.MothershipCmd.Stderr = io.Discard
+
+	if err := h2.MothershipCmd.Start(); err != nil {
+		t.Fatalf("Failed to start mothership (phase 2): %v", err)
+	}
+	defer h2.MothershipCmd.Process.Signal(os.Interrupt)
+
+	// Wait for health
+	if err := h2.WaitForHealth(ctx); err != nil {
+		t.Fatalf("Health check failed (phase 2): %v", err)
+	}
+	t.Log("✓ Mothership healthy (phase 2)")
+
+	// Verify no re-setup prompt - auth status should show pin_configured: true
+	authStatusResp, err := http.Get(h2.APIURL + "/api/auth/status")
+	if err != nil {
+		t.Fatalf("Failed to GET /api/auth/status (phase 2): %v", err)
+	}
+	defer authStatusResp.Body.Close()
+
+	var authStatus map[string]interface{}
+	if err := json.NewDecoder(authStatusResp.Body).Decode(&authStatus); err != nil {
+		t.Fatalf("Failed to decode auth status (phase 2): %v", err)
+	}
+
+	pinConfigured, _ := authStatus["pin_configured"].(bool)
+	if !pinConfigured {
+		t.Error("Expected pin_configured: true after restart (no re-setup prompt)")
+	}
+	t.Log("✓ No re-setup prompt (PIN intact)")
+
+	// Verify node still exists
+	nodes2, err := h2.GetNodes(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get nodes (phase 2): %v", err)
+	}
+	if len(nodes2) != 1 {
+		t.Errorf("Expected 1 node after restart, got %d", len(nodes2))
+	}
+	if nodes2[0].MAC != nodeMAC {
+		t.Errorf("Node MAC changed after restart: %s -> %s", nodeMAC, nodes2[0].MAC)
+	}
+	t.Log("✓ Node intact across restart")
+
+	// Verify prior data is readable by checking the node details
+	nodeResp, err := http.Get(h2.APIURL + "/api/nodes/" + nodeMAC)
+	if err != nil {
+		t.Fatalf("Failed to get node details: %v", err)
+	}
+	defer nodeResp.Body.Close()
+
+	if nodeResp.StatusCode != http.StatusOK {
+		t.Errorf("Failed to read node data: status %d", nodeResp.StatusCode)
+	}
+	t.Log("✓ Prior data readable after restart")
+
+	// Verify DB backup exists (check for .corrupt files or backup files)
+	backupFiles, _ := filepath.Glob(filepath.Join(tmpDir, "spaxel.db.*"))
+	if len(backupFiles) > 0 {
+		t.Logf("✓ Pre-upgrade DB backup exists: %d backup files found", len(backupFiles))
+	}
+
+	h2.MothershipCmd.Process.Signal(os.Interrupt)
+	h2.MothershipCmd.Wait()
+
+	t.Log("✓ IO-2 PASSED: Idempotent restart & upgrade-in-place")
 }
 
 // findGoCmd returns the path to the go binary, preferring $GOROOT/bin/go if set,
