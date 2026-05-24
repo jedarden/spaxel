@@ -285,12 +285,12 @@ func startMockMothershipForFallDetection(t *testing.T, webhookURL string) *httpt
 			// Return fall_alert events
 			events := []map[string]interface{}{
 				{
-					"id":            1,
-					"type":          "fall_alert",
-					"timestamp_ms":   time.Now().UnixMilli(),
-					"blob_id":       1,
-					"detail_json":   `{"start_z":1.7,"end_z":0.3,"peak_velocity":-2.5}`,
-					"severity":      "alert",
+					"id":           1,
+					"type":         "fall_alert",
+					"timestamp_ms": time.Now().UnixMilli(),
+					"blob_id":      1,
+					"detail_json":  `{"start_z":1.7,"end_z":0.3,"peak_velocity":-2.5}`,
+					"severity":     "alert",
 				},
 			}
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -300,8 +300,8 @@ func startMockMothershipForFallDetection(t *testing.T, webhookURL string) *httpt
 		case "/api/zones":
 			zones := []map[string]interface{}{
 				{
-					"id":       1,
-					"name":     "Bedroom",
+					"id":        1,
+					"name":      "Bedroom",
 					"zone_type": "bedroom",
 				},
 			}
@@ -402,12 +402,12 @@ func simulateFallSequence(t *testing.T) []blobState {
 
 	now := time.Now()
 	return []blobState{
-		{Time: now.Add(-2 * time.Second), Z: 1.7, VZ: 0.0},    // Standing
+		{Time: now.Add(-2 * time.Second), Z: 1.7, VZ: 0.0},           // Standing
 		{Time: now.Add(-1500 * time.Millisecond), Z: 1.65, VZ: -0.5}, // Starting to fall
-		{Time: now.Add(-1 * time.Second), Z: 1.4, VZ: -1.8},     // Falling
-		{Time: now.Add(-500 * time.Millisecond), Z: 0.8, VZ: -2.5},  // Rapid descent
-		{Time: now, Z: 0.3, VZ: -0.5},                             // Near floor
-		{Time: now.Add(500 * time.Millisecond), Z: 0.3, VZ: 0.0},    // On floor
+		{Time: now.Add(-1 * time.Second), Z: 1.4, VZ: -1.8},          // Falling
+		{Time: now.Add(-500 * time.Millisecond), Z: 0.8, VZ: -2.5},   // Rapid descent
+		{Time: now, Z: 0.3, VZ: -0.5},                                // Near floor
+		{Time: now.Add(500 * time.Millisecond), Z: 0.3, VZ: 0.0},     // On floor
 	}
 }
 

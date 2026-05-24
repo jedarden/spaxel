@@ -63,7 +63,7 @@ type MotionDetectedPayload struct {
 }
 
 func (m MotionDetectedPayload) EventType() BusEventType { return BusMotionDetected }
-func (m MotionDetectedPayload) GetTimestamp() time.Time   { return m.Timestamp }
+func (m MotionDetectedPayload) GetTimestamp() time.Time { return m.Timestamp }
 
 // MotionStoppedPayload is emitted when motion ceases in a zone.
 type MotionStoppedPayload struct {
@@ -77,7 +77,7 @@ type MotionStoppedPayload struct {
 }
 
 func (m MotionStoppedPayload) EventType() BusEventType { return BusMotionStopped }
-func (m MotionStoppedPayload) GetTimestamp() time.Time   { return m.Timestamp }
+func (m MotionStoppedPayload) GetTimestamp() time.Time { return m.Timestamp }
 
 // ZoneTransitionPayload is emitted when a blob crosses a portal between zones.
 type ZoneTransitionPayload struct {
@@ -96,7 +96,7 @@ type ZoneTransitionPayload struct {
 }
 
 func (z ZoneTransitionPayload) EventType() BusEventType { return BusZoneTransition }
-func (z ZoneTransitionPayload) GetTimestamp() time.Time   { return z.Timestamp }
+func (z ZoneTransitionPayload) GetTimestamp() time.Time { return z.Timestamp }
 
 // ZoneEntryPayload is emitted when a blob enters a zone (not via portal).
 type ZoneEntryPayload struct {
@@ -110,7 +110,7 @@ type ZoneEntryPayload struct {
 }
 
 func (z ZoneEntryPayload) EventType() BusEventType { return BusZoneEntry }
-func (z ZoneEntryPayload) GetTimestamp() time.Time   { return z.Timestamp }
+func (z ZoneEntryPayload) GetTimestamp() time.Time { return z.Timestamp }
 
 // ZoneExitPayload is emitted when a blob exits a zone (not via portal).
 type ZoneExitPayload struct {
@@ -124,7 +124,7 @@ type ZoneExitPayload struct {
 }
 
 func (z ZoneExitPayload) EventType() BusEventType { return BusZoneExit }
-func (z ZoneExitPayload) GetTimestamp() time.Time   { return z.Timestamp }
+func (z ZoneExitPayload) GetTimestamp() time.Time { return z.Timestamp }
 
 // FallDetectedPayload is emitted when a potential fall is detected.
 type FallDetectedPayload struct {
@@ -140,7 +140,7 @@ type FallDetectedPayload struct {
 }
 
 func (f FallDetectedPayload) EventType() BusEventType { return BusFallDetected }
-func (f FallDetectedPayload) GetTimestamp() time.Time   { return f.Timestamp }
+func (f FallDetectedPayload) GetTimestamp() time.Time { return f.Timestamp }
 
 // FallConfirmedPayload is emitted when a fall is confirmed after the confirmation window.
 type FallConfirmedPayload struct {
@@ -156,7 +156,7 @@ type FallConfirmedPayload struct {
 }
 
 func (f FallConfirmedPayload) EventType() BusEventType { return BusFallConfirmed }
-func (f FallConfirmedPayload) GetTimestamp() time.Time   { return f.Timestamp }
+func (f FallConfirmedPayload) GetTimestamp() time.Time { return f.Timestamp }
 
 // NodeConnectedPayload is emitted when a node connects for the first time or after a long absence.
 type NodeConnectedPayload struct {
@@ -168,7 +168,7 @@ type NodeConnectedPayload struct {
 }
 
 func (n NodeConnectedPayload) EventType() BusEventType { return BusNodeConnected }
-func (n NodeConnectedPayload) GetTimestamp() time.Time   { return n.Timestamp }
+func (n NodeConnectedPayload) GetTimestamp() time.Time { return n.Timestamp }
 
 // NodeDisconnectedPayload is emitted when a node disconnects unexpectedly.
 type NodeDisconnectedPayload struct {
@@ -180,7 +180,7 @@ type NodeDisconnectedPayload struct {
 }
 
 func (n NodeDisconnectedPayload) EventType() BusEventType { return BusNodeDisconnected }
-func (n NodeDisconnectedPayload) GetTimestamp() time.Time   { return n.Timestamp }
+func (n NodeDisconnectedPayload) GetTimestamp() time.Time { return n.Timestamp }
 
 // NodeReconnectedPayload is emitted when a node reconnects after a brief disconnection.
 type NodeReconnectedPayload struct {
@@ -191,7 +191,7 @@ type NodeReconnectedPayload struct {
 }
 
 func (n NodeReconnectedPayload) EventType() BusEventType { return BusNodeReconnected }
-func (n NodeReconnectedPayload) GetTimestamp() time.Time   { return n.Timestamp }
+func (n NodeReconnectedPayload) GetTimestamp() time.Time { return n.Timestamp }
 
 // NodeStalePayload is emitted when a node hasn't sent health updates within the expected interval.
 type NodeStalePayload struct {
@@ -202,7 +202,7 @@ type NodeStalePayload struct {
 }
 
 func (n NodeStalePayload) EventType() BusEventType { return BusNodeStale }
-func (n NodeStalePayload) GetTimestamp() time.Time   { return n.Timestamp }
+func (n NodeStalePayload) GetTimestamp() time.Time { return n.Timestamp }
 
 // SystemStartedPayload is emitted when the mothership completes startup.
 type SystemStartedPayload struct {
@@ -213,7 +213,7 @@ type SystemStartedPayload struct {
 }
 
 func (s SystemStartedPayload) EventType() BusEventType { return BusSystemStarted }
-func (s SystemStartedPayload) GetTimestamp() time.Time   { return s.Timestamp }
+func (s SystemStartedPayload) GetTimestamp() time.Time { return s.Timestamp }
 
 // SystemShutdownPayload is emitted when the mothership begins graceful shutdown.
 type SystemShutdownPayload struct {
@@ -223,7 +223,7 @@ type SystemShutdownPayload struct {
 }
 
 func (s SystemShutdownPayload) EventType() BusEventType { return BusSystemShutdown }
-func (s SystemShutdownPayload) GetTimestamp() time.Time   { return s.Timestamp }
+func (s SystemShutdownPayload) GetTimestamp() time.Time { return s.Timestamp }
 
 // ConfigChangedPayload is emitted when a configuration value changes.
 type ConfigChangedPayload struct {
@@ -235,7 +235,7 @@ type ConfigChangedPayload struct {
 }
 
 func (c ConfigChangedPayload) EventType() BusEventType { return BusConfigChanged }
-func (c ConfigChangedPayload) GetTimestamp() time.Time   { return c.Timestamp }
+func (c ConfigChangedPayload) GetTimestamp() time.Time { return c.Timestamp }
 
 // TriggerFiredPayload is emitted when an automation trigger condition is met.
 type TriggerFiredPayload struct {
@@ -253,7 +253,7 @@ type TriggerFiredPayload struct {
 }
 
 func (t TriggerFiredPayload) EventType() BusEventType { return BusTriggerFired }
-func (t TriggerFiredPayload) GetTimestamp() time.Time   { return t.Timestamp }
+func (t TriggerFiredPayload) GetTimestamp() time.Time { return t.Timestamp }
 
 // TriggerClearedPayload is emitted when a trigger condition is no longer met.
 type TriggerClearedPayload struct {
@@ -264,19 +264,19 @@ type TriggerClearedPayload struct {
 }
 
 func (t TriggerClearedPayload) EventType() BusEventType { return BusTriggerCleared }
-func (t TriggerClearedPayload) GetTimestamp() time.Time   { return t.Timestamp }
+func (t TriggerClearedPayload) GetTimestamp() time.Time { return t.Timestamp }
 
 // BaselineUpdatedPayload is emitted when a link baseline is updated.
 type BaselineUpdatedPayload struct {
-	Timestamp    time.Time `json:"timestamp"`
-	LinkID       string    `json:"link_id"`
-	Reason       string    `json:"reason"` // "manual", "drift", "schedule"
-	Confidence   float64   `json:"confidence"`
-	SampleCount  int       `json:"sample_count"`
+	Timestamp   time.Time `json:"timestamp"`
+	LinkID      string    `json:"link_id"`
+	Reason      string    `json:"reason"` // "manual", "drift", "schedule"
+	Confidence  float64   `json:"confidence"`
+	SampleCount int       `json:"sample_count"`
 }
 
 func (b BaselineUpdatedPayload) EventType() BusEventType { return BusBaselineUpdated }
-func (b BaselineUpdatedPayload) GetTimestamp() time.Time   { return b.Timestamp }
+func (b BaselineUpdatedPayload) GetTimestamp() time.Time { return b.Timestamp }
 
 // ModelUpdatedPayload is emitted when a prediction model is updated.
 type ModelUpdatedPayload struct {
@@ -290,14 +290,14 @@ type ModelUpdatedPayload struct {
 }
 
 func (m ModelUpdatedPayload) EventType() BusEventType { return BusModelUpdated }
-func (m ModelUpdatedPayload) GetTimestamp() time.Time   { return m.Timestamp }
+func (m ModelUpdatedPayload) GetTimestamp() time.Time { return m.Timestamp }
 
 // EventBus provides a typed publish/subscribe mechanism for internal events.
 // It supports multiple subscribers per event type with fan-out delivery.
 type EventBus struct {
-	mu         sync.RWMutex
+	mu          sync.RWMutex
 	subscribers map[BusEventType][]chan EventPayload
-	capacity   int // Buffer capacity for subscriber channels
+	capacity    int // Buffer capacity for subscriber channels
 }
 
 // NewEventBus creates a new EventBus with the specified channel buffer capacity.
@@ -306,7 +306,7 @@ type EventBus struct {
 func NewEventBus(capacity int) *EventBus {
 	return &EventBus{
 		subscribers: make(map[BusEventType][]chan EventPayload),
-		capacity:   capacity,
+		capacity:    capacity,
 	}
 }
 

@@ -74,12 +74,12 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 	testTime := time.Now()
 
 	testCases := []struct {
-		name          string
-		payload       EventPayload
-		expectedType  EventType
-		expectedZone  string
-		expectedPerson string
-		expectedBlobID int
+		name             string
+		payload          EventPayload
+		expectedType     EventType
+		expectedZone     string
+		expectedPerson   string
+		expectedBlobID   int
 		expectedSeverity EventSeverity
 	}{
 		{
@@ -91,10 +91,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				BlobID:     1,
 				Confidence: 0.85,
 			},
-			expectedType: EventTypeDetection,
-			expectedZone: "Kitchen",
-			expectedPerson: "Alice",
-			expectedBlobID: 1,
+			expectedType:     EventTypeDetection,
+			expectedZone:     "Kitchen",
+			expectedPerson:   "Alice",
+			expectedBlobID:   1,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -106,10 +106,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				BlobID:     2,
 				DurationMs: 5000,
 			},
-			expectedType: EventTypeDetection,
-			expectedZone: "Living Room",
-			expectedPerson: "Bob",
-			expectedBlobID: 2,
+			expectedType:     EventTypeDetection,
+			expectedZone:     "Living Room",
+			expectedPerson:   "Bob",
+			expectedBlobID:   2,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -123,10 +123,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				BlobID:       1,
 				Direction:    "a_to_b",
 			},
-			expectedType: EventTypePortalCrossing,
-			expectedZone: "Kitchen",
-			expectedPerson: "Alice",
-			expectedBlobID: 1,
+			expectedType:     EventTypePortalCrossing,
+			expectedZone:     "Kitchen",
+			expectedPerson:   "Alice",
+			expectedBlobID:   1,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -137,10 +137,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				PersonName: "Charlie",
 				BlobID:     3,
 			},
-			expectedType: EventTypeZoneEntry,
-			expectedZone: "Bedroom",
-			expectedPerson: "Charlie",
-			expectedBlobID: 3,
+			expectedType:     EventTypeZoneEntry,
+			expectedZone:     "Bedroom",
+			expectedPerson:   "Charlie",
+			expectedBlobID:   3,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -151,10 +151,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				PersonName: "Diana",
 				BlobID:     4,
 			},
-			expectedType: EventTypeZoneExit,
-			expectedZone: "Bathroom",
-			expectedPerson: "Diana",
-			expectedBlobID: 4,
+			expectedType:     EventTypeZoneExit,
+			expectedZone:     "Bathroom",
+			expectedPerson:   "Diana",
+			expectedBlobID:   4,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -167,10 +167,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				ZVelocity:  -2.5,
 				Confidence: 0.95,
 			},
-			expectedType: EventTypeFallAlert,
-			expectedZone: "Hallway",
-			expectedPerson: "Eve",
-			expectedBlobID: 5,
+			expectedType:     EventTypeFallAlert,
+			expectedZone:     "Hallway",
+			expectedPerson:   "Eve",
+			expectedBlobID:   5,
 			expectedSeverity: SeverityAlert,
 		},
 		{
@@ -183,10 +183,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				ConfirmationMs: 10000,
 				AlertSent:      true,
 			},
-			expectedType: EventTypeFallAlert,
-			expectedZone: "Bathroom",
-			expectedPerson: "Frank",
-			expectedBlobID: 6,
+			expectedType:     EventTypeFallAlert,
+			expectedZone:     "Bathroom",
+			expectedPerson:   "Frank",
+			expectedBlobID:   6,
 			expectedSeverity: SeverityCritical,
 		},
 		{
@@ -198,7 +198,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				FirmwareVer: "1.0.0",
 				IPAddress:   "192.168.1.100",
 			},
-			expectedType: EventTypeNodeOnline,
+			expectedType:     EventTypeNodeOnline,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -210,7 +210,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				WasOnlineFor: 3600000,
 				Reason:       "timeout",
 			},
-			expectedType: EventTypeNodeOffline,
+			expectedType:     EventTypeNodeOffline,
 			expectedSeverity: SeverityWarning,
 		},
 		{
@@ -221,7 +221,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				NodeName:     "Kitchen North",
 				OfflineForMs: 5000,
 			},
-			expectedType: EventTypeNodeOnline,
+			expectedType:     EventTypeNodeOnline,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -232,7 +232,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				NodeName:     "Bedroom",
 				LastHealthMs: 20000,
 			},
-			expectedType: EventTypeNodeOffline,
+			expectedType:     EventTypeNodeOffline,
 			expectedSeverity: SeverityWarning,
 		},
 		{
@@ -243,7 +243,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				StartTime:  testTime.Add(-1 * time.Second),
 				DurationMs: 1000,
 			},
-			expectedType: EventTypeSystem,
+			expectedType:     EventTypeSystem,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -253,7 +253,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				Reason:     "manual",
 				DurationMs: 5000,
 			},
-			expectedType: EventTypeSystem,
+			expectedType:     EventTypeSystem,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -265,7 +265,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				NewValue:  "20",
 				ChangedBy: "api",
 			},
-			expectedType: EventTypeSystem,
+			expectedType:     EventTypeSystem,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -280,10 +280,10 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				BlobID:      1,
 				DurationS:   35.0,
 			},
-			expectedType: EventTypeTriggerFired,
-			expectedZone: "Living Room",
-			expectedPerson: "Alice",
-			expectedBlobID: 1,
+			expectedType:     EventTypeTriggerFired,
+			expectedZone:     "Living Room",
+			expectedPerson:   "Alice",
+			expectedBlobID:   1,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -294,7 +294,7 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				TriggerName: "Couch Dwell",
 				DurationS:   60.0,
 			},
-			expectedType: EventTypeTriggerFired,
+			expectedType:     EventTypeTriggerFired,
 			expectedSeverity: SeverityInfo,
 		},
 		{
@@ -306,22 +306,22 @@ func TestStorageSubscriberAllEventTypes(t *testing.T) {
 				Confidence:  0.85,
 				SampleCount: 500,
 			},
-			expectedType: EventTypeBaselineChanged,
+			expectedType:     EventTypeBaselineChanged,
 			expectedSeverity: SeverityInfo,
 		},
 		{
 			name: "ModelUpdated",
 			payload: ModelUpdatedPayload{
-				Timestamp:      testTime,
-				ModelType:      "prediction",
-				PersonID:       "Alice",
-				ZoneID:         "1",
-				SamplesAdded:   10,
-				TotalSamples:   100,
+				Timestamp:       testTime,
+				ModelType:       "prediction",
+				PersonID:        "Alice",
+				ZoneID:          "1",
+				SamplesAdded:    10,
+				TotalSamples:    100,
 				AccuracyPercent: 78.5,
 			},
-			expectedType: EventTypeLearningMilestone,
-			expectedPerson: "Alice",
+			expectedType:     EventTypeLearningMilestone,
+			expectedPerson:   "Alice",
 			expectedSeverity: SeverityInfo,
 		},
 	}

@@ -15,10 +15,10 @@ import (
 
 // Config holds webhook configuration.
 type Config struct {
-	URL            string        // Target URL for webhook delivery
-	Timeout        time.Duration // Request timeout (default 5s)
-	RetryDelay     time.Duration // Delay before retry (default 30s)
-	Enabled        bool          // Whether webhook is enabled
+	URL        string        // Target URL for webhook delivery
+	Timeout    time.Duration // Request timeout (default 5s)
+	RetryDelay time.Duration // Delay before retry (default 30s)
+	Enabled    bool          // Whether webhook is enabled
 }
 
 // EventPayload represents the JSON payload sent to the webhook.
@@ -34,10 +34,10 @@ type EventPayload struct {
 
 // Publisher publishes all spaxel events to a configured webhook URL.
 type Publisher struct {
-	mu       sync.RWMutex
-	config   Config
-	client   *http.Client
-	stopped  chan struct{}
+	mu      sync.RWMutex
+	config  Config
+	client  *http.Client
+	stopped chan struct{}
 }
 
 // NewPublisher creates a new webhook publisher.
@@ -50,7 +50,7 @@ func NewPublisher(cfg Config) *Publisher {
 	}
 
 	return &Publisher{
-		config:  cfg,
+		config: cfg,
 		client: &http.Client{
 			Timeout: cfg.Timeout,
 		},

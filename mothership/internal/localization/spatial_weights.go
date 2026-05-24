@@ -69,13 +69,13 @@ func DefaultSpatialWeightLearnerConfig() SpatialWeightLearnerConfig {
 
 // ZoneWeight represents a learned weight for a link in a zone
 type ZoneWeight struct {
-	LinkID               string    `json:"link_id"`
-	ZoneGridX            int       `json:"zone_grid_x"`
-	ZoneGridY            int       `json:"zone_grid_y"`
-	Weight               float64   `json:"weight"`
-	SampleCount          int       `json:"sample_count"`
-	LastUpdated          time.Time `json:"last_updated"`
-	ValidationImprovement float64  `json:"validation_improvement"`
+	LinkID                string    `json:"link_id"`
+	ZoneGridX             int       `json:"zone_grid_x"`
+	ZoneGridY             int       `json:"zone_grid_y"`
+	Weight                float64   `json:"weight"`
+	SampleCount           int       `json:"sample_count"`
+	LastUpdated           time.Time `json:"last_updated"`
+	ValidationImprovement float64   `json:"validation_improvement"`
 }
 
 // NewSpatialWeightLearner creates a new spatial weight learner
@@ -92,10 +92,10 @@ func NewSpatialWeightLearner(dbPath string, config SpatialWeightLearnerConfig) (
 	db.SetMaxOpenConns(1)
 
 	learner := &SpatialWeightLearner{
-		db:             db,
-		path:           dbPath,
-		config:         config,
-		weightCache:    make(map[string]map[int]map[int]float64),
+		db:              db,
+		path:            dbPath,
+		config:          config,
+		weightCache:     make(map[string]map[int]map[int]float64),
 		validationRatio: 0.2,
 	}
 
@@ -634,13 +634,13 @@ func (l *SpatialWeightLearner) GetWeightStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_weights":        totalWeights,
-		"links_with_weights":   linksWithWeights,
-		"zones_with_weights":   len(zoneCounts),
-		"avg_weight":           avgWeight,
-		"min_weight":           minWeight,
-		"max_weight":           maxWeight,
-		"update_count":         l.updateCounter,
+		"total_weights":      totalWeights,
+		"links_with_weights": linksWithWeights,
+		"zones_with_weights": len(zoneCounts),
+		"avg_weight":         avgWeight,
+		"min_weight":         minWeight,
+		"max_weight":         maxWeight,
+		"update_count":       l.updateCounter,
 	}
 }
 
@@ -757,8 +757,8 @@ func (i *SpatialWeightIntegrator) AdjustAllLinkMotions(links []LinkMotion, blobX
 
 // GroundTruthCollector collects ground truth samples from BLE and blob data
 type GroundTruthCollector struct {
-	store    *GroundTruthStore
-	learner  *SpatialWeightLearner
+	store         *GroundTruthStore
+	learner       *SpatialWeightLearner
 	minConfidence float64
 	maxDistance   float64
 }

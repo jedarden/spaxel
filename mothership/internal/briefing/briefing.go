@@ -81,7 +81,7 @@ func NewGenerator(dbPath string) (*Generator, error) {
 		// Unwrap if it's JSON
 		if strings.HasPrefix(weatherURL, `"`) {
 			var url string
-			_ = json.Unmarshal([]byte(weatherURL), &url); //nolint:errcheck
+			_ = json.Unmarshal([]byte(weatherURL), &url) //nolint:errcheck
 			weatherURL = url
 		}
 	}

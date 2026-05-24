@@ -83,12 +83,12 @@ func TestAcceptance_AnomalyTriggersAtThreshold(t *testing.T) {
 // TestAcceptance_BreathingRegularityLabels verifies regularity CV thresholds.
 func TestAcceptance_BreathingRegularityLabels(t *testing.T) {
 	tests := []struct {
-		cv      float64
-		want    string
+		cv   float64
+		want string
 	}{
-		{0.05, "regular"},    // CV < 0.10
+		{0.05, "regular"}, // CV < 0.10
 		{0.09, "regular"},
-		{0.10, "normal"},    // boundary
+		{0.10, "normal"}, // boundary
 		{0.15, "normal"},
 		{0.25, "normal"},    // boundary
 		{0.26, "irregular"}, // CV > 0.25
@@ -182,8 +182,8 @@ func TestAcceptance_SleepReportIncludesAnomaly(t *testing.T) {
 // TestAcceptance_FFTRejectsOutOfRange verifies FFT rejects frequencies outside 6-25 bpm.
 func TestAcceptance_FFTRejectsOutOfRange(t *testing.T) {
 	tests := []struct {
-		name   string
-		freqHz float64
+		name    string
+		freqHz  float64
 		inRange bool // true if FFT should detect a value in 6-25 bpm
 	}{
 		{"0.05 Hz = 3 bpm (below range)", 0.05, false},

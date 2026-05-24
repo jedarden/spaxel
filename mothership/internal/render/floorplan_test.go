@@ -13,8 +13,8 @@ import (
 // TestRendererDimensions tests that the renderer produces images with correct dimensions.
 func TestRendererDimensions(t *testing.T) {
 	tests := []struct {
-		name  string
-		width int
+		name   string
+		width  int
 		height int
 	}{
 		{"default 300x300", 0, 0},
@@ -59,22 +59,22 @@ func TestRendererZones(t *testing.T) {
 	config := DefaultRenderConfig()
 	config.Zones = []Zone{
 		{
-			ID:     "kitchen",
-			Name:   "Kitchen",
-			X:      1.0,
-			Y:      1.0,
-			W:      3.0,
-			D:      2.0,
-			Color:  "#4fc3f7",
+			ID:    "kitchen",
+			Name:  "Kitchen",
+			X:     1.0,
+			Y:     1.0,
+			W:     3.0,
+			D:     2.0,
+			Color: "#4fc3f7",
 		},
 		{
-			ID:     "living",
-			Name:   "Living Room",
-			X:      5.0,
-			Y:      1.0,
-			W:      4.0,
-			D:      3.0,
-			Color:  "#81c784",
+			ID:    "living",
+			Name:  "Living Room",
+			X:     5.0,
+			Y:     1.0,
+			W:     4.0,
+			D:     3.0,
+			Color: "#81c784",
 		},
 	}
 
@@ -131,19 +131,19 @@ func TestRendererPeople(t *testing.T) {
 	config := DefaultRenderConfig()
 	config.People = []Person{
 		{
-			Name:      "Alice",
-			X:         2.5,
-			Y:         2.0,
-			Z:         1.0,
-			Color:     "#4488ff",
+			Name:       "Alice",
+			X:          2.5,
+			Y:          2.0,
+			Z:          1.0,
+			Color:      "#4488ff",
 			Confidence: 0.85,
 		},
 		{
-			Name:      "Bob",
-			X:         7.0,
-			Y:         2.5,
-			Z:         1.0,
-			Color:     "#44ff88",
+			Name:       "Bob",
+			X:          7.0,
+			Y:          2.5,
+			Z:          1.0,
+			Color:      "#44ff88",
 			Confidence: 0.60,
 		},
 	}
@@ -163,13 +163,13 @@ func TestRendererPeople(t *testing.T) {
 // TestRendererFallDetected tests that fall state is rendered correctly.
 func TestRendererFallDetected(t *testing.T) {
 	person := Person{
-		Name:      "Alice",
-		X:         2.5,
-		Y:         2.0,
-		Z:         0.2, // Low Z indicates fall
-		Color:     "#4488ff",
+		Name:       "Alice",
+		X:          2.5,
+		Y:          2.0,
+		Z:          0.2, // Low Z indicates fall
+		Color:      "#4488ff",
 		Confidence: 0.85,
-		IsFall:    true,
+		IsFall:     true,
 	}
 
 	data, err := GenerateFallDetectedThumbnail(10.0, 10.0, []Zone{
@@ -188,11 +188,11 @@ func TestRendererFallDetected(t *testing.T) {
 // TestGenerateZoneEnterThumbnail tests the zone entry thumbnail generator.
 func TestGenerateZoneEnterThumbnail(t *testing.T) {
 	person := Person{
-		Name:      "Alice",
-		X:         2.5,
-		Y:         2.0,
-		Z:         1.0,
-		Color:     "#4488ff",
+		Name:       "Alice",
+		X:          2.5,
+		Y:          2.0,
+		Z:          1.0,
+		Color:      "#4488ff",
 		Confidence: 0.85,
 	}
 
@@ -232,11 +232,11 @@ func TestGenerateAnomalyAlertThumbnail(t *testing.T) {
 // TestGenerateSleepSummaryThumbnail tests the sleep summary thumbnail generator.
 func TestGenerateSleepSummaryThumbnail(t *testing.T) {
 	person := Person{
-		Name:      "Alice",
-		X:         2.5,
-		Y:         2.0,
-		Z:         0.5, // Low Z (sleeping)
-		Color:     "#4488ff",
+		Name:       "Alice",
+		X:          2.5,
+		Y:          2.0,
+		Z:          0.5, // Low Z (sleeping)
+		Color:      "#4488ff",
 		Confidence: 0.85,
 	}
 
@@ -313,22 +313,22 @@ func TestPixelColors(t *testing.T) {
 	config := DefaultRenderConfig()
 	config.Zones = []Zone{
 		{
-			ID:     "kitchen",
-			Name:   "Kitchen",
-			X:      2.0, // Positioned to be visible
-			Y:      2.0,
-			W:      3.0,
-			D:      2.0,
-			Color:  "#4fc3f7", // Light blue
+			ID:    "kitchen",
+			Name:  "Kitchen",
+			X:     2.0, // Positioned to be visible
+			Y:     2.0,
+			W:     3.0,
+			D:     2.0,
+			Color: "#4fc3f7", // Light blue
 		},
 	}
 	config.People = []Person{
 		{
-			Name:      "Alice",
-			X:         3.5, // Center of zone
-			Y:         3.0,
-			Z:         1.0,
-			Color:     "#ff0000", // Red person
+			Name:       "Alice",
+			X:          3.5, // Center of zone
+			Y:          3.0,
+			Z:          1.0,
+			Color:      "#ff0000", // Red person
 			Confidence: 0.8,
 		},
 	}
@@ -522,8 +522,8 @@ func TestZoneBoundariesAtCorrectCoordinates(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name: "kitchen interior",
-			zone: config.Zones[0],
+			name:            "kitchen interior",
+			zone:            config.Zones[0],
 			testPointMeters: struct{ x, y float64 }{x: 3.5, y: 3.0}, // Center of kitchen
 			description:     "Zone should be visible with its color blended with background",
 			check: func(t *testing.T, pixelX, pixelY int, r, g, b, a uint32) {
@@ -546,8 +546,8 @@ func TestZoneBoundariesAtCorrectCoordinates(t *testing.T) {
 			},
 		},
 		{
-			name: "kitchen top-left corner",
-			zone: config.Zones[0],
+			name:            "kitchen top-left corner",
+			zone:            config.Zones[0],
 			testPointMeters: struct{ x, y float64 }{x: 2.0, y: 2.0},
 			description:     "Zone corner - should have white outline or zone fill",
 			check: func(t *testing.T, pixelX, pixelY int, r, g, b, a uint32) {
@@ -567,8 +567,8 @@ func TestZoneBoundariesAtCorrectCoordinates(t *testing.T) {
 			},
 		},
 		{
-			name: "living interior",
-			zone: config.Zones[1],
+			name:            "living interior",
+			zone:            config.Zones[1],
 			testPointMeters: struct{ x, y float64 }{x: 7.5, y: 6.5}, // Center of living
 			description:     "Second zone should have its green color visible",
 			check: func(t *testing.T, pixelX, pixelY int, r, g, b, a uint32) {
@@ -589,8 +589,8 @@ func TestZoneBoundariesAtCorrectCoordinates(t *testing.T) {
 			},
 		},
 		{
-			name: "background area",
-			zone: Zone{X: 0, Y: 0, W: 1, D: 1},
+			name:            "background area",
+			zone:            Zone{X: 0, Y: 0, W: 1, D: 1},
 			testPointMeters: struct{ x, y float64 }{x: 0.5, y: 0.5}, // Before first zone
 			description:     "Pure background color",
 			check: func(t *testing.T, pixelX, pixelY int, r, g, b, a uint32) {
@@ -793,11 +793,11 @@ func TestRenderPerformance200ms(t *testing.T) {
 	config.People = make([]Person, 10) // 10 people for stress test
 	for i := range config.People {
 		config.People[i] = Person{
-			Name:      fmt.Sprintf("Person%d", i),
-			X:         float64(i) + 1.0,
-			Y:         2.0,
-			Z:         1.0,
-			Color:     "#4488ff",
+			Name:       fmt.Sprintf("Person%d", i),
+			X:          float64(i) + 1.0,
+			Y:          2.0,
+			Z:          1.0,
+			Color:      "#4488ff",
 			Confidence: 0.7,
 		}
 	}
@@ -815,4 +815,3 @@ func TestRenderPerformance200ms(t *testing.T) {
 	_ = start
 	t.Log("Performance test completed successfully")
 }
-

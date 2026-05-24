@@ -109,10 +109,10 @@ func TestInsertEvent(t *testing.T) {
 			name: "event with timestamp",
 			event: Event{
 				TimestampMs: 1710000000000,
-				Type:       EventTypeZoneEntry,
-				Zone:       "Living Room",
-				Person:     "Bob",
-				Severity:   SeverityInfo,
+				Type:        EventTypeZoneEntry,
+				Zone:        "Living Room",
+				Person:      "Bob",
+				Severity:    SeverityInfo,
 			},
 			wantID: true,
 		},
@@ -427,7 +427,7 @@ func TestRunArchiveJob(t *testing.T) {
 	defer db.Close() //nolint:errcheck
 
 	now := time.Now().UnixMilli()
-	oldCutoff := now - ArchiveDaysMs - 1000  // Older than archive threshold
+	oldCutoff := now - ArchiveDaysMs - 1000   // Older than archive threshold
 	youngCutoff := now - ArchiveDaysMs + 1000 // Newer than archive threshold
 
 	// Insert old events (should be archived)
@@ -753,4 +753,3 @@ func TestStartArchiveScheduler_StopsOnDone(t *testing.T) {
 
 	// Test passes if we got here without deadlock
 }
-

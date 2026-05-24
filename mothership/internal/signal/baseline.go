@@ -7,21 +7,21 @@ import (
 
 // Baseline configuration constants
 const (
-	DefaultBaselineTimeConstant = 30.0       // seconds
-	DefaultMotionThreshold      = 0.05       // deltaRMS threshold for motion gating
-	DefaultAlpha                = 0.0033     // dt / (tau + dt) for dt=0.1s, tau=30s
-	BaselineConfidenceMin       = 0.3        // Minimum confidence for stale baselines
-	BaselineStaleDays           = 7          // Days before baseline is considered stale
+	DefaultBaselineTimeConstant = 30.0   // seconds
+	DefaultMotionThreshold      = 0.05   // deltaRMS threshold for motion gating
+	DefaultAlpha                = 0.0033 // dt / (tau + dt) for dt=0.1s, tau=30s
+	BaselineConfidenceMin       = 0.3    // Minimum confidence for stale baselines
+	BaselineStaleDays           = 7      // Days before baseline is considered stale
 )
 
 // BaselineState holds the EMA baseline for a single link
 type BaselineState struct {
-	mu           sync.RWMutex
-	Values       []float64 // Per-subcarrier baseline amplitude
-	Initialized  bool      // True if baseline has been set
-	SampleCount  int       // Number of samples used to train baseline
-	LastUpdate   time.Time // Time of last baseline update
-	Confidence   float64   // 0-1 confidence in the baseline
+	mu          sync.RWMutex
+	Values      []float64 // Per-subcarrier baseline amplitude
+	Initialized bool      // True if baseline has been set
+	SampleCount int       // Number of samples used to train baseline
+	LastUpdate  time.Time // Time of last baseline update
+	Confidence  float64   // 0-1 confidence in the baseline
 }
 
 // NewBaselineState creates a new baseline state
@@ -159,9 +159,9 @@ func (b *BaselineState) Reset() {
 
 // BaselineManager manages baselines for all links
 type BaselineManager struct {
-	mu     sync.RWMutex
+	mu        sync.RWMutex
 	baselines map[string]*BaselineState // keyed by linkID (nodeMAC:peerMAC)
-	nSub     int
+	nSub      int
 }
 
 // NewBaselineManager creates a new baseline manager

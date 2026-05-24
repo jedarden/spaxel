@@ -92,8 +92,8 @@ func TestWallSegmentIntersectsLine(t *testing.T) {
 
 func TestWallPenetrationLoss(t *testing.T) {
 	tests := []struct {
-		material  WallMaterial
-		expected  float64
+		material WallMaterial
+		expected float64
 	}{
 		{MaterialDrywall, 3.0},
 		{MaterialBrick, 10.0},

@@ -639,16 +639,16 @@ func (wl *WeightLearner) GetImprovementStats() map[string]interface{} {
 	duration := current.Timestamp.Sub(initial.Timestamp)
 
 	return map[string]interface{}{
-		"samples":             len(history),
-		"improvement_pct":     improvement,
-		"initial_error_m":     initial.AvgErrorM,
-		"current_error_m":     current.AvgErrorM,
+		"samples":              len(history),
+		"improvement_pct":      improvement,
+		"initial_error_m":      initial.AvgErrorM,
+		"current_error_m":      current.AvgErrorM,
 		"initial_observations": initial.Observations,
 		"current_observations": current.Observations,
-		"learning_duration":   duration.String(),
-		"trend":               trend,
-		"first_sample":        initial.Timestamp.Format(time.RFC3339),
-		"last_sample":         current.Timestamp.Format(time.RFC3339),
+		"learning_duration":    duration.String(),
+		"trend":                trend,
+		"first_sample":         initial.Timestamp.Format(time.RFC3339),
+		"last_sample":          current.Timestamp.Format(time.RFC3339),
 	}
 }
 

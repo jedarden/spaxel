@@ -6,8 +6,8 @@ import (
 )
 
 type rateSend struct {
-	mac              string
-	rate             int
+	mac               string
+	rate              int
 	varianceThreshold float64
 }
 

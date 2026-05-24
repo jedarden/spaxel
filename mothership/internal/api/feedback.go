@@ -28,10 +28,10 @@ type FeedbackRequest struct {
 
 // FeedbackHandler handles simple feedback submissions from the UI.
 type FeedbackHandler struct {
-	eventsHandler       *EventsHandler
-	learningHandler     any // Learning handler with ProcessFeedback method
+	eventsHandler         *EventsHandler
+	learningHandler       any // Learning handler with ProcessFeedback method
 	explainabilityHandler *explainability.Handler
-	diagnosticEngine    *diagnostics.DiagnosticEngine
+	diagnosticEngine      *diagnostics.DiagnosticEngine
 }
 
 // NewFeedbackHandler creates a new feedback handler.
@@ -153,7 +153,7 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 
 	// Return success response with inline message
 	response := map[string]interface{}{
-		"ok":     true,
+		"ok":      true,
 		"message": "Feedback recorded",
 	}
 
@@ -179,12 +179,12 @@ func (h *FeedbackHandler) handleSubmitFeedback(w http.ResponseWriter, r *http.Re
 				contributingLinksData := make([]map[string]interface{}, 0, len(exp.ContributingLinks))
 				for _, link := range exp.ContributingLinks {
 					linkData := map[string]interface{}{
-						"link_id":     link.LinkID,
-						"node_mac":    link.NodeMAC,
-						"peer_mac":    link.PeerMAC,
-						"delta_rms":   link.DeltaRMS,
-						"zone_number": link.ZoneNumber,
-						"weight":      link.Weight,
+						"link_id":      link.LinkID,
+						"node_mac":     link.NodeMAC,
+						"peer_mac":     link.PeerMAC,
+						"delta_rms":    link.DeltaRMS,
+						"zone_number":  link.ZoneNumber,
+						"weight":       link.Weight,
 						"contributing": link.Contributing,
 					}
 					contributingLinksData = append(contributingLinksData, linkData)
@@ -307,7 +307,7 @@ func (h *FeedbackHandler) SubmitFeedback(w http.ResponseWriter, r *http.Request,
 
 	// Return success response
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":     true,
+		"ok":      true,
 		"message": "Feedback recorded",
 	})
 }

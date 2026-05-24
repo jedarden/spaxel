@@ -35,8 +35,8 @@ func (h *BaselineHandler) RegisterRoutes(r chi.Router) {
 type BaselineEntry struct {
 	LinkID       string  `json:"link_id"`
 	SnapshotTime int64   `json:"snapshot_time_ms"` // Unix milliseconds
-	Confidence   float64 `json:"confidence"`        // 0.0–1.0
-	NSub         int     `json:"n_sub"`             // Number of subcarriers
+	Confidence   float64 `json:"confidence"`       // 0.0–1.0
+	NSub         int     `json:"n_sub"`            // Number of subcarriers
 }
 
 // listBaselines handles GET /api/baseline

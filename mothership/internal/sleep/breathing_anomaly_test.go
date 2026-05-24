@@ -12,17 +12,17 @@ func TestBreathingAnomalyTrackerCheckAnomaly(t *testing.T) {
 	tracker.UpdatePersonalAverage("alice", 16.0)
 
 	tests := []struct {
-		name       string
-		avgBPM     float64
-		personal   float64
+		name        string
+		avgBPM      float64
+		personal    float64
 		wantAnomaly bool
 	}{
 		{"normal rate", 16.0, 16.0, false},
-		{"slightly elevated", 19.0, 16.0, false},       // 19/16 = 1.1875 < 1.25
-		{"at threshold", 20.0, 16.0, false},             // 20/16 = 1.25 = threshold (not >)
-		{"above threshold", 21.0, 16.0, true},            // 21/16 = 1.3125 > 1.25
-		{"significantly elevated", 25.0, 16.0, true},     // 25/16 = 1.5625
-		{"below average", 12.0, 16.0, false},             // 12/16 = 0.75
+		{"slightly elevated", 19.0, 16.0, false},     // 19/16 = 1.1875 < 1.25
+		{"at threshold", 20.0, 16.0, false},          // 20/16 = 1.25 = threshold (not >)
+		{"above threshold", 21.0, 16.0, true},        // 21/16 = 1.3125 > 1.25
+		{"significantly elevated", 25.0, 16.0, true}, // 25/16 = 1.5625
+		{"below average", 12.0, 16.0, false},         // 12/16 = 0.75
 	}
 
 	for _, tt := range tests {

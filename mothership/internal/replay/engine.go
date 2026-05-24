@@ -28,7 +28,7 @@ func NewEngine(buffer *recording.Buffer, broadcaster BlobBroadcaster) *Engine {
 		buffer:          buffer,
 		blobBroadcaster: broadcaster,
 		defaultParams: &TunableParams{
-			DeltaRMSThreshold:     float64Ptr(0.02),
+			DeltaRMSThreshold:    float64Ptr(0.02),
 			TauS:                 float64Ptr(30.0),
 			FresnelDecay:         float64Ptr(2.0),
 			NSubcarriers:         intPtr(16),
@@ -225,12 +225,12 @@ func (p *TunableParams) clone() *TunableParams {
 		return nil
 	}
 	return &TunableParams{
-		DeltaRMSThreshold:     float64PtrCopy(p.DeltaRMSThreshold),
-		TauS:                  float64PtrCopy(p.TauS),
-		FresnelDecay:          float64PtrCopy(p.FresnelDecay),
-		NSubcarriers:          intPtrCopy(p.NSubcarriers),
-		BreathingSensitivity:  float64PtrCopy(p.BreathingSensitivity),
-		MinConfidence:         float64PtrCopy(p.MinConfidence),
+		DeltaRMSThreshold:    float64PtrCopy(p.DeltaRMSThreshold),
+		TauS:                 float64PtrCopy(p.TauS),
+		FresnelDecay:         float64PtrCopy(p.FresnelDecay),
+		NSubcarriers:         intPtrCopy(p.NSubcarriers),
+		BreathingSensitivity: float64PtrCopy(p.BreathingSensitivity),
+		MinConfidence:        float64PtrCopy(p.MinConfidence),
 	}
 }
 

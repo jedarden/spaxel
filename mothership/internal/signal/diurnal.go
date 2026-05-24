@@ -9,7 +9,7 @@ import (
 
 // Diurnal configuration constants
 const (
-	DiurnalSlots        = 24 // One slot per hour
+	DiurnalSlots        = 24  // One slot per hour
 	DiurnalMinSamples   = 300 // Minimum samples per slot (spec requirement: >= 300 samples/slot to mark ready)
 	DiurnalLearningDays = 7   // Days before diurnal baseline activates
 

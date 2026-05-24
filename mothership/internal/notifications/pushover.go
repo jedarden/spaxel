@@ -49,31 +49,31 @@ type PushoverClient struct {
 
 // PushoverMessage represents a notification message for Pushover.
 type PushoverMessage struct {
-	Message    string
-	Title      string
-	Priority   int
-	Device     string
-	URL        string
-	URLTitle   string
-	Sound      string
-	Timestamp  int64
+	Message   string
+	Title     string
+	Priority  int
+	Device    string
+	URL       string
+	URLTitle  string
+	Sound     string
+	Timestamp int64
 
 	// PNGImageData is optional PNG image data to attach
 	PNGImageData []byte
 
 	// Emergency settings for priority 2
-	Retry   int // Retry in seconds (min 30)
-	Expire  int // Expire in seconds (max 10800)
+	Retry  int // Retry in seconds (min 30)
+	Expire int // Expire in seconds (max 10800)
 }
 
 // NewPushoverClient creates a new Pushover client.
 func NewPushoverClient(appToken, userKey string) *PushoverClient {
 	return &PushoverClient{
-		AppToken:  appToken,
-		UserKey:   userKey,
-		APIURL:    "https://api.pushover.net/1/messages.json",
-		Priority:  0,
-		Sound:     "pushover",
+		AppToken: appToken,
+		UserKey:  userKey,
+		APIURL:   "https://api.pushover.net/1/messages.json",
+		Priority: 0,
+		Sound:    "pushover",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

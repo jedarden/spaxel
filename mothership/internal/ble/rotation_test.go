@@ -114,11 +114,11 @@ func TestCalculateTimeGapScore(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name       string
+		name        string
 		oldReadings []*RSSIObservation
 		newReadings []*RSSIObservation
-		minScore   float64
-		maxScore   float64
+		minScore    float64
+		maxScore    float64
 	}{
 		{
 			name: "immediate appearance (ideal)",

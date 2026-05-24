@@ -548,7 +548,6 @@ func TestFFTBreathingDetector_Detect_SyntheticBreathing(t *testing.T) {
 		result.FrequencyHz, result.PeakSNRdB, result.BreathingBPM)
 }
 
-
 func TestFFTBreathingDetector_OutsideBandFrequency(t *testing.T) {
 	// Test that the FFT breathing detector doesn't produce false positives with
 	// signals outside the breathing band. Sub-band signals cause spectral leakage

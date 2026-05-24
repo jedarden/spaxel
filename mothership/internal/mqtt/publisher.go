@@ -13,14 +13,14 @@ import (
 
 // EventPublisher subscribes to the internal event bus and publishes events to MQTT.
 type EventPublisher struct {
-	mu       sync.RWMutex
-	client   *Client
-	zones    map[string]string // zoneID -> zoneName
-	people   map[string]string // personID -> personName
-	stopped  chan struct{}
+	mu      sync.RWMutex
+	client  *Client
+	zones   map[string]string // zoneID -> zoneName
+	people  map[string]string // personID -> personName
+	stopped chan struct{}
 
 	// Track person presence across zones
-	personZones map[string]map[string]bool // personID -> set of zoneIDs they're in
+	personZones   map[string]map[string]bool // personID -> set of zoneIDs they're in
 	zoneOccupants map[string]map[string]bool // zoneID -> set of personIDs in zone
 
 	// System health ticker
@@ -35,13 +35,13 @@ type EventPublisher struct {
 // NewEventPublisher creates a new MQTT event publisher.
 func NewEventPublisher(client *Client) *EventPublisher {
 	return &EventPublisher{
-		client:       client,
-		zones:        make(map[string]string),
-		people:       make(map[string]string),
-		personZones:  make(map[string]map[string]bool),
+		client:        client,
+		zones:         make(map[string]string),
+		people:        make(map[string]string),
+		personZones:   make(map[string]map[string]bool),
 		zoneOccupants: make(map[string]map[string]bool),
-		stopped:      make(chan struct{}),
-		healthDone:   make(chan struct{}),
+		stopped:       make(chan struct{}),
+		healthDone:    make(chan struct{}),
 	}
 }
 

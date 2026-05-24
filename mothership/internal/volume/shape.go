@@ -183,12 +183,12 @@ type PredictionProvider interface {
 
 // Store provides trigger storage and state management.
 type Store struct {
-	mu                sync.RWMutex
-	db                *sql.DB
-	triggers          map[string]*Trigger
-	triggerState      map[string]*TriggerState // trigger_id -> state
-	blobVolumes       map[int]string           // blob_id -> current volume_id (for tracking)
-	onFired           FiringCallback           // Called when a trigger fires
+	mu                 sync.RWMutex
+	db                 *sql.DB
+	triggers           map[string]*Trigger
+	triggerState       map[string]*TriggerState // trigger_id -> state
+	blobVolumes        map[int]string           // blob_id -> current volume_id (for tracking)
+	onFired            FiringCallback           // Called when a trigger fires
 	predictionProvider PredictionProvider       // Provides prediction data for predicted_enter triggers
 }
 
@@ -593,8 +593,8 @@ func (s *Store) Evaluate(blobs []BlobPos, now time.Time) []string {
 			shouldFire = s.evaluateVacant(t, state, blobs, now)
 		case "count":
 			shouldFire = s.evaluateCount(t, state, blobs, now)
-			case "predicted_enter":
-				shouldFire = s.evaluatePredictedEnter(t, state, now)
+		case "predicted_enter":
+			shouldFire = s.evaluatePredictedEnter(t, state, now)
 		}
 
 		if shouldFire {

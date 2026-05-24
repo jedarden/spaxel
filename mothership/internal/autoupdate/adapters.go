@@ -52,8 +52,8 @@ type NodeConnectedGetter interface {
 
 // nodeProviderAdapter adapts fleet.Registry and fleet.Manager to implement ota.NodeProvider.
 type nodeProviderAdapter struct {
-	registry *fleet.Registry
-	weather  *fleet.LinkWeatherDiagnostics
+	registry   *fleet.Registry
+	weather    *fleet.LinkWeatherDiagnostics
 	connGetter NodeConnectedGetter
 }
 
@@ -68,8 +68,8 @@ func NewNodeProvider(registry *fleet.Registry, weather *fleet.LinkWeatherDiagnos
 // NewNodeProviderWithConnected creates an ota.NodeProvider with a connected nodes getter.
 func NewNodeProviderWithConnected(registry *fleet.Registry, weather *fleet.LinkWeatherDiagnostics, connGetter NodeConnectedGetter) ota.NodeProvider {
 	return &nodeProviderAdapter{
-		registry:  registry,
-		weather:   weather,
+		registry:   registry,
+		weather:    weather,
 		connGetter: connGetter,
 	}
 }

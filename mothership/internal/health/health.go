@@ -14,14 +14,14 @@ import (
 
 // Checker provides health check functionality for the mothership.
 type Checker struct {
-	mu            sync.RWMutex
-	startTime     time.Time
-	db            *sql.DB
-	getNodeCount  func() int
-	shedder       *loadshed.Shedder
-	getShedLevel  func() int    // optional override for load_level
-	level3Since   time.Time     // When level 3 shedding started
-	checkDB       func() string // injectable for testing; defaults to defaultCheckDB
+	mu           sync.RWMutex
+	startTime    time.Time
+	db           *sql.DB
+	getNodeCount func() int
+	shedder      *loadshed.Shedder
+	getShedLevel func() int    // optional override for load_level
+	level3Since  time.Time     // When level 3 shedding started
+	checkDB      func() string // injectable for testing; defaults to defaultCheckDB
 }
 
 // Config holds configuration for the health checker.
@@ -47,13 +47,13 @@ func New(cfg Config) *Checker {
 
 // Response is the health check response JSON structure.
 type Response struct {
-	Status      string  `json:"status"`      // "ok" or "degraded"
-	UptimeS     int64   `json:"uptime_s"`    // seconds since start
-	Version     string  `json:"version"`     // mothership version
-	NodesOnline int     `json:"nodes_online"` // count of connected nodes
-	DB          string  `json:"db"`          // "ok" or "failing"
-	SheddingLevel int     `json:"shedding_level"`  // 0-3, current load shedding level
-	Reason      string  `json:"reason,omitempty"` // explanation of degradation (only when status=degraded)
+	Status        string `json:"status"`           // "ok" or "degraded"
+	UptimeS       int64  `json:"uptime_s"`         // seconds since start
+	Version       string `json:"version"`          // mothership version
+	NodesOnline   int    `json:"nodes_online"`     // count of connected nodes
+	DB            string `json:"db"`               // "ok" or "failing"
+	SheddingLevel int    `json:"shedding_level"`   // 0-3, current load shedding level
+	Reason        string `json:"reason,omitempty"` // explanation of degradation (only when status=degraded)
 }
 
 // Handler returns an http.HandlerFunc that performs the health check.

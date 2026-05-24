@@ -66,9 +66,9 @@ func TestLinkHealth_SNRScoreMapping(t *testing.T) {
 		wantMin  float64
 		wantMax  float64
 	}{
-		{"SNR=1 (ratio=1)", 1.0, 0.0, 0.3},      // Low SNR, low score
-		{"SNR=10 (ratio=10)", 10.0, 0.4, 0.7},   // Medium SNR, medium score
-		{"SNR=100 (ratio=100)", 100.0, 0.9, 1.01}, // High SNR, high score
+		{"SNR=1 (ratio=1)", 1.0, 0.0, 0.3},           // Low SNR, low score
+		{"SNR=10 (ratio=10)", 10.0, 0.4, 0.7},        // Medium SNR, medium score
+		{"SNR=100 (ratio=100)", 100.0, 0.9, 1.01},    // High SNR, high score
 		{"SNR=1000 (ratio=1000)", 1000.0, 0.9, 1.01}, // capped at 1.0
 	}
 
@@ -356,7 +356,7 @@ func TestLinkHealth_ClampToRange(t *testing.T) {
 
 	// Test clamping with extreme values
 	lh.mu.Lock()
-	lh.SNRScore = 2.0   // Above 1.0
+	lh.SNRScore = 2.0             // Above 1.0
 	lh.PhaseStabilityScore = -0.5 // Below 0
 	lh.PacketRateScore = 0.5
 	lh.DriftScore = 0.5

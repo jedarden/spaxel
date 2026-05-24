@@ -106,17 +106,17 @@ func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
 		}
 
 		entries = append(entries, fleetNodeEntry{
-			MAC:            n.MAC,
-			Name:           n.Name,
-			Role:           role,
-			HealthScore:    n.HealthScore,
-			Online:         online,
-			PosX:           n.PosX,
-			PosY:           n.PosY,
-			PosZ:           n.PosZ,
+			MAC:             n.MAC,
+			Name:            n.Name,
+			Role:            role,
+			HealthScore:     n.HealthScore,
+			Online:          online,
+			PosX:            n.PosX,
+			PosY:            n.PosY,
+			PosZ:            n.PosZ,
 			FirmwareVersion: n.FirmwareVersion,
-			UptimeSeconds:  uptimeSeconds,
-			LastSeenMs:     n.LastSeenAt.UnixMilli(),
+			UptimeSeconds:   uptimeSeconds,
+			LastSeenMs:      n.LastSeenAt.UnixMilli(),
 		})
 	}
 
@@ -192,17 +192,17 @@ func (h *FleetHandler) getFleet(w http.ResponseWriter, r *http.Request) {
 		}
 
 		entries = append(entries, fleetNodeEntry{
-			MAC:            n.MAC,
-			Name:           n.Name,
-			Role:           role,
-			HealthScore:    n.HealthScore,
-			Online:         online,
-			PosX:           n.PosX,
-			PosY:           n.PosY,
-			PosZ:           n.PosZ,
+			MAC:             n.MAC,
+			Name:            n.Name,
+			Role:            role,
+			HealthScore:     n.HealthScore,
+			Online:          online,
+			PosX:            n.PosX,
+			PosY:            n.PosY,
+			PosZ:            n.PosZ,
 			FirmwareVersion: n.FirmwareVersion,
-			UptimeSeconds:  uptimeSeconds,
-			LastSeenMs:     n.LastSeenAt.UnixMilli(),
+			UptimeSeconds:   uptimeSeconds,
+			LastSeenMs:      n.LastSeenAt.UnixMilli(),
 		})
 	}
 
@@ -282,9 +282,9 @@ func (h *FleetHandler) getFleetHistory(w http.ResponseWriter, r *http.Request) {
 
 // optimiseResponse is returned after manual optimisation
 type optimiseResponse struct {
-	TriggerReason  string            `json:"trigger_reason"`
-	CoverageScore  float64           `json:"coverage_score"`
-	MeanGDOP       float64           `json:"mean_gdop"`
+	TriggerReason   string            `json:"trigger_reason"`
+	CoverageScore   float64           `json:"coverage_score"`
+	MeanGDOP        float64           `json:"mean_gdop"`
 	RoleAssignments map[string]string `json:"role_assignments"`
 }
 
@@ -292,9 +292,9 @@ func (h *FleetHandler) triggerOptimise(w http.ResponseWriter, r *http.Request) {
 	result := h.healer.ManualOptimise()
 
 	resp := optimiseResponse{
-		TriggerReason:  result.TriggerReason,
-		CoverageScore:  result.CoverageScore,
-		MeanGDOP:       result.MeanGDOP,
+		TriggerReason:   result.TriggerReason,
+		CoverageScore:   result.CoverageScore,
+		MeanGDOP:        result.MeanGDOP,
 		RoleAssignments: h.healer.GetCurrentRoles(),
 	}
 
@@ -382,8 +382,8 @@ func (h *FleetHandler) locateNode(w http.ResponseWriter, r *http.Request) {
 	// This is handled by the ingestion server which has access to node connections
 	// For now, return success - the actual command will be sent via WebSocket
 	writeJSON(w, map[string]interface{}{
-		"status": "sent",
-		"mac": mac,
+		"status":      "sent",
+		"mac":         mac,
 		"duration_ms": req.DurationMS,
 	})
 }

@@ -25,10 +25,10 @@ const (
 
 // EventsHandler manages the events timeline.
 type EventsHandler struct {
-	mu             sync.RWMutex
-	db             *sql.DB
-	hub            DashboardHub
-	ownsDB         bool
+	mu              sync.RWMutex
+	db              *sql.DB
+	hub             DashboardHub
+	ownsDB          bool
 	feedbackHandler any // FeedbackHandler for POST /api/events/{id}/feedback
 }
 
@@ -39,14 +39,14 @@ type DashboardHub interface {
 
 // Event represents a timeline event.
 type Event struct {
-	ID         int64     `json:"id"`
-	Timestamp  int64     `json:"timestamp_ms"`
-	Type       string    `json:"type"`
-	Zone       string    `json:"zone,omitempty"`
-	Person     string    `json:"person,omitempty"`
-	BlobID     int       `json:"blob_id,omitempty"`
-	DetailJSON string    `json:"detail_json,omitempty"`
-	Severity   string    `json:"severity"`
+	ID         int64  `json:"id"`
+	Timestamp  int64  `json:"timestamp_ms"`
+	Type       string `json:"type"`
+	Zone       string `json:"zone,omitempty"`
+	Person     string `json:"person,omitempty"`
+	BlobID     int    `json:"blob_id,omitempty"`
+	DetailJSON string `json:"detail_json,omitempty"`
+	Severity   string `json:"severity"`
 }
 
 // LogEvent logs a new event to the database and broadcasts it.
@@ -574,8 +574,7 @@ func (e *EventsHandler) postEventFeedback(w http.ResponseWriter, r *http.Request
 		fmt.Sprintf(`{"event_id":%d,"type":"%s","blob_id":%d}`, eventID, req.Type, req.BlobID), "info")
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":     true,
+		"ok":      true,
 		"message": "Feedback recorded",
 	})
 }
-

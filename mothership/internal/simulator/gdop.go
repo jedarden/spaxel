@@ -8,25 +8,25 @@ import (
 
 // GDOPResult contains GDOP computation results for a single cell
 type GDOPResult struct {
-	X, Y, Z      float64  // Cell center position
-	GDOP         float64  // Computed GDOP value (Infinity = no coverage)
-	Quality      string   // "excellent", "good", "fair", "poor", "none"
+	X, Y, Z           float64  // Cell center position
+	GDOP              float64  // Computed GDOP value (Infinity = no coverage)
+	Quality           string   // "excellent", "good", "fair", "poor", "none"
 	ContributingLinks []string // Link IDs that contributed to this cell
 }
 
 // GridConfig defines the GDOP computation grid
 type GridConfig struct {
-	CellSize    float64 // Grid cell size in meters
-	MinX, MinY  float64 // Grid origin
-	Width       float64 // Grid width
-	Depth       float64 // Grid depth
+	CellSize   float64 // Grid cell size in meters
+	MinX, MinY float64 // Grid origin
+	Width      float64 // Grid width
+	Depth      float64 // Grid depth
 }
 
 // GDOPComputer computes Geometric Dilution of Precision for coverage analysis
 type GDOPComputer struct {
-	links     []Link
-	config    GridConfig
-	maxZone   int // Maximum Fresnel zone to consider (default 3)
+	links   []Link
+	config  GridConfig
+	maxZone int // Maximum Fresnel zone to consider (default 3)
 }
 
 // NewGDOPComputer creates a new GDOP computer
@@ -347,15 +347,15 @@ func GDOPColorMap(gdop float64) GDOPColor {
 
 // GDOPHeatmapData represents flattened GDOP data for frontend rendering
 type GDOPHeatmapData struct {
-	Width      int         `json:"width"`       // Grid width (columns)
-	Depth      int         `json:"depth"`       // Grid depth (rows)
-	CellSize   float64     `json:"cell_size"`   // Cell size in meters
-	OriginX    float64     `json:"origin_x"`    // Grid origin X
-	OriginY    float64     `json:"origin_y"`    // Grid origin Y
-	GDOPValues []float64   `json:"gdop_values"` // Flattened GDOP values (9999 = infinity)
-	Qualities  []string    `json:"qualities"`   // Flattened quality strings
-	Colors     [][]uint8   `json:"colors"`      // Flattened RGB colors [width*depth*3]
-	AccuracyMap []float64   `json:"accuracy_map"` // Expected accuracy in meters per cell
+	Width       int       `json:"width"`        // Grid width (columns)
+	Depth       int       `json:"depth"`        // Grid depth (rows)
+	CellSize    float64   `json:"cell_size"`    // Cell size in meters
+	OriginX     float64   `json:"origin_x"`     // Grid origin X
+	OriginY     float64   `json:"origin_y"`     // Grid origin Y
+	GDOPValues  []float64 `json:"gdop_values"`  // Flattened GDOP values (9999 = infinity)
+	Qualities   []string  `json:"qualities"`    // Flattened quality strings
+	Colors      [][]uint8 `json:"colors"`       // Flattened RGB colors [width*depth*3]
+	AccuracyMap []float64 `json:"accuracy_map"` // Expected accuracy in meters per cell
 }
 
 // ToHeatmapData converts GDOP results to a heatmap-friendly format

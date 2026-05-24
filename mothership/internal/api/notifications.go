@@ -371,9 +371,9 @@ func (n *NotificationsHandler) handleSetConfig(w http.ResponseWriter, r *http.Re
 
 // testNotificationRequest is the request body for sending a test notification.
 type testNotificationRequest struct {
-	ChannelType string                 `json:"channel_type"` // ntfy, pushover, gotify, webhook, mqtt
-	Title       string                 `json:"title"`        // Custom title (optional)
-	Body        string                 `json:"body"`         // Custom body (optional)
+	ChannelType string                 `json:"channel_type"`   // ntfy, pushover, gotify, webhook, mqtt
+	Title       string                 `json:"title"`          // Custom title (optional)
+	Body        string                 `json:"body"`           // Custom body (optional)
 	Data        map[string]interface{} `json:"data,omitempty"` // Additional data (optional)
 }
 
@@ -463,13 +463,13 @@ func (n *NotificationsHandler) handlePreview(w http.ResponseWriter, r *http.Requ
 
 	// Define test person
 	person := render.Person{
-		Name:      personName,
-		X:         2.0,
-		Y:         1.5,
-		Z:         1.0,
-		Color:     "#4488ff",
+		Name:       personName,
+		X:          2.0,
+		Y:          1.5,
+		Z:          1.0,
+		Color:      "#4488ff",
 		Confidence: 0.85,
-		IsFall:    false,
+		IsFall:     false,
 	}
 
 	var pngData []byte

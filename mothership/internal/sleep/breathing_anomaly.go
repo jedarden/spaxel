@@ -9,9 +9,9 @@ import (
 
 // Anomaly detection constants
 const (
-	BreathingAnomalyEmaAlpha  = 0.05  // Rolling personal average EMA (slow, ~20-night half-life)
-	BreathingAnomalyThreshold = 1.25  // Flag if avg > personal_avg × 1.25
-	BreathingRegularityRegular  = 0.10 // CV below this = regular
+	BreathingAnomalyEmaAlpha     = 0.05 // Rolling personal average EMA (slow, ~20-night half-life)
+	BreathingAnomalyThreshold    = 1.25 // Flag if avg > personal_avg × 1.25
+	BreathingRegularityRegular   = 0.10 // CV below this = regular
 	BreathingRegularityIrregular = 0.25 // CV above this = irregular
 )
 

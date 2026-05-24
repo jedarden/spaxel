@@ -21,8 +21,8 @@ import (
 
 // Handler handles authentication endpoints.
 type Handler struct {
-	db        *sql.DB
-	secretKey []byte // for session token signing
+	db           *sql.DB
+	secretKey    []byte // for session token signing
 	mothershipID string // cached mothership ID
 }
 

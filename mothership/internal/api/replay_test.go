@@ -15,11 +15,11 @@ import (
 
 // mockRecordingStore is a mock implementation of FrameReader for testing.
 type mockRecordingStore struct {
-	stats        replay.Stats
-	scanFunc     func(fn func(recvTimeNS int64, frame []byte) bool) error
+	stats         replay.Stats
+	scanFunc      func(fn func(recvTimeNS int64, frame []byte) bool) error
 	scanRangeFunc func(fromNS, toNS int64, fn func(recvTimeNS int64, frame []byte) bool) error
-	closed       bool
-	closeErr     error
+	closed        bool
+	closeErr      error
 }
 
 func (m *mockRecordingStore) Stats() replay.Stats {
@@ -669,10 +669,10 @@ func TestTune(t *testing.T) {
 				return resp["session_id"].(string)
 			},
 			body: tuneRequest{
-				DeltaRMSThreshold:   &deltaThreshold,
-				TauS:               &tauS,
-				FresnelDecay:       &fresnelDecay,
-				Subcarriers:       &subcarriers,
+				DeltaRMSThreshold:    &deltaThreshold,
+				TauS:                 &tauS,
+				FresnelDecay:         &fresnelDecay,
+				Subcarriers:          &subcarriers,
 				BreathingSensitivity: &breathingSens,
 			},
 			wantStatus: http.StatusOK,
@@ -746,9 +746,9 @@ func TestTune(t *testing.T) {
 			},
 		},
 		{
-			name:  "malformed JSON",
-			setup: func(h *ReplayHandler) string { return "" },
-			body:  tuneRequest{},
+			name:       "malformed JSON",
+			setup:      func(h *ReplayHandler) string { return "" },
+			body:       tuneRequest{},
 			wantStatus: http.StatusBadRequest,
 			check: func(t *testing.T, resp map[string]interface{}) {
 				if _, ok := resp["error"]; !ok {
@@ -839,7 +839,7 @@ func TestReplaySessionLifecycle(t *testing.T) {
 	// 2. Tune the session
 	threshold := 0.03
 	tuneBody, _ := json.Marshal(tuneRequest{
-		SessionID:        sessionID,
+		SessionID:         sessionID,
 		DeltaRMSThreshold: &threshold,
 	})
 	req = httptest.NewRequest("POST", "/api/replay/tune", bytes.NewReader(tuneBody))

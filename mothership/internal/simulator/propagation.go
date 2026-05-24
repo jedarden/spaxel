@@ -444,7 +444,7 @@ func (pm *PropagationModel) PhaseAtSubcarrier(tx, rx, walker Point, subcarrierIn
 	phase := 2 * math.Pi * float64(subcarrierIndex) * SubcarrierSpacing * (totalDist / C)
 
 	// Add small temporal variation for realism
-	temporalPhase := 0.1 * math.Sin(2 * math.Pi * float64(frameNum) / 100.0)
+	temporalPhase := 0.1 * math.Sin(2*math.Pi*float64(frameNum)/100.0)
 	phase += temporalPhase
 
 	// Normalize to [-π, π]

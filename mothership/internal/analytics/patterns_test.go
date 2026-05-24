@@ -491,18 +491,18 @@ func TestPatternLearner_SurvivesRestart(t *testing.T) {
 
 func TestPatternLearner_AlertThresholds(t *testing.T) {
 	tests := []struct {
-		name          string
+		name         string
 		observations []int
-		testCount     int
-		wantAlert     bool
-		wantWarning   bool
+		testCount    int
+		wantAlert    bool
+		wantWarning  bool
 	}{
 		{
-			name:          "normal observation at mean",
+			name:         "normal observation at mean",
 			observations: makeConst(2, 50),
-			testCount:     2,
-			wantAlert:     false,
-			wantWarning:   false,
+			testCount:    2,
+			wantAlert:    false,
+			wantWarning:  false,
 		},
 	}
 

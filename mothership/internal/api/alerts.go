@@ -16,29 +16,29 @@ import (
 
 // AlertsHandler manages the unified alerts API.
 type AlertsHandler struct {
-	mu                sync.RWMutex
-	fallDetector      *falldetect.Detector
-	anomalyDetector   *analytics.Detector
-	fleetRegistry     *fleet.Registry
+	mu              sync.RWMutex
+	fallDetector    *falldetect.Detector
+	anomalyDetector *analytics.Detector
+	fleetRegistry   *fleet.Registry
 }
 
 // Alert represents a unified alert from any source.
 type Alert struct {
-	ID        string  `json:"id"`
-	Type      string  `json:"type"`      // "fall", "anomaly", "node_offline"
-	Severity  string  `json:"severity"`  // "critical", "warning", "info"
-	Title     string  `json:"title"`
-	Message   string  `json:"message"`
-	Zone      string  `json:"zone,omitempty"`
-	Person    string  `json:"person,omitempty"`
+	ID        string `json:"id"`
+	Type      string `json:"type"`     // "fall", "anomaly", "node_offline"
+	Severity  string `json:"severity"` // "critical", "warning", "info"
+	Title     string `json:"title"`
+	Message   string `json:"message"`
+	Zone      string `json:"zone,omitempty"`
+	Person    string `json:"person,omitempty"`
 	Timestamp int64  `json:"timestamp_ms"`
-	Data      any     `json:"data,omitempty"` // Type-specific data
+	Data      any    `json:"data,omitempty"` // Type-specific data
 }
 
 // ActiveAlertsResponse is the response for GET /api/alerts/active.
 type ActiveAlertsResponse struct {
 	Alerts []Alert `json:"alerts"`
-	Count  int      `json:"count"`
+	Count  int     `json:"count"`
 }
 
 // NewAlertsHandler creates a new alerts handler.
@@ -316,4 +316,3 @@ func (h *AlertsHandler) handleAcknowledgeAnomaly(w http.ResponseWriter, r *http.
 	// Override the path parameter to use the prefixed version
 	// This is handled by the unified handler
 }
-

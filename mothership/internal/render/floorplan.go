@@ -26,14 +26,14 @@ const (
 
 // Zone represents a zone in the floor plan.
 type Zone struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	W      float64 `json:"w"`
-	D      float64 `json:"d"`
-	Color  string  `json:"color"`
-	Highlight bool   `json:"highlight"` // Highlight this zone (event location)
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	W         float64 `json:"w"`
+	D         float64 `json:"d"`
+	Color     string  `json:"color"`
+	Highlight bool    `json:"highlight"` // Highlight this zone (event location)
 }
 
 // Node represents a node position.
@@ -46,46 +46,46 @@ type Node struct {
 
 // Person represents a tracked person.
 type Person struct {
-	Name      string  `json:"name"`
-	X         float64 `json:"x"`
-	Y         float64 `json:"y"`
-	Z         float64 `json:"z"`
-	Color     string  `json:"color"`
+	Name       string  `json:"name"`
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	Z          float64 `json:"z"`
+	Color      string  `json:"color"`
 	Confidence float64 `json:"confidence"`
-	IsFall    bool    `json:"is_fall"`
+	IsFall     bool    `json:"is_fall"`
 }
 
 // Portal represents a portal between zones.
 type Portal struct {
-	Name  string  `json:"name"`
-	X1    float64 `json:"x1"`
-	Y1    float64 `json:"y1"`
-	X2    float64 `json:"x2"`
-	Y2    float64 `json:"y2"`
+	Name string  `json:"name"`
+	X1   float64 `json:"x1"`
+	Y1   float64 `json:"y1"`
+	X2   float64 `json:"x2"`
+	Y2   float64 `json:"y2"`
 }
 
 // RenderConfig holds configuration for floor-plan rendering.
 type RenderConfig struct {
-	Width        int           // Image width in pixels (default 300)
-	Height       int           // Image height in pixels (default 300)
-	RoomWidth    float64       // Room width in meters
-	RoomDepth    float64       // Room depth in meters
-	Zones        []Zone        // Zones to render
-	Nodes        []Node        // Nodes to render
-	People       []Person      // People to render
-	Portals      []Portal      // Portals to render
-	EventType    NotificationType // Event type for title overlay
-	EventTitle   string        // Event title text
-	BackgroundColor color.Color // Background color
+	Width           int              // Image width in pixels (default 300)
+	Height          int              // Image height in pixels (default 300)
+	RoomWidth       float64          // Room width in meters
+	RoomDepth       float64          // Room depth in meters
+	Zones           []Zone           // Zones to render
+	Nodes           []Node           // Nodes to render
+	People          []Person         // People to render
+	Portals         []Portal         // Portals to render
+	EventType       NotificationType // Event type for title overlay
+	EventTitle      string           // Event title text
+	BackgroundColor color.Color      // Background color
 }
 
 // DefaultRenderConfig returns a config with sensible defaults.
 func DefaultRenderConfig() RenderConfig {
 	return RenderConfig{
-		Width:        300,
-		Height:       300,
-		RoomWidth:    10.0,
-		RoomDepth:    10.0,
+		Width:           300,
+		Height:          300,
+		RoomWidth:       10.0,
+		RoomDepth:       10.0,
 		BackgroundColor: color.RGBA{26, 26, 46, 255}, // Dark background
 	}
 }
@@ -136,8 +136,8 @@ func (r *Renderer) Render() ([]byte, error) {
 	scale := math.Min(scaleX, scaleY)
 
 	// Center the drawing
-	offsetX := margin + (drawWidth - r.config.RoomWidth*scale)/2
-	offsetY := margin + (drawHeight - r.config.RoomDepth*scale)/2
+	offsetX := margin + (drawWidth-r.config.RoomWidth*scale)/2
+	offsetY := margin + (drawHeight-r.config.RoomDepth*scale)/2
 
 	// Draw zones
 	for _, zone := range r.config.Zones {
@@ -191,9 +191,9 @@ func (r *Renderer) drawZone(zone Zone, offsetX, offsetY, scale float64) {
 	if zone.Highlight {
 		// Brighter fill for highlighted zone
 		r.dc.SetColor(color.RGBA{
-			R: uint8(math.Min(255, float64(zoneColor.R) * 1.5)),
-			G: uint8(math.Min(255, float64(zoneColor.G) * 1.5)),
-			B: uint8(math.Min(255, float64(zoneColor.B) * 1.5)),
+			R: uint8(math.Min(255, float64(zoneColor.R)*1.5)),
+			G: uint8(math.Min(255, float64(zoneColor.G)*1.5)),
+			B: uint8(math.Min(255, float64(zoneColor.B)*1.5)),
 			A: 150, // Higher opacity for highlight
 		})
 		r.dc.DrawRectangle(x, y, w, h)

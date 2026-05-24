@@ -295,7 +295,7 @@ func (h *Handler) listDevices(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Privacy-Notice", "Phones may appear multiple times due to address rotation. Wearables and AirTags have stable addresses.")
 
 	writeJSON(w, map[string]interface{}{
-		"devices":       devices,
+		"devices":        devices,
 		"privacy_notice": "Phones may appear multiple times due to address rotation. Wearables and AirTags have stable addresses.",
 	})
 }
@@ -531,7 +531,7 @@ func (h *Handler) mergeDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]interface{}{
-		"merged": device,
+		"merged":  device,
 		"message": "Devices merged successfully. " + req.MAC2 + " has been removed.",
 	})
 }
@@ -737,8 +737,8 @@ func (h *Handler) getDeviceAliases(w http.ResponseWriter, r *http.Request) {
 
 type splitDeviceRequest struct {
 	CanonicalAddr string `json:"canonical_addr"` // The canonical device address
-	AliasAddr     string `json:"alias_addr"`      // The alias to split off
-	NewPersonID   string `json:"new_person_id"`   // Optional: assign to different person
+	AliasAddr     string `json:"alias_addr"`     // The alias to split off
+	NewPersonID   string `json:"new_person_id"`  // Optional: assign to different person
 }
 
 // splitDevice splits an alias from its canonical device, creating a separate device entry.

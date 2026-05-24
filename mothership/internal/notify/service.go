@@ -27,22 +27,22 @@ import (
 type NotificationChannel string
 
 const (
-	ChannelNtfy    NotificationChannel = "ntfy"
+	ChannelNtfy     NotificationChannel = "ntfy"
 	ChannelPushover NotificationChannel = "pushover"
 	ChannelGotify   NotificationChannel = "gotify"
-	ChannelWebhook   NotificationChannel = "webhook"
+	ChannelWebhook  NotificationChannel = "webhook"
 )
 
 // Notification represents a notification to send.
 type Notification struct {
-	Title       string                 `json:"title"`
-	Body        string                 `json:"body"`
-	Priority    int                    `json:"priority,omitempty"` // 1-5 for Pushover
-	Tags        []string               `json:"tags,omitempty"`
-	Image       []byte                 `json:"-"` // Base64 encoded image
-	ImageType   string                 `json:"image_type,omitempty"`
-	Data        map[string]interface{} `json:"data,omitempty"`
-	Timestamp   time.Time             `json:"timestamp"`
+	Title     string                 `json:"title"`
+	Body      string                 `json:"body"`
+	Priority  int                    `json:"priority,omitempty"` // 1-5 for Pushover
+	Tags      []string               `json:"tags,omitempty"`
+	Image     []byte                 `json:"-"` // Base64 encoded image
+	ImageType string                 `json:"image_type,omitempty"`
+	Data      map[string]interface{} `json:"data,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
 }
 
 // ChannelConfig holds configuration for a notification channel.
@@ -54,7 +54,7 @@ type ChannelConfig struct {
 	User     string            // pushover user key
 	Username string            // basic auth username
 	Password string            // basic auth password
-	Headers  map[string]string  // custom headers for webhook
+	Headers  map[string]string // custom headers for webhook
 }
 
 // QuietHoursConfig holds quiet hours configuration.
@@ -68,21 +68,21 @@ type QuietHoursConfig struct {
 
 // Service manages notification delivery.
 type Service struct {
-	mu           sync.RWMutex
-	db           *sql.DB
-	channels     map[string]*ChannelConfig
-	quietHours   *QuietHoursConfig
-	httpClient   *http.Client
-	roomConfig   RoomConfigProvider
-	floorPlan    []byte // Cached floor plan image
+	mu         sync.RWMutex
+	db         *sql.DB
+	channels   map[string]*ChannelConfig
+	quietHours *QuietHoursConfig
+	httpClient *http.Client
+	roomConfig RoomConfigProvider
+	floorPlan  []byte // Cached floor plan image
 
 	// Batching
-	pending      []batchedNotification
-	batchTimer   *time.Timer
-	batchWindow  time.Duration
+	pending     []batchedNotification
+	batchTimer  *time.Timer
+	batchWindow time.Duration
 
 	// Callbacks
-	onSend       func(channel string, notif Notification, success bool)
+	onSend func(channel string, notif Notification, success bool)
 }
 
 type batchedNotification struct {
@@ -556,7 +556,6 @@ func (s *Service) sendGotify(cc *ChannelConfig, notif Notification) error {
 	return nil
 }
 
-
 // sendWebhook sends notification via custom webhook.
 func (s *Service) sendWebhook(cc *ChannelConfig, notif Notification) error {
 	if cc.URL == "" {
@@ -609,7 +608,7 @@ func (s *Service) sendWebhook(cc *ChannelConfig, notif Notification) error {
 
 // GenerateFloorPlanThumbnail generates a mini floor plan PNG with blob positions.
 func (s *Service) GenerateFloorPlanThumbnail(width, height int, blobs []struct {
-	X, Y, Z float64
+	X, Y, Z  float64
 	Identity string
 	IsFall   bool
 }) ([]byte, error) {

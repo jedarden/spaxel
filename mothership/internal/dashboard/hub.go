@@ -26,13 +26,13 @@ type Hub struct {
 	ingestionState IngestionState
 
 	// Additional state providers
-	bleState        BLEState
-	triggerState    TriggerState
-	systemHealth    SystemHealthProvider
-	zoneState       ZoneStateProvider
-	eventStore      EventStore
-	securityState   SecurityStateProvider
-	sleepState      SleepStateProvider
+	bleState         BLEState
+	triggerState     TriggerState
+	systemHealth     SystemHealthProvider
+	zoneState        ZoneStateProvider
+	eventStore       EventStore
+	securityState    SecurityStateProvider
+	sleepState       SleepStateProvider
 	briefingProvider BriefingProvider
 
 	// Pending events buffer — events accumulated between 10 Hz delta ticks.
@@ -57,17 +57,17 @@ type Hub struct {
 // snapshotCache holds serialised JSON bytes for each snapshot field,
 // allowing cheap byte-level comparison when computing deltas.
 type snapshotCache struct {
-	blobsJSON         []byte
-	nodesJSON         []byte
-	zonesJSON         []byte
-	portalsJSON       []byte
-	linksJSON         []byte
-	bleJSON           []byte
-	triggersJSON      []byte
-	motionStatesJSON  []byte
-	securityJSON      []byte
-	confidence        int
-	timestampMs       int64
+	blobsJSON        []byte
+	nodesJSON        []byte
+	zonesJSON        []byte
+	portalsJSON      []byte
+	linksJSON        []byte
+	bleJSON          []byte
+	triggersJSON     []byte
+	motionStatesJSON []byte
+	securityJSON     []byte
+	confidence       int
+	timestampMs      int64
 }
 
 // ZoneStateProvider is an interface to query zone data for the dashboard snapshot.
@@ -80,46 +80,46 @@ type ZoneStateProvider interface {
 
 // PortalSnapshot is the wire format for a portal in the dashboard snapshot.
 type PortalSnapshot struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	ZoneA     string  `json:"zone_a"`
-	ZoneB     string  `json:"zone_b"`
-	P1X       float64 `json:"p1_x"`
-	P1Y       float64 `json:"p1_y"`
-	P1Z       float64 `json:"p1_z"`
-	P2X       float64 `json:"p2_x"`
-	P2Y       float64 `json:"p2_y"`
-	P2Z       float64 `json:"p2_z"`
-	P3X       float64 `json:"p3_x"`
-	P3Y       float64 `json:"p3_y"`
-	P3Z       float64 `json:"p3_z"`
-	NX        float64 `json:"n_x"`
-	NY        float64 `json:"n_y"`
-	NZ        float64 `json:"n_z"`
-	Width     float64 `json:"width"`
-	Height    float64 `json:"height"`
-	Enabled   bool    `json:"enabled"`
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	ZoneA   string  `json:"zone_a"`
+	ZoneB   string  `json:"zone_b"`
+	P1X     float64 `json:"p1_x"`
+	P1Y     float64 `json:"p1_y"`
+	P1Z     float64 `json:"p1_z"`
+	P2X     float64 `json:"p2_x"`
+	P2Y     float64 `json:"p2_y"`
+	P2Z     float64 `json:"p2_z"`
+	P3X     float64 `json:"p3_x"`
+	P3Y     float64 `json:"p3_y"`
+	P3Z     float64 `json:"p3_z"`
+	NX      float64 `json:"n_x"`
+	NY      float64 `json:"n_y"`
+	NZ      float64 `json:"n_z"`
+	Width   float64 `json:"width"`
+	Height  float64 `json:"height"`
+	Enabled bool    `json:"enabled"`
 }
 
 // ZoneSnapshot is the wire format for a zone in the dashboard snapshot.
 type ZoneSnapshot struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Count       int      `json:"count"`
-	People      []string `json:"people"`
-	MinX        float64  `json:"x"`
-	MinY        float64  `json:"y"`
-	MinZ        float64  `json:"z"`
-	SizeX       float64  `json:"w"`
-	SizeY       float64  `json:"d"`
-	SizeZ       float64  `json:"h"`
-	OccStatus   string   `json:"occ_status,omitempty"` // "uncertain" or "reconciled"
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Count     int      `json:"count"`
+	People    []string `json:"people"`
+	MinX      float64  `json:"x"`
+	MinY      float64  `json:"y"`
+	MinZ      float64  `json:"z"`
+	SizeX     float64  `json:"w"`
+	SizeY     float64  `json:"d"`
+	SizeZ     float64  `json:"h"`
+	OccStatus string   `json:"occ_status,omitempty"` // "uncertain" or "reconciled"
 }
 
 // ZoneOccupancySnapshot provides occupancy counts for zones.
 type ZoneOccupancySnapshot struct {
-	Count   int    `json:"count"`
-	BlobIDs []int  `json:"blob_ids"`
+	Count   int   `json:"count"`
+	BlobIDs []int `json:"blob_ids"`
 }
 
 // IngestionState is an interface to query node/link/motion state from ingestion
@@ -915,16 +915,16 @@ func (h *Hub) broadcastBLEScan() {
 // This implements the fleet.FleetChangeBroadcaster interface.
 func (h *Hub) BroadcastFleetChange(event fleet.FleetChangeEvent) {
 	msg := map[string]interface{}{
-		"type":              "fleet_change",
-		"timestamp":         event.Timestamp.UnixMilli(),
-		"trigger_reason":    event.TriggerReason,
-		"mean_gdop_before":  event.MeanGDOPBefore,
-		"mean_gdop_after":   event.MeanGDOPAfter,
-		"coverage_before":   event.CoverageBefore,
-		"coverage_after":    event.CoverageAfter,
-		"coverage_delta":    event.CoverageDelta,
-		"is_degradation":    event.IsDegradation,
-		"role_assignments":  event.RoleAssignments,
+		"type":             "fleet_change",
+		"timestamp":        event.Timestamp.UnixMilli(),
+		"trigger_reason":   event.TriggerReason,
+		"mean_gdop_before": event.MeanGDOPBefore,
+		"mean_gdop_after":  event.MeanGDOPAfter,
+		"coverage_before":  event.CoverageBefore,
+		"coverage_after":   event.CoverageAfter,
+		"coverage_delta":   event.CoverageDelta,
+		"is_degradation":   event.IsDegradation,
+		"role_assignments": event.RoleAssignments,
 	}
 
 	if event.OfflineMAC != "" {
@@ -993,12 +993,12 @@ func (h *Hub) BroadcastFleetHealth(nodes []fleet.NodeRecord, roles map[string]st
 // BroadcastFleetHistory broadcasts optimisation history to dashboard.
 func (h *Hub) BroadcastFleetHistory(history []fleet.OptimisationHistoryRecord) {
 	type historyEntry struct {
-		ID              int64   `json:"id"`
-		Timestamp       int64   `json:"timestamp_ms"`
-		TriggerReason   string  `json:"trigger_reason"`
-		MeanGDOPBefore  float64 `json:"mean_gdop_before"`
-		MeanGDOPAfter   float64 `json:"mean_gdop_after"`
-		CoverageDelta   float64 `json:"coverage_delta"`
+		ID             int64   `json:"id"`
+		Timestamp      int64   `json:"timestamp_ms"`
+		TriggerReason  string  `json:"trigger_reason"`
+		MeanGDOPBefore float64 `json:"mean_gdop_before"`
+		MeanGDOPAfter  float64 `json:"mean_gdop_after"`
+		CoverageDelta  float64 `json:"coverage_delta"`
 	}
 
 	wireHistory := make([]historyEntry, len(history))
@@ -1131,11 +1131,11 @@ func (h *Hub) BroadcastSystemHealth(uptimeS int64, nodeCount, beadCount, goRouti
 	msg := map[string]interface{}{
 		"type": "system_health",
 		"health": map[string]interface{}{
-			"uptime_s":     uptimeS,
-			"node_count":   nodeCount,
-			"bead_count":   beadCount,
-			"go_routines":  goRoutines,
-			"mem_mb":       memMB,
+			"uptime_s":    uptimeS,
+			"node_count":  nodeCount,
+			"bead_count":  beadCount,
+			"go_routines": goRoutines,
+			"mem_mb":      memMB,
 		},
 	}
 	data, _ := json.Marshal(msg)
@@ -1149,14 +1149,14 @@ func (h *Hub) BroadcastEventFromDB(id int64, timestamp int64, eventType, zone, p
 	msg := map[string]interface{}{
 		"type": "event",
 		"event": map[string]interface{}{
-			"id":           id,
-			"ts":           timestamp,
-			"kind":         eventType,
-			"zone":         zone,
-			"blob_id":      blobID,
-			"person_name":  person,
-			"detail_json":  detailJSON,
-			"severity":     severity,
+			"id":          id,
+			"ts":          timestamp,
+			"kind":        eventType,
+			"zone":        zone,
+			"blob_id":     blobID,
+			"person_name": person,
+			"detail_json": detailJSON,
+			"severity":    severity,
 		},
 	}
 	data, _ := json.Marshal(msg)
@@ -1168,9 +1168,9 @@ func (h *Hub) BroadcastEventFromDB(id int64, timestamp int64, eventType, zone, p
 // reflects the new state. action is "created", "updated", or "deleted".
 func (h *Hub) BroadcastZoneChange(action string, zone ZoneSnapshot) {
 	msg := map[string]interface{}{
-		"type":  "zone_change",
+		"type":   "zone_change",
 		"action": action,
-		"zone":  zone,
+		"zone":   zone,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
@@ -1187,7 +1187,7 @@ func (h *Hub) BroadcastZoneChange(action string, zone ZoneSnapshot) {
 func (h *Hub) BroadcastPortalChange(action string, portal PortalSnapshot) {
 	msg := map[string]interface{}{
 		"type":   "portal_change",
-		"action":  action,
+		"action": action,
 		"portal": portal,
 	}
 	data, _ := json.Marshal(msg)
@@ -1217,8 +1217,8 @@ func (h *Hub) BroadcastLoadState(level int, label string) {
 // completed sleep session exists.
 func (h *Hub) BroadcastMorningSummary(summary map[string]interface{}) {
 	msg := map[string]interface{}{
-		"type":     "morning_summary",
-		"sleep":    summary,
+		"type":  "morning_summary",
+		"sleep": summary,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
@@ -1313,10 +1313,10 @@ func (h *Hub) BroadcastReplayBlobs(blobs []replay.BlobUpdate, timestampMS int64)
 // detection quality drops below 60% for over 24 hours.
 func (h *Hub) BroadcastQualityDrop(zoneID int, zoneName string, quality float64) {
 	msg := map[string]interface{}{
-		"type":        "quality_drop",
-		"zone_id":     zoneID,
-		"zone_name":   zoneName,
-		"quality":     quality,
+		"type":      "quality_drop",
+		"zone_id":   zoneID,
+		"zone_name": zoneName,
+		"quality":   quality,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
@@ -1327,8 +1327,8 @@ func (h *Hub) BroadcastQualityDrop(zoneID int, zoneName string, quality float64)
 // settings key is edited 3+ times within 60 minutes.
 func (h *Hub) BroadcastRepeatedEdit(key string) {
 	msg := map[string]interface{}{
-		"type":  "repeated_edit",
-		"key":   key,
+		"type": "repeated_edit",
+		"key":  key,
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
@@ -1387,12 +1387,12 @@ func (h *Hub) BroadcastZoneOccupancy(occupancy map[string]ZoneOccupancySnapshot)
 // Fired when a blob crosses a portal from one zone to another.
 func (h *Hub) BroadcastZoneTransition(portalID string, personLabel string, fromZone, toZone string) {
 	msg := map[string]interface{}{
-		"type":       "zone_transition",
-		"portal_id":  portalID,
-		"person":     personLabel,
-		"from_zone":  fromZone,
-		"to_zone":    toZone,
-		"timestamp":  time.Now().Format(time.RFC3339),
+		"type":      "zone_transition",
+		"portal_id": portalID,
+		"person":    personLabel,
+		"from_zone": fromZone,
+		"to_zone":   toZone,
+		"timestamp": time.Now().Format(time.RFC3339),
 	}
 	data, _ := json.Marshal(msg)
 	h.Broadcast(data)
@@ -1402,12 +1402,12 @@ func (h *Hub) BroadcastZoneTransition(portalID string, personLabel string, fromZ
 // Called when OTA state changes (pending, downloading, rebooting, verified, failed, rollback).
 func (h *Hub) BroadcastOTAProgress(mac string, state string, progressPct uint8, expectedVersion, previousVersion string, errorMsg string) {
 	msg := map[string]interface{}{
-		"type":              "ota_progress",
-		"mac":               mac,
-		"state":             state,
-		"progress_pct":      progressPct,
-		"expected_version":  expectedVersion,
-		"previous_version":  previousVersion,
+		"type":             "ota_progress",
+		"mac":              mac,
+		"state":            state,
+		"progress_pct":     progressPct,
+		"expected_version": expectedVersion,
+		"previous_version": previousVersion,
 	}
 	if errorMsg != "" {
 		msg["error"] = errorMsg

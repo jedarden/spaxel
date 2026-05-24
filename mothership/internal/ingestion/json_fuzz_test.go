@@ -29,17 +29,17 @@ func FuzzParseJSONFrame(f *testing.F) {
 
 	// 2. Valid health message
 	healthMsg := HealthMessage{
-		Type:         "health",
-		MAC:          "AA:BB:CC:DD:EE:FF",
-		TimestampMS:  1711234567890,
+		Type:          "health",
+		MAC:           "AA:BB:CC:DD:EE:FF",
+		TimestampMS:   1711234567890,
 		FreeHeapBytes: 204800,
-		WifiRSSIdBm:  -52,
-		UptimeMS:     3600000,
-		TemperatureC: 42.1,
-		CSIRateHz:    20,
-		WifiChannel:  6,
-		IP:           "192.168.1.123",
-		NTPSynced:    true,
+		WifiRSSIdBm:   -52,
+		UptimeMS:      3600000,
+		TemperatureC:  42.1,
+		CSIRateHz:     20,
+		WifiChannel:   6,
+		IP:            "192.168.1.123",
+		NTPSynced:     true,
 	}
 	healthBytes, _ := json.Marshal(healthMsg)
 	f.Add(healthBytes)
@@ -196,11 +196,11 @@ func makeLongJSON() []byte {
 // TestParseJSONMessageProperty tests specific properties of ParseJSONMessage
 func TestParseJSONMessageProperty(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantErr    bool
+		name        string
+		input       string
+		wantErr     bool
 		errContains string
-		wantType   interface{}
+		wantType    interface{}
 	}{
 		{
 			name:     "valid hello message",
@@ -233,32 +233,32 @@ func TestParseJSONMessageProperty(t *testing.T) {
 			wantType: &OTAStatusMessage{},
 		},
 		{
-			name:       "unknown type returns typed error",
-			input:      `{"type":"unknown_type","mac":"AA:BB:CC:DD:EE:FF"}`,
-			wantErr:    true,
+			name:        "unknown type returns typed error",
+			input:       `{"type":"unknown_type","mac":"AA:BB:CC:DD:EE:FF"}`,
+			wantErr:     true,
 			errContains: "unknown message type: unknown_type",
 		},
 		{
-			name:       "invalid JSON returns error",
-			input:      `{invalid json}`,
-			wantErr:    true,
+			name:        "invalid JSON returns error",
+			input:       `{invalid json}`,
+			wantErr:     true,
 			errContains: "failed to parse message type",
 		},
 		{
-			name:       "missing type field returns error",
-			input:      `{"mac":"AA:BB:CC:DD:EE:FF"}`,
-			wantErr:    true,
+			name:        "missing type field returns error",
+			input:       `{"mac":"AA:BB:CC:DD:EE:FF"}`,
+			wantErr:     true,
 			errContains: "unknown message type",
 		},
 		{
-			name:     "hello with invalid fields returns error",
-			input:    `{"type":"hello","mac":"invalid-mac"}`,
-			wantErr:  false, // ParseJSONMessage doesn't validate MAC format
+			name:    "hello with invalid fields returns error",
+			input:   `{"type":"hello","mac":"invalid-mac"}`,
+			wantErr: false, // ParseJSONMessage doesn't validate MAC format
 		},
 		{
-			name:     "empty JSON object",
-			input:    `{}`,
-			wantErr:  true,
+			name:        "empty JSON object",
+			input:       `{}`,
+			wantErr:     true,
 			errContains: "unknown message type",
 		},
 	}
@@ -306,7 +306,7 @@ func TestParseJSONMessageProperty(t *testing.T) {
 func containsString(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-		containsInMiddle(s, substr)))
+			containsInMiddle(s, substr)))
 }
 
 func containsInMiddle(s, substr string) bool {

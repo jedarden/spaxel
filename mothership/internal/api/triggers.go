@@ -27,16 +27,16 @@ type TriggersHandler struct {
 
 // Trigger represents an automation trigger.
 type Trigger struct {
-	ID              string           `json:"id"`
-	Name            string           `json:"name"`
-	Enabled         bool             `json:"enabled"`
-	Condition       string           `json:"condition"` // enter, leave, dwell, vacant, count
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Enabled         bool            `json:"enabled"`
+	Condition       string          `json:"condition"` // enter, leave, dwell, vacant, count
 	ConditionParams json.RawMessage `json:"condition_params"`
 	TimeConstraint  json.RawMessage `json:"time_constraint,omitempty"`
 	Actions         json.RawMessage `json:"actions"`
-	LastFired       *time.Time       `json:"last_fired,omitempty"`
-	Elapsed         int              `json:"elapsed,omitempty"` // seconds since last fire
-	CreatedAt       time.Time        `json:"created_at"`
+	LastFired       *time.Time      `json:"last_fired,omitempty"`
+	Elapsed         int             `json:"elapsed,omitempty"` // seconds since last fire
+	CreatedAt       time.Time       `json:"created_at"`
 }
 
 // TriggerEngine is the interface to the automation engine.
@@ -241,10 +241,10 @@ func (t *TriggersHandler) listTriggers(w http.ResponseWriter, r *http.Request) {
 }
 
 type createTriggerRequest struct {
-	ID              string           `json:"id"`
-	Name            string           `json:"name"`
-	Enabled         *bool            `json:"enabled,omitempty"`
-	Condition       string           `json:"condition"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Enabled         *bool           `json:"enabled,omitempty"`
+	Condition       string          `json:"condition"`
 	ConditionParams json.RawMessage `json:"condition_params"`
 	TimeConstraint  json.RawMessage `json:"time_constraint,omitempty"`
 	Actions         json.RawMessage `json:"actions"`
@@ -564,8 +564,8 @@ func (t *TriggersHandler) EvaluateTriggers(blobs []BlobPos) []string {
 
 		// Parse condition params
 		var params struct {
-			DurationS      *int `json:"duration_s"`
-			CountThreshold *int `json:"count_threshold"`
+			DurationS      *int   `json:"duration_s"`
+			CountThreshold *int   `json:"count_threshold"`
 			PersonID       string `json:"person_id,omitempty"`
 			VolumeID       string `json:"volume_id,omitempty"`
 		}

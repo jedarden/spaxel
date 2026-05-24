@@ -11,20 +11,20 @@ import (
 
 // SleepRecord represents a row in the sleep_records table (main spaxel.db).
 type SleepRecord struct {
-	ID                   int64     `json:"id"`
-	Person               string    `json:"person,omitempty"`
-	ZoneID               *int      `json:"zone_id,omitempty"`
-	Date                 string    `json:"date"`
-	BedTimeMs            *int64    `json:"bed_time_ms,omitempty"`
-	WakeTimeMs           *int64    `json:"wake_time_ms,omitempty"`
-	DurationMin          *int      `json:"duration_min,omitempty"`
-	OnsetLatencyMin      *float64  `json:"onset_latency_min,omitempty"`
-	Restlessness         *float64  `json:"restlessness,omitempty"`
-	BreathingRateAvg     *float64  `json:"breathing_rate_avg,omitempty"`
-	BreathingRegularity  *float64  `json:"breathing_regularity,omitempty"`
-	BreathingAnomaly     *bool     `json:"breathing_anomaly,omitempty"`
-	BreathingSamplesJSON *string   `json:"breathing_samples_json,omitempty"`
-	SummaryJSON          *string   `json:"summary_json,omitempty"`
+	ID                   int64    `json:"id"`
+	Person               string   `json:"person,omitempty"`
+	ZoneID               *int     `json:"zone_id,omitempty"`
+	Date                 string   `json:"date"`
+	BedTimeMs            *int64   `json:"bed_time_ms,omitempty"`
+	WakeTimeMs           *int64   `json:"wake_time_ms,omitempty"`
+	DurationMin          *int     `json:"duration_min,omitempty"`
+	OnsetLatencyMin      *float64 `json:"onset_latency_min,omitempty"`
+	Restlessness         *float64 `json:"restlessness,omitempty"`
+	BreathingRateAvg     *float64 `json:"breathing_rate_avg,omitempty"`
+	BreathingRegularity  *float64 `json:"breathing_regularity,omitempty"`
+	BreathingAnomaly     *bool    `json:"breathing_anomaly,omitempty"`
+	BreathingSamplesJSON *string  `json:"breathing_samples_json,omitempty"`
+	SummaryJSON          *string  `json:"summary_json,omitempty"`
 }
 
 // SleepRecordStore handles persistence of sleep records against the main DB.

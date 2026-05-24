@@ -10,7 +10,7 @@ import (
 
 func TestSinglePersonTracking(t *testing.T) {
 	tr := NewTracker()
-	const dt = 0.1  // 10 Hz
+	const dt = 0.1 // 10 Hz
 	const steps = 50
 
 	// Straight walk: x advances at 0.8 m/s, y=1.0 m (standing), z constant.

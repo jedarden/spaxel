@@ -403,7 +403,7 @@ func TestBatchingWindowExpiry(t *testing.T) {
 	// Set short batch window
 	ext.SetBatchingConfig(BatchingConfig{
 		Enabled:          true,
-		BatchWindowSec:   1, // 1 second window
+		BatchWindowSec:   1,   // 1 second window
 		MaxBatchSize:     100, // High max size, won't trigger flush
 		BatchLowPriority: true,
 		BatchMedium:      true,
@@ -452,10 +452,10 @@ func TestQuietHoursCrossMidnight(t *testing.T) {
 
 	// Test various times
 	testCases := []struct {
-		hour      int
-		min       int
-		expected  bool
-		desc      string
+		hour     int
+		min      int
+		expected bool
+		desc     string
 	}{
 		{21, 59, false, "21:59 - before quiet hours"},
 		{22, 0, true, "22:00 - quiet hours start"},
@@ -698,9 +698,9 @@ func TestFloorPlanRendererBlobClamping(t *testing.T) {
 		Identity string
 		IsFall   bool
 	}{
-		{X: -1.0, Z: -1.0}, // Outside (negative)
+		{X: -1.0, Z: -1.0},   // Outside (negative)
 		{X: 100.0, Z: 100.0}, // Outside (beyond room)
-		{X: 3.0, Z: 2.5}, // Inside
+		{X: 3.0, Z: 2.5},     // Inside
 	}
 
 	// Should not panic with out-of-bounds blobs
@@ -1258,8 +1258,8 @@ func TestMorningDigestPreventsDuplicateSend(t *testing.T) {
 	ext.mu.Unlock()
 
 	today := time.Now().Format("2006-01-02")
-	ext.digestLastDate = today    // Simulate already sent today
-	ext.digestSentToday = true    // Also need to set this flag
+	ext.digestLastDate = today // Simulate already sent today
+	ext.digestSentToday = true // Also need to set this flag
 
 	// Try to send digest
 	ext.sendMorningDigest()

@@ -15,8 +15,8 @@ import (
 
 // IntegrationSettingsHandler manages home automation integration settings.
 type IntegrationSettingsHandler struct {
-	mu     sync.RWMutex
-	db     *sql.DB
+	mu sync.RWMutex
+	db *sql.DB
 
 	// MQTT configuration (managed via settings table)
 	mqttClient MQTTClient
@@ -119,25 +119,25 @@ func (h *IntegrationSettingsHandler) RegisterRoutes(r chi.Router) {
 
 // integrationSettingsResponse is the response for integration settings.
 type integrationSettingsResponse struct {
-	MQTT      *mqttConfig      `json:"mqtt,omitempty"`
-	Webhook   *webhookConfig   `json:"webhook,omitempty"`
+	MQTT    *mqttConfig    `json:"mqtt,omitempty"`
+	Webhook *webhookConfig `json:"webhook,omitempty"`
 }
 
 // mqttConfig holds MQTT configuration.
 type mqttConfig struct {
 	Broker          string `json:"broker,omitempty"`           // e.g., "tcp://homeassistant.local:1883"
-	Username        string `json:"username,omitempty"`        // MQTT username
-	Password        string `json:"password,omitempty"`        // MQTT password (write-only, never returned)
+	Username        string `json:"username,omitempty"`         // MQTT username
+	Password        string `json:"password,omitempty"`         // MQTT password (write-only, never returned)
 	TLS             bool   `json:"tls,omitempty"`              // Whether to use TLS
 	DiscoveryPrefix string `json:"discovery_prefix,omitempty"` // Home Assistant discovery prefix
-	Connected       bool   `json:"connected"`                 // Connection status
-	MothershipID    string `json:"mothership_id,omitempty"`  // Unique ID
+	Connected       bool   `json:"connected"`                  // Connection status
+	MothershipID    string `json:"mothership_id,omitempty"`    // Unique ID
 }
 
 // webhookConfig holds system webhook configuration.
 type webhookConfig struct {
-	URL     string `json:"url,omitempty"`     // Webhook URL
-	Enabled bool   `json:"enabled"`          // Whether webhook is enabled
+	URL     string `json:"url,omitempty"` // Webhook URL
+	Enabled bool   `json:"enabled"`       // Whether webhook is enabled
 }
 
 // integrationSettingsRequest is the request body for updating integration settings.

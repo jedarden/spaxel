@@ -18,22 +18,22 @@ import (
 type EventType string
 
 const (
-	EventTypeDetection        EventType = "detection"
-	EventTypeZoneEntry        EventType = "zone_entry"
-	EventTypeZoneExit         EventType = "zone_exit"
-	EventTypePortalCrossing   EventType = "portal_crossing"
-	EventTypeTriggerFired     EventType = "trigger_fired"
-	EventTypeFallAlert        EventType = "fall_alert"
-	EventTypeAnomaly          EventType = "anomaly"
-	EventTypeSecurityAlert    EventType = "security_alert"
-	EventTypeNodeOnline       EventType = "node_online"
-	EventTypeNodeOffline      EventType = "node_offline"
-	EventTypeOTAUpdate        EventType = "ota_update"
-	EventTypeBaselineChanged  EventType = "baseline_changed"
-	EventTypeSystem           EventType = "system"
+	EventTypeDetection         EventType = "detection"
+	EventTypeZoneEntry         EventType = "zone_entry"
+	EventTypeZoneExit          EventType = "zone_exit"
+	EventTypePortalCrossing    EventType = "portal_crossing"
+	EventTypeTriggerFired      EventType = "trigger_fired"
+	EventTypeFallAlert         EventType = "fall_alert"
+	EventTypeAnomaly           EventType = "anomaly"
+	EventTypeSecurityAlert     EventType = "security_alert"
+	EventTypeNodeOnline        EventType = "node_online"
+	EventTypeNodeOffline       EventType = "node_offline"
+	EventTypeOTAUpdate         EventType = "ota_update"
+	EventTypeBaselineChanged   EventType = "baseline_changed"
+	EventTypeSystem            EventType = "system"
 	EventTypeLearningMilestone EventType = "learning_milestone"
-	EventTypeSleepStart       EventType = "sleep_session_start"
-	EventTypeSleepEnd         EventType = "sleep_session_end"
+	EventTypeSleepStart        EventType = "sleep_session_start"
+	EventTypeSleepEnd          EventType = "sleep_session_end"
 )
 
 // EventSeverity represents the severity level of an event.

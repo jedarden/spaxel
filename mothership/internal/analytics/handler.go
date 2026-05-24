@@ -145,6 +145,7 @@ func (h *AnomalyHandler) RegisterRoutes(r chi.Router) {
 // handleGetAnomalies returns anomalies filtered by the `since` query parameter.
 // Query params:
 //   - since: duration string (e.g. "24h", "7d", "1h"). Default "24h".
+//
 // Uses DB-backed QueryAnomalyEvents so results survive server restarts.
 func (h *AnomalyHandler) handleGetAnomalies(w http.ResponseWriter, r *http.Request) {
 	if h.detector == nil {
@@ -259,9 +260,9 @@ func (h *AnomalyHandler) handleGetLearningProgress(w http.ResponseWriter, r *htt
 	ready := h.detector.IsModelReady()
 
 	response := map[string]interface{}{
-		"progress":    progress,
-		"model_ready": ready,
-		"days_learned": int(progress * 7),
+		"progress":       progress,
+		"model_ready":    ready,
+		"days_learned":   int(progress * 7),
 		"days_remaining": int((1 - progress) * 7),
 	}
 	writeJSON(w, response)

@@ -925,7 +925,7 @@ func TestDiurnalBaseline_Crossfade15MinuteWindow(t *testing.T) {
 	// Test progression across the first 15 minutes of hour 13
 	testMinutes := []int{0, 5, 10, 15, 16, 30, 45}
 	// expectedFracs: 0 at start, 1/3 at 5 min, 2/3 at 10 min, 1 at 15 min, then 1 for rest
-	expectedFracs := []float64{0.0, 1.0/3.0, 2.0/3.0, 1.0, 1.0, 1.0, 1.0}
+	expectedFracs := []float64{0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0, 1.0, 1.0, 1.0}
 
 	for i, minute := range testMinutes {
 		testTime := time.Date(2024, 1, 15, 13, minute, 0, 0, loc)

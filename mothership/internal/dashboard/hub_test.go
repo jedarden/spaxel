@@ -397,12 +397,12 @@ func TestHub_BroadcastAlert(t *testing.T) {
 
 func TestHub_BroadcastEvent(t *testing.T) {
 	tests := []struct {
-		name        string
-		eventID     string
-		kind        string
-		zone        string
-		blobID      int
-		personName  string
+		name       string
+		eventID    string
+		kind       string
+		zone       string
+		blobID     int
+		personName string
 	}{
 		{
 			name:       "zone entry with person",
@@ -584,46 +584,46 @@ func TestHub_BroadcastBLEScan(t *testing.T) {
 
 func TestHub_BroadcastEventFromDB(t *testing.T) {
 	tests := []struct {
-		name        string
-		id          int64
-		timestamp   int64
-		eventType   string
-		zone        string
-		person      string
-		blobID      int
-		detailJSON  string
-		severity    string
+		name       string
+		id         int64
+		timestamp  int64
+		eventType  string
+		zone       string
+		person     string
+		blobID     int
+		detailJSON string
+		severity   string
 	}{
 		{
-			name:      "zone entry with person and detail",
-			id:        42,
-			timestamp: 1711234567890,
-			eventType: "zone_entry",
-			zone:      "Kitchen",
-			person:    "Alice",
-			blobID:    2,
+			name:       "zone entry with person and detail",
+			id:         42,
+			timestamp:  1711234567890,
+			eventType:  "zone_entry",
+			zone:       "Kitchen",
+			person:     "Alice",
+			blobID:     2,
 			detailJSON: `{"direction":"north"}`,
+			severity:   "info",
+		},
+		{
+			name:      "zone exit without person",
+			id:        43,
+			timestamp: 1711234567891,
+			eventType: "zone_exit",
+			zone:      "Kitchen",
+			person:    "",
+			blobID:    3,
 			severity:  "info",
 		},
 		{
-			name:       "zone exit without person",
-			id:         43,
-			timestamp:  1711234567891,
-			eventType:  "zone_exit",
-			zone:       "Kitchen",
-			person:     "",
-			blobID:     3,
-			severity:   "info",
-		},
-		{
-			name:       "portal crossing",
-			id:         44,
-			timestamp:  1711234567892,
-			eventType:  "portal_crossing",
-			zone:       "Hallway",
-			person:     "Bob",
-			blobID:     1,
-			severity:   "info",
+			name:      "portal crossing",
+			id:        44,
+			timestamp: 1711234567892,
+			eventType: "portal_crossing",
+			zone:      "Hallway",
+			person:    "Bob",
+			blobID:    1,
+			severity:  "info",
 		},
 		{
 			name:       "anomaly alert",
@@ -637,14 +637,14 @@ func TestHub_BroadcastEventFromDB(t *testing.T) {
 			severity:   "warning",
 		},
 		{
-			name:       "minimal event",
-			id:         46,
-			timestamp:  1711234567894,
-			eventType:  "system",
-			zone:       "",
-			person:     "",
-			blobID:     0,
-			severity:   "info",
+			name:      "minimal event",
+			id:        46,
+			timestamp: 1711234567894,
+			eventType: "system",
+			zone:      "",
+			person:    "",
+			blobID:    0,
+			severity:  "info",
 		},
 	}
 
@@ -729,12 +729,12 @@ func TestHub_BroadcastEventFromDB(t *testing.T) {
 
 func TestHub_BroadcastSystemHealth(t *testing.T) {
 	tests := []struct {
-		name        string
-		uptimeS     int64
-		nodeCount   int
-		beadCount   int
-		goRoutines  int
-		memMB       float64
+		name       string
+		uptimeS    int64
+		nodeCount  int
+		beadCount  int
+		goRoutines int
+		memMB      float64
 	}{
 		{
 			name:       "fresh start",
@@ -878,32 +878,32 @@ func TestHub_DeltaOmitsTypeField(t *testing.T) {
 
 func TestHub_BroadcastTriggerState(t *testing.T) {
 	tests := []struct {
-		name       string
-		triggerID  string
+		name        string
+		triggerID   string
 		triggerName string
-		lastFired  time.Time
-		enabled    bool
+		lastFired   time.Time
+		enabled     bool
 	}{
 		{
-			name:       "enabled trigger with last fired",
-			triggerID:  "trigger-1",
+			name:        "enabled trigger with last fired",
+			triggerID:   "trigger-1",
 			triggerName: "Couch Dwell",
-			lastFired:  time.Date(2026, 4, 7, 14, 32, 5, 0, time.UTC),
-			enabled:    true,
+			lastFired:   time.Date(2026, 4, 7, 14, 32, 5, 0, time.UTC),
+			enabled:     true,
 		},
 		{
-			name:       "disabled trigger never fired",
-			triggerID:  "trigger-2",
+			name:        "disabled trigger never fired",
+			triggerID:   "trigger-2",
 			triggerName: "Hallway Motion",
-			lastFired:  time.Time{},
-			enabled:    false,
+			lastFired:   time.Time{},
+			enabled:     false,
 		},
 		{
-			name:       "enabled trigger never fired",
-			triggerID:  "trigger-3",
+			name:        "enabled trigger never fired",
+			triggerID:   "trigger-3",
 			triggerName: "Kitchen Entry",
-			lastFired:  time.Time{},
-			enabled:    true,
+			lastFired:   time.Time{},
+			enabled:     true,
 		},
 	}
 

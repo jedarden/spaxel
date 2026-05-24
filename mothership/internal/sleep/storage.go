@@ -25,24 +25,24 @@ type Storage struct {
 
 // SleepSessionRecord represents a persisted sleep session.
 type SleepSessionRecord struct {
-	ID                      string        `json:"id"`
-	PersonID                string        `json:"person_id"`
-	LinkID                  string        `json:"link_id"`
-	ZoneID                  string        `json:"zone_id"`
-	SessionDate             time.Time     `json:"session_date"`
-	SleepOnset              time.Time     `json:"sleep_onset"`
-	WakeTime                time.Time     `json:"wake_time,omitempty"`
-	TimeInBedMinutes        float64       `json:"time_in_bed_minutes"`
-	SleepLatencyMinutes     float64       `json:"sleep_latency_minutes"`
-	WakeEpisodeCount        int           `json:"wake_episode_count"`
-	WASOMinutes             float64       `json:"waso_minutes"`
-	BreathingRateMean       float64       `json:"breathing_rate_mean"`
-	BreathingRateStdDev     float64       `json:"breathing_rate_std_dev"`
-	BreathingAnomalyCount   int           `json:"breathing_anomaly_count"`
-	SleepEfficiency         float64       `json:"sleep_efficiency"`
-	OverallScore            float64       `json:"overall_score"`
-	QualityRating           string        `json:"quality_rating"`
-	WakeEpisodes            []WakeEpisode `json:"wake_episodes,omitempty"`
+	ID                    string        `json:"id"`
+	PersonID              string        `json:"person_id"`
+	LinkID                string        `json:"link_id"`
+	ZoneID                string        `json:"zone_id"`
+	SessionDate           time.Time     `json:"session_date"`
+	SleepOnset            time.Time     `json:"sleep_onset"`
+	WakeTime              time.Time     `json:"wake_time,omitempty"`
+	TimeInBedMinutes      float64       `json:"time_in_bed_minutes"`
+	SleepLatencyMinutes   float64       `json:"sleep_latency_minutes"`
+	WakeEpisodeCount      int           `json:"wake_episode_count"`
+	WASOMinutes           float64       `json:"waso_minutes"`
+	BreathingRateMean     float64       `json:"breathing_rate_mean"`
+	BreathingRateStdDev   float64       `json:"breathing_rate_std_dev"`
+	BreathingAnomalyCount int           `json:"breathing_anomaly_count"`
+	SleepEfficiency       float64       `json:"sleep_efficiency"`
+	OverallScore          float64       `json:"overall_score"`
+	QualityRating         string        `json:"quality_rating"`
+	WakeEpisodes          []WakeEpisode `json:"wake_episodes,omitempty"`
 }
 
 // NewStorage creates a new storage instance.
@@ -516,13 +516,13 @@ func (s *Storage) GetWeeklyTrends(personID string) (*WeeklyTrends, error) {
 
 // WeeklyTrends holds aggregated weekly sleep statistics.
 type WeeklyTrends struct {
-	DailyDurations    []float64 `json:"daily_durations"`
-	DailyEfficiencies []float64 `json:"daily_efficiencies"`
-	DailyDates        []string  `json:"daily_dates"`
-	AvgDurationMinutes float64  `json:"avg_duration_minutes"`
-	AvgEfficiency     float64   `json:"avg_efficiency"`
-	AvgBreathingRate  float64   `json:"avg_breathing_rate"`
-	NightsCount       int       `json:"nights_count"`
+	DailyDurations     []float64 `json:"daily_durations"`
+	DailyEfficiencies  []float64 `json:"daily_efficiencies"`
+	DailyDates         []string  `json:"daily_dates"`
+	AvgDurationMinutes float64   `json:"avg_duration_minutes"`
+	AvgEfficiency      float64   `json:"avg_efficiency"`
+	AvgBreathingRate   float64   `json:"avg_breathing_rate"`
+	NightsCount        int       `json:"nights_count"`
 }
 
 // DeleteOldSessions deletes sessions older than the specified days.

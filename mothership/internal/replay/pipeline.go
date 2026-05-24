@@ -11,12 +11,12 @@ import (
 // Pipeline processes CSI frames through the signal processing pipeline
 // during replay, producing blob updates that are broadcast to the dashboard.
 type Pipeline struct {
-	mu       sync.Mutex
-	params   *TunableParams
+	mu          sync.Mutex
+	params      *TunableParams
 	broadcaster BlobBroadcaster
-	speed    float64
-	stopCh   chan struct{}
-	
+	speed       float64
+	stopCh      chan struct{}
+
 	// Blob state for tracking
 	blobIDCounter int
 	blobStates    map[int]*blobState
@@ -41,7 +41,7 @@ type blobState struct {
 func NewPipeline(params *TunableParams, broadcaster BlobBroadcaster) *Pipeline {
 	return &Pipeline{
 		params:        params,
-		broadcaster:  broadcaster,
+		broadcaster:   broadcaster,
 		speed:         1.0,
 		stopCh:        make(chan struct{}),
 		blobIDCounter: 1,
@@ -101,7 +101,7 @@ func (p *Pipeline) generateDemoBlobs(timestampNS int64) []BlobUpdate {
 	// Use timestamp to generate smooth motion
 	// 20 Hz = 50ms per frame, so timestampNS / 50_000_000 gives us a frame counter
 	frame := float64(timestampNS) / 50_000_000
-	
+
 	// Generate 1-2 blobs moving in a figure-8 pattern
 	blobs := make([]BlobUpdate, 0, 2)
 
@@ -157,7 +157,7 @@ func (p *Pipeline) getTrail(blobID int, x, z float64) []float64 {
 
 	// Add current position to trail
 	state.trail = append(state.trail, x, z)
-	
+
 	// Keep trail at max length
 	if len(state.trail) > 60 {
 		state.trail = state.trail[len(state.trail)-60:]

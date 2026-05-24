@@ -179,33 +179,33 @@ func TestAccuracyTracker_ZoneOccupancy(t *testing.T) {
 
 func TestHourOfWeek(t *testing.T) {
 	tests := []struct {
-		name      string
-		time      time.Time
+		name       string
+		time       time.Time
 		hourOfWeek int
 	}{
 		{
-			name:      "Sunday midnight",
-			time:      time.Date(2024, 1, 7, 0, 0, 0, 0, time.UTC), // Sunday
+			name:       "Sunday midnight",
+			time:       time.Date(2024, 1, 7, 0, 0, 0, 0, time.UTC), // Sunday
 			hourOfWeek: 0,
 		},
 		{
-			name:      "Sunday 1am",
-			time:      time.Date(2024, 1, 7, 1, 0, 0, 0, time.UTC),
+			name:       "Sunday 1am",
+			time:       time.Date(2024, 1, 7, 1, 0, 0, 0, time.UTC),
 			hourOfWeek: 1,
 		},
 		{
-			name:      "Monday midnight",
-			time:      time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC), // Monday
+			name:       "Monday midnight",
+			time:       time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC), // Monday
 			hourOfWeek: 24,
 		},
 		{
-			name:      "Monday noon",
-			time:      time.Date(2024, 1, 8, 12, 0, 0, 0, time.UTC),
+			name:       "Monday noon",
+			time:       time.Date(2024, 1, 8, 12, 0, 0, 0, time.UTC),
 			hourOfWeek: 36,
 		},
 		{
-			name:      "Saturday 11pm",
-			time:      time.Date(2024, 1, 6, 23, 0, 0, 0, time.UTC), // Saturday
+			name:       "Saturday 11pm",
+			time:       time.Date(2024, 1, 6, 23, 0, 0, 0, time.UTC), // Saturday
 			hourOfWeek: 167,
 		},
 	}

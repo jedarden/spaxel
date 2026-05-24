@@ -386,10 +386,10 @@ func TestPreMigrationBackup(t *testing.T) {
 // TestCurrentVersion tests getting the current schema version.
 func TestCurrentVersion(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupFunc      func(*sql.DB, *testing.T) error
-		wantVersion    int
-		wantErr        bool
+		name        string
+		setupFunc   func(*sql.DB, *testing.T) error
+		wantVersion int
+		wantErr     bool
 	}{
 		{
 			name: "no migrations table",

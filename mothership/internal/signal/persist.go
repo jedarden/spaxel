@@ -312,8 +312,8 @@ func (s *BaselineStore) LoadDiurnal(linkID string, nSub int) (*DiurnalSnapshot, 
 	}
 
 	snapshot := &DiurnalSnapshot{
-		LinkID:    linkID,
-		Created:   time.Unix(createdAt, 0),
+		LinkID:  linkID,
+		Created: time.Unix(createdAt, 0),
 	}
 
 	// Initialize slots

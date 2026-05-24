@@ -12,8 +12,8 @@ import (
 
 // mockWritePauser is a test mock for WritePauser.
 type mockWritePauser struct {
-	paused   atomic.Bool
-	pauseCnt atomic.Int32
+	paused    atomic.Bool
+	pauseCnt  atomic.Int32
 	resumeCnt atomic.Int32
 }
 
@@ -41,8 +41,8 @@ func (m *mockWritePauser) ResumeCount() int {
 
 // mockUpdatePauser is a test mock for UpdatePauser.
 type mockUpdatePauser struct {
-	paused   atomic.Bool
-	pauseCnt atomic.Int32
+	paused    atomic.Bool
+	pauseCnt  atomic.Int32
 	resumeCnt atomic.Int32
 }
 
@@ -311,11 +311,11 @@ func TestMonitor_NilComponents(t *testing.T) {
 
 	// Create monitor with nil components
 	m := New(Config{
-		DataDir:       tmpDir,
-		CheckInterval: time.Second,
-		Recorder:      nil,
+		DataDir:         tmpDir,
+		CheckInterval:   time.Second,
+		Recorder:        nil,
 		FlowAccumulator: nil,
-		Predictor:     nil,
+		Predictor:       nil,
 	})
 
 	// Should not panic

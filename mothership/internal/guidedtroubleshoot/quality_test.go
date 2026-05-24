@@ -11,11 +11,11 @@ func TestEditTracker_RecordEdit(t *testing.T) {
 	tracker := NewEditTracker()
 
 	tests := []struct {
-		name          string
-		key           string
-		edits         int
-		wantHint      bool
-		description   string
+		name        string
+		key         string
+		edits       int
+		wantHint    bool
+		description string
 	}{
 		{
 			name:        "non-qualifying key",

@@ -33,22 +33,22 @@ const (
 type NotificationType string
 
 const (
-	TypeZoneEnter        NotificationType = "zone_enter"
-	TypeZoneLeave        NotificationType = "zone_leave"
-	TypeZoneVacant       NotificationType = "zone_vacant"
-	TypeFallDetected     NotificationType = "fall_detected"
-	TypeFallEscalation   NotificationType = "fall_escalation"
-	TypeAnomalyAlert     NotificationType = "anomaly_alert"
-	TypeNodeOffline      NotificationType = "node_offline"
-	TypeSleepSummary     NotificationType = "sleep_summary"
-	TypeMorningBriefing  NotificationType = "morning_briefing"
+	TypeZoneEnter       NotificationType = "zone_enter"
+	TypeZoneLeave       NotificationType = "zone_leave"
+	TypeZoneVacant      NotificationType = "zone_vacant"
+	TypeFallDetected    NotificationType = "fall_detected"
+	TypeFallEscalation  NotificationType = "fall_escalation"
+	TypeAnomalyAlert    NotificationType = "anomaly_alert"
+	TypeNodeOffline     NotificationType = "node_offline"
+	TypeSleepSummary    NotificationType = "sleep_summary"
+	TypeMorningBriefing NotificationType = "morning_briefing"
 )
 
 // BatchingConfig holds smart batching configuration.
 type BatchingConfig struct {
 	Enabled          bool
-	BatchWindowSec   int // Window duration in seconds (default 30)
-	MaxBatchSize     int // Maximum events before forcing send (default 5)
+	BatchWindowSec   int  // Window duration in seconds (default 30)
+	MaxBatchSize     int  // Maximum events before forcing send (default 5)
 	BatchLowPriority bool // Batch LOW priority events
 	BatchMedium      bool // Batch MEDIUM priority events
 }
@@ -62,8 +62,8 @@ type QuietHoursConfigExtended struct {
 	EndMin        int
 	QuietDaysMask uint8 // Bitmask for days (0=Sunday, 1=Monday, etc.)
 	MorningDigest bool  // Deliver queued events as morning digest
-	DigestHour    int    // Hour to deliver morning digest (default 7)
-	DigestMin     int    // Minute to deliver morning digest
+	DigestHour    int   // Hour to deliver morning digest (default 7)
+	DigestMin     int   // Minute to deliver morning digest
 }
 
 // ExtendedService extends the base Service with batching and quiet hours.
@@ -71,10 +71,10 @@ type ExtendedService struct {
 	*Service
 
 	// Batching state
-	pendingLow      []Notification
-	pendingMedium   []Notification
-	batchTimer      *time.Timer
-	lastBatchFlush  time.Time
+	pendingLow     []Notification
+	pendingMedium  []Notification
+	batchTimer     *time.Timer
+	lastBatchFlush time.Time
 
 	// Quiet hours queue
 	queuedDuringQuiet []Notification
@@ -390,10 +390,10 @@ func (ext *ExtendedService) sendMorningDigest() {
 	body := fmt.Sprintf("While you were asleep: %s", strings.Join(bodies, ". "))
 
 	digestNotif := Notification{
-		Title:     title,
-		Body:      body,
-		Priority:  int(PriorityLow),
-		Tags:      []string{"digest", "morning"},
+		Title:    title,
+		Body:     body,
+		Priority: int(PriorityLow),
+		Tags:     []string{"digest", "morning"},
 		Data: map[string]interface{}{
 			"event_count": len(queued),
 		},

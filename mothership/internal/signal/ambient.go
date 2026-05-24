@@ -9,18 +9,18 @@ import (
 
 // Ambient confidence constants
 const (
-	HealthWindow         = 60  // Seconds of history for health metrics
-	HealthSampleRate     = 20  // Expected samples per second at active rate (default)
+	HealthWindow         = 60 // Seconds of history for health metrics
+	HealthSampleRate     = 20 // Expected samples per second at active rate (default)
 	HealthHistorySize    = HealthWindow * HealthSampleRate
 	PhaseStabilityWindow = 100 // Samples for phase stability calculation
 	DriftWindow          = 200 // Samples for drift calculation
 	NoiseFloor           = -95 // dBm - assumed noise floor for SNR calculation
 
 	// Health score weights (per specification)
-	SNRWeight           = 0.40
+	SNRWeight            = 0.40
 	PhaseStabilityWeight = 0.30
-	PacketRateWeight    = 0.20
-	BaselineDriftWeight = 0.10
+	PacketRateWeight     = 0.20
+	BaselineDriftWeight  = 0.10
 )
 
 // LinkHealth holds per-link health metrics
@@ -28,22 +28,22 @@ type LinkHealth struct {
 	mu sync.RWMutex
 
 	// Signal quality metrics (raw values)
-	SNR             float64   // Signal-to-noise ratio estimate (raw)
-	PhaseStability  float64   // Phase variance (radians²)
-	PacketRate      float64   // Actual packet rate (Hz)
-	DriftRate       float64   // Baseline drift rate (normalized 0-1)
-	PhaseVariance   float64   // Current phase variance
+	SNR            float64 // Signal-to-noise ratio estimate (raw)
+	PhaseStability float64 // Phase variance (radians²)
+	PacketRate     float64 // Actual packet rate (Hz)
+	DriftRate      float64 // Baseline drift rate (normalized 0-1)
+	PhaseVariance  float64 // Current phase variance
 
 	// Sub-scores (0-1 range, for dashboard breakdown)
-	SNRScore          float64
+	SNRScore            float64
 	PhaseStabilityScore float64
-	PacketRateScore   float64
-	DriftScore        float64
+	PacketRateScore     float64
+	DriftScore          float64
 
 	// History buffers
-	rssiHistory     []int8
-	rssiWriteIdx    int
-	rssiCount       int
+	rssiHistory  []int8
+	rssiWriteIdx int
+	rssiCount    int
 
 	phaseVarHistory  []float64
 	phaseVarWriteIdx int
@@ -53,26 +53,26 @@ type LinkHealth struct {
 	timestampWriteIdx int
 	timestampCount    int
 
-	baselineHistory   [][]float64 // Snapshots for drift calculation
-	baselineWriteIdx  int
-	baselineCount     int
+	baselineHistory  [][]float64 // Snapshots for drift calculation
+	baselineWriteIdx int
+	baselineCount    int
 
 	// Motion tracking for SNR estimation
-	deltaRMSHistory   []float64 // Motion-period deltaRMS values
-	deltaRMSWriteIdx  int
-	deltaRMSCount     int
-	quietDeltaRMSHistory []float64 // Quiet-period deltaRMS for noise estimation
+	deltaRMSHistory       []float64 // Motion-period deltaRMS values
+	deltaRMSWriteIdx      int
+	deltaRMSCount         int
+	quietDeltaRMSHistory  []float64 // Quiet-period deltaRMS for noise estimation
 	quietDeltaRMSWriteIdx int
-	quietDeltaRMSCount int
+	quietDeltaRMSCount    int
 
 	// Composite score
 	ambientConfidence float64
 	lastUpdate        time.Time
 
 	// Tracking state
-	nSub            int
-	linkID          string
-	configuredRate  float64 // Configured packet rate (Hz)
+	nSub           int
+	linkID         string
+	configuredRate float64 // Configured packet rate (Hz)
 }
 
 // NewLinkHealth creates a new link health monitor
@@ -82,11 +82,11 @@ func NewLinkHealth(linkID string, nSub int) *LinkHealth {
 		phaseVarHistory:      make([]float64, PhaseStabilityWindow),
 		timestampHistory:     make([]time.Time, HealthHistorySize),
 		baselineHistory:      make([][]float64, DriftWindow),
-		deltaRMSHistory:      make([]float64, 600), // 30s at 20Hz for motion periods
+		deltaRMSHistory:      make([]float64, 600),  // 30s at 20Hz for motion periods
 		quietDeltaRMSHistory: make([]float64, 1200), // 60s at 20Hz for quiet periods
 		nSub:                 nSub,
 		linkID:               linkID,
-		PhaseStability:       1.0, // Assume unstable until proven otherwise
+		PhaseStability:       1.0,                       // Assume unstable until proven otherwise
 		configuredRate:       float64(HealthSampleRate), // Default to 20 Hz
 	}
 }
@@ -440,10 +440,10 @@ func (lh *LinkHealth) GetHealthMetrics() (snr, phaseStability, packetRate, drift
 
 // HealthDetails represents the detailed health scores for API response
 type HealthDetails struct {
-	SNR           float64 `json:"snr"`
+	SNR            float64 `json:"snr"`
 	PhaseStability float64 `json:"phase_stability"`
-	PacketRate    float64 `json:"packet_rate"`
-	BaselineDrift float64 `json:"baseline_drift"`
+	PacketRate     float64 `json:"packet_rate"`
+	BaselineDrift  float64 `json:"baseline_drift"`
 }
 
 // GetHealthDetails returns the sub-scores for dashboard breakdown
@@ -451,10 +451,10 @@ func (lh *LinkHealth) GetHealthDetails() HealthDetails {
 	lh.mu.RLock()
 	defer lh.mu.RUnlock()
 	return HealthDetails{
-		SNR:           lh.SNRScore,
+		SNR:            lh.SNRScore,
 		PhaseStability: lh.PhaseStabilityScore,
-		PacketRate:    lh.PacketRateScore,
-		BaselineDrift: lh.DriftScore,
+		PacketRate:     lh.PacketRateScore,
+		BaselineDrift:  lh.DriftScore,
 	}
 }
 
@@ -464,7 +464,6 @@ func (lh *LinkHealth) GetAmbientConfidence() float64 {
 	defer lh.mu.RUnlock()
 	return lh.ambientConfidence
 }
-
 
 // GetDeltaRMSVariance returns the variance of deltaRMS values during motion periods
 // This is used for periodic interference detection (diagnostic Rule 5)

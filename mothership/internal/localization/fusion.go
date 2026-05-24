@@ -24,10 +24,10 @@ type NodePosition struct {
 
 // FusionResult is returned after each fusion cycle.
 type FusionResult struct {
-	Peaks    [][3]float64 // [x, z, weight] top peaks
-	GridCols int
-	GridRows int
-	GridData []float64 // normalised [0..1] row-major
+	Peaks     [][3]float64 // [x, z, weight] top peaks
+	GridCols  int
+	GridRows  int
+	GridData  []float64 // normalised [0..1] row-major
 	Timestamp time.Time
 }
 

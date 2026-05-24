@@ -24,27 +24,27 @@ type HelloMessage struct {
 
 // HealthMessage is sent every 10 seconds
 type HealthMessage struct {
-	Type           string `json:"type"`
-	MAC            string `json:"mac"`
-	TimestampMS    int64  `json:"timestamp_ms"`
-	FreeHeapBytes  int64  `json:"free_heap_bytes"`
-	WifiRSSIdBm    int    `json:"wifi_rssi_dbm"`
-	UptimeMS       int64  `json:"uptime_ms"`
-	TemperatureC   float64 `json:"temperature_c,omitempty"`
-	CSIRateHz      int    `json:"csi_rate_hz"`
-	WifiChannel    int    `json:"wifi_channel"`
-	IP             string `json:"ip,omitempty"`
-	NTPSynced      bool   `json:"ntp_synced"`
+	Type          string  `json:"type"`
+	MAC           string  `json:"mac"`
+	TimestampMS   int64   `json:"timestamp_ms"`
+	FreeHeapBytes int64   `json:"free_heap_bytes"`
+	WifiRSSIdBm   int     `json:"wifi_rssi_dbm"`
+	UptimeMS      int64   `json:"uptime_ms"`
+	TemperatureC  float64 `json:"temperature_c,omitempty"`
+	CSIRateHz     int     `json:"csi_rate_hz"`
+	WifiChannel   int     `json:"wifi_channel"`
+	IP            string  `json:"ip,omitempty"`
+	NTPSynced     bool    `json:"ntp_synced"`
 }
 
 // BLEDevice represents a discovered BLE device
 type BLEDevice struct {
-	Addr        string `json:"addr"`
-	AddrType    string `json:"addr_type,omitempty"`
-	RSSIdBm     int    `json:"rssi_dbm"`
-	Name        string `json:"name,omitempty"`
-	MfrID       int    `json:"mfr_id,omitempty"`
-	MfrDataHex  string `json:"mfr_data_hex,omitempty"`
+	Addr       string `json:"addr"`
+	AddrType   string `json:"addr_type,omitempty"`
+	RSSIdBm    int    `json:"rssi_dbm"`
+	Name       string `json:"name,omitempty"`
+	MfrID      int    `json:"mfr_id,omitempty"`
+	MfrDataHex string `json:"mfr_data_hex,omitempty"`
 }
 
 // BLEMessage is sent every 5 seconds with discovered devices
@@ -83,11 +83,11 @@ type RoleMessage struct {
 
 // ConfigMessage changes operational parameters
 type ConfigMessage struct {
-	Type              string  `json:"type"`
-	RateHz            *int    `json:"rate_hz,omitempty"`
-	TXSlotUS          *int    `json:"tx_slot_us,omitempty"`
+	Type              string   `json:"type"`
+	RateHz            *int     `json:"rate_hz,omitempty"`
+	TXSlotUS          *int     `json:"tx_slot_us,omitempty"`
 	VarianceThreshold *float64 `json:"variance_threshold,omitempty"`
-	NTPServer         *string `json:"ntp_server,omitempty"`
+	NTPServer         *string  `json:"ntp_server,omitempty"`
 }
 
 // OTAMessage triggers a firmware update
@@ -100,8 +100,8 @@ type OTAMessage struct {
 
 // RebootMessage triggers a node reboot
 type RebootMessage struct {
-	Type     string `json:"type"`
-	DelayMS  int    `json:"delay_ms,omitempty"`
+	Type    string `json:"type"`
+	DelayMS int    `json:"delay_ms,omitempty"`
 }
 
 // IdentifyMessage triggers LED blink for identification

@@ -49,18 +49,18 @@ type PersonNameProvider interface {
 
 // BLEObservation represents a BLE RSSI observation with device info.
 type BLEObservation struct {
-	DeviceMAC string    // The BLE device MAC address
-	NodeMAC   string    // The node that observed this device
+	DeviceMAC string // The BLE device MAC address
+	NodeMAC   string // The node that observed this device
 	RSSIdBm   int
 	Timestamp time.Time
 }
 
 // AutoAwayConfig holds configuration for auto-away detection.
 type AutoAwayConfig struct {
-	Enabled              bool          `json:"enabled"`
-	AbsenceDuration      time.Duration `json:"absence_duration"`       // Default: 15 minutes
-	AutoDisarmRSSI       int           `json:"auto_disarm_rssi"`       // Default: -70 dBm
-	ManualOverridePause  time.Duration `json:"manual_override_pause"` // Default: 30 minutes
+	Enabled             bool          `json:"enabled"`
+	AbsenceDuration     time.Duration `json:"absence_duration"`      // Default: 15 minutes
+	AutoDisarmRSSI      int           `json:"auto_disarm_rssi"`      // Default: -70 dBm
+	ManualOverridePause time.Duration `json:"manual_override_pause"` // Default: 30 minutes
 }
 
 // DefaultAutoAwayConfig returns default auto-away configuration.
@@ -106,8 +106,8 @@ type Manager struct {
 	onModeChange func(events.SystemModeChangeEvent)
 
 	// Collision detection and adaptive re-stagger
-	collisionDetector   *CollisionDetector
-	collisionCheckTick  time.Duration
+	collisionDetector  *CollisionDetector
+	collisionCheckTick time.Duration
 }
 
 // NewManager creates a fleet manager backed by registry.

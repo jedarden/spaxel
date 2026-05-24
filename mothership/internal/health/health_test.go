@@ -14,8 +14,8 @@ import (
 // TestHealthCheckOK tests that health check returns OK when all components are healthy.
 func TestHealthCheckOK(t *testing.T) {
 	checker := &Checker{
-		startTime: time.Now(),
-		db: &sql.DB{}, // Mock - we'll override checkDB for testing
+		startTime:    time.Now(),
+		db:           &sql.DB{}, // Mock - we'll override checkDB for testing
 		getNodeCount: func() int { return 3 },
 		shedder:      loadshed.New(),
 	}
@@ -53,10 +53,10 @@ func TestHealthCheckOK(t *testing.T) {
 // TestHealthCheckDBFailing tests that health check returns degraded when DB fails.
 func TestHealthCheckDBFailing(t *testing.T) {
 	checker := &Checker{
-		startTime: time.Now(),
-		db:        nil, // No DB = failing
+		startTime:    time.Now(),
+		db:           nil, // No DB = failing
 		getNodeCount: func() int { return 3 },
-		shedder:   loadshed.New(),
+		shedder:      loadshed.New(),
 	}
 
 	resp := checker.check("1.0.0")
@@ -76,10 +76,10 @@ func TestHealthCheckDBFailing(t *testing.T) {
 // (zero nodes is valid for headless deployments).
 func TestHealthCheckNoNodes(t *testing.T) {
 	checker := &Checker{
-		startTime: time.Now().Add(-6 * time.Minute), // 6 minutes ago
-		db:        &sql.DB{},
+		startTime:    time.Now().Add(-6 * time.Minute), // 6 minutes ago
+		db:           &sql.DB{},
 		getNodeCount: func() int { return 0 },
-		shedder:   loadshed.New(),
+		shedder:      loadshed.New(),
 	}
 
 	// Override checkDB to return OK
@@ -100,10 +100,10 @@ func TestHealthCheckNoNodes(t *testing.T) {
 // TestHealthCheckNoNodesWithinGracePeriod tests that health check is OK within 5 min grace period.
 func TestHealthCheckNoNodesWithinGracePeriod(t *testing.T) {
 	checker := &Checker{
-		startTime: time.Now().Add(-2 * time.Minute), // 2 minutes ago
-		db:        &sql.DB{},
+		startTime:    time.Now().Add(-2 * time.Minute), // 2 minutes ago
+		db:           &sql.DB{},
 		getNodeCount: func() int { return 0 },
-		shedder:   loadshed.New(),
+		shedder:      loadshed.New(),
 	}
 
 	// Override checkDB to return OK
@@ -152,11 +152,11 @@ func TestHealthCheckLoadLevel3(t *testing.T) {
 // JSON response and reflects the shedder's current level.
 func TestHealthCheckSheddingLevelJSON(t *testing.T) {
 	tests := []struct {
-		name          string
-		shedLevel     loadshed.Level
-		wantLevel     int
-		wantStatus    string
-		wantDegraded  bool
+		name         string
+		shedLevel    loadshed.Level
+		wantLevel    int
+		wantStatus   string
+		wantDegraded bool
 	}{
 		{"normal", loadshed.LevelNormal, 0, "ok", false},
 		{"light", loadshed.LevelLight, 1, "ok", false},
@@ -198,7 +198,7 @@ func TestHealthCheckSheddingLevelJSON(t *testing.T) {
 // TestHealthCheckHandler tests the HTTP handler returns correct status codes.
 func TestHealthCheckHandler(t *testing.T) {
 	checker := New(Config{
-		DB: &sql.DB{},
+		DB:           &sql.DB{},
 		GetNodeCount: func() int { return 2 },
 		Shedder:      loadshed.New(),
 	})
@@ -227,7 +227,7 @@ func TestHealthCheckHandler(t *testing.T) {
 // TestHealthCheckHandlerDegraded tests the HTTP handler returns 503 for degraded state.
 func TestHealthCheckHandlerDegraded(t *testing.T) {
 	checker := New(Config{
-		DB:          nil, // Failing DB
+		DB:           nil, // Failing DB
 		GetNodeCount: func() int { return 2 },
 		Shedder:      loadshed.New(),
 	})
@@ -257,10 +257,10 @@ func TestHealthCheckUptimeIncrement(t *testing.T) {
 	// Backdate startTime so the first check yields at least 1s uptime,
 	// then wait past the next whole second boundary for a measurable increment.
 	checker := &Checker{
-		startTime: time.Now().Add(-1900 * time.Millisecond),
-		db:        &sql.DB{},
+		startTime:    time.Now().Add(-1900 * time.Millisecond),
+		db:           &sql.DB{},
 		getNodeCount: func() int { return 1 },
-		shedder:   loadshed.New(),
+		shedder:      loadshed.New(),
 	}
 	checker.checkDB = func() string { return "ok" }
 

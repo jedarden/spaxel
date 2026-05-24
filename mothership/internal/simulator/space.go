@@ -88,12 +88,12 @@ func (p Point) Scale(f float64) Point {
 
 // WallSegment represents a flat wall with material properties
 type WallSegment struct {
-	ID        string       `json:"id"`
-	Name      string       `json:"name"`
-	Material  WallMaterial `json:"material"`
-	P1        Point        `json:"p1"` // Corner 1 (floor level)
-	P2        Point        `json:"p2"` // Corner 2 (floor level)
-	Height    float64      `json:"height"`
+	ID       string       `json:"id"`
+	Name     string       `json:"name"`
+	Material WallMaterial `json:"material"`
+	P1       Point        `json:"p1"` // Corner 1 (floor level)
+	P2       Point        `json:"p2"` // Corner 2 (floor level)
+	Height   float64      `json:"height"`
 }
 
 // Bounds returns the axis-aligned bounding box of this wall
@@ -156,15 +156,15 @@ func onSegment(px, py, qx, qy, rx, ry float64) bool {
 
 // Room defines a room in the virtual space
 type Room struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	MinX    float64 `json:"min_x"`
-	MinY    float64 `json:"min_y"`
-	MinZ    float64 `json:"min_z"`
-	MaxX    float64 `json:"max_x"`
-	MaxY    float64 `json:"max_y"`
-	MaxZ    float64 `json:"max_z"`
-	Walls   []WallSegment `json:"walls,omitempty"`
+	ID    string        `json:"id"`
+	Name  string        `json:"name"`
+	MinX  float64       `json:"min_x"`
+	MinY  float64       `json:"min_y"`
+	MinZ  float64       `json:"min_z"`
+	MaxX  float64       `json:"max_x"`
+	MaxY  float64       `json:"max_y"`
+	MaxZ  float64       `json:"max_z"`
+	Walls []WallSegment `json:"walls,omitempty"`
 }
 
 // Center returns the center point of the room
@@ -196,10 +196,10 @@ func (r *Room) Contains(p Point) bool {
 
 // Space defines the virtual simulation space
 type Space struct {
-	ID     string       `json:"id"`
-	Name   string       `json:"name"`
-	Rooms  []Room       `json:"rooms"`
-	Walls  []WallSegment `json:"walls"`
+	ID    string        `json:"id"`
+	Name  string        `json:"name"`
+	Rooms []Room        `json:"rooms"`
+	Walls []WallSegment `json:"walls"`
 }
 
 // Bounds returns the overall bounding box of the space

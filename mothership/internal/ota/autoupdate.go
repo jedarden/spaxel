@@ -12,14 +12,14 @@ import (
 
 // AutoUpdateManager manages automatic OTA updates with canary deployment and quiet window scheduling.
 type AutoUpdateManager struct {
-	mu                sync.RWMutex
-	server            *Server
-	otaManager        *Manager
-	settingsProvider  SettingsProvider
-	qualityProvider   QualityProvider
-	nodeProvider      NodeProvider
-	notifier          EventNotifier
-	timezone          *time.Location
+	mu                 sync.RWMutex
+	server             *Server
+	otaManager         *Manager
+	settingsProvider   SettingsProvider
+	qualityProvider    QualityProvider
+	nodeProvider       NodeProvider
+	notifier           EventNotifier
+	timezone           *time.Location
 	zoneVacancyChecker ZoneVacancyChecker
 
 	// State
@@ -66,10 +66,10 @@ type ZoneVacancyChecker interface {
 type UpdateState string
 
 const (
-	StateIdle            UpdateState = "idle"
-	StateChecking       UpdateState = "checking"
-	StateWaitingWindow  UpdateState = "waiting_window"
-	StateCanaryDeploy   UpdateState = "canary_deploy"
+	StateIdle          UpdateState = "idle"
+	StateChecking      UpdateState = "checking"
+	StateWaitingWindow UpdateState = "waiting_window"
+	StateCanaryDeploy  UpdateState = "canary_deploy"
 	StateCanaryMonitor UpdateState = "canary_monitor"
 	StateFleetDeploy   UpdateState = "fleet_deploy"
 	StateRollback      UpdateState = "rollback"
@@ -79,11 +79,11 @@ const (
 
 // AutoUpdateConfig holds the configuration for auto-updates.
 type AutoUpdateConfig struct {
-	Enabled           bool      `json:"enabled"`
-	QuietWindowStart  string    `json:"quiet_window_start"`  // HH:MM format
-	QuietWindowEnd    string    `json:"quiet_window_end"`    // HH:MM format
-	CanaryDurationMin int       `json:"canary_duration_min"` // Canary monitoring duration
-	QualityThreshold  float64   `json:"quality_threshold"`   // Quality degradation threshold (0-1)
+	Enabled           bool    `json:"enabled"`
+	QuietWindowStart  string  `json:"quiet_window_start"`  // HH:MM format
+	QuietWindowEnd    string  `json:"quiet_window_end"`    // HH:MM format
+	CanaryDurationMin int     `json:"canary_duration_min"` // Canary monitoring duration
+	QualityThreshold  float64 `json:"quality_threshold"`   // Quality degradation threshold (0-1)
 }
 
 // DefaultAutoUpdateConfig returns the default auto-update configuration.
@@ -92,7 +92,7 @@ func DefaultAutoUpdateConfig() AutoUpdateConfig {
 		Enabled:           false,
 		QuietWindowStart:  "02:00",
 		QuietWindowEnd:    "05:00",
-		CanaryDurationMin:  10,
+		CanaryDurationMin: 10,
 		QualityThreshold:  0.05, // 5% degradation threshold
 	}
 }
@@ -100,10 +100,10 @@ func DefaultAutoUpdateConfig() AutoUpdateConfig {
 // NewAutoUpdateManager creates a new auto-update manager.
 func NewAutoUpdateManager(server *Server, otaMgr *Manager, timezone *time.Location) *AutoUpdateManager {
 	return &AutoUpdateManager{
-		server:          server,
-		otaManager:      otaMgr,
-		timezone:        timezone,
-		updateState:     StateIdle,
+		server:      server,
+		otaManager:  otaMgr,
+		timezone:    timezone,
+		updateState: StateIdle,
 	}
 }
 
@@ -514,7 +514,7 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 	qualityChanged := math.Abs(qualityDelta)
 
 	m.publishEvent("canary_evaluated", canaryMAC, fmt.Sprintf("Canary evaluation: quality delta %.2f%%", qualityDelta*100), map[string]interface{}{
-		"baseline_quality":  baselineQuality,
+		"baseline_quality": baselineQuality,
 		"current_quality":  currentQuality,
 		"quality_delta":    qualityDelta,
 	})
@@ -527,8 +527,8 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 		m.mu.Unlock()
 
 		m.publishEvent("canary_failed", canaryMAC, fmt.Sprintf("Canary quality degraded %.2f%%, aborting update", qualityDelta*100), map[string]interface{}{
-			"threshold":       config.QualityThreshold,
-			"quality_delta":   qualityDelta,
+			"threshold":     config.QualityThreshold,
+			"quality_delta": qualityDelta,
 		})
 
 		log.Printf("[WARN] ota: canary quality degraded %.2f%% (threshold %.2f%%), aborting auto-update",

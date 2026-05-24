@@ -232,10 +232,10 @@ func (s *StorageSubscriber) convertPayload(payload EventPayload) Event {
 	case NodeConnectedPayload:
 		base.Type = EventTypeNodeOnline
 		base.DetailJSON = marshalDetail(map[string]interface{}{
-			"node_mac":        p.NodeMAC,
-			"node_name":       p.NodeName,
+			"node_mac":         p.NodeMAC,
+			"node_name":        p.NodeName,
 			"firmware_version": p.FirmwareVer,
-			"ip_address":      p.IPAddress,
+			"ip_address":       p.IPAddress,
 		})
 		base.Severity = SeverityInfo
 
@@ -261,8 +261,8 @@ func (s *StorageSubscriber) convertPayload(payload EventPayload) Event {
 	case NodeStalePayload:
 		base.Type = EventTypeNodeOffline
 		base.DetailJSON = marshalDetail(map[string]interface{}{
-			"node_mac":      p.NodeMAC,
-			"node_name":     p.NodeName,
+			"node_mac":       p.NodeMAC,
+			"node_name":      p.NodeName,
 			"last_health_ms": p.LastHealthMs,
 		})
 		base.Severity = SeverityWarning
@@ -270,9 +270,9 @@ func (s *StorageSubscriber) convertPayload(payload EventPayload) Event {
 	case SystemStartedPayload:
 		base.Type = EventTypeSystem
 		base.DetailJSON = marshalDetail(map[string]interface{}{
-			"message":  "System started",
-			"version":  p.Version,
-			"start_time": p.StartTime.Format(time.RFC3339),
+			"message":     "System started",
+			"version":     p.Version,
+			"start_time":  p.StartTime.Format(time.RFC3339),
 			"duration_ms": p.DurationMs,
 		})
 		base.Severity = SeverityInfo
@@ -334,11 +334,11 @@ func (s *StorageSubscriber) convertPayload(payload EventPayload) Event {
 		base.Type = EventTypeLearningMilestone
 		base.Person = p.PersonID
 		base.DetailJSON = marshalDetail(map[string]interface{}{
-			"model_type":        p.ModelType,
-			"zone_id":           p.ZoneID,
-			"samples_added":     p.SamplesAdded,
-			"total_samples":     p.TotalSamples,
-			"accuracy_percent":  p.AccuracyPercent,
+			"model_type":       p.ModelType,
+			"zone_id":          p.ZoneID,
+			"samples_added":    p.SamplesAdded,
+			"total_samples":    p.TotalSamples,
+			"accuracy_percent": p.AccuracyPercent,
 		})
 		base.Severity = SeverityInfo
 
@@ -425,8 +425,8 @@ func (s *StorageSubscriber) Stats() map[string]interface{} {
 	defer s.mu.Unlock()
 
 	return map[string]interface{}{
-		"queue_size":    len(s.queue),
+		"queue_size":     len(s.queue),
 		"queue_capacity": bufferSize,
-		"dropped_total": s.dropped,
+		"dropped_total":  s.dropped,
 	}
 }

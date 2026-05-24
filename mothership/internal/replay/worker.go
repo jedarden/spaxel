@@ -67,7 +67,6 @@ type FrameReader interface {
 // StoreStats is an alias for Stats for backward compatibility.
 type StoreStats = Stats
 
-
 // NewWorker creates a new replay worker.
 func NewWorker(store FrameReader, processor *signal.ProcessorManager, broadcaster BlobBroadcaster) *Worker {
 	return &Worker{

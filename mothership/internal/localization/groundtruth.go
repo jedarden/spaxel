@@ -27,10 +27,10 @@ var _ GroundTruthSource = (*BLEGroundTruthProvider)(nil)
 // GroundTruthPosition represents a known position from a ground truth source
 type GroundTruthPosition struct {
 	EntityID   string    `json:"entity_id"`
-	X          float64   `json:"x"`            // Position X in metres
-	Y          float64   `json:"y"`            // Position Y in metres
-	Z          float64   `json:"z"`            // Position Z in metres
-	Accuracy   float64   `json:"accuracy"`   // Position accuracy in metres (1σ)
+	X          float64   `json:"x"`        // Position X in metres
+	Y          float64   `json:"y"`        // Position Y in metres
+	Z          float64   `json:"z"`        // Position Z in metres
+	Accuracy   float64   `json:"accuracy"` // Position accuracy in metres (1σ)
 	Timestamp  time.Time `json:"timestamp"`
 	Source     string    `json:"source"`     // e.g., "ble", "manual"
 	Confidence float64   `json:"confidence"` // Source confidence (0-1)
@@ -75,9 +75,9 @@ type RSSIObservation struct {
 
 // BLEGroundTruthProvider uses BLE RSSI trilateration to provide ground truth positions
 type BLEGroundTruthProvider struct {
-	mu       sync.RWMutex
-	config   BLETrilaterationConfig
-	nodePos  map[string]NodePosition // Node MAC -> position
+	mu      sync.RWMutex
+	config  BLETrilaterationConfig
+	nodePos map[string]NodePosition // Node MAC -> position
 
 	// RSSI buffer: entityID -> nodeMAC -> observation
 	observations map[string]map[string]*RSSIObservation
@@ -229,9 +229,9 @@ func (p *BLEGroundTruthProvider) trilaterateLocked(entityID string, observations
 
 	// Build distance constraints
 	type constraint struct {
-		nodePos   NodePosition
-		distance  float64
-		weight    float64
+		nodePos  NodePosition
+		distance float64
+		weight   float64
 	}
 
 	var constraints []constraint
@@ -283,8 +283,8 @@ func (p *BLEGroundTruthProvider) trilaterateLocked(entityID string, observations
 
 	for iter := 0; iter < maxIter; iter++ {
 		// Build Jacobian and residual
-		var jacobian [][3]float64   // n x 3
-		var residuals []float64     // n x 1
+		var jacobian [][3]float64 // n x 3
+		var residuals []float64   // n x 1
 		var weights []float64
 
 		for _, c := range constraints {

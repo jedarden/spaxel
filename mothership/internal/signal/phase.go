@@ -19,9 +19,9 @@ const (
 
 // NullSubcarriers are subcarrier indices that are null/guard
 var NullSubcarriers = map[int]bool{
-	0:  true,  // DC
-	1:  true,  // guard
-	63: true,  // guard
+	0:  true, // DC
+	1:  true, // guard
+	63: true, // guard
 }
 
 // GuardBandSubcarriers are the center guard band indices

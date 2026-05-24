@@ -16,7 +16,7 @@ import (
 // AnalyticsHandler manages the crowd flow analytics API endpoints.
 type AnalyticsHandler struct {
 	flowAccumulator *analytics.FlowAccumulator
-	db             *sql.DB
+	db              *sql.DB
 }
 
 // NewAnalyticsHandler creates a new analytics handler.
@@ -39,7 +39,7 @@ func NewAnalyticsHandler(db *sql.DB, cellSizeM float64) *AnalyticsHandler {
 
 	return &AnalyticsHandler{
 		flowAccumulator: flowAcc,
-		db:             db,
+		db:              db,
 	}
 }
 

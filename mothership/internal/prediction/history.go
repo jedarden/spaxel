@@ -30,7 +30,7 @@ type HistoryUpdater struct {
 // NewHistoryUpdater creates a new history updater.
 func NewHistoryUpdater(store *ModelStore) *HistoryUpdater {
 	return &HistoryUpdater{
-		store:       store,
+		store: store,
 		personZones: make(map[string]struct {
 			ZoneID    string
 			EntryTime time.Time

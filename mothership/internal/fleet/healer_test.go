@@ -9,10 +9,10 @@ import (
 // ─── Mock GDOP Calculator ─────────────────────────────────────────────────────
 
 type mockGDOPCalculator struct {
-	mu     sync.Mutex
+	mu      sync.Mutex
 	gdopMap []float32
-	cols   int
-	rows   int
+	cols    int
+	rows    int
 }
 
 func newMockGDOPCalculator(gdop float32, cols, rows int) *mockGDOPCalculator {
@@ -368,12 +368,12 @@ func TestGenerateCombinations(t *testing.T) {
 		n, k    int
 		wantLen int
 	}{
-		{4, 2, 6},   // C(4,2) = 6
-		{5, 2, 10},  // C(5,2) = 10
-		{5, 3, 10},  // C(5,3) = 10
-		{6, 3, 20},  // C(6,3) = 20
-		{3, 0, 1},   // C(3,0) = 1
-		{3, 3, 1},   // C(3,3) = 1
+		{4, 2, 6},  // C(4,2) = 6
+		{5, 2, 10}, // C(5,2) = 10
+		{5, 3, 10}, // C(5,3) = 10
+		{6, 3, 20}, // C(6,3) = 20
+		{3, 0, 1},  // C(3,0) = 1
+		{3, 3, 1},  // C(3,3) = 1
 	}
 
 	for _, tt := range tests {

@@ -69,9 +69,9 @@ type MotionStateItem struct {
 	DiurnalConfidence float64 `json:"diurnal_confidence"`
 	DiurnalReady      bool    `json:"diurnal_ready"`
 	// Breathing detection fields (Phase 6)
-	BreathingState  string   `json:"breathing_state"`            // CLEAR, POSSIBLY_PRESENT, MOTION_DETECTED, STATIONARY_DETECTED
+	BreathingState  string   `json:"breathing_state"`             // CLEAR, POSSIBLY_PRESENT, MOTION_DETECTED, STATIONARY_DETECTED
 	BreathingFreqHz *float64 `json:"breathing_freq_hz,omitempty"` // Breathing frequency in Hz, null if not detected
-	BreathingBPM    float64  `json:"breathing_bpm"`              // Breathing rate in breaths per minute
+	BreathingBPM    float64  `json:"breathing_bpm"`               // Breathing rate in breaths per minute
 }
 
 // ReplayAppender appends raw CSI frames to a persistent store.
@@ -109,7 +109,7 @@ type Server struct {
 	// Optional pipeline components (set via setters)
 	dashboardBroadcaster CSIBroadcaster
 	motionBroadcaster    MotionBroadcaster
-	eventBroadcaster    EventBroadcaster
+	eventBroadcaster     EventBroadcaster
 	processorMgr         *signal.ProcessorManager
 	replayStore          ReplayAppender
 	recorder             Recorder
@@ -971,13 +971,13 @@ func (s *Server) GetUnpairedMACs() []string {
 
 // LinkInfo represents a link with its endpoints and health data
 type LinkInfo struct {
-	ID         string  `json:"id"`
-	NodeMAC    string  `json:"node_mac"`
-	PeerMAC    string  `json:"peer_mac"`
+	ID          string  `json:"id"`
+	NodeMAC     string  `json:"node_mac"`
+	PeerMAC     string  `json:"peer_mac"`
 	HealthScore float64 `json:"health_score,omitempty"` // Ambient confidence score (0-1)
 	// Alias fields for frontend compatibility with proactive.js
 	CompositeScore float64 `json:"composite_score,omitempty"` // Alias for HealthScore
-	Quality        float64 `json:"quality,omitempty"`        // Alias for HealthScore
+	Quality        float64 `json:"quality,omitempty"`         // Alias for HealthScore
 	LinkID         string  `json:"link_id,omitempty"`         // Alias for ID
 }
 
@@ -1111,10 +1111,10 @@ func (s *Server) GetAllLinksWithHealth() []LinkHealthInfo {
 		if info.HealthScore == 0 && info.HealthDetails == (signal.HealthDetails{}) {
 			info.HealthScore = 0.5
 			info.HealthDetails = signal.HealthDetails{
-				SNR:           0.5,
+				SNR:            0.5,
 				PhaseStability: 0.5,
-				PacketRate:    0.5,
-				BaselineDrift: 0.5,
+				PacketRate:     0.5,
+				BaselineDrift:  0.5,
 			}
 		}
 
@@ -1153,10 +1153,10 @@ func (s *Server) GetLinkWithHealth(linkID string) *LinkHealthInfo {
 	if info.HealthScore == 0 && info.HealthDetails == (signal.HealthDetails{}) {
 		info.HealthScore = 0.5
 		info.HealthDetails = signal.HealthDetails{
-			SNR:           0.5,
+			SNR:            0.5,
 			PhaseStability: 0.5,
-			PacketRate:    0.5,
-			BaselineDrift: 0.5,
+			PacketRate:     0.5,
+			BaselineDrift:  0.5,
 		}
 	}
 

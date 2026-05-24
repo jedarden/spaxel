@@ -11,12 +11,12 @@ import (
 
 // Qualifying settings keys that trigger repeated-edit hints
 var QualifyingSettingsKeys = map[string]bool{
-	"delta_rms_threshold":    true,
-	"breathing_sensitivity":  true,
-	"tau_s":                  true,
-	"fresnel_decay":          true,
-	"n_subcarriers":          true,
-	"motion_threshold":       true,
+	"delta_rms_threshold":   true,
+	"breathing_sensitivity": true,
+	"tau_s":                 true,
+	"fresnel_decay":         true,
+	"n_subcarriers":         true,
+	"motion_threshold":      true,
 }
 
 // EditTracker tracks edits to settings keys for repeated-edit hints.
@@ -28,11 +28,11 @@ type EditTracker struct {
 
 // editState tracks the edit count and last edit time for a settings key.
 type editState struct {
-	count      int
-	lastEdit   time.Time
-	firstEdit  time.Time
-	hintShown  bool
-	hintReset  time.Time // When to allow showing hint again (24h cooldown)
+	count     int
+	lastEdit  time.Time
+	firstEdit time.Time
+	hintShown bool
+	hintReset time.Time // When to allow showing hint again (24h cooldown)
 }
 
 // NewEditTracker creates a new edit tracker.
@@ -148,17 +148,17 @@ type ZoneInfo struct {
 
 // zoneQualityState tracks the quality state for a single zone.
 type zoneQualityState struct {
-	zoneID           int
-	quality          float64
-	firstPoorTime    time.Time // When quality first dropped below 60%
-	lastPoorTime     time.Time
-	bannerShown      bool
-	resolvedCount    int
-	hysteresis       float64 // For quality improvements
+	zoneID        int
+	quality       float64
+	firstPoorTime time.Time // When quality first dropped below 60%
+	lastPoorTime  time.Time
+	bannerShown   bool
+	resolvedCount int
+	hysteresis    float64 // For quality improvements
 }
 
 const (
-	QualityThreshold     = 60.0 // Quality below this triggers issues
+	QualityThreshold    = 60.0 // Quality below this triggers issues
 	QualityRecovery     = 70.0 // Quality above this marks recovery
 	PoorQualityDuration = 24 * time.Hour
 )
@@ -184,8 +184,8 @@ func (t *ZoneQualityTracker) UpdateQuality(zoneID int, quality float64, timestam
 	state := t.zones[zoneID]
 	if state == nil {
 		state = &zoneQualityState{
-			zoneID:    zoneID,
-			quality:   quality,
+			zoneID:     zoneID,
+			quality:    quality,
 			hysteresis: quality,
 		}
 		// If initial quality is already poor, set firstPoorTime
@@ -276,25 +276,25 @@ func (t *ZoneQualityTracker) Reset() {
 
 // Manager coordinates all guided troubleshooting features.
 type Manager struct {
-	editTracker        *EditTracker
-	qualityTracker     *ZoneQualityTracker
-	discoveryTracker   *DiscoveryTracker
-	fleetNotifier      *FleetNotifier
-	mu                 sync.RWMutex
-	running            bool
-	ctx                context.Context
-	cancel             context.CancelFunc
-	checkInterval      time.Duration
-	onQualityIssue     func(zoneID int, quality float64)
-	onNodeOffline      func(mac string, offlineDuration time.Duration)
+	editTracker           *EditTracker
+	qualityTracker        *ZoneQualityTracker
+	discoveryTracker      *DiscoveryTracker
+	fleetNotifier         *FleetNotifier
+	mu                    sync.RWMutex
+	running               bool
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	checkInterval         time.Duration
+	onQualityIssue        func(zoneID int, quality float64)
+	onNodeOffline         func(mac string, offlineDuration time.Duration)
 	onCalibrationComplete func(zoneID int, qualityBefore, qualityAfter float64)
 }
 
 // ManagerConfig holds configuration for the guided troubleshooting manager.
 type ManagerConfig struct {
-	CheckInterval       time.Duration // How often to check quality issues
-	GetAllZones         func() ([]ZoneInfo, error)
-	GetNodeLastSeen     func(mac string) time.Time
+	CheckInterval   time.Duration // How often to check quality issues
+	GetAllZones     func() ([]ZoneInfo, error)
+	GetNodeLastSeen func(mac string) time.Time
 }
 
 // NewManager creates a new guided troubleshooting manager.

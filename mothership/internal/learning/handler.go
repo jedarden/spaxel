@@ -28,10 +28,10 @@ type PositionAccuracyProvider interface {
 
 // Handler provides REST API handlers for the learning package
 type Handler struct {
-	store               *FeedbackStore
-	processor           *Processor
-	accuracyComp        *AccuracyComputer
-	spatialWeightProv   SpatialWeightProvider
+	store                *FeedbackStore
+	processor            *Processor
+	accuracyComp         *AccuracyComputer
+	spatialWeightProv    SpatialWeightProvider
 	positionAccuracyProv PositionAccuracyProvider
 }
 
@@ -96,11 +96,11 @@ func (h *Handler) handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 
 	// Validate feedback type
 	validTypes := map[string]bool{
-		string(TruePositive):   true,
-		string(FalsePositive):  true,
-		string(FalseNegative):  true,
-		string(WrongIdentity):  true,
-		string(WrongZone):      true,
+		string(TruePositive):  true,
+		string(FalsePositive): true,
+		string(FalseNegative): true,
+		string(WrongIdentity): true,
+		string(WrongZone):     true,
 	}
 	if !validTypes[req.FeedbackType] {
 		http.Error(w, "invalid feedback_type", http.StatusBadRequest)
@@ -109,10 +109,10 @@ func (h *Handler) handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 
 	// Validate event type
 	validEventTypes := map[string]bool{
-		string(BlobDetection):   true,
-		string(ZoneTransition):  true,
-		string(FallAlert):       true,
-		string(Anomaly):         true,
+		string(BlobDetection):  true,
+		string(ZoneTransition): true,
+		string(FallAlert):      true,
+		string(Anomaly):        true,
 	}
 	if !validEventTypes[req.EventType] {
 		http.Error(w, "invalid event_type", http.StatusBadRequest)

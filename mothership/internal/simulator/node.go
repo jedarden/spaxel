@@ -11,20 +11,20 @@ import (
 type NodeType string
 
 const (
-	NodeTypeReal    NodeType = "esp32"  // Real ESP32-S3 node
+	NodeTypeReal    NodeType = "esp32"   // Real ESP32-S3 node
 	NodeTypeVirtual NodeType = "virtual" // Simulated virtual node
-	NodeTypeAP      NodeType = "ap"     // Access point (passive radar TX)
+	NodeTypeAP      NodeType = "ap"      // Access point (passive radar TX)
 )
 
 // NodeRole represents the operational role of a node
 type NodeRole string
 
 const (
-	RoleTX    NodeRole = "tx"     // Transmit only
-	RoleRX    NodeRole = "rx"     // Receive only
-	RoleTXRX  NodeRole = "tx_rx"  // Both transmit and receive
+	RoleTX      NodeRole = "tx"      // Transmit only
+	RoleRX      NodeRole = "rx"      // Receive only
+	RoleTXRX    NodeRole = "tx_rx"   // Both transmit and receive
 	RolePassive NodeRole = "passive" // Passive radar (RX only, AP as TX)
-	RoleIdle  NodeRole = "idle"   // Disabled
+	RoleIdle    NodeRole = "idle"    // Disabled
 )
 
 // Node represents a virtual or real node in the simulation
@@ -36,8 +36,8 @@ type Node struct {
 	Position Point    `json:"position"` // X, Y, Z in meters
 	Enabled  bool     `json:"enabled"`
 	// For AP nodes
-	APBSSID     string `json:"ap_bssid,omitempty"`
-	APChannel   int    `json:"ap_channel,omitempty"`
+	APBSSID   string `json:"ap_bssid,omitempty"`
+	APChannel int    `json:"ap_channel,omitempty"`
 }
 
 // Position returns the node's position as a Point
@@ -66,7 +66,7 @@ func (n *Node) GenerateMAC() string {
 	for _, c := range n.ID {
 		hash += int(c)
 	}
-	return fmt.Sprintf("AA:BB:CC:DD:%02X:%02X", (hash&0xFF), ((hash>>8)&0xFF))
+	return fmt.Sprintf("AA:BB:CC:DD:%02X:%02X", (hash & 0xFF), ((hash >> 8) & 0xFF))
 }
 
 // NewNode creates a new node at the given position
@@ -211,10 +211,10 @@ func CornerPositions(s *Space) []Point {
 	height := (maxZ - minZ) / 2 // Average height
 
 	return []Point{
-		{X: minX, Y: minY, Z: height},          // Bottom-left, high
-		{X: maxX, Y: minY, Z: height},          // Bottom-right, high
-		{X: minX, Y: maxY, Z: height},          // Top-left, high
-		{X: maxX, Y: maxY, Z: height},          // Top-right, high
+		{X: minX, Y: minY, Z: height},           // Bottom-left, high
+		{X: maxX, Y: minY, Z: height},           // Bottom-right, high
+		{X: minX, Y: maxY, Z: height},           // Top-left, high
+		{X: maxX, Y: maxY, Z: height},           // Top-right, high
 		{X: (minX + maxX) / 2, Y: minY, Z: 0.3}, // Bottom-middle, low
 		{X: (minX + maxX) / 2, Y: maxY, Z: 0.3}, // Top-middle, low
 	}

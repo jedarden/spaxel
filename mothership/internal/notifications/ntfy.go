@@ -63,10 +63,10 @@ type NtfyMessage struct {
 // NewNtfyClient creates a new ntfy client with default settings.
 func NewNtfyClient(topic string) *NtfyClient {
 	return &NtfyClient{
-		URL:       "https://ntfy.sh",
-		Topic:     topic,
-		Priority:  "default",
-		Tags:      nil,
+		URL:      "https://ntfy.sh",
+		Topic:    topic,
+		Priority: "default",
+		Tags:     nil,
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

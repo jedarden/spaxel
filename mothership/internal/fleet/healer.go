@@ -39,28 +39,28 @@ type CoverageResult struct {
 type FleetHealer struct {
 	mu sync.RWMutex
 
-	registry      *Registry
-	gdopCalc      GDOPCalculator
-	notifier      NodeStateNotifier
-	bcaster       RegistryBroadcaster
+	registry *Registry
+	gdopCalc GDOPCalculator
+	notifier NodeStateNotifier
+	bcaster  RegistryBroadcaster
 
 	// State tracking
 	online        map[string]struct{}
 	nodePositions map[string]NodePosition
 
 	// Coverage history for before/after comparison
-	lastCoverage   *CoverageResult
+	lastCoverage    *CoverageResult
 	coverageHistory []*CoverageResult
-	maxHistorySize int
+	maxHistorySize  int
 
 	// Healing configuration
-	healInterval    time.Duration
-	minOnlineNodes  int // Minimum nodes before degraded mode
-	degradedMode    bool
+	healInterval   time.Duration
+	minOnlineNodes int // Minimum nodes before degraded mode
+	degradedMode   bool
 
 	// Role optimization
-	optimalRoles    map[string]string
-	txNodes         []string
+	optimalRoles map[string]string
+	txNodes      []string
 }
 
 // FleetHealerConfig holds configuration for FleetHealer
@@ -649,8 +649,8 @@ func (fh *FleetHealer) GetWorstCoverageZone() (x, z, gdop float64) {
 	room, _ := fh.registry.GetRoom()
 	cellSize := 0.2
 	if room != nil {
-		x = room.OriginX + (float64(worstCol) + 0.5) * cellSize
-		z = room.OriginZ + (float64(worstRow) + 0.5) * cellSize
+		x = room.OriginX + (float64(worstCol)+0.5)*cellSize
+		z = room.OriginZ + (float64(worstRow)+0.5)*cellSize
 	}
 
 	return x, z, worstGDOP

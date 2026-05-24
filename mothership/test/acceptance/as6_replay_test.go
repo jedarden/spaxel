@@ -122,8 +122,8 @@ func AS6_SeekPerformance(t *testing.T) {
 
 	// Test seeks to various points in the 48-hour window
 	testSeeks := []struct {
-		name       string
-		offsetMS   float64 // Offset from buffer start in milliseconds
+		name     string
+		offsetMS float64 // Offset from buffer start in milliseconds
 	}{
 		{"Seek to start", 0},
 		{"Seek to 1 hour", 3600 * 1000},
@@ -488,7 +488,7 @@ func AS6_BackToLiveResumesDetection(t *testing.T) {
 	sessionID, _ := session["id"].(string)
 
 	// Seek to some point in history
-	seekBody := map[string]interface{}{"target_ms": time.Now().Add(-1*time.Hour).UnixMilli()}
+	seekBody := map[string]interface{}{"target_ms": time.Now().Add(-1 * time.Hour).UnixMilli()}
 	body, _ := json.Marshal(seekBody)
 	http.Post(srv.URL+"/api/replay/session/"+sessionID+"/seek", "application/json", bytes.NewReader(body))
 
@@ -553,7 +553,7 @@ func AS6_ReplayIsolation(t *testing.T) {
 	sessionID, _ := session["id"].(string)
 
 	// Seek back in time
-	seekBody := map[string]interface{}{"target_ms": time.Now().Add(-2*time.Hour).UnixMilli()}
+	seekBody := map[string]interface{}{"target_ms": time.Now().Add(-2 * time.Hour).UnixMilli()}
 	body, _ := json.Marshal(seekBody)
 	http.Post(srv.URL+"/api/replay/session/"+sessionID+"/seek", "application/json", bytes.NewReader(body))
 
@@ -599,7 +599,7 @@ func startMockMothershipForReplay(t *testing.T) *httptest.Server {
 				// Create new replay session
 				now := time.Now()
 				session := map[string]interface{}{
-					"id":             "test-session-" + now.Format("150405"),
+					"id":              "test-session-" + now.Format("150405"),
 					"buffer_start_ms": now.Add(-48 * time.Hour).UnixMilli(),
 					"buffer_end_ms":   now.UnixMilli(),
 					"current_ms":      now.Add(-1 * time.Hour).UnixMilli(),
@@ -610,7 +610,7 @@ func startMockMothershipForReplay(t *testing.T) *httptest.Server {
 				// Get current session
 				now := time.Now()
 				session := map[string]interface{}{
-					"id":             "test-session",
+					"id":              "test-session",
 					"buffer_start_ms": now.Add(-48 * time.Hour).UnixMilli(),
 					"buffer_end_ms":   now.UnixMilli(),
 					"current_ms":      now.Add(-1 * time.Hour).UnixMilli(),
@@ -627,11 +627,11 @@ func startMockMothershipForReplay(t *testing.T) *httptest.Server {
 				"events": []map[string]interface{}{
 					{
 						"type":         "zone_entry",
-						"timestamp_ms": now.Add(-2*time.Hour).UnixMilli(),
+						"timestamp_ms": now.Add(-2 * time.Hour).UnixMilli(),
 					},
 					{
 						"type":         "anomaly",
-						"timestamp_ms": now.Add(-4*time.Hour).UnixMilli(),
+						"timestamp_ms": now.Add(-4 * time.Hour).UnixMilli(),
 					},
 				},
 			}

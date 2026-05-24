@@ -172,8 +172,8 @@ func TestNotifierFireWithAction(t *testing.T) {
 		eventID,
 		"Diurnal Baseline Ready",
 		"Your system has learned patterns",
-		"Ignored Label",  // This is ignored for known events
-		"#/ignored",      // This is ignored for known events
+		"Ignored Label", // This is ignored for known events
+		"#/ignored",     // This is ignored for known events
 	)
 
 	if !fired {

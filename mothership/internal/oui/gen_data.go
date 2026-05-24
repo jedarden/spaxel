@@ -15,7 +15,7 @@ import (
 
 // OUI entry from IEEE registry
 type OUIEntry struct {
-	OUI        string
+	OUI          string
 	Manufacturer string
 }
 
@@ -89,7 +89,7 @@ func parseOUIRegistry(r io.Reader) []OUIEntry {
 		}
 
 		entries = append(entries, OUIEntry{
-			OUI:        oui,
+			OUI:          oui,
 			Manufacturer: manufacturer,
 		})
 	}

@@ -40,13 +40,13 @@ type Event struct {
 // It subscribes to the EventBus and writes events to SQLite
 // without blocking publishers.
 type Storage struct {
-	db        *sql.DB
-	queue     chan Event
-	done      chan struct{}
-	wg        sync.WaitGroup
-	mu        sync.Mutex
-	dropped   int // Counter for dropped events (for metrics)
-	lastWarn  time.Time
+	db       *sql.DB
+	queue    chan Event
+	done     chan struct{}
+	wg       sync.WaitGroup
+	mu       sync.Mutex
+	dropped  int // Counter for dropped events (for metrics)
+	lastWarn time.Time
 }
 
 // New creates a new timeline storage subscriber.

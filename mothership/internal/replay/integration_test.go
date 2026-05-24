@@ -466,7 +466,7 @@ func TestTimelineEventMarkers(t *testing.T) {
 	// Simulate event markers at specific timestamps
 	eventMarkers := []struct {
 		timestamp time.Time
-		eventType  string
+		eventType string
 	}{
 		{time.Unix(0, baseTime+10*20_000_000), "zone_entry"},
 		{time.Unix(0, baseTime+30*20_000_000), "anomaly"},
@@ -555,12 +555,12 @@ func createTestCSIFrames(count int, baseTime int64) [][]byte {
 		frame := make([]byte, 152) // 24-byte header + 128*2 I/Q
 
 		// Set header fields
-		frame[0] = 0xAA // node MAC byte 0
-		frame[6] = 0xBB // peer MAC byte 0
+		frame[0] = 0xAA                                        // node MAC byte 0
+		frame[6] = 0xBB                                        // peer MAC byte 0
 		binary.LittleEndian.PutUint64(frame[12:20], uint64(i)) // timestamp
-		frame[20] = 206 // RSSI: -50 as unsigned byte (two's complement)
-		frame[22] = 6   // channel
-		frame[23] = 64  // nSub
+		frame[20] = 206                                        // RSSI: -50 as unsigned byte (two's complement)
+		frame[22] = 6                                          // channel
+		frame[23] = 64                                         // nSub
 
 		// Set I/Q data to simulate motion (64 subcarriers = 128 bytes of I/Q)
 		for j := 0; j < 64; j++ {
@@ -649,8 +649,8 @@ func (m *mockSettingsHandler) Update(updates map[string]interface{}) error {
 }
 
 type mockReplayHandler struct {
-	settings  *mockSettingsHandler
-	session   *ReplaySession
+	settings *mockSettingsHandler
+	session  *ReplaySession
 }
 
 func (m *mockReplayHandler) applyToLive(session *ReplaySession) error {

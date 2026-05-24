@@ -8,7 +8,7 @@ import (
 
 const (
 	// WiFi physical constants
-	wavelength        = 0.123     // meters (2.4 GHz)
+	wavelength        = 0.123 // meters (2.4 GHz)
 	halfWavelength    = wavelength / 2.0
 	subcarrierSpacing = 312.5e3 // Hz
 	c                 = 3e8     // speed of light m/s
@@ -18,9 +18,9 @@ const (
 
 	// Path loss model constants (log-distance model)
 	// PL(d) = PL_0 + 10*n*log10(d/d_0)
-	pl0    = 40.0 // dBm reference power at d0
-	d0     = 1.0   // meters reference distance
-	n      = 2.0   // path loss exponent (free space)
+	pl0 = 40.0 // dBm reference power at d0
+	d0  = 1.0  // meters reference distance
+	n   = 2.0  // path loss exponent (free space)
 
 	// Reflection coefficient (power, dimensionless)
 	reflectionCoeff = 0.3
@@ -50,14 +50,14 @@ func generateCSIFrame(tx, rx *VirtualNode, walkers []*Walker, walls []Wall, fram
 	frame := make([]byte, headerSize+nSub*2)
 
 	// Write header (matches ingestion/frame.go ParseFrame layout)
-	copy(frame[0:6], tx.MAC[:])   // node_mac
-	copy(frame[6:12], rx.MAC[:])  // peer_mac
+	copy(frame[0:6], tx.MAC[:])                                         // node_mac
+	copy(frame[6:12], rx.MAC[:])                                        // peer_mac
 	binary.LittleEndian.PutUint64(frame[12:20], uint64(frameNum*50000)) // timestamp_us
-	frame[20] = byte(rssi)        // rssi
+	frame[20] = byte(rssi)                                              // rssi
 	var noiseFloor int8 = -95
-	frame[21] = byte(noiseFloor) // noise_floor: -95 dBm
+	frame[21] = byte(noiseFloor)   // noise_floor: -95 dBm
 	frame[22] = byte(*flagChannel) // channel (from --channel flag)
-	frame[23] = nSub              // n_sub
+	frame[23] = nSub               // n_sub
 
 	// Generate I/Q pairs for each subcarrier
 	for k := 0; k < nSub; k++ {

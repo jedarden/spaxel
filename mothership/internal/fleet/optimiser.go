@@ -9,9 +9,9 @@ import (
 
 // Role constants
 const (
-	RoleTX     = "tx"
-	RoleRX     = "rx"
-	RoleTXRX   = "tx_rx"
+	RoleTX      = "tx"
+	RoleRX      = "rx"
+	RoleTXRX    = "tx_rx"
 	RolePassive = "passive"
 )
 
@@ -66,9 +66,9 @@ func DefaultOptimisationConfig() OptimisationConfig {
 
 // RoleOptimiser computes optimal role assignments to maximise coverage
 type RoleOptimiser struct {
-	config       OptimisationConfig
-	gdopCalc     GDOPCalculator
-	roomConfig   RoomConfig
+	config     OptimisationConfig
+	gdopCalc   GDOPCalculator
+	roomConfig RoomConfig
 }
 
 // NewRoleOptimiser creates a new role optimiser
@@ -90,16 +90,16 @@ func (ro *RoleOptimiser) SetRoomConfig(room RoomConfig) {
 
 // OptimiseResult contains the result of a role optimisation
 type OptimiseResult struct {
-	Assignments    []RoleAssignment
-	Links          []SensingLink
-	MeanGDOP       float64
-	CoverageScore  float64
-	OptimisedAt    time.Time
-	TriggerReason  string
-	GDOPBefore     []float32 // GDOP map before (if available)
-	GDOPAfter      []float32 // GDOP map after
-	GDOPCols       int
-	GDOPRows       int
+	Assignments   []RoleAssignment
+	Links         []SensingLink
+	MeanGDOP      float64
+	CoverageScore float64
+	OptimisedAt   time.Time
+	TriggerReason string
+	GDOPBefore    []float32 // GDOP map before (if available)
+	GDOPAfter     []float32 // GDOP map after
+	GDOPCols      int
+	GDOPRows      int
 }
 
 // Optimise computes the optimal role assignment for the given nodes

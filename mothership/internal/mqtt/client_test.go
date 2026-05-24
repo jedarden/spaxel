@@ -22,10 +22,10 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				Broker:        "tcp://localhost:1883",
-				MothershipID:  "test-mothership",
-				Username:      "testuser",
-				Password:      "testpass",
+				Broker:       "tcp://localhost:1883",
+				MothershipID: "test-mothership",
+				Username:     "testuser",
+				Password:     "testpass",
 			},
 			wantErr: false,
 		},
@@ -39,8 +39,8 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "defaults applied",
 			config: Config{
-				Broker:        "tcp://localhost:1883",
-				MothershipID:  "test",
+				Broker:       "tcp://localhost:1883",
+				MothershipID: "test",
 			},
 			wantErr: false,
 		},
@@ -63,9 +63,9 @@ func TestNewClient(t *testing.T) {
 // TestHomeAssistantDiscoveryConfig tests HA auto-discovery config generation.
 func TestHomeAssistantDiscoveryConfig(t *testing.T) {
 	cfg := Config{
-		Broker:        "tcp://localhost:1883",
-		MothershipID:  "test123",
-		TopicPrefix:   "spaxel",
+		Broker:          "tcp://localhost:1883",
+		MothershipID:    "test123",
+		TopicPrefix:     "spaxel",
 		DiscoveryPrefix: "homeassistant",
 	}
 
@@ -76,13 +76,13 @@ func TestHomeAssistantDiscoveryConfig(t *testing.T) {
 
 	// Test person presence discovery
 	personConfig := HADiscoveryConfig{
-		Name:         "Alice Presence",
-		UniqueID:     "spaxel_test123_alice_presence",
-		StateTopic:   "spaxel/person/alice/presence",
-		PayloadOn:    "home",
-		PayloadOff:   "not_home",
-		DeviceClass:  "presence",
-		Device:       client.spaxelDevice,
+		Name:        "Alice Presence",
+		UniqueID:    "spaxel_test123_alice_presence",
+		StateTopic:  "spaxel/person/alice/presence",
+		PayloadOn:   "home",
+		PayloadOff:  "not_home",
+		DeviceClass: "presence",
+		Device:      client.spaxelDevice,
 	}
 
 	payload, err := json.Marshal(personConfig)
@@ -117,9 +117,9 @@ func TestHomeAssistantDiscoveryConfig(t *testing.T) {
 // TestTopicGeneration tests MQTT topic generation.
 func TestTopicGeneration(t *testing.T) {
 	cfg := Config{
-		Broker:        "tcp://localhost:1883",
-		MothershipID:  "spaxel01",
-		TopicPrefix:   "spaxel",
+		Broker:       "tcp://localhost:1883",
+		MothershipID: "spaxel01",
+		TopicPrefix:  "spaxel",
 	}
 
 	client, err := NewClient(cfg)
@@ -174,13 +174,13 @@ func TestDiscoveryPayloadFormat(t *testing.T) {
 
 	// Test binary_sensor discovery payload
 	binaryConfig := map[string]interface{}{
-		"name":           "Alice Presence",
-		"unique_id":      "spaxel_test123_alice_presence",
-		"state_topic":    "spaxel/person/alice/presence",
-		"payload_on":     "home",
-		"payload_off":    "not_home",
-		"device_class":   "presence",
-		"device":         client.spaxelDevice,
+		"name":         "Alice Presence",
+		"unique_id":    "spaxel_test123_alice_presence",
+		"state_topic":  "spaxel/person/alice/presence",
+		"payload_on":   "home",
+		"payload_off":  "not_home",
+		"device_class": "presence",
+		"device":       client.spaxelDevice,
 	}
 
 	payload, err := json.Marshal(binaryConfig)

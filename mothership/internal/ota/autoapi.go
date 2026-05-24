@@ -95,15 +95,15 @@ func (h *AutoAPIHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	baselineQuality := h.mgr.GetBaselineQuality()
 
 	response := map[string]interface{}{
-		"enabled":            config.Enabled,
-		"state":              string(state),
-		"canary_node":        canaryNode,
-		"baseline_quality":   baselineQuality,
-		"quiet_window_start": config.QuietWindowStart,
-		"quiet_window_end":   config.QuietWindowEnd,
+		"enabled":             config.Enabled,
+		"state":               string(state),
+		"canary_node":         canaryNode,
+		"baseline_quality":    baselineQuality,
+		"quiet_window_start":  config.QuietWindowStart,
+		"quiet_window_end":    config.QuietWindowEnd,
 		"canary_duration_min": config.CanaryDurationMin,
-		"quality_threshold":  config.QualityThreshold,
-		"is_in_quiet_window": h.isInQuietWindow(config),
+		"quality_threshold":   config.QualityThreshold,
+		"is_in_quiet_window":  h.isInQuietWindow(config),
 	}
 
 	// Add canary progress info if in canary state
@@ -159,12 +159,12 @@ func (h *AutoAPIHandler) handleConfig(w http.ResponseWriter, r *http.Request) {
 	config := h.mgr.GetConfig()
 
 	response := map[string]interface{}{
-		"enabled":              config.Enabled,
-		"quiet_window_start":   config.QuietWindowStart,
-		"quiet_window_end":     config.QuietWindowEnd,
-		"canary_duration_min":  config.CanaryDurationMin,
-		"quality_threshold":    config.QualityThreshold,
-		"is_in_quiet_window":   h.isInQuietWindow(config),
+		"enabled":                 config.Enabled,
+		"quiet_window_start":      config.QuietWindowStart,
+		"quiet_window_end":        config.QuietWindowEnd,
+		"canary_duration_min":     config.CanaryDurationMin,
+		"quality_threshold":       config.QualityThreshold,
+		"is_in_quiet_window":      h.isInQuietWindow(config),
 		"next_quiet_window_start": h.nextQuietWindowStart(config),
 	}
 

@@ -158,8 +158,8 @@ func (h *Handler) removeWalker(w http.ResponseWriter, r *http.Request) {
 // Runs one simulation tick and returns results.
 func (h *Handler) simulate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		DurationSec  int     `json:"duration_sec"`
-		TickRateHz   int     `json:"tick_rate_hz"`
+		DurationSec int `json:"duration_sec"`
+		TickRateHz  int `json:"tick_rate_hz"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -187,7 +187,7 @@ func (h *Handler) getResults(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) computeGDOP(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Nodes []Node `json:"nodes"`
-		Space *Space  `json:"space"`
+		Space *Space `json:"space"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -401,7 +401,7 @@ func (h *Handler) getGDOPHeatmap(w http.ResponseWriter, r *http.Request) {
 
 	// Build response
 	response := map[string]interface{}{
-		"gdop_map":         heatmapData.GDOPValues,
+		"gdop_map":        heatmapData.GDOPValues,
 		"grid_dimensions": []int{heatmapData.Width, heatmapData.Depth},
 		"grid_origin":     map[string]float64{"x": heatmapData.OriginX, "y": heatmapData.OriginY},
 		"cell_size_m":     heatmapData.CellSize,

@@ -8,19 +8,19 @@ import (
 
 // Event type constants. These match the EventType values from the events package.
 const (
-	TypeDetection        = "detection"
-	TypeZoneEntry        = "zone_entry"
-	TypeZoneExit         = "zone_exit"
-	TypePortalCrossing   = "portal_crossing"
-	TypeTriggerFired     = "trigger_fired"
-	TypeFallAlert        = "fall_alert"
-	TypeAnomaly          = "anomaly"
-	TypeSecurityAlert    = "security_alert"
-	TypeNodeOnline       = "node_online"
-	TypeNodeOffline      = "node_offline"
-	TypeOTAUpdate        = "ota_update"
-	TypeBaselineChanged  = "baseline_changed"
-	TypeSystem           = "system"
+	TypeDetection         = "detection"
+	TypeZoneEntry         = "zone_entry"
+	TypeZoneExit          = "zone_exit"
+	TypePortalCrossing    = "portal_crossing"
+	TypeTriggerFired      = "trigger_fired"
+	TypeFallAlert         = "fall_alert"
+	TypeAnomaly           = "anomaly"
+	TypeSecurityAlert     = "security_alert"
+	TypeNodeOnline        = "node_online"
+	TypeNodeOffline       = "node_offline"
+	TypeOTAUpdate         = "ota_update"
+	TypeBaselineChanged   = "baseline_changed"
+	TypeSystem            = "system"
 	TypeLearningMilestone = "learning_milestone"
 )
 

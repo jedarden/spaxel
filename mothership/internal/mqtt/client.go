@@ -28,14 +28,14 @@ type Config struct {
 
 	// Spaxel-specific
 	MothershipID string // unique ID for this mothership instance
-	TopicPrefix   string // defaults to "spaxel"
+	TopicPrefix  string // defaults to "spaxel"
 
 	// Connection settings
-	KeepAlive       time.Duration
-	ConnectTimeout  time.Duration
-	AutoReconnect   bool
-	ReconnectMin    time.Duration // minimum reconnect delay (default 5s)
-	ReconnectMax    time.Duration // maximum reconnect delay (default 120s)
+	KeepAlive      time.Duration
+	ConnectTimeout time.Duration
+	AutoReconnect  bool
+	ReconnectMin   time.Duration // minimum reconnect delay (default 5s)
+	ReconnectMax   time.Duration // maximum reconnect delay (default 120s)
 }
 
 // HomeAssistantDevice represents a device in HA auto-discovery.
@@ -54,24 +54,24 @@ type HADiscoveryConfig struct {
 	Device     HomeAssistantDevice `json:"device"`
 	StateTopic string              `json:"state_topic"`
 	// Device-specific fields
-	DeviceClass    string `json:"device_class,omitempty"`
-	UnitOfMeasure  string `json:"unit_of_measurement,omitempty"`
-	Icon           string `json:"icon,omitempty"`
+	DeviceClass         string `json:"device_class,omitempty"`
+	UnitOfMeasure       string `json:"unit_of_measurement,omitempty"`
+	Icon                string `json:"icon,omitempty"`
 	JSONAttributesTopic string `json:"json_attributes_topic,omitempty"`
-	CommandTopic   string `json:"command_topic,omitempty"`
-	PayloadOn      string `json:"payload_on,omitempty"`
-	PayloadOff     string `json:"payload_off,omitempty"`
-	ValueTemplate  string `json:"value_template,omitempty"`
+	CommandTopic        string `json:"command_topic,omitempty"`
+	PayloadOn           string `json:"payload_on,omitempty"`
+	PayloadOff          string `json:"payload_off,omitempty"`
+	ValueTemplate       string `json:"value_template,omitempty"`
 }
 
 // EntityConfig holds configuration for an HA entity.
 type EntityConfig struct {
-	ID           string
-	Name         string
-	Type         string // binary_sensor, sensor, device_tracker
-	DeviceClass  string
+	ID            string
+	Name          string
+	Type          string // binary_sensor, sensor, device_tracker
+	DeviceClass   string
 	UnitOfMeasure string
-	Icon         string
+	Icon          string
 }
 
 // EventPublisherer is an interface for publishing HA auto-discovery configs.
@@ -87,15 +87,15 @@ type Client struct {
 	client mqtt.Client
 
 	// State tracking
-	connected     bool
-	spaxelDevice  HomeAssistantDevice
+	connected         bool
+	spaxelDevice      HomeAssistantDevice
 	publishedEntities map[string]bool // entity ID -> published
 
 	// Callbacks
-	onConnect           func()
-	onDisconnect        func()
-	onInitialDiscovery func() // Called on MQTT connect to publish initial discovery configs
-	eventPublisher      EventPublisherer // Optional EventPublisher for initial discovery
+	onConnect          func()
+	onDisconnect       func()
+	onInitialDiscovery func()           // Called on MQTT connect to publish initial discovery configs
+	eventPublisher     EventPublisherer // Optional EventPublisher for initial discovery
 }
 
 // NewClient creates a new MQTT client.
@@ -342,12 +342,12 @@ func (c *Client) PublishDeviceTracker(personID, personName string) error {
 	stateTopic := fmt.Sprintf("spaxel/person/%s/state", personID)
 
 	config := HADiscoveryConfig{
-		UniqueID:   entityID,
-		Name:       personName,
-		StateTopic: stateTopic,
+		UniqueID:            entityID,
+		Name:                personName,
+		StateTopic:          stateTopic,
 		JSONAttributesTopic: stateTopic,
-		Device:     c.spaxelDevice,
-		Icon:       "mdi:account",
+		Device:              c.spaxelDevice,
+		Icon:                "mdi:account",
 	}
 
 	payload, _ := json.Marshal(config)
@@ -618,13 +618,13 @@ func (c *Client) PublishPersonPresenceDiscovery(personID, personName string) err
 	stateTopic := fmt.Sprintf("%s/person/%s/presence", c.config.TopicPrefix, personID)
 
 	config := HADiscoveryConfig{
-		Name:       fmt.Sprintf("%s Presence", personName),
-		UniqueID:   entityID,
-		StateTopic: stateTopic,
-		PayloadOn:  "home",
-		PayloadOff: "not_home",
+		Name:        fmt.Sprintf("%s Presence", personName),
+		UniqueID:    entityID,
+		StateTopic:  stateTopic,
+		PayloadOn:   "home",
+		PayloadOff:  "not_home",
 		DeviceClass: "presence",
-		Device:     c.spaxelDevice,
+		Device:      c.spaxelDevice,
 	}
 
 	payload, _ := json.Marshal(config)
@@ -652,13 +652,13 @@ func (c *Client) PublishZoneOccupancyDiscovery(zoneID, zoneName string) error {
 	occupantsTopic := fmt.Sprintf("%s/zone/%s/occupants", c.config.TopicPrefix, zoneID)
 
 	config := HADiscoveryConfig{
-		Name:         fmt.Sprintf("%s Occupancy", zoneName),
-		UniqueID:     entityID,
-		StateTopic:   stateTopic,
-		UnitOfMeasure: "people",
+		Name:                fmt.Sprintf("%s Occupancy", zoneName),
+		UniqueID:            entityID,
+		StateTopic:          stateTopic,
+		UnitOfMeasure:       "people",
 		JSONAttributesTopic: occupantsTopic,
-		Icon:         "mdi:account-multiple",
-		Device:       c.spaxelDevice,
+		Icon:                "mdi:account-multiple",
+		Device:              c.spaxelDevice,
 	}
 
 	payload, _ := json.Marshal(config)
@@ -685,14 +685,14 @@ func (c *Client) PublishZoneBinaryDiscovery(zoneID, zoneName string) error {
 	stateTopic := fmt.Sprintf("%s/zone/%s/occupied", c.config.TopicPrefix, zoneID)
 
 	config := HADiscoveryConfig{
-		Name:       fmt.Sprintf("%s Occupied", zoneName),
-		UniqueID:   entityID,
-		StateTopic: stateTopic,
-		PayloadOn:  "ON",
-		PayloadOff: "OFF",
+		Name:        fmt.Sprintf("%s Occupied", zoneName),
+		UniqueID:    entityID,
+		StateTopic:  stateTopic,
+		PayloadOn:   "ON",
+		PayloadOff:  "OFF",
 		DeviceClass: "occupancy",
-		Icon:       "mdi:motion-sensor",
-		Device:     c.spaxelDevice,
+		Icon:        "mdi:motion-sensor",
+		Device:      c.spaxelDevice,
 	}
 
 	payload, _ := json.Marshal(config)
@@ -719,13 +719,13 @@ func (c *Client) PublishFallDetectionDiscovery() error {
 	stateTopic := fmt.Sprintf("%s/fall_detected", c.config.TopicPrefix)
 
 	config := HADiscoveryConfig{
-		Name:       "Fall Detected",
-		UniqueID:   entityID,
-		StateTopic: stateTopic,
+		Name:          "Fall Detected",
+		UniqueID:      entityID,
+		StateTopic:    stateTopic,
 		ValueTemplate: "{% if value_json.person is defined %}ON{% else %}OFF{% endif %}",
-		DeviceClass: "safety",
-		Icon:       "mdi:human-greeting-proximity",
-		Device:     c.spaxelDevice,
+		DeviceClass:   "safety",
+		Icon:          "mdi:human-greeting-proximity",
+		Device:        c.spaxelDevice,
 	}
 
 	payload, _ := json.Marshal(config)
@@ -752,13 +752,13 @@ func (c *Client) PublishSystemHealthDiscovery() error {
 	stateTopic := fmt.Sprintf("%s/system/health", c.config.TopicPrefix)
 
 	config := HADiscoveryConfig{
-		Name:       "Detection Quality",
-		UniqueID:   entityID,
-		StateTopic: stateTopic,
+		Name:          "Detection Quality",
+		UniqueID:      entityID,
+		StateTopic:    stateTopic,
 		UnitOfMeasure: "%",
-		DeviceClass: "",
-		Icon:       "mdi:gauge",
-		Device:     c.spaxelDevice,
+		DeviceClass:   "",
+		Icon:          "mdi:gauge",
+		Device:        c.spaxelDevice,
 	}
 
 	payload, _ := json.Marshal(config)
@@ -786,13 +786,13 @@ func (c *Client) PublishSystemModeDiscovery() error {
 	commandTopic := fmt.Sprintf("%s/command/system_mode", c.config.TopicPrefix)
 
 	config := map[string]interface{}{
-		"name": fmt.Sprintf("Spaxel System Mode"),
-		"unique_id": entityID,
-		"state_topic": stateTopic,
+		"name":          fmt.Sprintf("Spaxel System Mode"),
+		"unique_id":     entityID,
+		"state_topic":   stateTopic,
 		"command_topic": commandTopic,
-		"options": []string{"home", "away", "sleep"},
-		"device": c.spaxelDevice,
-		"icon": "mdi:home-switch",
+		"options":       []string{"home", "away", "sleep"},
+		"device":        c.spaxelDevice,
+		"icon":          "mdi:home-switch",
 	}
 
 	payload, _ := json.Marshal(config)
@@ -878,11 +878,11 @@ func (c *Client) PublishSystemHealth(nodeCount, onlineCount int, detectionQualit
 	topic := fmt.Sprintf("%s/system/health", c.config.TopicPrefix)
 
 	health := map[string]interface{}{
-		"node_count":         nodeCount,
-		"online_count":       onlineCount,
-		"detection_quality":  detectionQuality,
-		"mode":               mode,
-		"timestamp":          time.Now().Format(time.RFC3339),
+		"node_count":        nodeCount,
+		"online_count":      onlineCount,
+		"detection_quality": detectionQuality,
+		"mode":              mode,
+		"timestamp":         time.Now().Format(time.RFC3339),
 	}
 
 	payload, err := json.Marshal(health)

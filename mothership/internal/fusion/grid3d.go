@@ -11,8 +11,8 @@ const defaultCellSize = 0.2 // metres
 // Grid3D is a 3D voxel grid for accumulating link activation weights.
 // Axes: X (width), Y (height), Z (depth).
 type Grid3D struct {
-	mu       sync.RWMutex
-	cells    []float64
+	mu         sync.RWMutex
+	cells      []float64
 	nx, ny, nz int
 	cellSize   float64
 	ox, oy, oz float64 // origin (min corner)

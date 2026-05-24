@@ -710,11 +710,11 @@ func TestGetAllDiagnoses(t *testing.T) {
 // TestGetDiagnosticFor tests point-in-time diagnostic lookup
 func TestGetDiagnosticFor(t *testing.T) {
 	tests := []struct {
-		name          string
-		linkID        string
-		setupHistory  func() []LinkHealthSnapshot
-		wantRuleID    string
-		wantSeverity  DiagnosisSeverity
+		name         string
+		linkID       string
+		setupHistory func() []LinkHealthSnapshot
+		wantRuleID   string
+		wantSeverity DiagnosisSeverity
 	}{
 		{
 			name:   "environmental_change_from_high_drift",
@@ -881,7 +881,7 @@ func TestGetDiagnosticFor_PriorityOrder(t *testing.T) {
 			SNR:            0.7,
 			PhaseStability: 0.3,
 			PacketRate:     10.0, // Low
-			DriftRate:      0.08,  // High
+			DriftRate:      0.08, // High
 		}
 	}
 

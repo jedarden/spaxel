@@ -34,8 +34,8 @@ type CollisionEvent struct {
 
 // CollisionStats tracks collision statistics for a pair of TX nodes
 type CollisionStats struct {
-	TotalFrames  int
-	Collisions   int
+	TotalFrames   int
+	Collisions    int
 	LastCollision time.Time
 	LastReset     time.Time
 }
@@ -59,7 +59,7 @@ type CollisionDetector struct {
 	lastArrival map[string]time.Time
 
 	// Re-stagger state
-	lastRestagger time.Time
+	lastRestagger     time.Time
 	restaggersEnabled bool
 
 	// Callback for re-stagger trigger
@@ -72,13 +72,13 @@ type CollisionDetector struct {
 // NewCollisionDetector creates a new collision detector
 func NewCollisionDetector() *CollisionDetector {
 	return &CollisionDetector{
-		collisionCount:   make(map[string]int),
-		totalFrames:      make(map[string]int),
-		collisionHistory: make(map[string][]CollisionEvent),
-		txNodes:          make(map[string]bool),
-		lastArrival:      make(map[string]time.Time),
+		collisionCount:    make(map[string]int),
+		totalFrames:       make(map[string]int),
+		collisionHistory:  make(map[string][]CollisionEvent),
+		txNodes:           make(map[string]bool),
+		lastArrival:       make(map[string]time.Time),
 		restaggersEnabled: true,
-		frameArrivals:    make(map[string][]time.Time),
+		frameArrivals:     make(map[string][]time.Time),
 	}
 }
 

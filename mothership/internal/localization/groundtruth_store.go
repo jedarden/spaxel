@@ -17,9 +17,9 @@ import (
 
 // Collection gates and grid configuration
 const (
-	MinBLEConfidence    = 0.7  // Minimum BLE triangulation confidence
-	MaxBLEBlobDistance  = 0.5  // Maximum BLE-blob distance (metres)
-	ZoneGridCellSize    = 0.5  // Zone grid cell size (metres)
+	MinBLEConfidence   = 0.7 // Minimum BLE triangulation confidence
+	MaxBLEBlobDistance = 0.5 // Maximum BLE-blob distance (metres)
+	ZoneGridCellSize   = 0.5 // Zone grid cell size (metres)
 )
 
 // GroundTruthSample represents a single ground truth observation
@@ -30,9 +30,9 @@ type GroundTruthSample struct {
 	ID            int64              `json:"id"`
 	Timestamp     time.Time          `json:"timestamp"`
 	PersonID      string             `json:"person_id"`
-	BLEPosition   Vec3               `json:"ble_position"`   // Ground truth from BLE
-	BlobPosition  Vec3               `json:"blob_position"`  // CSI fusion estimate
-	PositionError float64            `json:"position_error"` // Distance between BLE and blob
+	BLEPosition   Vec3               `json:"ble_position"`    // Ground truth from BLE
+	BlobPosition  Vec3               `json:"blob_position"`   // CSI fusion estimate
+	PositionError float64            `json:"position_error"`  // Distance between BLE and blob
 	PerLinkDeltas map[string]float64 `json:"per_link_deltas"` // linkID -> deltaRMS
 	PerLinkHealth map[string]float64 `json:"per_link_health"` // linkID -> health score
 	BLEConfidence float64            `json:"ble_confidence"`
@@ -627,11 +627,11 @@ func (s *GroundTruthStore) GetPositionImprovementStats() (map[string]interface{}
 	s.db.QueryRow(`SELECT COUNT(*) FROM ground_truth_samples WHERE timestamp >= ?`, todayStart.Unix()).Scan(&todaySamples)
 
 	result := map[string]interface{}{
-		"current_week":       currentWeek,
-		"improvement_pct":    improvement,
-		"trend":              trend,
-		"total_samples":      totalSamples,
-		"today_samples":      todaySamples,
+		"current_week":    currentWeek,
+		"improvement_pct": improvement,
+		"trend":           trend,
+		"total_samples":   totalSamples,
+		"today_samples":   todaySamples,
 	}
 
 	if currentErr == nil {

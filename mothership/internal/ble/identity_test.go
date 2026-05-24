@@ -24,9 +24,9 @@ func (m *mockNodePositionAccessor) GetNodePosition(mac string) (x, y, z float64,
 
 func TestRSSIToDistance(t *testing.T) {
 	tests := []struct {
-		name     string
-		rssi     int
-		expected float64
+		name      string
+		rssi      int
+		expected  float64
 		tolerance float64
 	}{
 		{
@@ -71,9 +71,9 @@ func TestTriangulationWithThreeNodes(t *testing.T) {
 	// Setup mock node positions (equilateral triangle at known positions)
 	mockNodes := &mockNodePositionAccessor{
 		positions: map[string][3]float64{
-			"node:00:01": {0.0, 1.5, 0.0},   // Origin
-			"node:00:02": {4.0, 1.5, 0.0},   // 4m along X
-			"node:00:03": {2.0, 1.5, 3.46},  // ~3.46m along Z (equilateral)
+			"node:00:01": {0.0, 1.5, 0.0},  // Origin
+			"node:00:02": {4.0, 1.5, 0.0},  // 4m along X
+			"node:00:03": {2.0, 1.5, 3.46}, // ~3.46m along Z (equilateral)
 		},
 	}
 
@@ -271,9 +271,9 @@ func TestConfidenceGate(t *testing.T) {
 	cache.AddWithTime("aa:bb:cc:dd:ee:01", "node:00:01", -65, now)
 
 	blobs := []struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
-		Weight float64
+		Weight  float64
 	}{
 		{ID: 1, X: 1.5, Y: 1.5, Z: 0.0, Weight: 0.9}, // 1.5m from node
 	}
@@ -373,9 +373,9 @@ func TestBLEOnlyPlaceholderTrack(t *testing.T) {
 
 	// Blob is far away (> 2m from triangulated position)
 	blobs := []struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
-		Weight float64
+		Weight  float64
 	}{
 		{ID: 1, X: 10.0, Y: 1.5, Z: 10.0, Weight: 0.9}, // Far from BLE position
 	}
@@ -545,11 +545,11 @@ func TestIdentityHandoffOnMACRotation(t *testing.T) {
 
 func TestComputeMatchConfidence(t *testing.T) {
 	tests := []struct {
-		name       string
-		td         *TriangulatedDevice
-		blobDist   float64
-		minConf    float64
-		maxConf    float64
+		name     string
+		td       *TriangulatedDevice
+		blobDist float64
+		minConf  float64
+		maxConf  float64
 	}{
 		{
 			name: "High confidence: recent observation, 3+ nodes, low residual, close blob",

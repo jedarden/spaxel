@@ -21,9 +21,9 @@ type ReplayHandler struct {
 	worker          *replay.Worker
 	sessions        map[string]*_replaySession
 	nextID          int
-	activeSessionID string // Currently active session for dashboard control
+	activeSessionID string            // Currently active session for dashboard control
 	settingsHandler SettingsPersister // For ApplyToLive functionality
-	replayPath      string // Path to the replay binary file
+	replayPath      string            // Path to the replay binary file
 }
 
 // SettingsPersister is the interface for persisting replay parameters to live settings.
@@ -60,7 +60,7 @@ func NewReplayHandler(store replay.FrameReader) (*ReplayHandler, error) {
 	return &ReplayHandler{
 		worker:   worker,
 		sessions: make(map[string]*_replaySession),
-		nextID:    1,
+		nextID:   1,
 	}, nil
 }
 
@@ -141,12 +141,12 @@ func (h *ReplayHandler) RegisterRoutes(r chi.Router) {
 
 // replayInfo represents the response from GET /api/replay/sessions.
 type replayInfo struct {
-	HasData   bool             `json:"has_data"`
-	FileSize  int64            `json:"file_size_mb"`
-	WritePos  int64            `json:"write_pos"`
-	OldestPos int64            `json:"oldest_pos"`
-	OldestTS  int64            `json:"oldest_timestamp_ms"`
-	NewestTS  int64            `json:"newest_timestamp_ms"`
+	HasData   bool              `json:"has_data"`
+	FileSize  int64             `json:"file_size_mb"`
+	WritePos  int64             `json:"write_pos"`
+	OldestPos int64             `json:"oldest_pos"`
+	OldestTS  int64             `json:"oldest_timestamp_ms"`
+	NewestTS  int64             `json:"newest_timestamp_ms"`
 	Sessions  []*_replaySession `json:"sessions"`
 }
 
@@ -667,15 +667,15 @@ func (h *ReplayHandler) getSessionState(w http.ResponseWriter, r *http.Request) 
 
 	// Build response with session state and blobs
 	response := map[string]interface{}{
-		"session_id":  sessionID,
-		"current_ms":  session.CurrentMS,
-		"from_ms":     session.FromMS,
-		"to_ms":       session.ToMS,
-		"state":       session.State,
-		"speed":       session.Speed,
-		"progress":    progress,
-		"params":      session.Params,
-		"blobs":       blobs,
+		"session_id":   sessionID,
+		"current_ms":   session.CurrentMS,
+		"from_ms":      session.FromMS,
+		"to_ms":        session.ToMS,
+		"state":        session.State,
+		"speed":        session.Speed,
+		"progress":     progress,
+		"params":       session.Params,
+		"blobs":        blobs,
 		"timestamp_ms": session.LastBlobTime,
 	}
 

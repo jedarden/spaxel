@@ -37,7 +37,7 @@ var ManufacturerInfo = map[int]struct {
 	Name string
 	Type DeviceType
 }{
-	0x004C: {"Apple", DeviceTypeApplePhone},   // Apple - iPhone, iPad, AirPods, Apple Watch
+	0x004C: {"Apple", DeviceTypeApplePhone},    // Apple - iPhone, iPad, AirPods, Apple Watch
 	0x0006: {"Microsoft", DeviceTypeMicrosoft}, // Microsoft - Windows devices
 	0x0075: {"Samsung", DeviceTypeSamsung},     // Samsung - phones/tablets
 	0x009E: {"Fitbit", DeviceTypeFitbit},       // Fitbit - fitness trackers
@@ -49,20 +49,20 @@ var ManufacturerInfo = map[int]struct {
 
 // DeviceRecord represents a registered BLE device.
 type DeviceRecord struct {
-	Addr         string     `json:"mac"`            // MAC address
-	Name         string     `json:"name"`           // User-assigned name (e.g., "Alice's Phone")
-	Label        string     `json:"label"`          // Short label for display
-	Manufacturer string     `json:"manufacturer"`   // Auto-detected manufacturer name
-	DeviceType   DeviceType `json:"device_type"`    // Auto-detected or manual type
-	DeviceName   string     `json:"device_name"`    // Name from advertising (e.g., "iPhone")
-	MfrID        int        `json:"mfr_id"`         // Manufacturer ID from advertising
-	MfrDataHex   string     `json:"mfr_data_hex"`   // Raw manufacturer data (hex)
-	PersonID     string     `json:"person_id"`      // FK to people.id
-	PersonName   string     `json:"person_name"`    // Person name (joined from people)
-	PersonColor  string     `json:"person_color"`   // Person's color (joined from people)
-	RSSIMin      int        `json:"rssi_min"`       // Min RSSI observed
-	RSSIMax      int        `json:"rssi_max"`       // Max RSSI observed
-	RSSIAvg      int        `json:"rssi_avg"`       // Average RSSI
+	Addr         string     `json:"mac"`          // MAC address
+	Name         string     `json:"name"`         // User-assigned name (e.g., "Alice's Phone")
+	Label        string     `json:"label"`        // Short label for display
+	Manufacturer string     `json:"manufacturer"` // Auto-detected manufacturer name
+	DeviceType   DeviceType `json:"device_type"`  // Auto-detected or manual type
+	DeviceName   string     `json:"device_name"`  // Name from advertising (e.g., "iPhone")
+	MfrID        int        `json:"mfr_id"`       // Manufacturer ID from advertising
+	MfrDataHex   string     `json:"mfr_data_hex"` // Raw manufacturer data (hex)
+	PersonID     string     `json:"person_id"`    // FK to people.id
+	PersonName   string     `json:"person_name"`  // Person name (joined from people)
+	PersonColor  string     `json:"person_color"` // Person's color (joined from people)
+	RSSIMin      int        `json:"rssi_min"`     // Min RSSI observed
+	RSSIMax      int        `json:"rssi_max"`     // Max RSSI observed
+	RSSIAvg      int        `json:"rssi_avg"`     // Average RSSI
 	FirstSeenAt  time.Time  `json:"first_seen_at"`
 	LastSeenAt   time.Time  `json:"last_seen_at"`
 	LastSeenNode string     `json:"last_seen_node"` // MAC of node that last saw this device
@@ -74,9 +74,9 @@ type DeviceRecord struct {
 
 // Person represents a named person in the system.
 type Person struct {
-	ID        string    `json:"id"`         // UUID
-	Name      string    `json:"name"`       // Display name
-	Color     string    `json:"color"`      // Hex color for dashboard
+	ID        string    `json:"id"`    // UUID
+	Name      string    `json:"name"`  // Display name
+	Color     string    `json:"color"` // Hex color for dashboard
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -702,8 +702,8 @@ func (r *Registry) GetDeviceSightingHistory(mac string, limit int) ([]SightingHi
 // SightingHistoryEntry represents a single sighting event in the device history.
 type SightingHistoryEntry struct {
 	Timestamp time.Time `json:"timestamp"`
-	RSSIdBm    int       `json:"rssi_dbm"`
-	NodeMAC    string    `json:"node_mac"`
+	RSSIdBm   int       `json:"rssi_dbm"`
+	NodeMAC   string    `json:"node_mac"`
 }
 
 // UpdateLabel updates the user-assigned label for a device.
@@ -1238,10 +1238,10 @@ func generateUUID() string {
 
 // BLEDeviceAlias represents an address alias for a device.
 type BLEDeviceAlias struct {
-	Addr           string    `json:"addr"`            // The rotated address
-	CanonicalAddr  string    `json:"canonical_addr"`  // The primary/canonical address
-	FirstSeen      time.Time `json:"first_seen"`
-	LastSeen       time.Time `json:"last_seen"`
+	Addr          string    `json:"addr"`           // The rotated address
+	CanonicalAddr string    `json:"canonical_addr"` // The primary/canonical address
+	FirstSeen     time.Time `json:"first_seen"`
+	LastSeen      time.Time `json:"last_seen"`
 }
 
 // AddAlias adds a new address alias for a canonical device address.
@@ -1438,20 +1438,20 @@ func (r *Registry) GetCurrentDevices() []map[string]interface{} {
 			"last_seen":      d.LastSeenAt.UnixMilli(),
 			"blob_id":        nil,
 			"manufacturer":   d.Manufacturer,
-			"device_type":   d.DeviceType,
-			"device_name":   d.DeviceName,
-			"mfr_id":        d.MfrID,
-			"person_id":     d.PersonID,
-			"person_name":   d.PersonName,
-			"rssi_min":      d.RSSIMin,
-			"rssi_max":      d.RSSIMax,
-			"rssi_avg":      d.RSSIAvg,
-			"rssi_count":    r.GetDeviceRSSICount(d.Addr),
-			"first_seen_at": d.FirstSeenAt.UnixMilli(),
-			"last_seen_at":  d.LastSeenAt.UnixMilli(),
+			"device_type":    d.DeviceType,
+			"device_name":    d.DeviceName,
+			"mfr_id":         d.MfrID,
+			"person_id":      d.PersonID,
+			"person_name":    d.PersonName,
+			"rssi_min":       d.RSSIMin,
+			"rssi_max":       d.RSSIMax,
+			"rssi_avg":       d.RSSIAvg,
+			"rssi_count":     r.GetDeviceRSSICount(d.Addr),
+			"first_seen_at":  d.FirstSeenAt.UnixMilli(),
+			"last_seen_at":   d.LastSeenAt.UnixMilli(),
 			"last_seen_node": d.LastSeenNode,
-			"is_wearable":   d.IsWearable,
-			"enabled":       d.Enabled,
+			"is_wearable":    d.IsWearable,
+			"enabled":        d.Enabled,
 		}
 	}
 	return result

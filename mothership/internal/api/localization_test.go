@@ -408,10 +408,10 @@ func TestLocalizationHandler_getGroundTruthSamples(t *testing.T) {
 	// Add some test samples
 	for i := 0; i < 5; i++ {
 		sample := localization.GroundTruthSample{
-			Timestamp: time.Now().Add(-time.Duration(i) * time.Minute),
-			PersonID:  "test-person",
-			BLEPosition: localization.Vec3{X: 1.0, Y: 0.0, Z: 1.0},
-			BlobPosition: localization.Vec3{X: 1.0 + float64(i)*0.1, Y: 0.0, Z: 1.0},
+			Timestamp:     time.Now().Add(-time.Duration(i) * time.Minute),
+			PersonID:      "test-person",
+			BLEPosition:   localization.Vec3{X: 1.0, Y: 0.0, Z: 1.0},
+			BlobPosition:  localization.Vec3{X: 1.0 + float64(i)*0.1, Y: 0.0, Z: 1.0},
 			PositionError: float64(i) * 0.1,
 			PerLinkDeltas: map[string]float64{"link1": 0.5},
 			PerLinkHealth: map[string]float64{"link1": 0.9},

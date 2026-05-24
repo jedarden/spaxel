@@ -7,9 +7,9 @@ import (
 
 // SleepReport represents a complete sleep quality report
 type SleepReport struct {
-	LinkID      string       `json:"link_id"`
-	SessionDate time.Time    `json:"session_date"`
-	GeneratedAt time.Time    `json:"generated_at"`
+	LinkID      string        `json:"link_id"`
+	SessionDate time.Time     `json:"session_date"`
+	GeneratedAt time.Time     `json:"generated_at"`
 	Metrics     *SleepMetrics `json:"metrics"`
 
 	// Raw breathing rate samples (BPM values collected per ~60s window during sleep)
@@ -194,11 +194,11 @@ func formatMinutes(n int) string {
 // ToJSONMap converts the report to a map for JSON serialization
 func (r *SleepReport) ToJSONMap() map[string]interface{} {
 	m := map[string]interface{}{
-		"link_id":        r.LinkID,
-		"session_date":   r.SessionDate.Format("2006-01-02"),
-		"generated_at":   r.GeneratedAt.UnixMilli(),
-		"overall_score":  r.Metrics.OverallScore,
-		"quality_rating": r.Metrics.QualityRating,
+		"link_id":           r.LinkID,
+		"session_date":      r.SessionDate.Format("2006-01-02"),
+		"generated_at":      r.GeneratedAt.UnixMilli(),
+		"overall_score":     r.Metrics.OverallScore,
+		"quality_rating":    r.Metrics.QualityRating,
 		"breathing_summary": r.BreathingSummary,
 		"motion_summary":    r.MotionSummary,
 		"recommendations":   r.Recommendations,
@@ -206,21 +206,21 @@ func (r *SleepReport) ToJSONMap() map[string]interface{} {
 
 	// Add detailed metrics
 	metricsMap := map[string]interface{}{
-		"total_duration_hours":   r.Metrics.TotalDuration.Hours(),
-		"time_in_bed_hours":      r.Metrics.TimeInBed.Hours(),
-		"avg_breathing_rate":     r.Metrics.AvgBreathingRate,
-		"breathing_rate_std_dev": r.Metrics.BreathingRateStdDev,
-		"breathing_regularity":   r.Metrics.BreathingRegularity,
-		"breathing_score":        r.Metrics.BreathingScore,
-		"breathing_anomaly":      r.Metrics.BreathingAnomaly,
-		"breathing_anomaly_count": r.Metrics.BreathingAnomalyCount,
-		"quiet_time_pct":         r.Metrics.QuietTimePct,
-		"motion_events":          r.Metrics.MotionEvents,
-		"restless_periods":       r.Metrics.RestlessPeriods,
-		"motion_score":           r.Metrics.MotionScore,
-		"interruptions":          r.Metrics.Interruptions,
+		"total_duration_hours":     r.Metrics.TotalDuration.Hours(),
+		"time_in_bed_hours":        r.Metrics.TimeInBed.Hours(),
+		"avg_breathing_rate":       r.Metrics.AvgBreathingRate,
+		"breathing_rate_std_dev":   r.Metrics.BreathingRateStdDev,
+		"breathing_regularity":     r.Metrics.BreathingRegularity,
+		"breathing_score":          r.Metrics.BreathingScore,
+		"breathing_anomaly":        r.Metrics.BreathingAnomaly,
+		"breathing_anomaly_count":  r.Metrics.BreathingAnomalyCount,
+		"quiet_time_pct":           r.Metrics.QuietTimePct,
+		"motion_events":            r.Metrics.MotionEvents,
+		"restless_periods":         r.Metrics.RestlessPeriods,
+		"motion_score":             r.Metrics.MotionScore,
+		"interruptions":            r.Metrics.Interruptions,
 		"longest_deep_period_mins": r.Metrics.LongestDeepPeriod.Minutes(),
-		"continuity_score":       r.Metrics.ContinuityScore,
+		"continuity_score":         r.Metrics.ContinuityScore,
 	}
 
 	// Add breathing rate range

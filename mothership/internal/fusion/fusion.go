@@ -52,13 +52,13 @@ type Result struct {
 
 // LinkContribution describes a link's contribution to fusion.
 type LinkContribution struct {
-	LinkID    string  // "node_mac:peer_mac"
-	NodeMAC   string
-	PeerMAC   string
-	DeltaRMS  float64
-	ZoneNum   int     // Fresnel zone number at the peak position
-	Weight    float64 // Learned weight for this link
-	Contributing bool // Whether this link contributed to a blob
+	LinkID       string // "node_mac:peer_mac"
+	NodeMAC      string
+	PeerMAC      string
+	DeltaRMS     float64
+	ZoneNum      int     // Fresnel zone number at the peak position
+	Weight       float64 // Learned weight for this link
+	Contributing bool    // Whether this link contributed to a blob
 }
 
 // Engine runs the multi-link 3D Fresnel zone fusion.
@@ -155,13 +155,13 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 
 	activeLinks := 0
 	activeLinkData := make([]struct {
-		linkID    string
-		nodeMAC   string
-		peerMAC   string
-		deltaRMS  float64
-		weight    float64
-		posA      NodePosition
-		posB      NodePosition
+		linkID   string
+		nodeMAC  string
+		peerMAC  string
+		deltaRMS float64
+		weight   float64
+		posA     NodePosition
+		posB     NodePosition
 	}, 0)
 
 	for _, lm := range links {
@@ -190,13 +190,13 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 		// Store active link data for contribution tracking
 		linkID := lm.NodeMAC + ":" + lm.PeerMAC
 		activeLinkData = append(activeLinkData, struct {
-			linkID    string
-			nodeMAC   string
-			peerMAC   string
-			deltaRMS  float64
-			weight    float64
-			posA      NodePosition
-			posB      NodePosition
+			linkID   string
+			nodeMAC  string
+			peerMAC  string
+			deltaRMS float64
+			weight   float64
+			posA     NodePosition
+			posB     NodePosition
 		}{
 			linkID:   linkID,
 			nodeMAC:  lm.NodeMAC,
@@ -337,13 +337,13 @@ func (e *Engine) GetGridSnapshot() *explainability.GridSnapshot {
 	data := e.grid.Snapshot()
 
 	return &explainability.GridSnapshot{
-		Width:     width,
-		Depth:     depth,
-		CellSize:  cellSize,
-		OriginX:   ox,
-		OriginZ:   oz,
-		Data:      data,
-		Rows:      ny,
-		Cols:      nx,
+		Width:    width,
+		Depth:    depth,
+		CellSize: cellSize,
+		OriginX:  ox,
+		OriginZ:  oz,
+		Data:     data,
+		Rows:     ny,
+		Cols:     nx,
 	}
 }

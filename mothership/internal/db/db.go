@@ -19,10 +19,10 @@ import (
 // OpenDB initializes the database with full startup sequence.
 // It runs migrations, creates backups, and returns a ready-to-use database connection.
 // The startup sequence is:
-//   1. Data directory: verify /data is writable; acquire flock() lock
-//   2. SQLite: open database with WAL mode, busy_timeout=5000
-//   3. Schema migration: apply pending migrations with backup
-//   4. Config & secrets: load/generate install secret
+//  1. Data directory: verify /data is writable; acquire flock() lock
+//  2. SQLite: open database with WAL mode, busy_timeout=5000
+//  3. Schema migration: apply pending migrations with backup
+//  4. Config & secrets: load/generate install secret
 //
 // The parentCtx should be the startup timeout context from main so that all
 // phases share the same 30-second deadline. If parentCtx is nil, a fresh
@@ -75,7 +75,7 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 	db.SetMaxOpenConns(1) // SQLite is single-writer
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close() //nolint:errcheck
+		db.Close()       //nolint:errcheck
 		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
@@ -108,7 +108,7 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 		BackupRetention: 90 * 24 * time.Hour,
 	})
 	if err != nil {
-		db.Close() //nolint:errcheck
+		db.Close()       //nolint:errcheck
 		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("create migrator: %w", err)
 	}
@@ -116,7 +116,7 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 
 	current, err := migrator.CurrentVersion(ctx)
 	if err != nil {
-		db.Close() //nolint:errcheck
+		db.Close()       //nolint:errcheck
 		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("get current version: %w", err)
 	}
@@ -128,7 +128,7 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 	}
 
 	if err := migrator.Migrate(ctx); err != nil {
-		db.Close() //nolint:errcheck
+		db.Close()       //nolint:errcheck
 		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
@@ -147,7 +147,7 @@ func OpenDB(parentCtx context.Context, dataDir, dbName string) (*sql.DB, error) 
 	startup.CheckTimeout(ctx)
 	done = startup.Phase(4, "Config & secrets")
 	if err := ensureInstallSecret(ctx, db); err != nil {
-		db.Close() //nolint:errcheck
+		db.Close()       //nolint:errcheck
 		lockFile.Close() //nolint:errcheck
 		return nil, fmt.Errorf("ensure install secret: %w", err)
 	}

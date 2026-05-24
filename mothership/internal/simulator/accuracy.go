@@ -17,23 +17,23 @@ func NewAccuracyEstimator() *AccuracyEstimator {
 
 // AccuracyReport contains accuracy metrics from a simulation run.
 type AccuracyReport struct {
-	MedianError          float64 `json:"median_error_m"`          // Median position error in meters
-	MeanError            float64 `json:"mean_error_m"`            // Mean position error in meters
-	MaxError             float64 `json:"max_error_m"`             // Maximum position error in meters
-	P95Error             float64 `json:"p95_error_m"`             // 95th percentile error
-	DetectionRate        float64 `json:"detection_rate"`           // Fraction of walkers detected
-	FalsePositiveRate    float64 `json:"false_positive_rate"`     // False positives per second
-	RecallAt1m          float64 `json:"recall_at_1m"`            // Fraction within 1m of true position
-	RecallAt2m          float64 `json:"recall_at_2m"`            // Fraction within 2m of true position
-	SampleCount          int     `json:"sample_count"`            // Number of walker positions evaluated
+	MedianError       float64 `json:"median_error_m"`      // Median position error in meters
+	MeanError         float64 `json:"mean_error_m"`        // Mean position error in meters
+	MaxError          float64 `json:"max_error_m"`         // Maximum position error in meters
+	P95Error          float64 `json:"p95_error_m"`         // 95th percentile error
+	DetectionRate     float64 `json:"detection_rate"`      // Fraction of walkers detected
+	FalsePositiveRate float64 `json:"false_positive_rate"` // False positives per second
+	RecallAt1m        float64 `json:"recall_at_1m"`        // Fraction within 1m of true position
+	RecallAt2m        float64 `json:"recall_at_2m"`        // Fraction within 2m of true position
+	SampleCount       int     `json:"sample_count"`        // Number of walker positions evaluated
 }
 
 // Recommendation is a deployment recommendation.
 type Recommendation struct {
-	Priority   string  `json:"priority"`   // "high", "medium", "low"
-	Message    string  `json:"message"`    // Human-readable recommendation
-	Impact     float64 `json:"impact"`     // Estimated improvement (0-1)
-	Position   *Point  `json:"position,omitempty"` // Suggested position (if applicable)
+	Priority string  `json:"priority"`           // "high", "medium", "low"
+	Message  string  `json:"message"`            // Human-readable recommendation
+	Impact   float64 `json:"impact"`             // Estimated improvement (0-1)
+	Position *Point  `json:"position,omitempty"` // Suggested position (if applicable)
 }
 
 // RecommendationEngine generates deployment recommendations.
@@ -79,11 +79,11 @@ func (ae *AccuracyEstimator) Compute(walkers []*SimWalker, blobs []BlobResult) A
 
 	if len(errors) == 0 {
 		return AccuracyReport{
-			MedianError:    math.Inf(1),
-			MeanError:      math.Inf(1),
-			MaxError:       math.Inf(1),
-			DetectionRate:  0,
-			SampleCount:    len(truePositions),
+			MedianError:   math.Inf(1),
+			MeanError:     math.Inf(1),
+			MaxError:      math.Inf(1),
+			DetectionRate: 0,
+			SampleCount:   len(truePositions),
 		}
 	}
 
@@ -299,17 +299,17 @@ func (re *RecommendationEngine) Generate(space *Space, nodes *NodeSet, gdopMap [
 
 // ShoppingList contains hardware recommendations.
 type ShoppingList struct {
-	MinimumNodes      int       `json:"minimum_nodes"`
-	RecommendedNodes  int       `json:"recommended_nodes"`
-	ExpectedAccuracy   float64   `json:"expected_accuracy_m"`
-	CoveragePercent   float64   `json:"coverage_percent"`
-	HardwareList      []string  `json:"hardware_list"`
-	AmazonSearchURL   string    `json:"amazon_search_url"`
-	OptimalPositions  []Point   `json:"optimal_positions,omitempty"`
-	CoverageGaps     []Point   `json:"coverage_gaps,omitempty"`      // Positions with poor coverage
-	RecommendedAdditions []NodeAddition `json:"recommended_additions,omitempty"` // Specific nodes to add
-	EstimatedCost     float64   `json:"estimated_cost_usd,omitempty"` // Estimated hardware cost in USD
-	SpaceDimensions   SpaceDimensions `json:"space_dimensions"` // Space dimensions for reference
+	MinimumNodes         int             `json:"minimum_nodes"`
+	RecommendedNodes     int             `json:"recommended_nodes"`
+	ExpectedAccuracy     float64         `json:"expected_accuracy_m"`
+	CoveragePercent      float64         `json:"coverage_percent"`
+	HardwareList         []string        `json:"hardware_list"`
+	AmazonSearchURL      string          `json:"amazon_search_url"`
+	OptimalPositions     []Point         `json:"optimal_positions,omitempty"`
+	CoverageGaps         []Point         `json:"coverage_gaps,omitempty"`         // Positions with poor coverage
+	RecommendedAdditions []NodeAddition  `json:"recommended_additions,omitempty"` // Specific nodes to add
+	EstimatedCost        float64         `json:"estimated_cost_usd,omitempty"`    // Estimated hardware cost in USD
+	SpaceDimensions      SpaceDimensions `json:"space_dimensions"`                // Space dimensions for reference
 }
 
 // SpaceDimensions describes the space dimensions
@@ -327,7 +327,7 @@ type NodeAddition struct {
 	Name        string  `json:"name"`
 	Position    Point   `json:"position"`
 	Role        string  `json:"role"`
-	Height      string  `json:"height_description"` // e.g., "ceiling", "wall", "desk"
+	Height      string  `json:"height_description"`    // e.g., "ceiling", "wall", "desk"
 	Improvement float64 `json:"estimated_improvement"` // 0-1, estimated coverage improvement
 }
 
@@ -387,24 +387,24 @@ func GenerateShoppingListFromResults(space *Space, nodes *NodeSet, coverageScore
 
 	// Estimated cost (as of 2025)
 	estimatedCost := float64(recNodes)*15.0 + // ESP32-S3 dev board
-		float64(recNodes)*8.0 +              // Power supply
-		float64(recNodes)*3.0 +              // USB cable
-		float64(recNodes)*2.0               // Cable clips
+		float64(recNodes)*8.0 + // Power supply
+		float64(recNodes)*3.0 + // USB cable
+		float64(recNodes)*2.0 // Cable clips
 
 	// Amazon search URL (non-affiliate)
 	searchURL := fmt.Sprintf("https://www.amazon.com/s?k=esp32-s3+devkit+usb-c+psram")
 
 	return ShoppingList{
-		MinimumNodes:       minNodes,
-		RecommendedNodes:   recNodes,
-		ExpectedAccuracy:   expectedAccuracy,
-		CoveragePercent:    coverageScore,
-		HardwareList:       hardware,
-		AmazonSearchURL:    searchURL,
-		OptimalPositions:   optimalPositions,
-		CoverageGaps:       coverageGaps,
+		MinimumNodes:         minNodes,
+		RecommendedNodes:     recNodes,
+		ExpectedAccuracy:     expectedAccuracy,
+		CoveragePercent:      coverageScore,
+		HardwareList:         hardware,
+		AmazonSearchURL:      searchURL,
+		OptimalPositions:     optimalPositions,
+		CoverageGaps:         coverageGaps,
 		RecommendedAdditions: recommendedAdditions,
-		EstimatedCost:      estimatedCost,
+		EstimatedCost:        estimatedCost,
 		SpaceDimensions: SpaceDimensions{
 			Width:  width,
 			Depth:  depth,
@@ -422,14 +422,14 @@ func generateOptimalPositions(space *Space, count int) []Point {
 
 	// Strategy: place nodes at corners and mid-points, with mixed heights
 	corners := []Point{
-		{X: minX + 0.5, Y: minY + 0.5, Z: 2.2},  // Low corner, high
-		{X: maxX - 0.5, Y: minY + 0.5, Z: 2.2},  // Low corner, high
-		{X: minX + 0.5, Y: maxY - 0.5, Z: 2.2},  // Low corner, high
-		{X: maxX - 0.5, Y: maxY - 0.5, Z: 2.2},  // Low corner, high
+		{X: minX + 0.5, Y: minY + 0.5, Z: 2.2},        // Low corner, high
+		{X: maxX - 0.5, Y: minY + 0.5, Z: 2.2},        // Low corner, high
+		{X: minX + 0.5, Y: maxY - 0.5, Z: 2.2},        // Low corner, high
+		{X: maxX - 0.5, Y: maxY - 0.5, Z: 2.2},        // Low corner, high
 		{X: (minX + maxX) / 2, Y: minY + 0.5, Z: 2.5}, // Mid wall, high
 		{X: (minX + maxX) / 2, Y: maxY - 0.5, Z: 2.5}, // Mid wall, high
-		{X: minX + 0.5, Y: (minY + maxY) / 2, Z: 0.3},  // Mid wall, low
-		{X: maxX - 0.5, Y: (minY + maxY) / 2, Z: 0.3},  // Mid wall, low
+		{X: minX + 0.5, Y: (minY + maxY) / 2, Z: 0.3}, // Mid wall, low
+		{X: maxX - 0.5, Y: (minY + maxY) / 2, Z: 0.3}, // Mid wall, low
 	}
 
 	for i := 0; i < count; i++ {

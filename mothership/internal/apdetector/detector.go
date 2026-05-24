@@ -30,22 +30,22 @@ type BSSIDReport struct {
 
 // APInfo holds information about a detected AP
 type APInfo struct {
-	BSSID         string
-	Channel       int
-	Manufacturer  string
-	ReportCount   int
-	TotalNodes    int
-	AgreementPct  float64
-	LastUpdated   time.Time
+	BSSID        string
+	Channel      int
+	Manufacturer string
+	ReportCount  int
+	TotalNodes   int
+	AgreementPct float64
+	LastUpdated  time.Time
 }
 
 // Detector manages AP BSSID detection and virtual node creation
 type Detector struct {
-	db           *sql.DB
-	mu           sync.RWMutex
-	reports      map[string][]BSSIDReport // keyed by normalized BSSID
-	currentAP    *APInfo
-	subscribers  []chan APInfo
+	db          *sql.DB
+	mu          sync.RWMutex
+	reports     map[string][]BSSIDReport // keyed by normalized BSSID
+	currentAP   *APInfo
+	subscribers []chan APInfo
 }
 
 // NewDetector creates a new AP detector

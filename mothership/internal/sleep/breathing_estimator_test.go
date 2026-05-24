@@ -47,7 +47,7 @@ func TestComputeFFTBreathingRateSynthetic20BPM(t *testing.T) {
 	sampleRate := 20.0
 	buffer := make([]float64, 512)
 	for i := range buffer {
-		buffer[i] = math.Sin(2.0 * math.Pi * (1.0/3.0) * float64(i) / sampleRate)
+		buffer[i] = math.Sin(2.0 * math.Pi * (1.0 / 3.0) * float64(i) / sampleRate)
 	}
 
 	bpm := computeFFTBreathingRate(buffer, 0, sampleRate, 1024)
@@ -174,10 +174,10 @@ func TestBreathingRateEstimatorReset(t *testing.T) {
 
 func TestComputeBreathingRegularity(t *testing.T) {
 	tests := []struct {
-		name     string
-		samples  []float64
-		wantCV   float64
-		tol      float64
+		name    string
+		samples []float64
+		wantCV  float64
+		tol     float64
 	}{
 		{
 			name:    "constant rate — zero CV",
@@ -229,14 +229,14 @@ func TestComputeBreathingRegularity(t *testing.T) {
 
 func TestBreathingRegularityLabel(t *testing.T) {
 	tests := []struct {
-		cv      float64
-		want    string
+		cv   float64
+		want string
 	}{
 		{0.05, "regular"},
 		{0.09, "regular"},
-		{0.10, "normal"},  // boundary
+		{0.10, "normal"}, // boundary
 		{0.15, "normal"},
-		{0.25, "normal"},  // boundary
+		{0.25, "normal"}, // boundary
 		{0.26, "irregular"},
 		{0.50, "irregular"},
 	}

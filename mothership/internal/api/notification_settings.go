@@ -91,9 +91,9 @@ type notificationSettingsResponse struct {
 
 	// Quiet hours
 	QuietHoursEnabled bool   `json:"quiet_hours_enabled"`
-	QuietHoursStart   string `json:"quiet_hours_start"`   // HH:MM format
-	QuietHoursEnd     string `json:"quiet_hours_end"`     // HH:MM format
-	QuietHoursDays    int    `json:"quiet_hours_days"`    // Bitmask: 0x7F = all days (Sun=1, Mon=2, ..., Sat=64)
+	QuietHoursStart   string `json:"quiet_hours_start"` // HH:MM format
+	QuietHoursEnd     string `json:"quiet_hours_end"`   // HH:MM format
+	QuietHoursDays    int    `json:"quiet_hours_days"`  // Bitmask: 0x7F = all days (Sun=1, Mon=2, ..., Sat=64)
 
 	// Morning digest
 	MorningDigestEnabled bool   `json:"morning_digest_enabled"`
@@ -237,13 +237,13 @@ func (h *NotificationSettingsHandler) getSettings() (*notificationSettingsRespon
 
 	response := &notificationSettingsResponse{
 		// Set defaults
-		ChannelType:            "none",
-		ChannelConfig:          make(map[string]interface{}),
-		QuietHoursDays:         0x7F, // All days
-		MorningDigestTime:      "07:00",
-		SmartBatchingEnabled:   true,
-		SmartBatchingWindow:    30,
-		EventTypes:             getDefaultEventTypes(),
+		ChannelType:          "none",
+		ChannelConfig:        make(map[string]interface{}),
+		QuietHoursDays:       0x7F, // All days
+		MorningDigestTime:    "07:00",
+		SmartBatchingEnabled: true,
+		SmartBatchingWindow:  30,
+		EventTypes:           getDefaultEventTypes(),
 	}
 
 	// Get channel type
@@ -547,4 +547,3 @@ func (e *NotificationValidationError) Error() string {
 	}
 	return e.Reason
 }
-

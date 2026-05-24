@@ -16,79 +16,79 @@ import (
 
 // Handler provides the explainability HTTP API.
 type Handler struct {
-	mu                   sync.RWMutex
-	blobHistory          map[int]*BlobExplanation  // blobID -> explanation data
-	blobHistoryByTime    map[int64]*BlobExplanation // timestamp -> explanation for feedback lookups
-	linkStates           map[string]*LinkState      // linkID -> link state
-	fusionResult         *FusionResultSnapshot       // latest fusion result
+	mu                sync.RWMutex
+	blobHistory       map[int]*BlobExplanation   // blobID -> explanation data
+	blobHistoryByTime map[int64]*BlobExplanation // timestamp -> explanation for feedback lookups
+	linkStates        map[string]*LinkState      // linkID -> link state
+	fusionResult      *FusionResultSnapshot      // latest fusion result
 }
 
 // BlobExplanation contains all data needed to explain a blob detection.
 type BlobExplanation struct {
-	BlobID       int                    `json:"blob_id"`
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	Z float64 `json:"z"`
-	Confidence   float64               `json:"confidence"`
-	Timestamp    int64                 `json:"timestamp_ms"`
+	BlobID            int                `json:"blob_id"`
+	X                 float64            `json:"x"`
+	Y                 float64            `json:"y"`
+	Z                 float64            `json:"z"`
+	Confidence        float64            `json:"confidence"`
+	Timestamp         int64              `json:"timestamp_ms"`
 	ContributingLinks []LinkContribution `json:"contributing_links"`
-	AllLinks      []LinkContribution    `json:"all_links"`
-	BLEMatch     *BLEMatch             `json:"ble_match,omitempty"`
-	FresnelZones []FresnelZone         `json:"fresnel_zones"`
+	AllLinks          []LinkContribution `json:"all_links"`
+	BLEMatch          *BLEMatch          `json:"ble_match,omitempty"`
+	FresnelZones      []FresnelZone      `json:"fresnel_zones"`
 }
 
 // LinkContribution describes how much a link contributed to a blob detection.
 type LinkContribution struct {
-	LinkID        string  `json:"link_id"`         // e.g., "AA:BB:CC:DD:EE:FF"
-	NodeMAC       string  `json:"node_mac"`
-	PeerMAC       string  `json:"peer_mac"`
-	DeltaRMS      float64 `json:"delta_rms"`
-	ZoneNumber    int     `json:"zone_number"`     // Fresnel zone number at blob position
-	Weight        float64 `json:"weight"`          // Learned weight multiplier
-	Contributing   bool    `json:"contributing"`    // true if deltaRMS exceeded threshold
-	Contribution   float64 `json:"contribution"`    // amount added to fusion grid at blob position
+	LinkID       string  `json:"link_id"` // e.g., "AA:BB:CC:DD:EE:FF"
+	NodeMAC      string  `json:"node_mac"`
+	PeerMAC      string  `json:"peer_mac"`
+	DeltaRMS     float64 `json:"delta_rms"`
+	ZoneNumber   int     `json:"zone_number"`  // Fresnel zone number at blob position
+	Weight       float64 `json:"weight"`       // Learned weight multiplier
+	Contributing bool    `json:"contributing"` // true if deltaRMS exceeded threshold
+	Contribution float64 `json:"contribution"` // amount added to fusion grid at blob position
 }
 
 // BLEMatch describes a BLE device match for the blob.
 type BLEMatch struct {
-	PersonID          string  `json:"person_id"`
-	PersonLabel       string  `json:"person_label"`
-	PersonColor       string  `json:"person_color"`
-	DeviceAddr        string  `json:"device_addr"`
-	Confidence        float64 `json:"confidence"`
-	MatchMethod       string  `json:"match_method"` // "ble_triangulation" or "ble_only"
-	ReportedByNodes   []string `json:"reported_by_nodes"`
-	TriangulationPos  *[3]float64 `json:"triangulation_pos,omitempty"` // [x, y, z]
+	PersonID         string      `json:"person_id"`
+	PersonLabel      string      `json:"person_label"`
+	PersonColor      string      `json:"person_color"`
+	DeviceAddr       string      `json:"device_addr"`
+	Confidence       float64     `json:"confidence"`
+	MatchMethod      string      `json:"match_method"` // "ble_triangulation" or "ble_only"
+	ReportedByNodes  []string    `json:"reported_by_nodes"`
+	TriangulationPos *[3]float64 `json:"triangulation_pos,omitempty"` // [x, y, z]
 }
 
 // FresnelZone describes a Fresnel zone ellipsoid for a link.
 type FresnelZone struct {
-	LinkID      string     `json:"link_id"`
-	CenterPos   [3]float64 `json:"center_pos"`   // [x, y, z] zone center
-	SemiAxes    [3]float64 `json:"semi_axes"`    // [a, b, c] for ellipsoid
-	ZoneNumber  int        `json:"zone_number"`  // zone number for this blob position
-	TXPos       [3]float64 `json:"tx_pos"`       // transmitter position for proper ellipsoid orientation
-	RXPos       [3]float64 `json:"rx_pos"`       // receiver position for proper ellipsoid orientation
-	Lambda      float64    `json:"lambda"`       // WiFi wavelength in metres
+	LinkID     string     `json:"link_id"`
+	CenterPos  [3]float64 `json:"center_pos"`  // [x, y, z] zone center
+	SemiAxes   [3]float64 `json:"semi_axes"`   // [a, b, c] for ellipsoid
+	ZoneNumber int        `json:"zone_number"` // zone number for this blob position
+	TXPos      [3]float64 `json:"tx_pos"`      // transmitter position for proper ellipsoid orientation
+	RXPos      [3]float64 `json:"rx_pos"`      // receiver position for proper ellipsoid orientation
+	Lambda     float64    `json:"lambda"`      // WiFi wavelength in metres
 }
 
 // LinkState captures the current state of a link.
 type LinkState struct {
-	NodeMAC    string
-	PeerMAC    string
-	NodePos    [3]float64 // [x, y, z]
-	PeerPos    [3]float64 // [x, y, z]
-	DeltaRMS   float64
-	Motion     bool
-	Weight     float64 // Learned weight
+	NodeMAC     string
+	PeerMAC     string
+	NodePos     [3]float64 // [x, y, z]
+	PeerPos     [3]float64 // [x, y, z]
+	DeltaRMS    float64
+	Motion      bool
+	Weight      float64 // Learned weight
 	HealthScore float64
 }
 
 // FusionResultSnapshot captures the latest fusion result for explainability.
 type FusionResultSnapshot struct {
-	Timestamp   int64
-	Blobs       []BlobSnapshot
-	GridData    *GridSnapshot
+	Timestamp int64
+	Blobs     []BlobSnapshot
+	GridData  *GridSnapshot
 }
 
 // BlobSnapshot is a lightweight blob representation.
@@ -103,17 +103,17 @@ type BlobSnapshot struct {
 type GridSnapshot struct {
 	Width, Depth, CellSize float64
 	OriginX, OriginZ       float64
-	Data                    []float64 // Normalised [0-1] row-major grid data
+	Data                   []float64 // Normalised [0-1] row-major grid data
 	Rows, Cols             int
 }
 
 // NewHandler creates a new explainability handler.
 func NewHandler() *Handler {
 	return &Handler{
-		blobHistory:     make(map[int]*BlobExplanation),
+		blobHistory:       make(map[int]*BlobExplanation),
 		blobHistoryByTime: make(map[int64]*BlobExplanation),
-		linkStates:      make(map[string]*LinkState),
-		fusionResult:    &FusionResultSnapshot{},
+		linkStates:        make(map[string]*LinkState),
+		fusionResult:      &FusionResultSnapshot{},
 	}
 }
 
@@ -126,8 +126,8 @@ func (h *Handler) UpdateBlobs(blobs []BlobSnapshot, links []LinkState, grid *Gri
 	// Update fusion result snapshot
 	h.fusionResult = &FusionResultSnapshot{
 		Timestamp: time.Now().Unix(),
-		Blobs:    blobs,
-		GridData: grid,
+		Blobs:     blobs,
+		GridData:  grid,
 	}
 
 	// Update link states
@@ -192,10 +192,10 @@ func (h *Handler) explainBlob(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		// Return empty explanation for unknown blob
 		explanation = &BlobExplanation{
-			BlobID: blobID,
-			X:      0,
-			Y:      0,
-			Z:      0,
+			BlobID:     blobID,
+			X:          0,
+			Y:          0,
+			Z:          0,
 			Confidence: 0,
 		}
 	}
@@ -310,10 +310,10 @@ func (h *Handler) GetExplanationForBlob(blobID int, timestamp int64) *BlobExplan
 // This is called by the dashboard to refresh the explainability data.
 func (h *Handler) refreshData(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Blobs       []BlobSnapshot    `json:"blobs"`
-		Links       []LinkState      `json:"links"`
-		GridData    *GridSnapshot    `json:"grid_data,omitempty"`
-		Identity    map[int]*BLEMatch `json:"identity,omitempty"`
+		Blobs    []BlobSnapshot    `json:"blobs"`
+		Links    []LinkState       `json:"links"`
+		GridData *GridSnapshot     `json:"grid_data,omitempty"`
+		Identity map[int]*BLEMatch `json:"identity,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -327,8 +327,8 @@ func (h *Handler) refreshData(w http.ResponseWriter, r *http.Request) {
 	// Update fusion result snapshot
 	h.fusionResult = &FusionResultSnapshot{
 		Timestamp: int64(req.GridData.Rows), // placeholder
-		Blobs:    req.Blobs,
-		GridData: req.GridData,
+		Blobs:     req.Blobs,
+		GridData:  req.GridData,
 	}
 
 	// Update link states
@@ -429,13 +429,13 @@ func (h *Handler) computeExplanation(blob BlobSnapshot, links []LinkState, _ *Gr
 			a := (pathDirect + lambda) / 2
 			b := math.Sqrt(math.Max(0, a*a-(pathDirect/2)*(pathDirect/2)))
 			explanation.FresnelZones = append(explanation.FresnelZones, FresnelZone{
-				LinkID:    linkID,
-				CenterPos: [3]float64{centerX, centerY, centerZ},
-				SemiAxes:  [3]float64{b, b, a},
+				LinkID:     linkID,
+				CenterPos:  [3]float64{centerX, centerY, centerZ},
+				SemiAxes:   [3]float64{b, b, a},
 				ZoneNumber: zoneNumber,
-				TXPos:     nodePos,
-				RXPos:     peerPos,
-				Lambda:    lambda,
+				TXPos:      nodePos,
+				RXPos:      peerPos,
+				Lambda:     lambda,
 			})
 		}
 	}
@@ -475,17 +475,17 @@ func (h *Handler) BuildWebSocketSnapshot(blobID int) map[string]interface{} {
 	perLinkContribs := make([]map[string]interface{}, 0, len(exp.AllLinks))
 	for _, link := range exp.AllLinks {
 		perLinkContribs = append(perLinkContribs, map[string]interface{}{
-			"link_id":                    link.LinkID,
-			"tx_mac":                     link.NodeMAC,
-			"rx_mac":                     link.PeerMAC,
-			"delta_rms":                  link.DeltaRMS,
-			"zone_number":                link.ZoneNumber,
-			"weight":                     link.Weight,
-			"learned_weight":             1.0,
-			"combined_weight":            link.Weight,
-			"contribution_pct":           link.Contribution * 100,
+			"link_id":                     link.LinkID,
+			"tx_mac":                      link.NodeMAC,
+			"rx_mac":                      link.PeerMAC,
+			"delta_rms":                   link.DeltaRMS,
+			"zone_number":                 link.ZoneNumber,
+			"weight":                      link.Weight,
+			"learned_weight":              1.0,
+			"combined_weight":             link.Weight,
+			"contribution_pct":            link.Contribution * 100,
 			"fresnel_intersection_volume": 0,
-			"contributing":               link.Contributing,
+			"contributing":                link.Contributing,
 		})
 	}
 
@@ -493,23 +493,23 @@ func (h *Handler) BuildWebSocketSnapshot(blobID int) map[string]interface{} {
 	fresnelZones := make([]map[string]interface{}, 0, len(exp.FresnelZones))
 	for _, z := range exp.FresnelZones {
 		fresnelZones = append(fresnelZones, map[string]interface{}{
-			"link_id":    z.LinkID,
-			"tx_pos":     z.TXPos[:],
-			"rx_pos":     z.RXPos[:],
-			"center_pos": z.CenterPos[:],
-			"semi_axes":  z.SemiAxes[:],
+			"link_id":     z.LinkID,
+			"tx_pos":      z.TXPos[:],
+			"rx_pos":      z.RXPos[:],
+			"center_pos":  z.CenterPos[:],
+			"semi_axes":   z.SemiAxes[:],
 			"zone_number": z.ZoneNumber,
-			"lambda":     z.Lambda,
+			"lambda":      z.Lambda,
 		})
 	}
 
 	snap := map[string]interface{}{
-		"blob_id":               exp.BlobID,
-		"blob_position":         []float64{exp.X, exp.Y, exp.Z},
-		"fusion_score":          exp.Confidence,
+		"blob_id":                exp.BlobID,
+		"blob_position":          []float64{exp.X, exp.Y, exp.Z},
+		"fusion_score":           exp.Confidence,
 		"per_link_contributions": perLinkContribs,
-		"fresnel_zones":         fresnelZones,
-		"timestamp":             time.UnixMilli(exp.Timestamp),
+		"fresnel_zones":          fresnelZones,
+		"timestamp":              time.UnixMilli(exp.Timestamp),
 	}
 
 	if exp.BLEMatch != nil {
@@ -537,5 +537,5 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, _ = w.Write(data); //nolint:errcheck
+	_, _ = w.Write(data) //nolint:errcheck
 }

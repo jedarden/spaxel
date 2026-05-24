@@ -422,28 +422,28 @@ func TestTokenValidation_NoValidator(t *testing.T) {
 
 func TestMigrationWindow(t *testing.T) {
 	tests := []struct {
-		name             string
-		validator        func(mac, token string) bool
+		name              string
+		validator         func(mac, token string) bool
 		migrationDeadline time.Time
-		helloJSON        string
-		wantAccepted     bool
-		wantUnpaired     bool
+		helloJSON         string
+		wantAccepted      bool
+		wantUnpaired      bool
 	}{
 		{
-			name:             "no validator accepts normally",
-			validator:        nil,
+			name:              "no validator accepts normally",
+			validator:         nil,
 			migrationDeadline: time.Time{},
-			helloJSON:        `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`,
-			wantAccepted:     true,
-			wantUnpaired:     false,
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`,
+			wantAccepted:      true,
+			wantUnpaired:      false,
 		},
 		{
-			name:             "valid token always accepted",
-			validator:        func(mac, token string) bool { return token == "good" },
+			name:              "valid token always accepted",
+			validator:         func(mac, token string) bool { return token == "good" },
 			migrationDeadline: time.Now().Add(24 * time.Hour),
-			helloJSON:        `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"good"}`,
-			wantAccepted:     true,
-			wantUnpaired:     false,
+			helloJSON:         `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3","token":"good"}`,
+			wantAccepted:      true,
+			wantUnpaired:      false,
 		},
 		{
 			name:              "missing token accepted during migration window",

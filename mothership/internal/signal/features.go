@@ -6,13 +6,13 @@ import (
 
 // Feature extraction constants
 const (
-	DefaultDeltaRMSThreshold   = 0.02 // Motion detection threshold
-	NBVIWindowSize             = 100  // Samples for NBVI calculation (~5s at 20Hz)
-	NBVIUpdateInterval         = 40   // Recalculate every 40 samples
-	NBVIMinSamples             = 50   // Minimum samples before selection
-	NBVITopCount               = 16   // Select top 16 subcarriers
-	NBVIMinThreshold           = 0.001 // Minimum NBVI to be considered
-	DeltaRMSSmoothingAlpha     = 0.3  // Exponential smoothing for deltaRMS
+	DefaultDeltaRMSThreshold = 0.02  // Motion detection threshold
+	NBVIWindowSize           = 100   // Samples for NBVI calculation (~5s at 20Hz)
+	NBVIUpdateInterval       = 40    // Recalculate every 40 samples
+	NBVIMinSamples           = 50    // Minimum samples before selection
+	NBVITopCount             = 16    // Select top 16 subcarriers
+	NBVIMinThreshold         = 0.001 // Minimum NBVI to be considered
+	DeltaRMSSmoothingAlpha   = 0.3   // Exponential smoothing for deltaRMS
 )
 
 // NBVITracker tracks NBVI statistics for subcarrier selection
@@ -161,7 +161,7 @@ func (n *NBVITracker) SampleCount() int {
 
 // MotionDetector computes motion features from processed CSI
 type MotionDetector struct {
-	nbviTracker   *NBVITracker
+	nbviTracker    *NBVITracker
 	smoothDeltaRMS float64
 	lastDeltaRMS   float64
 	motionDetected bool
@@ -178,12 +178,12 @@ func NewMotionDetector(nSub int) *MotionDetector {
 
 // MotionFeatures holds extracted motion features
 type MotionFeatures struct {
-	DeltaRMS        float64 // Raw delta RMS
-	SmoothDeltaRMS  float64 // Smoothed delta RMS
-	MotionDetected  bool    // True if motion above threshold
-	PhaseVariance   float64 // Phase variance over selected subcarriers
-	SelectedCount   int     // Number of selected subcarriers
-	PhaseStd        float64 // Phase standard deviation
+	DeltaRMS       float64 // Raw delta RMS
+	SmoothDeltaRMS float64 // Smoothed delta RMS
+	MotionDetected bool    // True if motion above threshold
+	PhaseVariance  float64 // Phase variance over selected subcarriers
+	SelectedCount  int     // Number of selected subcarriers
+	PhaseStd       float64 // Phase standard deviation
 }
 
 // Process processes a new CSI frame and extracts motion features

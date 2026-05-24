@@ -16,14 +16,14 @@ import (
 
 // mockDetectorProvider is a mock implementation of DetectorProvider for testing.
 type mockDetectorProvider struct {
-	mode             analytics.SecurityMode
-	isActive         bool
-	progress         float64
-	modelReady       bool
-	activeAnomalies  []*events.AnomalyEvent
-	history          []*events.AnomalyEvent
-	modeChanges      []analytics.SecurityMode
-	systemMode       events.SystemMode
+	mode            analytics.SecurityMode
+	isActive        bool
+	progress        float64
+	modelReady      bool
+	activeAnomalies []*events.AnomalyEvent
+	history         []*events.AnomalyEvent
+	modeChanges     []analytics.SecurityMode
+	systemMode      events.SystemMode
 }
 
 func (m *mockDetectorProvider) GetSecurityMode() analytics.SecurityMode {
@@ -131,11 +131,11 @@ func TestSecurityHandler_Status(t *testing.T) {
 			}
 
 			mock := &mockDetectorProvider{
-				mode:         tt.mode,
-				isActive:     tt.isActive,
-				modelReady:   tt.modelReady,
-				progress:     tt.progress,
-				history:      history,
+				mode:       tt.mode,
+				isActive:   tt.isActive,
+				modelReady: tt.modelReady,
+				progress:   tt.progress,
+				history:    history,
 			}
 
 			handler := NewSecurityHandler(mock)
@@ -369,10 +369,10 @@ func TestSecurityHandler_NilDetector(t *testing.T) {
 func TestSecurityHandler_CountAnomalies24h(t *testing.T) {
 	now := time.Now()
 	history := []*events.AnomalyEvent{
-		{Timestamp: now.Add(-1 * time.Hour)},     // Within 24h
-		{Timestamp: now.Add(-12 * time.Hour)},    // Within 24h
-		{Timestamp: now.Add(-25 * time.Hour)},    // Outside 24h
-		{Timestamp: now.Add(-48 * time.Hour)},    // Outside 24h
+		{Timestamp: now.Add(-1 * time.Hour)},  // Within 24h
+		{Timestamp: now.Add(-12 * time.Hour)}, // Within 24h
+		{Timestamp: now.Add(-25 * time.Hour)}, // Outside 24h
+		{Timestamp: now.Add(-48 * time.Hour)}, // Outside 24h
 	}
 
 	mock := &mockDetectorProvider{

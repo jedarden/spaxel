@@ -464,15 +464,15 @@ func TestDeltaRMSComputation(t *testing.T) {
 	rx := Point{X: 5, Y: 0, Z: 2}
 
 	tests := []struct {
-		name     string
-		walker   Point
-		minRMS   float64
-		maxRMS   float64
+		name   string
+		walker Point
+		minRMS float64
+		maxRMS float64
 	}{
 		{
 			name:   "Walker on direct line (zone 1)",
 			walker: Point{X: 2.5, Y: 0, Z: 1.7},
-			minRMS: 0.1,  // zone 1 should have high deltaRMS
+			minRMS: 0.1, // zone 1 should have high deltaRMS
 			maxRMS: 0.2,
 		},
 		{
@@ -540,7 +540,7 @@ func TestWalkerBounce(t *testing.T) {
 		ID:       0,
 		Type:     WalkerTypeRandomWalk,
 		Position: Point{X: 0.1, Y: 2.5, Z: 1.7}, // Near left wall
-		Velocity: Point{X: -1.0, Y: 0, Z: 0},     // Moving left
+		Velocity: Point{X: -1.0, Y: 0, Z: 0},    // Moving left
 		Speed:    1.0,
 		Height:   1.7,
 	}
@@ -845,29 +845,29 @@ func TestLineIntersection(t *testing.T) {
 		wantY  float64
 	}{
 		{
-			name:  "Crossing lines",
-			p1:    Point{X: 0, Y: 0, Z: 0},
-			p2:    Point{X: 2, Y: 2, Z: 0},
-			p3:    Point{X: 0, Y: 2, Z: 0},
-			p4:    Point{X: 2, Y: 0, Z: 0},
+			name:   "Crossing lines",
+			p1:     Point{X: 0, Y: 0, Z: 0},
+			p2:     Point{X: 2, Y: 2, Z: 0},
+			p3:     Point{X: 0, Y: 2, Z: 0},
+			p4:     Point{X: 2, Y: 0, Z: 0},
 			wantOK: true,
 			wantX:  1,
 			wantY:  1,
 		},
 		{
-			name:  "Parallel lines",
-			p1:    Point{X: 0, Y: 0, Z: 0},
-			p2:    Point{X: 1, Y: 0, Z: 0},
-			p3:    Point{X: 0, Y: 1, Z: 0},
-			p4:    Point{X: 1, Y: 1, Z: 0},
+			name:   "Parallel lines",
+			p1:     Point{X: 0, Y: 0, Z: 0},
+			p2:     Point{X: 1, Y: 0, Z: 0},
+			p3:     Point{X: 0, Y: 1, Z: 0},
+			p4:     Point{X: 1, Y: 1, Z: 0},
 			wantOK: false,
 		},
 		{
-			name:  "Non-intersecting segments",
-			p1:    Point{X: 0, Y: 0, Z: 0},
-			p2:    Point{X: 1, Y: 0, Z: 0},
-			p3:    Point{X: 2, Y: 0, Z: 0},
-			p4:    Point{X: 3, Y: 0, Z: 0},
+			name:   "Non-intersecting segments",
+			p1:     Point{X: 0, Y: 0, Z: 0},
+			p2:     Point{X: 1, Y: 0, Z: 0},
+			p3:     Point{X: 2, Y: 0, Z: 0},
+			p4:     Point{X: 3, Y: 0, Z: 0},
 			wantOK: false,
 		},
 	}

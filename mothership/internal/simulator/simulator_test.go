@@ -408,9 +408,9 @@ func TestExpectedAccuracy(t *testing.T) {
 		minAccuracy float64
 		maxAccuracy float64
 	}{
-		{1.0, 0.4, 0.6},  // GDOP 1: ~0.5m
-		{2.0, 0.8, 1.2},  // GDOP 2: ~1.0m
-		{4.0, 1.6, 2.4},  // GDOP 4: ~2.0m
+		{1.0, 0.4, 0.6},       // GDOP 1: ~0.5m
+		{2.0, 0.8, 1.2},       // GDOP 2: ~1.0m
+		{4.0, 1.6, 2.4},       // GDOP 4: ~2.0m
 		{math.Inf(1), -1, -1}, // Infinity: no accuracy
 	}
 

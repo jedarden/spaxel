@@ -339,7 +339,7 @@ func TestNodeToNodeWalkerDecelerationNearTarget(t *testing.T) {
 	farSpeeds := make([]float64, 0, 10)
 	for i := 0; i < 10; i++ {
 		w := NewNodeToNodeWalkerNoWait(fmt.Sprintf("walker-far-%d", i), nodes, 1.0)
-		w.Position.X = 4.2 // 0.8m from node-2
+		w.Position.X = 4.2    // 0.8m from node-2
 		w.Update(0.01, space) // Small update to compute velocity without moving much
 		speed := math.Sqrt(w.Velocity.X*w.Velocity.X + w.Velocity.Y*w.Velocity.Y)
 		if speed > 0 {
@@ -351,7 +351,7 @@ func TestNodeToNodeWalkerDecelerationNearTarget(t *testing.T) {
 	nearSpeeds := make([]float64, 0, 10)
 	for i := 0; i < 10; i++ {
 		w := NewNodeToNodeWalkerNoWait(fmt.Sprintf("walker-near-%d", i), nodes, 1.0)
-		w.Position.X = 4.8 // 0.2m from node-2
+		w.Position.X = 4.8    // 0.2m from node-2
 		w.Update(0.01, space) // Small update to compute velocity
 		speed := math.Sqrt(w.Velocity.X*w.Velocity.X + w.Velocity.Y*w.Velocity.Y)
 		if speed > 0 {

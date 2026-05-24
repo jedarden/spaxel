@@ -105,11 +105,11 @@ func TestCheckDataDirWritable(t *testing.T) {
 
 func TestCheckFirmwareDir(t *testing.T) {
 	tests := []struct {
-		name         string
+		name          string
 		setupFirmware func() string
-		wantName     string
-		wantStatus   string
-		wantMessage  string
+		wantName      string
+		wantStatus    string
+		wantMessage   string
 	}{
 		{
 			name: "has firmware binaries",
@@ -349,9 +349,9 @@ func TestCheckInstallSecret(t *testing.T) {
 
 func TestCheckPINConfigured(t *testing.T) {
 	tests := []struct {
-		name       string
-		dbSetup    func(*sql.DB)
-		wantStatus string
+		name        string
+		dbSetup     func(*sql.DB)
+		wantStatus  string
 		wantMessage string
 	}{
 		{
@@ -436,8 +436,8 @@ func TestCheckNodeTokenConsistency(t *testing.T) {
 			wantMessage: "Cannot check node tokens",
 		},
 		{
-			name:     "nil getNodes function",
-			getNodes: nil,
+			name:       "nil getNodes function",
+			getNodes:   nil,
 			wantStatus: "ok",
 		},
 	}
@@ -462,8 +462,8 @@ func TestCheckNodeTokenConsistency(t *testing.T) {
 
 func TestCheckOverall(t *testing.T) {
 	tests := []struct {
-		name       string
-		checks     []CheckResult
+		name        string
+		checks      []CheckResult
 		wantOverall string
 	}{
 		{

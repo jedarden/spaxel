@@ -39,7 +39,7 @@ type SimWalker struct {
 	Type        WalkerType `json:"type"`
 	Position    Point      `json:"position"`
 	Velocity    Point      `json:"velocity"`
-	Path        []Point    `json:"path,omitempty"`        // for path walks
+	Path        []Point    `json:"path,omitempty"`         // for path walks
 	PathIndex   int        `json:"path_index,omitempty"`   // current position in path
 	TargetZones []string   `json:"target_zones,omitempty"` // for zone walks
 	TrueHistory []Point    `json:"true_history,omitempty"` // ground truth positions
@@ -47,13 +47,13 @@ type SimWalker struct {
 
 // Grid is the 3D spatial grid for Fresnel accumulation.
 type Grid struct {
-	CellSize    float64  `json:"cell_size"`    // meters
-	OriginX     float64  `json:"origin_x"`     // meters
-	OriginY     float64  `json:"origin_y"`     // meters
-	OriginZ     float64  `json:"origin_z"`     // meters
-	WidthCells  int      `json:"width_cells"`  // number of cells in X
-	DepthCells  int      `json:"depth_cells"`  // number of cells in Y
-	HeightCells int      `json:"height_cells"` // number of cells in Z
+	CellSize    float64   `json:"cell_size"`    // meters
+	OriginX     float64   `json:"origin_x"`     // meters
+	OriginY     float64   `json:"origin_y"`     // meters
+	OriginZ     float64   `json:"origin_z"`     // meters
+	WidthCells  int       `json:"width_cells"`  // number of cells in X
+	DepthCells  int       `json:"depth_cells"`  // number of cells in Y
+	HeightCells int       `json:"height_cells"` // number of cells in Z
 	Data        []float64 `json:"data"`         // flattened 3D array [z][x][y]
 }
 
@@ -66,14 +66,14 @@ type ZoneInfo struct {
 
 // SimulationResult contains the results of a simulation run.
 type SimulationResult struct {
-	Timestamp         int64         `json:"timestamp_ms"`
-	Blobs             []BlobResult  `json:"blobs"`
-	CoverageScore     float64       `json:"coverage_score"`      // 0-100
-	GDOPMap           []float64     `json:"gdop_map"`           // flattened grid
-	GridDimensions    []int         `json:"grid_dimensions"`    // [width_cells, depth_cells, height_cells]
-	Recommendations   []Recommendation `json:"recommendations"`
-	Accuracy          AccuracyReport `json:"accuracy"`
-	ShoppingList      ShoppingList  `json:"shopping_list"`
+	Timestamp       int64            `json:"timestamp_ms"`
+	Blobs           []BlobResult     `json:"blobs"`
+	CoverageScore   float64          `json:"coverage_score"`  // 0-100
+	GDOPMap         []float64        `json:"gdop_map"`        // flattened grid
+	GridDimensions  []int            `json:"grid_dimensions"` // [width_cells, depth_cells, height_cells]
+	Recommendations []Recommendation `json:"recommendations"`
+	Accuracy        AccuracyReport   `json:"accuracy"`
+	ShoppingList    ShoppingList     `json:"shopping_list"`
 }
 
 // BlobResult is a simulated detection result.
@@ -89,12 +89,12 @@ type BlobResult struct {
 // NewEngine creates a new simulator engine.
 func NewEngine(space *Space) *Engine {
 	return &Engine{
-		space:       space,
-		nodes:       NewNodeSet(),
-		walkers:     make([]*SimWalker, 0),
-		subscribers: make([]chan *SimulationResult, 0),
-		propagation: NewPropagationModel(space),
-		accuracy:    NewAccuracyEstimator(),
+		space:           space,
+		nodes:           NewNodeSet(),
+		walkers:         make([]*SimWalker, 0),
+		subscribers:     make([]chan *SimulationResult, 0),
+		propagation:     NewPropagationModel(space),
+		accuracy:        NewAccuracyEstimator(),
 		recommendations: NewRecommendationEngine(),
 	}
 }
