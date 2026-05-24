@@ -2510,3 +2510,55 @@ func TestHandlerDisableEnableRoundTrip(t *testing.T) {
 		t.Errorf("Expected role_before_disable to be cleared after enable, got %s", savedRole)
 	}
 }
+
+// TestRouteRegistrationNoPanic verifies that registering both Handler and FleetHandler
+// on the same router does not cause chi to panic with duplicate route registration.
+// This is a startup smoke test to catch accidental route conflicts early.
+func TestRouteRegistrationNoPanic(t *testing.T) {
+	reg := newTestRegistry(t)
+	mgr := NewManager(reg)
+	selfHealMgr := NewSelfHealManager(reg, NewRoleOptimiser(DefaultOptimisationConfig()), DefaultSelfHealConfig())
+
+	// Create both handlers as main.go does
+	h := NewHandler(mgr)
+	fleetHealthHandler := NewFleetHandler(selfHealMgr, reg)
+
+	// This should not panic - if there are duplicate routes, chi will panic here
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+	fleetHealthHandler.RegisterRoutes(r)
+
+	// Verify expected routes are registered
+	// From Handler: /api/nodes, /api/fleet (list), /api/nodes/{mac}/role, etc.
+	// From FleetHandler: /api/fleet/health, /api/fleet/history, /api/fleet/optimise, /api/fleet/simulate
+	// The key is no panic on duplicate routes like POST /api/nodes/{mac}/role
+
+	// Try to walk the routes to ensure they're registered
+	routes := chi.Routes(r)
+	if len(routes) == 0 {
+		t.Fatal("No routes registered")
+	}
+
+	// Verify some expected routes exist
+	expectedRoutes := []string{
+		"/api/nodes",
+		"/api/fleet",
+		"/api/fleet/health",
+		"/api/fleet/history",
+		"/api/fleet/optimise",
+		"/api/fleet/simulate",
+	}
+
+	for _, expected := range expectedRoutes {
+		found := false
+		for _, route := range routes {
+			if route.Pattern == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected route %s not found", expected)
+		}
+	}
+}
