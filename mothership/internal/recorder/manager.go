@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -44,6 +45,9 @@ type Manager struct {
 	links  map[string]*linkRecorder
 	done   chan struct{}
 	wg     sync.WaitGroup
+
+	// Pause control
+	paused atomic.Bool
 }
 
 type linkRecorder struct {
@@ -90,11 +94,17 @@ func NewManager(cfg Config) (*Manager, error) {
 // Write writes a raw CSI frame for the given link.
 // It does not block the caller. If the per-link buffer is full,
 // the frame is dropped with a log warning.
+// If writes are paused (due to low disk space), the frame is dropped.
 func (m *Manager) Write(linkID string, frame []byte) {
 	select {
 	case <-m.done:
 		return
 	default:
+	}
+
+	// Drop frames if paused (low disk space)
+	if m.paused.Load() {
+		return
 	}
 
 	lr := m.getOrCreateLink(linkID)
@@ -109,6 +119,22 @@ func (m *Manager) Write(linkID string, frame []byte) {
 	default:
 		log.Printf("[WARN] Recorder buffer full for link %s, dropping frame", linkID)
 	}
+}
+
+// PauseWrites pauses all CSI replay buffer writes.
+// Frames written while paused are silently dropped.
+func (m *Manager) PauseWrites() {
+	m.paused.Store(true)
+}
+
+// ResumeWrites resumes CSI replay buffer writes.
+func (m *Manager) ResumeWrites() {
+	m.paused.Store(false)
+}
+
+// IsPaused returns whether writes are currently paused.
+func (m *Manager) IsPaused() bool {
+	return m.paused.Load()
 }
 
 // ReadFrom returns a channel that yields raw CSI frames for the given link

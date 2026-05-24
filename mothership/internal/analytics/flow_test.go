@@ -346,9 +346,9 @@ func TestFlowAccumulator_PruneOldSegments(t *testing.T) {
 
 func TestBresenhamLine(t *testing.T) {
 	tests := []struct {
-		name          string
+		name           string
 		x0, y0, x1, y1 int
-		expectedCount int
+		expectedCount  int
 	}{
 		{"horizontal line", 0, 0, 5, 0, 6},
 		{"vertical line", 0, 0, 0, 5, 6},
@@ -477,5 +477,135 @@ func TestFlowAccumulator_PersonFiltering(t *testing.T) {
 	// All flow should have more segments than individual person flows
 	if len(person1Flow.Cells) == 0 && len(person2Flow.Cells) == 0 && len(allFlow.Cells) == 0 {
 		t.Error("Expected some flow data")
+	}
+}
+
+func TestFlowAccumulator_PauseResumeWrites(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "flow_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close() //nolint:errcheck
+
+	fa := NewFlowAccumulator(db, testGridCellSize)
+	if err := fa.InitSchema(); err != nil {
+		t.Fatalf("Failed to init schema: %v", err)
+	}
+	defer fa.Close() //nolint:errcheck
+
+	// Add some track updates before pausing
+	fa.AddTrackUpdate("track-1", 0, 0, 0, 0.25, 0, 0, "person1")
+	fa.AddTrackUpdate("track-1", 0.25, 0, 0, 0.25, 0, 0, "person1")
+	fa.Flush() //nolint:errcheck
+
+	var beforePauseCount int
+	err = db.QueryRow(`SELECT COUNT(*) FROM trajectory_segments`).Scan(&beforePauseCount)
+	if err != nil {
+		t.Fatalf("Failed to query segments: %v", err)
+	}
+
+	// Pause writes
+	fa.PauseWrites()
+	if !fa.IsPaused() {
+		t.Error("IsPaused should return true after PauseWrites")
+	}
+
+	// Add track updates while paused - these should be dropped
+	fa.AddTrackUpdate("track-1", 0.5, 0, 0, 0.25, 0, 0, "person1")
+	fa.AddTrackUpdate("track-1", 0.75, 0, 0, 0.25, 0, 0, "person1")
+	fa.Flush() //nolint:errcheck
+
+	var duringPauseCount int
+	err = db.QueryRow(`SELECT COUNT(*) FROM trajectory_segments`).Scan(&duringPauseCount)
+	if err != nil {
+		t.Fatalf("Failed to query segments: %v", err)
+	}
+
+	if duringPauseCount != beforePauseCount {
+		t.Errorf("Segment count changed during pause: got %d, want %d", duringPauseCount, beforePauseCount)
+	}
+
+	// Resume writes
+	fa.ResumeWrites()
+	if fa.IsPaused() {
+		t.Error("IsPaused should return false after ResumeWrites")
+	}
+
+	// Add track updates after resuming
+	fa.AddTrackUpdate("track-1", 1.0, 0, 0, 0.25, 0, 0, "person1")
+	fa.AddTrackUpdate("track-1", 1.25, 0, 0, 0.25, 0, 0, "person1")
+	fa.Flush() //nolint:errcheck
+
+	var afterResumeCount int
+	err = db.QueryRow(`SELECT COUNT(*) FROM trajectory_segments`).Scan(&afterResumeCount)
+	if err != nil {
+		t.Fatalf("Failed to query segments: %v", err)
+	}
+
+	if afterResumeCount <= beforePauseCount {
+		t.Errorf("Segment count should have increased after resume: got %d, want > %d", afterResumeCount, beforePauseCount)
+	}
+}
+
+func TestFlowAccumulator_DwellWhilePaused(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "flow_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close() //nolint:errcheck
+
+	fa := NewFlowAccumulator(db, testGridCellSize)
+	if err := fa.InitSchema(); err != nil {
+		t.Fatalf("Failed to init schema: %v", err)
+	}
+	defer fa.Close() //nolint:errcheck
+
+	// Pause writes first
+	fa.PauseWrites()
+
+	// Add track updates with low speed (should generate dwell data if not paused)
+	// Speed below dwellSpeedThreshold (0.1 m/s) generates dwell
+	fa.AddTrackUpdate("track-1", 1.0, 1.0, 0, 0.05, 0.05, 0, "person1")
+	fa.AddTrackUpdate("track-1", 1.0, 1.0, 0, 0.05, 0.05, 0, "person1")
+	fa.Flush() //nolint:errcheck
+
+	// Verify no dwell data was written while paused
+	var dwellCount int
+	err = db.QueryRow(`SELECT COUNT(*) FROM dwell_accumulator`).Scan(&dwellCount)
+	if err != nil {
+		t.Fatalf("Failed to query dwell accumulator: %v", err)
+	}
+
+	if dwellCount != 0 {
+		t.Errorf("Dwell data was written while paused: got %d, want 0", dwellCount)
+	}
+
+	// Resume and add more updates
+	fa.ResumeWrites()
+	fa.AddTrackUpdate("track-1", 1.0, 1.0, 0, 0.05, 0.05, 0, "person1")
+	fa.Flush() //nolint:errcheck
+
+	// Now we should have dwell data
+	err = db.QueryRow(`SELECT COUNT(*) FROM dwell_accumulator`).Scan(&dwellCount)
+	if err != nil {
+		t.Fatalf("Failed to query dwell accumulator: %v", err)
+	}
+
+	if dwellCount == 0 {
+		t.Error("Expected dwell data after resume")
 	}
 }

@@ -4,6 +4,7 @@ package prediction
 import (
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -46,16 +47,19 @@ type MQTTClient interface {
 type Predictor struct {
 	mu sync.RWMutex
 
-	store       *ModelStore
-	zoneProvider    ZoneInfoProvider
-	personProvider  PersonInfoProvider
+	store            *ModelStore
+	zoneProvider     ZoneInfoProvider
+	personProvider   PersonInfoProvider
 	positionProvider CurrentPositionProvider
-	mqttClient      MQTTClient
-	mothershipID    string
+	mqttClient       MQTTClient
+	mothershipID     string
 
 	// Cached predictions, updated periodically
 	predictions []PersonPrediction
 	lastUpdate  time.Time
+
+	// Pause control
+	paused atomic.Bool
 }
 
 // NewPredictor creates a new predictor.
@@ -95,6 +99,22 @@ func (p *Predictor) SetMQTTClient(client MQTTClient, mothershipID string) {
 	p.mu.Unlock()
 }
 
+// PauseUpdates pauses prediction model updates.
+// UpdatePredictions calls while paused are no-ops.
+func (p *Predictor) PauseUpdates() {
+	p.paused.Store(true)
+}
+
+// ResumeUpdates resumes prediction model updates.
+func (p *Predictor) ResumeUpdates() {
+	p.paused.Store(false)
+}
+
+// IsPaused returns whether updates are currently paused.
+func (p *Predictor) IsPaused() bool {
+	return p.paused.Load()
+}
+
 // GetPredictions returns current predictions for all tracked people.
 func (p *Predictor) GetPredictions() []PersonPrediction {
 	p.mu.RLock()
@@ -107,7 +127,13 @@ func (p *Predictor) GetPredictions() []PersonPrediction {
 }
 
 // UpdatePredictions computes new predictions based on current state.
+// If updates are paused (due to low disk space), this is a no-op.
 func (p *Predictor) UpdatePredictions() {
+	// Silently return if paused (low disk space)
+	if p.paused.Load() {
+		return
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -155,10 +181,10 @@ func (p *Predictor) UpdatePredictions() {
 // predictForPerson generates a prediction for a single person.
 func (p *Predictor) predictForPerson(personID, personName, currentZoneID string, entryTime, now time.Time, hasMinimumData bool, dataAge time.Duration) PersonPrediction {
 	prediction := PersonPrediction{
-		PersonID:        personID,
-		PersonLabel:     personName,
-		CurrentZoneID:   currentZoneID,
-		DataConfidence:  "insufficient_data",
+		PersonID:       personID,
+		PersonLabel:    personName,
+		CurrentZoneID:  currentZoneID,
+		DataConfidence: "insufficient_data",
 	}
 
 	// Get zone name
@@ -178,7 +204,7 @@ func (p *Predictor) predictForPerson(personID, personName, currentZoneID string,
 
 	// Check data confidence
 	if !hasMinimumData {
-		daysRemaining := int(MinimumDataAge - dataAge + 23*time.Hour) / int(24*time.Hour)
+		daysRemaining := int(MinimumDataAge-dataAge+23*time.Hour) / int(24*time.Hour)
 		if daysRemaining < 0 {
 			daysRemaining = 0
 		}

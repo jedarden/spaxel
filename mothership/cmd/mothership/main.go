@@ -35,6 +35,7 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/db"
 	"github.com/spaxel/mothership/internal/diagnostics"
+	"github.com/spaxel/mothership/internal/diskspace"
 	"github.com/spaxel/mothership/internal/doctor"
 	"github.com/spaxel/mothership/internal/eventbus"
 	"github.com/spaxel/mothership/internal/events"
@@ -2767,6 +2768,19 @@ func main() {
 		}
 	}
 
+	// Phase 6: Disk-space monitor for low-disk handling
+	var diskspaceMonitor *diskspace.Monitor
+	diskspaceMonitor = diskspace.New(diskspace.Config{
+		DataDir:         cfg.DataDir,
+		CheckInterval:   60 * time.Second,
+		Recorder:        recMgr,
+		FlowAccumulator: flowAccumulator,
+		Predictor:       predictionPredictor,
+	})
+	diskspaceMonitor.Start()
+	defer diskspaceMonitor.Stop()
+	log.Printf("[INFO] Disk-space monitor started (interval: 60s, warning: 100MB, critical: 20MB)")
+
 	// Fleet REST API
 	fleetHandler := fleet.NewHandler(fleetMgr)
 	fleetHandler.SetNodeIdentifier(ingestSrv)
@@ -3118,6 +3132,16 @@ func main() {
 			"stationary_count": pm.GetStationaryPersonCount(),
 			"worst_link":       func() string { id, _ := pm.GetWorstLink(); return id }(),
 		})
+	})
+
+	// Phase 6: Disk-space stats API
+	r.Get("/api/diskspace/stats", func(w http.ResponseWriter, r *http.Request) {
+		if diskspaceMonitor == nil {
+			http.Error(w, "disk-space monitor not available", http.StatusServiceUnavailable)
+			return
+		}
+		stats := diskspaceMonitor.GetStats()
+		writeJSON(w, stats)
 	})
 
 	// Phase 6: Diurnal learning status API
