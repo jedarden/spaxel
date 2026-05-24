@@ -88,6 +88,11 @@ func AllMigrations() []Migration {
 			Description: "add crossing_events table for portal crossing log",
 			Up:          migration_016_add_crossing_events_table,
 		},
+		{
+			Version:     17,
+			Description: "add predicted_enter to triggers table CHECK constraint",
+			Up:          migration_017_add_predicted_enter_trigger,
+		},
 	}
 }
 
@@ -870,4 +875,77 @@ func migration_016_add_crossing_events_table(tx *sql.Tx) error {
 	`
 	_, err := tx.Exec(schema)
 	return err
+}
+
+// migration_017_add_predicted_enter_trigger expands the triggers table
+// CHECK constraint to include 'predicted_enter' for pre-emptive automation.
+// SQLite doesn't support ALTER CONSTRAINT, so we recreate the table.
+func migration_017_add_predicted_enter_trigger(tx *sql.Tx) error {
+	// Check if triggers table exists
+	var triggersExists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='triggers'`,
+	).Scan(&triggersExists); err != nil {
+		return err
+	}
+	if !triggersExists {
+		return nil // triggers table will be created by a later migration
+	}
+
+	// In SQLite, we need to recreate the table with the new CHECK constraint
+	// Step 1: Create a new triggers table with the updated constraint
+	_, err := tx.Exec(`
+		CREATE TABLE triggers_new (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			name        TEXT NOT NULL,
+			shape_json  TEXT NOT NULL,
+			condition   TEXT NOT NULL CHECK (condition IN ('enter','leave','dwell','vacant','count','predicted_enter')),
+			condition_params_json TEXT,
+			time_constraint_json TEXT,
+			actions_json TEXT NOT NULL,
+			enabled     INTEGER NOT NULL DEFAULT 1,
+			last_fired  INTEGER,
+			error_message TEXT DEFAULT '',
+			error_count INTEGER NOT NULL DEFAULT 0,
+			created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+			updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+		);
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Step 2: Copy data from old table to new table
+	_, err = tx.Exec(`
+		INSERT INTO triggers_new (id, name, shape_json, condition, condition_params_json,
+			time_constraint_json, actions_json, enabled, last_fired, created_at, updated_at,
+			error_message, error_count)
+		SELECT id, name, shape_json, condition, condition_params_json,
+			time_constraint_json, actions_json, enabled, last_fired, created_at, updated_at,
+			COALESCE(error_message, ''), COALESCE(error_count, 0)
+		FROM triggers;
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Step 3: Drop the old table
+	_, err = tx.Exec(`DROP TABLE triggers;`)
+	if err != nil {
+		return err
+	}
+
+	// Step 4: Rename the new table to the original name
+	_, err = tx.Exec(`ALTER TABLE triggers_new RENAME TO triggers;`)
+	if err != nil {
+		return err
+	}
+
+	// Step 5: Recreate indexes (if any existed)
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_triggers_enabled ON triggers(enabled);`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

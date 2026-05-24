@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -100,26 +101,26 @@ func (s *ShapeJSON) isInsideCylinder(p Point3D) bool {
 
 // Trigger represents a spatial automation trigger from the triggers table.
 type Trigger struct {
-	ID                 string     `json:"id"`
-	Name               string     `json:"name"`
-	Shape              ShapeJSON  `json:"shape"`
-	Condition          string     `json:"condition"`          // enter, leave, dwell, vacant, count
-	ConditionParams    ConditionParams `json:"condition_params"`
-	TimeConstraint     *TimeConstraint `json:"time_constraint,omitempty"`
-	Actions            []Action    `json:"actions"`
-	Enabled            bool       `json:"enabled"`
-	ErrorMessage       string     `json:"error_message,omitempty"` // Set when disabled by 4xx
-	ErrorCount         int        `json:"error_count"`            // Incremented on 5xx/timeout, reset on 2xx
-	LastFired          *time.Time `json:"last_fired,omitempty"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Shape           ShapeJSON       `json:"shape"`
+	Condition       string          `json:"condition"` // enter, leave, dwell, vacant, count
+	ConditionParams ConditionParams `json:"condition_params"`
+	TimeConstraint  *TimeConstraint `json:"time_constraint,omitempty"`
+	Actions         []Action        `json:"actions"`
+	Enabled         bool            `json:"enabled"`
+	ErrorMessage    string          `json:"error_message,omitempty"` // Set when disabled by 4xx
+	ErrorCount      int             `json:"error_count"`             // Incremented on 5xx/timeout, reset on 2xx
+	LastFired       *time.Time      `json:"last_fired,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 // ConditionParams holds trigger condition parameters.
 type ConditionParams struct {
-	DurationS      *int    `json:"duration_s,omitempty"`      // For dwell: seconds inside volume
-	CountThreshold *int    `json:"count_threshold,omitempty"` // For count: minimum blob count
-	PersonID       string  `json:"person_id,omitempty"`      // Filter by person ID
+	DurationS      *int   `json:"duration_s,omitempty"`      // For dwell: seconds inside volume
+	CountThreshold *int   `json:"count_threshold,omitempty"` // For count: minimum blob count
+	PersonID       string `json:"person_id,omitempty"`       // Filter by person ID
 }
 
 // TimeConstraint represents a time window constraint.
@@ -130,8 +131,8 @@ type TimeConstraint struct {
 
 // Action represents an action to execute when a trigger fires.
 type Action struct {
-	Type    string                 `json:"type"` // webhook, mqtt, internal
-	Params  map[string]interface{} `json:"params"`
+	Type   string                 `json:"type"` // webhook, mqtt, internal
+	Params map[string]interface{} `json:"params"`
 }
 
 // BlobState represents the state of a tracked blob relative to a trigger.
@@ -162,14 +163,33 @@ type FiredEvent struct {
 // FiringCallback is called when a trigger fires.
 type FiringCallback func(event FiredEvent)
 
+// PredictionInfo represents a prediction for use by predicted_enter triggers.
+type PredictionInfo struct {
+	PersonID                   string
+	PersonName                 string
+	CurrentZoneID              string
+	CurrentZoneName            string
+	PredictedNextZoneID        string
+	PredictedNextZoneName      string
+	PredictionConfidence       float64
+	EstimatedTransitionMinutes float64
+	DataConfidence             string
+}
+
+// PredictionProvider provides prediction information for predicted_enter triggers.
+type PredictionProvider interface {
+	GetPredictions() []PredictionInfo
+}
+
 // Store provides trigger storage and state management.
 type Store struct {
-	mu           sync.RWMutex
-	db           *sql.DB
-	triggers     map[string]*Trigger
-	triggerState map[string]*TriggerState // trigger_id -> state
-	blobVolumes  map[int]string          // blob_id -> current volume_id (for tracking)
-	onFired      FiringCallback          // Called when a trigger fires
+	mu                sync.RWMutex
+	db                *sql.DB
+	triggers          map[string]*Trigger
+	triggerState      map[string]*TriggerState // trigger_id -> state
+	blobVolumes       map[int]string           // blob_id -> current volume_id (for tracking)
+	onFired           FiringCallback           // Called when a trigger fires
+	predictionProvider PredictionProvider       // Provides prediction data for predicted_enter triggers
 }
 
 // NewStore creates a new trigger volume store.
@@ -212,7 +232,7 @@ func (s *Store) init() error {
 			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			name        TEXT NOT NULL,
 			shape_json  TEXT NOT NULL,
-			condition   TEXT NOT NULL CHECK (condition IN ('enter','leave','dwell','vacant','count')),
+			condition   TEXT NOT NULL CHECK (condition IN ('enter','leave','dwell','vacant','count','predicted_enter')),
 			condition_params_json TEXT,
 			time_constraint_json TEXT,
 			actions_json TEXT NOT NULL,
@@ -518,6 +538,13 @@ func (s *Store) SetOnFired(cb FiringCallback) {
 	s.onFired = cb
 }
 
+// SetPredictionProvider sets the prediction provider for predicted_enter triggers.
+func (s *Store) SetPredictionProvider(pp PredictionProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.predictionProvider = pp
+}
+
 // Evaluate evaluates all enabled triggers against the current blob positions.
 // Returns a list of trigger IDs that should fire.
 func (s *Store) Evaluate(blobs []BlobPos, now time.Time) []string {
@@ -566,6 +593,8 @@ func (s *Store) Evaluate(blobs []BlobPos, now time.Time) []string {
 			shouldFire = s.evaluateVacant(t, state, blobs, now)
 		case "count":
 			shouldFire = s.evaluateCount(t, state, blobs, now)
+			case "predicted_enter":
+				shouldFire = s.evaluatePredictedEnter(t, state, now)
 		}
 
 		if shouldFire {
@@ -797,6 +826,109 @@ func (s *Store) evaluateCount(t *Trigger, state *TriggerState, blobs []BlobPos, 
 	return crossedThreshold
 }
 
+// evaluatePredictedEnter triggers when a prediction indicates a person is likely
+// to enter a zone within the configured time window. Uses rising-edge detection:
+// fires when P(predicted zone entry) > threshold AND previous computation had P < threshold.
+// Suppresses re-firing for the same (person, zone, time_slot) within 60 minutes.
+func (s *Store) evaluatePredictedEnter(t *Trigger, state *TriggerState, now time.Time) bool {
+	if s.predictionProvider == nil {
+		return false // No prediction provider configured
+	}
+
+	// Get minutes ahead threshold from condition params (default 30 minutes)
+	minutesAhead := 30
+	if t.ConditionParams.DurationS != nil {
+		minutesAhead = *t.ConditionParams.DurationS
+	}
+
+	predictions := s.predictionProvider.GetPredictions()
+	var fired bool
+
+	// Use a special blob ID slot for tracking predictions (negative IDs are in-memory only)
+	// We use -1000 - (hash of person+zone) to track per-person-per-zone state
+	for _, pred := range predictions {
+		// Check person filter
+		if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
+			if t.ConditionParams.PersonID != pred.PersonID {
+				continue
+			}
+		}
+
+		// Check if predicted zone matches our volume
+		// For predicted_enter, we check if the predicted zone is within the volume
+		// TODO: Add zone-to-volume mapping; for now, we trigger if the predicted zone name
+		// is in the trigger name or if the trigger name contains the predicted zone name
+		if !s.zoneMatchesVolume(pred.PredictedNextZoneName, t) {
+			continue
+		}
+
+		// Check if prediction confidence is high enough (default 0.6)
+		if pred.PredictionConfidence < 0.6 {
+			continue
+		}
+
+		// Check if estimated transition time is within the threshold
+		if pred.EstimatedTransitionMinutes > float64(minutesAhead) {
+			continue
+		}
+
+		// Create a unique state key for this person-zone combination
+		stateKey := -1000 - s.hashPersonZone(pred.PersonID, pred.PredictedNextZoneID)
+		blobState := state.Blobs[stateKey]
+		if blobState == nil {
+			blobState = &BlobState{
+				BlobID:        stateKey,
+				Inside:        false,
+				LastCheckTime: now,
+			}
+			state.Blobs[stateKey] = blobState
+		}
+
+		// Rising-edge detection: fire when we go from below threshold to at/above threshold
+		if !blobState.Inside && pred.PredictionConfidence >= 0.6 {
+			// Check cooldown (60 minutes)
+			if !blobState.EnterTime.IsZero() && now.Sub(blobState.EnterTime) < 60*time.Minute {
+				continue
+			}
+
+			// Fire the trigger
+			blobState.Inside = true
+			blobState.EnterTime = now
+			blobState.LastCheckTime = now
+			fired = true
+		} else if pred.PredictionConfidence < 0.6 {
+			// Below threshold - reset for next rising edge
+			blobState.Inside = false
+		}
+
+		blobState.LastCheckTime = now
+	}
+
+	return fired
+}
+
+// zoneMatchesVolume checks if a zone name matches a trigger volume.
+// TODO: Implement proper zone-to-volume geometry mapping.
+func (s *Store) zoneMatchesVolume(zoneName string, t *Trigger) bool {
+	// For now, use simple string matching
+	if zoneName == "" {
+		return false
+	}
+	// Check if trigger name contains zone name or vice versa
+	return strings.Contains(strings.ToLower(t.Name), strings.ToLower(zoneName)) ||
+		strings.Contains(strings.ToLower(zoneName), strings.ToLower(t.Name))
+}
+
+// hashPersonZone creates a simple hash of person+zone for state tracking.
+func (s *Store) hashPersonZone(personID, zoneID string) int {
+	// Simple hash: sum of character codes
+	h := 0
+	for _, c := range personID + zoneID {
+		h += int(c)
+	}
+	return h % 10000 // Keep it small and positive
+}
+
 // isTimeInRange checks if the current time is within the constraint window.
 func (s *Store) isTimeInRange(tc *TimeConstraint, now time.Time) bool {
 	if tc == nil {
@@ -935,13 +1067,13 @@ type FiringRecord struct {
 
 // WebhookLogEntry represents an entry in the webhook audit log.
 type WebhookLogEntry struct {
-	ID        int64     `json:"id"`
-	TriggerID string    `json:"trigger_id"`
-	URL       string    `json:"url"`
-	FiredAtMs int64     `json:"fired_at_ms"`
-	Status    int       `json:"status_code,omitempty"`
-	LatencyMs int64     `json:"latency_ms"`
-	Error     string    `json:"error,omitempty"`
+	ID        int64  `json:"id"`
+	TriggerID string `json:"trigger_id"`
+	URL       string `json:"url"`
+	FiredAtMs int64  `json:"fired_at_ms"`
+	Status    int    `json:"status_code,omitempty"`
+	LatencyMs int64  `json:"latency_ms"`
+	Error     string `json:"error,omitempty"`
 }
 
 // BlobPos represents a blob's position for trigger evaluation.

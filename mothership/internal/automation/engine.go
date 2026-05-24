@@ -22,17 +22,17 @@ import (
 type TriggerType string
 
 const (
-	TriggerZoneEnter         TriggerType = "zone_enter"
-	TriggerZoneLeave         TriggerType = "zone_leave"
-	TriggerZoneDwell         TriggerType = "zone_dwell"
-	TriggerZoneVacant        TriggerType = "zone_vacant"
-	TriggerPersonCountChange TriggerType = "person_count_change"
-	TriggerFallDetected      TriggerType = "fall_detected"
-	TriggerAnomaly           TriggerType = "anomaly"
-	TriggerBLEDevicePresent  TriggerType = "ble_device_present"
-	TriggerBLEDeviceAbsent   TriggerType = "ble_device_absent"
-	TriggerVolumeEnter       TriggerType = "volume_enter"
-	TriggerVolumeLeave       TriggerType = "volume_leave"
+	TriggerZoneEnter          TriggerType = "zone_enter"
+	TriggerZoneLeave          TriggerType = "zone_leave"
+	TriggerZoneDwell          TriggerType = "zone_dwell"
+	TriggerZoneVacant         TriggerType = "zone_vacant"
+	TriggerPersonCountChange  TriggerType = "person_count_change"
+	TriggerFallDetected       TriggerType = "fall_detected"
+	TriggerAnomaly            TriggerType = "anomaly"
+	TriggerBLEDevicePresent   TriggerType = "ble_device_present"
+	TriggerBLEDeviceAbsent    TriggerType = "ble_device_absent"
+	TriggerVolumeEnter        TriggerType = "volume_enter"
+	TriggerVolumeLeave        TriggerType = "volume_leave"
 	TriggerPredictedZoneEnter TriggerType = "predicted_zone_enter" // N minutes before predicted zone entry
 )
 
@@ -47,10 +47,10 @@ const (
 
 // TriggerVolume represents a 3D region that can trigger automations.
 type TriggerVolume struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Type      string  `json:"type"` // box, sphere, cylinder
-	Enabled   bool    `json:"enabled"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"` // box, sphere, cylinder
+	Enabled      bool   `json:"enabled"`
 	AutomationID string `json:"automation_id,omitempty"`
 	// Box type
 	MinX float64 `json:"min_x,omitempty"`
@@ -63,13 +63,13 @@ type TriggerVolume struct {
 	CenterX float64 `json:"center_x,omitempty"`
 	CenterY float64 `json:"center_y,omitempty"`
 	CenterZ float64 `json:"center_z,omitempty"`
-	Radius   float64 `json:"radius,omitempty"`
+	Radius  float64 `json:"radius,omitempty"`
 	// Cylinder type
-	BaseX float64 `json:"base_x,omitempty"`
-	BaseZ float64 `json:"base_z,omitempty"`
-	BaseRadius      float64 `json:"base_radius,omitempty"`
-	MinHeight float64 `json:"min_height,omitempty"`
-	MaxHeight float64 `json:"max_height,omitempty"`
+	BaseX      float64 `json:"base_x,omitempty"`
+	BaseZ      float64 `json:"base_z,omitempty"`
+	BaseRadius float64 `json:"base_radius,omitempty"`
+	MinHeight  float64 `json:"min_height,omitempty"`
+	MaxHeight  float64 `json:"max_height,omitempty"`
 }
 
 // TriggerConfig holds configuration for the trigger.
@@ -108,39 +108,39 @@ type Condition struct {
 type ActionType string
 
 const (
-	ActionWebhook     ActionType = "webhook"
-	ActionMQTT        ActionType = "mqtt_publish"
-	ActionNtfy        ActionType = "ntfy"
-	ActionPushover    ActionType = "pushover"
+	ActionWebhook  ActionType = "webhook"
+	ActionMQTT     ActionType = "mqtt_publish"
+	ActionNtfy     ActionType = "ntfy"
+	ActionPushover ActionType = "pushover"
 )
 
 // Action represents an action to execute when triggered.
 type Action struct {
-	Type        ActionType            `json:"type"`
-	URL         string                `json:"url,omitempty"`      // for webhook
-	Topic       string                `json:"topic,omitempty"`    // for mqtt
-	Server      string                `json:"server,omitempty"`   // for ntfy
-	Token       string                `json:"token,omitempty"`    // for pushover
-	UserKey     string                `json:"user_key,omitempty"` // for pushover
-	Template    string                `json:"template,omitempty"` // payload template
-	Headers     map[string]string     `json:"headers,omitempty"`
-	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+	Type       ActionType             `json:"type"`
+	URL        string                 `json:"url,omitempty"`      // for webhook
+	Topic      string                 `json:"topic,omitempty"`    // for mqtt
+	Server     string                 `json:"server,omitempty"`   // for ntfy
+	Token      string                 `json:"token,omitempty"`    // for pushover
+	UserKey    string                 `json:"user_key,omitempty"` // for pushover
+	Template   string                 `json:"template,omitempty"` // payload template
+	Headers    map[string]string      `json:"headers,omitempty"`
+	Parameters map[string]interface{} `json:"parameters,omitempty"`
 }
 
 // Automation represents an automation rule.
 type Automation struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Enabled       bool           `json:"enabled"`
-	TriggerType   TriggerType    `json:"trigger_type"`
-	TriggerConfig TriggerConfig  `json:"trigger_config"`
-	Conditions    []Condition    `json:"conditions,omitempty"`
-	Actions       []Action       `json:"actions"`
-	Cooldown      int            `json:"cooldown"` // seconds between triggers
-	LastFired     time.Time      `json:"last_fired"`
-	FireCount     int            `json:"fire_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID            string        `json:"id"`
+	Name          string        `json:"name"`
+	Enabled       bool          `json:"enabled"`
+	TriggerType   TriggerType   `json:"trigger_type"`
+	TriggerConfig TriggerConfig `json:"trigger_config"`
+	Conditions    []Condition   `json:"conditions,omitempty"`
+	Actions       []Action      `json:"actions"`
+	Cooldown      int           `json:"cooldown"` // seconds between triggers
+	LastFired     time.Time     `json:"last_fired"`
+	FireCount     int           `json:"fire_count"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
 // ActionResult represents the result of an action execution.
@@ -174,20 +174,20 @@ type TriggerEventData struct {
 
 // Event represents an internal event that can trigger automations.
 type Event struct {
-	Type         TriggerType
-	Timestamp    time.Time
-	PersonID     string
-	PersonName   string
-	PersonColor  string
-	ZoneID       string
-	ZoneName     string
-	FromZone     string
-	ToZone       string
-	DeviceMAC    string
-	DeviceName   string
+	Type          TriggerType
+	Timestamp     time.Time
+	PersonID      string
+	PersonName    string
+	PersonColor   string
+	ZoneID        string
+	ZoneName      string
+	FromZone      string
+	ToZone        string
+	DeviceMAC     string
+	DeviceName    string
 	OccupantCount int
-	Confidence   float64
-	Extra        map[string]interface{}
+	Confidence    float64
+	Extra         map[string]interface{}
 }
 
 // ZoneInfoProvider provides zone information.
@@ -237,12 +237,12 @@ type PredictionInfo struct {
 
 // Engine manages automation rules and triggers.
 type Engine struct {
-	mu       sync.RWMutex
-	db       *sql.DB
+	mu sync.RWMutex
+	db *sql.DB
 
-	automations   map[string]*Automation
-	volumes       map[string]*TriggerVolume
-	cooldowns     map[string]time.Time // automationID -> last trigger time
+	automations map[string]*Automation
+	volumes     map[string]*TriggerVolume
+	cooldowns   map[string]time.Time // automationID -> last trigger time
 
 	// Zone dwell tracking
 	zoneEnterTime map[string]map[int]time.Time // zoneID -> blobID -> enter time
@@ -254,15 +254,15 @@ type Engine struct {
 	systemMode SystemMode
 
 	// Providers
-	zoneProvider    ZoneInfoProvider
-	personProvider  PersonInfoProvider
-	deviceProvider  DeviceInfoProvider
+	zoneProvider       ZoneInfoProvider
+	personProvider     PersonInfoProvider
+	deviceProvider     DeviceInfoProvider
 	predictionProvider PredictionProvider
 
 	// Clients
-	httpClient       *http.Client
-	mqttClient       MQTTClient
-	notifySender     NotificationSender
+	httpClient   *http.Client
+	mqttClient   MQTTClient
+	notifySender NotificationSender
 
 	// Callbacks
 	onTrigger func(TriggerEventData)
@@ -281,14 +281,14 @@ func NewEngine(dbPath string) (*Engine, error) {
 	db.SetMaxOpenConns(1)
 
 	e := &Engine{
-		db:              db,
-		automations:     make(map[string]*Automation),
-		volumes:         make(map[string]*TriggerVolume),
-		cooldowns:       make(map[string]time.Time),
-		zoneEnterTime:   make(map[string]map[int]time.Time),
-		deviceLastSeen:  make(map[string]time.Time),
-		systemMode:      ModeHome,
-		httpClient:      &http.Client{Timeout: 10 * time.Second},
+		db:             db,
+		automations:    make(map[string]*Automation),
+		volumes:        make(map[string]*TriggerVolume),
+		cooldowns:      make(map[string]time.Time),
+		zoneEnterTime:  make(map[string]map[int]time.Time),
+		deviceLastSeen: make(map[string]time.Time),
+		systemMode:     ModeHome,
+		httpClient:     &http.Client{Timeout: 10 * time.Second},
 	}
 
 	if err := e.migrate(); err != nil {
@@ -495,6 +495,13 @@ func (e *Engine) SetMQTTClient(client MQTTClient) {
 func (e *Engine) SetNotificationSender(sender NotificationSender) {
 	e.mu.Lock()
 	e.notifySender = sender
+	e.mu.Unlock()
+}
+
+// SetPredictionProvider sets the prediction provider for predicted_zone_enter triggers.
+func (e *Engine) SetPredictionProvider(pp PredictionProvider) {
+	e.mu.Lock()
+	e.predictionProvider = pp
 	e.mu.Unlock()
 }
 
@@ -839,7 +846,7 @@ func (e *Engine) isDayOfWeek(value string, now time.Time) bool {
 	if len(value) <= 7 {
 		bitmask := parseInt(value)
 		if bitmask > 0 {
-			return (bitmask&(1<<weekday)) != 0
+			return (bitmask & (1 << weekday)) != 0
 		}
 	}
 
@@ -1147,11 +1154,11 @@ func (e *Engine) TestFire(automationID string) error {
 
 	// Create a simulated event
 	event := Event{
-		Type:       a.TriggerType,
-		Timestamp:  time.Now(),
-		PersonID:   a.TriggerConfig.PersonID,
-		ZoneID:     a.TriggerConfig.ZoneID,
-		DeviceMAC:  a.TriggerConfig.DeviceMAC,
+		Type:      a.TriggerType,
+		Timestamp: time.Now(),
+		PersonID:  a.TriggerConfig.PersonID,
+		ZoneID:    a.TriggerConfig.ZoneID,
+		DeviceMAC: a.TriggerConfig.DeviceMAC,
 	}
 
 	// Get provider info
@@ -1272,9 +1279,9 @@ func (e *Engine) CheckBLEAbsentTriggers(now time.Time) {
 		if !exists {
 			// Device never seen - trigger immediately
 			event := Event{
-				Type:       TriggerBLEDeviceAbsent,
-				Timestamp:  now,
-				DeviceMAC:  targetMAC,
+				Type:      TriggerBLEDeviceAbsent,
+				Timestamp: now,
+				DeviceMAC: targetMAC,
 			}
 			if e.deviceProvider != nil {
 				event.DeviceName, _ = e.deviceProvider.GetDevice(targetMAC)
@@ -1288,9 +1295,9 @@ func (e *Engine) CheckBLEAbsentTriggers(now time.Time) {
 		absentMinutes := int(now.Sub(lastSeen).Minutes())
 		if absentMinutes >= cfg.AbsentMinutes {
 			event := Event{
-				Type:       TriggerBLEDeviceAbsent,
-				Timestamp:  now,
-				DeviceMAC:  targetMAC,
+				Type:      TriggerBLEDeviceAbsent,
+				Timestamp: now,
+				DeviceMAC: targetMAC,
 			}
 			if e.deviceProvider != nil {
 				event.DeviceName, _ = e.deviceProvider.GetDevice(targetMAC)
@@ -1445,10 +1452,10 @@ func (e *Engine) checkVolumeTriggers(blob TrackedBlob, currentZone string, now t
 
 // GetRecentActionLog returns recent action log entries.
 func (e *Engine) GetRecentActionLog(limit int) []struct {
-	AutomationID  string
-	FiredAt       time.Time
-	EventJSON     string
-	ResultsJSON   string
+	AutomationID string
+	FiredAt      time.Time
+	EventJSON    string
+	ResultsJSON  string
 } {
 	rows, err := e.db.Query(`
 		SELECT automation_id, fired_at, event_json, actions_results_json
@@ -1463,18 +1470,18 @@ func (e *Engine) GetRecentActionLog(limit int) []struct {
 	defer rows.Close() //nolint:errcheck
 
 	var results []struct {
-		AutomationID  string
-		FiredAt       time.Time
-		EventJSON     string
-		ResultsJSON   string
+		AutomationID string
+		FiredAt      time.Time
+		EventJSON    string
+		ResultsJSON  string
 	}
 
 	for rows.Next() {
 		var entry struct {
-			AutomationID  string
-			FiredAt       time.Time
-			EventJSON     string
-			ResultsJSON   string
+			AutomationID string
+			FiredAt      time.Time
+			EventJSON    string
+			ResultsJSON  string
 		}
 		var firedAtNS int64
 		if err := rows.Scan(&entry.AutomationID, &firedAtNS, &entry.EventJSON, &entry.ResultsJSON); err != nil {
