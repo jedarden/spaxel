@@ -3,7 +3,8 @@
 // meets its acceptance criteria.
 //
 // To run these tests:
-//   SPAXEL_INTEGRATION_TEST=1 go test -v ./mothership/test/acceptance/
+//
+//	SPAXEL_INTEGRATION_TEST=1 go test -v ./mothership/test/acceptance/
 //
 // Tests require:
 // - The mothership binary to be built and available
@@ -29,7 +30,7 @@ const (
 	defaultMothershipURL = "http://localhost:8080"
 	simStartupTimeout    = 30 * time.Second
 	apiTimeout           = 10 * time.Second
-	nodeOnlineTimeout     = 30 * time.Second
+	nodeOnlineTimeout    = 30 * time.Second
 )
 
 // TestMain runs all acceptance tests in sequence if integration mode is enabled.
@@ -43,6 +44,9 @@ func TestMain(m *testing.M) {
 		name string
 		fn   func(*testing.T)
 	}{
+		{"IO1_FreshInstall_FirstBoot", IO1_FreshInstall_FirstBoot},
+		{"IO2_IdempotentRestart", IO2_IdempotentRestart},
+		{"IO2_UpgradeInPlace", IO2_UpgradeInPlace},
 		{"AS1_FirstTimeSetup", AS1_FirstTimeSetupIntegration},
 		{"AS2_WalkingDetection", AS2_WalkingDetectionIntegration},
 		{"AS3_FallDetection", AS3_FallDetectionIntegration},
@@ -742,7 +746,7 @@ func waitForEvent(t *testing.T, baseURL, eventType string, timeout time.Duration
 
 	start := time.Now()
 	for time.Since(start) < timeout {
-		resp, err := http.Get(baseURL + "/api/events?type="+eventType+"&limit=1")
+		resp, err := http.Get(baseURL + "/api/events?type=" + eventType + "&limit=1")
 		if err != nil {
 			time.Sleep(1 * time.Second)
 			continue
