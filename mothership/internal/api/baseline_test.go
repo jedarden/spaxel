@@ -51,7 +51,7 @@ func TestBaselineHandler_ListBaselines(t *testing.T) {
 			capturedAt int64
 			confidence float64
 			nSub       int
-			amplitude   []float32
+			amplitude  []float32
 			phase      []float32
 		}{
 			{"AA:BB:CC:DD:EE:FF", now - 10000, 0.8, 64, []float32{1.0, 2.0}, []float32{0.1, 0.2}},

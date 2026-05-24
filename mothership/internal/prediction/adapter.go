@@ -47,8 +47,8 @@ func (a *ZoneAdapter) GetZone(id string) (string, bool) {
 
 // PersonAdapter provides person information from the BLE registry.
 type PersonAdapter struct {
-	mu      sync.RWMutex
-	people  map[string]struct {
+	mu     sync.RWMutex
+	people map[string]struct {
 		Name  string
 		Color string
 	}

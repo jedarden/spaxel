@@ -29,7 +29,7 @@ type NodeRecord struct {
 	MAC             string    `json:"mac"`
 	Name            string    `json:"name"`
 	Role            string    `json:"role"`
-	PreviousRole    string    `json:"previous_role"` // Role before disconnect, for reconnect grace period
+	PreviousRole    string    `json:"previous_role"`             // Role before disconnect, for reconnect grace period
 	WentOfflineAt   time.Time `json:"went_offline_at,omitempty"` // When the node went offline
 	PosX            float64   `json:"pos_x"`
 	PosY            float64   `json:"pos_y"`

@@ -23,8 +23,8 @@ type GuidedManager interface {
 // GuidedHandler provides endpoints for proactive contextual help.
 type GuidedHandler struct {
 	guidedMgr          GuidedManager
-	zonesHandler        any
-	nodesHandler        any
+	zonesHandler       any
+	nodesHandler       any
 	diagnosticsHandler DiagnosticsHandler
 }
 
@@ -103,10 +103,10 @@ func (h *GuidedHandler) handleGetLinkDiagnostics(w http.ResponseWriter, r *http.
 	health := h.getCurrentLinkHealth(linkID)
 
 	response := map[string]interface{}{
-		"link_id":  linkID,
+		"link_id":   linkID,
 		"diagnosis": diagnosis,
 		"diagnoses": diagnoses,
-		"health":   health,
+		"health":    health,
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -132,11 +132,11 @@ func (h *GuidedHandler) getCurrentLinkHealth(linkID string) map[string]interface
 
 	// Build health map with current metrics
 	health := map[string]interface{}{
-		"packet_rate":      20.0, // Default expected rate
-		"snr":              0.5,  // Default SNR
-		"phase_stability":  0.5,  // Default stability
-		"drift_rate":       0.0,  // No drift
-		"composite_score":  mostRecent.ConfidenceScore,
+		"packet_rate":     20.0, // Default expected rate
+		"snr":             0.5,  // Default SNR
+		"phase_stability": 0.5,  // Default stability
+		"drift_rate":      0.0,  // No drift
+		"composite_score": mostRecent.ConfidenceScore,
 	}
 
 	// If the diagnosis has specific rule info, we can infer health metrics
@@ -233,10 +233,10 @@ func (h *GuidedHandler) handleGetFeedbackResponse(w http.ResponseWriter, r *http
 	var req struct {
 		FeedbackType string `json:"feedback_type"` // "incorrect" or "correct"
 		Links        []struct {
-			LinkID string `json:"link_id"`
+			LinkID   string  `json:"link_id"`
 			DeltaRMS float64 `json:"delta_rms"`
 		} `json:"links,omitempty"`
-		ZoneID   *int    `json:"zone_id,omitempty"`
+		ZoneID *int `json:"zone_id,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -278,9 +278,9 @@ func (h *GuidedHandler) handleGetFeedbackResponse(w http.ResponseWriter, r *http
 // handleCalibrationComplete reports calibration completion and triggers reinforcement.
 func (h *GuidedHandler) handleCalibrationComplete(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ZoneID         int     `json:"zone_id"`
-		QualityBefore  float64 `json:"quality_before"`
-		QualityAfter   float64 `json:"quality_after"`
+		ZoneID          int     `json:"zone_id"`
+		QualityBefore   float64 `json:"quality_before"`
+		QualityAfter    float64 `json:"quality_after"`
 		LinksCalibrated int     `json:"links_calibrated"`
 	}
 
@@ -298,12 +298,12 @@ func (h *GuidedHandler) handleCalibrationComplete(w http.ResponseWriter, r *http
 	improvementPct := int(improvement)
 
 	response := map[string]interface{}{
-		"type":         "calibration_complete",
-		"title":        "Re-baseline complete",
-		"message":      "Detection quality in this zone has improved.",
-		"improvement":  improvementPct,
+		"type":          "calibration_complete",
+		"title":         "Re-baseline complete",
+		"message":       "Detection quality in this zone has improved.",
+		"improvement":   improvementPct,
 		"quality_after": req.QualityAfter,
-		"links":        req.LinksCalibrated,
+		"links":         req.LinksCalibrated,
 	}
 
 	// Add encouraging message based on improvement
@@ -377,12 +377,12 @@ func (h *GuidedHandler) handleGetNodeTroubleshoot(w http.ResponseWriter, r *http
 	}
 
 	response := map[string]interface{}{
-		"mac":              mac,
-		"name":             nodeName,
-		"role":             nodeRole,
-		"offline_minutes":  int(offlineDuration),
-		"troubleshooting":  steps,
-		"escalation":       "If the issue persists after these steps, you may need to reflash the firmware or reset the node to factory defaults.",
+		"mac":             mac,
+		"name":            nodeName,
+		"role":            nodeRole,
+		"offline_minutes": int(offlineDuration),
+		"troubleshooting": steps,
+		"escalation":      "If the issue persists after these steps, you may need to reflash the firmware or reset the node to factory defaults.",
 	}
 
 	writeJSON(w, http.StatusOK, response)

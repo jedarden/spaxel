@@ -409,7 +409,7 @@ func AS2_SmoothDeltaRMSAboveThreshold(t *testing.T) {
 	diagnosticsResponse := map[string]interface{}{
 		"links": []map[string]interface{}{
 			{
-				"link_id":         "AA:BB:CC:DD:EE:FF:AA:BB:CC:DD:EE:F0",
+				"link_id":          "AA:BB:CC:DD:EE:FF:AA:BB:CC:DD:EE:F0",
 				"delta_rms":        0.08,
 				"smooth_delta_rms": 0.07,
 				"threshold":        0.02,

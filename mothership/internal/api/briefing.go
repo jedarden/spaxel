@@ -10,19 +10,19 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	_ "modernc.org/sqlite"
 	"github.com/spaxel/mothership/internal/briefing"
+	_ "modernc.org/sqlite"
 )
 
 // BriefingHandler manages morning briefing REST endpoints.
 type BriefingHandler struct {
-	generator     *briefing.Generator
-	db            *sql.DB
-	notifyService briefing.NotifyService
-	zoneProvider  briefing.ZoneProvider
-	personProvider briefing.PersonProvider
+	generator          *briefing.Generator
+	db                 *sql.DB
+	notifyService      briefing.NotifyService
+	zoneProvider       briefing.ZoneProvider
+	personProvider     briefing.PersonProvider
 	predictionProvider briefing.PredictionProvider
-	healthProvider briefing.HealthProvider
+	healthProvider     briefing.HealthProvider
 }
 
 // NewBriefingHandler creates a new briefing handler.
@@ -262,9 +262,9 @@ func (h *BriefingHandler) handleTestNotification(w http.ResponseWriter, r *http.
 	if h.notifyService != nil {
 		notif := briefing.Notification{
 			Title:     "Morning Briefing (Test)",
-			Body:       b.Content,
+			Body:      b.Content,
 			Priority:  1,
-			Tags:       []string{"briefing", "test"},
+			Tags:      []string{"briefing", "test"},
 			Timestamp: time.Now(),
 		}
 		if err := h.notifyService.Send(notif); err != nil {

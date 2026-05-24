@@ -27,10 +27,10 @@ const (
 type ZoneType string
 
 const (
-	ZoneTypeNormal    ZoneType = "normal"     // Default zone
-	ZoneTypeBedroom   ZoneType = "bedroom"    // Enables sleep monitoring
-	ZoneTypeKitchen   ZoneType = "kitchen"    // No special behavior
-	ZoneTypeChildren  ZoneType = "children"   // Suppresses fall detection
+	ZoneTypeNormal   ZoneType = "normal"   // Default zone
+	ZoneTypeBedroom  ZoneType = "bedroom"  // Enables sleep monitoring
+	ZoneTypeKitchen  ZoneType = "kitchen"  // No special behavior
+	ZoneTypeChildren ZoneType = "children" // Suppresses fall detection
 )
 
 // Zone represents a spatial region in the room.
@@ -38,12 +38,12 @@ type Zone struct {
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
 	Color          string    `json:"color"` // Hex color for visualization
-	MinX float64 `json:"min_x"`
-	MinY float64 `json:"min_y"`
-	MinZ float64 `json:"min_z"`
-	MaxX float64 `json:"max_x"`
-	MaxY float64 `json:"max_y"`
-	MaxZ float64 `json:"max_z"`
+	MinX           float64   `json:"min_x"`
+	MinY           float64   `json:"min_y"`
+	MinZ           float64   `json:"min_z"`
+	MaxX           float64   `json:"max_x"`
+	MaxY           float64   `json:"max_y"`
+	MaxZ           float64   `json:"max_z"`
 	Enabled        bool      `json:"enabled"`
 	ZoneType       ZoneType  `json:"zone_type"`        // Zone type for behavior customization
 	IsChildrenZone bool      `json:"is_children_zone"` // Suppresses fall detection in this zone (deprecated, use ZoneType)
@@ -52,10 +52,10 @@ type Zone struct {
 
 // Portal represents a doorway/transition plane between zones.
 type Portal struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	ZoneAID      string    `json:"zone_a_id"`
-	ZoneBID      string    `json:"zone_b_id"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	ZoneAID string `json:"zone_a_id"`
+	ZoneBID string `json:"zone_b_id"`
 	// Portal plane definition (3 points defining the doorway plane)
 	P1X float64 `json:"p1_x"`
 	P1Y float64 `json:"p1_y"`
@@ -67,25 +67,25 @@ type Portal struct {
 	P3Y float64 `json:"p3_y"`
 	P3Z float64 `json:"p3_z"`
 	// Portal normal vector (computed from points)
-	NX float64 `json:"n_x"`
-	NY float64 `json:"n_y"`
-	NZ float64 `json:"n_z"`
-	Width       float64   `json:"width"` // Portal width in meters
-	Height      float64   `json:"height"` // Portal height in meters
-	Enabled     bool      `json:"enabled"`
-	CreatedAt   time.Time `json:"created_at"`
+	NX        float64   `json:"n_x"`
+	NY        float64   `json:"n_y"`
+	NZ        float64   `json:"n_z"`
+	Width     float64   `json:"width"`  // Portal width in meters
+	Height    float64   `json:"height"` // Portal height in meters
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // CrossingEvent represents a detected portal crossing.
 type CrossingEvent struct {
-	ID          int64     `json:"id"`           // Database row ID
-	PortalID    string    `json:"portal_id"`
-	BlobID      int       `json:"blob_id"`
-	Direction   int       `json:"direction"` // 1 = A->B, -1 = B->A
-	FromZone    string    `json:"from_zone"`
-	ToZone      string    `json:"to_zone"`
-	Timestamp   time.Time `json:"timestamp"`
-	Identity    string    `json:"identity,omitempty"` // Device name if matched
+	ID        int64     `json:"id"` // Database row ID
+	PortalID  string    `json:"portal_id"`
+	BlobID    int       `json:"blob_id"`
+	Direction int       `json:"direction"` // 1 = A->B, -1 = B->A
+	FromZone  string    `json:"from_zone"`
+	ToZone    string    `json:"to_zone"`
+	Timestamp time.Time `json:"timestamp"`
+	Identity  string    `json:"identity,omitempty"` // Device name if matched
 }
 
 // ZoneTransitionEvent represents a blob entering or leaving a zone.
@@ -108,10 +108,10 @@ type ZoneOccupancy struct {
 
 // Manager handles zones, portals, and occupancy.
 type Manager struct {
-	mu        sync.RWMutex
-	db        *sql.DB
-	zones    map[string]*Zone
-	portals  map[string]*Portal
+	mu      sync.RWMutex
+	db      *sql.DB
+	zones   map[string]*Zone
+	portals map[string]*Portal
 
 	// Occupancy tracking
 	occupancy     map[string]*ZoneOccupancy
@@ -122,7 +122,7 @@ type Manager struct {
 	}
 
 	// Crossing detection state
-	blobSide      map[int]float64 // blobID -> which side of portal (>0 = A side, <0 = B side)
+	blobSide map[int]float64 // blobID -> which side of portal (>0 = A side, <0 = B side)
 
 	// Reconciliation state
 	startedAt    time.Time // time this session started
@@ -157,19 +157,19 @@ func NewManager(dbPath string, tz *time.Location) (*Manager, error) {
 	}
 
 	m := &Manager{
-		db:            db,
-		zones:         make(map[string]*Zone),
-		portals:       make(map[string]*Portal),
-		occupancy:     make(map[string]*ZoneOccupancy),
+		db:        db,
+		zones:     make(map[string]*Zone),
+		portals:   make(map[string]*Portal),
+		occupancy: make(map[string]*ZoneOccupancy),
 		blobPositions: make(map[int]struct {
 			X, Y, Z     float64
 			ZoneID      string
 			LastUpdated time.Time
 		}),
-		blobSide:    make(map[int]float64),
-		startedAt:   time.Now(),
-		reconciled:  false,
-		tz:          tz,
+		blobSide:   make(map[int]float64),
+		startedAt:  time.Now(),
+		reconciled: false,
+		tz:         tz,
 	}
 
 	if err := m.migrate(); err != nil {
@@ -190,7 +190,6 @@ func NewManager(dbPath string, tz *time.Location) (*Manager, error) {
 
 	return m, nil
 }
-
 
 func (m *Manager) loadZones() error {
 	rows, err := m.db.Query(`SELECT id, name, color, min_x, min_y, min_z, max_x, max_y, max_z, enabled, zone_type, is_children_zone, created_at FROM zones`)
@@ -489,7 +488,7 @@ type pendingCrossing struct {
 // UpdateBlobPositions updates blob positions and detects portal crossings.
 // Callbacks are fired synchronously after the lock is released to avoid deadlock.
 func (m *Manager) UpdateBlobPositions(blobs []struct {
-	ID     int
+	ID      int
 	X, Y, Z float64
 }) {
 	now := time.Now()
@@ -831,7 +830,7 @@ func (m *Manager) GetBlobZone(blobID int) string {
 // UpdateBlobPosition updates a single blob's position (convenience method).
 func (m *Manager) UpdateBlobPosition(blobID int, x, y, z float64) {
 	m.UpdateBlobPositions([]struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
 	}{{ID: blobID, X: x, Y: y, Z: z}})
 }

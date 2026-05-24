@@ -27,11 +27,11 @@ const (
 
 // ScenarioConfig holds scenario-specific configuration
 type ScenarioConfig struct {
-	Type        ScenarioType
-	FallParams  FallScenarioParams
-	OTAParams   OTAScenarioParams
-	StartedAt   time.Time
-	Phase       string // for multi-phase scenarios
+	Type       ScenarioType
+	FallParams FallScenarioParams
+	OTAParams  OTAScenarioParams
+	StartedAt  time.Time
+	Phase      string // for multi-phase scenarios
 }
 
 // FallScenarioParams defines parameters for fall detection scenario
@@ -46,12 +46,12 @@ type FallScenarioParams struct {
 
 // OTAScenarioParams defines parameters for OTA update scenario
 type OTAScenarioParams struct {
-	UpdateAfter       time.Duration // Time before OTA starts
-	FirmwareSize      int64         // Size of firmware in bytes
-	NewVersion        string        // New firmware version
-	RebootDelay       time.Duration // Delay before rebooting
-	BootFailDuration  time.Duration // How long to simulate boot failure (for rollback test)
-	SimulateFailure   bool          // Whether to simulate a boot failure
+	UpdateAfter      time.Duration // Time before OTA starts
+	FirmwareSize     int64         // Size of firmware in bytes
+	NewVersion       string        // New firmware version
+	RebootDelay      time.Duration // Delay before rebooting
+	BootFailDuration time.Duration // How long to simulate boot failure (for rollback test)
+	SimulateFailure  bool          // Whether to simulate a boot failure
 }
 
 // FallScenarioState tracks fall scenario state for a walker
@@ -160,14 +160,14 @@ func (s *FallScenarioState) StartFall(params FallScenarioParams) {
 
 // OTAScenarioState tracks OTA scenario state for a node
 type OTAScenarioState struct {
-	Node             *VirtualNode
-	State            string // "idle", "downloading", "installing", "rebooting", "updated", "rollback"
-	CurrentVersion   string
-	DownloadedBytes  int64
-	DownloadStart    time.Time
-	RebootStart      time.Time
-	FailureStart     time.Time
-	AllNodes         []*VirtualNode
+	Node            *VirtualNode
+	State           string // "idle", "downloading", "installing", "rebooting", "updated", "rollback"
+	CurrentVersion  string
+	DownloadedBytes int64
+	DownloadStart   time.Time
+	RebootStart     time.Time
+	FailureStart    time.Time
+	AllNodes        []*VirtualNode
 }
 
 // SendOTAStatus sends OTA status message to mothership

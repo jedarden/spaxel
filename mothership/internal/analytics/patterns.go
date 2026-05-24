@@ -35,8 +35,8 @@ const (
 // PatternSlot represents a single (zone_id, hour_of_day, day_of_week) statistical slot.
 type PatternSlot struct {
 	ZoneID      string  `json:"zone_id"`
-	HourOfDay   int     `json:"hour_of_day"`  // 0-23
-	DayOfWeek   int     `json:"day_of_week"`  // 0-6 (0=Sunday)
+	HourOfDay   int     `json:"hour_of_day"` // 0-23
+	DayOfWeek   int     `json:"day_of_week"` // 0-6 (0=Sunday)
 	MeanCount   float64 `json:"mean_count"`
 	Variance    float64 `json:"variance"`
 	SampleCount int     `json:"sample_count"`

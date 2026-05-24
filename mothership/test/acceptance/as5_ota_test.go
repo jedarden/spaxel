@@ -67,11 +67,11 @@ func AS5_OTAUpdateSucceeds(t *testing.T) {
 	t.Run("NodeAppliesUpdate", func(t *testing.T) {
 		// Register node for OTA
 		node := map[string]interface{}{
-			"mac":       "AA:BB:CC:DD:EE:FF",
-			"name":      "TestNode",
-			"role":      "tx_rx",
-			"version":   "v1.2.2",
-			"platform":  "esp32s3",
+			"mac":      "AA:BB:CC:DD:EE:FF",
+			"name":     "TestNode",
+			"role":     "tx_rx",
+			"version":  "v1.2.2",
+			"platform": "esp32s3",
 		}
 
 		body, _ := json.Marshal(node)
@@ -83,10 +83,10 @@ func AS5_OTAUpdateSucceeds(t *testing.T) {
 
 		// Request OTA update
 		otaRequest := map[string]interface{}{
-			"node_mac":  "AA:BB:CC:DD:EE:FF",
-			"version":   "v1.2.3",
-			"url":       srv.URL + "/api/firmware/spaxel-nodemcu-v1.2.3.bin",
-			"checksum":  "abc123def456",
+			"node_mac": "AA:BB:CC:DD:EE:FF",
+			"version":  "v1.2.3",
+			"url":      srv.URL + "/api/firmware/spaxel-nodemcu-v1.2.3.bin",
+			"checksum": "abc123def456",
 		}
 
 		otaBody, _ := json.Marshal(otaRequest)
@@ -168,10 +168,10 @@ func AS5_RollbackOnBootFailure(t *testing.T) {
 	t.Run("BadFirmwareTriggersRollback", func(t *testing.T) {
 		// Register node
 		node := map[string]interface{}{
-			"mac":       "AA:BB:CC:DD:EF:00",
-			"name":      "BadFirmwareNode",
-			"version":   "v1.2.3",
-			"platform":  "esp32s3",
+			"mac":      "AA:BB:CC:DD:EF:00",
+			"name":     "BadFirmwareNode",
+			"version":  "v1.2.3",
+			"platform": "esp32s3",
 		}
 
 		body, _ := json.Marshal(node)
@@ -183,10 +183,10 @@ func AS5_RollbackOnBootFailure(t *testing.T) {
 
 		// Request OTA with bad firmware
 		otaRequest := map[string]interface{}{
-			"node_mac":  "AA:BB:CC:DD:EF:00",
-			"version":   "v1.2.4-bad",
-			"url":       srv.URL + "/api/firmware/spaxel-nodemcu-v1.2.4-bad.bin",
-			"checksum":  "badchecksum123",
+			"node_mac": "AA:BB:CC:DD:EF:00",
+			"version":  "v1.2.4-bad",
+			"url":      srv.URL + "/api/firmware/spaxel-nodemcu-v1.2.4-bad.bin",
+			"checksum": "badchecksum123",
 		}
 
 		otaBody, _ := json.Marshal(otaRequest)
@@ -390,8 +390,8 @@ func startMockMothershipForOTA(t *testing.T) *httptest.Server {
 			if from != "" && to != "" {
 				// Differential query
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"has_differential":   true,
-					"differential_size":  524288.0, // 512KB
+					"has_differential":  true,
+					"differential_size": 524288.0,  // 512KB
 					"full_size":         1048576.0, // 1MB
 					"from_version":      from,
 					"to_version":        to,

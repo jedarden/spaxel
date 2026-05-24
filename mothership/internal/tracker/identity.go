@@ -8,23 +8,23 @@ import (
 // IdentityMatcher interface for dependency injection from ble package.
 type IdentityMatcher interface {
 	GetMatch(blobID int) *struct {
-		PersonID          string
-		PersonName        string
-		PersonColor       string
-		Confidence        float64
-		IsBLEOnly         bool
-		Timestamp         time.Time
+		PersonID    string
+		PersonName  string
+		PersonColor string
+		Confidence  float64
+		IsBLEOnly   bool
+		Timestamp   time.Time
 	}
 	GetMatches() map[int]interface{}
 }
 
 // IdentityInfo represents identity information for a blob.
 type IdentityInfo struct {
-	PersonID          string
-	PersonLabel       string
-	PersonColor       string
+	PersonID           string
+	PersonLabel        string
+	PersonColor        string
 	IdentityConfidence float64
-	IdentitySource    string
+	IdentitySource     string
 }
 
 // IdentityProvider provides identity matching for tracked blobs.

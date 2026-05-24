@@ -3,19 +3,20 @@
 // per plan §Quality Gates / Definition of Done (item 9).
 //
 // The benchmark runs the full fusion pipeline:
-//   1. Phase sanitization → Feature extraction → Fresnel accumulation → Peak extraction → UKF update
-//   against synthetic CSI data from spaxel-sim output.
+//  1. Phase sanitization → Feature extraction → Fresnel accumulation → Peak extraction → UKF update
+//     against synthetic CSI data from spaxel-sim output.
 //
 // Asserts:
 //   - Median fusion iteration < 15 ms over 600 iterations (60 seconds at 10 Hz)
 //   - P99 < 40 ms (hard limit)
 //
 // CI integration:
-//   Add to Argo Workflows CI step after go test ./...:
-//     go test -bench=BenchmarkFusionLoop -benchtime=60s -count=1 ./internal/localizer/fusion/
 //
-//   Acceptance: Workflow fails if median latency exceeds 30 ms on CI runner
-//               (2x allowance for slower hardware; 15 ms production target)
+//	Add to Argo Workflows CI step after go test ./...:
+//	  go test -bench=BenchmarkFusionLoop -benchtime=60s -count=1 ./internal/localizer/fusion/
+//
+//	Acceptance: Workflow fails if median latency exceeds 30 ms on CI runner
+//	            (2x allowance for slower hardware; 15 ms production target)
 package fusion
 
 import (
@@ -33,15 +34,15 @@ import (
 
 const (
 	// WiFi physical constants (matching spaxel-sim)
-	wavelength        = 0.123     // meters (2.4 GHz)
-	halfWavelength    = wavelength / 2.0
-	nSub              = 64        // number of subcarriers for HT20
-	headerSize        = 24        // CSI frame header size
-	fusionRate        = 10        // Hz (fusion loop rate)
-	fusionIterations  = 600       // Number of iterations for timing (60s at 10Hz)
-	productionTarget  = 15 * time.Millisecond // Production target (per iteration)
-	ciThreshold       = 30 * time.Millisecond // CI threshold (2x allowance)
-	hardLimit         = 40 * time.Millisecond // P99 hard limit
+	wavelength       = 0.123 // meters (2.4 GHz)
+	halfWavelength   = wavelength / 2.0
+	nSub             = 64                    // number of subcarriers for HT20
+	headerSize       = 24                    // CSI frame header size
+	fusionRate       = 10                    // Hz (fusion loop rate)
+	fusionIterations = 600                   // Number of iterations for timing (60s at 10Hz)
+	productionTarget = 15 * time.Millisecond // Production target (per iteration)
+	ciThreshold      = 30 * time.Millisecond // CI threshold (2x allowance)
+	hardLimit        = 40 * time.Millisecond // P99 hard limit
 )
 
 // CSIFrame represents a synthetic CSI frame matching spaxel-sim output format
@@ -80,7 +81,7 @@ type durationSlice []time.Duration
 
 func (d durationSlice) Len() int           { return len(d) }
 func (d durationSlice) Less(i, j int) bool { return d[i] < d[j] }
-func (d durationSlice) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
+func (d durationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 
 // BenchmarkFusionLoop benchmarks the full fusion pipeline timing.
 // It simulates 4 nodes with 2 walkers, running 600 fusion iterations (60s at 10Hz).
@@ -97,12 +98,12 @@ func BenchmarkFusionLoop(b *testing.B) {
 
 	// Create fusion engine
 	engine := fusion.NewEngine(&fusion.Config{
-		Width:        10,
-		Height:       3,
-		Depth:        10,
-		CellSize:     0.2,
-		MinDeltaRMS:  0.01,
-		MaxBlobs:     6,
+		Width:         10,
+		Height:        3,
+		Depth:         10,
+		CellSize:      0.2,
+		MinDeltaRMS:   0.01,
+		MaxBlobs:      6,
 		BlobThreshold: 0.3,
 	})
 
@@ -180,10 +181,10 @@ func BenchmarkFusionLoop(b *testing.B) {
 				// Add link motion if motion detected
 				if result.Features != nil && result.Features.MotionDetected {
 					linkMotions = append(linkMotions, fusion.LinkMotion{
-						NodeMAC:    macToString(frame.NodeMAC),
-						PeerMAC:    macToString(frame.PeerMAC),
-						DeltaRMS:   result.Features.SmoothDeltaRMS,
-						Motion:     true,
+						NodeMAC:     macToString(frame.NodeMAC),
+						PeerMAC:     macToString(frame.PeerMAC),
+						DeltaRMS:    result.Features.SmoothDeltaRMS,
+						Motion:      true,
 						HealthScore: 1.0, // Perfect health for synthetic data
 					})
 				}
@@ -295,7 +296,7 @@ func createWalkers(count int) []*Walker {
 			ID: i,
 			Position: Point{
 				X: 2 + rng.Float64()*6, // Keep away from edges
-				Y: 1.7,                // Person height
+				Y: 1.7,                 // Person height
 				Z: 2 + rng.Float64()*6,
 			},
 			Velocity: Point{
@@ -431,7 +432,7 @@ func computeCSIForWalkers(tx, rx *VirtualNode, walkers []*Walker) (float64, floa
 		amplitude := math.Pow(10.0, -totalLossDB/20.0)
 		amplitude *= 1000.0 * decay
 
-		phase := 2 * math.Pi * (d1+d2) / wavelength
+		phase := 2 * math.Pi * (d1 + d2) / wavelength
 
 		totalAmplitude += amplitude
 		totalPhase += phase * decay
@@ -522,12 +523,12 @@ func TestTimingBudgetProduction(t *testing.T) {
 	walkers := createWalkers(2)
 
 	engine := fusion.NewEngine(&fusion.Config{
-		Width:        10,
-		Height:       3,
-		Depth:        10,
-		CellSize:     0.2,
-		MinDeltaRMS:  0.01,
-		MaxBlobs:     6,
+		Width:         10,
+		Height:        3,
+		Depth:         10,
+		CellSize:      0.2,
+		MinDeltaRMS:   0.01,
+		MaxBlobs:      6,
 		BlobThreshold: 0.3,
 	})
 

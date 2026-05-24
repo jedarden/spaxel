@@ -35,23 +35,23 @@ func DefaultSelfHealConfig() SelfHealConfig {
 
 // FleetChangeEvent is broadcast when the fleet configuration changes
 type FleetChangeEvent struct {
-	Type             string    `json:"type"` // "node_lost", "node_recovered", "reoptimised"
-	Timestamp        time.Time `json:"timestamp"`
-	TriggerReason    string    `json:"trigger_reason"`
-	OfflineMAC       string    `json:"offline_mac,omitempty"`
-	RecoveredMAC     string    `json:"recovered_mac,omitempty"`
-	MeanGDOPBefore   float64   `json:"mean_gdop_before"`
-	MeanGDOPAfter    float64   `json:"mean_gdop_after"`
-	CoverageBefore   float64   `json:"coverage_before"`
-	CoverageAfter    float64   `json:"coverage_after"`
-	CoverageDelta    float64   `json:"coverage_delta"`
-	IsDegradation    bool      `json:"is_degradation"` // true if coverage dropped significantly
-	WarningMessage   string    `json:"warning_message,omitempty"`
-	RoleAssignments  map[string]string `json:"role_assignments"`
-	GDOPBefore       []float32 `json:"gdop_before,omitempty"` // GDOP map before
-	GDOPAfter        []float32 `json:"gdop_after,omitempty"`  // GDOP map after
-	GDOPCols         int       `json:"gdop_cols"`
-	GDOPRows         int       `json:"gdop_rows"`
+	Type            string            `json:"type"` // "node_lost", "node_recovered", "reoptimised"
+	Timestamp       time.Time         `json:"timestamp"`
+	TriggerReason   string            `json:"trigger_reason"`
+	OfflineMAC      string            `json:"offline_mac,omitempty"`
+	RecoveredMAC    string            `json:"recovered_mac,omitempty"`
+	MeanGDOPBefore  float64           `json:"mean_gdop_before"`
+	MeanGDOPAfter   float64           `json:"mean_gdop_after"`
+	CoverageBefore  float64           `json:"coverage_before"`
+	CoverageAfter   float64           `json:"coverage_after"`
+	CoverageDelta   float64           `json:"coverage_delta"`
+	IsDegradation   bool              `json:"is_degradation"` // true if coverage dropped significantly
+	WarningMessage  string            `json:"warning_message,omitempty"`
+	RoleAssignments map[string]string `json:"role_assignments"`
+	GDOPBefore      []float32         `json:"gdop_before,omitempty"` // GDOP map before
+	GDOPAfter       []float32         `json:"gdop_after,omitempty"`  // GDOP map after
+	GDOPCols        int               `json:"gdop_cols"`
+	GDOPRows        int               `json:"gdop_rows"`
 }
 
 // OfflineNode tracks a node that has gone offline
@@ -66,11 +66,11 @@ type OfflineNode struct {
 type SelfHealManager struct {
 	mu sync.RWMutex
 
-	registry   *Registry
-	optimiser  *RoleOptimiser
-	notifier   NodeStateNotifier
-	bcaster    FleetChangeBroadcaster
-	gdopCalc   GDOPCalculator
+	registry  *Registry
+	optimiser *RoleOptimiser
+	notifier  NodeStateNotifier
+	bcaster   FleetChangeBroadcaster
+	gdopCalc  GDOPCalculator
 
 	config SelfHealConfig
 
@@ -180,10 +180,10 @@ func (shm *SelfHealManager) OnNodeConnected(mac, firmware, chip string) {
 
 		// Broadcast recovery event
 		shm.broadcastEvent(FleetChangeEvent{
-			Type:           "node_recovered",
-			Timestamp:      now,
-			TriggerReason:  "grace_period_reconnect",
-			RecoveredMAC:   mac,
+			Type:            "node_recovered",
+			Timestamp:       now,
+			TriggerReason:   "grace_period_reconnect",
+			RecoveredMAC:    mac,
 			RoleAssignments: shm.getCurrentRoles(),
 		})
 

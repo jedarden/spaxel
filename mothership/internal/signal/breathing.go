@@ -9,30 +9,30 @@ import (
 
 // Breathing detection constants
 const (
-	BreathingSampleRate       = 20.0  // Hz (active rate)
-	BreathingMinHz            = 0.1   // Lower bound of breathing band
-	BreathingMaxHz            = 0.5   // Upper bound of breathing band
-	BreathingRMSWindow        = 1200  // 60 seconds at 20Hz
-	BreathingThreshold        = 0.005 // Radians - detection threshold
-	BreathingSustainTime      = 30    // Seconds sustained before detection
-	BreathingFFTSize          = 512   // FFT window size (25.6s at 20Hz)
-	BreathingFFTZeroPad       = 1024  // Zero-padded size for resolution
-	BreathingMotionThreshold  = 0.03  // smoothDeltaRMS below which breathing is computed
-	BreathingEMAlpha          = 0.01  // EMA smoothing for breathing rate
-	BreathingHealthThreshold  = 0.7   // Minimum link health for breathing detection
+	BreathingSampleRate      = 20.0  // Hz (active rate)
+	BreathingMinHz           = 0.1   // Lower bound of breathing band
+	BreathingMaxHz           = 0.5   // Upper bound of breathing band
+	BreathingRMSWindow       = 1200  // 60 seconds at 20Hz
+	BreathingThreshold       = 0.005 // Radians - detection threshold
+	BreathingSustainTime     = 30    // Seconds sustained before detection
+	BreathingFFTSize         = 512   // FFT window size (25.6s at 20Hz)
+	BreathingFFTZeroPad      = 1024  // Zero-padded size for resolution
+	BreathingMotionThreshold = 0.03  // smoothDeltaRMS below which breathing is computed
+	BreathingEMAlpha         = 0.01  // EMA smoothing for breathing rate
+	BreathingHealthThreshold = 0.7   // Minimum link health for breathing detection
 
 	// FFT-based breathing detection constants (Phase 6)
-	FFTBreathingBufferSize    = 60    // 30 seconds at 2Hz adaptive rate
-	FFTMinBreathingHz         = 0.2   // Lower bound of breathing band (FFT)
-	FFTMaxBreathingHz         = 1.0   // Upper bound of breathing band (FFT) - double breathing rate
-	FFTSNRThreshold           = 15.0  // Minimum SNR in dB to declare breathing
-	FFTSampleRateHz           = 2.0   // Adaptive sensing rate for breathing buffer
-	FFTMinSamples             = 30    // Minimum 15s of data before detection can fire
+	FFTBreathingBufferSize = 60   // 30 seconds at 2Hz adaptive rate
+	FFTMinBreathingHz      = 0.2  // Lower bound of breathing band (FFT)
+	FFTMaxBreathingHz      = 1.0  // Upper bound of breathing band (FFT) - double breathing rate
+	FFTSNRThreshold        = 15.0 // Minimum SNR in dB to declare breathing
+	FFTSampleRateHz        = 2.0  // Adaptive sensing rate for breathing buffer
+	FFTMinSamples          = 30   // Minimum 15s of data before detection can fire
 
 	// Dwell tracker timeouts (Phase 6)
-	DwellMotionToPossiblyTime   = 500  // ms - debounce before transitioning to POSSIBLY_PRESENT
-	DwellPossiblyToClearTime    = 60000 // ms - 60s without motion/breathing -> CLEAR
-	DwellStationaryToClearTime  = 120000 // ms - 120s without breathing -> CLEAR
+	DwellMotionToPossiblyTime  = 500    // ms - debounce before transitioning to POSSIBLY_PRESENT
+	DwellPossiblyToClearTime   = 60000  // ms - 60s without motion/breathing -> CLEAR
+	DwellStationaryToClearTime = 120000 // ms - 120s without breathing -> CLEAR
 )
 
 // BiquadCoeffs holds coefficients for one biquad section
@@ -385,11 +385,11 @@ func (bd *BreathingDetector) IsHealthGated() bool {
 
 // FFTBreathingResult holds the result of FFT-based breathing detection
 type FFTBreathingResult struct {
-	IsBreathing   bool    // True if breathing detected
-	FrequencyHz   float64 // Peak frequency in Hz (0.2-1.0 Hz band)
-	Confidence    float64 // Detection confidence (0-1)
-	PeakSNRdB     float64 // Peak-to-median SNR in dB
-	BreathingBPM  float64 // Estimated breathing rate in breaths per minute
+	IsBreathing  bool    // True if breathing detected
+	FrequencyHz  float64 // Peak frequency in Hz (0.2-1.0 Hz band)
+	Confidence   float64 // Detection confidence (0-1)
+	PeakSNRdB    float64 // Peak-to-median SNR in dB
+	BreathingBPM float64 // Estimated breathing rate in breaths per minute
 }
 
 // FFTBreathingDetector detects stationary persons via FFT analysis of deltaRMS samples
@@ -586,11 +586,11 @@ func (bd *FFTBreathingDetector) Detect() FFTBreathingResult {
 	confidence := math.Min(1.0, math.Max(0.0, (snrDb-bd.snrThreshold)/10.0))
 
 	bd.lastResult = FFTBreathingResult{
-		IsBreathing:   isBreathing,
-		FrequencyHz:   freqHz,
-		Confidence:    confidence,
-		PeakSNRdB:     snrDb,
-		BreathingBPM:  breathingBPM,
+		IsBreathing:  isBreathing,
+		FrequencyHz:  freqHz,
+		Confidence:   confidence,
+		PeakSNRdB:    snrDb,
+		BreathingBPM: breathingBPM,
 	}
 
 	return bd.lastResult
@@ -682,10 +682,10 @@ func (s DwellState) MarshalText() ([]byte, error) {
 type DwellTracker struct {
 	mu sync.RWMutex
 
-	state           DwellState
-	lastMotionTime  time.Time // When motion was last detected
-	lastBreathTime  time.Time // When breathing was last detected
-	stateChangeTime time.Time // When we entered the current state
+	state               DwellState
+	lastMotionTime      time.Time // When motion was last detected
+	lastBreathTime      time.Time // When breathing was last detected
+	stateChangeTime     time.Time // When we entered the current state
 	motionDebounceStart time.Time // When current quiescence started
 
 	// FFT-based breathing detector

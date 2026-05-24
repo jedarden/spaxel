@@ -13,12 +13,12 @@ import (
 
 // PredictionHandler manages prediction API endpoints.
 type PredictionHandler struct {
-	predictor       *prediction.Predictor
-	history         *prediction.HistoryUpdater
-	accuracyTracker *prediction.AccuracyTracker
+	predictor        *prediction.Predictor
+	history          *prediction.HistoryUpdater
+	accuracyTracker  *prediction.AccuracyTracker
 	horizonPredictor *prediction.HorizonPredictor
-	zoneProvider    ZoneProvider
-	personProvider  PersonProvider
+	zoneProvider     ZoneProvider
+	personProvider   PersonProvider
 }
 
 // ZoneProvider provides zone information.
@@ -145,9 +145,9 @@ func (h *PredictionHandler) getStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"transition_count":  count,
-		"data_age_days":     dataAge.Hours() / 24,
-		"minimum_data_age":  prediction.MinimumDataAge.Hours() / 24,
+		"transition_count": count,
+		"data_age_days":    dataAge.Hours() / 24,
+		"minimum_data_age": prediction.MinimumDataAge.Hours() / 24,
 		"has_minimum_data": dataAge >= prediction.MinimumDataAge,
 	})
 }
@@ -280,9 +280,9 @@ func (h *PredictionHandler) getZonePattern(w http.ResponseWriter, r *http.Reques
 
 	if pattern == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"zone_id":     zoneID,
+			"zone_id":      zoneID,
 			"hour_of_week": hourOfWeek,
-			"message":     "no pattern data for this zone/time",
+			"message":      "no pattern data for this zone/time",
 		})
 		return
 	}

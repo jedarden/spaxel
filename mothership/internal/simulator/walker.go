@@ -12,9 +12,9 @@ import (
 type WalkerType string
 
 const (
-	WalkerTypeRandomWalk  WalkerType = "random_walk"  // Random Gaussian walk
-	WalkerTypePathFollow   WalkerType = "path_follow"   // Follow a predefined path
-	WalkerTypeNodeToNode   WalkerType = "node_to_node"  // Traverse between virtual nodes
+	WalkerTypeRandomWalk WalkerType = "random_walk"  // Random Gaussian walk
+	WalkerTypePathFollow WalkerType = "path_follow"  // Follow a predefined path
+	WalkerTypeNodeToNode WalkerType = "node_to_node" // Traverse between virtual nodes
 )
 
 // Walker represents a simulated person moving through the space
@@ -24,17 +24,17 @@ type Walker struct {
 	Position   Point      `json:"position"`
 	Velocity   Point      `json:"velocity"`
 	Type       WalkerType `json:"type"`
-	Path       []Point    `json:"path,omitempty"`      // For path-following mode
-	PathIndex  int        `json:"path_index,omitempty"` // Current position along path
-	Speed      float64    `json:"speed"`                // Movement speed in m/s
-	Height     float64    `json:"height"`               // Person height in meters
+	Path       []Point    `json:"path,omitempty"`        // For path-following mode
+	PathIndex  int        `json:"path_index,omitempty"`  // Current position along path
+	Speed      float64    `json:"speed"`                 // Movement speed in m/s
+	Height     float64    `json:"height"`                // Person height in meters
 	BLEAddress string     `json:"ble_address,omitempty"` // Simulated BLE device
 	// Node-to-node traversal fields
-	Nodes      []*Node    `json:"nodes,omitempty"`      // List of nodes to visit
-	NodeIndex  int        `json:"node_index,omitempty"` // Current target node index
-	WaitTimer  float64    `json:"wait_timer,omitempty"` // Time remaining at current node
-	WaitTime   float64    `json:"wait_time,omitempty"`  // How long to wait at each node (seconds)
-	ShouldWait bool       `json:"should_wait,omitempty"` // Whether to wait at nodes
+	Nodes      []*Node `json:"nodes,omitempty"`       // List of nodes to visit
+	NodeIndex  int     `json:"node_index,omitempty"`  // Current target node index
+	WaitTimer  float64 `json:"wait_timer,omitempty"`  // Time remaining at current node
+	WaitTime   float64 `json:"wait_time,omitempty"`   // How long to wait at each node (seconds)
+	ShouldWait bool    `json:"should_wait,omitempty"` // Whether to wait at nodes
 }
 
 // NewWalker creates a new walker at the given position
@@ -43,8 +43,8 @@ func NewWalker(id string, position Point) *Walker {
 		ID:       id,
 		Position: position,
 		Type:     WalkerTypeRandomWalk,
-		Speed:    1.0,  // 1 m/s default
-		Height:   1.7,  // Average person height
+		Speed:    1.0, // 1 m/s default
+		Height:   1.7, // Average person height
 		Velocity: Point{X: 0, Y: 0, Z: 0},
 	}
 }
@@ -153,7 +153,7 @@ func (w *Walker) updateRandomWalk(dt float64, space *Space) {
 
 	// Clamp velocity magnitude
 	currentSpeed := math.Sqrt(w.Velocity.X*w.Velocity.X + w.Velocity.Y*w.Velocity.Y)
-	targetSpeed := w.Speed * (0.5 + rand.Float64()*0.5) // 50%-100% of set speed
+	targetSpeed := w.Speed * (0.5 + rand.Float64()*0.5)       // 50%-100% of set speed
 	newSpeed := currentSpeed + (targetSpeed-currentSpeed)*0.1 // Smooth speed change
 
 	maxSpeed := w.Speed * 1.5

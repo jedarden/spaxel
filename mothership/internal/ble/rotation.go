@@ -13,17 +13,17 @@ import (
 // Rotation constants per specification
 const (
 	// Rotation detection windows
-	RotationTimeWindow      = 90 * time.Second  // Time window to look for rotation patterns
-	RotationRSSIThreshold   = 10                // RSSI similarity threshold (dBm)
-	RotationMinScore        = 0.7               // Minimum score to consider a rotation match
-	RotationConfirmCount    = 3                 // Consecutive confirmations needed to merge
-	RotationGracePeriod     = 5 * time.Minute   // Grace period before clearing identity
-	RotationStaleThreshold  = 5 * time.Minute   // Time after which an alias is considered stale
+	RotationTimeWindow     = 90 * time.Second // Time window to look for rotation patterns
+	RotationRSSIThreshold  = 10               // RSSI similarity threshold (dBm)
+	RotationMinScore       = 0.7              // Minimum score to consider a rotation match
+	RotationConfirmCount   = 3                // Consecutive confirmations needed to merge
+	RotationGracePeriod    = 5 * time.Minute  // Grace period before clearing identity
+	RotationStaleThreshold = 5 * time.Minute  // Time after which an alias is considered stale
 
 	// Scoring weights for rotation detection
-	WeightManufacturerMatch = 0.50  // Manufacturer data fingerprint
-	WeightRSSIProximity     = 0.35  // Time + RSSI proximity
-	WeightTimeGap           = 0.15  // Time gap factor
+	WeightManufacturerMatch = 0.50 // Manufacturer data fingerprint
+	WeightRSSIProximity     = 0.35 // Time + RSSI proximity
+	WeightTimeGap           = 0.15 // Time gap factor
 )
 
 // RotationCandidate represents a possible address rotation match.
@@ -39,25 +39,25 @@ type RotationCandidate struct {
 
 // RotationDetector implements BLE address rotation detection heuristics.
 type RotationDetector struct {
-	registry *Registry
+	registry  *Registry
 	rssiCache *RSSICache
 
-	mu              sync.RWMutex
-	candidates      map[string]*RotationCandidate // canonical_addr -> candidate
-	rotationHistory  map[string][]string          // canonical_addr -> list of rotated addresses
-	lastCheck        time.Time
-	gracePeriodExpiries map[string]time.Time     // canonical_addr -> identity expiry
+	mu                  sync.RWMutex
+	candidates          map[string]*RotationCandidate // canonical_addr -> candidate
+	rotationHistory     map[string][]string           // canonical_addr -> list of rotated addresses
+	lastCheck           time.Time
+	gracePeriodExpiries map[string]time.Time // canonical_addr -> identity expiry
 }
 
 // NewRotationDetector creates a new rotation detector.
 func NewRotationDetector(registry *Registry, rssiCache *RSSICache) *RotationDetector {
 	return &RotationDetector{
-		registry:              registry,
-		rssiCache:             rssiCache,
-		candidates:            make(map[string]*RotationCandidate),
-		rotationHistory:       make(map[string][]string),
-		gracePeriodExpiries:   make(map[string]time.Time),
-		lastCheck:             time.Now(),
+		registry:            registry,
+		rssiCache:           rssiCache,
+		candidates:          make(map[string]*RotationCandidate),
+		rotationHistory:     make(map[string][]string),
+		gracePeriodExpiries: make(map[string]time.Time),
+		lastCheck:           time.Now(),
 	}
 }
 
@@ -274,7 +274,7 @@ func (r *RotationDetector) compareRSSIProximity(oldReadings, newReadings []*RSSI
 		timeScore = 0.1
 	} else {
 		// Linear decay from 1.0 to 0.5 over the window
-		timeScore = 1.0 - (0.5*float64(timeGap)/float64(RotationTimeWindow))
+		timeScore = 1.0 - (0.5 * float64(timeGap) / float64(RotationTimeWindow))
 	}
 
 	// Check for same-node observations (strongest signal)

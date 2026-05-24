@@ -338,11 +338,11 @@ func (a *AccuracyComputer) GetImprovementStats() (map[string]interface{}, error)
 	}
 
 	return map[string]interface{}{
-		"current_f1":        currentAvg,
-		"last_week_f1":      lastAvg,
-		"improvement_pct":   improvement,
-		"total_feedback":    stats["total_count"],
+		"current_f1":         currentAvg,
+		"last_week_f1":       lastAvg,
+		"improvement_pct":    improvement,
+		"total_feedback":     stats["total_count"],
 		"this_week_feedback": stats["this_week_count"],
-		"unprocessed_count": stats["unprocessed_count"],
+		"unprocessed_count":  stats["unprocessed_count"],
 	}, nil
 }

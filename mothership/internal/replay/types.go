@@ -14,19 +14,19 @@ import (
 
 // Session represents a time-travel replay session.
 type Session struct {
-	mu           sync.RWMutex
-	id           string
-	fromMS       int64
-	toMS         int64
-	currentMS    int64
-	speed        int
-	state        SessionState
-	params       *TunableParams
-	created_at   int64
-	updated_at   int64
-	ctx          context.Context
-	cancel       context.CancelFunc
-	stopCh       chan struct{}
+	mu         sync.RWMutex
+	id         string
+	fromMS     int64
+	toMS       int64
+	currentMS  int64
+	speed      int
+	state      SessionState
+	params     *TunableParams
+	created_at int64
+	updated_at int64
+	ctx        context.Context
+	cancel     context.CancelFunc
+	stopCh     chan struct{}
 }
 
 // SessionState is the playback state of a session.
@@ -40,13 +40,13 @@ const (
 
 // TunableParams holds pipeline parameters that can be tuned during replay.
 type TunableParams struct {
-	DeltaRMSThreshold     *float64 `json:"delta_rms_threshold,omitempty"`
-	TauS                  *float64 `json:"tau_s,omitempty"`
-	FresnelDecay          *float64 `json:"fresnel_decay,omitempty"`
-	NSubcarriers          *int     `json:"n_subcarriers,omitempty"`
-	BreathingSensitivity  *float64 `json:"breathing_sensitivity,omitempty"`
-	FresnelWeightSigma    *float64 `json:"fresnel_weight_sigma,omitempty"`
-	MinConfidence         *float64 `json:"min_confidence,omitempty"`
+	DeltaRMSThreshold    *float64 `json:"delta_rms_threshold,omitempty"`
+	TauS                 *float64 `json:"tau_s,omitempty"`
+	FresnelDecay         *float64 `json:"fresnel_decay,omitempty"`
+	NSubcarriers         *int     `json:"n_subcarriers,omitempty"`
+	BreathingSensitivity *float64 `json:"breathing_sensitivity,omitempty"`
+	FresnelWeightSigma   *float64 `json:"fresnel_weight_sigma,omitempty"`
+	MinConfidence        *float64 `json:"min_confidence,omitempty"`
 }
 
 // NewSession creates a new replay session.

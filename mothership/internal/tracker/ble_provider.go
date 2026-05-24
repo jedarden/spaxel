@@ -38,11 +38,11 @@ func (p *BLEIdentityProvider) GetIdentity(blobID int) *IdentityInfo {
 			source = "ble_only"
 		}
 		return &IdentityInfo{
-			PersonID:          match.PersonID,
-			PersonLabel:       match.PersonName,
-			PersonColor:       match.PersonColor,
+			PersonID:           match.PersonID,
+			PersonLabel:        match.PersonName,
+			PersonColor:        match.PersonColor,
 			IdentityConfidence: match.Confidence,
-			IdentitySource:    source,
+			IdentitySource:     source,
 		}
 	}
 
@@ -53,11 +53,11 @@ func (p *BLEIdentityProvider) GetIdentity(blobID int) *IdentityInfo {
 			source = "ble_only"
 		}
 		return &IdentityInfo{
-			PersonID:          persist.PersonID,
-			PersonLabel:       persist.PersonName,
-			PersonColor:       persist.PersonColor,
+			PersonID:           persist.PersonID,
+			PersonLabel:        persist.PersonName,
+			PersonColor:        persist.PersonColor,
 			IdentityConfidence: persist.Confidence,
-			IdentitySource:    source,
+			IdentitySource:     source,
 		}
 	}
 

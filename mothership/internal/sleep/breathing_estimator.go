@@ -11,14 +11,14 @@ import (
 
 // FFT estimator constants
 const (
-	FFTEstimatorSampleRate = 20.0              // Hz — matches signal pipeline
-	FFTEstimatorFFTSize     = 512              // Input window (25.6 s at 20 Hz)
-	FFTEstimatorZeroPad     = 1024             // Zero-padded FFT size
-	FFTEstimatorEMAlpha     = 1.0 / 60.0       // 60-second EMA smoothing
-	FFTEstimatorMinHz       = 0.1              // 6 BPM lower bound
-	FFTEstimatorMaxHz       = 0.5              // 30 BPM upper bound
-	FFTEstimatorMinBPM      = 6.0
-	FFTEstimatorMaxBPM      = 30.0
+	FFTEstimatorSampleRate = 20.0       // Hz — matches signal pipeline
+	FFTEstimatorFFTSize    = 512        // Input window (25.6 s at 20 Hz)
+	FFTEstimatorZeroPad    = 1024       // Zero-padded FFT size
+	FFTEstimatorEMAlpha    = 1.0 / 60.0 // 60-second EMA smoothing
+	FFTEstimatorMinHz      = 0.1        // 6 BPM lower bound
+	FFTEstimatorMaxHz      = 0.5        // 30 BPM upper bound
+	FFTEstimatorMinBPM     = 6.0
+	FFTEstimatorMaxBPM     = 30.0
 )
 
 // BreathingRateEstimator accumulates phase samples and estimates breathing rate via FFT.

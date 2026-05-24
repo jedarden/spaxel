@@ -720,7 +720,7 @@ func TestSetPreviousRateStoresCorrectly(t *testing.T) {
 	s := New()
 
 	tests := []struct {
-		hz  int
+		hz   int
 		want int32
 	}{
 		{20, 20},
@@ -742,9 +742,9 @@ func TestSetPreviousRateStoresCorrectly(t *testing.T) {
 // entering L3 pushes 10 Hz, exiting L3 restores the previous rate.
 func TestLevel3RatePushAndRestore(t *testing.T) {
 	tests := []struct {
-		name       string
-		prevRate   int
-		wantCap    int
+		name        string
+		prevRate    int
+		wantCap     int
 		wantRestore int
 	}{
 		{"default_20", 20, level3RateCapHz, 20},
@@ -863,11 +863,11 @@ func TestStageTimingOverflow(t *testing.T) {
 // Level 3 and the channel-fullness callback.
 func TestShouldDropFramesChannelFullAtL3(t *testing.T) {
 	tests := []struct {
-		name       string
-		level      Level
+		name        string
+		level       Level
 		channelFull bool
 		hasCallback bool
-		want       bool
+		want        bool
 	}{
 		{"L3 full with callback", LevelHeavy, true, true, true},
 		{"L3 not full with callback", LevelHeavy, false, true, false},

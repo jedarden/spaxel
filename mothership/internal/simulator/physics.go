@@ -9,15 +9,15 @@ import (
 
 // PhysicsModel provides physics calculations for CSI simulation
 type PhysicsModel struct {
-	space        *Space
-	noiseSigma   float64 // Gaussian noise standard deviation for I/Q
-	walls        []WallDefinition
+	space      *Space
+	noiseSigma float64 // Gaussian noise standard deviation for I/Q
+	walls      []WallDefinition
 }
 
 // WallDefinition defines a wall segment for attenuation calculations
 type WallDefinition struct {
 	X1, Y1, X2, Y2 float64 // Wall endpoints (floor coordinates)
-	Attenuation     float64 // dB attenuation
+	Attenuation    float64 // dB attenuation
 }
 
 // NewPhysicsModel creates a new physics model for the given space
@@ -196,7 +196,7 @@ func (pm *PhysicsModel) PhaseAtSubcarrier(tx, rx, walker Point, subcarrierIndex,
 	totalDist := d1 + d2
 
 	// Phase = 2π × k × Δf × (d / c) + temporal_variation
-	phase := 2*math.Pi*float64(subcarrierIndex)*SubcarrierSpacing*(totalDist/C)
+	phase := 2 * math.Pi * float64(subcarrierIndex) * SubcarrierSpacing * (totalDist / C)
 
 	// Add small temporal variation for realism
 	temporalPhase := 0.1 * math.Sin(2*math.Pi*float64(frameNum)/100.0)

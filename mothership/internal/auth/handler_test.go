@@ -581,10 +581,10 @@ func TestInstallSecret_NodeTokenDerivation(t *testing.T) {
 	defer h.Close() //nolint:errcheck
 
 	tests := []struct {
-		name  string
-		mac   string
-		mac2  string
-		same  bool // whether mac and mac2 should produce the same token
+		name string
+		mac  string
+		mac2 string
+		same bool // whether mac and mac2 should produce the same token
 	}{
 		{"same MAC always produces same token", "AA:BB:CC:DD:EE:FF", "AA:BB:CC:DD:EE:FF", true},
 		{"different MACs produce different tokens", "AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66", false},

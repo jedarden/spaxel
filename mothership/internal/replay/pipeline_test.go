@@ -24,7 +24,7 @@ func (m *mockBroadcasterForPipeline) BroadcastReplayBlobs(blobs []BlobUpdate, ti
 func TestNewPipeline(t *testing.T) {
 	params := &TunableParams{
 		DeltaRMSThreshold: float64Ptr(0.02),
-		TauS:               float64Ptr(30.0),
+		TauS:              float64Ptr(30.0),
 	}
 	broadcaster := &mockBroadcasterForPipeline{}
 
@@ -200,7 +200,7 @@ func TestFloat64Helpers(t *testing.T) {
 		x    float64
 		want float64
 	}{
-		{0, 1},           // cos(0) = 1
+		{0, 1},              // cos(0) = 1
 		{3.14159265359, -1}, // cos(π) ≈ -1
 	}
 
@@ -213,4 +213,3 @@ func TestFloat64Helpers(t *testing.T) {
 		}
 	}
 }
-

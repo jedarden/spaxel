@@ -32,14 +32,14 @@ type RegistryNodeAdapter interface {
 
 // NodeRecord represents a node record from the fleet registry
 type NodeRecord struct {
-	MAC      string
-	Name     string
-	Role     string
-	PosX     float64
-	PosY     float64
-	PosZ     float64
-	Virtual  bool
-	Enabled  bool
+	MAC     string
+	Name    string
+	Role    string
+	PosX    float64
+	PosY    float64
+	PosZ    float64
+	Virtual bool
+	Enabled bool
 }
 
 // SyncToRegistry synchronizes all virtual nodes to the fleet registry
@@ -208,11 +208,11 @@ func (b *FleetRegistryBridge) GetStore() *VirtualNodeStore {
 
 // CoverageOptimization represents optimization suggestions for virtual node placement
 type CoverageOptimization struct {
-	CurrentScore       float64  `json:"current_score"`       // Current coverage score (0-100)
-	RecommendedNodes   int      `json:"recommended_nodes"`   // Recommended number of nodes
-	SuggestedPositions []Point  `json:"suggested_positions"`  // Suggested positions for new nodes
-	WeakAreas          []Point  `json:"weak_areas"`           // Areas with poor coverage
-	ImprovementDelta   float64  `json:"improvement_delta"`    // Expected improvement with suggestions
+	CurrentScore       float64 `json:"current_score"`       // Current coverage score (0-100)
+	RecommendedNodes   int     `json:"recommended_nodes"`   // Recommended number of nodes
+	SuggestedPositions []Point `json:"suggested_positions"` // Suggested positions for new nodes
+	WeakAreas          []Point `json:"weak_areas"`          // Areas with poor coverage
+	ImprovementDelta   float64 `json:"improvement_delta"`   // Expected improvement with suggestions
 }
 
 // OptimizeCoverage analyzes current coverage and suggests improvements

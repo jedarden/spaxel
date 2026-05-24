@@ -214,11 +214,11 @@ func TestCreateZoneInvalid(t *testing.T) {
 			body:    ``,
 			wantMsg: "invalid request body",
 		},
-			{
-				name:    "missing name",
-				body:    `{"id":"z1","x":0,"y":0,"z":0,"max_x":1,"max_y":1,"max_z":1}`,
-				wantMsg: "name is required",
-			},
+		{
+			name:    "missing name",
+			body:    `{"id":"z1","x":0,"y":0,"z":0,"max_x":1,"max_y":1,"max_z":1}`,
+			wantMsg: "name is required",
+		},
 	}
 
 	for _, tt := range tests {
@@ -256,21 +256,21 @@ func TestUpdateZone(t *testing.T) {
 		wantName string
 	}{
 		{
-			name:  "update zone name",
-			setup: zones.Zone{ID: "z1", Name: "Kitchen", MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5},
-			update: zones.Zone{ID: "z1", Name: "Big Kitchen", MinX: 0, MinY: 0, MinZ: 0, MaxX: 6, MaxY: 5, MaxZ: 3},
+			name:     "update zone name",
+			setup:    zones.Zone{ID: "z1", Name: "Kitchen", MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5},
+			update:   zones.Zone{ID: "z1", Name: "Big Kitchen", MinX: 0, MinY: 0, MinZ: 0, MaxX: 6, MaxY: 5, MaxZ: 3},
 			wantName: "Big Kitchen",
 		},
 		{
-			name:  "update zone type to bedroom",
-			setup: zones.Zone{ID: "z1", Name: "Room", MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5},
-			update: zones.Zone{ID: "z1", Name: "Room", MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5, ZoneType: zones.ZoneTypeBedroom},
+			name:     "update zone type to bedroom",
+			setup:    zones.Zone{ID: "z1", Name: "Room", MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5},
+			update:   zones.Zone{ID: "z1", Name: "Room", MinX: 0, MinY: 0, MinZ: 0, MaxX: 4, MaxY: 3, MaxZ: 2.5, ZoneType: zones.ZoneTypeBedroom},
 			wantName: "Room",
 		},
 		{
-			name:  "update zone bounds",
-			setup: zones.Zone{ID: "z1", Name: "Box", MinX: 0, MinY: 0, MinZ: 0, MaxX: 1, MaxY: 1, MaxZ: 1},
-			update: zones.Zone{ID: "z1", Name: "Box", MinX: 2, MinY: 3, MinZ: 1, MaxX: 10, MaxY: 8, MaxZ: 4},
+			name:     "update zone bounds",
+			setup:    zones.Zone{ID: "z1", Name: "Box", MinX: 0, MinY: 0, MinZ: 0, MaxX: 1, MaxY: 1, MaxZ: 1},
+			update:   zones.Zone{ID: "z1", Name: "Box", MinX: 2, MinY: 3, MinZ: 1, MaxX: 10, MaxY: 8, MaxZ: 4},
 			wantName: "Box",
 		},
 	}

@@ -13,12 +13,12 @@ import (
 // FeatureMonitor checks for feature availability and fires notifications.
 // It runs periodically to check if features have become available.
 type FeatureMonitor struct {
-	mu               sync.Mutex
-	db               *sql.DB
-	notifier         *Notifier
-	checkInterval    time.Duration
-	stopCh           chan struct{}
-	wg               sync.WaitGroup
+	mu            sync.Mutex
+	db            *sql.DB
+	notifier      *Notifier
+	checkInterval time.Duration
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
 
 	// Callbacks for checking feature availability
 	checkDiurnalReady      func() bool
@@ -49,10 +49,10 @@ func NewFeatureMonitor(cfg FeatureMonitorConfig) *FeatureMonitor {
 	}
 
 	return &FeatureMonitor{
-		db:                    cfg.DB,
-		notifier:              cfg.Notifier,
-		checkInterval:         cfg.CheckInterval,
-		stopCh:                make(chan struct{}),
+		db:                      cfg.DB,
+		notifier:                cfg.Notifier,
+		checkInterval:           cfg.CheckInterval,
+		stopCh:                  make(chan struct{}),
 		notifiedPredictionReady: make(map[string]bool),
 	}
 }

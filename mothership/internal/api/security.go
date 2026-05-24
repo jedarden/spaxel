@@ -55,24 +55,25 @@ type SecurityStatus struct {
 
 // SystemModeResponse represents the current system mode response.
 type SystemModeResponse struct {
-	Mode            string    `json:"mode"`            // "home", "away", "sleep"
-	Armed           bool      `json:"armed"`
-	LearningUntil   string    `json:"learning_until,omitempty"`
-	AnomalyCount24h int       `json:"anomaly_count_24h"`
-	ModelReady      bool      `json:"model_ready"`
-	LastChange      string    `json:"last_change,omitempty"`
-	LastChangeBy    string    `json:"last_change_by,omitempty"`
+	Mode            string `json:"mode"` // "home", "away", "sleep"
+	Armed           bool   `json:"armed"`
+	LearningUntil   string `json:"learning_until,omitempty"`
+	AnomalyCount24h int    `json:"anomaly_count_24h"`
+	ModelReady      bool   `json:"model_ready"`
+	LastChange      string `json:"last_change,omitempty"`
+	LastChangeBy    string `json:"last_change_by,omitempty"`
 }
 
 // handleStatus returns the current security mode status.
 // Response JSON:
-// {
-//   "armed": true,
-//   "mode": "armed",
-//   "learning_until": "2024-04-15T10:30:00Z",  // omitted if model_ready
-//   "anomaly_count_24h": 5,
-//   "model_ready": false
-// }
+//
+//	{
+//	  "armed": true,
+//	  "mode": "armed",
+//	  "learning_until": "2024-04-15T10:30:00Z",  // omitted if model_ready
+//	  "anomaly_count_24h": 5,
+//	  "model_ready": false
+//	}
 func (h *SecurityHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if h.detector == nil {
 		http.Error(w, "detector not available", http.StatusServiceUnavailable)
@@ -176,15 +177,16 @@ func (h *SecurityHandler) countAnomalies24h() int {
 
 // handleGetMode returns the current system mode (home/away/sleep).
 // Response JSON:
-// {
-//   "mode": "home",
-//   "armed": false,
-//   "learning_until": "2024-04-15T10:30:00Z",  // omitted if model_ready
-//   "anomaly_count_24h": 5,
-//   "model_ready": false,
-//   "last_change": "2024-04-15T10:30:00Z",
-//   "last_change_by": "auto_away"
-// }
+//
+//	{
+//	  "mode": "home",
+//	  "armed": false,
+//	  "learning_until": "2024-04-15T10:30:00Z",  // omitted if model_ready
+//	  "anomaly_count_24h": 5,
+//	  "model_ready": false,
+//	  "last_change": "2024-04-15T10:30:00Z",
+//	  "last_change_by": "auto_away"
+//	}
 func (h *SecurityHandler) handleGetMode(w http.ResponseWriter, r *http.Request) {
 	if h.detector == nil {
 		http.Error(w, "detector not available", http.StatusServiceUnavailable)
@@ -216,10 +218,12 @@ func (h *SecurityHandler) handleGetMode(w http.ResponseWriter, r *http.Request) 
 
 // handleSetMode sets the system mode (home/away/sleep).
 // Request body:
-// {
-//   "mode": "away",  // "home", "away", or "sleep"
-//   "reason": "manual"  // optional reason for logging
-// }
+//
+//	{
+//	  "mode": "away",  // "home", "away", or "sleep"
+//	  "reason": "manual"  // optional reason for logging
+//	}
+//
 // Response: SystemModeResponse
 func (h *SecurityHandler) handleSetMode(w http.ResponseWriter, r *http.Request) {
 	if h.detector == nil {

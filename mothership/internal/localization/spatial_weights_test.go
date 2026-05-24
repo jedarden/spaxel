@@ -9,10 +9,10 @@ import (
 
 func TestShouldCollectSample_Gates(t *testing.T) {
 	tests := []struct {
-		name           string
-		confidence     float64
-		bleBlobDist    float64
-		expectCollect  bool
+		name          string
+		confidence    float64
+		bleBlobDist   float64
+		expectCollect bool
 	}{
 		{
 			name:          "high confidence, close position - should collect",
@@ -65,9 +65,9 @@ func TestShouldCollectSample_Gates(t *testing.T) {
 
 func TestComputeZoneGrid(t *testing.T) {
 	tests := []struct {
-		x, z     float64
-		expectX  int
-		expectY  int
+		x, z    float64
+		expectX int
+		expectY int
 	}{
 		{0.0, 0.0, 0, 0},
 		{0.25, 0.25, 0, 0},
@@ -143,13 +143,13 @@ func TestSpatialWeightLearner_GetSpatialWeight_BilinearInterpolation(t *testing.
 	}{
 		// At grid points (exact cell positions)
 		{"at origin", 0.0, 0.0, 1.0},
-		{"at (0.5, 0)", 0.5, 0.0, 2.0},    // exact cell (1,0)
-		{"at (0, 0.5)", 0.0, 0.5, 2.0},    // exact cell (0,1)
-		{"at (0.5, 0.5)", 0.5, 0.5, 3.0},  // exact cell (1,1)
+		{"at (0.5, 0)", 0.5, 0.0, 2.0},   // exact cell (1,0)
+		{"at (0, 0.5)", 0.0, 0.5, 2.0},   // exact cell (0,1)
+		{"at (0.5, 0.5)", 0.5, 0.5, 3.0}, // exact cell (1,1)
 		// Midpoints between grid cells
-		{"mid x-axis", 0.25, 0.0, 1.5},    // between (0,0)=1 and (1,0)=2
-		{"mid z-axis", 0.0, 0.25, 1.5},    // between (0,0)=1 and (0,1)=2
-		{"center", 0.25, 0.25, 2.0},       // bilinear center of 1,2,2,3
+		{"mid x-axis", 0.25, 0.0, 1.5}, // between (0,0)=1 and (1,0)=2
+		{"mid z-axis", 0.0, 0.25, 1.5}, // between (0,0)=1 and (0,1)=2
+		{"center", 0.25, 0.25, 2.0},    // bilinear center of 1,2,2,3
 	}
 
 	for _, tt := range tests {
@@ -422,10 +422,10 @@ func TestValidationChecker_ShouldAcceptUpdate(t *testing.T) {
 	// Add some samples for validation
 	for i := 0; i < 10; i++ {
 		sample := GroundTruthSample{
-			Timestamp: time.Now().Add(-time.Duration(i) * time.Hour),
-			PersonID:  "person1",
-			BLEPosition: Vec3{X: 1.0, Y: 0.0, Z: 1.0},
-			BlobPosition: Vec3{X: 1.0 + float64(i)*0.01, Y: 0.0, Z: 1.0}, // Small errors
+			Timestamp:     time.Now().Add(-time.Duration(i) * time.Hour),
+			PersonID:      "person1",
+			BLEPosition:   Vec3{X: 1.0, Y: 0.0, Z: 1.0},
+			BlobPosition:  Vec3{X: 1.0 + float64(i)*0.01, Y: 0.0, Z: 1.0}, // Small errors
 			PositionError: float64(i) * 0.01,
 			PerLinkDeltas: map[string]float64{"link1": 0.5},
 			PerLinkHealth: map[string]float64{"link1": 0.9},

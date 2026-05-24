@@ -65,8 +65,8 @@ func (w *CSVWriter) WriteRow(walkers []*Walker, nodes []*VirtualNode, walls []Wa
 			fmt.Sprintf("%.3f", walker.Velocity.X),
 			fmt.Sprintf("%.3f", walker.Velocity.Y),
 			fmt.Sprintf("%.3f", walker.Velocity.Z),
-			"",     // link_id — empty for position-only rows
-			"",     // delta_rms — empty for position-only rows
+			"", // link_id — empty for position-only rows
+			"", // delta_rms — empty for position-only rows
 		}
 		if err := w.writer.Write(row); err != nil {
 			log.Printf("[SIM] CSV write error: %v", err)

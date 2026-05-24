@@ -43,7 +43,7 @@ type EventWriter interface {
 
 // Manager orchestrates the 10-step graceful shutdown sequence.
 type Manager struct {
-	baselineFlusher     BaselineFlusher
+	baselineFlusher      BaselineFlusher
 	processorManager     interface{} // *sigproc.ProcessorManager
 	baselineStore        interface{} // *sigproc.BaselineStore
 	recordingSyncer      RecordingSyncer

@@ -213,12 +213,12 @@ func GenerateExplainabilitySnapshot(
 			(s.posA.Z + s.posB.Z) / 2,
 		}
 		fresnelZones = append(fresnelZones, ExplainFresnelZone{
-			LinkID: s.lm.NodeMAC + ":" + s.lm.PeerMAC,
-			TXPos:  [3]float64{s.posA.X, s.posA.Y, s.posA.Z},
-			RXPos:  [3]float64{s.posB.X, s.posB.Y, s.posB.Z},
-			Center: center,
+			LinkID:   s.lm.NodeMAC + ":" + s.lm.PeerMAC,
+			TXPos:    [3]float64{s.posA.X, s.posA.Y, s.posA.Z},
+			RXPos:    [3]float64{s.posB.X, s.posB.Y, s.posB.Z},
+			Center:   center,
 			SemiAxes: [3]float64{b, b, a}, // X=b, Y=b, Z=a for Three.js scale
-			Lambda:  lambda,
+			Lambda:   lambda,
 		})
 	}
 	snap.FresnelZones = fresnelZones

@@ -65,14 +65,14 @@ type Monitor struct {
 	interval time.Duration
 
 	// Components to control
-	recorder       WritePauser  // CSI replay buffer
-	flowAccumulator WritePauser // Crowd flow accumulation
-	predictor      UpdatePauser // Prediction model updates
+	recorder        WritePauser  // CSI replay buffer
+	flowAccumulator WritePauser  // Crowd flow accumulation
+	predictor       UpdatePauser // Prediction model updates
 
 	// State
-	state      State
-	freeMB     uint64
-	lastCheck  time.Time
+	state     State
+	freeMB    uint64
+	lastCheck time.Time
 
 	// Lifecycle
 	ctx    context.Context
@@ -295,11 +295,11 @@ func (m *Monitor) GetState() (state State, freeMB uint64, lastCheck time.Time) {
 
 // Stats returns disk-space statistics for the dashboard.
 type Stats struct {
-	State       State    `json:"state"`
-	FreeMB      uint64   `json:"free_mb"`
-	WarningMB   uint64   `json:"warning_mb"`
-	CriticalMB  uint64   `json:"critical_mb"`
-	LastCheck   time.Time `json:"last_check"`
+	State      State     `json:"state"`
+	FreeMB     uint64    `json:"free_mb"`
+	WarningMB  uint64    `json:"warning_mb"`
+	CriticalMB uint64    `json:"critical_mb"`
+	LastCheck  time.Time `json:"last_check"`
 }
 
 // GetStats returns current statistics for dashboard display.

@@ -137,9 +137,9 @@ func TestFalsePositiveFrameStorage(t *testing.T) {
 
 	// Add false positive frame
 	frame := FalsePositiveFrame{
-		LinkID:   "link-1-2",
+		LinkID:    "link-1-2",
 		Timestamp: time.Now(),
-		DeltaRMS: 0.15,
+		DeltaRMS:  0.15,
 		Context: map[string]interface{}{
 			"zone_id": "zone-living",
 		},

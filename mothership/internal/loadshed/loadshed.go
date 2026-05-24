@@ -6,7 +6,8 @@
 // Level 1 (light):   rolling avg >= 80 ms — suspend crowd flow accumulation
 // Level 2 (moderate): rolling avg >= 90 ms — also suspend CSI replay buffer writes
 // Level 3 (heavy):   rolling avg >= 95 ms — drop CSI frames when ingest channel > 50% full;
-//                     push rate reduction config to all nodes (10 Hz cap)
+//
+//	push rate reduction config to all nodes (10 Hz cap)
 //
 // Recovery: when rolling avg < 60 ms for 10 consecutive iterations, step down one level.
 //
@@ -94,8 +95,8 @@ type Shedder struct {
 	recoveryTicks atomic.Int32 // Consecutive iterations below recovery threshold.
 
 	// Rolling average window (ring buffer).
-	durations      [rollingWindowSize]time.Duration
-	durationsIdx   int
+	durations       [rollingWindowSize]time.Duration
+	durationsIdx    int
 	durationsFilled int // how many slots have been written (< rollingWindowSize on startup)
 
 	// Pipeline stage timing for instrumentation (captured at EndIteration).
@@ -114,7 +115,7 @@ type Shedder struct {
 	ratePush   RatePushCallback
 
 	// Previous rate before Level 3 was entered, for restoration.
-	prevRateHz  atomic.Int32
+	prevRateHz   atomic.Int32
 	level3Active atomic.Bool
 
 	// OnLevelChange is an optional callback invoked after a level change.

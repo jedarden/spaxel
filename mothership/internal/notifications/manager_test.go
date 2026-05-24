@@ -774,10 +774,10 @@ func TestNotifyWithTimestamp(t *testing.T) {
 
 	expectedTime := time.Date(2024, 4, 10, 12, 30, 0, 0, time.UTC)
 	event := Event{
-		Type:     ZoneEnter,
-		Priority: Urgent,
-		Title:    "Test",
-		Body:     "Test",
+		Type:      ZoneEnter,
+		Priority:  Urgent,
+		Title:     "Test",
+		Body:      "Test",
 		Timestamp: expectedTime,
 	}
 
@@ -1085,8 +1085,8 @@ func TestQuietHoursLowQueued(t *testing.T) {
 	}
 
 	m, err := New(Config{
-		DBPath:   dbPath,
-		Location: loc,
+		DBPath:       dbPath,
+		Location:     loc,
 		SendCallback: func(e Event) {},
 	})
 	if err != nil {
@@ -1099,7 +1099,7 @@ func TestQuietHoursLowQueued(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF, // All days
+		QuietDaysBitmask: 0xFF, // All days
 		MorningDigest:    true,
 	}
 
@@ -1179,7 +1179,7 @@ func TestQuietHoursUrgentDelivered(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
 		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+1)%24, currentMinute),
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -1244,7 +1244,7 @@ func TestMorningDigestDelivery(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -1332,7 +1332,7 @@ func TestMorningDigestNotSentWhenDisabled(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    false, // Disabled
 	}
 
@@ -1411,7 +1411,7 @@ func TestHighPriorityDuringQuietHours(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "00:00",
 		QuietTo:          "23:59",
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 	m.SetConfig(cfg)
@@ -1452,8 +1452,8 @@ func TestMediumPriorityDuringQuietHours(t *testing.T) {
 	}
 
 	m, err := New(Config{
-		DBPath:   dbPath,
-		Location: loc,
+		DBPath:       dbPath,
+		Location:     loc,
 		SendCallback: func(e Event) {},
 	})
 	if err != nil {
@@ -1466,7 +1466,7 @@ func TestMediumPriorityDuringQuietHours(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "00:00",
 		QuietTo:          "23:59",
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 	m.SetConfig(cfg)
@@ -1519,7 +1519,7 @@ func TestQuietHoursNotActiveOutsideWindow(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        fmt.Sprintf("%02d:00", (now.Hour()+1)%24), // Next hour
 		QuietTo:          fmt.Sprintf("%02d:00", (now.Hour()+2)%24),
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 	m.SetConfig(cfg)
@@ -1622,7 +1622,7 @@ func TestQuietHoursGate_LowAt23pmQueued(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF, // All days
+		QuietDaysBitmask: 0xFF, // All days
 		MorningDigest:    true,
 	}
 
@@ -1719,7 +1719,7 @@ func TestQuietHoursGate_UrgentAt23pmDelivered(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF, // All days
+		QuietDaysBitmask: 0xFF, // All days
 		MorningDigest:    true,
 	}
 
@@ -1802,7 +1802,7 @@ func TestQuietHoursGate_MediumAt23pmQueued(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF, // All days
+		QuietDaysBitmask: 0xFF, // All days
 		MorningDigest:    true,
 	}
 
@@ -1871,7 +1871,7 @@ func TestQuietHoursGate_HighAt23pmDelivered(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
 		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -1953,7 +1953,7 @@ func TestMorningDigestOncePerDay(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -2018,7 +2018,7 @@ func TestMorningDigestEmptyNotSent(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -2059,7 +2059,7 @@ func TestIsQuietHoursEnd(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        "22:00",
 		QuietTo:          "07:00",
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    false, // Disabled
 	}
 
@@ -2121,7 +2121,7 @@ func TestMorningDigestIncludesAllEvents(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
 		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -2188,8 +2188,8 @@ func TestMorningDigestClearedAfterSend(t *testing.T) {
 	}
 
 	m, err := New(Config{
-		DBPath:   dbPath,
-		Location: loc,
+		DBPath:       dbPath,
+		Location:     loc,
 		SendCallback: func(e Event) {},
 	})
 	if err != nil {
@@ -2206,7 +2206,7 @@ func TestMorningDigestClearedAfterSend(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
 		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -2299,7 +2299,7 @@ func TestMorningDigestWithMixedPriorities(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
 		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 
@@ -2360,7 +2360,7 @@ func TestMorningDigestTitleFormat(t *testing.T) {
 		Channel:          "default",
 		QuietFrom:        fmt.Sprintf("%02d:%02d", currentHour, currentMinute),
 		QuietTo:          fmt.Sprintf("%02d:%02d", (currentHour+2)%24, currentMinute),
-		QuietDaysBitmask:  0xFF,
+		QuietDaysBitmask: 0xFF,
 		MorningDigest:    true,
 	}
 

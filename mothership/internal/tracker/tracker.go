@@ -34,22 +34,22 @@ func (p Posture) String() string {
 
 // Blob is a tracked entity with a persistent numeric identity.
 type Blob struct {
-	ID      int
-	X, Y, Z float64      // world-space position, metres
-	VX, VY, VZ float64   // velocity, m/s
-	Weight  float64      // detection confidence [0..1]
-	Posture Posture
-	LastSeen time.Time
+	ID         int
+	X, Y, Z    float64 // world-space position, metres
+	VX, VY, VZ float64 // velocity, m/s
+	Weight     float64 // detection confidence [0..1]
+	Posture    Posture
+	LastSeen   time.Time
 	// Trail holds the last TrailMaxLen positions (newest last).
 	Trail [][3]float64
 
 	// Identity fields (populated by BLE-to-blob matching)
-	PersonID           string    `json:"person_id,omitempty"`            // UUID from BLE registry
-	PersonLabel        string    `json:"person_label,omitempty"`         // Display name
-	PersonColor        string    `json:"person_color,omitempty"`         // Hex color for dashboard
-	IdentityConfidence float64   `json:"identity_confidence,omitempty"`  // Match confidence [0..1]
-	IdentitySource     string    `json:"identity_source,omitempty"`      // "ble_triangulation", "ble_only", or ""
-	IdentityLastSeen   time.Time `json:"-"`                              // Last time identity was confirmed
+	PersonID           string    `json:"person_id,omitempty"`           // UUID from BLE registry
+	PersonLabel        string    `json:"person_label,omitempty"`        // Display name
+	PersonColor        string    `json:"person_color,omitempty"`        // Hex color for dashboard
+	IdentityConfidence float64   `json:"identity_confidence,omitempty"` // Match confidence [0..1]
+	IdentitySource     string    `json:"identity_source,omitempty"`     // "ble_triangulation", "ble_only", or ""
+	IdentityLastSeen   time.Time `json:"-"`                             // Last time identity was confirmed
 
 	ukf *UKF // internal — nil in copies returned to callers
 }
@@ -58,10 +58,10 @@ type Blob struct {
 const TrailMaxLen = 60
 
 const (
-	maxAssocDist  = 2.0           // m  — measurement-to-track gate radius
+	maxAssocDist  = 2.0             // m  — measurement-to-track gate radius
 	gapTolerance  = 3 * time.Second // persistence through occlusion
-	minSeparation = 0.4           // m  — collision avoidance floor
-	walkThreshold = 0.3           // m/s horizontal speed → walking posture
+	minSeparation = 0.4             // m  — collision avoidance floor
+	walkThreshold = 0.3             // m/s horizontal speed → walking posture
 )
 
 // Posture height thresholds (Y = blob centroid height above floor, metres).
@@ -160,8 +160,8 @@ func (t *Tracker) Update(measurements [][4]float64) []Blob {
 			continue
 		}
 		b := &Blob{
-			ID:       t.nextID,
-			X: m[0], Y: m[1], Z: m[2],
+			ID: t.nextID,
+			X:  m[0], Y: m[1], Z: m[2],
 			Weight:   m[3],
 			LastSeen: now,
 			Trail:    [][3]float64{{m[0], m[1], m[2]}},

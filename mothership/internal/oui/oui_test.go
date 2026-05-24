@@ -7,10 +7,10 @@ import (
 
 func TestLookupOUI(t *testing.T) {
 	tests := []struct {
-		name         string
-		mac          string
-		want         string
-		wantEmpty    bool
+		name      string
+		mac       string
+		want      string
+		wantEmpty bool
 	}{
 		{
 			name:      "Apple OUI",

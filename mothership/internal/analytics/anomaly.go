@@ -22,11 +22,11 @@ import (
 
 // NormalBehaviourSlot represents expected behaviour for a specific hour_of_week and zone.
 type NormalBehaviourSlot struct {
-	HourOfWeek         int   `json:"hour_of_week"`          // 0-167
-	ZoneID             string `json:"zone_id"`
-	ExpectedOccupancy  float64 `json:"expected_occupancy"` // 0.0-1.0, fraction of samples with occupancy
-	TypicalPersonCount float64 `json:"typical_person_count"` // Mean person count
-	SampleCount        int     `json:"sample_count"`
+	HourOfWeek         int                `json:"hour_of_week"` // 0-167
+	ZoneID             string             `json:"zone_id"`
+	ExpectedOccupancy  float64            `json:"expected_occupancy"`   // 0.0-1.0, fraction of samples with occupancy
+	TypicalPersonCount float64            `json:"typical_person_count"` // Mean person count
+	SampleCount        int                `json:"sample_count"`
 	TypicalBLEDevices  map[string]float64 `json:"typical_ble_devices,omitempty"` // MAC -> frequency (0.0-1.0)
 }
 
@@ -43,51 +43,51 @@ type DwellBehaviourSlot struct {
 // AnomalyScoreConfig holds configurable thresholds for anomaly scoring.
 type AnomalyScoreConfig struct {
 	// Unusual hour presence
-	UnusualHourScore          float64 `json:"unusual_hour_score"`           // Default: 0.7
-	UnusualHourScoreSecurity  float64 `json:"unusual_hour_score_security"`  // Default: 0.9
-	LateNightMultiplier       float64 `json:"late_night_multiplier"`        // Default: 1.5 (00:00-06:00)
+	UnusualHourScore         float64 `json:"unusual_hour_score"`          // Default: 0.7
+	UnusualHourScoreSecurity float64 `json:"unusual_hour_score_security"` // Default: 0.9
+	LateNightMultiplier      float64 `json:"late_night_multiplier"`       // Default: 1.5 (00:00-06:00)
 
 	// Unknown BLE device
-	UnknownBLEScore          float64 `json:"unknown_ble_score"`           // Default: 0.5
-	UnknownBLEScoreSecurity  float64 `json:"unknown_ble_score_security"`  // Default: 0.8
-	SeenOnceScore            float64 `json:"seen_once_score"`             // Default: 0.3
-	CloseRangeRSSIThreshold  int     `json:"close_range_rssi_threshold"`  // Default: -60 dBm
+	UnknownBLEScore         float64 `json:"unknown_ble_score"`          // Default: 0.5
+	UnknownBLEScoreSecurity float64 `json:"unknown_ble_score_security"` // Default: 0.8
+	SeenOnceScore           float64 `json:"seen_once_score"`            // Default: 0.3
+	CloseRangeRSSIThreshold int     `json:"close_range_rssi_threshold"` // Default: -60 dBm
 
 	// Motion during away
-	MotionDuringAwayScore    float64 `json:"motion_during_away_score"`    // Default: 0.95
+	MotionDuringAwayScore float64 `json:"motion_during_away_score"` // Default: 0.95
 
 	// Unusual dwell duration
-	UnusualDwellScore        float64 `json:"unusual_dwell_score"`         // Default: 0.4
-	DwellMultiplierThreshold float64 `json:"dwell_multiplier_threshold"`  // Default: 5.0
+	UnusualDwellScore        float64 `json:"unusual_dwell_score"`        // Default: 0.4
+	DwellMultiplierThreshold float64 `json:"dwell_multiplier_threshold"` // Default: 5.0
 
 	// Alert thresholds
-	AlertThresholdNormal     float64 `json:"alert_threshold_normal"`      // Default: 0.6
-	AlertThresholdSecurity   float64 `json:"alert_threshold_security"`   // Default: 0.4
+	AlertThresholdNormal   float64 `json:"alert_threshold_normal"`   // Default: 0.6
+	AlertThresholdSecurity float64 `json:"alert_threshold_security"` // Default: 0.4
 
 	// Auto-away/disarm
-	AutoAwayDuration         time.Duration `json:"auto_away_duration"`     // Default: 15 minutes
-	AutoDisarmRSSIThreshold  int           `json:"auto_disarm_rssi_threshold"` // Default: -70 dBm
-	ManualOverrideDuration   time.Duration `json:"manual_override_duration"` // Default: 30 minutes
+	AutoAwayDuration        time.Duration `json:"auto_away_duration"`         // Default: 15 minutes
+	AutoDisarmRSSIThreshold int           `json:"auto_disarm_rssi_threshold"` // Default: -70 dBm
+	ManualOverrideDuration  time.Duration `json:"manual_override_duration"`   // Default: 30 minutes
 }
 
 // DefaultAnomalyScoreConfig returns default configuration.
 func DefaultAnomalyScoreConfig() AnomalyScoreConfig {
 	return AnomalyScoreConfig{
-		UnusualHourScore:          0.7,
-		UnusualHourScoreSecurity:  0.9,
-		LateNightMultiplier:       1.5,
-		UnknownBLEScore:           0.5,
-		UnknownBLEScoreSecurity:   0.8,
-		SeenOnceScore:             0.3,
-		CloseRangeRSSIThreshold:   -60,
-		MotionDuringAwayScore:     0.95,
-		UnusualDwellScore:         0.4,
-		DwellMultiplierThreshold:  5.0,
-		AlertThresholdNormal:      0.6,
-		AlertThresholdSecurity:    0.4,
-		AutoAwayDuration:          15 * time.Minute,
-		AutoDisarmRSSIThreshold:   -70,
-		ManualOverrideDuration:    30 * time.Minute,
+		UnusualHourScore:         0.7,
+		UnusualHourScoreSecurity: 0.9,
+		LateNightMultiplier:      1.5,
+		UnknownBLEScore:          0.5,
+		UnknownBLEScoreSecurity:  0.8,
+		SeenOnceScore:            0.3,
+		CloseRangeRSSIThreshold:  -60,
+		MotionDuringAwayScore:    0.95,
+		UnusualDwellScore:        0.4,
+		DwellMultiplierThreshold: 5.0,
+		AlertThresholdNormal:     0.6,
+		AlertThresholdSecurity:   0.4,
+		AutoAwayDuration:         15 * time.Minute,
+		AutoDisarmRSSIThreshold:  -70,
+		ManualOverrideDuration:   30 * time.Minute,
 	}
 }
 
@@ -95,33 +95,33 @@ func DefaultAnomalyScoreConfig() AnomalyScoreConfig {
 type SecurityMode string
 
 const (
-	SecurityModeDisarmed SecurityMode = "disarmed"
-	SecurityModeArmed    SecurityMode = "armed"
+	SecurityModeDisarmed  SecurityMode = "disarmed"
+	SecurityModeArmed     SecurityMode = "armed"
 	SecurityModeArmedStay SecurityMode = "armed_stay" // Armed but people are home
 )
 
 // AutoAwayState tracks state for auto-away functionality.
 type AutoAwayState struct {
-	LastMotionTime   time.Time `json:"last_motion_time"`
-	LastPersonCount  int       `json:"last_person_count"`
-	AutoAwayTriggered bool     `json:"auto_away_triggered"`
+	LastMotionTime    time.Time `json:"last_motion_time"`
+	LastPersonCount   int       `json:"last_person_count"`
+	AutoAwayTriggered bool      `json:"auto_away_triggered"`
 }
 
 // AutoDisarmState tracks state for auto-disarm functionality.
 type AutoDisarmState struct {
 	RegisteredDeviceSeen bool      `json:"registered_device_seen"`
-	SeenDeviceMAC       string    `json:"seen_device_mac"`
-	SeenDeviceRSSI      int       `json:"seen_device_rssi"`
-	LastSeenTime        time.Time `json:"last_seen_time"`
+	SeenDeviceMAC        string    `json:"seen_device_mac"`
+	SeenDeviceRSSI       int       `json:"seen_device_rssi"`
+	LastSeenTime         time.Time `json:"last_seen_time"`
 }
 
 // AnomalyCooldownConfig holds configuration for anomaly deduplication.
 type AnomalyCooldownConfig struct {
 	// Cooldown duration per anomaly type+zone combination
-	UnusualHourCooldown    time.Duration `json:"unusual_hour_cooldown"`    // Default: 30 minutes
-	UnknownBLECooldown     time.Duration `json:"unknown_ble_cooldown"`     // Default: 10 minutes
+	UnusualHourCooldown      time.Duration `json:"unusual_hour_cooldown"`       // Default: 30 minutes
+	UnknownBLECooldown       time.Duration `json:"unknown_ble_cooldown"`        // Default: 10 minutes
 	MotionDuringAwayCooldown time.Duration `json:"motion_during_away_cooldown"` // Default: 5 minutes
-	UnusualDwellCooldown   time.Duration `json:"unusual_dwell_cooldown"`   // Default: 1 hour
+	UnusualDwellCooldown     time.Duration `json:"unusual_dwell_cooldown"`      // Default: 1 hour
 }
 
 // DefaultAnomalyCooldownConfig returns default cooldown configuration.
@@ -144,21 +144,21 @@ type cooldownKey struct {
 
 // Detector detects anomalies based on learned normal behaviour.
 type Detector struct {
-	mu      sync.RWMutex
-	db      *sql.DB
-	config  AnomalyScoreConfig
+	mu             sync.RWMutex
+	db             *sql.DB
+	config         AnomalyScoreConfig
 	cooldownConfig AnomalyCooldownConfig
 
 	// Normal behaviour model (loaded from DB)
-	behaviourSlots   map[string]*NormalBehaviourSlot   // key: "hour-zone"
-	dwellSlots       map[string]*DwellBehaviourSlot    // key: "hour-zone-person"
+	behaviourSlots map[string]*NormalBehaviourSlot // key: "hour-zone"
+	dwellSlots     map[string]*DwellBehaviourSlot  // key: "hour-zone-person"
 
 	// Active anomaly tracking
-	activeAnomalies  map[string]*events.AnomalyEvent    // id -> event
-	anomalyHistory   []*events.AnomalyEvent
+	activeAnomalies map[string]*events.AnomalyEvent // id -> event
+	anomalyHistory  []*events.AnomalyEvent
 
 	// Pending alert timers
-	pendingAlerts    map[string]*alertTimerState
+	pendingAlerts map[string]*alertTimerState
 
 	// Anomaly cooldown tracking for deduplication
 	anomalyCooldowns map[cooldownKey]time.Time // key -> last triggered time
@@ -169,29 +169,29 @@ type Detector struct {
 	modelReadyAt      time.Time
 
 	// Registered devices and people
-	registeredDevices map[string]bool   // MAC -> registered
-	registeredPeople  map[string]string // person_id -> name
+	registeredDevices map[string]bool      // MAC -> registered
+	registeredPeople  map[string]string    // person_id -> name
 	deviceFirstSeen   map[string]time.Time // MAC -> first seen time
 
 	// Security mode state
-	securityMode      SecurityMode
-	autoAwayState     AutoAwayState
-	autoDisarmState   AutoDisarmState
+	securityMode        SecurityMode
+	autoAwayState       AutoAwayState
+	autoDisarmState     AutoDisarmState
 	manualOverrideUntil time.Time // Manual mode override expiry
 
 	// Providers
-	zoneProvider      ZoneProvider
-	personProvider    PersonProvider
-	deviceProvider    DeviceProvider
-	positionProvider  PositionProvider
-	alertHandler      AlertHandler
+	zoneProvider     ZoneProvider
+	personProvider   PersonProvider
+	deviceProvider   DeviceProvider
+	positionProvider PositionProvider
+	alertHandler     AlertHandler
 
 	// Feedback store for accuracy tracking
-	feedbackStore     *learning.FeedbackStore
+	feedbackStore *learning.FeedbackStore
 
 	// Callbacks
-	onAnomaly         func(event events.AnomalyEvent)
-	onModeChange      func(event events.SystemModeChangeEvent)
+	onAnomaly            func(event events.AnomalyEvent)
+	onModeChange         func(event events.SystemModeChangeEvent)
 	onSecurityModeChange func(oldMode, newMode SecurityMode, reason string)
 }
 
@@ -247,14 +247,14 @@ func NewDetector(dbPath string, config AnomalyScoreConfig) (*Detector, error) {
 	db.SetMaxOpenConns(1)
 
 	d := &Detector{
-		db:               db,
-		config:           config,
-		cooldownConfig:   DefaultAnomalyCooldownConfig(),
-		behaviourSlots:   make(map[string]*NormalBehaviourSlot),
-		dwellSlots:       make(map[string]*DwellBehaviourSlot),
-		activeAnomalies:  make(map[string]*events.AnomalyEvent),
-		pendingAlerts:    make(map[string]*alertTimerState),
-		anomalyCooldowns: make(map[cooldownKey]time.Time),
+		db:                db,
+		config:            config,
+		cooldownConfig:    DefaultAnomalyCooldownConfig(),
+		behaviourSlots:    make(map[string]*NormalBehaviourSlot),
+		dwellSlots:        make(map[string]*DwellBehaviourSlot),
+		activeAnomalies:   make(map[string]*events.AnomalyEvent),
+		pendingAlerts:     make(map[string]*alertTimerState),
+		anomalyCooldowns:  make(map[cooldownKey]time.Time),
 		registeredDevices: make(map[string]bool),
 		registeredPeople:  make(map[string]string),
 		deviceFirstSeen:   make(map[string]time.Time),
@@ -1074,17 +1074,17 @@ func (d *Detector) ProcessDwellDuration(zoneID, personID string, dwellDuration t
 		}
 
 		event := events.AnomalyEvent{
-			ID:             uuid.New().String(),
-			Type:           events.AnomalyUnusualDwell,
-			Score:          score,
-			Description:    fmt.Sprintf("%s in %s for longer than usual (%.0f minutes)", personName, zoneName, dwellDuration.Minutes()),
-			Timestamp:      now,
-			ZoneID:         zoneID,
-			ZoneName:       zoneName,
-			PersonID:       personID,
-			PersonName:     personName,
-			DwellDuration:  dwellDuration,
-			ExpectedDwell:  slot.MeanDwellDuration,
+			ID:            uuid.New().String(),
+			Type:          events.AnomalyUnusualDwell,
+			Score:         score,
+			Description:   fmt.Sprintf("%s in %s for longer than usual (%.0f minutes)", personName, zoneName, dwellDuration.Minutes()),
+			Timestamp:     now,
+			ZoneID:        zoneID,
+			ZoneName:      zoneName,
+			PersonID:      personID,
+			PersonName:    personName,
+			DwellDuration: dwellDuration,
+			ExpectedDwell: slot.MeanDwellDuration,
 		}
 
 		// Mark cooldown
@@ -1208,7 +1208,7 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 		// Security mode: all alerts fire immediately
 		if d.alertHandler != nil {
 			d.alertHandler.SendWebhook(*event, true) //nolint:errcheck
-			d.alertHandler.SendEscalation(*event) //nolint:errcheck
+			d.alertHandler.SendEscalation(*event)    //nolint:errcheck
 		}
 		event.AlertSent = true
 		event.WebhookSent = true
@@ -1267,7 +1267,7 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 }
 
 func (d *Detector) updateAnomalyAlertState(event *events.AnomalyEvent) {
- _, _ = d.db.Exec(`
+	_, _ = d.db.Exec(`
 		UPDATE anomaly_events SET
 			alert_sent = ?, alert_sent_at = ?,
 			webhook_sent = ?, webhook_sent_at = ?,
@@ -1463,7 +1463,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 
 		// Upsert to database
 		devicesJSON, _ := jsonMarshal(slot.TypicalBLEDevices)
-  _, _ = d.db.Exec(`
+		_, _ = d.db.Exec(`
 			INSERT INTO behaviour_slots (hour_of_week, zone_id, expected_occupancy, typical_person_count, sample_count, typical_ble_devices)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(hour_of_week, zone_id) DO UPDATE SET
@@ -1502,7 +1502,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 		slot.MeanDwellDuration = time.Duration(meanNS)
 		slot.StdDwellDuration = time.Duration(stdNS)
 
-  _, _ = d.db.Exec(`
+		_, _ = d.db.Exec(`
 			INSERT INTO dwell_slots (hour_of_week, zone_id, person_id, mean_dwell_ns, std_dwell_ns, sample_count)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(hour_of_week, zone_id, person_id) DO UPDATE SET

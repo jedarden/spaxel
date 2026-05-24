@@ -270,7 +270,7 @@ func TestSleepEfficiencyCalculation(t *testing.T) {
 	metrics := ss.GetMetrics()
 
 	expectedEfficiency := (480.0 - 45.0) / 480.0 * 100.0 // 90.625%
-	tolerance := 5.0 // Allow tolerance due to timing granularity
+	tolerance := 5.0                                     // Allow tolerance due to timing granularity
 
 	if math.Abs(metrics.SleepEfficiency-expectedEfficiency) > tolerance {
 		t.Errorf("expected sleep efficiency ~%.1f%%, got %.1f%%", expectedEfficiency, metrics.SleepEfficiency)

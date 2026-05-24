@@ -12,13 +12,13 @@ import (
 type NodeOTAState int
 
 const (
-	OTAIdle       NodeOTAState = iota
-	OTAPending                 // queued for update
-	OTADownloading             // node is downloading firmware
-	OTARebooting               // node rebooted into new partition
-	OTAVerified                // node reconnected with new version
-	OTAFailed                  // download or verification failed
-	OTARollback                // node came back with old version
+	OTAIdle        NodeOTAState = iota
+	OTAPending                  // queued for update
+	OTADownloading              // node is downloading firmware
+	OTARebooting                // node rebooted into new partition
+	OTAVerified                 // node reconnected with new version
+	OTAFailed                   // download or verification failed
+	OTARollback                 // node came back with old version
 )
 
 func (s NodeOTAState) String() string {
@@ -66,12 +66,12 @@ type DashboardBroadcaster interface {
 
 // Manager orchestrates rolling OTA updates across the fleet.
 type Manager struct {
-	mu         sync.RWMutex
-	server     *Server
-	sender     NodeSender
+	mu          sync.RWMutex
+	server      *Server
+	sender      NodeSender
 	broadcaster DashboardBroadcaster
-	progress   map[string]*NodeOTAProgress
-	baseURL    string // e.g. "http://mothership:8080"
+	progress    map[string]*NodeOTAProgress
+	baseURL     string // e.g. "http://mothership:8080"
 }
 
 // NewManager creates an OTA manager.

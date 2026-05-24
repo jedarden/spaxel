@@ -17,15 +17,18 @@ const (
 
 // CSIFrame represents a parsed CSI binary frame
 // Header (fixed 24 bytes):
-//   node_mac:     6 bytes  — source node MAC
-//   peer_mac:     6 bytes  — transmitting peer MAC
-//   timestamp_us: 8 bytes  — uint64, microseconds since node boot
-//   rssi:         1 byte   — int8, dBm
-//   noise_floor:  1 byte   — int8, dBm
-//   channel:      1 byte   — uint8, WiFi channel
-//   n_sub:        1 byte   — uint8, subcarrier count
+//
+//	node_mac:     6 bytes  — source node MAC
+//	peer_mac:     6 bytes  — transmitting peer MAC
+//	timestamp_us: 8 bytes  — uint64, microseconds since node boot
+//	rssi:         1 byte   — int8, dBm
+//	noise_floor:  1 byte   — int8, dBm
+//	channel:      1 byte   — uint8, WiFi channel
+//	n_sub:        1 byte   — uint8, subcarrier count
+//
 // Payload (n_sub × 2 bytes):
-//   Per subcarrier: int8 I, int8 Q
+//
+//	Per subcarrier: int8 I, int8 Q
 type CSIFrame struct {
 	NodeMAC     [6]byte
 	PeerMAC     [6]byte

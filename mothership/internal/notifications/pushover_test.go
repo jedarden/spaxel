@@ -367,7 +367,7 @@ func TestPushoverEmergencySettings(t *testing.T) {
 	msg := PushoverMessage{
 		Message:  "Emergency!",
 		Priority: 2,
-		Retry:    60,  // Retry every 60 seconds
+		Retry:    60,   // Retry every 60 seconds
 		Expire:   3600, // Expire after 1 hour
 	}
 
@@ -674,14 +674,14 @@ func TestPushoverSendWithAllOptions(t *testing.T) {
 	client.APIURL = server.URL
 
 	msg := PushoverMessage{
-		Message:    "Full message",
-		Title:      "Full Title",
-		Priority:   1,
-		Device:     "iphone",
-		URL:        "https://example.com",
-		URLTitle:   "Example Site",
-		Sound:      "cosmic",
-		Timestamp:  1234567890,
+		Message:   "Full message",
+		Title:     "Full Title",
+		Priority:  1,
+		Device:    "iphone",
+		URL:       "https://example.com",
+		URLTitle:  "Example Site",
+		Sound:     "cosmic",
+		Timestamp: 1234567890,
 	}
 
 	err := client.Send(msg)
@@ -766,7 +766,7 @@ func TestPushoverRetryExpireClamping(t *testing.T) {
 	msg := PushoverMessage{
 		Message:  "Emergency",
 		Priority: 2,
-		Retry:    10, // Below minimum of 30
+		Retry:    10,    // Below minimum of 30
 		Expire:   20000, // Above maximum of 10800
 	}
 

@@ -109,10 +109,10 @@ func TestSettingsHandler(t *testing.T) {
 			method: "POST",
 			path:   "/api/settings",
 			body: map[string]interface{}{
-				"fusion_rate_hz":       12.0,
-				"delta_rms_threshold":  0.03,
-				"grid_cell_m":          0.15,
-				"max_tracked_blobs":    30,
+				"fusion_rate_hz":      12.0,
+				"delta_rms_threshold": 0.03,
+				"grid_cell_m":         0.15,
+				"max_tracked_blobs":   30,
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
@@ -505,26 +505,26 @@ func TestSettingsDelete(t *testing.T) {
 // TestValidateSettings tests the settings validation.
 func TestValidateSettings(t *testing.T) {
 	tests := []struct {
-		name      string
-		settings  map[string]interface{}
-		wantErr   bool
-		errKey    string
+		name     string
+		settings map[string]interface{}
+		wantErr  bool
+		errKey   string
 	}{
 		{
 			name: "all valid settings",
 			settings: map[string]interface{}{
-				"fusion_rate_hz":       10.0,
-				"grid_cell_m":          0.2,
-				"delta_rms_threshold":  0.02,
-				"tau_s":                30.0,
-				"fresnel_decay":        2.0,
-				"n_subcarriers":        16,
+				"fusion_rate_hz":        10.0,
+				"grid_cell_m":           0.2,
+				"delta_rms_threshold":   0.02,
+				"tau_s":                 30.0,
+				"fresnel_decay":         2.0,
+				"n_subcarriers":         16,
 				"breathing_sensitivity": 0.005,
-				"motion_threshold":     0.05,
-				"dwell_seconds":        30,
-				"vacant_seconds":       300,
-				"max_tracked_blobs":    20,
-				"security_mode":        true,
+				"motion_threshold":      0.05,
+				"dwell_seconds":         30,
+				"vacant_seconds":        300,
+				"max_tracked_blobs":     20,
+				"security_mode":         true,
 			},
 			wantErr: false,
 		},

@@ -19,18 +19,18 @@ const (
 	WakeConfirmDuration    = 2 * time.Minute  // Must be moving for 2 min to confirm wake
 
 	// Scoring weights
-	BreathingWeight = 0.4
-	MotionWeight    = 0.3
+	BreathingWeight  = 0.4
+	MotionWeight     = 0.3
 	ContinuityWeight = 0.3
 
 	// Breathing quality thresholds
-	BreathingRateLow  = 10.0 // BPM - below this is concerning
-	BreathingRateHigh = 25.0 // BPM - above this is concerning
+	BreathingRateLow     = 10.0 // BPM - below this is concerning
+	BreathingRateHigh    = 25.0 // BPM - above this is concerning
 	BreathingRateOptimal = 14.0 // BPM - optimal breathing rate
 
 	// Breathing anomaly thresholds (per task spec: <8 or >25 bpm)
-	BreathingAnomalyLow  = 8.0  // BPM - apnea indicator
-	BreathingAnomalyHigh = 25.0 // BPM - hyperventilation indicator
+	BreathingAnomalyLow               = 8.0  // BPM - apnea indicator
+	BreathingAnomalyHigh              = 25.0 // BPM - hyperventilation indicator
 	BreathingAnomalyDurationThreshold = 3 * time.Minute
 
 	// Motion thresholds (deltaRMS)
@@ -93,28 +93,28 @@ type BreathingSample struct {
 
 // MotionSample represents a motion measurement during sleep
 type MotionSample struct {
-	Timestamp     time.Time `json:"timestamp"`
-	DeltaRMS      float64   `json:"delta_rms"`
-	MotionDetected bool     `json:"motion_detected"`
+	Timestamp      time.Time `json:"timestamp"`
+	DeltaRMS       float64   `json:"delta_rms"`
+	MotionDetected bool      `json:"motion_detected"`
 }
 
 // SleepPeriod represents a continuous period of sleep
 type SleepPeriod struct {
-	StartTime   time.Time `json:"start_time"`
-	EndTime     time.Time `json:"end_time,omitempty"`
-	Duration    time.Duration `json:"duration"`
-	State       SleepState `json:"state"`
-	Interruptions int      `json:"interruptions"`
+	StartTime     time.Time     `json:"start_time"`
+	EndTime       time.Time     `json:"end_time,omitempty"`
+	Duration      time.Duration `json:"duration"`
+	State         SleepState    `json:"state"`
+	Interruptions int           `json:"interruptions"`
 }
 
 // SleepMetrics aggregates metrics for a sleep session
 type SleepMetrics struct {
 	// Timing
-	SleepStartTime  time.Time `json:"sleep_start_time"`
-	SleepEndTime    time.Time `json:"sleep_end_time,omitempty"`
-	SleepOnsetTime  time.Time `json:"sleep_onset_time,omitempty"` // When sleep was confirmed (15 min stationary)
-	TotalDuration   time.Duration `json:"total_duration"`
-	TimeInBed       time.Duration `json:"time_in_bed"`
+	SleepStartTime time.Time     `json:"sleep_start_time"`
+	SleepEndTime   time.Time     `json:"sleep_end_time,omitempty"`
+	SleepOnsetTime time.Time     `json:"sleep_onset_time,omitempty"` // When sleep was confirmed (15 min stationary)
+	TotalDuration  time.Duration `json:"total_duration"`
+	TimeInBed      time.Duration `json:"time_in_bed"`
 
 	// Sleep efficiency (per task spec: (time_in_bed - waso) / time_in_bed * 100)
 	SleepEfficiency     float64 `json:"sleep_efficiency"`      // 0-100%
@@ -123,31 +123,31 @@ type SleepMetrics struct {
 	WakeEpisodeCount    int     `json:"wake_episode_count"`
 
 	// Breathing metrics
-	AvgBreathingRate    float64 `json:"avg_breathing_rate"`
-	MinBreathingRate    float64 `json:"min_breathing_rate"`
-	MaxBreathingRate    float64 `json:"max_breathing_rate"`
-	BreathingRateStdDev float64 `json:"breathing_rate_std_dev"`
-	BreathingRegularity float64 `json:"breathing_regularity"` // CV (std/mean)
-	BreathingScore      float64 `json:"breathing_score"` // 0-100
-	BreathingAnomalyCount int   `json:"breathing_anomaly_count"` // Anomalies < 8 or > 25 bpm
-	BreathingAnomaly    bool    `json:"breathing_anomaly"`    // Elevated vs personal average
-	PersonalAvgBPM      float64 `json:"personal_avg_bpm,omitempty"` // Person's rolling average for comparison
-	BreathingSamplesJSON string `json:"breathing_samples_json,omitempty"` // Raw samples for storage
+	AvgBreathingRate      float64 `json:"avg_breathing_rate"`
+	MinBreathingRate      float64 `json:"min_breathing_rate"`
+	MaxBreathingRate      float64 `json:"max_breathing_rate"`
+	BreathingRateStdDev   float64 `json:"breathing_rate_std_dev"`
+	BreathingRegularity   float64 `json:"breathing_regularity"`             // CV (std/mean)
+	BreathingScore        float64 `json:"breathing_score"`                  // 0-100
+	BreathingAnomalyCount int     `json:"breathing_anomaly_count"`          // Anomalies < 8 or > 25 bpm
+	BreathingAnomaly      bool    `json:"breathing_anomaly"`                // Elevated vs personal average
+	PersonalAvgBPM        float64 `json:"personal_avg_bpm,omitempty"`       // Person's rolling average for comparison
+	BreathingSamplesJSON  string  `json:"breathing_samples_json,omitempty"` // Raw samples for storage
 
 	// Motion metrics
-	MotionEvents      int     `json:"motion_events"`
-	RestlessPeriods   int     `json:"restless_periods"`
-	QuietTimePct      float64 `json:"quiet_time_pct"`
-	MotionScore       float64 `json:"motion_score"` // 0-100
+	MotionEvents    int     `json:"motion_events"`
+	RestlessPeriods int     `json:"restless_periods"`
+	QuietTimePct    float64 `json:"quiet_time_pct"`
+	MotionScore     float64 `json:"motion_score"` // 0-100
 
 	// Sleep continuity
-	Interruptions     int     `json:"interruptions"`
+	Interruptions     int           `json:"interruptions"`
 	LongestDeepPeriod time.Duration `json:"longest_deep_period"`
-	ContinuityScore   float64 `json:"continuity_score"` // 0-100
+	ContinuityScore   float64       `json:"continuity_score"` // 0-100
 
 	// Overall score
-	OverallScore      float64 `json:"overall_score"` // 0-100
-	QualityRating     string  `json:"quality_rating"` // poor/fair/good/excellent
+	OverallScore  float64 `json:"overall_score"`  // 0-100
+	QualityRating string  `json:"quality_rating"` // poor/fair/good/excellent
 }
 
 // Breathing anomaly thresholds are defined above (lines 32-34)
@@ -164,11 +164,11 @@ type WakeEpisode struct {
 
 // BreathingAnomaly represents a detected breathing anomaly
 type BreathingAnomaly struct {
-	ID          string    `json:"id"`
-	StartTime   time.Time `json:"start_time"`
-	EndTime     time.Time `json:"end_time,omitempty"`
-	RateBPM     float64   `json:"rate_bpm"`
-	AnomalyType string    `json:"anomaly_type"` // "low" or "high"
+	ID          string        `json:"id"`
+	StartTime   time.Time     `json:"start_time"`
+	EndTime     time.Time     `json:"end_time,omitempty"`
+	RateBPM     float64       `json:"rate_bpm"`
+	AnomalyType string        `json:"anomaly_type"` // "low" or "high"
 	Duration    time.Duration `json:"duration"`
 }
 
@@ -181,27 +181,27 @@ type SleepSession struct {
 	sleepEndHour   int
 
 	// State
-	currentState   SleepState
-	sessionDate    time.Time // Date of sleep session (midnight of the night)
-	isActive       bool
+	currentState SleepState
+	sessionDate  time.Time // Date of sleep session (midnight of the night)
+	isActive     bool
 
 	// Session timing
-	sessionStart   time.Time // When person entered bedroom/started tracking
-	sleepOnset     time.Time // When sleep was confirmed (15 min after stationary detection)
-	wakeTime       time.Time // When session ended
+	sessionStart time.Time // When person entered bedroom/started tracking
+	sleepOnset   time.Time // When sleep was confirmed (15 min after stationary detection)
+	wakeTime     time.Time // When session ended
 
 	// Sample buffers
 	breathingSamples []BreathingSample
 	motionSamples    []MotionSample
 
 	// Period tracking
-	sleepPeriods []SleepPeriod
+	sleepPeriods  []SleepPeriod
 	currentPeriod *SleepPeriod
 
 	// Wake episode tracking
-	wakeEpisodes     []WakeEpisode
+	wakeEpisodes       []WakeEpisode
 	currentWakeEpisode *WakeEpisode
-	wakeEpisodeStart time.Time // Track when current wake period started
+	wakeEpisodeStart   time.Time // Track when current wake period started
 
 	// Breathing anomaly tracking
 	breathingAnomalies []BreathingAnomaly
@@ -241,10 +241,10 @@ type SleepAnalyzer struct {
 // NewSleepAnalyzer creates a new sleep analyzer
 func NewSleepAnalyzer() *SleepAnalyzer {
 	return &SleepAnalyzer{
-		sessions:        make(map[string]*SleepSession),
-		sleepStartHour:  DefaultSleepStartHour,
-		sleepEndHour:    DefaultSleepEndHour,
-		anomalyTracker:  NewBreathingAnomalyTracker(),
+		sessions:       make(map[string]*SleepSession),
+		sleepStartHour: DefaultSleepStartHour,
+		sleepEndHour:   DefaultSleepEndHour,
+		anomalyTracker: NewBreathingAnomalyTracker(),
 	}
 }
 
@@ -377,14 +377,14 @@ func (sa *SleepAnalyzer) SetPersonID(linkID, personID string) {
 // NewSleepSession creates a new sleep session
 func NewSleepSession(linkID string, sleepStartHour, sleepEndHour int) *SleepSession {
 	return &SleepSession{
-		linkID:           linkID,
-		sleepStartHour:   sleepStartHour,
-		sleepEndHour:     sleepEndHour,
-		currentState:     SleepStateAwake,
-		breathingSamples: make([]BreathingSample, 0, 1440), // ~12 hours at 30s intervals
-		motionSamples:    make([]MotionSample, 0, 1440),
-		sleepPeriods:     make([]SleepPeriod, 0, 100),
-		wakeEpisodes:     make([]WakeEpisode, 0, 50),
+		linkID:             linkID,
+		sleepStartHour:     sleepStartHour,
+		sleepEndHour:       sleepEndHour,
+		currentState:       SleepStateAwake,
+		breathingSamples:   make([]BreathingSample, 0, 1440), // ~12 hours at 30s intervals
+		motionSamples:      make([]MotionSample, 0, 1440),
+		sleepPeriods:       make([]SleepPeriod, 0, 100),
+		wakeEpisodes:       make([]WakeEpisode, 0, 50),
 		breathingAnomalies: make([]BreathingAnomaly, 0, 20),
 	}
 }
@@ -914,10 +914,10 @@ func (ss *SleepSession) GenerateReport() *SleepReport {
 	}
 
 	report := &SleepReport{
-		LinkID:       ss.linkID,
-		SessionDate:  ss.sessionDate,
-		GeneratedAt:  time.Now(),
-		Metrics:      metrics,
+		LinkID:           ss.linkID,
+		SessionDate:      ss.sessionDate,
+		GeneratedAt:      time.Now(),
+		Metrics:          metrics,
 		BreathingSamples: breathingSamples,
 		BreathingSummary: generateBreathingSummary(metrics),
 		MotionSummary:    generateMotionSummary(metrics),

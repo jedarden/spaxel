@@ -12,14 +12,14 @@ import (
 type HorizonPredictor struct {
 	mu sync.RWMutex
 
-	store           *ModelStore
-	accuracyTracker *AccuracyTracker
-	zoneProvider    ZoneInfoProvider
-	personProvider  PersonInfoProvider
+	store            *ModelStore
+	accuracyTracker  *AccuracyTracker
+	zoneProvider     ZoneInfoProvider
+	personProvider   PersonInfoProvider
 	positionProvider CurrentPositionProvider
 
 	// Configuration
-	horizon       time.Duration
+	horizon        time.Duration
 	monteCarloRuns int // Number of Monte Carlo simulations
 
 	// Random source for simulations
@@ -74,19 +74,19 @@ func (h *HorizonPredictor) SetMonteCarloRuns(n int) {
 
 // HorizonPrediction represents a prediction at a specific time horizon.
 type HorizonPrediction struct {
-	PersonID             string            `json:"person_id"`
-	PersonLabel          string            `json:"person_label"`
-	CurrentZoneID        string            `json:"current_zone_id"`
-	CurrentZoneName      string            `json:"current_zone_name"`
-	PredictedZoneID      string            `json:"predicted_zone_id"`
-	PredictedZoneName    string            `json:"predicted_zone_name"`
-	HorizonMinutes       int               `json:"horizon_minutes"`
-	Confidence           float64           `json:"confidence"`
+	PersonID             string             `json:"person_id"`
+	PersonLabel          string             `json:"person_label"`
+	CurrentZoneID        string             `json:"current_zone_id"`
+	CurrentZoneName      string             `json:"current_zone_name"`
+	PredictedZoneID      string             `json:"predicted_zone_id"`
+	PredictedZoneName    string             `json:"predicted_zone_name"`
+	HorizonMinutes       int                `json:"horizon_minutes"`
+	Confidence           float64            `json:"confidence"`
 	ZoneProbabilities    map[string]float64 `json:"zone_probabilities"` // zoneID -> probability
-	DataConfidence       string            `json:"data_confidence"`
-	SampleCount          int               `json:"sample_count"`
-	ModelReady           bool              `json:"model_ready"`
-	EstimatedTransitions int               `json:"estimated_transitions"`
+	DataConfidence       string             `json:"data_confidence"`
+	SampleCount          int                `json:"sample_count"`
+	ModelReady           bool               `json:"model_ready"`
+	EstimatedTransitions int                `json:"estimated_transitions"`
 }
 
 // PredictAtHorizon predicts where a person will be at the specified horizon.
@@ -256,7 +256,7 @@ func (h *HorizonPredictor) sampleNormal(mean, stddev float64) float64 {
 		h.mu.Unlock()
 	}
 
-	z := sqrtFast(-2 * logFast(u1)) * cosFast(2 * 3.14159265359 * u2)
+	z := sqrtFast(-2*logFast(u1)) * cosFast(2*3.14159265359*u2)
 	return mean + stddev*z
 }
 

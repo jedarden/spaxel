@@ -29,8 +29,8 @@ const (
 
 // Handler provides floor plan HTTP endpoints.
 type Handler struct {
-	db          *sql.DB
-	dataDir     string
+	db           *sql.DB
+	dataDir      string
 	floorplanDir string
 }
 
@@ -41,8 +41,8 @@ func NewHandler(db *sql.DB, dataDir string) *Handler {
 		log.Printf("[WARN] Failed to create floorplan directory: %v", err)
 	}
 	return &Handler{
-		db:          db,
-		dataDir:     dataDir,
+		db:           db,
+		dataDir:      dataDir,
 		floorplanDir: fpDir,
 	}
 }
@@ -148,7 +148,7 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 	// Return success with image URL
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"ok":       "true",
+		"ok":        "true",
 		"image_url": "/floorplan/image.png",
 	})
 }
@@ -176,11 +176,11 @@ func (h *Handler) getImage(w http.ResponseWriter, r *http.Request) {
 
 // calibrateRequest contains calibration point data.
 type calibrateRequest struct {
-	AX         float64 `json:"ax"`
-	AY         float64 `json:"ay"`
-	BX         float64 `json:"bx"`
-	BY         float64 `json:"by"`
-	DistanceM  float64 `json:"distance_m"`
+	AX          float64 `json:"ax"`
+	AY          float64 `json:"ay"`
+	BX          float64 `json:"bx"`
+	BY          float64 `json:"by"`
+	DistanceM   float64 `json:"distance_m"`
 	RotationDeg float64 `json:"rotation_deg,omitempty"`
 }
 

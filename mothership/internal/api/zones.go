@@ -25,10 +25,10 @@ type BlobIdentityProvider interface {
 // Changes to zones and portals are immediately broadcast to dashboard clients
 // via the ZoneChangeBroadcaster, and also reflected in the next delta tick.
 type ZonesHandler struct {
-	mu      sync.RWMutex
-	mgr     *zones.Manager
-	bc      dashboard.ZoneChangeBroadcaster
-	ident   BlobIdentityProvider
+	mu    sync.RWMutex
+	mgr   *zones.Manager
+	bc    dashboard.ZoneChangeBroadcaster
+	ident BlobIdentityProvider
 }
 
 // zoneWithOcc extends a zone with current occupancy and people list for API responses.

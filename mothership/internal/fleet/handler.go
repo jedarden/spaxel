@@ -132,20 +132,20 @@ type FleetNode struct {
 	HealthScore     float64 `json:"health_score"`
 	Unpaired        bool    `json:"unpaired,omitempty"`
 	// Computed fields
-	LastSeenMS    int64   `json:"last_seen_ms"`
-	UptimeSeconds int64   `json:"uptime_seconds"`
-	PacketRate    float64 `json:"packet_rate"`
-	ConfiguredRate int   `json:"configured_rate"`
-	Temperature   float64 `json:"temperature"`
-	OTAInProgress bool    `json:"ota_in_progress"`
+	LastSeenMS     int64   `json:"last_seen_ms"`
+	UptimeSeconds  int64   `json:"uptime_seconds"`
+	PacketRate     float64 `json:"packet_rate"`
+	ConfiguredRate int     `json:"configured_rate"`
+	Temperature    float64 `json:"temperature"`
+	OTAInProgress  bool    `json:"ota_in_progress"`
 }
 
 // fleetListResponse wraps the fleet list with migration window metadata.
 type fleetListResponse struct {
-	Nodes                   []FleetNode `json:"nodes"`
-	MigrationWindowActive   bool        `json:"migration_window_active"`
-	MigrationDeadlineMS     int64       `json:"migration_deadline_ms,omitempty"`
-	MigrationRemainingSecs  float64     `json:"migration_remaining_secs,omitempty"`
+	Nodes                  []FleetNode `json:"nodes"`
+	MigrationWindowActive  bool        `json:"migration_window_active"`
+	MigrationDeadlineMS    int64       `json:"migration_deadline_ms,omitempty"`
+	MigrationRemainingSecs float64     `json:"migration_remaining_secs,omitempty"`
 }
 
 // listFleet returns extended node data with computed fields for the fleet page.
@@ -549,9 +549,9 @@ func (h *Handler) exportConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	config := map[string]interface{}{
-		"version":    1,
+		"version":     1,
 		"exported_at": time.Now().Format(time.RFC3339),
-		"nodes":      nodes,
+		"nodes":       nodes,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -614,14 +614,14 @@ func (h *Handler) updateRoom(w http.ResponseWriter, r *http.Request) {
 // ── System Mode endpoints ───────────────────────────────────────────────────────
 
 type systemModeResponse struct {
-	Mode           string `json:"mode"`
-	Reason         string `json:"reason,omitempty"`
+	Mode           string                 `json:"mode"`
+	Reason         string                 `json:"reason,omitempty"`
 	AutoAwayConfig autoAwayConfigResponse `json:"auto_away_config"`
 }
 
 type autoAwayConfigResponse struct {
-	Enabled         bool `json:"enabled"`
-	AbsenceDurationSec int `json:"absence_duration_sec"`
+	Enabled            bool `json:"enabled"`
+	AbsenceDurationSec int  `json:"absence_duration_sec"`
 }
 
 // getSystemMode returns the current system mode.
@@ -630,9 +630,9 @@ func (h *Handler) getSystemMode(w http.ResponseWriter, r *http.Request) {
 	cfg := h.mgr.GetAutoAwayConfig()
 
 	resp := systemModeResponse{
-		Mode:   string(mode),
+		Mode: string(mode),
 		AutoAwayConfig: autoAwayConfigResponse{
-			Enabled:           cfg.Enabled,
+			Enabled:            cfg.Enabled,
 			AbsenceDurationSec: int(cfg.AbsenceDuration.Seconds()),
 		},
 	}
@@ -793,9 +793,9 @@ func (h *Handler) disableNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]interface{}{
-		"ok":          true,
-		"mac":         mac,
-		"prior_role":  node.Role,
+		"ok":           true,
+		"mac":          mac,
+		"prior_role":   node.Role,
 		"current_role": "idle",
 	})
 }
@@ -830,10 +830,10 @@ func (h *Handler) enableNode(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// Node isn't idle, just return current state.
 			writeJSON(w, map[string]interface{}{
-				"ok":          true,
-				"mac":         mac,
+				"ok":           true,
+				"mac":          mac,
 				"current_role": node.Role,
-				"note":        "node already enabled",
+				"note":         "node already enabled",
 			})
 			return
 		}
@@ -851,8 +851,8 @@ func (h *Handler) enableNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]interface{}{
-		"ok":          true,
-		"mac":         mac,
+		"ok":            true,
+		"mac":           mac,
 		"restored_role": priorRole,
 	})
 }

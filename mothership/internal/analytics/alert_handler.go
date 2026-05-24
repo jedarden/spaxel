@@ -15,8 +15,8 @@ import (
 // NotificationAlertHandler implements AlertHandler using a notification service.
 type NotificationAlertHandler struct {
 	notifyService NotificationService
-	httpClient   *http.Client
-	webhookURL   string
+	httpClient    *http.Client
+	webhookURL    string
 	escalationURL string
 }
 
@@ -24,9 +24,9 @@ type NotificationAlertHandler struct {
 type NotificationService interface {
 	Send(notif Notification) error
 	GenerateFloorPlanThumbnail(width, height int, blobs []struct {
-		X, Y, Z   float64
-		Identity  string
-		IsFall    bool
+		X, Y, Z  float64
+		Identity string
+		IsFall   bool
 	}) ([]byte, error)
 }
 
@@ -46,7 +46,7 @@ type Notification struct {
 func NewNotificationAlertHandler(notifyService NotificationService) *NotificationAlertHandler {
 	return &NotificationAlertHandler{
 		notifyService: notifyService,
-		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		httpClient:    &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -64,9 +64,9 @@ func (h *NotificationAlertHandler) SetEscalationURL(url string) {
 func (h *NotificationAlertHandler) SendAlert(event events.AnomalyEvent, immediate bool) error {
 	// Generate floor plan thumbnail
 	thumbnail, err := h.notifyService.GenerateFloorPlanThumbnail(400, 300, []struct {
-		X, Y, Z   float64
-		Identity  string
-		IsFall    bool
+		X, Y, Z  float64
+		Identity string
+		IsFall   bool
 	}{
 		{
 			X:        event.Position.X,
@@ -88,14 +88,14 @@ func (h *NotificationAlertHandler) SendAlert(event events.AnomalyEvent, immediat
 		Image:     thumbnail,
 		ImageType: "image/png",
 		Data: map[string]interface{}{
-			"anomaly_id":      event.ID,
-			"anomaly_type":    string(event.Type),
-			"zone_id":         event.ZoneID,
-			"zone_name":       event.ZoneName,
-			"person_id":       event.PersonID,
-			"person_name":     event.PersonName,
-			"timestamp":       event.Timestamp.Format(time.RFC3339),
-			"immediate":       immediate,
+			"anomaly_id":   event.ID,
+			"anomaly_type": string(event.Type),
+			"zone_id":      event.ZoneID,
+			"zone_name":    event.ZoneName,
+			"person_id":    event.PersonID,
+			"person_name":  event.PersonName,
+			"timestamp":    event.Timestamp.Format(time.RFC3339),
+			"immediate":    immediate,
 		},
 		Timestamp: time.Now(),
 	}
@@ -116,20 +116,20 @@ func (h *NotificationAlertHandler) SendWebhook(event events.AnomalyEvent, immedi
 	}
 
 	payload := map[string]interface{}{
-		"anomaly_id":      event.ID,
-		"type":             string(event.Type),
-		"score":            event.Score,
-		"description":      event.Description,
-		"timestamp":        event.Timestamp.Format(time.RFC3339),
-		"zone_id":          event.ZoneID,
-		"zone_name":        event.ZoneName,
-		"person_id":        event.PersonID,
-		"person_name":      event.PersonName,
-		"device_mac":       event.DeviceMAC,
-		"position":         event.Position,
-		"hour_of_week":     event.HourOfWeek,
+		"anomaly_id":         event.ID,
+		"type":               string(event.Type),
+		"score":              event.Score,
+		"description":        event.Description,
+		"timestamp":          event.Timestamp.Format(time.RFC3339),
+		"zone_id":            event.ZoneID,
+		"zone_name":          event.ZoneName,
+		"person_id":          event.PersonID,
+		"person_name":        event.PersonName,
+		"device_mac":         event.DeviceMAC,
+		"position":           event.Position,
+		"hour_of_week":       event.HourOfWeek,
 		"expected_occupancy": event.ExpectedOccupancy,
-		"immediate":        immediate,
+		"immediate":          immediate,
 	}
 
 	body, err := json.Marshal(payload)
@@ -165,16 +165,16 @@ func (h *NotificationAlertHandler) SendEscalation(event events.AnomalyEvent) err
 	}
 
 	payload := map[string]interface{}{
-		"anomaly_id":   event.ID,
-		"type":          string(event.Type),
-		"score":         event.Score,
-		"description":   event.Description,
-		"timestamp":     event.Timestamp.Format(time.RFC3339),
-		"zone_id":       event.ZoneID,
-		"zone_name":     event.ZoneName,
-		"person_id":     event.PersonID,
-		"person_name":   event.PersonName,
-		"escalation":    true,
+		"anomaly_id":  event.ID,
+		"type":        string(event.Type),
+		"score":       event.Score,
+		"description": event.Description,
+		"timestamp":   event.Timestamp.Format(time.RFC3339),
+		"zone_id":     event.ZoneID,
+		"zone_name":   event.ZoneName,
+		"person_id":   event.PersonID,
+		"person_name": event.PersonName,
+		"escalation":  true,
 	}
 
 	body, err := json.Marshal(payload)

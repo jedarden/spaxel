@@ -112,7 +112,7 @@ func (g *Grid) AddLinkInfluenceWithSigma(ax, az, bx, bz, weight, sigmaMultiplier
 			if excess < 0 {
 				excess = 0
 			}
-			influence := weight * math.Exp(-(excess * excess) / twoSigSq)
+			influence := weight * math.Exp(-(excess*excess)/twoSigSq)
 			g.cells[row*g.cols+col] += influence
 		}
 	}
@@ -173,7 +173,7 @@ func (g *Grid) AddLinkInfluenceWithSpatialWeights(ax, az, bx, bz, weight, sigmaM
 				cellWeight = weight * spatialWeightFunc(px, pz)
 			}
 
-			influence := cellWeight * math.Exp(-(excess * excess) / twoSigSq)
+			influence := cellWeight * math.Exp(-(excess*excess)/twoSigSq)
 			g.cells[row*g.cols+col] += influence
 		}
 	}

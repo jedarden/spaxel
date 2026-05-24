@@ -37,12 +37,12 @@ const (
 // RecordingStore is a disk-backed circular buffer for raw CSI frames.
 // It is safe for concurrent use.
 type RecordingStore struct {
-	mu       sync.Mutex
-	f        *os.File
-	fileSize int64 // total file size including header
-	writePos int64 // absolute file offset of next write
+	mu        sync.Mutex
+	f         *os.File
+	fileSize  int64 // total file size including header
+	writePos  int64 // absolute file offset of next write
 	oldestPos int64 // absolute file offset of oldest valid record (0 = empty)
-	wrapPos  int64 // writePos at time of last wrap (0 = no pending wrap)
+	wrapPos   int64 // writePos at time of last wrap (0 = no pending wrap)
 }
 
 // NewRecordingStore opens or creates a recording store at path.

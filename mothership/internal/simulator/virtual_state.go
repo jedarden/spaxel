@@ -14,14 +14,14 @@ import (
 
 // VirtualNodeState represents the persistent state of a virtual node
 type VirtualNodeState struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Type        NodeType  `json:"type"`
-	Role        NodeRole  `json:"role"`
-	Position    Point     `json:"position"`
-	Enabled     bool      `json:"enabled"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Type      NodeType  `json:"type"`
+	Role      NodeRole  `json:"role"`
+	Position  Point     `json:"position"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	// For AP nodes
 	APBSSID   string `json:"ap_bssid,omitempty"`
 	APChannel int    `json:"ap_channel,omitempty"`
@@ -681,15 +681,15 @@ func (s *VirtualNodeStore) copyState(state *VirtualNodeState) *VirtualNodeState 
 
 // VirtualNodeSummary provides a summary of virtual nodes in the space
 type VirtualNodeSummary struct {
-	TotalCount      int               `json:"total_count"`
-	EnabledCount    int               `json:"enabled_count"`
-	VirtualCount    int               `json:"virtual_count"`
-	APCount         int               `json:"ap_count"`
-	ByType          map[string]int    `json:"by_type"`
-	ByTag           map[string]int    `json:"by_tag"`
-	BoundingBox     BoundingBox       `json:"bounding_box"`
-	FirstCreated    *time.Time        `json:"first_created,omitempty"`
-	LastUpdated     *time.Time        `json:"last_updated,omitempty"`
+	TotalCount   int            `json:"total_count"`
+	EnabledCount int            `json:"enabled_count"`
+	VirtualCount int            `json:"virtual_count"`
+	APCount      int            `json:"ap_count"`
+	ByType       map[string]int `json:"by_type"`
+	ByTag        map[string]int `json:"by_tag"`
+	BoundingBox  BoundingBox    `json:"bounding_box"`
+	FirstCreated *time.Time     `json:"first_created,omitempty"`
+	LastUpdated  *time.Time     `json:"last_updated,omitempty"`
 }
 
 // BoundingBox represents the axis-aligned bounding box of all nodes

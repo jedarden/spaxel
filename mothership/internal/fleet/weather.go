@@ -50,14 +50,14 @@ type LinkWeatherReport struct {
 	Issues []LinkIssue
 
 	// Trend over time
-	TrendSNR          string // "improving", "stable", "degrading"
-	TrendStability    string
-	TrendPacketRate   string
+	TrendSNR        string // "improving", "stable", "degrading"
+	TrendStability  string
+	TrendPacketRate string
 
 	// Weekly statistics
-	WeekUptimePct     float64
-	WeekMeanSNR       float64
-	WeekFalsePosRate  float64
+	WeekUptimePct    float64
+	WeekMeanSNR      float64
+	WeekFalsePosRate float64
 
 	// Repositioning advice
 	RepositionAdvice  string
@@ -610,9 +610,9 @@ func (lwd *LinkWeatherDiagnostics) GetWeeklyTrend(linkID string) []DailyHealthSu
 }
 
 type dailyAccumulator struct {
-	snr   float64
+	snr    float64
 	health float64
-	count int
+	count  int
 }
 
 func (d *dailyAccumulator) add(s LinkWeatherSnapshot) {

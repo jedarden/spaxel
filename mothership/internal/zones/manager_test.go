@@ -63,19 +63,19 @@ func TestReconcileOccupancy_PersistedOnly(t *testing.T) {
 		{
 			name: "multiple zones with various counts",
 			persisted: map[string]int{
-				"kitchen":  1,
-				"bedroom":  0,
-				"hallway":  3,
+				"kitchen": 1,
+				"bedroom": 0,
+				"hallway": 3,
 			},
 			wantCount: map[string]int{
-				"kitchen":  1,
-				"bedroom":  0,
-				"hallway":  3,
+				"kitchen": 1,
+				"bedroom": 0,
+				"hallway": 3,
 			},
 			wantStatus: map[string]OccupancyStatus{
-				"kitchen":  OccupancyUncertain,
-				"bedroom":  OccupancyUncertain,
-				"hallway":  OccupancyUncertain,
+				"kitchen": OccupancyUncertain,
+				"bedroom": OccupancyUncertain,
+				"hallway": OccupancyUncertain,
 			},
 		},
 	}
@@ -88,8 +88,8 @@ func TestReconcileOccupancy_PersistedOnly(t *testing.T) {
 			// Create zones and set persisted occupancy
 			for zoneID := range tt.persisted {
 				zone := &Zone{
-					ID:     zoneID,
-					Name:   zoneID,
+					ID:   zoneID,
+					Name: zoneID,
 					MinX: 0, MinY: 0, MinZ: 0,
 					MaxX: 1, MaxY: 1, MaxZ: 1,
 					Enabled: true,
@@ -135,22 +135,22 @@ func TestReconcileOccupancy_PersistedOnly(t *testing.T) {
 
 func TestReconcileOccupancy_WithCrossings(t *testing.T) {
 	tests := []struct {
-		name         string
-		persisted    map[string]int // zone_id -> last_known_occupancy
-		crossings    []struct {
-			zoneA   string
-			zoneB   string
-			dir     int // 1 = a_to_b, -1 = b_to_a
-			tsMs    int64
+		name      string
+		persisted map[string]int // zone_id -> last_known_occupancy
+		crossings []struct {
+			zoneA string
+			zoneB string
+			dir   int // 1 = a_to_b, -1 = b_to_a
+			tsMs  int64
 		}
-		wantCount    map[string]int
-		wantStatus   map[string]OccupancyStatus
+		wantCount  map[string]int
+		wantStatus map[string]OccupancyStatus
 	}{
 		{
 			name: "one person left kitchen after midnight",
 			persisted: map[string]int{
-				"kitchen":  2,
-				"hallway":  0,
+				"kitchen": 2,
+				"hallway": 0,
 			},
 			crossings: []struct {
 				zoneA string
@@ -161,19 +161,19 @@ func TestReconcileOccupancy_WithCrossings(t *testing.T) {
 				{zoneA: "kitchen", zoneB: "hallway", dir: 1, tsMs: nowMsSinceMidnight(1 * time.Hour)},
 			},
 			wantCount: map[string]int{
-				"kitchen":  1,
-				"hallway":  1,
+				"kitchen": 1,
+				"hallway": 1,
 			},
 			wantStatus: map[string]OccupancyStatus{
-				"kitchen":  OccupancyUncertain,
-				"hallway":  OccupancyUncertain,
+				"kitchen": OccupancyUncertain,
+				"hallway": OccupancyUncertain,
 			},
 		},
 		{
 			name: "person entered and left (net zero)",
 			persisted: map[string]int{
-				"kitchen":  1,
-				"hallway":  0,
+				"kitchen": 1,
+				"hallway": 0,
 			},
 			crossings: []struct {
 				zoneA string
@@ -185,18 +185,18 @@ func TestReconcileOccupancy_WithCrossings(t *testing.T) {
 				{zoneA: "hallway", zoneB: "kitchen", dir: 1, tsMs: nowMsSinceMidnight(2 * time.Hour)},
 			},
 			wantCount: map[string]int{
-				"kitchen":  1,
-				"hallway":  0,
+				"kitchen": 1,
+				"hallway": 0,
 			},
 			wantStatus: map[string]OccupancyStatus{
-				"kitchen":  OccupancyUncertain,
+				"kitchen": OccupancyUncertain,
 			},
 		},
 		{
 			name: "net negative clamped to zero",
 			persisted: map[string]int{
-				"kitchen":  0,
-				"hallway":  0,
+				"kitchen": 0,
+				"hallway": 0,
 			},
 			crossings: []struct {
 				zoneA string
@@ -207,8 +207,8 @@ func TestReconcileOccupancy_WithCrossings(t *testing.T) {
 				{zoneA: "kitchen", zoneB: "hallway", dir: 1, tsMs: nowMsSinceMidnight(1 * time.Hour)},
 			},
 			wantCount: map[string]int{
-				"kitchen":  0, // clamped from -1
-				"hallway":  1,
+				"kitchen": 0, // clamped from -1
+				"hallway": 1,
 			},
 			wantStatus: map[string]OccupancyStatus{
 				"hallway": OccupancyUncertain,
@@ -217,8 +217,8 @@ func TestReconcileOccupancy_WithCrossings(t *testing.T) {
 		{
 			name: "crossings before midnight ignored",
 			persisted: map[string]int{
-				"kitchen":  2,
-				"hallway":  0,
+				"kitchen": 2,
+				"hallway": 0,
 			},
 			crossings: []struct {
 				zoneA string
@@ -230,8 +230,8 @@ func TestReconcileOccupancy_WithCrossings(t *testing.T) {
 				{zoneA: "kitchen", zoneB: "hallway", dir: 1, tsMs: nowMsSinceMidnight(-1 * time.Hour)},
 			},
 			wantCount: map[string]int{
-				"kitchen":  2,
-				"hallway":  0,
+				"kitchen": 2,
+				"hallway": 0,
 			},
 			wantStatus: map[string]OccupancyStatus{
 				"kitchen": OccupancyUncertain,
@@ -477,9 +477,9 @@ func TestPersistOccupancy(t *testing.T) {
 		{
 			name: "multiple zones",
 			occupancy: map[string]int{
-				"kitchen":  1,
-				"bedroom":  0,
-				"hallway":  3,
+				"kitchen": 1,
+				"bedroom": 0,
+				"hallway": 3,
 			},
 		},
 		{
@@ -547,7 +547,7 @@ func TestPersistOccupancy_OnBlobUpdate(t *testing.T) {
 
 	// Update blob positions — should persist occupancy
 	m.UpdateBlobPositions([]struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
 	}{
 		{ID: 1, X: 5, Y: 5, Z: 1},
@@ -565,7 +565,7 @@ func TestPersistOccupancy_OnBlobUpdate(t *testing.T) {
 
 	// Add second blob
 	m.UpdateBlobPositions([]struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
 	}{
 		{ID: 1, X: 5, Y: 5, Z: 1},
@@ -597,7 +597,7 @@ func TestPersistOccupancy_OnBlobRemoval(t *testing.T) {
 
 	// Add blobs
 	m.UpdateBlobPositions([]struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
 	}{
 		{ID: 1, X: 5, Y: 5, Z: 1},
@@ -652,7 +652,7 @@ func TestEndToEnd_RestoreOccupancyAfterRestart(t *testing.T) {
 
 	// Simulate 2 people in kitchen
 	m1.UpdateBlobPositions([]struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
 	}{
 		{ID: 1, X: 5, Y: 5, Z: 1},
@@ -716,7 +716,7 @@ func TestEndToEnd_RestoreWithCrossings(t *testing.T) {
 
 	// Simulate 2 people in kitchen, persist
 	m1.UpdateBlobPositions([]struct {
-		ID     int
+		ID      int
 		X, Y, Z float64
 	}{
 		{ID: 1, X: 5, Y: 5, Z: 1},
@@ -806,12 +806,12 @@ func TestIsReconciled_NoZones(t *testing.T) {
 
 func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 	tests := []struct {
-		name           string
-		portal         Portal
-		prevPos        struct{ X, Y, Z float64 }
-		currPos        struct{ X, Y, Z float64 }
-		wantCrossing   bool
-		wantDirection  int // 1 = A->B, -1 = B->A
+		name          string
+		portal        Portal
+		prevPos       struct{ X, Y, Z float64 }
+		currPos       struct{ X, Y, Z float64 }
+		wantCrossing  bool
+		wantDirection int // 1 = A->B, -1 = B->A
 	}{
 		{
 			name: "cross from A side to B side",
@@ -823,12 +823,12 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				P1X: 5, P1Y: 0, P1Z: 0,
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
-				NX:  -1, NY: 0, NZ: 0, // Normal pointing -X (A side is +X)
+				NX: -1, NY: 0, NZ: 0, // Normal pointing -X (A side is +X)
 				Enabled: true,
 			},
-			prevPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
-			currPos:      struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
-			wantCrossing: true,
+			prevPos:       struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
+			currPos:       struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
+			wantCrossing:  true,
 			wantDirection: 1, // A->B
 		},
 		{
@@ -841,12 +841,12 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				P1X: 5, P1Y: 0, P1Z: 0,
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
-				NX:  -1, NY: 0, NZ: 0,
+				NX: -1, NY: 0, NZ: 0,
 				Enabled: true,
 			},
-			prevPos:      struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
-			currPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
-			wantCrossing: true,
+			prevPos:       struct{ X, Y, Z float64 }{X: 4, Y: 1, Z: 0.5}, // B side
+			currPos:       struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
+			wantCrossing:  true,
 			wantDirection: -1, // B->A
 		},
 		{
@@ -855,15 +855,15 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				ID:      "portal_3",
 				ZoneAID: "kitchen",
 				ZoneBID: "hallway",
-				P1X: 5, P1Y: 0, P1Z: 0,
+				P1X:     5, P1Y: 0, P1Z: 0,
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
-				NX:  -1, NY: 0, NZ: 0,
+				NX: -1, NY: 0, NZ: 0,
 				Enabled: true,
 			},
-			prevPos:      struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
-			currPos:      struct{ X, Y, Z float64 }{X: 7, Y: 1, Z: 0.5}, // Still A side
-			wantCrossing: false,
+			prevPos:       struct{ X, Y, Z float64 }{X: 6, Y: 1, Z: 0.5}, // A side
+			currPos:       struct{ X, Y, Z float64 }{X: 7, Y: 1, Z: 0.5}, // Still A side
+			wantCrossing:  false,
 			wantDirection: 0,
 		},
 		{
@@ -876,12 +876,12 @@ func TestCrossingDetection_PlaneCrossing(t *testing.T) {
 				P1X: 5, P1Y: 0, P1Z: 0,
 				P2X: 5, P2Y: 2, P2Z: 0,
 				P3X: 5, P3Y: 0, P3Z: 1,
-				NX:  -1, NY: 0, NZ: 0,
+				NX: -1, NY: 0, NZ: 0,
 				Enabled: true,
 			},
-			prevPos:      struct{ X, Y, Z float64 }{X: 4.9, Y: 0, Z: 0}, // Just on B side
-			currPos:      struct{ X, Y, Z float64 }{X: 4.9, Y: 2, Z: 1}, // Still B side, moved in YZ
-			wantCrossing: false,
+			prevPos:       struct{ X, Y, Z float64 }{X: 4.9, Y: 0, Z: 0}, // Just on B side
+			currPos:       struct{ X, Y, Z float64 }{X: 4.9, Y: 2, Z: 1}, // Still B side, moved in YZ
+			wantCrossing:  false,
 			wantDirection: 0,
 		},
 	}
@@ -977,10 +977,10 @@ func TestCrossingDetection_ParallelMovementWithinTolerance(t *testing.T) {
 		ID:      "portal_1",
 		ZoneAID: "kitchen",
 		ZoneBID: "hallway",
-		P1X: 5, P1Y: 0, P1Z: 0,
+		P1X:     5, P1Y: 0, P1Z: 0,
 		P2X: 5, P2Y: 2, P2Z: 0,
 		P3X: 5, P3Y: 0, P3Z: 1,
-		NX:  -1, NY: 0, NZ: 0,
+		NX: -1, NY: 0, NZ: 0,
 	}
 	m.CreatePortal(portal)
 
@@ -1043,7 +1043,7 @@ func TestCrossingDetection_OutsideWidthBounds(t *testing.T) {
 		P1X: 5, P1Y: 0, P1Z: 2,
 		P2X: 5, P2Y: 2.1, P2Z: 2,
 		P3X: 5, P3Y: 0, P3Z: 3,
-		NX:  -1, NY: 0, NZ: 0,
+		NX: -1, NY: 0, NZ: 0,
 	}
 	m.CreatePortal(portal)
 
@@ -1089,10 +1089,10 @@ func TestOccupancyCount_WithPortalCrossing(t *testing.T) {
 		Name:    "Kitchen-LR Door",
 		ZoneAID: "kitchen",
 		ZoneBID: "living_room",
-		P1X: 5, P1Y: 0, P1Z: 0,
+		P1X:     5, P1Y: 0, P1Z: 0,
 		P2X: 5, P2Y: 2, P2Z: 0,
 		P3X: 5, P3Y: 0, P3Z: 1,
-		NX:  -1, NY: 0, NZ: 0,
+		NX: -1, NY: 0, NZ: 0,
 		Enabled: true,
 	}
 	m.CreatePortal(portal)
@@ -1284,10 +1284,10 @@ func TestZoneTransitionWebSocket_Broadcast(t *testing.T) {
 		Name:    "Kitchen-LR Door",
 		ZoneAID: "kitchen",
 		ZoneBID: "living_room",
-		P1X: 5, P1Y: 0, P1Z: 0,
+		P1X:     5, P1Y: 0, P1Z: 0,
 		P2X: 5, P2Y: 2, P2Z: 0,
 		P3X: 5, P3Y: 0, P3Z: 1,
-		NX:  -1, NY: 0, NZ: 0,
+		NX: -1, NY: 0, NZ: 0,
 		Enabled: true,
 	}
 	m.CreatePortal(portal)
@@ -1366,11 +1366,11 @@ func TestZoneTransitionWebSocket_Broadcast(t *testing.T) {
 
 func TestGetPortalCrossings(t *testing.T) {
 	tests := []struct {
-		name       string
-		crossings  []struct {
+		name      string
+		crossings []struct {
 			portalID string
 			blobID   int
-			dir      int    // 1 = A->B, -1 = B->A
+			dir      int // 1 = A->B, -1 = B->A
 			fromZone string
 			toZone   string
 			tsMs     int64
@@ -1577,14 +1577,14 @@ func TestGetZoneHistory(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		history    []struct {
+		name    string
+		history []struct {
 			hourTs int64    // hour bucket timestamp
 			count  int      // occupancy count
 			people []string // people list (will be JSON-serialized)
 		}
 		hours      int
-		wantCounts []int     // expected counts per hour bucket (newest to oldest)
+		wantCounts []int      // expected counts per hour bucket (newest to oldest)
 		wantPeople [][]string // expected people per hour bucket (newest to oldest)
 	}{
 		{

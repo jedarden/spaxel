@@ -18,39 +18,39 @@ import (
 
 // Notifier manages feature discovery notifications.
 type Notifier struct {
-	mu   sync.RWMutex
-	db   *sql.DB
+	mu         sync.RWMutex
+	db         *sql.DB
 	quietHours *QuietHours
 }
 
 // QuietHours defines when notifications should be suppressed.
 type QuietHours struct {
-	Enabled    bool
-	StartHour  int // 0-23
-	StartMin   int
-	EndHour    int
-	EndMin     int
-	DaysMask   int // Bitmask for days (0=Sun, 1=Mon, ..., 6=Sat)
+	Enabled   bool
+	StartHour int // 0-23
+	StartMin  int
+	EndHour   int
+	EndMin    int
+	DaysMask  int // Bitmask for days (0=Sun, 1=Mon, ..., 6=Sat)
 }
 
 // FeatureNotification represents a one-time notification for a feature.
 type FeatureNotification struct {
-	EventID        string    `json:"event_id"`         // Unique identifier
-	Title          string    `json:"title"`
-	Message        string    `json:"message"`
-	ActionLabel    string    `json:"action_label,omitempty"` // Button text
-	ActionURL      string    `json:"action_url,omitempty"`   // Link for button
-	DismissedAt    *time.Time `json:"dismissed_at,omitempty"`
-	FiredAt        time.Time `json:"fired_at"`
+	EventID     string     `json:"event_id"` // Unique identifier
+	Title       string     `json:"title"`
+	Message     string     `json:"message"`
+	ActionLabel string     `json:"action_label,omitempty"` // Button text
+	ActionURL   string     `json:"action_url,omitempty"`   // Link for button
+	DismissedAt *time.Time `json:"dismissed_at,omitempty"`
+	FiredAt     time.Time  `json:"fired_at"`
 }
 
 // Predefined feature notification events
 const (
-	EventDiurnalBaselineActivated   = "diurnal_baseline_activated"
-	EventFirstSleepSessionComplete   = "first_sleep_session_complete"
-	EventWeightUpdateApproved        = "weight_update_approved"
-	EventAutomationFirstFired        = "automation_first_fired"
-	EventPredictionModelReady        = "prediction_model_ready"
+	EventDiurnalBaselineActivated  = "diurnal_baseline_activated"
+	EventFirstSleepSessionComplete = "first_sleep_session_complete"
+	EventWeightUpdateApproved      = "weight_update_approved"
+	EventAutomationFirstFired      = "automation_first_fired"
+	EventPredictionModelReady      = "prediction_model_ready"
 )
 
 // NewNotifier creates a new feature notification manager.
@@ -149,7 +149,7 @@ func (n *Notifier) isQuietHours(t time.Time) bool {
 
 	// Check day of week
 	dow := int(t.Weekday())
-	if n.quietHours.DaysMask != 0 && (n.quietHours.DaysMask & (1 << dow)) == 0 {
+	if n.quietHours.DaysMask != 0 && (n.quietHours.DaysMask&(1<<dow)) == 0 {
 		return false
 	}
 
@@ -329,8 +329,8 @@ func (n *Notifier) handleTest(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":    true,
-		"fired": fired,
+		"ok":       true,
+		"fired":    fired,
 		"event_id": testEventID,
 	})
 }
@@ -339,11 +339,11 @@ func (n *Notifier) handleTest(w http.ResponseWriter, r *http.Request) {
 
 func getNotificationTitle(eventID string) string {
 	titles := map[string]string{
-		EventDiurnalBaselineActivated: "Your system has learned your home's daily patterns",
+		EventDiurnalBaselineActivated:  "Your system has learned your home's daily patterns",
 		EventFirstSleepSessionComplete: "Your first sleep session was tracked overnight",
-		EventWeightUpdateApproved:     "Localization accuracy improved",
-		EventAutomationFirstFired:     "Your first automation just ran",
-		EventPredictionModelReady:     "Presence predictions are now available",
+		EventWeightUpdateApproved:      "Localization accuracy improved",
+		EventAutomationFirstFired:      "Your first automation just ran",
+		EventPredictionModelReady:      "Presence predictions are now available",
 	}
 	if title, ok := titles[eventID]; ok {
 		return title
@@ -353,7 +353,7 @@ func getNotificationTitle(eventID string) string {
 
 func getNotificationMessage(eventID string) string {
 	messages := map[string]string{
-		EventDiurnalBaselineActivated: "Detection accuracy should improve starting today. The system now understands the daily RF patterns in your home.",
+		EventDiurnalBaselineActivated:  "Detection accuracy should improve starting today. The system now understands the daily RF patterns in your home.",
 		EventFirstSleepSessionComplete: "Tap to see your sleep summary. Sleep data will accumulate over the coming nights for more detailed reports.",
 		EventWeightUpdateApproved:      "Median position error decreased based on your BLE device positions. The system is adapting to your space.",
 		EventAutomationFirstFired:      " automations are now active. You can view automation history in the Automations panel.",
@@ -367,7 +367,7 @@ func getNotificationMessage(eventID string) string {
 
 func getNotificationActionLabel(eventID string) string {
 	labels := map[string]string{
-		EventDiurnalBaselineActivated: "View Diurnal Baseline",
+		EventDiurnalBaselineActivated:  "View Diurnal Baseline",
 		EventFirstSleepSessionComplete: "View Sleep Summary",
 		EventWeightUpdateApproved:      "View Accuracy Trends",
 		EventAutomationFirstFired:      "View Automations Log",
@@ -381,7 +381,7 @@ func getNotificationActionLabel(eventID string) string {
 
 func getNotificationActionURL(eventID string) string {
 	urls := map[string]string{
-		EventDiurnalBaselineActivated: "#/settings/diurnal",
+		EventDiurnalBaselineActivated:  "#/settings/diurnal",
 		EventFirstSleepSessionComplete: "#/sleep",
 		EventWeightUpdateApproved:      "#/accuracy",
 		EventAutomationFirstFired:      "#/automations",

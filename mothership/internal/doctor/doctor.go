@@ -72,7 +72,7 @@ type CheckResult struct {
 // Response is the doctor endpoint response.
 type Response struct {
 	Checks    []CheckResult `json:"checks"`
-	Overall   string        `json:"overall"`   // "ok", "warn", "error"
+	Overall   string        `json:"overall"` // "ok", "warn", "error"
 	CheckedAt string        `json:"checked_at"`
 }
 

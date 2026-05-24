@@ -611,10 +611,10 @@ func TestVirtualNodeStore_UpdateSpace(t *testing.T) {
 		ID:   "smaller",
 		Name: "Smaller Space",
 		Rooms: []Room{{
-			ID:    "room-1",
-			Name:  "Small Room",
-			MinX:  0, MinY: 0, MinZ: 0,
-			MaxX:  1.5, MaxY: 1.5, MaxZ: 1.5,
+			ID:   "room-1",
+			Name: "Small Room",
+			MinX: 0, MinY: 0, MinZ: 0,
+			MaxX: 1.5, MaxY: 1.5, MaxZ: 1.5,
 		}},
 	}
 
@@ -634,10 +634,10 @@ func TestVirtualNodeStore_UpdateSpace(t *testing.T) {
 		ID:   "tiny",
 		Name: "Tiny Space",
 		Rooms: []Room{{
-			ID:    "room-1",
-			Name:  "Tiny Room",
-			MinX:  0, MinY: 0, MinZ: 0,
-			MaxX:  0.5, MaxY: 0.5, MaxZ: 0.5,
+			ID:   "room-1",
+			Name: "Tiny Room",
+			MinX: 0, MinY: 0, MinZ: 0,
+			MaxX: 0.5, MaxY: 0.5, MaxZ: 0.5,
 		}},
 	}
 

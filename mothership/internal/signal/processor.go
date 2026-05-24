@@ -46,8 +46,8 @@ type ProcessResult struct {
 	DiurnalWeight     float64   // Weight of diurnal in baseline (0-1)
 	DiurnalReady      bool      // True if diurnal slot has enough samples
 	// Phase 6: Dwell state for stationary person detection
-	DwellState        DwellState // Current dwell state (CLEAR, MOTION_DETECTED, etc.)
-	BreathingBPM      float64    // Estimated breathing rate in BPM
+	DwellState   DwellState // Current dwell state (CLEAR, MOTION_DETECTED, etc.)
+	BreathingBPM float64    // Estimated breathing rate in BPM
 }
 
 // Process processes a raw CSI frame and returns processed data with features
@@ -324,9 +324,9 @@ type LinkMotionState struct {
 	AmbientConfidence float64
 	DiurnalConfidence float64
 	// Phase 6: Dwell state for stationary person detection
-	DwellState     DwellState // CLEAR, MOTION_DETECTED, POSSIBLY_PRESENT, STATIONARY_DETECTED
-	BreathingBPM   float64    // Estimated breathing rate from dwell tracker
-	StationaryDetected bool    // True if in STATIONARY_DETECTED state
+	DwellState         DwellState // CLEAR, MOTION_DETECTED, POSSIBLY_PRESENT, STATIONARY_DETECTED
+	BreathingBPM       float64    // Estimated breathing rate from dwell tracker
+	StationaryDetected bool       // True if in STATIONARY_DETECTED state
 }
 
 // GetAllMotionStates returns motion states for all links
@@ -339,16 +339,16 @@ func (pm *ProcessorManager) GetAllMotionStates() []LinkMotionState {
 		processor.mu.RLock()
 		dwellState := processor.dwellTracker.GetState()
 		state := LinkMotionState{
-			LinkID:            linkID,
-			MotionDetected:    processor.motionDetector.IsMotionDetected(),
-			SmoothDeltaRMS:    processor.motionDetector.GetSmoothDeltaRMS(),
-			BaselineConf:      processor.baseline.GetConfidence(),
-			BreathingDetected: processor.breathing.IsDetected(),
-			BreathingRate:     processor.breathing.GetBreathingRate(),
-			AmbientConfidence: processor.health.GetAmbientConfidence(),
-			DiurnalConfidence: processor.diurnal.GetOverallConfidence(),
-			DwellState:        dwellState,
-			BreathingBPM:      processor.dwellTracker.GetBreathingRate(),
+			LinkID:             linkID,
+			MotionDetected:     processor.motionDetector.IsMotionDetected(),
+			SmoothDeltaRMS:     processor.motionDetector.GetSmoothDeltaRMS(),
+			BaselineConf:       processor.baseline.GetConfidence(),
+			BreathingDetected:  processor.breathing.IsDetected(),
+			BreathingRate:      processor.breathing.GetBreathingRate(),
+			AmbientConfidence:  processor.health.GetAmbientConfidence(),
+			DiurnalConfidence:  processor.diurnal.GetOverallConfidence(),
+			DwellState:         dwellState,
+			BreathingBPM:       processor.dwellTracker.GetBreathingRate(),
 			StationaryDetected: dwellState == DwellStationaryDetected,
 		}
 		processor.mu.RUnlock()
@@ -497,14 +497,14 @@ func (pm *ProcessorManager) GetStationaryPersonCount() int {
 
 // DiurnalLearningStatus represents the diurnal baseline learning state for a link
 type DiurnalLearningStatus struct {
-	LinkID             string    `json:"link_id"`
-	IsLearning         bool      `json:"is_learning"`
-	DaysRemaining      float64   `json:"days_remaining"`
-	Progress           float64   `json:"progress"` // 0-100 percentage
-	IsReady            bool      `json:"is_ready"`
-	SlotsReady         int       `json:"slots_ready"` // Number of slots with >= 100 samples
-	DiurnalConfidence  float64   `json:"diurnal_confidence"`
-	CreatedAt          time.Time `json:"created_at"`
+	LinkID            string    `json:"link_id"`
+	IsLearning        bool      `json:"is_learning"`
+	DaysRemaining     float64   `json:"days_remaining"`
+	Progress          float64   `json:"progress"` // 0-100 percentage
+	IsReady           bool      `json:"is_ready"`
+	SlotsReady        int       `json:"slots_ready"` // Number of slots with >= 100 samples
+	DiurnalConfidence float64   `json:"diurnal_confidence"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 // GetDiurnalLearningStatus returns diurnal learning status for all links
@@ -585,10 +585,10 @@ func (pm *ProcessorManager) CheckDiurnalReadinessTransitions(previouslyReady map
 
 // TrackedBlob represents a tracked spatial blob from the fusion engine.
 type TrackedBlob struct {
-	ID       int
-	X, Y, Z  float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Weight   float64
+	Weight     float64
 	// Identity fields (populated by BLE-to-blob matching)
 	PersonID           string  `json:"person_id,omitempty"`
 	PersonLabel        string  `json:"person_label,omitempty"`

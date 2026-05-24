@@ -4,12 +4,14 @@
 // This is a standalone binary for running migrations without starting the full application.
 //
 // Build:
-//   go build -tags ignore_migrate -o migrate ./cmd/mothership
+//
+//	go build -tags ignore_migrate -o migrate ./cmd/mothership
 //
 // Usage:
-//   ./migrate [options]
-//   ./migrate --version
-//   ./migrate --prune
+//
+//	./migrate [options]
+//	./migrate --version
+//	./migrate --prune
 package main
 
 import (

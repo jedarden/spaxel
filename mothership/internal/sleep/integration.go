@@ -15,23 +15,23 @@ import (
 type SessionState int
 
 const (
-	SessionStateNone SessionState = iota
-	SessionStateTentative    // In bedroom, stationary detected, waiting for 15-min confirmation
-	SessionStateConfirmed    // Sleep session confirmed (15 min stationary)
-	SessionStateEnded        // Session ended, waiting for morning report
+	SessionStateNone      SessionState = iota
+	SessionStateTentative              // In bedroom, stationary detected, waiting for 15-min confirmation
+	SessionStateConfirmed              // Sleep session confirmed (15 min stationary)
+	SessionStateEnded                  // Session ended, waiting for morning report
 )
 
 // LinkSessionState tracks the sleep session state per link
 type LinkSessionState struct {
-	State              SessionState
-	TentativeStartTime time.Time // When tentative detection started
-	ConfirmedStartTime time.Time // When sleep was confirmed (15 min after tentative)
-	SessionID          string
-	ZoneID             string
-	PersonID           string
-	LastStationaryTime time.Time // Last time stationary was detected
-	LastMotionTime     time.Time // Last time motion was detected
-	InBedroomZone      bool
+	State                SessionState
+	TentativeStartTime   time.Time // When tentative detection started
+	ConfirmedStartTime   time.Time // When sleep was confirmed (15 min after tentative)
+	SessionID            string
+	ZoneID               string
+	PersonID             string
+	LastStationaryTime   time.Time // Last time stationary was detected
+	LastMotionTime       time.Time // Last time motion was detected
+	InBedroomZone        bool
 	SustainedMotionStart time.Time // When sustained motion started (for wake detection)
 }
 
@@ -55,13 +55,13 @@ type Monitor struct {
 	wakeConfirmMinutes    int // Minutes of sustained motion to confirm wake (default 2)
 
 	// State
-	running            bool
-	stopCh             chan struct{}
-	lastSample         map[string]time.Time
-	lastReport         time.Time
-	linkSessionStates  map[string]*LinkSessionState // Per-link session tracking
-	firstConnectionToday bool // Track if morning summary was pushed today
-	morningSummaryPushed time.Time // When morning summary was last pushed
+	running              bool
+	stopCh               chan struct{}
+	lastSample           map[string]time.Time
+	lastReport           time.Time
+	linkSessionStates    map[string]*LinkSessionState // Per-link session tracking
+	firstConnectionToday bool                         // Track if morning summary was pushed today
+	morningSummaryPushed time.Time                    // When morning summary was last pushed
 
 	// Event callbacks
 	onSessionStart func(event events.SleepSessionStartEvent)
@@ -383,8 +383,8 @@ func (m *Monitor) checkSessionEnd(linkID string, now time.Time) {
 		// Fire session end callback
 		if m.onSessionEnd != nil {
 			m.onSessionEnd(events.SleepSessionEndEvent{
-				ZoneID:        ls.ZoneID,
-				PersonID:      ls.PersonID,
+				ZoneID:         ls.ZoneID,
+				PersonID:       ls.PersonID,
 				StartTimestamp: ls.ConfirmedStartTime,
 				EndTimestamp:   now,
 				DurationMin:    now.Sub(ls.ConfirmedStartTime).Minutes(),
@@ -429,8 +429,8 @@ func (m *Monitor) NotifyZoneTransition(linkID string, zoneID string, entered boo
 
 		if m.onSessionEnd != nil {
 			m.onSessionEnd(events.SleepSessionEndEvent{
-				ZoneID:        ls.ZoneID,
-				PersonID:      ls.PersonID,
+				ZoneID:         ls.ZoneID,
+				PersonID:       ls.PersonID,
 				StartTimestamp: ls.ConfirmedStartTime,
 				EndTimestamp:   now,
 				DurationMin:    now.Sub(ls.ConfirmedStartTime).Minutes(),
@@ -475,20 +475,20 @@ func (m *Monitor) ShouldPushMorningSummary() (bool, map[string]interface{}) {
 				m.morningSummaryPushed = now
 				// Convert report to map[string]interface{} format
 				summaryMap := map[string]interface{}{
-					"link_id":        report.LinkID,
-					"session_date":   report.SessionDate.Format("2006-01-02"),
-					"generated_at":   report.GeneratedAt.UnixMilli(),
-					"overall_score":  report.Metrics.OverallScore,
-					"quality_rating": report.Metrics.QualityRating,
+					"link_id":           report.LinkID,
+					"session_date":      report.SessionDate.Format("2006-01-02"),
+					"generated_at":      report.GeneratedAt.UnixMilli(),
+					"overall_score":     report.Metrics.OverallScore,
+					"quality_rating":    report.Metrics.QualityRating,
 					"breathing_summary": report.BreathingSummary,
 					"motion_summary":    report.MotionSummary,
 					"recommendations":   report.Recommendations,
 					"metrics": map[string]interface{}{
 						"total_duration_hours":     report.Metrics.TotalDuration.Hours(),
 						"time_in_bed_hours":        report.Metrics.TimeInBed.Hours(),
-						"sleep_efficiency":        report.Metrics.SleepEfficiency,
-						"sleep_latency_minutes":   report.Metrics.SleepLatencyMinutes,
-						"waso_minutes":            report.Metrics.WASOMinutes,
+						"sleep_efficiency":         report.Metrics.SleepEfficiency,
+						"sleep_latency_minutes":    report.Metrics.SleepLatencyMinutes,
+						"waso_minutes":             report.Metrics.WASOMinutes,
 						"wake_episode_count":       report.Metrics.WakeEpisodeCount,
 						"avg_breathing_rate":       report.Metrics.AvgBreathingRate,
 						"breathing_rate_std_dev":   report.Metrics.BreathingRateStdDev,
@@ -608,12 +608,12 @@ type SleepStatus struct {
 
 // SleepLinkState represents sleep state for a single link
 type SleepLinkState struct {
-	LinkID          string    `json:"link_id"`
-	SleepState      string    `json:"sleep_state"`
-	SamplesCollected int      `json:"samples_collected"`
-	SessionActive   bool      `json:"session_active"`
+	LinkID               string  `json:"link_id"`
+	SleepState           string  `json:"sleep_state"`
+	SamplesCollected     int     `json:"samples_collected"`
+	SessionActive        bool    `json:"session_active"`
 	CurrentBreathingRate float64 `json:"current_breathing_rate"`
-	CurrentMotion      bool     `json:"current_motion"`
+	CurrentMotion        bool    `json:"current_motion"`
 }
 
 // GetStatus returns the current sleep monitoring status
@@ -633,8 +633,8 @@ func (m *Monitor) GetStatus() SleepStatus {
 
 	for linkID, session := range sessions {
 		state := SleepLinkState{
-			LinkID:     linkID,
-			SleepState: session.GetCurrentState().String(),
+			LinkID:        linkID,
+			SleepState:    session.GetCurrentState().String(),
 			SessionActive: session.isActive,
 		}
 

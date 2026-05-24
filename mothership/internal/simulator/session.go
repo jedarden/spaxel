@@ -14,16 +14,16 @@ import (
 
 // Session represents a simulation session.
 type Session struct {
-	mu           sync.RWMutex
-	id           string
-	space        *Space
-	nodes        []*VirtualNode
-	walkers      []*Walker
-	params       *SimulationParams
-	state        SessionState
-	created_at   int64
-	updated_at   int64
-	ctx          chan struct{}
+	mu         sync.RWMutex
+	id         string
+	space      *Space
+	nodes      []*VirtualNode
+	walkers    []*Walker
+	params     *SimulationParams
+	state      SessionState
+	created_at int64
+	updated_at int64
+	ctx        chan struct{}
 }
 
 // SessionState is the state of a simulation session.
@@ -46,13 +46,13 @@ type VirtualNode struct {
 
 // SimulationParams holds simulation parameters.
 type SimulationParams struct {
-	TickRateHz        int     `json:"tick_rate_hz"`         // 10 Hz default
-	WalkerSpeed       float64 `json:"walker_speed"`          // m/s
-	SignalAmplitude   float64 `json:"signal_amplitude"`      // 0.05
-	FresnelSigma      float64 `json:"fresnel_sigma"`         // 0.3m
-	NoiseSigma        float64 `json:"noise_sigma"`           // Gaussian noise std dev
-	DefaultRSSI       float64 `json:"default_rssi"`          // -30 dBm at 1m
-	WallAttenuationDB float64 `json:"wall_attenuation_db"`   // default 4 dB
+	TickRateHz        int     `json:"tick_rate_hz"`        // 10 Hz default
+	WalkerSpeed       float64 `json:"walker_speed"`        // m/s
+	SignalAmplitude   float64 `json:"signal_amplitude"`    // 0.05
+	FresnelSigma      float64 `json:"fresnel_sigma"`       // 0.3m
+	NoiseSigma        float64 `json:"noise_sigma"`         // Gaussian noise std dev
+	DefaultRSSI       float64 `json:"default_rssi"`        // -30 dBm at 1m
+	WallAttenuationDB float64 `json:"wall_attenuation_db"` // default 4 dB
 }
 
 // DefaultSimulationParams returns the default simulation parameters.

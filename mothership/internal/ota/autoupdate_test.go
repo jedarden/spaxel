@@ -18,9 +18,9 @@ func newMockSettingsProvider() *mockSettingsProvider {
 	return &mockSettingsProvider{
 		values: map[string]interface{}{
 			"auto_update_enabled":           false,
-			"quiet_window_start":           "02:00",
-			"quiet_window_end":             "05:00",
-			"canary_duration_min":          float64(10),
+			"quiet_window_start":            "02:00",
+			"quiet_window_end":              "05:00",
+			"canary_duration_min":           float64(10),
 			"auto_update_quality_threshold": 0.05,
 		},
 	}
@@ -156,8 +156,8 @@ func (e *mockNodeNotFoundError) Error() string {
 
 // mockEventNotifier is a test implementation of EventNotifier.
 type mockEventNotifier struct {
-	mu      sync.RWMutex
-	events  []mockEvent
+	mu     sync.RWMutex
+	events []mockEvent
 }
 
 type mockEvent struct {
@@ -198,8 +198,8 @@ func (m *mockEventNotifier) clear() {
 
 // mockZoneVacancyChecker is a test implementation of ZoneVacancyChecker.
 type mockZoneVacancyChecker struct {
-	mu      sync.RWMutex
-	vacant  bool
+	mu     sync.RWMutex
+	vacant bool
 }
 
 func newMockZoneVacancyChecker() *mockZoneVacancyChecker {
@@ -317,11 +317,11 @@ func TestIsInQuietWindow(t *testing.T) {
 	_ = NewAutoUpdateManager(srv, mgr, tz)
 
 	tests := []struct {
-		name      string
-		start     string
-		end       string
-		testTime  string
-		wantIn    bool
+		name     string
+		start    string
+		end      string
+		testTime string
+		wantIn   bool
 	}{
 		{
 			name:     "inside window",

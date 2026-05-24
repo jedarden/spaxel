@@ -389,13 +389,13 @@ func (h *VolumeTriggersHandler) createTrigger(w http.ResponseWriter, r *http.Req
 
 	// Validate condition
 	validConditions := map[string]bool{
-		"enter":  true,
-		"leave":  true,
-		"dwell":  true,
-		"vacant": true,
+		"enter":           true,
+		"leave":           true,
+		"dwell":           true,
+		"vacant":          true,
 		"count":           true,
-			"predicted_enter": true,
-		}
+		"predicted_enter": true,
+	}
 	if !validConditions[req.Condition] {
 		http.Error(w, "condition must be one of: enter, leave, dwell, vacant, count, predicted_enter", http.StatusBadRequest)
 		return

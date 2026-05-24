@@ -245,24 +245,24 @@ func TestUpdateBLEDevice(t *testing.T) {
 		wantPerson string
 	}{
 		{
-			name: "update label only",
-			mac:  "AA:BB:CC:DD:EE:01",
-			body: `{"label": "Alice's iPhone"}`,
+			name:       "update label only",
+			mac:        "AA:BB:CC:DD:EE:01",
+			body:       `{"label": "Alice's iPhone"}`,
 			wantStatus: http.StatusOK,
-			wantLabel: "Alice's iPhone",
+			wantLabel:  "Alice's iPhone",
 		},
 		{
-			name: "update device type",
-			mac:  "AA:BB:CC:DD:EE:02",
-			body: `{"device_type": "apple_phone"}`,
+			name:       "update device type",
+			mac:        "AA:BB:CC:DD:EE:02",
+			body:       `{"device_type": "apple_phone"}`,
 			wantStatus: http.StatusOK,
 		},
 		{
-			name: "update all fields",
-			mac:  "AA:BB:CC:DD:EE:03",
-			body: `{"label": "Bob's Phone", "device_type": "samsung"}`,
+			name:       "update all fields",
+			mac:        "AA:BB:CC:DD:EE:03",
+			body:       `{"label": "Bob's Phone", "device_type": "samsung"}`,
 			wantStatus: http.StatusOK,
-			wantLabel: "Bob's Phone",
+			wantLabel:  "Bob's Phone",
 		},
 	}
 
@@ -612,7 +612,7 @@ func TestListPeople(t *testing.T) {
 
 	// Create people
 	registry.CreatePerson("Alice", "#ff0000") //nolint:errcheck
-	registry.CreatePerson("Bob", "#0000ff") //nolint:errcheck
+	registry.CreatePerson("Bob", "#0000ff")   //nolint:errcheck
 
 	r := setupBLERouter(h)
 	req := httptest.NewRequest("GET", "/api/people", nil)

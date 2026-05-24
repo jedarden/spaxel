@@ -68,35 +68,35 @@ type Event struct {
 // NotificationConfig holds configuration for notification channels.
 type NotificationConfig struct {
 	Channel          string `json:"channel"`
-	QuietFrom        string `json:"quiet_from"`        // HH:MM format
-	QuietTo          string `json:"quiet_to"`          // HH:MM format
+	QuietFrom        string `json:"quiet_from"`         // HH:MM format
+	QuietTo          string `json:"quiet_to"`           // HH:MM format
 	QuietDaysBitmask uint8  `json:"quiet_days_bitmask"` // Bitmask (0=Sun, 1=Mon, ..., 6=Sat)
 	MorningDigest    bool   `json:"morning_digest"`
 }
 
 // NotificationManager manages notification delivery with batching and quiet hours.
 type NotificationManager struct {
-	mu                sync.RWMutex
-	db                *sql.DB
-	config            *NotificationConfig
-	batchWindow       time.Duration
-	maxBatchSize      int
-	pendingLow        []*Event
-	pendingMedium     []*Event
-	batchTimer        *time.Timer
-	queuedForDigest   []*Event
-	sendCallback      func(Event)
-	digestSentDate    string // YYYY-MM-DD
-	location          *time.Location
+	mu              sync.RWMutex
+	db              *sql.DB
+	config          *NotificationConfig
+	batchWindow     time.Duration
+	maxBatchSize    int
+	pendingLow      []*Event
+	pendingMedium   []*Event
+	batchTimer      *time.Timer
+	queuedForDigest []*Event
+	sendCallback    func(Event)
+	digestSentDate  string // YYYY-MM-DD
+	location        *time.Location
 }
 
 // Config holds initialization options for NotificationManager.
 type Config struct {
-	DBPath            string        // Path to SQLite database
-	BatchWindowSec    int           // Batching window in seconds (default 30)
-	MaxBatchSize      int           // Max events before forcing batch (default 5)
-	Location          *time.Location // Timezone for quiet hours (default UTC)
-	SendCallback      func(Event)   // Callback for sending notifications
+	DBPath         string         // Path to SQLite database
+	BatchWindowSec int            // Batching window in seconds (default 30)
+	MaxBatchSize   int            // Max events before forcing batch (default 5)
+	Location       *time.Location // Timezone for quiet hours (default UTC)
+	SendCallback   func(Event)    // Callback for sending notifications
 }
 
 // New creates a new NotificationManager.
@@ -134,13 +134,13 @@ func New(cfg Config) (*NotificationManager, error) {
 	}
 
 	m := &NotificationManager{
-		db:             db,
-		batchWindow:    batchWindow,
-		maxBatchSize:   maxBatchSize,
-		sendCallback:   cfg.SendCallback,
-		location:       location,
-		pendingLow:     make([]*Event, 0, maxBatchSize),
-		pendingMedium:  make([]*Event, 0, maxBatchSize),
+		db:              db,
+		batchWindow:     batchWindow,
+		maxBatchSize:    maxBatchSize,
+		sendCallback:    cfg.SendCallback,
+		location:        location,
+		pendingLow:      make([]*Event, 0, maxBatchSize),
+		pendingMedium:   make([]*Event, 0, maxBatchSize),
 		queuedForDigest: make([]*Event, 0),
 	}
 
@@ -301,11 +301,11 @@ func (m *NotificationManager) isQuietHours() bool {
 	if quietFrom.Before(quietTo) {
 		// Quiet hours don't cross midnight
 		return (currentTime.Equal(quietFrom) || currentTime.After(quietFrom)) &&
-		       currentTime.Before(quietTo)
+			currentTime.Before(quietTo)
 	}
 	// Quiet hours cross midnight
 	return currentTime.Equal(quietFrom) || currentTime.After(quietFrom) ||
-	       currentTime.Before(quietTo)
+		currentTime.Before(quietTo)
 }
 
 // isQuietHoursEnd checks if current time is at the quiet hours end time.
@@ -483,14 +483,14 @@ func (m *NotificationManager) createSummary(events []*Event) Event {
 	return Event{
 		ID:        fmt.Sprintf("batch-%d", time.Now().UnixNano()),
 		Type:      ZoneEnter, // Generic type for summaries
-		Priority:  Medium,     // Summaries are medium priority
+		Priority:  Medium,    // Summaries are medium priority
 		Title:     title,
 		Body:      body,
 		Timestamp: time.Now(),
 		Data: map[string]interface{}{
-			"event_count":  len(events),
-			"type_counts":  typeCounts,
-			"is_batch":     true,
+			"event_count": len(events),
+			"type_counts": typeCounts,
+			"is_batch":    true,
 		},
 	}
 }
@@ -588,9 +588,9 @@ func (m *NotificationManager) sendDigest() {
 		Body:      body,
 		Timestamp: time.Now(),
 		Data: map[string]interface{}{
-			"event_count":  len(queued),
-			"type_counts":  typeCounts,
-			"is_digest":    true,
+			"event_count": len(queued),
+			"type_counts": typeCounts,
+			"is_digest":   true,
 		},
 	}
 

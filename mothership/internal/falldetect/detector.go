@@ -44,12 +44,12 @@ type FallEvent struct {
 	Identity       string    `json:"identity,omitempty"`
 	ZoneID         string    `json:"zone_id,omitempty"`
 	ZoneName       string    `json:"zone_name,omitempty"`
-	StartZ         float64   `json:"start_z"`         // Height before fall
-	EndZ           float64   `json:"end_z"`           // Height after fall
-	ZDrop          float64   `json:"z_drop"`          // Total Z drop in meters
-	PeakVelocity   float64   `json:"peak_velocity"`   // Peak downward velocity (m/s)
-	FallDuration   float64   `json:"fall_duration"`   // Time from descent to stillness (seconds)
-	StillnessTime  float64   `json:"stillness_time"`  // Seconds of stillness after fall
+	StartZ         float64   `json:"start_z"`        // Height before fall
+	EndZ           float64   `json:"end_z"`          // Height after fall
+	ZDrop          float64   `json:"z_drop"`         // Total Z drop in meters
+	PeakVelocity   float64   `json:"peak_velocity"`  // Peak downward velocity (m/s)
+	FallDuration   float64   `json:"fall_duration"`  // Time from descent to stillness (seconds)
+	StillnessTime  float64   `json:"stillness_time"` // Seconds of stillness after fall
 	Confidence     float64   `json:"confidence"`
 	Timestamp      time.Time `json:"timestamp"`
 	Position       Position  `json:"position"`
@@ -67,22 +67,22 @@ type Position struct {
 
 // BlobSnapshot captures blob state at a point in time.
 type BlobSnapshot struct {
-	ID        int
-	X, Y, Z   float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Posture   string
-	Timestamp time.Time
-	DeltaRMS  float64 // Motion level from contributing links
+	Posture    string
+	Timestamp  time.Time
+	DeltaRMS   float64 // Motion level from contributing links
 }
 
 // AlertLevel represents the escalation level of a fall alert.
 type AlertLevel int
 
 const (
-	AlertLevelNone AlertLevel = iota
-	AlertLevelInitial    // T+0s
-	AlertLevelEscalated  // T+2min
-	AlertLevelUrgent     // T+5min
+	AlertLevelNone      AlertLevel = iota
+	AlertLevelInitial              // T+0s
+	AlertLevelEscalated            // T+2min
+	AlertLevelUrgent               // T+5min
 )
 
 // fallTrackState holds per-blob fall detection state.
@@ -113,8 +113,8 @@ type fallTrackState struct {
 }
 
 type postureEntry struct {
-	posture  string
-	time     time.Time
+	posture string
+	time    time.Time
 }
 
 // Config holds fall detector configuration.
@@ -125,14 +125,14 @@ type Config struct {
 	DescentWindow            float64 // Rolling window for velocity (seconds), default: 0.2
 
 	// Post-fall confirmation
-	FloorLevelThreshold   float64 // Z below this is "floor level" (m), default: 0.4
+	FloorLevelThreshold      float64 // Z below this is "floor level" (m), default: 0.4
 	StillnessMotionThreshold float64 // DeltaRMS below this is "still", default: 0.01
 	StillnessTimeRequired    float64 // Seconds of stillness to confirm (s), default: 30
 
 	// False positive suppression
-	StandardDropThreshold  float64 // Normal drop threshold (m), default: 0.8
-	ElevatedDropThreshold  float64 // Higher threshold if recent sitting/lying (m), default: 1.2
-	PostureHistoryWindow   float64 // How far back to check posture (s), default: 600 (10 min)
+	StandardDropThreshold float64 // Normal drop threshold (m), default: 0.8
+	ElevatedDropThreshold float64 // Higher threshold if recent sitting/lying (m), default: 1.2
+	PostureHistoryWindow  float64 // How far back to check posture (s), default: 600 (10 min)
 
 	// Alert timing
 	EscalationTime1 time.Duration // Time to first escalation, default: 2min
@@ -143,18 +143,18 @@ type Config struct {
 // DefaultConfig returns the default fall detection configuration.
 func DefaultConfig() Config {
 	return Config{
-		DescentVelocityThreshold:  -1.5,
-		DescentDropThreshold:      0.8,
-		DescentWindow:             0.2,
-		FloorLevelThreshold:       0.4,
-		StillnessMotionThreshold:  0.01,
-		StillnessTimeRequired:     30.0,
-		StandardDropThreshold:     0.8,
-		ElevatedDropThreshold:     1.2,
-		PostureHistoryWindow:      600.0,
-		EscalationTime1:           2 * time.Minute,
-		EscalationTime2:           5 * time.Minute,
-		AlertCooldown:             5 * time.Minute,
+		DescentVelocityThreshold: -1.5,
+		DescentDropThreshold:     0.8,
+		DescentWindow:            0.2,
+		FloorLevelThreshold:      0.4,
+		StillnessMotionThreshold: 0.01,
+		StillnessTimeRequired:    30.0,
+		StandardDropThreshold:    0.8,
+		ElevatedDropThreshold:    1.2,
+		PostureHistoryWindow:     600.0,
+		EscalationTime1:          2 * time.Minute,
+		EscalationTime2:          5 * time.Minute,
+		AlertCooldown:            5 * time.Minute,
 	}
 }
 
@@ -164,20 +164,20 @@ type Detector struct {
 	config Config
 
 	// Per-blob tracking
-	trackStates  map[int]*fallTrackState
-	blobHistory  map[int][]BlobSnapshot
+	trackStates map[int]*fallTrackState
+	blobHistory map[int][]BlobSnapshot
 
 	// Active fall events (for acknowledgement)
 	activeFalls   map[string]*FallEvent
 	fallIDCounter int
 
 	// Callbacks
-	onFall        func(FallEvent)
-	onEscalation  func(FallEvent, AlertLevel)
-	identityFunc  func(blobID int) string
-	zoneFunc      func(blobID int) (zoneID, zoneName string)
-	childrenZoneFunc func(blobID int) bool // Returns true if blob is in children's zone
-	deltaRMSFunc  func(blobID int) float64 // Gets motion level for blob
+	onFall           func(FallEvent)
+	onEscalation     func(FallEvent, AlertLevel)
+	identityFunc     func(blobID int) string
+	zoneFunc         func(blobID int) (zoneID, zoneName string)
+	childrenZoneFunc func(blobID int) bool    // Returns true if blob is in children's zone
+	deltaRMSFunc     func(blobID int) float64 // Gets motion level for blob
 
 	// Alert tracking
 	recentAlerts map[int]time.Time // blobID -> last alert time
@@ -247,10 +247,10 @@ func (d *Detector) SetDeltaRMSFunc(fn func(blobID int) float64) {
 
 // Update processes new blob positions. This should be called at 10Hz.
 func (d *Detector) Update(blobs []struct {
-	ID       int
-	X, Y, Z  float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Posture  string
+	Posture    string
 }, now time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -268,10 +268,10 @@ func (d *Detector) Update(blobs []struct {
 
 // processBlob analyzes a single blob for fall patterns.
 func (d *Detector) processBlob(blob struct {
-	ID       int
-	X, Y, Z  float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Posture  string
+	Posture    string
 }, now time.Time) {
 	// Record snapshot
 	snapshot := BlobSnapshot{
@@ -347,10 +347,10 @@ func (d *Detector) processBlob(blob struct {
 
 // checkForDescent detects the initial rapid descent that could indicate a fall.
 func (d *Detector) checkForDescent(blob struct {
-	ID       int
-	X, Y, Z  float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Posture  string
+	Posture    string
 }, history []BlobSnapshot, state *fallTrackState, now time.Time) {
 	if len(history) < 3 {
 		return
@@ -415,10 +415,10 @@ func (d *Detector) checkForDescent(blob struct {
 
 // checkForFallConfirmation checks if the descent is followed by stillness at floor level.
 func (d *Detector) checkForFallConfirmation(blob struct {
-	ID       int
-	X, Y, Z  float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Posture  string
+	Posture    string
 }, history []BlobSnapshot, state *fallTrackState, now time.Time) {
 	// Check if person got up (Z rose above floor level)
 	if blob.Z > d.config.FloorLevelThreshold+0.1 { // Small hysteresis
@@ -478,10 +478,10 @@ func (d *Detector) checkForFallConfirmation(blob struct {
 
 // checkForRecovery monitors a confirmed fall for recovery (person gets up).
 func (d *Detector) checkForRecovery(blob struct {
-	ID       int
-	X, Y, Z  float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Posture  string
+	Posture    string
 }, state *fallTrackState, now time.Time) {
 	// If person rises significantly, they've recovered
 	if blob.Z > d.config.FloorLevelThreshold+0.3 {
@@ -502,10 +502,10 @@ func (d *Detector) hasRecentSittingOrLying(state *fallTrackState) bool {
 
 // triggerFallAlert fires the fall alert and sets up escalation timers.
 func (d *Detector) triggerFallAlert(blob struct {
-	ID       int
-	X, Y, Z  float64
+	ID         int
+	X, Y, Z    float64
 	VX, VY, VZ float64
-	Posture  string
+	Posture    string
 }, state *fallTrackState, fallDuration, stillnessTime float64, now time.Time) {
 	// Check cooldown
 	if lastAlert, exists := d.recentAlerts[blob.ID]; exists {

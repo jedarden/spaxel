@@ -518,9 +518,9 @@ func TestSendUrgentPriorityImmediate(t *testing.T) {
 
 	// Low-priority is suppressed during quiet hours
 	service.Send(Notification{
-		Title:    "Low priority",
-		Body:     "suppressed",
-		Priority: int(PriorityLow),
+		Title:     "Low priority",
+		Body:      "suppressed",
+		Priority:  int(PriorityLow),
 		Timestamp: time.Now(),
 	})
 
@@ -940,8 +940,8 @@ func TestFloorPlanThumbnailBlobColors(t *testing.T) {
 	defer service.Close() //nolint:errcheck
 
 	tests := []struct {
-		name     string
-		blob     struct {
+		name string
+		blob struct {
 			X, Y, Z  float64
 			Identity string
 			IsFall   bool
@@ -952,18 +952,30 @@ func TestFloorPlanThumbnailBlobColors(t *testing.T) {
 		wantBlueDominant  bool
 	}{
 		{
-			name:             "identified blob is green-ish",
-			blob:             struct{ X, Y, Z float64; Identity string; IsFall bool }{X: 2.0, Z: 1.5, Identity: "Alice"},
+			name: "identified blob is green-ish",
+			blob: struct {
+				X, Y, Z  float64
+				Identity string
+				IsFall   bool
+			}{X: 2.0, Z: 1.5, Identity: "Alice"},
 			wantGreenDominant: true,
 		},
 		{
-			name:            "fall blob is red-ish",
-			blob:            struct{ X, Y, Z float64; Identity string; IsFall bool }{X: 2.0, Z: 1.5, IsFall: true},
+			name: "fall blob is red-ish",
+			blob: struct {
+				X, Y, Z  float64
+				Identity string
+				IsFall   bool
+			}{X: 2.0, Z: 1.5, IsFall: true},
 			wantRedDominant: true,
 		},
 		{
-			name:             "unknown blob is blue-ish",
-			blob:             struct{ X, Y, Z float64; Identity string; IsFall bool }{X: 2.0, Z: 1.5},
+			name: "unknown blob is blue-ish",
+			blob: struct {
+				X, Y, Z  float64
+				Identity string
+				IsFall   bool
+			}{X: 2.0, Z: 1.5},
 			wantBlueDominant: true,
 		},
 	}
@@ -1011,9 +1023,10 @@ func TestFloorPlanThumbnailBlobColors(t *testing.T) {
 
 // TestFloorPlanZoneBoundaryPixels verifies that zone outlines appear at the expected pixel coordinates
 // in the extended renderer. The coordinate transform for a 300x300 image with 6x5 room:
-//   margin=10, drawW=280, drawH=280
-//   scaleX=280/6≈46.67, scaleZ=280/5=56 → scale=min(46.67,56)=46.67
-//   offsetX=10+(280-6*46.67)/2=10, offsetY=10+(280-5*46.67)/2≈33
+//
+//	margin=10, drawW=280, drawH=280
+//	scaleX=280/6≈46.67, scaleZ=280/5=56 → scale=min(46.67,56)=46.67
+//	offsetX=10+(280-6*46.67)/2=10, offsetY=10+(280-5*46.67)/2≈33
 //
 // A zone at (X=0, Y=0, W=2, D=2) → top-left at (px=10, py=33), bottom-right at ~(px=103, py=127).
 func TestFloorPlanZoneBoundaryPixels(t *testing.T) {

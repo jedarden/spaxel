@@ -349,10 +349,10 @@ func TestNotificationSettingsValidation(t *testing.T) {
 
 	t.Run("validateEventTypes - valid types", func(t *testing.T) {
 		validTypes := map[string]bool{
-			"zone_enter":      true,
-			"zone_leave":      true,
-			"fall_detected":   true,
-			"anomaly_alert":   true,
+			"zone_enter":    true,
+			"zone_leave":    true,
+			"fall_detected": true,
+			"anomaly_alert": true,
 		}
 		if err := validateEventTypes(validTypes); err != nil {
 			t.Errorf("Valid event types should pass validation: %v", err)

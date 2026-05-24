@@ -104,7 +104,7 @@ func (rc *RepositioningComputer) ComputeRepositioningTarget(linkID string, block
 	bestPos := currentPos
 	bestImprovement := 0.0
 
-	step := 0.3 // 30cm steps
+	step := 0.3    // 30cm steps
 	minDist := 0.5 // Minimum distance from other nodes
 
 	for x := originX + step; x < originX+width-step; x += step {
@@ -167,8 +167,8 @@ func (rc *RepositioningComputer) computeWorstGDOPNear(fixedPositions []NodePosit
 	for row := 0; row < rows; row++ {
 		for col := 0; col < cols; col++ {
 			// Convert cell to room coordinates
-			cellX := originX + (float64(col) + 0.5) * cellWidth
-			cellZ := originZ + (float64(row) + 0.5) * cellDepth
+			cellX := originX + (float64(col)+0.5)*cellWidth
+			cellZ := originZ + (float64(row)+0.5)*cellDepth
 
 			// Check distance from center
 			dist := math.Sqrt((cellX-center.X)*(cellX-center.X) + (cellZ-center.Z)*(cellZ-center.Z))

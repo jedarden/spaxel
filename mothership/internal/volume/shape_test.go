@@ -134,7 +134,7 @@ func TestStore_EvaluateEnter(t *testing.T) {
 			H:    float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -195,7 +195,7 @@ func TestStore_EvaluateLeave(t *testing.T) {
 			H:    float64Ptr(1),
 		},
 		Condition: "leave",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -295,7 +295,7 @@ func TestStore_EvaluateDwell(t *testing.T) {
 	}
 
 	// Blob re-enters and stays for duration threshold - should fire again
-	reEntry := now.Add(time.Duration(durationSec)*time.Second+10*time.Second)
+	reEntry := now.Add(time.Duration(durationSec)*time.Second + 10*time.Second)
 	store.Evaluate(blobsInside, reEntry) // enters
 	fired = store.Evaluate(blobsInside, reEntry.Add(time.Duration(durationSec)*time.Second))
 	if len(fired) != 1 {
@@ -317,7 +317,7 @@ func TestStore_EvaluateDwell_Accuracy(t *testing.T) {
 		Shape: ShapeJSON{
 			Type: ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "dwell",
 		ConditionParams: ConditionParams{
@@ -415,11 +415,11 @@ func TestStore_EvaluateLeave_BlobDisappears(t *testing.T) {
 		Name: "test leave disappear",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "leave",
-		Enabled: true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -454,7 +454,7 @@ func TestStore_EvaluateVacant_Cancelled(t *testing.T) {
 		Name: "test vacant cancelled",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "vacant",
@@ -507,11 +507,11 @@ func TestStore_MultipleBlobs(t *testing.T) {
 		Name: "test multi-blob enter",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(4), D: float64Ptr(4), H: float64Ptr(2),
 		},
 		Condition: "enter",
-		Enabled: true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -689,11 +689,11 @@ func TestStore_NilDurationParams(t *testing.T) {
 		Name: "dwell no duration",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "dwell",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	_, err = store.Create(dwellTrigger)
@@ -713,11 +713,11 @@ func TestStore_NilDurationParams(t *testing.T) {
 		Name: "count no threshold",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "count",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	_, err = store.Create(countTrigger)
@@ -743,11 +743,11 @@ func TestStore_DisabledTrigger(t *testing.T) {
 		Name: "disabled trigger",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  false,
+		Enabled:   false,
 	}
 
 	_, err = store.Create(trigger)
@@ -779,11 +779,11 @@ func TestStore_FiringCallback(t *testing.T) {
 		Name: "callback test",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -830,22 +830,22 @@ func TestStore_BlobVolumeTracking(t *testing.T) {
 		Name: "box1",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	box2 := &Trigger{
 		Name: "box2",
 		Shape: ShapeJSON{
 			Type: ShapeBox,
-			X: float64Ptr(5), Y: float64Ptr(0), Z: float64Ptr(0),
+			X:    float64Ptr(5), Y: float64Ptr(0), Z: float64Ptr(0),
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id1, _ := store.Create(box1)
@@ -1027,7 +1027,7 @@ func TestStore_CRUD(t *testing.T) {
 			H:    float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": "http://example.com"}},
 		},
@@ -1122,7 +1122,7 @@ func TestStore_TimeConstraint(t *testing.T) {
 
 	// Before time window - blob enters but no fire due to time constraint
 	beforeTime := time.Date(2024, 1, 1, 8, 0, 0, 0, time.UTC)
-	store.Evaluate(blobsOutside, beforeTime) // Blob outside
+	store.Evaluate(blobsOutside, beforeTime)         // Blob outside
 	fired := store.Evaluate(blobsInside, beforeTime) // Blob enters
 	if len(fired) != 0 {
 		t.Errorf("Expected 0 firings (before time window), got %d", len(fired))
@@ -1197,7 +1197,7 @@ func TestStore_ErrorCountManagement(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": "http://example.com"}},
 		},
@@ -1259,7 +1259,7 @@ func TestStore_DisableTriggerWithError(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -1306,7 +1306,7 @@ func TestStore_EnableTriggerClearsErrorState(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -1352,7 +1352,7 @@ func TestStore_ErrorCountResetsOnFirst2xx(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -1393,7 +1393,7 @@ func TestStore_WebhookLogAudit(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -1453,7 +1453,7 @@ func TestStore_5xxDoesNotDisable(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -1491,7 +1491,7 @@ func TestStore_DisabledTriggerSkippedInEvaluate(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store.Create(trigger)
@@ -1529,7 +1529,7 @@ func TestStore_ErrorStatePersistsAcrossRestart(t *testing.T) {
 			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 	}
 
 	id, err := store1.Create(trigger)

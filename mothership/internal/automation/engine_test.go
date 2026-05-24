@@ -265,11 +265,11 @@ func TestTimeWindowCondition(t *testing.T) {
 		minute   int
 		expected bool
 	}{
-		{8, 0, true},    // 08:00 - within 07:00-18:00
-		{12, 0, true},   // 12:00 - within 07:00-18:00
-		{17, 59, true},  // 17:59 - within 07:00-18:00
-		{6, 59, false},  // 06:59 - outside 07:00-18:00
-		{18, 1, false},  // 18:01 - outside 07:00-18:00
+		{8, 0, true},   // 08:00 - within 07:00-18:00
+		{12, 0, true},  // 12:00 - within 07:00-18:00
+		{17, 59, true}, // 17:59 - within 07:00-18:00
+		{6, 59, false}, // 06:59 - outside 07:00-18:00
+		{18, 1, false}, // 18:01 - outside 07:00-18:00
 	}
 
 	for _, tc := range dayTestCases {
@@ -448,9 +448,9 @@ func TestWebhookDispatch(t *testing.T) {
 	})
 
 	engine.ProcessEvent(Event{
-		Type:      TriggerZoneEnter,
-		ZoneID:    "test",
-		ZoneName:  "Test Zone",
+		Type:       TriggerZoneEnter,
+		ZoneID:     "test",
+		ZoneName:   "Test Zone",
 		PersonName: "Alice",
 		Timestamp:  time.Now(),
 	})
@@ -503,8 +503,8 @@ func TestWebhookRetry(t *testing.T) {
 	}
 
 	engine.ProcessEvent(Event{
-		Type:     TriggerZoneEnter,
-		ZoneID:   "test",
+		Type:      TriggerZoneEnter,
+		ZoneID:    "test",
 		Timestamp: time.Now(),
 	})
 
@@ -544,8 +544,8 @@ func TestMQTTPublish(t *testing.T) {
 	}
 
 	engine.ProcessEvent(Event{
-		Type:     TriggerZoneEnter,
-		ZoneID:   "test",
+		Type:      TriggerZoneEnter,
+		ZoneID:    "test",
 		Timestamp: time.Now(),
 	})
 
@@ -639,8 +639,8 @@ func TestFireCountIncrement(t *testing.T) {
 	// Trigger 3 times
 	for i := 0; i < 3; i++ {
 		engine.ProcessEvent(Event{
-			Type:     TriggerZoneEnter,
-			ZoneID:   "test",
+			Type:      TriggerZoneEnter,
+			ZoneID:    "test",
 			Timestamp: time.Now(),
 		})
 		time.Sleep(10 * time.Millisecond)
@@ -663,22 +663,22 @@ func TestTriggerVolumeContainment(t *testing.T) {
 
 	// Box volume
 	boxVolume := TriggerVolume{
-		ID:    "test-box",
-		Type:  "box",
-		MinX:  1.0, MinY: 0.0, MinZ: 1.0,
-		MaxX:  3.0, MaxY: 2.0, MaxZ: 3.0,
+		ID:   "test-box",
+		Type: "box",
+		MinX: 1.0, MinY: 0.0, MinZ: 1.0,
+		MaxX: 3.0, MaxY: 2.0, MaxZ: 3.0,
 	}
 
 	testCases := []struct {
 		x, y, z  float64
 		expected bool
 	}{
-		{2.0, 1.0, 2.0, true},   // Center
-		{1.0, 0.0, 1.0, true},   // Corner
-		{3.0, 2.0, 3.0, true},   // Opposite corner
-		{0.0, 1.0, 2.0, false},  // Outside X
-		{2.0, 3.0, 2.0, false},  // Outside Y
-		{2.0, 1.0, 4.0, false},  // Outside Z
+		{2.0, 1.0, 2.0, true},  // Center
+		{1.0, 0.0, 1.0, true},  // Corner
+		{3.0, 2.0, 3.0, true},  // Opposite corner
+		{0.0, 1.0, 2.0, false}, // Outside X
+		{2.0, 3.0, 2.0, false}, // Outside Y
+		{2.0, 1.0, 4.0, false}, // Outside Z
 	}
 
 	for _, tc := range testCases {
@@ -691,20 +691,20 @@ func TestTriggerVolumeContainment(t *testing.T) {
 
 	// Sphere volume
 	sphereVolume := TriggerVolume{
-		ID:       "test-sphere",
-		Type:     "sphere",
-		CenterX:  2.0, CenterY: 2.0, CenterZ: 2.0,
-		Radius:   1.0,
+		ID:      "test-sphere",
+		Type:    "sphere",
+		CenterX: 2.0, CenterY: 2.0, CenterZ: 2.0,
+		Radius: 1.0,
 	}
 
 	sphereCases := []struct {
 		x, y, z  float64
 		expected bool
 	}{
-		{2.0, 2.0, 2.0, true},   // Center
-		{2.0, 2.0, 3.0, true},   // On surface
-		{2.0, 2.0, 3.1, false},  // Just outside
-		{1.0, 1.0, 1.0, false},  // Corner (distance > 1)
+		{2.0, 2.0, 2.0, true},  // Center
+		{2.0, 2.0, 3.0, true},  // On surface
+		{2.0, 2.0, 3.1, false}, // Just outside
+		{1.0, 1.0, 1.0, false}, // Corner (distance > 1)
 	}
 
 	for _, tc := range sphereCases {
@@ -717,9 +717,9 @@ func TestTriggerVolumeContainment(t *testing.T) {
 
 	// Cylinder volume
 	cylinderVolume := TriggerVolume{
-		ID:         "test-cylinder",
-		Type:       "cylinder",
-		BaseX:      2.0, BaseZ: 2.0,
+		ID:    "test-cylinder",
+		Type:  "cylinder",
+		BaseX: 2.0, BaseZ: 2.0,
 		BaseRadius: 1.0,
 		MinHeight:  0.0, MaxHeight: 2.0,
 	}
@@ -728,11 +728,11 @@ func TestTriggerVolumeContainment(t *testing.T) {
 		x, y, z  float64
 		expected bool
 	}{
-		{2.0, 1.0, 2.0, true},   // Center
-		{2.0, 2.5, 2.0, false},  // Above height
-		{3.0, 1.0, 2.0, true},   // On edge
-		{3.5, 1.0, 2.0, false},  // Outside radius
-		{2.0, 1.0, 3.0, true},   // On edge (dist=1.0 from center in Z)
+		{2.0, 1.0, 2.0, true},  // Center
+		{2.0, 2.5, 2.0, false}, // Above height
+		{3.0, 1.0, 2.0, true},  // On edge
+		{3.5, 1.0, 2.0, false}, // Outside radius
+		{2.0, 1.0, 3.0, true},  // On edge (dist=1.0 from center in Z)
 	}
 
 	for _, tc := range cylinderCases {
@@ -854,7 +854,7 @@ func TestTriggerVolumeCRUD(t *testing.T) {
 		Type:    "box",
 		Enabled: true,
 		MinX:    0, MinY: 0, MinZ: 0,
-		MaxX:    1, MaxY: 1, MaxZ: 1,
+		MaxX: 1, MaxY: 1, MaxZ: 1,
 	}
 	if err := engine.CreateTriggerVolume(v); err != nil {
 		t.Fatal(err)
@@ -1006,8 +1006,8 @@ func TestZoneOccupancyCondition(t *testing.T) {
 		triggered = true
 	})
 	engine.ProcessEvent(Event{
-		Type:     TriggerZoneEnter,
-		ZoneID:   "kitchen",
+		Type:      TriggerZoneEnter,
+		ZoneID:    "kitchen",
 		Timestamp: time.Now(),
 	})
 

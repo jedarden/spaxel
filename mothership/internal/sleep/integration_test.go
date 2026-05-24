@@ -8,10 +8,10 @@ import (
 
 func TestNewMonitor(t *testing.T) {
 	cfg := MonitorConfig{
-		SampleInterval:   15 * time.Second,
-		ReportHour:       7,
-		SleepStartHour:   22,
-		SleepEndHour:     7,
+		SampleInterval: 15 * time.Second,
+		ReportHour:     7,
+		SleepStartHour: 22,
+		SleepEndHour:   7,
 	}
 
 	m := NewMonitor(cfg)

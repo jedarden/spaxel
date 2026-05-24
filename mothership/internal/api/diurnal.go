@@ -123,4 +123,3 @@ func (h *DiurnalHandler) getDiurnalSlots(w http.ResponseWriter, r *http.Request)
 
 	writeJSON(w, http.StatusOK, response)
 }
-

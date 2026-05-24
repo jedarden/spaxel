@@ -446,8 +446,8 @@ func (m *mockPersonNameProvider) GetPersonName(personID string) string {
 
 // mockModeChangeBroadcaster implements ModeChangeBroadcaster for testing.
 type mockModeChangeBroadcaster struct {
-	mu      sync.Mutex
-	events  []events.SystemModeChangeEvent
+	mu     sync.Mutex
+	events []events.SystemModeChangeEvent
 }
 
 func (m *mockModeChangeBroadcaster) BroadcastSystemModeChange(event events.SystemModeChangeEvent) {

@@ -122,13 +122,13 @@ func AS1_NoManualIPRequired(t *testing.T) {
 
 	// Verify the provisioning API endpoint exists and can generate a provisioning payload without requiring an IP.
 	provisioningResponse := map[string]interface{}{
-		"wifi_ssid":   "TestNetwork",
-		"wifi_pass":   "testpass",
-		"node_id":     "test-node-uuid",
-		"node_token":  "test-token-hex",
-		"ms_mdns":     "spaxel",
-		"ms_port":     8080,
-		"debug":       false,
+		"wifi_ssid":  "TestNetwork",
+		"wifi_pass":  "testpass",
+		"node_id":    "test-node-uuid",
+		"node_token": "test-token-hex",
+		"ms_mdns":    "spaxel",
+		"ms_port":    8080,
+		"debug":      false,
 	}
 
 	// Verify the provisioning response contains mDNS service name

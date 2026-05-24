@@ -45,7 +45,7 @@ func validBoxShape() volume.ShapeJSON {
 	return volume.ShapeJSON{
 		Type: volume.ShapeBox,
 		X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-		W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+		W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 	}
 }
 
@@ -237,7 +237,7 @@ func TestVolumeCreateTriggerAssignsID(t *testing.T) {
 func TestVolumeGetTrigger(t *testing.T) {
 	tests := []struct {
 		name     string
-		setup    bool // whether to seed a trigger
+		setup    bool   // whether to seed a trigger
 		getID    string // empty = use the seeded ID
 		wantCode int
 		wantErr  string
@@ -424,8 +424,8 @@ func TestVolumeUpdateTrigger(t *testing.T) {
 func TestVolumeDeleteTrigger(t *testing.T) {
 	tests := []struct {
 		name     string
-		setup    int  // number of triggers to seed
-		deleteN  int  // 0 = delete nonexistent, 1 = delete first trigger
+		setup    int // number of triggers to seed
+		deleteN  int // 0 = delete nonexistent, 1 = delete first trigger
 		wantCode int
 		wantLen  int
 	}{
@@ -610,10 +610,10 @@ func TestTestTriggerEndpoint(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "dwell",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": "http://example.com/hook"}},
 		},
@@ -687,10 +687,10 @@ func TestTestTrigger_ReturnsErrorOnMissingURL(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{}},
 		},
@@ -743,10 +743,10 @@ func TestTestTrigger_4xxInTestDoesNotDisable(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": mockServer.URL}},
 		},
@@ -787,10 +787,10 @@ func TestEnableEndpoint(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  false,
+		Enabled:   false,
 	}
 
 	id, err := handler.store.Create(trigger)
@@ -836,10 +836,10 @@ func TestGetWebhookLogEndpoint(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled: true,
+		Enabled:   true,
 	}
 
 	id, err := handler.store.Create(trigger)
@@ -899,10 +899,10 @@ func TestWebhookPayloadSchema(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "dwell",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": mockServer.URL}},
 		},
@@ -959,10 +959,10 @@ func Test5xxDoesNotDisableTrigger(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": mockServer.URL}},
 		},
@@ -1012,10 +1012,10 @@ func Test4xxDisablesTrigger(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": mockServer.URL}},
 		},
@@ -1065,10 +1065,10 @@ func Test2xxResetsErrorCount(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": mockServer.URL}},
 		},
@@ -1129,10 +1129,10 @@ func TestTimeoutDoesNotDisable(t *testing.T) {
 		Shape: volume.ShapeJSON{
 			Type: volume.ShapeBox,
 			X:    float64Ptr(0), Y: float64Ptr(0), Z: float64Ptr(0),
-			W:    float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
+			W: float64Ptr(1), D: float64Ptr(1), H: float64Ptr(1),
 		},
 		Condition: "enter",
-		Enabled:  true,
+		Enabled:   true,
 		Actions: []volume.Action{
 			{Type: "webhook", Params: map[string]interface{}{"url": "http://" + listener.Addr().String()}},
 		},

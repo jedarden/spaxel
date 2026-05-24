@@ -10,16 +10,16 @@ import (
 
 // Triangulation parameters per specification
 const (
-	RefDistance    = 1.0  // d0 = 1.0m reference distance
-	RefRSSI        = -65  // RSSI at 1m in typical indoor environment (dBm)
-	PathLossExp    = 2.5  // Indoor path loss exponent (typical range 2.0-3.5)
-	RSSINoiseSigma = 5.0  // RSSI noise sigma in dBm
+	RefDistance    = 1.0 // d0 = 1.0m reference distance
+	RefRSSI        = -65 // RSSI at 1m in typical indoor environment (dBm)
+	PathLossExp    = 2.5 // Indoor path loss exponent (typical range 2.0-3.5)
+	RSSINoiseSigma = 5.0 // RSSI noise sigma in dBm
 )
 
 // Matching thresholds per specification
 const (
-	MaxBLEBlobDistance    = 2.0  // Maximum distance for BLE-to-blob matching (metres)
-	MinMatchConfidence    = 0.6  // Minimum confidence for identity assignment
+	MaxBLEBlobDistance    = 2.0 // Maximum distance for BLE-to-blob matching (metres)
+	MinMatchConfidence    = 0.6 // Minimum confidence for identity assignment
 	IdentityPersistence   = 5 * time.Minute
 	ObservationWindow     = 5 * time.Second
 	ObservationWindowLong = 15 * time.Second
@@ -62,15 +62,15 @@ type TriangulatedDevice struct {
 
 // IdentityMatcher matches BLE devices to CSI blobs using RSSI triangulation.
 type IdentityMatcher struct {
-	registry  *Registry
-	rssiCache *RSSICache
-	nodePos   NodePositionAccessor
+	registry         *Registry
+	rssiCache        *RSSICache
+	nodePos          NodePositionAccessor
 	rotationDetector *RotationDetector // For address rotation detection
 
 	mu              sync.RWMutex
-	matches         map[int]*IdentityMatch // blobID -> match
+	matches         map[int]*IdentityMatch    // blobID -> match
 	bleOnlyTracks   map[string]*IdentityMatch // personID -> BLE-only placeholder
-	persistentIdent map[int]*IdentityMatch // blobID -> persisted identity (for 5-min persistence)
+	persistentIdent map[int]*IdentityMatch    // blobID -> persisted identity (for 5-min persistence)
 	lastBLEUpdate   time.Time
 	cachedDevices   []*TriangulatedDevice
 
@@ -102,9 +102,9 @@ func NewIdentityMatcher(registry *Registry, rssiCache *RSSICache, nodePos NodePo
 // UpdateBlobs processes new blob positions and matches them to BLE devices.
 // This implements the full BLE-to-blob matching algorithm per specification.
 func (m *IdentityMatcher) UpdateBlobs(blobs []struct {
-	ID     int
+	ID      int
 	X, Y, Z float64
-	Weight float64
+	Weight  float64
 }) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -171,7 +171,7 @@ func (m *IdentityMatcher) triangulateAllDevices(now time.Time) []*TriangulatedDe
 		if processed[dev.Addr] {
 			// Update alias last_seen timestamp if this is an alias
 			if addr != dev.Addr {
-				_ = m.registry.UpdateAliasLastSeen(addr); //nolint:errcheck // best-effort
+				_ = m.registry.UpdateAliasLastSeen(addr) //nolint:errcheck // best-effort
 			}
 			continue
 		}
@@ -188,7 +188,7 @@ func (m *IdentityMatcher) triangulateAllDevices(now time.Time) []*TriangulatedDe
 
 		// Update alias last_seen timestamp
 		if addr != dev.Addr {
-			_ = m.registry.UpdateAliasLastSeen(addr); //nolint:errcheck // best-effort
+			_ = m.registry.UpdateAliasLastSeen(addr) //nolint:errcheck // best-effort
 		}
 
 		// Find most recent observation age
@@ -230,8 +230,8 @@ func (m *IdentityMatcher) triangulate(readings []*RSSIObservation) (Position, fl
 
 	// Convert RSSI readings to distance estimates with node positions
 	type nodeReading struct {
-		x, y, z float64
-		rssi    int
+		x, y, z  float64
+		rssi     int
 		distance float64
 		weight   float64
 	}
@@ -365,9 +365,9 @@ func rssiToDistance(rssi int) float64 {
 
 // assignBLEToBlobs assigns triangulated BLE devices to the nearest CSI blobs.
 func (m *IdentityMatcher) assignBLEToBlobs(devices []*TriangulatedDevice, blobs []struct {
-	ID     int
+	ID      int
 	X, Y, Z float64
-	Weight float64
+	Weight  float64
 }, now time.Time) {
 	// Track which blobs have been assigned
 	assignedBlobs := make(map[int]bool)
@@ -387,9 +387,9 @@ func (m *IdentityMatcher) assignBLEToBlobs(devices []*TriangulatedDevice, blobs 
 
 		// Find nearest blob within 2m (using horizontal plane only)
 		var bestBlob *struct {
-			ID     int
+			ID      int
 			X, Y, Z float64
-			Weight float64
+			Weight  float64
 		}
 		bestDist := MaxBLEBlobDistance
 
@@ -506,9 +506,9 @@ func computeMatchConfidence(td *TriangulatedDevice, blobDist float64) float64 {
 
 // createBLEOnlyTracks creates placeholder tracks for BLE devices without nearby CSI blobs.
 func (m *IdentityMatcher) createBLEOnlyTracks(devices []*TriangulatedDevice, blobs []struct {
-	ID     int
+	ID      int
 	X, Y, Z float64
-	Weight float64
+	Weight  float64
 }, now time.Time) {
 	// Track which persons already have blob assignments
 	hasBlobAssignment := make(map[string]bool)

@@ -13,11 +13,11 @@ import (
 
 // StatusHandler handles GET /api/status and GET /api/occupancy.
 type StatusHandler struct {
-	mu            sync.RWMutex
-	pm            ProcessorManagerProvider
-	zonesMgr      ZonesManagerProvider
-	startTime     time.Time
-	getNodeCount  func() int
+	mu           sync.RWMutex
+	pm           ProcessorManagerProvider
+	zonesMgr     ZonesManagerProvider
+	startTime    time.Time
+	getNodeCount func() int
 }
 
 // ProcessorManagerProvider provides access to signal processor data.

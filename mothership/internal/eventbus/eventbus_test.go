@@ -128,9 +128,9 @@ func TestSeverityConstants(t *testing.T) {
 // TestEventFields verifies event struct fields work correctly.
 func TestEventFields(t *testing.T) {
 	tests := []struct {
-		name     string
-		event    Event
-		check    func(Event) error
+		name  string
+		event Event
+		check func(Event) error
 	}{
 		{
 			name: "full event",

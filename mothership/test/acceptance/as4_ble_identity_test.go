@@ -40,7 +40,7 @@ func AS4_BLEIdentityResolvesToPersonName(t *testing.T) {
 	t.Run("RegisterBLEDevice", func(t *testing.T) {
 		// Register Alice's phone
 		aliceDevice := map[string]interface{}{
-			"addr": "AA:BB:CC:DD:EE:FF",
+			"addr":  "AA:BB:CC:DD:EE:FF",
 			"label": "Alice",
 			"type":  "person",
 			"color": "#4488ff",
@@ -63,14 +63,14 @@ func AS4_BLEIdentityResolvesToPersonName(t *testing.T) {
 	t.Run("SimulateBLEScanWithBlob", func(t *testing.T) {
 		// Send BLE scan result
 		bleScan := map[string]interface{}{
-			"type": "ble",
-			"mac":  "AA:BB:CC:DD:EE:F0", // Node MAC
+			"type":         "ble",
+			"mac":          "AA:BB:CC:DD:EE:F0", // Node MAC
 			"timestamp_ms": time.Now().UnixMilli(),
 			"devices": []map[string]interface{}{
 				{
-					"addr":    "AA:BB:CC:DD:EE:FF",
-					"rssi":    -60,
-					"name":    "Alice's iPhone",
+					"addr": "AA:BB:CC:DD:EE:FF",
+					"rssi": -60,
+					"name": "Alice's iPhone",
 				},
 			},
 		}
@@ -220,8 +220,8 @@ func AS4_BLEIdentityPersistence(t *testing.T) {
 
 	// Send initial BLE scan
 	bleScan := map[string]interface{}{
-		"type": "ble",
-		"mac":  "AA:BB:CC:DD:EE:F0",
+		"type":         "ble",
+		"mac":          "AA:BB:CC:DD:EE:F0",
 		"timestamp_ms": time.Now().UnixMilli(),
 		"devices": []map[string]interface{}{
 			{
@@ -241,7 +241,7 @@ func AS4_BLEIdentityPersistence(t *testing.T) {
 		if person, ok := blob["person"].(string); ok && person == "Bob" {
 			bobFound = true
 			break
-			}
+		}
 	}
 
 	if !bobFound {
@@ -267,8 +267,8 @@ func AS4_BLEIdentityPersistence(t *testing.T) {
 
 	// Simulate address rotation (new MAC for same device)
 	rotatedScan := map[string]interface{}{
-		"type": "ble",
-		"mac":  "AA:BB:CC:DD:EE:F0",
+		"type":         "ble",
+		"mac":          "AA:BB:CC:DD:EE:F0",
 		"timestamp_ms": time.Now().UnixMilli(),
 		"devices": []map[string]interface{}{
 			{
@@ -316,8 +316,8 @@ func AS4_RSSIBasedPositionMatching(t *testing.T) {
 	// Send BLE scans from multiple nodes with different RSSI
 	bleScans := []map[string]interface{}{
 		{
-			"type": "ble",
-			"mac":  "AA:BB:CC:DD:EE:F0", // Node 1
+			"type":         "ble",
+			"mac":          "AA:BB:CC:DD:EE:F0", // Node 1
 			"timestamp_ms": time.Now().UnixMilli(),
 			"devices": []map[string]interface{}{
 				{
@@ -327,8 +327,8 @@ func AS4_RSSIBasedPositionMatching(t *testing.T) {
 			},
 		},
 		{
-			"type": "ble",
-			"mac":  "AA:BB:CC:DD:EE:F1", // Node 2
+			"type":         "ble",
+			"mac":          "AA:BB:CC:DD:EE:F1", // Node 2
 			"timestamp_ms": time.Now().Add(100 * time.Millisecond).UnixMilli(),
 			"devices": []map[string]interface{}{
 				{
@@ -384,8 +384,8 @@ func AS4_UnregisteredDeviceIgnored(t *testing.T) {
 
 	// Send BLE scan for unregistered device
 	bleScan := map[string]interface{}{
-		"type": "ble",
-		"mac":  "AA:BB:CC:DD:EE:F0",
+		"type":         "ble",
+		"mac":          "AA:BB:CC:DD:EE:F0",
 		"timestamp_ms": time.Now().UnixMilli(),
 		"devices": []map[string]interface{}{
 			{
@@ -429,10 +429,10 @@ func startMockMothershipForBLE(t *testing.T) *httptest.Server {
 				// Return list of registered devices
 				devices := []map[string]interface{}{
 					{
-						"addr":   "AA:BB:CC:DD:EE:FF",
-						"label":  "Alice",
-						"type":   "person",
-						"color":  "#4488ff",
+						"addr":  "AA:BB:CC:DD:EE:FF",
+						"label": "Alice",
+						"type":  "person",
+						"color": "#4488ff",
 					},
 				}
 				json.NewEncoder(w).Encode(devices)
@@ -442,11 +442,11 @@ func startMockMothershipForBLE(t *testing.T) *httptest.Server {
 			// Return blobs with identity
 			blobs := []map[string]interface{}{
 				{
-					"id":     1,
-					"x":      1.5,
-					"y":      2.0,
-					"z":      1.0,
-					"person": "Alice", // Identity assigned
+					"id":         1,
+					"x":          1.5,
+					"y":          2.0,
+					"z":          1.0,
+					"person":     "Alice", // Identity assigned
 					"confidence": 0.9,
 				},
 			}
@@ -506,7 +506,7 @@ func AS4_Integration(t *testing.T) {
 		"addr":  "AA:BB:CC:DD:EE:FF",
 		"label": "Alice",
 		"type":  "person",
-			"color": "#4488ff",
+		"color": "#4488ff",
 	}
 
 	body, _ := json.Marshal(aliceDevice)
@@ -587,4 +587,3 @@ func AS4_Integration(t *testing.T) {
 
 	t.Log("AS-4 Integration test PASSED")
 }
-

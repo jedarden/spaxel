@@ -9,7 +9,7 @@ import (
 // DiscoveryTracker tracks which features have been discovered by the user.
 // It provides first-run contextual help tooltips that are shown once per feature.
 type DiscoveryTracker struct {
-	mu       sync.RWMutex
+	mu         sync.RWMutex
 	discovered map[string]discoveryState
 }
 

@@ -19,23 +19,23 @@ const (
 
 // Blob represents a tracked person/object in the room.
 type Blob struct {
-	ID        int
-	X         float64   // metres, room X
-	Z         float64   // metres, room Z
-	VX        float64   // m/s
-	VZ        float64   // m/s
-	Weight    float64   // localisation confidence [0..1]
-	LastSeen  time.Time
-	Trail     [][2]float64 // recent positions (newest last)
-	ukf       *UKF
+	ID       int
+	X        float64 // metres, room X
+	Z        float64 // metres, room Z
+	VX       float64 // m/s
+	VZ       float64 // m/s
+	Weight   float64 // localisation confidence [0..1]
+	LastSeen time.Time
+	Trail    [][2]float64 // recent positions (newest last)
+	ukf      *UKF
 
 	// Identity fields (populated by BLE-to-blob matching)
-	PersonID           string    `json:"person_id,omitempty"`            // UUID from BLE registry
-	PersonLabel        string    `json:"person_label,omitempty"`         // Display name
-	PersonColor        string    `json:"person_color,omitempty"`         // Hex color for dashboard
-	IdentityConfidence float64   `json:"identity_confidence,omitempty"`  // Match confidence [0..1]
-	IdentitySource     string    `json:"identity_source,omitempty"`      // "ble_triangulation", "ble_only", or ""
-	IdentityLastSeen   time.Time `json:"-"`                              // Last time identity was confirmed
+	PersonID           string    `json:"person_id,omitempty"`           // UUID from BLE registry
+	PersonLabel        string    `json:"person_label,omitempty"`        // Display name
+	PersonColor        string    `json:"person_color,omitempty"`        // Hex color for dashboard
+	IdentityConfidence float64   `json:"identity_confidence,omitempty"` // Match confidence [0..1]
+	IdentitySource     string    `json:"identity_source,omitempty"`     // "ble_triangulation", "ble_only", or ""
+	IdentityLastSeen   time.Time `json:"-"`                             // Last time identity was confirmed
 	Posture            Posture   `json:"posture,omitempty"`             // Estimated body posture
 }
 

@@ -82,8 +82,8 @@ func TestPhaseSanitizeProperty(t *testing.T) {
 			payloadGen: func(nSub int) []int8 {
 				payload := make([]int8, nSub*2)
 				for i := 0; i < nSub*2; i += 2 {
-					payload[i] = 127     // I
-					payload[i+1] = 0     // Q
+					payload[i] = 127 // I
+					payload[i+1] = 0 // Q
 				}
 				return payload
 			},
@@ -96,8 +96,8 @@ func TestPhaseSanitizeProperty(t *testing.T) {
 			payloadGen: func(nSub int) []int8 {
 				payload := make([]int8, nSub*2)
 				for i := 0; i < nSub*2; i += 2 {
-					payload[i] = 0       // I
-					payload[i+1] = 127   // Q
+					payload[i] = 0     // I
+					payload[i+1] = 127 // Q
 				}
 				return payload
 			},
@@ -318,27 +318,27 @@ func TestPhaseSanitizeInvalidInputs(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:    "payload too short",
-			payload: []int8{1, 2, 3},
-			rssiDBm:  -50,
-			nSub:    64,
-			wantErr: true,
+			name:        "payload too short",
+			payload:     []int8{1, 2, 3},
+			rssiDBm:     -50,
+			nSub:        64,
+			wantErr:     true,
 			errContains: "too short",
 		},
 		{
-			name:    "zero subcarriers",
-			payload: []int8{},
-			rssiDBm:  -50,
-			nSub:    0,
-			wantErr: true,
+			name:        "zero subcarriers",
+			payload:     []int8{},
+			rssiDBm:     -50,
+			nSub:        0,
+			wantErr:     true,
 			errContains: "zero subcarriers",
 		},
 		{
-			name: "nSub larger than payload",
-			payload: []int8{1, 2, 3, 4},
-			rssiDBm: -50,
-			nSub:   10,
-			wantErr: true,
+			name:        "nSub larger than payload",
+			payload:     []int8{1, 2, 3, 4},
+			rssiDBm:     -50,
+			nSub:        10,
+			wantErr:     true,
 			errContains: "too short",
 		},
 	}

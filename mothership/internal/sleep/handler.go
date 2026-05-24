@@ -141,12 +141,12 @@ func (h *Handler) handleGetSessions(w http.ResponseWriter, r *http.Request) {
 	for linkID, session := range sessions {
 		session.mu.RLock()
 		summary := map[string]interface{}{
-			"link_id":          linkID,
-			"current_state":    session.GetCurrentState().String(),
-			"is_active":        session.isActive,
+			"link_id":           linkID,
+			"current_state":     session.GetCurrentState().String(),
+			"is_active":         session.isActive,
 			"breathing_samples": len(session.breathingSamples),
-			"motion_samples":   len(session.motionSamples),
-			"sleep_periods":    len(session.sleepPeriods),
+			"motion_samples":    len(session.motionSamples),
+			"sleep_periods":     len(session.sleepPeriods),
 		}
 
 		if !session.sessionDate.IsZero() {
@@ -306,8 +306,8 @@ func (h *Handler) handleGetSamples(w http.ResponseWriter, r *http.Request) {
 	periods := make([]map[string]interface{}, len(session.sleepPeriods))
 	for i, p := range session.sleepPeriods {
 		period := map[string]interface{}{
-			"state":     p.State.String(),
-			"start_time": p.StartTime.Unix(),
+			"state":            p.State.String(),
+			"start_time":       p.StartTime.Unix(),
 			"duration_seconds": p.Duration.Seconds(),
 		}
 		if !p.EndTime.IsZero() {

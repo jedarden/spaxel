@@ -68,10 +68,10 @@ func measureModel(x [stateN]float64) [2]float64 {
 
 // UKF is an Unscented Kalman Filter tracking [x, z, vx, vz].
 type UKF struct {
-	X  [stateN]float64         // state estimate
-	P  [stateN][stateN]float64 // covariance estimate
-	Q  [stateN][stateN]float64 // process noise
-	R  [2][2]float64           // measurement noise
+	X [stateN]float64         // state estimate
+	P [stateN][stateN]float64 // covariance estimate
+	Q [stateN][stateN]float64 // process noise
+	R [2][2]float64           // measurement noise
 }
 
 // NewUKF creates a UKF at initial position (x0, z0).

@@ -16,23 +16,23 @@ import (
 type DiagnosisSeverity string
 
 const (
-	SeverityINFO      DiagnosisSeverity = "INFO"      // Informational, no action needed
-	SeverityWARNING   DiagnosisSeverity = "WARNING"   // Attention recommended
+	SeverityINFO       DiagnosisSeverity = "INFO"       // Informational, no action needed
+	SeverityWARNING    DiagnosisSeverity = "WARNING"    // Attention recommended
 	SeverityACTIONABLE DiagnosisSeverity = "ACTIONABLE" // Specific action required
 )
 
 // Diagnosis represents a diagnostic finding for a link
 type Diagnosis struct {
-	LinkID              string
-	RuleID              string            // Identifies which rule fired
-	Severity            DiagnosisSeverity // INFO, WARNING, ACTIONABLE
-	Title               string            // Human-readable headline
-	Detail              string            // Explanation in plain language
-	Advice              string            // Specific actionable steps
-	RepositioningTarget *Vec3             // 3D position to move node, or nil
-	RepositioningNodeMAC string           // Which node to move
-	ConfidenceScore     float64           // How confident the engine is (0-1)
-	Timestamp           time.Time
+	LinkID               string
+	RuleID               string            // Identifies which rule fired
+	Severity             DiagnosisSeverity // INFO, WARNING, ACTIONABLE
+	Title                string            // Human-readable headline
+	Detail               string            // Explanation in plain language
+	Advice               string            // Specific actionable steps
+	RepositioningTarget  *Vec3             // 3D position to move node, or nil
+	RepositioningNodeMAC string            // Which node to move
+	ConfidenceScore      float64           // How confident the engine is (0-1)
+	Timestamp            time.Time
 }
 
 // Vec3 represents a 3D position
@@ -44,21 +44,21 @@ type Vec3 struct {
 
 // LinkHealthSnapshot represents a health snapshot for diagnostic analysis
 type LinkHealthSnapshot struct {
-	Timestamp       time.Time
-	SNR             float64
-	PhaseStability  float64
-	PacketRate      float64
-	DriftRate       float64
-	CompositeScore  float64
+	Timestamp        time.Time
+	SNR              float64
+	PhaseStability   float64
+	PacketRate       float64
+	DriftRate        float64
+	CompositeScore   float64
 	DeltaRMSVariance float64 // For periodic interference detection
-	IsQuietPeriod   bool     // True if no motion detected
+	IsQuietPeriod    bool    // True if no motion detected
 }
 
 // FeedbackEvent represents user-reported false negative/positive for Rule 4
 type FeedbackEvent struct {
 	LinkID    string
-	EventType string    // "false_negative" or "false_positive"
-	Position  Vec3      // Where the event occurred
+	EventType string // "false_negative" or "false_positive"
+	Position  Vec3   // Where the event occurred
 	Timestamp time.Time
 }
 
@@ -324,15 +324,15 @@ func (de *DiagnosticEngine) checkEnvironmentalChange(linkID string, history []Li
 	confidence := 0.85
 
 	return &Diagnosis{
-		LinkID:           linkID,
-		RuleID:           "environmental_change",
-		Severity:         SeverityINFO,
-		Title:            "Environmental change detected",
-		Detail:           "Multiple sensing links are showing simultaneous baseline shifts. This typically indicates a temperature change, or a large object was moved in the space. The system is adapting automatically.",
-		Advice:           "No action needed. The baseline will re-stabilise within 30 minutes.",
+		LinkID:              linkID,
+		RuleID:              "environmental_change",
+		Severity:            SeverityINFO,
+		Title:               "Environmental change detected",
+		Detail:              "Multiple sensing links are showing simultaneous baseline shifts. This typically indicates a temperature change, or a large object was moved in the space. The system is adapting automatically.",
+		Advice:              "No action needed. The baseline will re-stabilise within 30 minutes.",
 		RepositioningTarget: nil,
-		ConfidenceScore:  confidence,
-		Timestamp:        time.Now(),
+		ConfidenceScore:     confidence,
+		Timestamp:           time.Now(),
 	}
 }
 
@@ -391,16 +391,16 @@ func (de *DiagnosticEngine) checkWiFiCongestion(linkID string, history []LinkHea
 	nodeBMAC := extractNodeBMAC(linkID)
 
 	return &Diagnosis{
-		LinkID:           linkID,
-		RuleID:           "wifi_congestion_distance",
-		Severity:         SeverityACTIONABLE,
-		Title:            "Node has low signal rate",
-		Detail:           formatWiFiDetail(nodeBMAC, avgPacketRate),
-		Advice: formatWiFiAdvice(nodeBMAC),
-		RepositioningTarget: nil,
+		LinkID:               linkID,
+		RuleID:               "wifi_congestion_distance",
+		Severity:             SeverityACTIONABLE,
+		Title:                "Node has low signal rate",
+		Detail:               formatWiFiDetail(nodeBMAC, avgPacketRate),
+		Advice:               formatWiFiAdvice(nodeBMAC),
+		RepositioningTarget:  nil,
 		RepositioningNodeMAC: nodeBMAC,
-		ConfidenceScore:  0.75,
-		Timestamp:        time.Now(),
+		ConfidenceScore:      0.75,
+		Timestamp:            time.Now(),
 	}
 }
 
@@ -461,16 +461,16 @@ func (de *DiagnosticEngine) checkMetalInterference(linkID string, history []Link
 	nodeAMAC := extractNodeAMAC(linkID)
 
 	return &Diagnosis{
-		LinkID:           linkID,
-		RuleID:           "metal_interference",
-		Severity:         SeverityACTIONABLE,
-		Title:            formatMetalTitle(nodeAMAC),
-		Detail:           formatMetalDetail(linkID),
-		Advice:           formatMetalAdvice(nodeAMAC),
-		RepositioningTarget: nil,
+		LinkID:               linkID,
+		RuleID:               "metal_interference",
+		Severity:             SeverityACTIONABLE,
+		Title:                formatMetalTitle(nodeAMAC),
+		Detail:               formatMetalDetail(linkID),
+		Advice:               formatMetalAdvice(nodeAMAC),
+		RepositioningTarget:  nil,
 		RepositioningNodeMAC: nodeAMAC,
-		ConfidenceScore:  0.80,
-		Timestamp:        time.Now(),
+		ConfidenceScore:      0.80,
+		Timestamp:            time.Now(),
 	}
 }
 
@@ -538,16 +538,16 @@ func (de *DiagnosticEngine) checkFresnelBlockage(linkID string, history []LinkHe
 	advice := formatFresnelAdvice(nodeBMAC, &blockedZone, target, improvement)
 
 	return &Diagnosis{
-		LinkID:              linkID,
-		RuleID:              "fresnel_blockage",
-		Severity:            SeverityACTIONABLE,
-		Title:               "Coverage gap detected - possible obstruction",
-		Detail:              detail,
-		Advice:              advice,
-		RepositioningTarget: target,
+		LinkID:               linkID,
+		RuleID:               "fresnel_blockage",
+		Severity:             SeverityACTIONABLE,
+		Title:                "Coverage gap detected - possible obstruction",
+		Detail:               detail,
+		Advice:               advice,
+		RepositioningTarget:  target,
 		RepositioningNodeMAC: targetNodeMAC,
-		ConfidenceScore:     0.75,
-		Timestamp:           time.Now(),
+		ConfidenceScore:      0.75,
+		Timestamp:            time.Now(),
 	}
 }
 
@@ -582,16 +582,16 @@ func (de *DiagnosticEngine) checkFresnelBlockageHeuristic(linkID string, history
 	if avgActivity < 0.5 && avgActivity < avgQuiet-0.2 {
 		nodeBMAC := extractNodeBMAC(linkID)
 		return &Diagnosis{
-			LinkID:           linkID,
-			RuleID:           "fresnel_blockage_heuristic",
-			Severity:         SeverityWARNING,
-			Title:            "Possible coverage gap detected",
-			Detail:           "Detection quality degrades during movement periods. This may indicate an obstruction in the sensing zone.",
-			Advice:           "Submit feedback using the app when detection misses occur. This will help identify the exact location of the coverage gap.",
-			RepositioningTarget: nil,
+			LinkID:               linkID,
+			RuleID:               "fresnel_blockage_heuristic",
+			Severity:             SeverityWARNING,
+			Title:                "Possible coverage gap detected",
+			Detail:               "Detection quality degrades during movement periods. This may indicate an obstruction in the sensing zone.",
+			Advice:               "Submit feedback using the app when detection misses occur. This will help identify the exact location of the coverage gap.",
+			RepositioningTarget:  nil,
 			RepositioningNodeMAC: nodeBMAC,
-			ConfidenceScore:  0.60, // Lower confidence for heuristic
-			Timestamp:        time.Now(),
+			ConfidenceScore:      0.60, // Lower confidence for heuristic
+			Timestamp:            time.Now(),
 		}
 	}
 
@@ -639,15 +639,15 @@ func (de *DiagnosticEngine) checkPeriodicInterference(linkID string, history []L
 	nodeBMAC := extractNodeBMAC(linkID)
 
 	return &Diagnosis{
-		LinkID:           linkID,
-		RuleID:           "periodic_interference",
-		Severity:         SeverityWARNING,
-		Title:            "Periodic interference detected",
-		Detail:           formatInterferenceDetail(nodeAMAC, nodeBMAC, int(eventsPerHour)),
-		Advice:           formatInterferenceAdvice(nodeAMAC, nodeBMAC),
+		LinkID:              linkID,
+		RuleID:              "periodic_interference",
+		Severity:            SeverityWARNING,
+		Title:               "Periodic interference detected",
+		Detail:              formatInterferenceDetail(nodeAMAC, nodeBMAC, int(eventsPerHour)),
+		Advice:              formatInterferenceAdvice(nodeAMAC, nodeBMAC),
 		RepositioningTarget: nil,
-		ConfidenceScore:  0.70,
-		Timestamp:        time.Now(),
+		ConfidenceScore:     0.70,
+		Timestamp:           time.Now(),
 	}
 }
 
@@ -1036,14 +1036,14 @@ func (de *DiagnosticEngine) GetDiagnosticFor(linkID string, timestamp time.Time)
 	if len(history) < de.config.MinSamples {
 		// Not enough data - return a generic diagnosis
 		return &Diagnosis{
-			LinkID:           linkID,
-			RuleID:           "insufficient_data",
-			Severity:         SeverityINFO,
-			Title:            "Not enough data for diagnosis",
-			Detail:           "This link hasn't been active long enough to analyze.",
-			Advice:           "Continue normal operation. Diagnostics will be available after more data is collected.",
-			ConfidenceScore:  0.0,
-			Timestamp:        time.Now(),
+			LinkID:          linkID,
+			RuleID:          "insufficient_data",
+			Severity:        SeverityINFO,
+			Title:           "Not enough data for diagnosis",
+			Detail:          "This link hasn't been active long enough to analyze.",
+			Advice:          "Continue normal operation. Diagnostics will be available after more data is collected.",
+			ConfidenceScore: 0.0,
+			Timestamp:       time.Now(),
 		}
 	}
 
@@ -1072,14 +1072,14 @@ func (de *DiagnosticEngine) GetDiagnosticFor(linkID string, timestamp time.Time)
 	// Rule: Check for environmental change indicators
 	if closestSnapshot.DriftRate > 0.05 {
 		return &Diagnosis{
-			LinkID:   linkID,
-			RuleID:   "environmental_change",
-			Severity: SeverityINFO,
-			Title:    "Possible environmental change",
-			Detail:   "The baseline for this link has drifted significantly. This could be caused by temperature changes, furniture movement, or new obstructions.",
-			Advice:   "The system is adapting automatically. No action needed unless this persists.",
+			LinkID:          linkID,
+			RuleID:          "environmental_change",
+			Severity:        SeverityINFO,
+			Title:           "Possible environmental change",
+			Detail:          "The baseline for this link has drifted significantly. This could be caused by temperature changes, furniture movement, or new obstructions.",
+			Advice:          "The system is adapting automatically. No action needed unless this persists.",
 			ConfidenceScore: 0.70,
-			Timestamp: time.Now(),
+			Timestamp:       time.Now(),
 		}
 	}
 
@@ -1087,15 +1087,15 @@ func (de *DiagnosticEngine) GetDiagnosticFor(linkID string, timestamp time.Time)
 	if closestSnapshot.PacketRate < 16.0 { // Less than 80% of expected 20 Hz
 		nodeBMAC := extractNodeBMAC(linkID)
 		return &Diagnosis{
-			LinkID:   linkID,
-			RuleID:   "wifi_congestion",
-			Severity: SeverityACTIONABLE,
-			Title:    "Possible WiFi congestion",
-			Detail:   formatWiFiDetail(nodeBMAC, closestSnapshot.PacketRate),
-			Advice:   formatWiFiAdvice(nodeBMAC),
+			LinkID:               linkID,
+			RuleID:               "wifi_congestion",
+			Severity:             SeverityACTIONABLE,
+			Title:                "Possible WiFi congestion",
+			Detail:               formatWiFiDetail(nodeBMAC, closestSnapshot.PacketRate),
+			Advice:               formatWiFiAdvice(nodeBMAC),
 			RepositioningNodeMAC: nodeBMAC,
-			ConfidenceScore: 0.75,
-			Timestamp: time.Now(),
+			ConfidenceScore:      0.75,
+			Timestamp:            time.Now(),
 		}
 	}
 
@@ -1103,15 +1103,15 @@ func (de *DiagnosticEngine) GetDiagnosticFor(linkID string, timestamp time.Time)
 	if closestSnapshot.PhaseStability > 0.6 {
 		nodeAMAC := extractNodeAMAC(linkID)
 		return &Diagnosis{
-			LinkID:   linkID,
-			RuleID:   "metal_interference",
-			Severity: SeverityACTIONABLE,
-			Title:    formatMetalTitle(nodeAMAC),
-			Detail:   formatMetalDetail(linkID),
-			Advice:   formatMetalAdvice(nodeAMAC),
+			LinkID:               linkID,
+			RuleID:               "metal_interference",
+			Severity:             SeverityACTIONABLE,
+			Title:                formatMetalTitle(nodeAMAC),
+			Detail:               formatMetalDetail(linkID),
+			Advice:               formatMetalAdvice(nodeAMAC),
 			RepositioningNodeMAC: nodeAMAC,
-			ConfidenceScore: 0.80,
-			Timestamp: time.Now(),
+			ConfidenceScore:      0.80,
+			Timestamp:            time.Now(),
 		}
 	}
 
@@ -1120,27 +1120,27 @@ func (de *DiagnosticEngine) GetDiagnosticFor(linkID string, timestamp time.Time)
 		nodeAMAC := extractNodeAMAC(linkID)
 		nodeBMAC := extractNodeBMAC(linkID)
 		return &Diagnosis{
-			LinkID:   linkID,
-			RuleID:   "periodic_interference",
-			Severity: SeverityWARNING,
-			Title:    "Possible periodic interference",
-			Detail:   formatInterferenceDetail(nodeAMAC, nodeBMAC, 3),
-			Advice:   formatInterferenceAdvice(nodeAMAC, nodeBMAC),
+			LinkID:          linkID,
+			RuleID:          "periodic_interference",
+			Severity:        SeverityWARNING,
+			Title:           "Possible periodic interference",
+			Detail:          formatInterferenceDetail(nodeAMAC, nodeBMAC, 3),
+			Advice:          formatInterferenceAdvice(nodeAMAC, nodeBMAC),
 			ConfidenceScore: 0.70,
-			Timestamp: time.Now(),
+			Timestamp:       time.Now(),
 		}
 	}
 
 	// Default: no specific issue found
 	return &Diagnosis{
-		LinkID:   linkID,
-		RuleID:   "no_issue_detected",
-		Severity: SeverityINFO,
-		Title:    "No specific issue detected",
-		Detail:   "The link health metrics appear normal. The false positive may be due to transient RF interference or a brief environmental change.",
-		Advice:   "This is a rare occurrence. If it happens frequently, consider submitting feedback so the system can learn.",
+		LinkID:          linkID,
+		RuleID:          "no_issue_detected",
+		Severity:        SeverityINFO,
+		Title:           "No specific issue detected",
+		Detail:          "The link health metrics appear normal. The false positive may be due to transient RF interference or a brief environmental change.",
+		Advice:          "This is a rare occurrence. If it happens frequently, consider submitting feedback so the system can learn.",
 		ConfidenceScore: 0.50,
-		Timestamp: time.Now(),
+		Timestamp:       time.Now(),
 	}
 }
 

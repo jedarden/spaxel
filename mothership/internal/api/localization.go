@@ -14,10 +14,10 @@ import (
 
 // LocalizationHandler manages self-improving localization API endpoints.
 type LocalizationHandler struct {
-	groundTruthStore   *localization.GroundTruthStore
-	spatialWeightLearner *localization.SpatialWeightLearner
-	weightLearner      *localization.WeightLearner
-	weightStore        *localization.WeightStore
+	groundTruthStore       *localization.GroundTruthStore
+	spatialWeightLearner   *localization.SpatialWeightLearner
+	weightLearner          *localization.WeightLearner
+	weightStore            *localization.WeightStore
 	selfImprovingLocalizer *localization.SelfImprovingLocalizer
 }
 
@@ -30,10 +30,10 @@ func NewLocalizationHandler(
 	sil *localization.SelfImprovingLocalizer,
 ) *LocalizationHandler {
 	return &LocalizationHandler{
-		groundTruthStore:   gtStore,
-		spatialWeightLearner: swLearner,
-		weightLearner:      wLearner,
-		weightStore:        wStore,
+		groundTruthStore:       gtStore,
+		spatialWeightLearner:   swLearner,
+		weightLearner:          wLearner,
+		weightStore:            wStore,
 		selfImprovingLocalizer: sil,
 	}
 }
@@ -290,10 +290,10 @@ func (h *LocalizationHandler) getGroundTruthStats(w http.ResponseWriter, r *http
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"total_samples":  total,
-		"today_samples":  today,
-		"by_person":      byPerson,
-		"zone_counts":    zoneCountsStr,
+		"total_samples": total,
+		"today_samples": today,
+		"by_person":     byPerson,
+		"zone_counts":   zoneCountsStr,
 	})
 }
 
@@ -433,7 +433,7 @@ func (h *LocalizationHandler) getSelfImprovingStatus(w http.ResponseWriter, r *h
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"learning_progress":       progress,
+		"learning_progress":      progress,
 		"learned_weights":        weights,
 		"improvement_stats":      improvementStats,
 		"improvement_history":    improvementHistory,
@@ -457,7 +457,7 @@ func (h *LocalizationHandler) processLearning(w http.ResponseWriter, r *http.Req
 	h.weightLearner.RecordErrorSnapshot()
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"status":      "learning_processed",
-		"timestamp":   time.Now().Format(time.RFC3339),
+		"status":    "learning_processed",
+		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }

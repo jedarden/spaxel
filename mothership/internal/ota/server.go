@@ -32,10 +32,10 @@ type FirmwareUploadCallback func(filename string)
 
 // Server serves firmware binaries and tracks available versions.
 type Server struct {
-	mu            sync.RWMutex
-	firmwareDir   string
-	firmware      map[string]*FirmwareMeta
-	latestFile    string
+	mu             sync.RWMutex
+	firmwareDir    string
+	firmware       map[string]*FirmwareMeta
+	latestFile     string
 	uploadCallback FirmwareUploadCallback
 }
 

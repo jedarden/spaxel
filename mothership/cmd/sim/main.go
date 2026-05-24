@@ -35,36 +35,36 @@ const (
 	defaultMothership = "ws://localhost:8080/ws/node"
 	defaultNodes      = 2
 	defaultWalkers    = 1
-	defaultRate       = 20  // Hz
-	defaultDuration   = 60  // seconds
-	defaultChannel    = 6   // 2.4 GHz channel 6
-	defaultSeed       = 0   // random seed (0 = use current time)
+	defaultRate       = 20        // Hz
+	defaultDuration   = 60        // seconds
+	defaultChannel    = 6         // 2.4 GHz channel 6
+	defaultSeed       = 0         // random seed (0 = use current time)
 	defaultSpace      = "5x5x2.5" // room dimensions
 	defaultNoiseSigma = 0.005
 )
 
 var (
 	// CLI flags
-	flagMothership  = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
-	flagToken       = flag.String("token", "", "Provisioning token (auto-generated if empty)")
-	flagNodes       = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
-	flagWalkers     = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
-	flagRate        = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
-	flagDuration    = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
-	flagSeed        = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
-	flagSpace       = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
-	flagBLE         = flag.Bool("ble", false, "Include synthetic BLE advertisements")
-	flagVerify      = flag.Bool("verify", false, "Verify blob detection after duration")
-	flagNoiseSigma  = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
-	flagOutputCSV   = flag.String("output-csv", "", "Write ground truth to CSV file")
-	flagChannel     = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
-	flagWalkerType  = flag.String("walker-type", "random", "Walker type: random, path, node-to-node")
-	flagPathFile    = flag.String("path-file", "", "JSON file containing walker paths")
+	flagMothership = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
+	flagToken      = flag.String("token", "", "Provisioning token (auto-generated if empty)")
+	flagNodes      = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
+	flagWalkers    = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
+	flagRate       = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
+	flagDuration   = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
+	flagSeed       = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
+	flagSpace      = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
+	flagBLE        = flag.Bool("ble", false, "Include synthetic BLE advertisements")
+	flagVerify     = flag.Bool("verify", false, "Verify blob detection after duration")
+	flagNoiseSigma = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
+	flagOutputCSV  = flag.String("output-csv", "", "Write ground truth to CSV file")
+	flagChannel    = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
+	flagWalkerType = flag.String("walker-type", "random", "Walker type: random, path, node-to-node")
+	flagPathFile   = flag.String("path-file", "", "JSON file containing walker paths")
 
 	// GDOP and shopping list flags
-	flagGDOPOverlay = flag.Bool("gdop-overlay", false, "Output GDOP overlay data as JSON to stdout")
+	flagGDOPOverlay  = flag.Bool("gdop-overlay", false, "Output GDOP overlay data as JSON to stdout")
 	flagShoppingList = flag.Bool("shopping-list", false, "Output shopping list as JSON to stdout")
-	flagCellSize    = flag.Float64("cell-size", 0.2, "GDOP grid cell size in meters")
+	flagCellSize     = flag.Float64("cell-size", 0.2, "GDOP grid cell size in meters")
 
 	// Scenario flags
 	flagScenario     = flag.String("scenario", "normal", "Scenario type: normal, fall, ota, bag-on-couch")
@@ -143,9 +143,9 @@ type VirtualNode struct {
 type WalkerType string
 
 const (
-	WalkerTypeRandomWalk  WalkerType = "random"
-	WalkerTypePathFollow  WalkerType = "path"
-	WalkerTypeNodeToNode  WalkerType = "node-to-node"
+	WalkerTypeRandomWalk WalkerType = "random"
+	WalkerTypePathFollow WalkerType = "path"
+	WalkerTypeNodeToNode WalkerType = "node-to-node"
 )
 
 // Walker represents a simulated person
@@ -156,10 +156,10 @@ type Walker struct {
 	Speed    float64
 	Height   float64
 	Type     WalkerType
-	Path     []Point    // For path-following mode
-	PathIdx  int        // Current position along path
+	Path     []Point        // For path-following mode
+	PathIdx  int            // Current position along path
 	Nodes    []*VirtualNode // For node-to-node mode
-	NodeIdx  int        // Current target node index
+	NodeIdx  int            // Current target node index
 }
 
 // Point represents a 3D position
@@ -191,8 +191,8 @@ const (
 // Wall represents a wall segment with material properties
 type Wall struct {
 	X1, Y1, X2, Y2 float64
-	Material        WallMaterial
-	Attenuation     float64 // dB loss
+	Material       WallMaterial
+	Attenuation    float64 // dB loss
 }
 
 // Stats tracks simulation statistics
@@ -395,7 +395,7 @@ func createVirtualNodes(count int, space *Space, rng *rand.Rand) []*VirtualNode 
 		}
 
 		// Distribute nodes around perimeter
-		perimeter := 2*(space.Width+space.Depth)
+		perimeter := 2 * (space.Width + space.Depth)
 		pos := float64(i) / float64(count) * perimeter
 
 		if pos < space.Width {
@@ -1334,25 +1334,25 @@ func outputGDOPOverlay(space *Space, nodes []*VirtualNode, cellSize float64) err
 
 	// Output JSON
 	output := map[string]interface{}{
-		"type":            "gdop_overlay",
+		"type": "gdop_overlay",
 		"space_dimensions": map[string]float64{
 			"width_m":  space.Width,
 			"depth_m":  space.Depth,
 			"height_m": space.Height,
 		},
 		"grid_dimensions": []int{heatmapData.Width, heatmapData.Depth, 1},
-		"cell_size_m":    cellSize,
-		"origin":         map[string]float64{"x": heatmapData.OriginX, "y": heatmapData.OriginY},
-		"gdop_values":    heatmapData.GDOPValues,
-		"qualities":      heatmapData.Qualities,
-		"colors":         heatmapData.Colors,
-		"accuracy_map":   heatmapData.AccuracyMap,
-		"coverage_score": gdopComp.CoverageScore(results),
-		"average_gdop":   avgGDOPOutput,
-		"quality_counts": gdopComp.QualityCounts(results),
-		"dead_zones":     gdopComp.FindDeadZones(results),
-		"links":          links,
-		"timestamp":      time.Now().Format(time.RFC3339),
+		"cell_size_m":     cellSize,
+		"origin":          map[string]float64{"x": heatmapData.OriginX, "y": heatmapData.OriginY},
+		"gdop_values":     heatmapData.GDOPValues,
+		"qualities":       heatmapData.Qualities,
+		"colors":          heatmapData.Colors,
+		"accuracy_map":    heatmapData.AccuracyMap,
+		"coverage_score":  gdopComp.CoverageScore(results),
+		"average_gdop":    avgGDOPOutput,
+		"quality_counts":  gdopComp.QualityCounts(results),
+		"dead_zones":      gdopComp.FindDeadZones(results),
+		"links":           links,
+		"timestamp":       time.Now().Format(time.RFC3339),
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -1399,10 +1399,10 @@ func outputShoppingList(space *Space, nodes []*VirtualNode) error {
 
 	// Output JSON
 	output := map[string]interface{}{
-		"type":     "shopping_list",
-		"list":     shoppingList,
+		"type":      "shopping_list",
+		"list":      shoppingList,
 		"timestamp": time.Now().Format(time.RFC3339),
-		"note":     "This is a pre-deployment estimate. Actual accuracy may vary based on environment.",
+		"note":      "This is a pre-deployment estimate. Actual accuracy may vary based on environment.",
 	}
 
 	enc := json.NewEncoder(os.Stdout)

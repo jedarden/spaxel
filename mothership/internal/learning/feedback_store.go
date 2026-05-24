@@ -18,21 +18,21 @@ import (
 type FeedbackType string
 
 const (
-	TruePositive   FeedbackType = "TRUE_POSITIVE"
-	FalsePositive  FeedbackType = "FALSE_POSITIVE"
-	FalseNegative  FeedbackType = "FALSE_NEGATIVE"
-	WrongIdentity  FeedbackType = "WRONG_IDENTITY"
-	WrongZone      FeedbackType = "WRONG_ZONE"
+	TruePositive  FeedbackType = "TRUE_POSITIVE"
+	FalsePositive FeedbackType = "FALSE_POSITIVE"
+	FalseNegative FeedbackType = "FALSE_NEGATIVE"
+	WrongIdentity FeedbackType = "WRONG_IDENTITY"
+	WrongZone     FeedbackType = "WRONG_ZONE"
 )
 
 // EventType represents the type of detection event
 type EventType string
 
 const (
-	BlobDetection   EventType = "blob_detection"
-	ZoneTransition  EventType = "zone_transition"
-	FallAlert       EventType = "fall_alert"
-	Anomaly         EventType = "anomaly"
+	BlobDetection  EventType = "blob_detection"
+	ZoneTransition EventType = "zone_transition"
+	FallAlert      EventType = "fall_alert"
+	Anomaly        EventType = "anomaly"
 )
 
 // FeedbackRecord represents a single feedback entry
@@ -49,20 +49,20 @@ type FeedbackRecord struct {
 
 // FalsePositiveFrame represents CSI data for a known false positive
 type FalsePositiveFrame struct {
-	LinkID     string                 `json:"link_id"`
-	Timestamp  time.Time              `json:"timestamp"`
-	DeltaRMS   float64                `json:"delta_rms"`
-	Context    map[string]interface{} `json:"context"`
+	LinkID    string                 `json:"link_id"`
+	Timestamp time.Time              `json:"timestamp"`
+	DeltaRMS  float64                `json:"delta_rms"`
+	Context   map[string]interface{} `json:"context"`
 }
 
 // FalseNegativeFrame represents CSI data for a known false negative
 type FalseNegativeFrame struct {
-	LinkID             string                 `json:"link_id"`
-	Timestamp          time.Time              `json:"timestamp"`
-	ExpectedPositionX  float64                `json:"expected_position_x"`
-	ExpectedPositionY  float64                `json:"expected_position_y"`
-	ExpectedPositionZ  float64                `json:"expected_position_z"`
-	Context            map[string]interface{} `json:"context"`
+	LinkID            string                 `json:"link_id"`
+	Timestamp         time.Time              `json:"timestamp"`
+	ExpectedPositionX float64                `json:"expected_position_x"`
+	ExpectedPositionY float64                `json:"expected_position_y"`
+	ExpectedPositionZ float64                `json:"expected_position_z"`
+	Context           map[string]interface{} `json:"context"`
 }
 
 // FeedbackStore persists detection feedback to SQLite
@@ -384,15 +384,15 @@ func (s *FeedbackStore) GetFalseNegativeFrames(linkID string, window time.Durati
 
 // AccuracyRecord represents weekly accuracy metrics for a scope
 type AccuracyRecord struct {
-	Week      string    `json:"week"`
-	ScopeType string    `json:"scope_type"`
-	ScopeID   string    `json:"scope_id"`
-	Precision float64   `json:"precision"`
-	Recall    float64   `json:"recall"`
-	F1        float64   `json:"f1"`
-	TPCount   int       `json:"tp_count"`
-	FPCount   int       `json:"fp_count"`
-	FNCount   int       `json:"fn_count"`
+	Week       string    `json:"week"`
+	ScopeType  string    `json:"scope_type"`
+	ScopeID    string    `json:"scope_id"`
+	Precision  float64   `json:"precision"`
+	Recall     float64   `json:"recall"`
+	F1         float64   `json:"f1"`
+	TPCount    int       `json:"tp_count"`
+	FPCount    int       `json:"fp_count"`
+	FNCount    int       `json:"fn_count"`
 	ComputedAt time.Time `json:"computed_at"`
 }
 

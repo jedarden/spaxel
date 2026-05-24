@@ -484,9 +484,9 @@ func TestEventBusConcurrentPublish(t *testing.T) {
 // TestAllPayloadTypes verifies that all defined event types have a corresponding payload struct.
 func TestAllPayloadTypes(t *testing.T) {
 	payloads := []struct {
-		name     string
+		name      string
 		eventType BusEventType
-		payload  EventPayload
+		payload   EventPayload
 	}{
 		{"MotionDetected", BusMotionDetected, MotionDetectedPayload{Timestamp: time.Now()}},
 		{"MotionStopped", BusMotionStopped, MotionStoppedPayload{Timestamp: time.Now()}},

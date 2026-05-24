@@ -10,10 +10,10 @@ import (
 
 // SelfImprovingLocalizerConfig holds configuration for the self-improving localizer
 type SelfImprovingLocalizerConfig struct {
-	RoomWidth   float64
-	RoomDepth   float64
-	OriginX     float64
-	OriginZ     float64
+	RoomWidth          float64
+	RoomDepth          float64
+	OriginX            float64
+	OriginZ            float64
 	AdjustmentInterval time.Duration // How often to adjust weights
 
 	// BLE ground truth configuration
@@ -41,21 +41,21 @@ func DefaultSelfImprovingConfig() SelfImprovingLocalizerConfig {
 // DefaultSelfImprovingLocalizerConfig returns sensible defaults
 func DefaultSelfImprovingLocalizerConfig() SelfImprovingLocalizerConfig {
 	return SelfImprovingLocalizerConfig{
-		RoomWidth:           10.0,
-		RoomDepth:           10.0,
-		OriginX:             0.0,
-		OriginZ:             0.0,
-		AdjustmentInterval:  10 * time.Second,
-		BLEConfig:           DefaultBLETrilaterationConfig(),
-		LearningRate:        0.001,
-		Regularization:      0.01,
-		MinZoneSamples:      100,
-		ValidationBatchSize: 50,
+		RoomWidth:            10.0,
+		RoomDepth:            10.0,
+		OriginX:              0.0,
+		OriginZ:              0.0,
+		AdjustmentInterval:   10 * time.Second,
+		BLEConfig:            DefaultBLETrilaterationConfig(),
+		LearningRate:         0.001,
+		Regularization:       0.01,
+		MinZoneSamples:       100,
+		ValidationBatchSize:  50,
 		ImprovementThreshold: 0.05,
-		MinWeight:           0.1,
-		MaxWeight:           3.0,
-		MinBLEConfidence:    MinBLEConfidence,
-		MaxBLEBlobDistance:  MaxBLEBlobDistance,
+		MinWeight:            0.1,
+		MaxWeight:            3.0,
+		MinBLEConfidence:     MinBLEConfidence,
+		MaxBLEBlobDistance:   MaxBLEBlobDistance,
 	}
 }
 
@@ -64,21 +64,21 @@ type SelfImprovingLocalizer struct {
 	mu sync.RWMutex
 
 	// Core components
-	engine                *Engine
-	weightLearner         *WeightLearner
-	weightStore           *WeightStore
-	spatialWeightLearner  *SpatialWeightLearner
-	groundTruthProvider   GroundTruthSource
+	engine               *Engine
+	weightLearner        *WeightLearner
+	weightStore          *WeightStore
+	spatialWeightLearner *SpatialWeightLearner
+	groundTruthProvider  GroundTruthSource
 
 	// Configuration
 	config SelfImprovingLocalizerConfig
 
 	// Runtime state
-	running       bool
-	stopChan      chan struct{}
-	lastAdjust    time.Time
-	sampleCount   int
-	adjustCount   int
+	running     bool
+	stopChan    chan struct{}
+	lastAdjust  time.Time
+	sampleCount int
+	adjustCount int
 
 	// Improvement tracking
 	improvementHistory []ImprovementRecord
@@ -122,7 +122,7 @@ func NewSelfImprovingLocalizer(config SelfImprovingLocalizerConfig) *SelfImprovi
 		groundTruthProvider: groundTruthProvider,
 		config:              config,
 		stopChan:            make(chan struct{}),
-		improvementHistory:   make([]ImprovementRecord, 0),
+		improvementHistory:  make([]ImprovementRecord, 0),
 	}
 }
 
@@ -410,13 +410,13 @@ func (s *SelfImprovingLocalizer) GetImprovementStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_samples":      s.sampleCount,
-		"adjustments":        s.adjustCount,
-		"baseline_error_m":   latest.BaselineError,
-		"current_error_m":    latest.CurrentError,
-		"improvement_pct":    latest.ImprovementPct,
-		"trend":              trend,
-		"last_adjustment":    latest.Timestamp,
+		"total_samples":    s.sampleCount,
+		"adjustments":      s.adjustCount,
+		"baseline_error_m": latest.BaselineError,
+		"current_error_m":  latest.CurrentError,
+		"improvement_pct":  latest.ImprovementPct,
+		"trend":            trend,
+		"last_adjustment":  latest.Timestamp,
 	}
 }
 

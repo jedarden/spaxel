@@ -32,29 +32,29 @@ type WebhookClient struct {
 
 // WebhookPayload represents the JSON payload sent to webhook URLs.
 type WebhookPayload struct {
-	EventType         string  `json:"event_type"`
-	Message           string  `json:"message"`
-	Title             string  `json:"title,omitempty"`
-	Priority          string  `json:"priority,omitempty"`
-	PersonID          string  `json:"person_id,omitempty"`
-	PersonName        string  `json:"person_name,omitempty"`
-	ZoneID            string  `json:"zone_id,omitempty"`
-	ZoneName          string  `json:"zone_name,omitempty"`
-	Timestamp         int64   `json:"timestamp"`
-	TimestampISO      string  `json:"timestamp_iso"`
+	EventType          string `json:"event_type"`
+	Message            string `json:"message"`
+	Title              string `json:"title,omitempty"`
+	Priority           string `json:"priority,omitempty"`
+	PersonID           string `json:"person_id,omitempty"`
+	PersonName         string `json:"person_name,omitempty"`
+	ZoneID             string `json:"zone_id,omitempty"`
+	ZoneName           string `json:"zone_name,omitempty"`
+	Timestamp          int64  `json:"timestamp"`
+	TimestampISO       string `json:"timestamp_iso"`
 	FloorplanPNGBase64 string `json:"floorplan_png_base64,omitempty"`
 
 	// Additional fields for specific event types
-	BlobID      *int     `json:"blob_id,omitempty"`
-	BlobX       *float64 `json:"blob_x,omitempty"`
-	BlobY       *float64 `json:"blob_y,omitempty"`
-	BlobZ       *float64 `json:"blob_z,omitempty"`
-	Confidence  *float64 `json:"confidence,omitempty"`
+	BlobID     *int     `json:"blob_id,omitempty"`
+	BlobX      *float64 `json:"blob_x,omitempty"`
+	BlobY      *float64 `json:"blob_y,omitempty"`
+	BlobZ      *float64 `json:"blob_z,omitempty"`
+	Confidence *float64 `json:"confidence,omitempty"`
 
 	// Node information for node events
-	NodeMAC     string `json:"node_mac,omitempty"`
-	NodeName    string `json:"node_name,omitempty"`
-	NodeRole    string `json:"node_role,omitempty"`
+	NodeMAC  string `json:"node_mac,omitempty"`
+	NodeName string `json:"node_name,omitempty"`
+	NodeRole string `json:"node_role,omitempty"`
 
 	// Additional metadata
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
