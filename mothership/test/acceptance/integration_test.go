@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -38,6 +39,9 @@ func TestMain(m *testing.M) {
 	if os.Getenv("SPAXEL_INTEGRATION_TEST") != "1" {
 		return
 	}
+
+	// Parse flags to initialize testing framework (needed for testing.Short())
+	flag.Parse()
 
 	// Run tests in sequence
 	tests := []struct {
@@ -64,7 +68,13 @@ func TestMain(m *testing.M) {
 	}
 
 	for _, tc := range tests {
-		tc.fn(&testing.T{})
+		t := &testing.T{}
+		tc.fn(t)
+		if t.Failed() {
+			fmt.Printf("FAIL: %s\n", tc.name)
+		} else {
+			fmt.Printf("PASS: %s\n", tc.name)
+		}
 	}
 }
 
