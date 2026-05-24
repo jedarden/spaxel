@@ -2,7 +2,6 @@ package prediction
 
 import (
 	"database/sql"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -34,7 +33,14 @@ func TestPredictor_PauseResumeUpdates(t *testing.T) {
 
 	// Add transition samples
 	for i := 0; i < 100; i++ {
-		err := store.AddTransitionSample(personID, zoneID, zoneID, hourOfWeek)
+		err := store.RecordTransition(ZoneTransition{
+			PersonID:             personID,
+			FromZoneID:           zoneID,
+			ToZoneID:             zoneID,
+			HourOfWeek:           hourOfWeek,
+			DwellDurationMinutes: 10.0,
+			Timestamp:            time.Now(),
+		})
 		if err != nil {
 			t.Fatalf("Failed to add transition sample: %v", err)
 		}
@@ -148,7 +154,7 @@ func TestPredictor_ConcurrentPauseUpdates(t *testing.T) {
 			ZoneID    string
 			EntryTime time.Time
 		}{
-			{"person1": {"zone1", time.Now()}},
+			"person1": {ZoneID: "zone1", EntryTime: time.Now()},
 		},
 	})
 

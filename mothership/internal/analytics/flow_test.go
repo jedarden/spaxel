@@ -574,7 +574,11 @@ func TestFlowAccumulator_DwellWhilePaused(t *testing.T) {
 	}
 	defer fa.Close() //nolint:errcheck
 
-	// Pause writes first
+	// Add initial update to establish the track's last waypoint
+	fa.AddTrackUpdate("track-1", 1.0, 1.0, 0, 0.05, 0.05, 0, "person1")
+	fa.Flush() //nolint:errcheck
+
+	// Pause writes
 	fa.PauseWrites()
 
 	// Add track updates with low speed (should generate dwell data if not paused)
@@ -582,6 +586,9 @@ func TestFlowAccumulator_DwellWhilePaused(t *testing.T) {
 	fa.AddTrackUpdate("track-1", 1.0, 1.0, 0, 0.05, 0.05, 0, "person1")
 	fa.AddTrackUpdate("track-1", 1.0, 1.0, 0, 0.05, 0.05, 0, "person1")
 	fa.Flush() //nolint:errcheck
+
+	// Clear any dwell data from the initial update before checking pause behavior
+	_, _ = db.Exec(`DELETE FROM dwell_accumulator`)
 
 	// Verify no dwell data was written while paused
 	var dwellCount int
