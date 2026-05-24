@@ -1,8 +1,29 @@
 # Spaxel Mothership Dockerfile
-# Multi-stage build: ESP32 firmware → Go binary → minimal runtime image
+# Multi-stage build: ESP32 firmware (amd64 only) → Go binary → minimal runtime image
+# Build arguments for multi-platform support
+ARG TARGETPLATFORM=linux/amd64
+ARG TARGETARCH=amd64
 
-# Stage 1: Build ESP32-S3 firmware
+# Stage 1: Build ESP32-S3 firmware (amd64 only - ESP-IDF is x86_64)
 FROM espressif/idf:v5.2 AS firmware-builder
+ARG TARGETPLATFORM
+
+# Create build directory
+RUN mkdir -p /project/build
+
+# Handle amd64-only firmware build: skip on arm64, build on amd64
+RUN if [ "$TARGETPLATFORM" != "linux/amd64" ]; then \
+        echo "# Firmware not available on $TARGETPLATFORM (ESP-IDF is amd64-only)" > /project/build/spaxel-firmware-merged.bin && \
+        echo "Firmware build skipped - placeholder created"; \
+    fi
+
+# Only copy firmware source and build on amd64 (placeholder already created on arm64)
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        cd /project && \
+        echo "Building ESP32 firmware for $TARGETPLATFORM"; \
+    else \
+        exit 0; \
+    fi
 
 WORKDIR /project
 COPY firmware/ ./
@@ -19,7 +40,7 @@ RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
         0x8000  build/partition_table/partition-table.bin \
         0x10000 build/spaxel-firmware.bin
 
-# Stage 2: Build the Go binary
+# Stage 2: Build the Go binary (cross-platform)
 FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
@@ -31,15 +52,21 @@ RUN go mod download
 # Copy source code
 COPY mothership/ ./
 
-# Build the binary
+# Build the binary with cross-platform support
 # CGO_ENABLED=0 because we use pure-Go SQLite (modernc.org/sqlite)
+# GOOS/GOARCH derived from TARGETPLATFORM for multi-arch builds
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=linux go build \
+ARG TARGETPLATFORM
+RUN CGO_ENABLED=0 \
+    GOOS=$(echo $TARGETPLATFORM | cut -d'/' -f2) \
+    GOARCH=$(echo $TARGETPLATFORM | cut -d'/' -f3) \
+    go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o spaxel ./cmd/mothership
 
-# Stage 2: Minimal runtime image
+# Stage 3: Minimal runtime image
 FROM debian:12-slim
+ARG TARGETARCH=amd64
 
 # Install wget for health check
 RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -52,7 +79,14 @@ COPY dashboard/ /dashboard/
 
 # Bake ESP32 firmware into the image so the mothership can seed it on first run.
 # The mothership copies /firmware/*.bin → /data/firmware/ at startup if not present.
+# Firmware is only included on amd64 builds (ESP-IDF is x86_64-only).
+# arm64 users must mount their own firmware via /data volume.
 COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/spaxel-firmware.bin
+# Remove placeholder file if present (non-amd64 builds)
+RUN if [ "$TARGETARCH" != "amd64" ]; then \
+        rm -f /firmware/spaxel-firmware.bin && \
+        echo "# Firmware not available on $TARGETARCH (amd64 only)" > /firmware/README.txt; \
+    fi
 
 VOLUME ["/data"]
 
