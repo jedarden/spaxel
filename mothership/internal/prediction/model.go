@@ -15,13 +15,13 @@ import (
 
 // ZoneTransition represents a recorded zone transition event.
 type ZoneTransition struct {
-	ID                 string    `json:"id"`
-	PersonID           string    `json:"person_id"`
-	FromZoneID         string    `json:"from_zone_id"`
-	ToZoneID           string    `json:"to_zone_id"`
-	HourOfWeek         int       `json:"hour_of_week"` // 0-167: day_of_week * 24 + hour_of_day
-	DwellDurationMinutes float64 `json:"dwell_duration_minutes"`
-	Timestamp          time.Time `json:"timestamp"`
+	ID                   string    `json:"id"`
+	PersonID             string    `json:"person_id"`
+	FromZoneID           string    `json:"from_zone_id"`
+	ToZoneID             string    `json:"to_zone_id"`
+	HourOfWeek           int       `json:"hour_of_week"` // 0-167: day_of_week * 24 + hour_of_day
+	DwellDurationMinutes float64   `json:"dwell_duration_minutes"`
+	Timestamp            time.Time `json:"timestamp"`
 }
 
 // TransitionProbability represents the probability of transitioning from one zone to another.
@@ -100,52 +100,78 @@ func NewModelStore(dbPath string) (*ModelStore, error) {
 }
 
 func (s *ModelStore) migrate() error {
+	// Create prediction schema version tracking table
 	_, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS zone_transitions_history (
-			id                    TEXT PRIMARY KEY,
-			person_id             TEXT    NOT NULL,
-			from_zone_id          TEXT    NOT NULL,
-			to_zone_id            TEXT    NOT NULL,
-			hour_of_week          INTEGER NOT NULL,
-			dwell_duration_minutes REAL    NOT NULL DEFAULT 0,
-			timestamp             INTEGER NOT NULL
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_transitions_person_time ON zone_transitions_history(person_id, hour_of_week);
-		CREATE INDEX IF NOT EXISTS idx_transitions_from ON zone_transitions_history(from_zone_id);
-		CREATE INDEX IF NOT EXISTS idx_transitions_timestamp ON zone_transitions_history(timestamp);
-
-		CREATE TABLE IF NOT EXISTS transition_probabilities (
-			person_id     TEXT    NOT NULL,
-			hour_of_week  INTEGER NOT NULL,
-			from_zone_id  TEXT    NOT NULL,
-			to_zone_id    TEXT    NOT NULL,
-			probability   REAL    NOT NULL,
-			count         INTEGER NOT NULL,
-			last_computed INTEGER NOT NULL,
-			PRIMARY KEY (person_id, hour_of_week, from_zone_id, to_zone_id)
-		);
-
-		CREATE TABLE IF NOT EXISTS dwell_times (
-			person_id       TEXT    NOT NULL,
-			zone_id         TEXT    NOT NULL,
-			hour_of_week    INTEGER NOT NULL,
-			mean_minutes    REAL    NOT NULL,
-			stddev_minutes  REAL    NOT NULL,
-			count           INTEGER NOT NULL,
-			last_computed   INTEGER NOT NULL,
-			PRIMARY KEY (person_id, zone_id, hour_of_week)
-		);
-
-		CREATE TABLE IF NOT EXISTS person_zone_entry (
-			person_id     TEXT    NOT NULL,
-			zone_id       TEXT    NOT NULL,
-			entry_time    INTEGER NOT NULL,
-			blob_id       INTEGER NOT NULL,
-			PRIMARY KEY (person_id, zone_id)
+		CREATE TABLE IF NOT EXISTS prediction_schema_version (
+			version INTEGER PRIMARY KEY,
+			applied_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Check current version
+	var currentVersion int
+	err = s.db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM prediction_schema_version`).Scan(&currentVersion)
+	if err != nil {
+		return err
+	}
+
+	// Version 1: initial prediction tables
+	if currentVersion < 1 {
+		_, err = s.db.Exec(`
+			CREATE TABLE IF NOT EXISTS zone_transitions_history (
+				id                    TEXT PRIMARY KEY,
+				person_id             TEXT    NOT NULL,
+				from_zone_id          TEXT    NOT NULL,
+				to_zone_id            TEXT    NOT NULL,
+				hour_of_week          INTEGER NOT NULL,
+				dwell_duration_minutes REAL    NOT NULL DEFAULT 0,
+				timestamp             INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_transitions_person_time ON zone_transitions_history(person_id, hour_of_week);
+			CREATE INDEX IF NOT EXISTS idx_transitions_from ON zone_transitions_history(from_zone_id);
+			CREATE INDEX IF NOT EXISTS idx_transitions_timestamp ON zone_transitions_history(timestamp);
+
+			CREATE TABLE IF NOT EXISTS transition_probabilities (
+				person_id     TEXT    NOT NULL,
+				hour_of_week  INTEGER NOT NULL,
+				from_zone_id  TEXT    NOT NULL,
+				to_zone_id    TEXT    NOT NULL,
+				probability   REAL    NOT NULL,
+				count         INTEGER NOT NULL,
+				last_computed INTEGER NOT NULL,
+				PRIMARY KEY (person_id, hour_of_week, from_zone_id, to_zone_id)
+			);
+
+			CREATE TABLE IF NOT EXISTS dwell_times (
+				person_id       TEXT    NOT NULL,
+				zone_id         TEXT    NOT NULL,
+				hour_of_week    INTEGER NOT NULL,
+				mean_minutes    REAL    NOT NULL,
+				stddev_minutes  REAL    NOT NULL,
+				count           INTEGER NOT NULL,
+				last_computed   INTEGER NOT NULL,
+				PRIMARY KEY (person_id, zone_id, hour_of_week)
+			);
+
+			CREATE TABLE IF NOT EXISTS person_zone_entry (
+				person_id     TEXT    NOT NULL,
+				zone_id       TEXT    NOT NULL,
+				entry_time    INTEGER NOT NULL,
+				blob_id       INTEGER NOT NULL,
+				PRIMARY KEY (person_id, zone_id)
+			);
+
+			INSERT INTO prediction_schema_version (version) VALUES (1);
+		`)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *ModelStore) loadFirstTransitionTime() {

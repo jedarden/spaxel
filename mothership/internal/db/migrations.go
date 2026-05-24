@@ -487,7 +487,6 @@ func migration_006_add_virtual_node_columns(tx *sql.Tx) error {
 	return nil
 }
 
-
 // migration_007_add_webhook_tables adds webhook_log, trigger_state tables
 // and error_message/error_count columns to the triggers table.
 func migration_007_add_webhook_tables(tx *sql.Tx) error {
