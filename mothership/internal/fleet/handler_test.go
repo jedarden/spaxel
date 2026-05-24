@@ -15,10 +15,10 @@ import (
 
 // mockNodeIdentifier is a mock implementation of NodeIdentifier for testing.
 type mockNodeIdentifier struct {
-	sendIdentifyFunc  func(mac string, durationMS int) bool
-	sendRebootFunc    func(mac string, delayMS int) bool
-	getConnectedMACs  func() []string
-	getUnpairedMACs   func() []string
+	sendIdentifyFunc func(mac string, durationMS int) bool
+	sendRebootFunc   func(mac string, delayMS int) bool
+	getConnectedMACs func() []string
+	getUnpairedMACs  func() []string
 }
 
 func (m *mockNodeIdentifier) SendIdentifyToMAC(mac string, durationMS int) bool {
@@ -162,13 +162,13 @@ func (m *mockRegistry) Close() error {
 
 func TestHandlerIdentifyNode(t *testing.T) {
 	tests := []struct {
-		name           string
-		mac            string
-		reqBody        string
-		nodeExists     bool
-		nodeConnected  bool
-		wantStatus     int
-		wantResponse   string
+		name          string
+		mac           string
+		reqBody       string
+		nodeExists    bool
+		nodeConnected bool
+		wantStatus    int
+		wantResponse  string
 	}{
 		{
 			name:          "successful identify with default duration",
@@ -292,28 +292,28 @@ func TestHandlerIdentifyNode(t *testing.T) {
 
 func TestHandlerIdentifyNodeDurationParsing(t *testing.T) {
 	tests := []struct {
-		name            string
-		reqBody         string
+		name             string
+		reqBody          string
 		expectedDuration int
 	}{
 		{
-			name:            "default duration when not specified",
-			reqBody:         `{}`,
+			name:             "default duration when not specified",
+			reqBody:          `{}`,
 			expectedDuration: 5000,
 		},
 		{
-			name:            "custom duration",
-			reqBody:         `{"duration_ms": 10000}`,
+			name:             "custom duration",
+			reqBody:          `{"duration_ms": 10000}`,
 			expectedDuration: 10000,
 		},
 		{
-			name:            "zero uses default",
-			reqBody:         `{"duration_ms": 0}`,
+			name:             "zero uses default",
+			reqBody:          `{"duration_ms": 0}`,
 			expectedDuration: 5000,
 		},
 		{
-			name:            "negative uses default",
-			reqBody:         `{"duration_ms": -1000}`,
+			name:             "negative uses default",
+			reqBody:          `{"duration_ms": -1000}`,
 			expectedDuration: 5000,
 		},
 	}
@@ -477,14 +477,14 @@ func TestHandlerSetSystemMode(t *testing.T) {
 			expectedMode: "away",
 		},
 		{
-			name:         "invalid mode",
-			requestBody:  `{"mode": "invalid"}`,
-			wantStatus:   http.StatusBadRequest,
+			name:        "invalid mode",
+			requestBody: `{"mode": "invalid"}`,
+			wantStatus:  http.StatusBadRequest,
 		},
 		{
-			name:         "invalid json",
-			requestBody:  `invalid json`,
-			wantStatus:   http.StatusBadRequest,
+			name:        "invalid json",
+			requestBody: `invalid json`,
+			wantStatus:  http.StatusBadRequest,
 		},
 	}
 
@@ -745,12 +745,12 @@ func TestHandlerUpdateNodeLabel(t *testing.T) {
 
 func TestHandlerSetNodeRole(t *testing.T) {
 	tests := []struct {
-		name          string
-		mac           string
-		requestBody   string
-		nodeExists    bool
-		wantStatus    int
-		expectedRole  string
+		name         string
+		mac          string
+		requestBody  string
+		nodeExists   bool
+		wantStatus   int
+		expectedRole string
 	}{
 		{
 			name:         "successful role change to tx",
@@ -898,12 +898,12 @@ func TestHandlerDeleteNode(t *testing.T) {
 
 func TestHandlerTriggerNodeOTA(t *testing.T) {
 	tests := []struct {
-		name          string
-		mac           string
-		requestBody   string
-		nodeExists    bool
-		otaAvailable  bool
-		wantStatus    int
+		name         string
+		mac          string
+		requestBody  string
+		nodeExists   bool
+		otaAvailable bool
+		wantStatus   int
 	}{
 		{
 			name:         "successful OTA trigger",
@@ -1089,10 +1089,10 @@ func TestHandlerRebootNode(t *testing.T) {
 
 func TestHandlerUpdateAllNodes(t *testing.T) {
 	tests := []struct {
-		name           string
-		connectedMACs  []string
-		wantStatus     int
-		expectedCount  int
+		name          string
+		connectedMACs []string
+		wantStatus    int
+		expectedCount int
 	}{
 		{
 			name:          "update all connected nodes",
@@ -1387,15 +1387,15 @@ func TestHandlerUpdateNodePosition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-				reg := newTestRegistry(t);
-				reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3");
-				reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Test Node");
-				reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx");
-				reg.SetNodePosition("AA:BB:CC:DD:EE:FF", 0, 0, 0);
+			reg := newTestRegistry(t)
+			reg.UpsertNode("AA:BB:CC:DD:EE:FF", "1.0.0", "ESP32-S3")
+			reg.SetNodeLabel("AA:BB:CC:DD:EE:FF", "Test Node")
+			reg.SetNodeRole("AA:BB:CC:DD:EE:FF", "rx")
+			reg.SetNodePosition("AA:BB:CC:DD:EE:FF", 0, 0, 0)
 
-				mgr := NewManager(reg);
+			mgr := NewManager(reg)
 
-				h := &Handler{mgr: mgr}
+			h := &Handler{mgr: mgr}
 
 			req := httptest.NewRequest("PUT", "/api/nodes/"+tt.mac+"/position", bytes.NewBufferString(tt.requestBody))
 			req.Header.Set("Content-Type", "application/json")
@@ -1410,17 +1410,17 @@ func TestHandlerUpdateNodePosition(t *testing.T) {
 				t.Errorf("updateNodePosition() status = %v, want %v", w.Code, tt.wantStatus)
 			}
 
-				if tt.wantStatus == http.StatusNoContent {
-					// Verify the position was updated
-					node, err := reg.GetNode(tt.mac)
-					if err != nil {
-						t.Errorf("Failed to get node: %v", err)
-					} else if node.PosX != tt.expectedX || node.PosY != tt.expectedY || node.PosZ != tt.expectedZ {
-						t.Errorf("Expected position to be (%v, %v, %v), got (%v, %v, %v)",
-							tt.expectedX, tt.expectedY, tt.expectedZ,
-							node.PosX, node.PosY, node.PosZ)
-					}
+			if tt.wantStatus == http.StatusNoContent {
+				// Verify the position was updated
+				node, err := reg.GetNode(tt.mac)
+				if err != nil {
+					t.Errorf("Failed to get node: %v", err)
+				} else if node.PosX != tt.expectedX || node.PosY != tt.expectedY || node.PosZ != tt.expectedZ {
+					t.Errorf("Expected position to be (%v, %v, %v), got (%v, %v, %v)",
+						tt.expectedX, tt.expectedY, tt.expectedZ,
+						node.PosX, node.PosY, node.PosZ)
 				}
+			}
 		})
 	}
 }
@@ -1434,14 +1434,14 @@ func TestFleetTableRendering(t *testing.T) {
 
 	// Create 4 test nodes with different configurations
 	testNodes := []struct {
-		mac               string
-		name              string
-		role              string
-		firmware          string
-		chip              string
-		x, y, z           float64
-		health            float64
-		online            bool
+		mac      string
+		name     string
+		role     string
+		firmware string
+		chip     string
+		x, y, z  float64
+		health   float64
+		online   bool
 	}{
 		{
 			mac:      "AA:BB:CC:DD:EE:01",
@@ -2196,13 +2196,13 @@ func TestFleetListUnpairedNotInRegistry(t *testing.T) {
 
 func TestHandlerDisableNode(t *testing.T) {
 	tests := []struct {
-		name           string
-		mac            string
-		initialRole    string
-		nodeExists     bool
-		wantStatus     int
-		expectedRole   string
-		expectedPrior  string
+		name          string
+		mac           string
+		initialRole   string
+		nodeExists    bool
+		wantStatus    int
+		expectedRole  string
+		expectedPrior string
 	}{
 		{
 			name:          "successful disable from tx",
@@ -2308,14 +2308,14 @@ func TestHandlerDisableNode(t *testing.T) {
 
 func TestHandlerEnableNode(t *testing.T) {
 	tests := []struct {
-		name              string
-		mac               string
-		initialRole       string
-		savedPriorRole    string
-		nodeExists        bool
-		wantStatus        int
-		expectedRole      string
-		expectedNote      string
+		name           string
+		mac            string
+		initialRole    string
+		savedPriorRole string
+		nodeExists     bool
+		wantStatus     int
+		expectedRole   string
+		expectedNote   string
 	}{
 		{
 			name:           "successful enable from idle with saved prior role",
@@ -2533,32 +2533,32 @@ func TestRouteRegistrationNoPanic(t *testing.T) {
 	// From FleetHandler: /api/fleet/health, /api/fleet/history, /api/fleet/optimise, /api/fleet/simulate
 	// The key is no panic on duplicate routes like POST /api/nodes/{mac}/role
 
-	// Try to walk the routes to ensure they're registered
-	routes := chi.Routes(r)
-	if len(routes) == 0 {
-		t.Fatal("No routes registered")
-	}
+	// Walk the routes to ensure they're registered
+	expectedRoutes := make(map[string]bool)
+	expectedRoutes["/api/nodes"] = false
+	expectedRoutes["/api/fleet"] = false
+	expectedRoutes["/api/fleet/health"] = false
+	expectedRoutes["/api/fleet/history"] = false
+	expectedRoutes["/api/fleet/optimise"] = false
+	expectedRoutes["/api/fleet/simulate"] = false
 
-	// Verify some expected routes exist
-	expectedRoutes := []string{
-		"/api/nodes",
-		"/api/fleet",
-		"/api/fleet/health",
-		"/api/fleet/history",
-		"/api/fleet/optimise",
-		"/api/fleet/simulate",
-	}
-
-	for _, expected := range expectedRoutes {
-		found := false
-		for _, route := range routes {
-			if route.Pattern == expected {
-				found = true
-				break
+	// Use chi.Walk to iterate over all registered routes
+	err := chi.Walk(r, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		for pattern := range expectedRoutes {
+			if route == pattern {
+				expectedRoutes[pattern] = true
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to walk routes: %v", err)
+	}
+
+	// Check that all expected routes were found
+	for pattern, found := range expectedRoutes {
 		if !found {
-			t.Errorf("Expected route %s not found", expected)
+			t.Errorf("Expected route %s not found", pattern)
 		}
 	}
 }
