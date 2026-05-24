@@ -277,8 +277,8 @@ func NewDetector(dbPath string, config AnomalyScoreConfig) (*Detector, error) {
 	return d, nil
 }
 
-func (d *Detector) migrate() error {
-	_, err := d.db.Exec(` //nolint:errcheck
+func (d *Detector) migrate() error { //nolint:errcheck
+	_, err := d.db.Exec(`
 		CREATE TABLE IF NOT EXISTS behaviour_slots (
 			hour_of_week    INTEGER NOT NULL,
 			zone_id         TEXT    NOT NULL,
@@ -1152,7 +1152,7 @@ func (d *Detector) cleanupStaleCooldowns() {
 
 func (d *Detector) recordOccupancySample(hourOfWeek int, zoneID string, personCount int, bleDevices []string, timestamp time.Time) {
 	devicesJSON, _ := jsonMarshal(bleDevices)
-	_, err := d.db.Exec(` //nolint:errcheck
+	_, err := d.db.Exec(`
 		INSERT INTO occupancy_samples (hour_of_week, zone_id, person_count, ble_devices, timestamp)
 		VALUES (?, ?, ?, ?, ?)
 	`, hourOfWeek, zoneID, personCount, string(devicesJSON), timestamp.UnixNano())
@@ -1162,7 +1162,7 @@ func (d *Detector) recordOccupancySample(hourOfWeek int, zoneID string, personCo
 }
 
 func (d *Detector) recordDwellSample(hourOfWeek int, zoneID, personID string, dwellDuration time.Duration, timestamp time.Time) {
-	_, err := d.db.Exec(` //nolint:errcheck
+	_, err := d.db.Exec(`
 		INSERT INTO dwell_samples (hour_of_week, zone_id, person_id, dwell_ns, timestamp)
 		VALUES (?, ?, ?, ?, ?)
 	`, hourOfWeek, zoneID, personID, dwellDuration.Nanoseconds(), timestamp.UnixNano())
@@ -1172,7 +1172,7 @@ func (d *Detector) recordDwellSample(hourOfWeek int, zoneID, personID string, dw
 }
 
 func (d *Detector) persistAnomaly(event *events.AnomalyEvent) {
-	_, err := d.db.Exec(` //nolint:errcheck
+	_, err := d.db.Exec(`
 		INSERT INTO anomaly_events (
 			id, type, score, description, timestamp,
 			zone_id, zone_name, blob_id, person_id, person_name,
@@ -1267,7 +1267,7 @@ func (d *Detector) startAlertChain(event *events.AnomalyEvent, isSecurityMode bo
 }
 
 func (d *Detector) updateAnomalyAlertState(event *events.AnomalyEvent) {
- _, _ = d.db.Exec(` //nolint:errcheck
+ _, _ = d.db.Exec(`
 		UPDATE anomaly_events SET
 			alert_sent = ?, alert_sent_at = ?,
 			webhook_sent = ?, webhook_sent_at = ?,
@@ -1310,7 +1310,7 @@ func (d *Detector) AcknowledgeAnomaly(anomalyID, feedback, acknowledgedBy string
 	event.AcknowledgedBy = acknowledgedBy
 
 	// Update database
-	_, err := d.db.Exec(` //nolint:errcheck
+	_, err := d.db.Exec(`
 		UPDATE anomaly_events SET
 			acknowledged = 1,
 			acknowledged_at = ?,
@@ -1463,7 +1463,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 
 		// Upsert to database
 		devicesJSON, _ := jsonMarshal(slot.TypicalBLEDevices)
-  _, _ = d.db.Exec(` //nolint:errcheck
+  _, _ = d.db.Exec(`
 			INSERT INTO behaviour_slots (hour_of_week, zone_id, expected_occupancy, typical_person_count, sample_count, typical_ble_devices)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(hour_of_week, zone_id) DO UPDATE SET
@@ -1502,7 +1502,7 @@ func (d *Detector) UpdateBehaviourModel() error {
 		slot.MeanDwellDuration = time.Duration(meanNS)
 		slot.StdDwellDuration = time.Duration(stdNS)
 
-  _, _ = d.db.Exec(` //nolint:errcheck
+  _, _ = d.db.Exec(`
 			INSERT INTO dwell_slots (hour_of_week, zone_id, person_id, mean_dwell_ns, std_dwell_ns, sample_count)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(hour_of_week, zone_id, person_id) DO UPDATE SET
