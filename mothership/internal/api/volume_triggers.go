@@ -38,11 +38,11 @@ type WSBroadcaster interface {
 
 // VolumeTriggersHandler manages automation trigger volumes with 3D geometry.
 type VolumeTriggersHandler struct {
-	mu          sync.RWMutex
-	store       *volume.Store
-	httpClient  *http.Client
-	mqttClient   VolumeMQTTClient
-	notifyClient NotificationClient
+	mu            sync.RWMutex
+	store         *volume.Store
+	httpClient    *http.Client
+	mqttClient    VolumeMQTTClient
+	notifyClient  NotificationClient
 	wsBroadcaster WSBroadcaster
 }
 
@@ -64,39 +64,39 @@ type VolumeTriggersHandler struct {
 //   - created_at: creation timestamp
 //   - updated_at: last modification timestamp
 type TriggerResponse struct {
-	ID             string                  `json:"id"`
-	Name           string                  `json:"name"`
-	Shape          volume.ShapeJSON        `json:"shape"`
-	Condition      string                  `json:"condition"`
+	ID              string                 `json:"id"`
+	Name            string                 `json:"name"`
+	Shape           volume.ShapeJSON       `json:"shape"`
+	Condition       string                 `json:"condition"`
 	ConditionParams volume.ConditionParams `json:"condition_params"`
-	TimeConstraint *volume.TimeConstraint `json:"time_constraint,omitempty"`
-	Actions        []volume.Action         `json:"actions"`
-	Enabled        bool                    `json:"enabled"`
-	ErrorMessage  string                  `json:"error_message,omitempty"`
-	ErrorCount     int                     `json:"error_count"`
-	LastFired      *time.Time              `json:"last_fired,omitempty"`
-	Elapsed        int                     `json:"elapsed,omitempty"` // seconds since last fire
-	CreatedAt      time.Time               `json:"created_at"`
-	UpdatedAt      time.Time               `json:"updated_at"`
+	TimeConstraint  *volume.TimeConstraint `json:"time_constraint,omitempty"`
+	Actions         []volume.Action        `json:"actions"`
+	Enabled         bool                   `json:"enabled"`
+	ErrorMessage    string                 `json:"error_message,omitempty"`
+	ErrorCount      int                    `json:"error_count"`
+	LastFired       *time.Time             `json:"last_fired,omitempty"`
+	Elapsed         int                    `json:"elapsed,omitempty"` // seconds since last fire
+	CreatedAt       time.Time              `json:"created_at"`
+	UpdatedAt       time.Time              `json:"updated_at"`
 }
 
 // WebhookTestResult is returned by POST /api/triggers/{id}/test.
 //
 // Contains the overall test status and per-action execution results.
 type WebhookTestResult struct {
-	Status    string        `json:"status"`
-	ResponseMs int64         `json:"response_ms"`
-	Error     string        `json:"error,omitempty"`
-	Actions   []ActionResult `json:"actions"`
+	Status     string         `json:"status"`
+	ResponseMs int64          `json:"response_ms"`
+	Error      string         `json:"error,omitempty"`
+	Actions    []ActionResult `json:"actions"`
 }
 
 // ActionResult represents the outcome of executing a single action during a test fire.
 type ActionResult struct {
-	Type      string `json:"type"`
-	URL       string `json:"url,omitempty"`
-	Status    int    `json:"status,omitempty"`
+	Type       string `json:"type"`
+	URL        string `json:"url,omitempty"`
+	Status     int    `json:"status,omitempty"`
 	ResponseMs int64  `json:"response_ms,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 // NewVolumeTriggersHandler creates a new triggers handler with volume support.
@@ -138,6 +138,13 @@ func (h *VolumeTriggersHandler) SetWSBroadcaster(broadcaster WSBroadcaster) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.wsBroadcaster = broadcaster
+}
+
+// SetPredictionProvider sets the prediction provider for predicted_enter triggers.
+func (h *VolumeTriggersHandler) SetPredictionProvider(pp volume.PredictionProvider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.store.SetPredictionProvider(pp)
 }
 
 // Close closes the underlying store.
@@ -332,13 +339,13 @@ func (h *VolumeTriggersHandler) getTrigger(w http.ResponseWriter, r *http.Reques
 
 // volumeCreateTriggerRequest is the request body for POST /api/triggers.
 type volumeCreateTriggerRequest struct {
-	Name            string                   `json:"name"`
-	Shape           volume.ShapeJSON         `json:"shape"`
-	Condition       string                   `json:"condition"`
+	Name            string                 `json:"name"`
+	Shape           volume.ShapeJSON       `json:"shape"`
+	Condition       string                 `json:"condition"`
 	ConditionParams volume.ConditionParams `json:"condition_params,omitempty"`
-	TimeConstraint  *volume.TimeConstraint   `json:"time_constraint,omitempty"`
-	Actions         []volume.Action          `json:"actions"`
-	Enabled         *bool                    `json:"enabled,omitempty"`
+	TimeConstraint  *volume.TimeConstraint `json:"time_constraint,omitempty"`
+	Actions         []volume.Action        `json:"actions"`
+	Enabled         *bool                  `json:"enabled,omitempty"`
 }
 
 // createTrigger handles POST /api/triggers.
@@ -386,10 +393,11 @@ func (h *VolumeTriggersHandler) createTrigger(w http.ResponseWriter, r *http.Req
 		"leave":  true,
 		"dwell":  true,
 		"vacant": true,
-		"count":  true,
-	}
+		"count":           true,
+			"predicted_enter": true,
+		}
 	if !validConditions[req.Condition] {
-		http.Error(w, "condition must be one of: enter, leave, dwell, vacant, count", http.StatusBadRequest)
+		http.Error(w, "condition must be one of: enter, leave, dwell, vacant, count, predicted_enter", http.StatusBadRequest)
 		return
 	}
 
@@ -430,13 +438,13 @@ func (h *VolumeTriggersHandler) createTrigger(w http.ResponseWriter, r *http.Req
 // volumeUpdateTriggerRequest is the request body for PUT /api/triggers/{id}.
 // Only non-nil fields are updated.
 type volumeUpdateTriggerRequest struct {
-	Name            *string                  `json:"name,omitempty"`
-	Shape           *volume.ShapeJSON        `json:"shape,omitempty"`
-	Condition       *string                  `json:"condition,omitempty"`
+	Name            *string                 `json:"name,omitempty"`
+	Shape           *volume.ShapeJSON       `json:"shape,omitempty"`
+	Condition       *string                 `json:"condition,omitempty"`
 	ConditionParams *volume.ConditionParams `json:"condition_params,omitempty"`
-	TimeConstraint  *volume.TimeConstraint   `json:"time_constraint,omitempty"`
-	Actions         *[]volume.Action         `json:"actions,omitempty"`
-	Enabled         *bool                    `json:"enabled,omitempty"`
+	TimeConstraint  *volume.TimeConstraint  `json:"time_constraint,omitempty"`
+	Actions         *[]volume.Action        `json:"actions,omitempty"`
+	Enabled         *bool                   `json:"enabled,omitempty"`
 }
 
 // updateTrigger handles PUT /api/triggers/{id}.
@@ -562,10 +570,10 @@ func (h *VolumeTriggersHandler) testTrigger(w http.ResponseWriter, r *http.Reque
 		"condition":    trigger.Condition,
 		"blob_id":      0,
 		"person":       nil,
-		"position": map[string]float64{"x": 0, "y": 0, "z": 0},
+		"position":     map[string]float64{"x": 0, "y": 0, "z": 0},
 		"zone":         nil,
 		"dwell_s":      0,
-		"timestamp_ms":  now.UnixMilli(),
+		"timestamp_ms": now.UnixMilli(),
 	}
 
 	data, err := json.Marshal(payload)
@@ -614,9 +622,9 @@ func (h *VolumeTriggersHandler) testTrigger(w http.ResponseWriter, r *http.Reque
 	totalMs := time.Since(totalStart).Milliseconds()
 
 	resp := WebhookTestResult{
-		Status:    "ok",
+		Status:     "ok",
 		ResponseMs: totalMs,
-		Actions:   results,
+		Actions:    results,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -747,19 +755,19 @@ func (h *VolumeTriggersHandler) isValidShape(shape *volume.ShapeJSON) bool {
 // toResponse converts a trigger to the API response format.
 func (h *VolumeTriggersHandler) toResponse(t *volume.Trigger, now time.Time) *TriggerResponse {
 	resp := &TriggerResponse{
-		ID:             t.ID,
-		Name:           t.Name,
-		Shape:          t.Shape,
-		Condition:      t.Condition,
+		ID:              t.ID,
+		Name:            t.Name,
+		Shape:           t.Shape,
+		Condition:       t.Condition,
 		ConditionParams: t.ConditionParams,
-		TimeConstraint: t.TimeConstraint,
-		Actions:        t.Actions,
-		Enabled:        t.Enabled,
-		ErrorMessage:  t.ErrorMessage,
-		ErrorCount:     t.ErrorCount,
-		LastFired:      t.LastFired,
-		CreatedAt:      t.CreatedAt,
-		UpdatedAt:      t.UpdatedAt,
+		TimeConstraint:  t.TimeConstraint,
+		Actions:         t.Actions,
+		Enabled:         t.Enabled,
+		ErrorMessage:    t.ErrorMessage,
+		ErrorCount:      t.ErrorCount,
+		LastFired:       t.LastFired,
+		CreatedAt:       t.CreatedAt,
+		UpdatedAt:       t.UpdatedAt,
 	}
 
 	if t.LastFired != nil {
@@ -864,14 +872,14 @@ func (h *VolumeTriggersHandler) executeWebhook(action volume.Action, event volum
 	t := h.store.GetTrigger(event.TriggerID)
 	payload := map[string]interface{}{
 		"trigger_id":   event.TriggerID,
-		"trigger_name":  t.Name,
+		"trigger_name": t.Name,
 		"condition":    t.Condition,
 		"blob_id":      0,
 		"person":       nil,
 		"position":     map[string]float64{"x": 0, "y": 0, "z": 0},
 		"zone":         nil,
 		"dwell_s":      0,
-		"timestamp_ms":  event.Timestamp.UnixMilli(),
+		"timestamp_ms": event.Timestamp.UnixMilli(),
 	}
 
 	data, err := json.Marshal(payload)
@@ -950,7 +958,7 @@ func (h *VolumeTriggersHandler) executeMQTT(action volume.Action, event volume.F
 	t := h.store.GetTrigger(event.TriggerID)
 	payload := map[string]interface{}{
 		"trigger_id":   event.TriggerID,
-		"trigger_name":  t.Name,
+		"trigger_name": t.Name,
 		"condition":    t.Condition,
 		"fired_at":     event.Timestamp.Format(time.RFC3339),
 		"blob_ids":     event.BlobIDs,
@@ -982,10 +990,10 @@ func (h *VolumeTriggersHandler) executeNotification(action volume.Action, event 
 	body := fmt.Sprintf("%s triggered (%s)", event.TriggerName, event.Condition)
 
 	data := map[string]interface{}{
-		"trigger_id":  event.TriggerID,
+		"trigger_id":   event.TriggerID,
 		"trigger_name": event.TriggerName,
-		"condition":   event.Condition,
-		"timestamp":   event.Timestamp.Unix(),
+		"condition":    event.Condition,
+		"timestamp":    event.Timestamp.Unix(),
 	}
 
 	if err := client.SendViaChannel(action.Type, title, body, data); err != nil {
