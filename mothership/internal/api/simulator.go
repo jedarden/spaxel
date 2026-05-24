@@ -19,10 +19,10 @@ import (
 // It allows users to define virtual spaces, place virtual nodes, simulate walkers,
 // and compute GDOP coverage quality before purchasing hardware.
 type SimulatorHandler struct {
-	mu       sync.RWMutex
-	space    *simulator.Space
-	nodes    *simulator.NodeSet
-	walkers  *simulator.WalkerSet
+	mu      sync.RWMutex
+	space   *simulator.Space
+	nodes   *simulator.NodeSet
+	walkers *simulator.WalkerSet
 }
 
 // NewSimulatorHandler creates a new simulator handler.
@@ -37,7 +37,7 @@ func NewSimulatorHandler() *SimulatorHandler {
 
 // RegisterRoutes registers simulator routes on the router.
 func (h *SimulatorHandler) RegisterRoutes(r chi.Router) {
-	r.Route("/simulator", func(r chi.Router) {
+	r.Route("/api/simulator", func(r chi.Router) {
 		r.Get("/", h.GetState)
 		r.Post("/reset", h.Reset)
 		r.Post("/session", h.CreateSession)
@@ -184,11 +184,11 @@ func (h *SimulatorHandler) ValidateSpace(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"valid":       true,
-		"volume_m3":   h.space.TotalVolume(),
-		"bounds":      getBoundsJSON(h.space),
-		"room_count":  len(h.space.Rooms),
-		"wall_count":  len(h.space.GetWalls()),
+		"valid":      true,
+		"volume_m3":  h.space.TotalVolume(),
+		"bounds":     getBoundsJSON(h.space),
+		"room_count": len(h.space.Rooms),
+		"wall_count": len(h.space.GetWalls()),
 	})
 }
 
@@ -381,20 +381,20 @@ func (h *SimulatorHandler) RemoveWalker(w http.ResponseWriter, r *http.Request) 
 
 // GDOPRequest contains parameters for GDOP computation
 type GDOPRequest struct {
-	CellSize  float64 `json:"cell_size"`  // Grid cell size in meters
-	MaxZone   int     `json:"max_zone"`   // Maximum Fresnel zone to consider
-	Threshold float64 `json:"threshold"`  // DeltaRMS threshold for active links
+	CellSize  float64 `json:"cell_size"` // Grid cell size in meters
+	MaxZone   int     `json:"max_zone"`  // Maximum Fresnel zone to consider
+	Threshold float64 `json:"threshold"` // DeltaRMS threshold for active links
 }
 
 // GDOPResponse contains GDOP computation results
 type GDOPResponse struct {
 	Results        [][]simulator.GDOPResult `json:"results"`
-	CoverageScore  float64                   `json:"coverage_score"`
-	AverageGDOP    float64                   `json:"average_gdop"`
-	QualityCounts  map[string]int            `json:"quality_counts"`
-	DeadZones      []simulator.Point         `json:"dead_zones"`
+	CoverageScore  float64                  `json:"coverage_score"`
+	AverageGDOP    float64                  `json:"average_gdop"`
+	QualityCounts  map[string]int           `json:"quality_counts"`
+	DeadZones      []simulator.Point        `json:"dead_zones"`
 	RecommendedPos simulator.Point          `json:"recommended_position"`
-	Links          []simulator.Link          `json:"links"`
+	Links          []simulator.Link         `json:"links"`
 }
 
 // ComputeGDOP computes GDOP for the current configuration
@@ -507,7 +507,7 @@ func (h *SimulatorHandler) GetGDOPHeatmap(w http.ResponseWriter, r *http.Request
 	if nodes.Count() < 2 {
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"gdop_map":         []float64{},
-			"grid_dimensions": []int{0, 0, 0},
+			"grid_dimensions":  []int{0, 0, 0},
 			"coverage_percent": 0,
 			"error":            "need at least 2 nodes",
 		})
@@ -549,7 +549,7 @@ func (h *SimulatorHandler) GetGDOPHeatmap(w http.ResponseWriter, r *http.Request
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"gdop_map":         gdopMap,
-		"grid_dimensions": []int{width, depth, 1}, // 2D heatmap, so height = 1
+		"grid_dimensions":  []int{width, depth, 1}, // 2D heatmap, so height = 1
 		"coverage_percent": gdopComp.CoverageScore(results),
 		"average_gdop":     gdopComp.AverageGDOP(results),
 		"quality_counts":   gdopComp.QualityCounts(results),
@@ -583,7 +583,7 @@ func (h *SimulatorHandler) GetShoppingList(w http.ResponseWriter, r *http.Reques
 
 	// Create a basic accuracy report from GDOP data
 	accuracyReport := simulator.AccuracyReport{
-		MedianError: avgGDOP * 0.5, // Estimate: 50% of GDOP as median error
+		MedianError:   avgGDOP * 0.5, // Estimate: 50% of GDOP as median error
 		DetectionRate: math.Min(coverageScore/100, 1.0),
 	}
 
@@ -601,7 +601,7 @@ type SimulationRequest struct {
 
 // SimulationResponse contains simulation results
 type SimulationResponse struct {
-	WalkerPositions []simulator.Point `json:"walker_positions"`
+	WalkerPositions []simulator.Point  `json:"walker_positions"`
 	LinkActivity    map[string]float64 `json:"link_activity"`
 	Duration        int                `json:"duration"`
 	Ticks           int                `json:"ticks"`
