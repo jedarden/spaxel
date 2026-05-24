@@ -65,6 +65,7 @@ func TestMain(m *testing.M) {
 		{"AS4_BLEIdentity", AS4_BLEIdentityIntegration},
 		{"AS5_OTAUpdate", AS5_OTAUpdateIntegration},
 		{"AS6_Replay", AS6_ReplayIntegration},
+		{"AS7_AuthReject", AS7_AuthRejectIntegration},
 	}
 
 	for _, tc := range tests {
