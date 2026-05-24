@@ -79,7 +79,8 @@ type AccuracyTracker struct {
 	horizon time.Duration
 }
 
-// NewAccuracyTracker creates a new accuracy tracker.
+// NewAccuracyTracker creates a new accuracy tracker with its own database connection.
+// Deprecated: Use NewAccuracyTrackerWithDB to share the main database connection.
 func NewAccuracyTracker(dbPath string) (*AccuracyTracker, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
@@ -102,6 +103,24 @@ func NewAccuracyTracker(dbPath string) (*AccuracyTracker, error) {
 	if err := t.migrate(); err != nil {
 		db.Close() //nolint:errcheck
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+
+	// Load pending predictions
+	if err := t.loadPendingPredictions(); err != nil {
+		log.Printf("[WARN] prediction: failed to load pending predictions: %v", err)
+	}
+
+	return t, nil
+}
+
+// NewAccuracyTrackerWithDB creates a new accuracy tracker using an existing database connection.
+// Tables must have been created by the migration framework.
+func NewAccuracyTrackerWithDB(db *sql.DB) (*AccuracyTracker, error) {
+	t := &AccuracyTracker{
+		db:                 db,
+		pendingPredictions: make(map[string]RecordedPrediction),
+		cachedStats:        make(map[string]*AccuracyStats),
+		horizon:            PredictionHorizon,
 	}
 
 	// Load pending predictions
@@ -227,9 +246,12 @@ func (t *AccuracyTracker) loadPendingPredictions() error {
 	return nil
 }
 
-// Close closes the database.
+// Close closes the database if we own it.
 func (t *AccuracyTracker) Close() error {
-	return t.db.Close()
+	if t.path != "" {
+		return t.db.Close()
+	}
+	return nil
 }
 
 // RecordPrediction records a new prediction for later evaluation.
