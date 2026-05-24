@@ -1320,10 +1320,6 @@ func main() {
 
 		briefingHandler.SetProviders(zoneProvider, personProvider, predictionProvider, healthProvider)
 
-		// Wire briefing dashboard adapter to hub for morning briefing push
-		briefingDashboardAdapter := briefing.NewDashboardAdapter(briefingHandler.GetGenerator())
-		dashboardHub.SetBriefingProvider(briefingDashboardAdapter)
-
 		log.Printf("[INFO] Briefing providers wired up")
 	}
 
@@ -1473,6 +1469,12 @@ func main() {
 	// Wire BLE state to dashboard for ble_scan broadcasts (5s interval)
 	if bleRegistry != nil {
 		dashboardHub.SetBLEState(bleRegistry)
+	}
+
+	// Wire briefing dashboard adapter to hub for morning briefing push
+	if briefingHandler != nil {
+		briefingDashboardAdapter := briefing.NewDashboardAdapter(briefingHandler.GetGenerator())
+		dashboardHub.SetBriefingProvider(briefingDashboardAdapter)
 	}
 
 	// Wire zone state to dashboard for occupancy snapshots
