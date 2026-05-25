@@ -288,8 +288,8 @@ func (s *HealthStore) AggregateDaily() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Get yesterday's date
-	yesterday := time.Now().Add(-24 * time.Hour).Format("2006-01-02")
+	// Get yesterday's date (UTC to match SQLite's date() function)
+	yesterday := time.Now().Add(-24 * time.Hour).UTC().Format("2006-01-02")
 
 	// Aggregate per-link stats for yesterday
 	_, err := s.db.Exec(`
@@ -318,7 +318,7 @@ func (s *HealthStore) GetWeeklyTrend(linkID string) ([]DailyHealthSummary, error
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	weekAgo := time.Now().Add(-7 * 24 * time.Hour).Format("2006-01-02")
+	weekAgo := time.Now().Add(-7 * 24 * time.Hour).UTC().Format("2006-01-02")
 
 	rows, err := s.db.Query(`
 		SELECT link_id, date, avg_health, min_health, max_health, avg_snr, avg_phase_stability, avg_packet_rate, sample_count
@@ -354,7 +354,7 @@ func (s *HealthStore) GetAllWeeklyTrends() (map[string][]DailyHealthSummary, err
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	weekAgo := time.Now().Add(-7 * 24 * time.Hour).Format("2006-01-02")
+	weekAgo := time.Now().Add(-7 * 24 * time.Hour).UTC().Format("2006-01-02")
 
 	rows, err := s.db.Query(`
 		SELECT link_id, date, avg_health, min_health, max_health, avg_snr, avg_phase_stability, avg_packet_rate, sample_count
