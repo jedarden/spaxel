@@ -70,6 +70,15 @@ RUN CGO_ENABLED=0 \
     -tags=embed \
     -o spaxel ./cmd/mothership
 
+# Also build the CSI simulator so the same image can run synthetic-node load
+# against a deployed mothership (used by the in-cluster simulator workload).
+RUN CGO_ENABLED=0 \
+    GOOS=$(echo $TARGETPLATFORM | cut -d'/' -f2) \
+    GOARCH=$(echo $TARGETPLATFORM | cut -d'/' -f3) \
+    go build \
+    -ldflags="-s -w" \
+    -o spaxel-sim ./cmd/sim
+
 # Stage 3: Minimal runtime image - distroless nonroot
 # Dashboard is embedded in the Go binary via go:embed, not copied as files
 FROM gcr.io/distroless/static-debian12:nonroot
@@ -77,6 +86,10 @@ ARG TARGETARCH=amd64
 
 # Copy the binary (dashboard is embedded via go:embed)
 COPY --from=builder /app/spaxel /spaxel
+
+# CSI simulator binary — invoked via an explicit command override in the
+# simulator workload; the default ENTRYPOINT still runs the mothership.
+COPY --from=builder /app/spaxel-sim /spaxel-sim
 
 # Bake ESP32 firmware into the image so the mothership can seed it on first run.
 # The mothership copies /firmware/*.bin → /data/firmware/ at startup if not present.
