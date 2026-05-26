@@ -56,15 +56,14 @@ COPY mothership/ ./
 # The go:embed directive in cmd/mothership/main.go references the local dashboard directory
 COPY dashboard/ ./cmd/mothership/dashboard/
 
-# Build the binary with cross-platform support
+# Build the binary. CI builds amd64 only (ESP-IDF firmware is x86_64-only),
+# so GOOS/GOARCH are pinned to linux/amd64.
 # CGO_ENABLED=0 because we use pure-Go SQLite (modernc.org/sqlite)
-# GOOS/GOARCH derived from TARGETPLATFORM for multi-arch builds
 # -tags=embed enables dashboard embedding via go:embed
 ARG VERSION=dev
 ARG TARGETPLATFORM
 RUN CGO_ENABLED=0 \
-    GOOS=$(echo $TARGETPLATFORM | cut -d'/' -f2) \
-    GOARCH=$(echo $TARGETPLATFORM | cut -d'/' -f3) \
+    GOOS=linux GOARCH=amd64 \
     go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -tags=embed \
@@ -73,8 +72,7 @@ RUN CGO_ENABLED=0 \
 # Also build the CSI simulator so the same image can run synthetic-node load
 # against a deployed mothership (used by the in-cluster simulator workload).
 RUN CGO_ENABLED=0 \
-    GOOS=$(echo $TARGETPLATFORM | cut -d'/' -f2) \
-    GOARCH=$(echo $TARGETPLATFORM | cut -d'/' -f3) \
+    GOOS=linux GOARCH=amd64 \
     go build \
     -ldflags="-s -w" \
     -o spaxel-sim ./cmd/sim
