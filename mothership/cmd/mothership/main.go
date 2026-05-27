@@ -311,10 +311,12 @@ func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, filename string) 
 			http.NotFound(w, r)
 			return
 		}
-		http.ServeContent(w, r, filename, stat.ModTime(), file.(interface {
-			Len() int64
-			io.ReadSeeker
-		}))
+		rs, ok := file.(io.ReadSeeker)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeContent(w, r, filename, stat.ModTime(), rs)
 		return
 	}
 
