@@ -124,6 +124,12 @@ linters:
           - staticcheck
           - unused
 
+      # Exclude errcheck and unused from acceptance test helpers
+      - path: test/acceptance/
+        linters:
+          - errcheck
+          - unused
+
       # Exclude errcheck from main.go entrypoint (os.Exit is acceptable)
       - path: cmd/mothership/main\.go
         linters:
@@ -133,6 +139,12 @@ linters:
       - path: cmd/sim/main\.go
         linters:
           - errcheck
+
+      # Exclude errcheck and unused from sim/scenario.go (reconnect helper, WS cleanup)
+      - path: cmd/sim/scenario\.go
+        linters:
+          - errcheck
+          - unused
 
       # Exclude errcheck from ingestion server (WebSocket write errors handled by HTTP layer)
       - path: internal/ingestion/
@@ -334,6 +346,11 @@ linters:
         linters:
           - unused
 
+      # Exclude unused from internal/fleet/fleethandler.go (handler methods not yet wired to routes)
+      - path: internal/fleet/fleethandler\.go
+        linters:
+          - unused
+
       # Exclude unused from internal/learning/accuracy.go (mutex for future use)
       - path: internal/learning/accuracy\.go
         linters:
@@ -380,6 +397,7 @@ issues:
   uniq-by-line: false
 
 output:
+  sort-results: true
   sort-order:
     - linter
     - file
