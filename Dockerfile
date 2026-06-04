@@ -25,8 +25,17 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         exit 0; \
     fi
 
+# Bust Kaniko layer cache when flash size config changes (sdkconfig.defaults).
+# Without this ARG, Kaniko can serve a cached firmware layer that was built with
+# the old 16MB config even after sdkconfig.defaults is updated to 4MB.
+ARG FIRMWARE_CACHE_BUST=2026-06-03
+
 WORKDIR /project
 COPY firmware/ ./
+
+# Remove any stale generated sdkconfig so set-target regenerates it from
+# sdkconfig.defaults (which specifies CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y).
+RUN rm -f sdkconfig sdkconfig.old
 
 # Source export.sh to activate IDF toolchain (entrypoint is not called in build stages).
 # set-target must be run explicitly before build even when CONFIG_IDF_TARGET is in sdkconfig.defaults.
