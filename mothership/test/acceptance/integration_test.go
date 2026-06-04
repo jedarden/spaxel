@@ -484,13 +484,21 @@ func startMothership(t *testing.T, dataDir string, extraArgs ...string) *exec.Cm
 	args = append(args, "ghcr.io/spaxel/mothership:latest")
 
 	if os.Getenv("SPAXEL_NO_DOCKER") == "1" {
-		// For local testing without Docker
 		binPath := filepath.Join("..", "..", "build", "spaxel")
 		cmd := exec.Command(binPath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 		cmd.Env = append(os.Environ(),
 			fmt.Sprintf("SPAXEL_DATA_DIR=%s", dataDir),
+			"SPAXEL_BIND_ADDR=0.0.0.0:8080",
 			"SPAXEL_LOG_LEVEL=info",
+			"SPAXEL_MDNS_ENABLED=false",
 		)
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("Failed to start mothership binary %s: %v", binPath, err)
+		}
+		t.Log("Mothership started (no-docker mode) pid:", cmd.Process.Pid)
+		time.Sleep(2 * time.Second)
 		return cmd
 	}
 
