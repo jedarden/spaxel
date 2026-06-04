@@ -497,7 +497,7 @@ func generateNodeAdditions(space *Space, nodes *NodeSet, gaps []Point) []NodeAdd
 			break // Limit to 3 gap-based additions
 		}
 
-		heightDesc := "ceiling"
+		var heightDesc string
 		if gap.Z < 1.0 {
 			heightDesc = "wall mount"
 		} else if gap.Z > 2.0 {

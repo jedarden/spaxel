@@ -774,7 +774,7 @@ func (m *IdentityMatcher) EnrichBlobsWithIdentity(blobs interface{}) {
 
 	// Use reflection to handle both *TrackedBlob and *tracking.Blob
 	val := reflect.ValueOf(blobs)
-	if val.Kind() != reflect.Ptr || val.IsNil() {
+	if val.Kind() != reflect.Pointer || val.IsNil() {
 		return
 	}
 
@@ -786,7 +786,7 @@ func (m *IdentityMatcher) EnrichBlobsWithIdentity(blobs interface{}) {
 	now := time.Now()
 	for i := 0; i < slice.Len(); i++ {
 		blobElem := slice.Index(i)
-		if blobElem.Kind() != reflect.Ptr || blobElem.IsNil() {
+		if blobElem.Kind() != reflect.Pointer || blobElem.IsNil() {
 			continue
 		}
 
