@@ -44,18 +44,27 @@ void provision_listen_window(void) {
         ? PROVISION_WINDOW_MS_REPROV
         : PROVISION_WINDOW_MS_FRESH;
 
-    // Signal that firmware is ready for provisioning (includes MAC for display)
+    // Signal that firmware is ready for provisioning (includes MAC for display).
+    // Broadcast every 1 s so the host can open the port at any time during
+    // the window — not just at the exact moment of first boot.
     char ready_msg[64];
     snprintf(ready_msg, sizeof(ready_msg), "SPAXEL READY %s\n", mac_str);
     uart_write_bytes(PROVISION_UART, ready_msg, strlen(ready_msg));
 
     ESP_LOGI(TAG, "Provisioning window open for %u ms (MAC: %s)", (unsigned)window_ms, mac_str);
 
-    TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(window_ms);
+    TickType_t deadline   = xTaskGetTickCount() + pdMS_TO_TICKS(window_ms);
+    TickType_t last_ready = xTaskGetTickCount();
     char line[MAX_LINE_LEN];
     int line_pos = 0;
 
     while (xTaskGetTickCount() < deadline) {
+        // Re-broadcast READY every 1 s so the host can connect at any time
+        if ((xTaskGetTickCount() - last_ready) >= pdMS_TO_TICKS(1000)) {
+            uart_write_bytes(PROVISION_UART, ready_msg, strlen(ready_msg));
+            last_ready = xTaskGetTickCount();
+        }
+
         uint8_t ch;
         int n = uart_read_bytes(PROVISION_UART, &ch, 1, pdMS_TO_TICKS(50));
         if (n <= 0) {
