@@ -2,3 +2,9 @@
 # issue_prefix: spaxel
 # default_priority: 2
 # default_type: task
+
+secret_protection:
+  allowlist:
+    - "updatePresenceIndicator"
+    - "handlePresenceUpdate"
+    - "ratecontrol\\.go"
