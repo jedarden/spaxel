@@ -234,6 +234,25 @@ int main(void)
     int failed = 0;
 
     for (int i = 0; i < g_test_count; i++) {
+        /*
+         * Per-test recovery guard. setjmp() establishes the longjmp() target
+         * that test_record_failure() jumps into on a failed assertion. On the
+         * direct call setjmp() returns 0 and the body runs as before; on a
+         * longjmp() return it yields non-zero and we take the else branch —
+         * the body is NOT re-invoked, the loop just falls through to the next
+         * i. That is the whole point: a failure in test N never blocks N+1.
+         *
+         * volatile analysis (C11 7.13.2.1): an automatic variable modified
+         * between setjmp() and longjmp() AND read after the longjmp returns
+         * has indeterminate value unless it is volatile-qualified. The loop
+         * index i IS read in the post-longjmp path (g_tests[i].name in the
+         * else branch), so the question is whether i is modified between the
+         * setjmp() call and a possible longjmp(). It is not: between them the
+         * body only READS i (g_tests[i].fn()), and the only write to i is the
+         * for-loop increment, which runs AFTER control returns here (whether
+         * via a normal body return or the longjmp). So no volatile is needed
+         * on i — confirmed safe.
+         */
         if (setjmp(g_test_jmp) == 0) {
             g_tests[i].fn();
             printf("PASS: %s\n", g_tests[i].name);
