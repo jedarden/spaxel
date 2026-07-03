@@ -314,6 +314,73 @@ func TestEngine_RemoveNode(t *testing.T) {
 	}
 }
 
+// seedPosKey is the distinctness key for a 3D position (see TestEngine_SeedNodePositions).
+type seedPosKey struct{ x, y, z float64 }
+
+// TestEngine_SeedNodePositions locks in the bf-6s3d startup-seeding invariant.
+// At startup main.go iterates fleetReg.GetAllNodes() and calls
+// SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ) per node, reading the
+// DB pos_x/pos_y/pos_z columns (the columns the nodes schema defaults to 0/0/1 —
+// internal/db/migrations.go and fleet/registry.go). After that seeding the engine
+// must hold: NodeCount() == number of fleet nodes, and NodePositions() holding a
+// distinct, non-(0,0,1) position for each node (nodes must NOT collapse to the
+// co-located DB default). This test replays that seeding pattern against the engine
+// so a future refactor cannot silently regress the acceptance criteria.
+func TestEngine_SeedNodePositions(t *testing.T) {
+	e := makeEngine(6, 2.5, 5)
+
+	// Distinct, realistic fleet placements (meters) — mirrors what
+	// fleetReg.GetAllNodes() returns for a positioned fleet; none sit at the
+	// (0,0,1) column default.
+	seeded := []NodePosition{
+		{MAC: "AA:00:00:00:00:01", X: 0.2, Y: 2.1, Z: 0.2},
+		{MAC: "AA:00:00:00:00:02", X: 5.8, Y: 2.0, Z: 0.2},
+		{MAC: "AA:00:00:00:00:03", X: 0.2, Y: 0.3, Z: 4.8},
+		{MAC: "AA:00:00:00:00:04", X: 5.8, Y: 0.3, Z: 4.8},
+	}
+	for _, n := range seeded {
+		e.SetNodePosition(n.MAC, n.X, n.Y, n.Z) // mirrors main.go seeding loop
+	}
+
+	// Acceptance criterion: NodeCount() equals the number of fleet nodes.
+	if got := e.NodeCount(); got != len(seeded) {
+		t.Fatalf("NodeCount() = %d, want %d (must equal fleet node count from GetAllNodes)", got, len(seeded))
+	}
+
+	// Acceptance criterion: a distinct, non-(0,0,1) position for each registered node.
+	pos := e.NodePositions()
+	if len(pos) != len(seeded) {
+		t.Fatalf("NodePositions() returned %d entries, want %d", len(pos), len(seeded))
+	}
+	byMAC := make(map[string]NodePosition, len(seeded))
+	for _, n := range seeded {
+		byMAC[n.MAC] = n
+	}
+	seen := make(map[seedPosKey]bool, len(pos))
+	for _, p := range pos {
+		want, ok := byMAC[p.MAC]
+		if !ok {
+			t.Errorf("NodePositions() returned unknown MAC %q", p.MAC)
+			continue
+		}
+		// Coordinates must round-trip exactly from what the seeding loop set.
+		if p.X != want.X || p.Y != want.Y || p.Z != want.Z {
+			t.Errorf("node %q position = (%.2f,%.2f,%.2f), want (%.2f,%.2f,%.2f)",
+				p.MAC, p.X, p.Y, p.Z, want.X, want.Y, want.Z)
+		}
+		// Must NOT be the co-located DB default.
+		if p.X == 0 && p.Y == 0 && p.Z == 1 {
+			t.Errorf("node %q seeded at DB default (0,0,1) — positions must come from DB columns", p.MAC)
+		}
+		// Must be distinct from every other node.
+		k := seedPosKey{p.X, p.Y, p.Z}
+		if seen[k] {
+			t.Errorf("node %q duplicates another node's position (%.2f,%.2f,%.2f) — positions must be distinct", p.MAC, p.X, p.Y, p.Z)
+		}
+		seen[k] = true
+	}
+}
+
 // TestEngine_HealthWeight verifies that links with lower health scores contribute less to fusion.
 // Per spec: "each link's contribution to the 3D occupancy grid is multiplied by its health_score"
 func TestEngine_HealthWeight(t *testing.T) {
