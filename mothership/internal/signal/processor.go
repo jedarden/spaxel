@@ -599,6 +599,35 @@ type TrackedBlob struct {
 }
 
 // SetTrackedBlobs stores the latest tracked blobs from the fusion engine.
+//
+// INVESTIGATION NOTE (bf-2fz8 / bf-3gw1 umbrella): this setter is the ONLY
+// writer of pm.trackedBlobs, and as of this writing it has NO callers anywhere
+// in the repo (verified by grep across all non-test and test code). Therefore
+// pm.trackedBlobs is always nil and GetTrackedBlobs() always returns an empty
+// slice. Every reader sees zero blobs, so IO-6 ("walker produces a tracked
+// blob") cannot pass. Verified read sites of GetTrackedBlobs:
+//   - live 10 Hz loop:           cmd/mothership/main.go:1866
+//   - /api/blobs REST handler:   cmd/mothership/main.go:4056
+//   - anomalyPositionAdapter:    cmd/mothership/main.go:4840
+//   - API-layer wrappers:        internal/api/status.go:84, internal/api/tracks.go:99
+//
+// The intended producer is internal/fusion.NewEngine (the 3D Fresnel engine,
+// internal/fusion/fusion.go:93), but that constructor is NEVER called in
+// non-test code — the internal/fusion package is imported by exactly one file,
+// internal/localizer/fusion/timing_budget_test.go (a test); the only NewEngine
+// call sites are in that test and internal/fusion/fusion_test.go. A second
+// engine, internal/localization.NewEngine (2D Fresnel,
+// internal/localization/fusion.go:53), IS constructed in the live path via
+// NewSelfImprovingLocalizer (main.go:1005) and runs Fuse (main.go:2593), but
+// the returned *FusionResult is DISCARDED — nothing reads .Peaks; only
+// GetLearnedWeights() is read afterward (main.go:2599) for weight persistence.
+// No signal.TrackedBlob literal exists outside test code.
+//
+// CONCLUSION: no engine currently feeds the live blob loop. To satisfy IO-6,
+// internal/fusion.NewEngine MUST be newly constructed in non-test code and
+// wired (Fuse -> TrackedBlob -> SetTrackedBlobs), OR the existing
+// localization.Engine FusionResult.Peaks must be converted to TrackedBlobs
+// and stored here via SetTrackedBlobs.
 func (pm *ProcessorManager) SetTrackedBlobs(blobs []TrackedBlob) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -606,6 +635,8 @@ func (pm *ProcessorManager) SetTrackedBlobs(blobs []TrackedBlob) {
 }
 
 // GetTrackedBlobs returns the latest tracked blobs from the fusion engine.
+// See SetTrackedBlobs for the bf-2fz8 finding: until that setter is wired to
+// an engine, this always returns nil.
 func (pm *ProcessorManager) GetTrackedBlobs() []TrackedBlob {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()

@@ -137,6 +137,27 @@ func (e *Engine) RemoveNode(mac string) {
 	e.mu.Unlock()
 }
 
+// NodeCount returns the number of positioned nodes currently registered.
+func (e *Engine) NodeCount() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return len(e.nodePos)
+}
+
+// NodePositions returns a snapshot of all registered node positions.
+// The slice is a copy; callers may mutate it freely. Used by startup
+// assertions and tests to confirm the engine holds distinct, non-default
+// positions after seeding (no all-(0,0,1) collapse).
+func (e *Engine) NodePositions() []NodePosition {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]NodePosition, 0, len(e.nodePos))
+	for _, p := range e.nodePos {
+		out = append(out, p)
+	}
+	return out
+}
+
 // Fuse performs a single fusion step over the provided link motion states.
 // It returns a Result containing detected blob positions and confidence scores.
 // Each link's contribution is weighted by its HealthScore (0-1). A link with
