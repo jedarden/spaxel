@@ -1,28 +1,33 @@
 /*
  * Spaxel firmware host test harness — gcc runner implementation.
  *
- * This file is built up incrementally across the three children of the bf-lfz
- * sub-split (itself a child of bf-2i4; the header API lives in bf-1xs). All
- * three children are now present:
+ * This file is built up incrementally across the children of the bf-lfz
+ * sub-split (itself a child of bf-2i4; the header API lives in bf-1xs). The
+ * registry chain is complete and the failure-recovery sibling has landed:
  *
  *   - child 1 (bf-6aj): the includes and this comment block.
  *   - child 2 (bf-uvv): the test registry storage (array + count).
- *   - child 3 (this change, bf-oe1): test_register() (appends entries in
- *                   construction order, with a capacity guard).
+ *   - child 3 (bf-oe1): test_register() (appends entries in construction
+ *                   order, with a capacity guard).
+ *   - sibling  (bf-3id, this change): the per-test failure-recovery
+ *                   machinery — the file-scope jmp_buf the ASSERT_* macros
+ *                   longjmp into, a run-wide failure counter, and
+ *                   test_record_failure() itself.
  *
- * The failure handler (test_record_failure, per-test longjmp) and main()
- * (sorted iteration, PASS/FAIL reporting, non-zero-on-failure exit) are NOT
- * part of this chain — they arrive in the sibling beads bf-3id and bf-bq9,
- * and are intentionally absent here.
+ * Only main() (sorted iteration, PASS/FAIL reporting, non-zero-on-failure
+ * exit) remains, in the sibling bead bf-bq9, and is intentionally absent
+ * here. With the failure handler landed this translation unit compiles
+ * cleanly to an object (gcc -std=c11 -Wall -Wextra -c) but still cannot link
+ * into a runnable harness: there is no main(), so nothing calls setjmp()
+ * into the jmp_buf yet and the longjmp in test_record_failure() has no live
+ * target — wiring that up is exactly what bf-bq9 does.
  *
- * With child 3 landed this translation unit compiles cleanly to an object
- * (gcc -std=c11 -Wall -Wextra -c) but is still not linkable into a runnable
- * harness: test_record_failure() remains undefined and there is no main().
- * test_register() now writes the registry, so the static storage below is
- * referenced (read/written) and no longer carries the __attribute__((unused))
- * it needed while unwritten. The libc headers here are everything the full
- * runner will need (longjmp, stdio, exit/abort/qsort, string compares) — no
- * includes from firmware/main, by design (see test_runner.h's header comment).
+ * test_register() writes the registry storage and test_record_failure()
+ * reads/writes the recovery statics, so neither group needs the
+ * __attribute__((unused)) each required while unwritten. The libc headers
+ * here are everything the full runner needs (setjmp/longjmp, stdio, stdlib,
+ * string, and stdarg for the variadic vfprintf) — no includes from
+ * firmware/main, by design (see test_runner.h's header comment).
  *
  * See test_runner.h (bf-1xs) for the TEST()/ASSERT_* macros and the registry
  * API, and the gcc host-harness decision record (bf-21t) for why this is plain
@@ -31,6 +36,7 @@
 #include "test_runner.h"
 
 #include <setjmp.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,9 +87,10 @@ static int          g_test_count = 0;
  * test beats smashing the stack any day.
  *
  * NOTE: main() (sorted iteration, PASS/FAIL reporting, non-zero-on-failure
- * exit) and test_record_failure() (the per-test longjmp failure handler)
- * arrive in the sibling beads bf-bq9 and bf-3id respectively. They are
- * intentionally absent here: this chain carries only the registry itself.
+ * exit) arrives in the sibling bead bf-bq9 and is intentionally absent here:
+ * this chain carries only the registry, and the failure-recovery machinery
+ * (test_record_failure + the jmp_buf) lives in its own sibling section below
+ * (bf-3id). What is still missing is just the entry point that drives it all.
  */
 void test_register(const char *name, test_fn fn)
 {
@@ -98,4 +105,67 @@ void test_register(const char *name, test_fn fn)
     g_tests[g_test_count].name = name;
     g_tests[g_test_count].fn   = fn;
     g_test_count++;
+}
+
+/* ---- Per-test failure recovery ------------------------------------------ */
+
+/*
+ * The live setjmp() target for whichever test is currently running. Every
+ * ASSERT_* macro in test_runner.h funnels a failed assertion into
+ * test_record_failure(), which longjmp()s back into here — aborting ONLY the
+ * current test so the remaining tests still run.
+ *
+ * This is the shared contract with main() (bf-bq9): before driving each test
+ * main() setjmp()s into g_test_jmp and calls the test body; on a longjmp
+ * return (setjmp yields non-zero) it records the failure and moves to the
+ * next test. A single jmp_buf rather than per-test state is sufficient
+ * because tests run strictly one at a time and the buffer is refreshed
+ * before each via that setjmp().
+ *
+ * It is declared at file scope (not static-local inside test_record_failure)
+ * precisely so main() — which lands in this same translation unit — can
+ * setjmp() it directly, and given internal linkage (static) because nothing
+ * outside test_runner.c needs to touch it.
+ */
+static jmp_buf g_test_jmp;
+
+/*
+ * Run-wide count of failed assertions. test_record_failure() bumps it on each
+ * longjmp; main() reads it after the run to pick the process exit code —
+ * non-zero iff at least one assertion failed anywhere. It is monotonic across
+ * the whole run (never reset): once the suite has failed it stays failed,
+ * which is exactly "return non-zero on any failure". Because a failed
+ * assertion longjmps out of its test immediately, this counts the first (and
+ * only) failing assertion per test that trips one.
+ */
+static int g_failure_count = 0;
+
+/*
+ * Record a failed assertion and bail out of the current test.
+ *
+ * Prints the source location and a printf-style detail line to stderr (e.g.
+ * "test_sanity.c:22: ASSERT_EQ(...) failed: got 2, want 3"), bumps the
+ * run-wide failure counter so main() returns non-zero, then longjmp()s into
+ * g_test_jmp. The longjmp is what keeps the harness alive: control returns to
+ * main()'s setjmp() call site (which sees a non-zero return) rather than
+ * unwinding the stack, so main() proceeds to the next test.
+ *
+ * NOTE: main() — which calls setjmp(g_test_jmp) before each test — is not
+ * part of this bead; it lands in bf-bq9. Until then the longjmp below has no
+ * live target, which is expected and is why this file is compiled to an
+ * object but not yet linked into a binary.
+ */
+void test_record_failure(const char *file, int line, const char *fmt, ...)
+{
+    va_list ap;
+
+    fprintf(stderr, "%s:%d: ", file, line);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fputc('\n', stderr);
+
+    g_failure_count++;
+
+    longjmp(g_test_jmp, 1);
 }
