@@ -28,8 +28,13 @@ func NewFleetNotifier(mgr *Manager, getNodeLastSeen func(mac string) time.Time) 
 	}
 }
 
-// OnNodeConnected is called when a node connects.
-func (n *FleetNotifier) OnNodeConnected(mac, firmware, chip string) {
+// OnNodeConnected is called when a node connects. posX/posY/posZ are the
+// hello-announced position (bf-24xp); guided troubleshooting only tracks
+// connect/disconnect, so they are ignored.
+func (n *FleetNotifier) OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64) {
+	_ = posX
+	_ = posY
+	_ = posZ
 	n.mu.Lock()
 	defer n.mu.Unlock()
 

@@ -83,7 +83,7 @@ func TestFleetHealer_SingleNode(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{MinOnlineNodes: 2})
 	fh.SetNotifier(newMockNotifier())
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 
 	roles := fh.GetOptimalRoles()
 	if roles["aa:00:00:00:00:01"] != "tx_rx" {
@@ -103,8 +103,8 @@ func TestFleetHealer_TwoNodes(t *testing.T) {
 
 	fh := NewFleetHealer(reg, FleetHealerConfig{MinOnlineNodes: 2})
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 
 	roles := fh.GetOptimalRoles()
 	if len(roles) != 2 {
@@ -139,9 +139,9 @@ func TestFleetHealer_ThreeNodes_OptimalRoles(t *testing.T) {
 
 	fh := NewFleetHealer(reg, FleetHealerConfig{MinOnlineNodes: 2})
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
 
 	roles := fh.GetOptimalRoles()
 	if len(roles) != 3 {
@@ -168,9 +168,9 @@ func TestFleetHealer_NodeDisconnect(t *testing.T) {
 
 	fh := NewFleetHealer(reg, FleetHealerConfig{MinOnlineNodes: 2})
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
 
 	if len(fh.GetOnlineNodes()) != 3 {
 		t.Fatalf("expected 3 online nodes, got %d", len(fh.GetOnlineNodes()))
@@ -200,10 +200,10 @@ func TestFleetHealer_DegradedMode(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{MinOnlineNodes: 4})
 
 	// Connect all 4 - should not be degraded
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3", nil, nil, nil)
 
 	if fh.IsDegraded() {
 		t.Error("should not be degraded with 4/4 nodes")
@@ -225,7 +225,7 @@ func TestFleetHealer_Coverage(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{})
 	fh.SetGDOPCalculator(newMockGDOPCalculator(1.5, 20, 20))
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 	fh.UpdateNodePosition("aa:00:00:00:00:01", 2.0, 2.0)
 
 	coverage := fh.GetCoverage()
@@ -251,7 +251,7 @@ func TestFleetHealer_CoverageHistory(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{MaxHistorySize: 5})
 	fh.SetGDOPCalculator(newMockGDOPCalculator(1.5, 20, 20))
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 
 	// Trigger multiple coverage computations
 	for i := 0; i < 10; i++ {
@@ -278,10 +278,10 @@ func TestFleetHealer_GDOPBasedOptimization(t *testing.T) {
 	mockCalc := newMockGDOPCalculator(2.0, 20, 20)
 	fh.SetGDOPCalculator(mockCalc)
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3", nil, nil, nil)
 
 	fh.UpdateNodePosition("aa:00:00:00:00:01", 0.0, 0.0)
 	fh.UpdateNodePosition("aa:00:00:00:00:02", 4.0, 0.0)
@@ -310,8 +310,8 @@ func TestFleetHealer_WorstCoverageZone(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{})
 	fh.SetGDOPCalculator(newMockGDOPCalculator(3.0, 20, 20))
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 	fh.UpdateNodePosition("aa:00:00:00:00:01", 1.0, 2.0)
 	fh.UpdateNodePosition("aa:00:00:00:00:02", 3.0, 2.0)
 
@@ -336,7 +336,7 @@ func TestFleetHealer_SuggestNodePosition(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{})
 	fh.SetGDOPCalculator(newMockGDOPCalculator(3.0, 20, 20))
 
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 	fh.UpdateNodePosition("aa:00:00:00:00:01", 0.5, 0.5)
 
 	// Should suggest a position away from the existing node
@@ -354,8 +354,8 @@ func TestFleetHealer_NoGDOPCalculator(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{})
 
 	// Without GDOP calculator, should fall back to simple assignment
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 
 	roles := fh.GetOptimalRoles()
 	if len(roles) != 2 {
@@ -439,10 +439,10 @@ func TestFleetHealer_RecoveryFromDegraded(t *testing.T) {
 	fh := NewFleetHealer(reg, FleetHealerConfig{MinOnlineNodes: 4})
 
 	// Connect all 4
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
-	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
+	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3", nil, nil, nil)
 
 	if fh.IsDegraded() {
 		t.Fatal("should not start degraded")
@@ -455,7 +455,7 @@ func TestFleetHealer_RecoveryFromDegraded(t *testing.T) {
 	}
 
 	// Reconnect - recovered
-	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3", nil, nil, nil)
 	if fh.IsDegraded() {
 		t.Error("should recover after reconnect")
 	}
@@ -466,7 +466,7 @@ func TestFleetHealer_ComputeCoverage_NoGDOPCalculator(t *testing.T) {
 	reg.UpsertNode("aa:00:00:00:00:01", "v1", "S3")
 
 	fh := NewFleetHealer(reg, FleetHealerConfig{})
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 
 	coverage := fh.computeCoverage()
 	if coverage == nil {
@@ -485,7 +485,7 @@ func TestFleetHealer_CoverageScore(t *testing.T) {
 
 	fh := NewFleetHealer(reg, FleetHealerConfig{})
 	fh.SetGDOPCalculator(newMockGDOPCalculator(1.5, 20, 20))
-	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	fh.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 	fh.UpdateNodePosition("aa:00:00:00:00:01", 2.0, 2.0)
 
 	coverage := fh.computeCoverage()
