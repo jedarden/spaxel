@@ -27,8 +27,8 @@ Goal: Detect presence on a single link.
 | Baseline system | **Done** | EMA with motion-gated updates |
 | Motion detection | **Done** | deltaRMS, NBVI selection |
 | Dashboard presence indicator | **Done** | Implemented in dashboard/live.html and dashboard/js/app.js |
-| CSI recording buffer | **Pending** | |
-| Adaptive sensing rate | **Pending** | |
+| CSI recording buffer | **Done** | Disk-backed circular buffer — mothership/internal/recording/buffer.go |
+| Adaptive sensing rate | **Done** | RateController (2 Hz idle / 50 Hz active) — mothership/internal/ingestion/ratecontrol.go |
 
 ### Iteration Log
 
@@ -90,9 +90,9 @@ mothership/internal/signal/
 └── processor.go      — LinkProcessor, ProcessorManager
 ```
 
-**Remaining for Phase 2:**
-- CSI recording buffer
-- Adaptive sensing rate
+**Phase 2 Status:** COMPLETE
+
+All Phase 2 items implemented — CSI recording buffer (mothership/internal/recording/buffer.go) and adaptive sensing rate (mothership/internal/ingestion/ratecontrol.go) landed after this iteration.
 
 #### Iteration 4 — 2026-03-26
 
