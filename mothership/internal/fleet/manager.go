@@ -108,6 +108,16 @@ type Manager struct {
 	// Collision detection and adaptive re-stagger
 	collisionDetector  *CollisionDetector
 	collisionCheckTick time.Duration
+
+	// nodePositionSink, when set, forwards a node's 3D world position to the
+	// blob-producing fusion engine (internal/fusion.Engine) whenever a node is
+	// positioned at runtime: from a PATCH /api/nodes/{mac}/position request
+	// (Handler.updateNodePosition → ForwardNodePosition) or a node
+	// connect/register event (OnNodeConnected). This is the write-side mirror
+	// of the read-side SetNodePositionAccessor pattern used by diagnostics and
+	// weather.go. Without it, a node moved at runtime keeps its stale engine
+	// position and Fuse localizes against the wrong geometry (bf-3p6g).
+	nodePositionSink func(mac string, x, y, z float64)
 }
 
 // NewManager creates a fleet manager backed by registry.
@@ -144,6 +154,31 @@ func (m *Manager) SetBroadcaster(b RegistryBroadcaster) {
 	m.mu.Unlock()
 }
 
+// SetNodePositionSink wires the sink that receives node position updates to
+// forward to the blob-producing fusion engine. Injected at startup (main.go)
+// — see nodePositionSink. Mirrors the read-side SetNodePositionAccessor used
+// by diagnostics/weather.go.
+func (m *Manager) SetNodePositionSink(fn func(mac string, x, y, z float64)) {
+	m.mu.Lock()
+	m.nodePositionSink = fn
+	m.mu.Unlock()
+}
+
+// ForwardNodePosition pushes a node's position to the registered sink (if any).
+// Called by the REST handler after the registry has accepted a new position
+// (PATCH /api/nodes/{mac}/position), and by OnNodeConnected on node
+// connect/register, so the fusion engine's node registry stays in sync with
+// the fleet registry and a node moved at runtime does not keep a stale engine
+// position (bf-3p6g).
+func (m *Manager) ForwardNodePosition(mac string, x, y, z float64) {
+	m.mu.RLock()
+	sink := m.nodePositionSink
+	m.mu.RUnlock()
+	if sink != nil {
+		sink(mac, x, y, z)
+	}
+}
+
 // OnNodeConnected is called when a node completes its hello handshake.
 // It persists the node, assigns a role, and broadcasts updated state.
 func (m *Manager) OnNodeConnected(mac, firmware, chip string) {
@@ -162,6 +197,17 @@ func (m *Manager) OnNodeConnected(mac, firmware, chip string) {
 
 	m.applyRoleAndConfig(mac, role)
 	m.broadcastRegistry()
+
+	// bf-3p6g: Push the node's current registry position to the fusion engine
+	// on connect/register so a node positioned (or moved) while offline does
+	// not keep a stale engine position. The fleet registry is the source of
+	// truth for positions; the engine holds a mirror that Fuse reads each
+	// tick. On first connect the position is the schema default until the user
+	// places the node, which is still forwarded (it matches the registry).
+	if x, y, z, ok := m.registry.GetNodePosition(mac); ok {
+		m.ForwardNodePosition(mac, x, y, z)
+	}
+
 	log.Printf("[INFO] fleet: node %s joined as %s", mac, role)
 }
 

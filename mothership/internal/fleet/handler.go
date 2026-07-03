@@ -393,6 +393,10 @@ func (h *Handler) updateNodePosition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mgr.BroadcastRegistry()
+	// bf-3p6g: Forward the new position to the blob-producing fusion engine so
+	// a node moved at runtime does not stay at its stale engine position (the
+	// engine's node registry is the geometry Fuse localizes against).
+	h.mgr.ForwardNodePosition(mac, req.X, req.Y, req.Z)
 	w.WriteHeader(http.StatusNoContent)
 }
 
