@@ -47,6 +47,7 @@ import (
 	"github.com/spaxel/mothership/internal/health"
 	featurehelp "github.com/spaxel/mothership/internal/help"
 	"github.com/spaxel/mothership/internal/ingestion"
+	"github.com/spaxel/mothership/internal/fusion"
 	"github.com/spaxel/mothership/internal/learning"
 	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
@@ -980,9 +981,20 @@ func main() {
 	var selfImprovingLocalizer *localization.SelfImprovingLocalizer
 	var weightStore *localization.WeightStore
 
+	// fusionEngine is the 3D Fresnel fusion engine (internal/fusion) that
+	// produces the blobs consumed by the live 10 Hz tracker loop via
+	// pm.GetTrackedBlobs()/SetTrackedBlobs (bf-3f6q). It is a function-local
+	// variable (mirroring selfImprovingLocalizer above) retained for the life of
+	// main: the startup seeding loop below calls SetNodePosition on it, the
+	// follow-up node-seeding bead can do the same, and the live-loop goroutine
+	// closure captures it to run Fuse each tick. Before bf-3f6q this engine was
+	// only ever constructed in tests, so pm.trackedBlobs was always nil (bf-2fz8).
+	var fusionEngine *fusion.Engine
+
 	// Get room configuration from fleet registry
 	roomWidth := 10.0
 	roomDepth := 10.0
+	roomHeight := 2.5
 	originX := 0.0
 	originZ := 0.0
 	if fleetReg != nil {
@@ -990,6 +1002,7 @@ func main() {
 		if roomErr == nil && room != nil {
 			roomWidth = room.Width
 			roomDepth = room.Depth
+			roomHeight = room.Height
 			originX = room.OriginX
 			originZ = room.OriginZ
 		}
@@ -1003,6 +1016,23 @@ func main() {
 	silConfig.AdjustmentInterval = 10 * time.Second
 
 	selfImprovingLocalizer = localization.NewSelfImprovingLocalizer(silConfig)
+
+	// bf-3f6q: Construct the 3D Fresnel fusion engine (assigned to the
+	// function-local fusionEngine declared above, mirroring selfImprovingLocalizer).
+	// This is the engine that produces the blobs consumed by the live 10 Hz
+	// tracker loop through
+	// pm.GetTrackedBlobs()/SetTrackedBlobs (see the tracker goroutine below).
+	// Before this it was only ever constructed in tests (bf-2fz8), so
+	// pm.trackedBlobs was always nil and no reader ever saw a blob. The Config
+	// mirrors the room geometry used by the 2D self-improving localizer above.
+	fusionEngine = fusion.NewEngine(&fusion.Config{
+		Width:   roomWidth,
+		Height:  roomHeight,
+		Depth:   roomDepth,
+		OriginX: originX,
+		OriginY: 0, // grid origin at floor level (height axis)
+		OriginZ: originZ,
+	})
 
 	// Load persisted weights
 	weightStore, err = localization.NewWeightStore(filepath.Join(cfg.DataDir, "weights.db"))
@@ -1025,6 +1055,9 @@ func main() {
 		nodes, _ := fleetReg.GetAllNodes()
 		for _, node := range nodes {
 			selfImprovingLocalizer.SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ)
+			// Seed the 3D fusion engine's node registry (bf-3f6q). Without
+			// positioned nodes, Fuse skips every link and emits no blobs.
+			fusionEngine.SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ)
 		}
 	}
 
@@ -1032,6 +1065,8 @@ func main() {
 	selfImprovingLocalizer.Start()
 	log.Printf("[INFO] Self-improving localization started (room: %.1fx%.1fm, interval: %v)",
 		roomWidth, roomDepth, silConfig.AdjustmentInterval)
+	log.Printf("[INFO] 3D fusion engine ready (room: %.1fx%.1fx%.1fm, origin %.1f,%.1f, %d nodes positioned)",
+		roomWidth, roomDepth, roomHeight, originX, originZ, fusionEngine.NodeCount())
 
 	// Phase 6: Ground truth store for self-improving localization weights
 	var groundTruthStore *localization.GroundTruthStore
@@ -1854,6 +1889,13 @@ func main() {
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond) // 10 Hz
 		defer ticker.Stop()
+
+		// Per-session blob ID bookkeeping: associates each tick's fusion peaks to
+		// stable tracked IDs via greedy nearest-neighbour matching (1.0 m gate),
+		// assigning fresh monotonically-increasing IDs to unmatched peaks. IDs are
+		// in-memory only and reset on restart. Mirrors plan.md Component 4.
+		blobTracker := newBlobTracker()
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -1861,9 +1903,17 @@ func main() {
 			case <-ticker.C:
 				shedder.BeginIteration()
 
-				// Stage 1: Get tracked blobs from fusion/tracker
+				// Stage 1: Run the 3D Fresnel fusion engine and derive tracked
+				// blobs from its peaks (bf-3f6q). Before this, pm.trackedBlobs was
+				// always nil (bf-2fz8) so GetTrackedBlobs() returned nothing and no
+				// downstream consumer (identity matching, fall detection,
+				// /api/blobs) ever saw a blob. We feed link motion through Fuse,
+				// convert the peaks to TrackedBlobs, and publish them via
+				// SetTrackedBlobs so every reader of that path sees live blobs.
 				st1 := shedder.BeginStage("fusion_track")
-				blobs := pm.GetTrackedBlobs()
+				result := fusionEngine.Fuse(gatherFusionLinks(pm))
+				blobs := blobTracker.track(result)
+				pm.SetTrackedBlobs(blobs)
 				shedder.EndStage(st1)
 
 				if len(blobs) == 0 {
@@ -5141,4 +5191,124 @@ func splitLinkID(linkID string) []string {
 		}
 	}
 	return nil
+}
+
+// gatherFusionLinks converts the processor manager's current per-link motion
+// states into fusion.LinkMotion values for the 3D engine. This mirrors the
+// conversion the 2D self-improving localizer loop performs, but targets the
+// internal/fusion package (bf-3f6q). Link IDs without a valid "mac-peer" split
+// are skipped.
+func gatherFusionLinks(pm *sigproc.ProcessorManager) []fusion.LinkMotion {
+	states := pm.GetAllMotionStates()
+	if len(states) == 0 {
+		return nil
+	}
+	links := make([]fusion.LinkMotion, 0, len(states))
+	for _, s := range states {
+		parts := splitLinkID(s.LinkID)
+		if len(parts) != 2 {
+			continue
+		}
+		health := s.AmbientConfidence
+		if health <= 0 {
+			health = s.BaselineConf
+		}
+		links = append(links, fusion.LinkMotion{
+			NodeMAC:     parts[0],
+			PeerMAC:     parts[1],
+			DeltaRMS:    s.SmoothDeltaRMS,
+			Motion:      s.MotionDetected,
+			HealthScore: health,
+		})
+	}
+	return links
+}
+
+// blobAssocDistM is the maximum distance (metres) at which a new fusion peak is
+// associated to an existing tracked blob rather than spawning a fresh ID.
+const blobAssocDistM = 1.0
+
+// blobTracker assigns stable per-session IDs to the 3D fusion engine's peaks so
+// that downstream consumers keyed on blob.ID (identity matching, zone tracking,
+// /api/blobs) see continuity across ticks. It is the bridge from the
+// internal/fusion engine's stateless peaks to the stateful sigproc.TrackedBlob
+// list consumed by the live loop (bf-3f6q / bf-2fz8).
+type blobTracker struct {
+	nextID int
+	prev   map[int]sigproc.TrackedBlob // last known blob per tracked ID
+	lastAt time.Time
+}
+
+func newBlobTracker() *blobTracker {
+	return &blobTracker{nextID: 1, prev: make(map[int]sigproc.TrackedBlob)}
+}
+
+// track converts a fusion Result's peaks into TrackedBlobs, associating each
+// peak to the nearest previous blob within blobAssocDistM (greedy) and issuing
+// a new ID otherwise. Velocity is derived from the previous position of the
+// same tracked ID. A nil/empty result yields nil (clearing tracked blobs).
+func (bt *blobTracker) track(result *fusion.Result) []sigproc.TrackedBlob {
+	if result == nil || len(result.Blobs) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	dt := 0.1
+	if !bt.lastAt.IsZero() {
+		dt = now.Sub(bt.lastAt).Seconds()
+		if dt < 0.01 {
+			dt = 0.01
+		} else if dt > 2.0 {
+			dt = 2.0
+		}
+	}
+	bt.lastAt = now
+
+	used := make(map[int]bool, len(bt.prev))
+	out := make([]sigproc.TrackedBlob, 0, len(result.Blobs))
+	next := make(map[int]sigproc.TrackedBlob, len(result.Blobs))
+
+	for _, pk := range result.Blobs {
+		// Greedy nearest-neighbour association against previous blobs.
+		bestID := 0
+		bestDist := blobAssocDistM
+		for id, pb := range bt.prev {
+			if used[id] {
+				continue
+			}
+			dx := pk.X - pb.X
+			dy := pk.Y - pb.Y
+			dz := pk.Z - pb.Z
+			d := math.Sqrt(dx*dx + dy*dy + dz*dz)
+			if d < bestDist {
+				bestDist = d
+				bestID = id
+			}
+		}
+
+		id := bestID
+		if id == 0 {
+			id = bt.nextID
+			bt.nextID++
+		} else {
+			used[id] = true
+		}
+
+		b := sigproc.TrackedBlob{
+			ID:     id,
+			X:      pk.X,
+			Y:      pk.Y,
+			Z:      pk.Z,
+			Weight: pk.Confidence,
+		}
+		if pb, ok := bt.prev[id]; ok {
+			b.VX = (pk.X - pb.X) / dt
+			b.VY = (pk.Y - pb.Y) / dt
+			b.VZ = (pk.Z - pb.Z) / dt
+		}
+		out = append(out, b)
+		next[id] = b
+	}
+	bt.prev = next
+	return out
 }
