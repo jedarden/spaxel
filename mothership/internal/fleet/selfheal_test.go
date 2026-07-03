@@ -34,7 +34,7 @@ func TestSelfHealManager_SingleNode(t *testing.T) {
 	shm := NewSelfHealManager(reg, optimiser, cfg)
 	shm.SetNotifier(newMockNotifier())
 
-	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 
 	roles := shm.GetCurrentRoles()
 	if roles["aa:00:00:00:00:01"] != RoleTXRX {
@@ -52,8 +52,8 @@ func TestSelfHealManager_TwoNodes(t *testing.T) {
 	cfg := DefaultSelfHealConfig()
 	shm := NewSelfHealManager(reg, optimiser, cfg)
 
-	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 
 	roles := shm.GetCurrentRoles()
 	if len(roles) != 2 {
@@ -89,9 +89,9 @@ func TestSelfHealManager_ReconnectWithinGracePeriod(t *testing.T) {
 	shm.SetNotifier(notifier)
 
 	// Connect 3 nodes
-	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
 
 	// Record initial role
 	rolesBefore := shm.GetCurrentRoles()
@@ -110,7 +110,7 @@ func TestSelfHealManager_ReconnectWithinGracePeriod(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Reconnect within grace period
-	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 
 	// Verify role was restored
 	rolesAfter := shm.GetCurrentRoles()
@@ -140,9 +140,9 @@ func TestSelfHealManager_ReconnectAfterGracePeriod(t *testing.T) {
 	shm.SetNotifier(notifier)
 
 	// Connect 3 nodes
-	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
 
 	// Disconnect one node
 	shm.OnNodeDisconnected("aa:00:00:00:00:02")
@@ -151,7 +151,7 @@ func TestSelfHealManager_ReconnectAfterGracePeriod(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Reconnect after grace period - should trigger re-optimisation, not restore
-	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 
 	// Verify all 3 nodes have valid roles
 	roles := shm.GetCurrentRoles()
@@ -179,7 +179,7 @@ func TestSelfHealManager_GracePeriodExpiration(t *testing.T) {
 	shm.SetNotifier(newMockNotifier())
 
 	// Connect a node
-	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 
 	// Disconnect it
 	shm.OnNodeDisconnected("aa:00:00:00:00:01")
@@ -237,10 +237,10 @@ func TestSelfHealManager_GDOPComparison(t *testing.T) {
 	shm.SetGDOPCalculator(mockGDOP)
 
 	// Connect all 4
-	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:04", "v1", "S3", nil, nil, nil)
 
 	// Record initial coverage
 	coverageBefore := shm.GetCoverageScore()
@@ -295,8 +295,8 @@ func TestSelfHealManager_FleetChangeEventContainsGDOP(t *testing.T) {
 	reg.SetNodePosition("aa:00:00:00:00:02", 3, 0, 3)
 
 	bcaster.reset()
-	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	shm.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	shm.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 
 	// Disconnect to trigger event with GDOP data
 	bcaster.reset()

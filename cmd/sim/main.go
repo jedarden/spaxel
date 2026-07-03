@@ -342,7 +342,9 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode, token string, rng *
 
 			log.Printf("[SIM] Node %d: connected to mothership", n.ID)
 
-			// Send hello message
+			// Send hello message. Announce the node's computed position
+			// (createVirtualNodes corner geometry) so the mothership persists it
+			// in the fleet/DB row instead of leaving it at the schema default (bf-24xp).
 			hello := map[string]interface{}{
 				"type":            "hello",
 				"mac":             macToString(n.MAC),
@@ -351,6 +353,9 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode, token string, rng *
 				"chip":            "ESP32-S3",
 				"flash_mb":        16,
 				"uptime_ms":       1000,
+				"pos_x":           n.Position.X,
+				"pos_y":           n.Position.Y,
+				"pos_z":           n.Position.Z,
 			}
 			if err := conn.WriteJSON(hello); err != nil {
 				log.Printf("[SIM] Node %d: failed to send hello: %v", n.ID, err)
