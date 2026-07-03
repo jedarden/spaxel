@@ -1,0 +1,3 @@
+# Build output of `make -C firmware/test test` (BUILD_DIR = build).
+# The runner binary and object artifacts land here; never tracked.
+/build/
