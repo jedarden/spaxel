@@ -213,8 +213,9 @@ static int test_entry_cmp(const void *a, const void *b)
  *      on the direct call, so the body runs normally; if a failed assertion
  *      inside it calls test_record_failure(), that longjmp(g_test_jmp, 1)
  *      returns control here with setjmp yielding non-zero instead. Either way
- *      we land back in the loop to print PASS/FAIL and advance — a failure in
- *      test N never blocks tests N+1..end (the per-test setjmp/longjmp loop).
+ *      we land back in the loop to print a neutral RUN marker for the test and
+ *      advance — a failure in test N never blocks tests N+1..end (the per-test
+ *      setjmp/longjmp loop).
  *   3. Print a one-line run summary (passed / failed / total).
  *   4. Return 1 iff at least one test failed, else 0.
  *
