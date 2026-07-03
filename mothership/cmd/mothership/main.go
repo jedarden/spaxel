@@ -43,11 +43,11 @@ import (
 	"github.com/spaxel/mothership/internal/falldetect"
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/floorplan"
+	"github.com/spaxel/mothership/internal/fusion"
 	guidedtroubleshoot "github.com/spaxel/mothership/internal/guidedtroubleshoot"
 	"github.com/spaxel/mothership/internal/health"
 	featurehelp "github.com/spaxel/mothership/internal/help"
 	"github.com/spaxel/mothership/internal/ingestion"
-	"github.com/spaxel/mothership/internal/fusion"
 	"github.com/spaxel/mothership/internal/learning"
 	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
@@ -1058,6 +1058,39 @@ func main() {
 			// Seed the 3D fusion engine's node registry (bf-3f6q). Without
 			// positioned nodes, Fuse skips every link and emits no blobs.
 			fusionEngine.SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ)
+		}
+	}
+
+	// bf-1tsm: Startup assertion over fusionEngine.NodePositions() (the
+	// fusion.go:140-159 docstring notes this startup-assertion use). After the
+	// seeding loop above, the engine must hold populated, distinct positions —
+	// NOT every node collapsed to the nodes-table schema default (pos_x=0,
+	// pos_y=0, pos_z=1 → NodePosition{X:0,Y:0,Z:1}). A fleet where every seeded
+	// node still sits at that default was never positioned: all nodes are
+	// co-located, so Fuse emits only degenerate peaks and cannot localize.
+	// This logs the assertion result but does NOT block startup, because an
+	// empty or freshly-onboarded fleet is a valid state (IO-1: the server
+	// reaches ready with no nodes positioned). The hard regression gate for
+	// the invariant is TestEngine_SeedNodePositions (bf-6s3d).
+	{
+		type posKey struct{ x, y, z float64 }
+		positions := fusionEngine.NodePositions()
+		atDefault := 0
+		seen := make(map[posKey]struct{}, len(positions))
+		for _, p := range positions {
+			if p.X == 0 && p.Y == 0 && p.Z == 1 {
+				atDefault++
+			}
+			seen[posKey{p.X, p.Y, p.Z}] = struct{}{}
+		}
+		switch n := len(positions); {
+		case n == 0:
+			log.Printf("[INFO] 3D fusion engine node-position assertion: no nodes positioned yet")
+		case atDefault == n:
+			log.Printf("[WARN] 3D fusion engine node-position assertion FAILED: all %d seeded nodes collapsed to (0,0,1) — position nodes in the dashboard before fusion can localize", n)
+		default:
+			log.Printf("[INFO] 3D fusion engine node-position assertion OK: %d nodes seeded, %d distinct positions, %d at (0,0,1) default",
+				n, len(seen), atDefault)
 		}
 	}
 
