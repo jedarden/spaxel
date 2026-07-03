@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/fusion"
 )
 
 // mockNodeIdentifier is a mock implementation of NodeIdentifier for testing.
@@ -1422,6 +1423,108 @@ func TestHandlerUpdateNodePosition(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// engineNodePosition returns the fusion engine's stored position for mac, or
+// nil if the engine holds no position for it. The engine exposes its node
+// registry only via NodePositions() (a snapshot slice), so the helper scans.
+func engineNodePosition(e *fusion.Engine, mac string) *fusion.NodePosition {
+	for _, p := range e.NodePositions() {
+		if p.MAC == mac {
+			cp := p
+			return &cp
+		}
+	}
+	return nil
+}
+
+// patchNodePosition issues a PUT /api/nodes/{mac}/position through the handler
+// and fails the test if the handler does not return 204 No Content.
+func patchNodePosition(t *testing.T, h *Handler, mac, body string) {
+	t.Helper()
+	req := httptest.NewRequest("PUT", "/api/nodes/"+mac+"/position", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("mac", mac)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+	h.updateNodePosition(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("updateNodePosition status = %v, want %d (body=%q)", w.Code, http.StatusNoContent, w.Body.String())
+	}
+}
+
+// TestHandlerUpdateNodePositionForwardsToEngine (bf-3p6g) verifies that a
+// PATCH /api/nodes/{mac}/position flows through the handler and the manager's
+// node position sink into the blob-producing fusion engine, and that the
+// position the engine stores for that MAC changes to the new coordinates.
+func TestHandlerUpdateNodePositionForwardsToEngine(t *testing.T) {
+	const mac = "AA:BB:CC:DD:EE:FF"
+	reg := newTestRegistry(t)
+	reg.UpsertNode(mac, "1.0.0", "ESP32-S3")
+	reg.SetNodeRole(mac, "rx")
+	reg.SetNodePosition(mac, 0, 0, 0)
+
+	engine := fusion.NewEngine(nil)
+	mgr := NewManager(reg)
+	mgr.SetNodePositionSink(func(m string, x, y, z float64) {
+		engine.SetNodePosition(m, x, y, z)
+	})
+	h := &Handler{mgr: mgr}
+
+	// Sanity: engine holds no position for this MAC before any PATCH.
+	if p := engineNodePosition(engine, mac); p != nil {
+		t.Fatalf("engine should hold no position before PATCH, got (%v,%v,%v)", p.X, p.Y, p.Z)
+	}
+
+	// First PATCH seeds the engine position.
+	patchNodePosition(t, h, mac, `{"x": 1.5, "y": 2.5, "z": 3.5}`)
+	p := engineNodePosition(engine, mac)
+	if p == nil {
+		t.Fatal("PATCH did not forward node position to fusion engine")
+	}
+	if p.X != 1.5 || p.Y != 2.5 || p.Z != 3.5 {
+		t.Errorf("engine position after PATCH = (%v,%v,%v), want (1.5,2.5,3.5)", p.X, p.Y, p.Z)
+	}
+
+	// Second PATCH with new coordinates: the stored engine position must change.
+	patchNodePosition(t, h, mac, `{"x": 7.0, "y": 8.0, "z": 9.0}`)
+	p = engineNodePosition(engine, mac)
+	if p == nil {
+		t.Fatal("engine lost position after second PATCH")
+	}
+	if p.X != 7.0 || p.Y != 8.0 || p.Z != 9.0 {
+		t.Errorf("engine position after second PATCH = (%v,%v,%v), want (7,8,9)", p.X, p.Y, p.Z)
+	}
+}
+
+// TestManagerOnNodeConnectedForwardsPositionToEngine (bf-3p6g) verifies that a
+// node connect/register event pushes the node's current registry position into
+// the fusion engine, so a node positioned (or moved) while offline does not
+// keep a stale engine position when it reconnects.
+func TestManagerOnNodeConnectedForwardsPositionToEngine(t *testing.T) {
+	const mac = "AA:BB:CC:DD:EE:FF"
+	reg := newTestRegistry(t)
+	// Pre-position the node in the registry (e.g. placed while offline), then
+	// connect it; the manager must forward the registry position to the engine.
+	reg.UpsertNode(mac, "1.0.0", "ESP32-S3")
+	reg.SetNodePosition(mac, 4.0, 5.0, 6.0)
+
+	engine := fusion.NewEngine(nil)
+	mgr := NewManager(reg)
+	mgr.SetNodePositionSink(func(m string, x, y, z float64) {
+		engine.SetNodePosition(m, x, y, z)
+	})
+
+	mgr.OnNodeConnected(mac, "1.0.0", "ESP32-S3")
+
+	p := engineNodePosition(engine, mac)
+	if p == nil {
+		t.Fatal("OnNodeConnected did not forward node position to fusion engine")
+	}
+	if p.X != 4.0 || p.Y != 5.0 || p.Z != 6.0 {
+		t.Errorf("engine position after connect = (%v,%v,%v), want (4,5,6)", p.X, p.Y, p.Z)
 	}
 }
 

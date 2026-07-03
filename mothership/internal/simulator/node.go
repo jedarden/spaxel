@@ -265,6 +265,71 @@ func SuggestedNodes(s *Space, count int) *NodeSet {
 	return ns
 }
 
+// DefaultNodePositions returns count distinct, in-bounds node positions spread
+// across the bounding box of space. It is the shared default-geometry source for
+// simulator/spaxel-sim node seeding: distributing nodes across the room (rather
+// than letting every node sit at the DB default of (0,0,1)) keeps the Fresnel
+// excess path |P-T|+|P-R|-|T-R| non-degenerate so the 3D fusion engine can
+// actually form blobs instead of collapsing toward zero (core symptom in bf-4q5w).
+//
+// The placement strategy mirrors cmd/sim's generateNodePositions: a single node
+// at the room center, two on a diagonal, and three or more on an expanding
+// square grid. For count >= 3 the grid always spans at least two columns and two
+// rows, guaranteeing both X and Y range across the room, and every grid cell is
+// distinct so no two nodes co-locate. Z alternates between a low and high
+// band to provide height diversity (mixed-height placement improves fusion).
+func DefaultNodePositions(s *Space, count int) []Point {
+	if count <= 0 {
+		return []Point{}
+	}
+
+	minX, minY, minZ, maxX, maxY, maxZ := s.Bounds()
+	midX := (minX + maxX) / 2
+	midY := (minY + maxY) / 2
+	midZ := (minZ + maxZ) / 2
+
+	// Single node: center of the room.
+	if count == 1 {
+		return []Point{{X: midX, Y: midY, Z: midZ}}
+	}
+
+	// Two nodes: opposite corners so both X and Y span the room.
+	if count == 2 {
+		return []Point{
+			{X: minX, Y: minY, Z: maxZ},
+			{X: maxX, Y: maxY, Z: maxZ},
+		}
+	}
+
+	// Three or more: row-major fill of a ceil(sqrt(count)) x ceil(sqrt(count))
+	// grid. Because count >= 3, gridSize >= 2 and the last cell lands on
+	// row >= 1, so the grid touches two columns and two rows — spanning both
+	// axes — while every cell maps to a distinct floor position.
+	gridSize := int(math.Ceil(math.Sqrt(float64(count))))
+	denom := float64(gridSize - 1) // >= 1 since gridSize >= 2 here
+
+	lowZ := minZ + (maxZ-minZ)*0.25
+	highZ := minZ + (maxZ-minZ)*0.75
+
+	positions := make([]Point, 0, count)
+	for i := 0; i < count; i++ {
+		col := i % gridSize
+		row := i / gridSize
+		// Alternate Z by cell parity for mixed-height diversity.
+		z := lowZ
+		if (row+col)%2 != 0 {
+			z = highZ
+		}
+		positions = append(positions, Point{
+			X: minX + float64(col)*(maxX-minX)/denom,
+			Y: minY + float64(row)*(maxY-minY)/denom,
+			Z: z,
+		})
+	}
+
+	return positions
+}
+
 // GenerateAllLinks creates all possible links between nodes in the set.
 // For TX/RX or TX_RX nodes, this creates bidirectional links.
 // For passive radar (AP nodes), creates links from AP to each RX node.
