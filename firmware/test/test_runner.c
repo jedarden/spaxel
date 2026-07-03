@@ -255,7 +255,7 @@ int main(void)
          */
         if (setjmp(g_test_jmp) == 0) {
             g_tests[i].fn();
-            printf("PASS: %s\n", g_tests[i].name);
+            printf("RUN: %s\n", g_tests[i].name);
             passed++;
         } else {
             printf("RUN: %s (assertion failed)\n", g_tests[i].name);
