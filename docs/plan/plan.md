@@ -4139,13 +4139,52 @@ Located in `test/acceptance/` (the cross-cutting acceptance Go module), `mothers
 | OTA rollback | Push invalid firmware | node reconnects with original version |
 | Auth rejection | Connect without token | connection closed with HTTP 401 |
 
-### Firmware Tests (host-based unit tests)
+### Firmware Tests (host-based, gcc harness)
 
-ESP-IDF supports host-based testing via `idf.py test --target linux`. The following firmware modules have host tests:
+The three firmware modules below are tested **on the host with no hardware**, via a plain
+**gcc harness under `firmware/test/`** — *not* ESP-IDF's `idf.py test --target linux`.
 
-- `nvs` — NVS schema migration: simulate schema_ver=0→1 upgrade
-- `csi` — Binary frame serialization: verify frame header fields and little-endian encoding
-- `serial_prov` — Provisioning JSON parser: verify valid JSON parsed correctly; invalid JSON returns `{"ok":false}`
+The `idf.py --target linux` / Unity-host path was evaluated and **rejected** (decision
+record: `docs/notes/firmware-host-test-approach.md`, bead bf-21t): `firmware/main` builds
+as a single `idf_component_register(...)` whose `REQUIRES` names `esp_wifi`, `bt`, and
+`driver` — three components with no host build — so the whole component (and thus every
+translation unit in it) is unhostable. `csi.c` pulls in `esp_wifi.h` and `provision.c`
+pulls in `driver/uart.h`; even `nvs_migration.c`, whose own includes would be hostable in
+isolation, is blocked because the `main` component can't be configured for the host target.
+
+The harness therefore does **not** link `firmware/main/*.c`. It tests dependency-free
+extractions of the logic and the binary-format/wire contracts in self-contained units that
+compile with nothing more than a C compiler. The real `esp_wifi`/`uart`/`nvs` call sites
+remain validated on-target and via the Go-side `spaxel-sim` acceptance suite; the host
+tests are a logic-and-format safety net.
+
+**Run (single command, no ESP-IDF toolchain):**
+
+```
+make -C firmware/test test
+```
+
+The Makefile globs every `test_*.c`, compiles them with `test_runner.c` under plain gcc
+(`-std=c11 -Wall -Wextra`), and runs the suite; `make` propagates a non-zero exit on any
+assertion failure. The same recipe runs as a CI gate inside the Docker `firmware-builder`
+stage (`RUN make -C test test`, before the expensive ESP-IDF build — see Dockerfile).
+
+**Modules covered:**
+
+- `nvs` — NVS schema migration: fresh-install init to v1, no-downgrade guard, forward
+  migration loop dispatch (v→v+1 at index v−1), and the concrete v1→v2 step
+  (rename `ms_ip`→`mothership_ip`, default `ntp_server`). Driven against a simulated
+  in-memory NVS store.
+- `csi` — Binary frame serialization: 24-byte header field round-trip, explicit
+  little-endian timestamp byte order, signed-RSSI `(uint8_t)` reinterpretation, I/Q
+  payload copy, n_sub=0 header-only probe, and the ingestion-side validation rules
+  (too-short / payload-mismatch / n_sub>128 / bad channel) tied to the firmware encoder
+  contract.
+- `serial_prov` — Provisioning JSON parser, including a **fuzz pass**: the parser is a
+  bounded recursive-descent JSON decoder (fixed node pool, fixed string arena, depth cap)
+  that is the fuzz target, and the protocol must always answer with a single well-formed
+  `{"ok":...}` line on any input — verified across random byte streams, a tricky-input
+  corpus, and deep-nesting stress.
 
 ### Property-Based / Fuzz Tests
 
@@ -4168,7 +4207,7 @@ Fuzz targets are in `*_fuzz_test.go` files and must be run with `go test -fuzz` 
 1. `go test ./...` — all unit tests pass
 2. `go vet ./...` — no vet warnings
 3. `golangci-lint run` — no lint errors (at least: `errcheck`, `staticcheck`, `gosimple`)
-4. `docker buildx build --platform linux/amd64 .` — single-arch (amd64) build succeeds. **amd64 only** is a deliberate decision: the ESP-IDF firmware build stage is x86_64-only and the deployment target is amd64 k8s. arm64 is tracked as future work (see Deployment > Dockerfile); it is not built in CI today.
+4. `docker buildx build --platform linux/amd64 .` — single-arch (amd64) build succeeds. **amd64 only** is a deliberate decision: the ESP-IDF firmware build stage is x86_64-only and the deployment target is amd64 k8s. arm64 is tracked as future work (see Deployment > Dockerfile); it is not built in CI today. This gate also runs the firmware **host-test** suite (`make -C test test`, the gcc harness — see Firmware Tests above) inside the `firmware-builder` stage before the ESP-IDF build, so a logic/format-contract regression fails the image build.
 5. Integration test suite: `spaxel-sim --nodes 4 --walkers 1 --duration 30s` with blob count >0
 6. Integration test: OTA rollback test (invalid firmware → node reverts)
 7. Integration test: auth rejection test (node without token → HTTP 401)

@@ -37,6 +37,16 @@ COPY firmware/ ./
 # sdkconfig.defaults (which specifies CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y).
 RUN rm -f sdkconfig sdkconfig.old
 
+# Firmware host-test gate: run the gcc host unit tests (nvs schema migration,
+# CSI binary-frame serialization, serial_prov JSON parser fuzz) BEFORE the
+# expensive ESP-IDF build so a logic/format-contract regression fails the image
+# build fast. Pure gcc — no IDF toolchain needed; gcc + GNU make ship in this
+# espressif/idf image. `make` propagates the suite's non-zero exit code on any
+# assertion failure, failing the build. This is the gcc harness, NOT idf.py
+# --target linux — see firmware/test/Makefile and the decision record
+# docs/notes/firmware-host-test-approach.md (firmware/main cannot be host-linked).
+RUN make -C test test
+
 # Source export.sh to activate IDF toolchain (entrypoint is not called in build stages).
 # set-target must be run explicitly before build even when CONFIG_IDF_TARGET is in sdkconfig.defaults.
 # idf.py build produces build/spaxel-firmware.bin
