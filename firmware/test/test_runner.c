@@ -2,25 +2,28 @@
  * Spaxel firmware host test harness — gcc runner implementation.
  *
  * This file is built up incrementally across the children of the bf-lfz
- * sub-split (itself a child of bf-2i4; the header API lives in bf-1xs). The
- * registry chain is complete and the failure-recovery sibling has landed:
+ * sub-split (itself a child of bf-2i4; the header API lives in bf-1xs). With
+ * this bead the runner is complete — every piece below has landed:
  *
  *   - child 1 (bf-6aj): the includes and this comment block.
  *   - child 2 (bf-uvv): the test registry storage (array + count).
  *   - child 3 (bf-oe1): test_register() (appends entries in construction
  *                   order, with a capacity guard).
- *   - sibling  (bf-3id, this change): the per-test failure-recovery
- *                   machinery — the file-scope jmp_buf the ASSERT_* macros
- *                   longjmp into, a run-wide failure counter, and
- *                   test_record_failure() itself.
+ *   - sibling  (bf-3id): the per-test failure-recovery machinery — the
+ *                   file-scope jmp_buf the ASSERT_* macros longjmp into, a
+ *                   run-wide failure counter, and test_record_failure()
+ *                   itself.
+ *   - sibling  (bf-bq9, this change): main() — the entry point that sorts
+ *                   the registered tests by name, drives each through the
+ *                   setjmp/longjmp recovery loop, prints a one-line
+ *                   PASS/FAIL per test plus a run summary, and returns
+ *                   non-zero iff any test failed.
  *
- * Only main() (sorted iteration, PASS/FAIL reporting, non-zero-on-failure
- * exit) remains, in the sibling bead bf-bq9, and is intentionally absent
- * here. With the failure handler landed this translation unit compiles
- * cleanly to an object (gcc -std=c11 -Wall -Wextra -c) but still cannot link
- * into a runnable harness: there is no main(), so nothing calls setjmp()
- * into the jmp_buf yet and the longjmp in test_record_failure() has no live
- * target — wiring that up is exactly what bf-bq9 does.
+ * main() setjmp()s into g_test_jmp before each test and calls the body; on a
+ * longjmp return (a failed assertion) it prints FAIL and moves on, so one
+ * test's failure never blocks the rest. The exit code — 1 if
+ * g_failure_count > 0, else 0 — is the contract CI relies on (the documented
+ * `make -C firmware/test test` propagates it).
  *
  * test_register() writes the registry storage and test_record_failure()
  * reads/writes the recovery statics, so neither group needs the
@@ -86,11 +89,10 @@ static int          g_test_count = 0;
  * test and the cap — and return WITHOUT writing past the end. Dropping a late
  * test beats smashing the stack any day.
  *
- * NOTE: main() (sorted iteration, PASS/FAIL reporting, non-zero-on-failure
- * exit) arrives in the sibling bead bf-bq9 and is intentionally absent here:
- * this chain carries only the registry, and the failure-recovery machinery
- * (test_record_failure + the jmp_buf) lives in its own sibling section below
- * (bf-3id). What is still missing is just the entry point that drives it all.
+ * The failure-recovery machinery (test_record_failure + the jmp_buf) lives in
+ * its own sibling section below (bf-3id), and the entry point that drives the
+ * whole registry — main(), which sorts, iterates, and reports — is the final
+ * section at the bottom of this file (bf-bq9).
  */
 void test_register(const char *name, test_fn fn)
 {
@@ -168,4 +170,81 @@ void test_record_failure(const char *file, int line, const char *fmt, ...)
     g_failure_count++;
 
     longjmp(g_test_jmp, 1);
+}
+
+/* ---- main: suite driver -------------------------------------------------- */
+
+/*
+ * Name comparator for the sort below: plain strcmp over test_entry_t::name.
+ *
+ * main() sorts the registry by name so iteration order is deterministic no
+ * matter how the constructors fired or how the link line ordered the TUs. The
+ * C standard does NOT guarantee constructor order across translation units —
+ * within one TU it follows definition order, but across TUs (and across link
+ * lines, which the Makefile's test_*.c glob feeds in a glob-dependent order)
+ * it is implementation- and link-defined. An unsorted run would therefore order
+ * tests however gcc happened to receive them, so a failing run's interleaved
+ * PASS/FAIL output would not be reproducible. Sorting by name makes it stable,
+ * which is what CI log diffing and "did this run change?" want.
+ */
+static int test_entry_cmp(const void *a, const void *b)
+{
+    const test_entry_t *ta = a;
+    const test_entry_t *tb = b;
+    return strcmp(ta->name, tb->name);
+}
+
+/*
+ * Entry point — the contract CI relies on.
+ *
+ * Run the whole suite from the repo root with the single documented command:
+ *
+ *     make -C firmware/test test
+ *
+ * (per the bf-1xs header contract and the bf-56v gcc-harness decision record).
+ * make compiles every test_*.c plus this runner with plain gcc and runs the
+ * binary; THIS function's exit code is what make propagates, so a non-zero
+ * return here fails CI.
+ *
+ * Flow:
+ *   1. Sort the registry by name (test_entry_cmp) for a deterministic order.
+ *      The TEST() constructors have already fully populated it before main().
+ *   2. For each test: setjmp(g_test_jmp), then call the body. setjmp returns 0
+ *      on the direct call, so the body runs normally; if a failed assertion
+ *      inside it calls test_record_failure(), that longjmp(g_test_jmp, 1)
+ *      returns control here with setjmp yielding non-zero instead. Either way
+ *      we land back in the loop to print PASS/FAIL and advance — a failure in
+ *      test N never blocks tests N+1..end (the per-test setjmp/longjmp loop).
+ *   3. Print a one-line run summary (passed / failed / total).
+ *   4. Return 1 iff at least one test failed, else 0.
+ *
+ * Failure counting is deliberately NOT repeated here. test_record_failure()
+ * already bumped g_failure_count before it longjmp'd out of the failing test,
+ * so the else branch below only prints the FAIL line and its own per-test
+ * counter — it leaves g_failure_count alone. That keeps a single source of
+ * truth for "did anything fail anywhere", and the exit code reads that truth
+ * directly (g_failure_count > 0). The local `failed` counter mirrors it only
+ * for the summary line, where it pairs with `passed` to total g_test_count.
+ */
+int main(void)
+{
+    qsort(g_tests, (size_t)g_test_count, sizeof(g_tests[0]), test_entry_cmp);
+
+    int passed = 0;
+    int failed = 0;
+
+    for (int i = 0; i < g_test_count; i++) {
+        if (setjmp(g_test_jmp) == 0) {
+            g_tests[i].fn();
+            printf("PASS: %s\n", g_tests[i].name);
+            passed++;
+        } else {
+            printf("FAIL: %s\n", g_tests[i].name);
+            failed++;
+        }
+    }
+
+    printf("%d passed, %d failed of %d\n", passed, failed, g_test_count);
+
+    return g_failure_count > 0 ? 1 : 0;
 }
