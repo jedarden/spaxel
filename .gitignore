@@ -18,6 +18,11 @@ firmware/managed_components/
 firmware/.cache/
 firmware/sdkconfig
 firmware/sdkconfig.old
+# Abandoned ESP-IDF `idf.py --target linux` test-app experiments. That host-test
+# path was rejected (see docs/notes/firmware-host-test-approach.md); the firmware
+# host tests live in firmware/test/ as a gcc harness. Ignore any stray residue so
+# the rejected approach's build output can't be committed by accident.
+firmware/test_apps/
 
 # Test and coverage
 *.test
