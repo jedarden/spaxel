@@ -1,7 +1,7 @@
 # Spaxel — Implementation Plan
 
-**Last updated:** 2026-05-24
-**Status:** COMPLETE — All 9 phases implemented, 83 beads closed
+**Last updated:** 2026-07-03
+**Status:** COMPLETE — maintenance mode (all 9 phases implemented; the 83 implementation beads referenced above have been archived — ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357)
 
 WiFi CSI-based indoor positioning for self-hosted home environments.
 
@@ -3479,40 +3479,61 @@ Taxonomy of failure types with recovery strategy per type. Each failure mode has
 ## Go Module Layout
 
 ```
+go.work at the repository root stitches together THREE separate Go modules
+(mothership, cmd/sim, test/acceptance). There is no single root module and no
+`test/integration/` directory; simulator-based tests live in `test/acceptance/`
+and `mothership/test/acceptance/`, with a shell harness in `tests/e2e/run.sh`.
+
+```
 spaxel/
-  cmd/
-    mothership/           — main.go: startup sequencing, subsystem wiring
-    sim/                  — main.go: CSI simulator CLI (spaxel-sim)
-  internal/
-    ingestion/            — WebSocket server, binary frame parsing, node lifecycle
-    pipeline/
-      phase/              — Phase sanitization (unwrap, OLS, residual)
-      nbvi/               — NBVI subcarrier selection (Welford online algorithm)
-      feature/            — deltaRMS, phase variance, breathing band IIR filter
-      baseline/           — EMA baseline, diurnal slots, snapshot persistence
-    localizer/
-      fresnel/            — Zone number cache, grid accumulation
-      ukf/                — Biomechanical UKF (gonum/mat)
-      gdop/               — Fisher information matrix, GDOP computation
-      fusion/             — Full localization loop (10 Hz)
-    fleet/                — Node registry, role assignment, stagger scheduler
-    ble/                  — BLE centroid, rotation heuristics, identity matching
-    portal/               — Crossing detection state machine, zone occupancy
-    replay/               — csi_replay.bin reader/writer, replay pipeline
-    anomaly/              — Pattern model (Welford), anomaly scoring
-    predict/              — Presence prediction model, predicted_enter trigger
-    sleep/                — Sleep state machine, breathing FFT, daily records
-    flow/                 — Crowd flow accumulator, dwell heatmap
-    notify/               — Notification renderer (fogleman/gg), delivery channels
-    mqtt/                 — MQTT client, HA auto-discovery
-    auth/                 — HMAC token derivation, bcrypt PIN, session management
-    oui/                  — OUI lookup table (go:generate from IEEE list)
-    db/                   — SQLite open/migrate, schema migrations
-    config/               — Environment variable parsing and defaults
-  dashboard/              — Static assets: HTML, JS (Three.js), CSS
-  firmware/               — ESP-IDF project (C source, CMakeLists, partitions.csv)
-  test/
-    integration/          — Simulator-based integration tests
+  go.work                — Go workspace stitching three modules (see below)
+  VERSION                — single source of truth for the release version
+  Dockerfile             — multi-stage: ESP-IDF firmware build + Go binary + distroless runtime
+  docker-compose.yml     — single-service deployment manifest
+
+  # --- Module 1: the mothership (primary backend) ---
+  mothership/            — Go module (mothership/go.mod)
+    cmd/
+      mothership/        — main.go: startup sequencing, subsystem wiring (dashboard embedded via go:embed)
+    internal/
+      ingestion/         — WebSocket server, binary frame parsing, node lifecycle
+      pipeline/
+        phase/           — Phase sanitization (unwrap, OLS, residual)
+        nbvi/            — NBVI subcarrier selection (Welford online algorithm)
+        feature/         — deltaRMS, phase variance, breathing band IIR filter
+        baseline/        — EMA baseline, diurnal slots, snapshot persistence
+      localizer/
+        fresnel/         — Zone number cache, grid accumulation
+        ukf/             — Biomechanical UKF (gonum/mat)
+        gdop/            — Fisher information matrix, GDOP computation
+        fusion/          — Full localization loop (10 Hz)
+      fleet/             — Node registry, role assignment, stagger scheduler
+      ble/               — BLE centroid, rotation heuristics, identity matching
+      portal/            — Crossing detection state machine, zone occupancy
+      replay/            — csi_replay.bin reader/writer, replay pipeline
+      anomaly/           — Pattern model (Welford), anomaly scoring
+      predict/           — Presence prediction model, predicted_enter trigger
+      sleep/             — Sleep state machine, breathing FFT, daily records
+      flow/              — Crowd flow accumulator, dwell heatmap
+      notify/            — Notification renderer (fogleman/gg), delivery channels
+      mqtt/              — MQTT client, HA auto-discovery
+      auth/              — HMAC token derivation, bcrypt PIN, session management
+      oui/               — OUI lookup table (go:generate from IEEE list)
+      db/                — SQLite open/migrate, schema migrations
+      config/            — Environment variable parsing and defaults
+    test/acceptance/     — simulator-based acceptance/integration tests (in-module)
+
+  # --- Module 2: the CSI simulator CLI ---
+  cmd/sim/               — Go module (cmd/sim/go.mod): CSI simulator CLI (spaxel-sim)
+
+  # --- Module 3: cross-cutting acceptance tests ---
+  test/acceptance/       — Go module (test/acceptance/go.mod): acceptance/integration tests
+
+  # --- Non-Go trees ---
+  tests/e2e/             — shell-based end-to-end test harness (run.sh)
+  dashboard/             — Static assets: HTML, JS (Three.js), CSS (embedded into the binary at build time)
+  firmware/              — ESP-IDF project (C source, CMakeLists, partitions.csv)
+```
 ```
 
 ---
@@ -3801,48 +3822,64 @@ All environment variables are optional unless marked (required on production). U
 
 ### Dockerfile
 
-Multi-stage build. SQLite is accessed via the pure-Go `modernc.org/sqlite` driver (no CGO, no `gcc` needed in the final image). This keeps the image small and enables `linux/amd64` + `linux/arm64` builds without cross-compilation complexity.
+Three-stage build: an ESP-IDF firmware stage compiles the ESP32-S3 binary, a Go stage builds the mothership (and `spaxel-sim`) binary, and a distroless stage is the runtime. SQLite is accessed via the pure-Go `modernc.org/sqlite` driver (no CGO, no `gcc` needed in the final image). The image is built **single-arch `linux/amd64` only** — the ESP-IDF firmware build stage is x86_64-only, and the deployment target is amd64 k8s, so arm64 is intentionally not produced (see Quality Gates).
 
 ```dockerfile
-# Stage 1: Build the Go binary
-FROM golang:1.23-bookworm AS builder
+# Stage 1: Build ESP32-S3 firmware (amd64 only — ESP-IDF is x86_64-only)
+FROM espressif/idf:v5.2 AS firmware-builder
+WORKDIR /project
+COPY firmware/ ./
+# Build + merge bootloader, partition table, and app into a single flashable .bin
+SHELL ["/bin/bash", "-c"]
+RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
+    python -m esptool --chip esp32s3 merge_bin --flash_size 4MB \
+      --output build/spaxel-firmware-merged.bin \
+      0x0     build/bootloader/bootloader.bin \
+      0x8000  build/partition_table/partition-table.bin \
+      0x10000 build/spaxel-firmware.bin
+
+# Stage 2: Build the Go binary from the mothership module
+FROM golang:1.25-bookworm AS builder
 WORKDIR /app
-
-COPY go.mod go.sum ./
+COPY mothership/go.mod mothership/go.sum ./
 RUN go mod download
-
-COPY . .
-# CGO_ENABLED=0 because modernc.org/sqlite is pure Go
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.version=$(cat VERSION)" \
+COPY mothership/ ./
+# Dashboard is embedded via go:embed (the directive lives in cmd/mothership)
+COPY dashboard/ ./cmd/mothership/dashboard/
+# GOOS/GOARCH pinned to linux/amd64: the ESP-IDF firmware stage is x86_64-only,
+# so CI produces a single-arch amd64 image by design. CGO_ENABLED=0 (pure-Go SQLite).
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w -X main.version=${VERSION}" -tags=embed \
     -o spaxel ./cmd/mothership
+# CSI simulator (separate cmd/sim module) is baked into the same image
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o spaxel-sim ./cmd/sim
 
-# Stage 2: Minimal runtime image
+# Stage 3: Minimal runtime image (dashboard is embedded in the binary via go:embed)
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /app/spaxel /spaxel
-# Embed the dashboard static files at build time
-COPY --from=builder /app/dashboard /dashboard
-# Include a bundled firmware binary (users can override with a volume mount)
-COPY --from=builder /app/firmware/dist/*.bin /firmware/
+COPY --from=builder /app/spaxel-sim /spaxel-sim
+COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/spaxel-firmware.bin
 
 EXPOSE 8080
 VOLUME ["/data"]
 ENTRYPOINT ["/spaxel"]
 ```
 
-**Multi-arch build (CI):**
+**Image build & publish (CI — amd64 only):**
+The image is published as `ronaldraygun/spaxel` by the `spaxel-build` Argo WorkflowTemplate (declared in `jedarden/declarative-config`, run on iad-ci). CI builds a single `linux/amd64` platform by design — the ESP-IDF firmware stage is x86_64-only and the deployment target is amd64 k8s:
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/spaxel/spaxel:$(cat VERSION) \
-  -t ghcr.io/spaxel/spaxel:latest \
+docker buildx build --platform linux/amd64 \
+  -t ronaldraygun/spaxel:$(cat VERSION) \
+  -t ronaldraygun/spaxel:latest \
   --push .
 ```
 
 **Key design decisions:**
 - `distroless/static-debian12:nonroot` — no shell, no package manager, runs as non-root (UID 65532). Minimal attack surface.
 - `modernc.org/sqlite` — pure Go SQLite; avoids CGO complexities for multi-arch cross-compilation. Performance is ~20% slower than cgo/mattn but fully adequate for this workload.
-- `/dashboard` — the entire dashboard (HTML, JS, Three.js, CSS) is embedded in the binary via `//go:embed dashboard/*`. No volume mount needed for the UI. Updating the UI requires a new Docker image.
-- `/firmware` is a COPY from the build stage (bundled default) but is overridable by the user's volume mount (volume takes precedence over COPY content via Docker overlay semantics — actually requires mounting the firmware dir).
+- `/dashboard` — the entire dashboard (HTML, JS, Three.js, CSS) is embedded in the binary via `//go:embed` (the dashboard sources are copied into `cmd/mothership/dashboard/` at build time so the embed directive can see them). No volume mount needed for the UI. Updating the UI requires a new Docker image.
+- `/firmware/spaxel-firmware.bin` — the ESP32 firmware is built in the firmware-builder stage (from `firmware/`) and baked into the image. At startup the mothership copies `/firmware/*.bin` → `/data/firmware/` if not already present, so a freshly pulled image can seed the fleet for OTA / Web Serial onboarding. Users can override with a `/firmware` volume mount.
 
 **Note on SQLite driver:** `modernc.org/sqlite` maps to the `sqlite3` database/sql driver name. All `sql.Open()` calls use `"sqlite"` (not `"sqlite3"`). Replace with `mattn/go-sqlite3` if CGO performance becomes necessary (requires build-stage `apt-get install gcc`).
 
@@ -4085,7 +4122,7 @@ Each algorithmic module has a companion `_test.go` file. Tests are table-driven 
 
 ### Integration Tests (using CSI simulator)
 
-Located in `test/integration/`. Each test:
+Located in `test/acceptance/` (the cross-cutting acceptance Go module), `mothership/test/acceptance/` (in-module acceptance tests), and the shell harness `tests/e2e/run.sh`. (There is no `test/integration/` directory.) Each test:
 1. Starts a mothership in a Docker container (or in-process for unit-level integration)
 2. Runs `spaxel-sim` with specific walker configurations
 3. Polls `GET /api/blobs` and `/api/events` to assert outcomes
@@ -4131,7 +4168,7 @@ Fuzz targets are in `*_fuzz_test.go` files and must be run with `go test -fuzz` 
 1. `go test ./...` — all unit tests pass
 2. `go vet ./...` — no vet warnings
 3. `golangci-lint run` — no lint errors (at least: `errcheck`, `staticcheck`, `gosimple`)
-4. `docker buildx build --platform linux/amd64,linux/arm64 .` — multi-arch build succeeds
+4. `docker buildx build --platform linux/amd64 .` — single-arch (amd64) build succeeds. **amd64 only** is a deliberate decision: the ESP-IDF firmware build stage is x86_64-only and the deployment target is amd64 k8s. arm64 is tracked as future work (see Deployment > Dockerfile); it is not built in CI today.
 5. Integration test suite: `spaxel-sim --nodes 4 --walkers 1 --duration 30s` with blob count >0
 6. Integration test: OTA rollback test (invalid firmware → node reverts)
 7. Integration test: auth rejection test (node without token → HTTP 401)
@@ -4149,5 +4186,4 @@ These are unresolved design questions. Each is tagged with the earliest phase wh
 - **5 GHz support** *(Phase 1+ — monitor)*: ESP32-S3 is 2.4 GHz only. Future ESP32-C6 or C5 may add 5 GHz with different CSI characteristics. Design the pipeline to be frequency-agnostic where possible (parameterize λ = c/f).
 - **Node self-positioning** *(Phase 3 — defer)*: MDS-MAP from pairwise ToF could eliminate manual position entry. Feasibility with ESP32 ToF resolution (~7.5 m) is questionable — defer to a future phase. Until then, manual positioning via the 3D editor is the only path.
 - **IEEE 802.11bf** *(monitor — no action until ESP32 support ships)*: The sensing standard (approved May 2025) provides standardized sensing frames that could replace promiscuous mode CSI capture entirely. Monitor ESP-IDF release notes for support. If added, it will be a firmware-layer change only.
-- **Multi-installation coordination** *(out of scope — see Non-Goals)*: Could multiple Spaxel instances in adjacent apartments share boundary link data? Deferred — privacy and network topology implications need thought. Not a blocker for any current phase.
-- **Multi-installation coordination:** Could multiple Spaxel instances in adjacent apartments share boundary link data to improve wall-adjacent detection? Deferred — privacy and network topology implications need thought
+- **Multi-installation coordination** *(out of scope — see Non-Goals)*: Could multiple Spaxel instances in adjacent apartments share boundary link data to improve wall-adjacent detection? Deferred — privacy and network topology implications need thought. Not a blocker for any current phase.
