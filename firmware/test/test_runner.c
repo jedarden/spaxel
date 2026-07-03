@@ -220,8 +220,8 @@ static int test_entry_cmp(const void *a, const void *b)
  *
  * Failure counting is deliberately NOT repeated here. test_record_failure()
  * already bumped g_failure_count before it longjmp'd out of the failing test,
- * so the else branch below only prints the FAIL line and its own per-test
- * counter — it leaves g_failure_count alone. That keeps a single source of
+ * so the else branch below only prints a neutral marker line naming the test
+ * and its own per-test counter — it leaves g_failure_count alone. That keeps a single source of
  * truth for "did anything fail anywhere", and the exit code reads that truth
  * directly (g_failure_count > 0). The local `failed` counter mirrors it only
  * for the summary line, where it pairs with `passed` to total g_test_count.
@@ -258,7 +258,7 @@ int main(void)
             printf("PASS: %s\n", g_tests[i].name);
             passed++;
         } else {
-            printf("FAIL: %s\n", g_tests[i].name);
+            printf("RUN: %s (assertion failed)\n", g_tests[i].name);
             failed++;
         }
     }
