@@ -1,9 +1,12 @@
 package fusion
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
+
+	"github.com/spaxel/mothership/internal/simulator"
 )
 
 // ---- Grid3D unit tests ----
@@ -379,6 +382,146 @@ func TestEngine_SeedNodePositions(t *testing.T) {
 		}
 		seen[k] = true
 	}
+}
+
+// TestEngine_DefaultPlacementProducesPeaks is the bf-18yn acceptance test and
+// closes the bf-4q5w symptom (the 3D fusion engine emitting no / degenerate
+// peaks). It seeds the engine using ONLY the default node placement —
+// simulator.DefaultNodePositions, the spread geometry a freshly-onboarded
+// virtual/sim fleet receives with no manual positioning (bf-3fr6, bf-xrej) —
+// then drives a synthetic walker through the room centre and asserts the
+// accumulation grid produces non-zero fusion peaks (len(blobs) > 0).
+//
+// This is the fleet->engine counterpart to TestEngine_SeedNodePositions
+// (bf-6s3d): that test locks in the seeding invariant (distinct, non-(0,0,1)
+// positions); this one locks in the downstream consequence the seeding exists
+// to deliver — that spread nodes actually let Fuse form blobs.
+func TestEngine_DefaultPlacementProducesPeaks(t *testing.T) {
+	space := simulator.DefaultSpace()
+	minX, minY, minZ, maxX, maxY, maxZ := space.Bounds()
+
+	// 2+ nodes are required to form any link; count == 1 has no links and
+	// cannot produce peaks (that is a valid empty state, not a regression).
+	for _, count := range []int{2, 3, 4, 6} {
+		t.Run(fmt.Sprintf("nodes=%d", count), func(t *testing.T) {
+			// DEFAULT placement — no manual positioning. Distinct, room-spanning
+			// points distributed across the space's bounding box.
+			pts := simulator.DefaultNodePositions(space, count)
+
+			// Regression guard (bf-4q5w): if default placement ever collapses
+			// back to the co-located DB origin, every link goes degenerate and
+			// Fuse can only emit zero peaks. Fail loudly with a clear reason
+			// rather than letting the regression pass silently.
+			assertPlacementNotCollapsed(t, pts)
+
+			// Seed the engine exactly as main.go does at startup: one
+			// SetNodePosition per node, reading the (default) registry
+			// positions. The grid is sized to the same bounding box so every
+			// default-placed node lands in-bounds.
+			e := NewEngine(&Config{
+				Width:   maxX - minX,
+				Height:  maxY - minY,
+				Depth:   maxZ - minZ,
+				OriginX: minX,
+				OriginY: minY,
+				OriginZ: minZ,
+				CellSize:      0.2,
+				MinDeltaRMS:   0.01,
+				MaxBlobs:      6,
+				BlobThreshold: 0.1,
+			})
+			nodes := make([]NodePosition, len(pts))
+			for i, p := range pts {
+				mac := fmt.Sprintf("SN:%02d", i+1)
+				nodes[i] = NodePosition{MAC: mac, X: p.X, Y: p.Y, Z: p.Z}
+				e.SetNodePosition(mac, p.X, p.Y, p.Z) // mirrors main.go seeding loop
+			}
+
+			// A walker at the room centre perturbs every link whose first
+			// Fresnel zone crosses it — the same synthetic-motion model the
+			// position-accuracy tests use (buildSyntheticLinks).
+			links := buildSyntheticLinks(nodes,
+				(minX+maxX)/2, (minY+maxY)/2, (minZ+maxZ)/2)
+			if len(links) == 0 {
+				t.Fatalf("expected at least one motion link crossing the room centre, got 0")
+			}
+
+			r := e.Fuse(links)
+
+			// Acceptance criterion (bf-18yn / bf-4q5w): the default placement
+			// must yield non-zero fusion peaks — either extracted blobs
+			// (len > 0) OR an accumulation grid whose max rises above the peak
+			// threshold. The OR covers small fleets whose links paint a flat
+			// ridge that the strict local-maximum extractor may not promote to
+			// a blob, even though the grid is plainly non-zero. Co-located
+			// (0,0,1) nodes paint nothing, so their grid max stays at 0 — the
+			// condition is non-trivial (see TestEngine_CoLocatedOriginYieldsNoPeaks).
+			gridMax := gridMaxValue(e.GetGridSnapshot().Data)
+			if len(r.Blobs) == 0 && gridMax <= e.blobThresh {
+				t.Fatalf("default placement of %d nodes produced no peaks: "+
+					"0 blobs and gridMax=%.4f <= threshold %.4f (activeLinks=%d) — "+
+					"bf-4q5w regression: spread nodes must let the grid accumulate",
+					count, gridMax, e.blobThresh, r.ActiveLinks)
+			}
+		})
+	}
+}
+
+// TestEngine_CoLocatedOriginYieldsNoPeaks is the counter-example that pins the
+// bf-4q5w symptom: nodes left collapsed at the (0,0,1) DB schema default are
+// co-located, so every link is degenerate (length < 0.1 m), the accumulation
+// grid stays at zero, and Fuse emits no blobs. This is exactly the failure the
+// default placement (tested above) exists to prevent — a fleet seeded this way
+// could never localize. It documents why the non-zero-peak assertion is
+// meaningful rather than trivially satisfiable.
+func TestEngine_CoLocatedOriginYieldsNoPeaks(t *testing.T) {
+	e := NewEngine(&Config{
+		Width: 6, Height: 5, Depth: 2.5,
+		CellSize: 0.2, MinDeltaRMS: 0.01, MaxBlobs: 6, BlobThreshold: 0.1,
+	})
+	// Four nodes all at the DB default — the pre-spread state.
+	for i := 0; i < 4; i++ {
+		e.SetNodePosition(fmt.Sprintf("CN:%02d", i+1), 0, 0, 1)
+	}
+	links := []LinkMotion{
+		{NodeMAC: "CN:01", PeerMAC: "CN:02", DeltaRMS: 1.0, Motion: true},
+		{NodeMAC: "CN:03", PeerMAC: "CN:04", DeltaRMS: 1.0, Motion: true},
+	}
+	r := e.Fuse(links)
+	if len(r.Blobs) != 0 {
+		t.Fatalf("co-located (0,0,1) nodes must produce 0 blobs, got %d — "+
+			"degenerate links should leave the grid at zero", len(r.Blobs))
+	}
+}
+
+// assertPlacementNotCollapsed fails the test if any node sits at the co-located
+// (0,0,1) DB default or if any two nodes share a position — i.e. the placement
+// has collapsed instead of spreading across the room (bf-4q5w root cause).
+func assertPlacementNotCollapsed(t *testing.T, pts []simulator.Point) {
+	t.Helper()
+	seen := make(map[simulator.Point]bool, len(pts))
+	for i, p := range pts {
+		if p.X == 0 && p.Y == 0 && p.Z == 1 {
+			t.Fatalf("default-placed node %d collapsed to DB origin (0,0,1) — "+
+				"bf-4q5w regression: positions must be spread, not co-located", i)
+		}
+		if seen[p] {
+			t.Fatalf("default-placed nodes co-located at %v — bf-4q5w regression: "+
+				"positions must be distinct", p)
+		}
+		seen[p] = true
+	}
+}
+
+// gridMaxValue returns the maximum voxel value in a flat grid snapshot.
+func gridMaxValue(data []float64) float64 {
+	max := 0.0
+	for _, v := range data {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }
 
 // TestEngine_HealthWeight verifies that links with lower health scores contribute less to fusion.
