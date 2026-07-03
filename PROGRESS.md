@@ -26,7 +26,7 @@ Goal: Detect presence on a single link.
 | Phase sanitisation | **Done** | See iteration 5 below |
 | Baseline system | **Done** | EMA with motion-gated updates |
 | Motion detection | **Done** | deltaRMS, NBVI selection |
-| Dashboard presence indicator | **Pending** | |
+| Dashboard presence indicator | **Done** | Implemented in dashboard/live.html and dashboard/js/app.js |
 | CSI recording buffer | **Pending** | |
 | Adaptive sensing rate | **Pending** | |
 
@@ -91,7 +91,6 @@ mothership/internal/signal/
 ```
 
 **Remaining for Phase 2:**
-- Dashboard presence indicator
 - CSI recording buffer
 - Adaptive sensing rate
 
