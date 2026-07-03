@@ -1410,6 +1410,18 @@ func main() {
 	// Legacy fleet manager (kept for basic operations)
 	fleetMgr := fleet.NewManager(fleetReg)
 
+	// bf-3p6g: Forward runtime node position changes to the blob-producing 3D
+	// fusion engine so a node moved at runtime does not stay at its stale engine
+	// position. The sink fires from both PATCH /api/nodes/{mac}/position
+	// (fleet.Handler.updateNodePosition → ForwardNodePosition) and node
+	// connect/register (Manager.OnNodeConnected), converging the two position
+	// paths on one accessor — the write-side mirror of the read-side
+	// SetNodePositionAccessor used by diagnostics and weather.go. fusionEngine
+	// is constructed above (Phase 6, bf-3f6q) and captured by this closure.
+	fleetMgr.SetNodePositionSink(func(mac string, x, y, z float64) {
+		fusionEngine.SetNodePosition(mac, x, y, z)
+	})
+
 	// Phase 5: Multi-notifier broadcasts node events to legacy manager, healer, and self-heal manager
 	multiNotify := newMultiNotifier(fleetMgr, fleetHealer, selfHealManager)
 	ingestSrv.SetFleetNotifier(multiNotify)
