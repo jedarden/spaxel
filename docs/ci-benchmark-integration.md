@@ -63,12 +63,13 @@ Add this step to the spaxel-build Argo WorkflowTemplate after the `go test ./...
           echo "PASS: Timing constraints satisfied (Median: ${median_ms}ms, P99: ${p99_ms}ms)"
 ```
 
-## GitHub Actions Integration
+## CI Execution
 
-A GitHub Actions workflow (`.github/workflows/benchmark-ci.yml`) is also provided that runs the same benchmark and checks timing thresholds. This can be used as:
-- A standalone CI gate
-- A reference implementation for Argo Workflow integration
-- Local testing via `gh workflow run benchmark-ci.yml`
+GitHub Actions are disabled across all repos — all CI runs on Argo Workflows (iad-ci). The
+timing benchmark is already wired into the `spaxel-build` Argo WorkflowTemplate, which runs
+`go test -bench=BenchmarkFusionLoop` as a step (alongside `go test ./...`). There is no
+separate GitHub Actions path; the Argo template above is the canonical integration and the
+only place this gate runs.
 
 ## Acceptance Criteria
 
