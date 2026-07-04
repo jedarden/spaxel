@@ -142,7 +142,7 @@ All of the above belong to the cmd/sim-consolidation child (or a dedicated doc-s
 | `go test -bench=BenchmarkFusionLoop -benchtime=10s -count=1 ./internal/localizer/fusion/` | L329–330 | `mothership` | `mothership/internal/localizer/fusion/` (`BenchmarkFusionLoop` at `…/fusion/timing_budget_test.go:94`) | yes |
 | `go build -v -o /tmp/spaxel-sim ./cmd/sim` | **L385** | `mothership` | **`mothership/cmd/sim`** (NOT root `cmd/sim`) | yes (`mothership/cmd/sim/main.go` + others; **no own go.mod** → in `github.com/spaxel/mothership`) |
 | `go build -v -o build/spaxel ./cmd/mothership` | **L392** | `mothership` | **`mothership/cmd/mothership`** | yes (`main.go`, `dashboard_embed.go`, `migrate.go`) |
-| `go test -v -timeout 8m ./test/acceptance/` | **L400** | `mothership` | **`mothership/test/acceptance/`** (NOT root `test/acceptance`) | yes (9 `as*_test.go` + `io_install_upgrade_test.go`, `integration_test.go`, `test_helpers.go`) |
+| `go test -v -timeout 8m ./test/acceptance/` | **L400** | `mothership` | **`mothership/test/acceptance/`** (NOT root `test/acceptance`) | yes (7 `as*_test.go` + `integration_test.go`, `io_install_upgrade_test.go`, `test_helpers.go` = 10 `.go` files) |
 
 ### Docker build context / Dockerfile (kaniko, `docker-build` step)
 
