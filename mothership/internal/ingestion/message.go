@@ -20,6 +20,17 @@ type HelloMessage struct {
 	APBSSID         string   `json:"ap_bssid,omitempty"`
 	APChannel       int      `json:"ap_channel,omitempty"`
 	Token           string   `json:"token,omitempty"`
+
+	// PosX/PosY/PosZ carry the node's announced 3D world position, in meters.
+	// Pointers (not plain float64) so an *absent* position is distinguishable
+	// from a genuine (0,0,0): a real ESP32 omits these in hello (the user places
+	// the node in the dashboard), whereas spaxel-sim announces its computed
+	// corner geometry so the mothership persists it instead of leaving the
+	// fleet/DB row at the schema default (bf-24xp). nil on all three axes =
+	// "not announced"; the mothership then preserves any existing position.
+	PosX *float64 `json:"pos_x,omitempty"`
+	PosY *float64 `json:"pos_y,omitempty"`
+	PosZ *float64 `json:"pos_z,omitempty"`
 }
 
 // HealthMessage is sent every 10 seconds

@@ -1517,7 +1517,7 @@ func TestManagerOnNodeConnectedForwardsPositionToEngine(t *testing.T) {
 		engine.SetNodePosition(m, x, y, z)
 	})
 
-	mgr.OnNodeConnected(mac, "1.0.0", "ESP32-S3")
+	mgr.OnNodeConnected(mac, "1.0.0", "ESP32-S3", nil, nil, nil)
 
 	p := engineNodePosition(engine, mac)
 	if p == nil {
@@ -1525,6 +1525,105 @@ func TestManagerOnNodeConnectedForwardsPositionToEngine(t *testing.T) {
 	}
 	if p.X != 4.0 || p.Y != 5.0 || p.Z != 6.0 {
 		t.Errorf("engine position after connect = (%v,%v,%v), want (4,5,6)", p.X, p.Y, p.Z)
+	}
+}
+
+// TestManagerOnNodeConnectedPersistsHelloPosition (bf-24xp) verifies the
+// acceptance criterion for hello-announced node positions: when a node
+// connects announcing its 3D position (spaxel-sim does this with its computed
+// corner/perimeter geometry), the manager persists it to the registry so the
+// fleet/DB row is NOT left at the schema default (0,0,1) and matches the
+// announced coordinates. The announced position must also reach the fusion
+// engine through the bf-3p6g connect/register sink.
+func TestManagerOnNodeConnectedPersistsHelloPosition(t *testing.T) {
+	f64 := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name              string
+		posX, posY, posZ  float64
+	}{
+		{name: "corner_geometry", posX: 6.0, posY: 0.0, posZ: 2.5},
+		{name: "interior_point", posX: 3.25, posY: 2.75, posZ: 1.1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			const mac = "02:53:AC:00:00:01" // matches spaxel-sim's MAC OUI
+			reg := newTestRegistry(t)
+
+			engine := fusion.NewEngine(nil)
+			mgr := NewManager(reg)
+			mgr.SetNodePositionSink(func(m string, x, y, z float64) {
+				engine.SetNodePosition(m, x, y, z)
+			})
+
+			// Connect announcing the position, exactly as spaxel-sim does in hello.
+			mgr.OnNodeConnected(mac, "sim-1.0.0", "ESP32-S3", f64(tc.posX), f64(tc.posY), f64(tc.posZ))
+
+			// Registry row must hold the announced position, not the (0,0,1) default.
+			rx, ry, rz, ok := reg.GetNodePosition(mac)
+			if !ok {
+				t.Fatal("node row missing after connect")
+			}
+			if rx == 0 && ry == 0 && rz == 1 {
+				t.Errorf("registry position still at schema default (0,0,1); got (%v,%v,%v)", rx, ry, rz)
+			}
+			if rx != tc.posX || ry != tc.posY || rz != tc.posZ {
+				t.Errorf("registry position = (%v,%v,%v), want (%v,%v,%v)", rx, ry, rz, tc.posX, tc.posY, tc.posZ)
+			}
+
+			// The same coordinates must have reached the fusion engine.
+			p := engineNodePosition(engine, mac)
+			if p == nil {
+				t.Fatal("announced position not forwarded to fusion engine")
+			}
+			if p.X != tc.posX || p.Y != tc.posY || p.Z != tc.posZ {
+				t.Errorf("engine position = (%v,%v,%v), want (%v,%v,%v)", p.X, p.Y, p.Z, tc.posX, tc.posY, tc.posZ)
+			}
+		})
+	}
+}
+
+// TestManagerOnNodeConnectedWithoutHelloPositionPreservesExisting (bf-24xp)
+// verifies the real-ESP32 case: a node that does NOT announce a position (nil
+// on all three axes — a real node's position is user-placed in the dashboard)
+// leaves any existing registry position untouched, so a connect never clobbers
+// a user-placed position with the schema default. A partial announcement
+// (only some axes present) is likewise ignored.
+func TestManagerOnNodeConnectedWithoutHelloPositionPreservesExisting(t *testing.T) {
+	const mac = "AA:BB:CC:DD:EE:FF"
+	reg := newTestRegistry(t)
+	reg.UpsertNode(mac, "1.0.0", "ESP32-S3")
+	reg.SetNodePosition(mac, 4.0, 5.0, 6.0) // user-placed while offline
+
+	engine := fusion.NewEngine(nil)
+	mgr := NewManager(reg)
+	mgr.SetNodePositionSink(func(m string, x, y, z float64) {
+		engine.SetNodePosition(m, x, y, z)
+	})
+
+	// Connect with no announced position; the existing (4,5,6) must survive.
+	mgr.OnNodeConnected(mac, "1.0.0", "ESP32-S3", nil, nil, nil)
+
+	rx, ry, rz, ok := reg.GetNodePosition(mac)
+	if !ok {
+		t.Fatal("node row missing after connect")
+	}
+	if rx != 4.0 || ry != 5.0 || rz != 6.0 {
+		t.Errorf("existing position overwritten by nil announce; got (%v,%v,%v), want (4,5,6)", rx, ry, rz)
+	}
+
+	// A partial announcement (only X present) must also be ignored.
+	onlyX := 9.0
+	reg.SetNodePosition(mac, 4.0, 5.0, 6.0) // reset
+	mgr.OnNodeConnected(mac, "1.0.0", "ESP32-S3", &onlyX, nil, nil)
+
+	rx, ry, rz, ok = reg.GetNodePosition(mac)
+	if !ok {
+		t.Fatal("node row missing after partial-announce connect")
+	}
+	if rx != 4.0 || ry != 5.0 || rz != 6.0 {
+		t.Errorf("existing position overwritten by partial announce; got (%v,%v,%v), want (4,5,6)", rx, ry, rz)
 	}
 }
 

@@ -115,8 +115,13 @@ func (fh *FleetHealer) SetBroadcaster(b RegistryBroadcaster) {
 	fh.mu.Unlock()
 }
 
-// OnNodeConnected handles a node connection event
-func (fh *FleetHealer) OnNodeConnected(mac, firmware, chip string) {
+// OnNodeConnected handles a node connection event. posX/posY/posZ are the
+// hello-announced position (bf-24xp); the healer reads geometry from the
+// registry, so they are ignored here.
+func (fh *FleetHealer) OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64) {
+	_ = posX
+	_ = posY
+	_ = posZ
 	fh.mu.Lock()
 	fh.online[mac] = struct{}{}
 	wasDegraded := fh.degradedMode
