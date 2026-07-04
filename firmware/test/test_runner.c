@@ -229,7 +229,21 @@ int main(void)
 {
     qsort(g_tests, (size_t)g_test_count, sizeof(g_tests[0]), test_entry_cmp);
 
-    for (int i = 0; i < g_test_count; i++) {
+    /*
+     * volatile is genuinely required, not cosmetic: i spans the setjmp/longjmp
+     * below and is read (the i < g_test_count test and the i++ advance) on the
+     * longjmp-return path, i.e. after control resumes here from a failed
+     * assertion. C11 7.13.2.1 makes a non-volatile automatic that has been
+     * changed between the setjmp and the longjmp indeterminate on return, and
+     * gcc's -Wclobbered (on under -Wall) flags exactly this loop-index-across-
+     * setjmp shape — empirically the identical loop warns once the incidental
+     * preceding qsort() call stops biasing gcc's register heuristic. volatile
+     * exempts i from both the indeterminate rule and the warning, with no
+     * behavior change (the counter still walks 0..g_test_count-1). This is the
+     * compile-cleanliness gate for the guard (parent bf-22vg): no pragma and no
+     * flag downgrade, per C11 7.13.2.1's sanctioned remedy.
+     */
+    for (volatile int i = 0; i < g_test_count; i++) {
         /*
          * The RUN line is the one observable line per test and prints BEFORE the
          * setjmp, so it appears regardless of how the body ends. The body itself
