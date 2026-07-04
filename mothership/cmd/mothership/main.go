@@ -1509,13 +1509,19 @@ func main() {
 		}
 	})
 	guidedMgr.SetOnCalibrationComplete(func(zoneID int, qualityBefore, qualityAfter float64) {
-		// Send WebSocket event to dashboard
+		// Send WebSocket event to dashboard. Populate the active link count
+		// from the ingestion server so the guided-troubleshooting dashboard
+		// reflects how many links participated in the re-baseline.
+		linkCount := 0
+		if ingestSrv != nil {
+			linkCount = len(ingestSrv.GetAllLinksInfo())
+		}
 		msg := map[string]interface{}{
 			"type":           "calibration_complete",
 			"zone_id":        zoneID,
 			"quality_before": qualityBefore,
 			"quality_after":  qualityAfter,
-			"links":          0, // TODO: get actual link count
+			"links":          linkCount,
 		}
 		data, _ := json.Marshal(msg)
 		if dashboardHub != nil {
