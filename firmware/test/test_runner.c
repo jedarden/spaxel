@@ -16,7 +16,7 @@
  *   - sibling  (bf-bq9, this change): main() — the entry point that sorts
  *                   the registered tests by name, drives each through the
  *                   setjmp/longjmp recovery loop, prints a one-line
- *                   PASS/FAIL per test plus a run summary, and returns
+ *                   RUN marker per test plus a run summary, and returns
  *                   non-zero iff any test failed.
  *
  * main() setjmp()s into g_test_jmp before each test and calls the body; on a
@@ -206,65 +206,30 @@ static int test_entry_cmp(const void *a, const void *b)
  * binary; THIS function's exit code is what make propagates, so a non-zero
  * return here fails CI.
  *
- * Flow:
+ * This is the deliberately minimal naive baseline for the bf-22vg re-split —
+ * the starting state the parent names before the per-test machinery is layered
+ * back on. Flow:
  *   1. Sort the registry by name (test_entry_cmp) for a deterministic order.
  *      The TEST() constructors have already fully populated it before main().
- *   2. For each test: setjmp(g_test_jmp), then call the body. setjmp returns 0
- *      on the direct call, so the body runs normally; if a failed assertion
- *      inside it calls test_record_failure(), that longjmp(g_test_jmp, 1)
- *      returns control here with setjmp yielding non-zero instead. Either way
- *      we land back in the loop to print a neutral RUN marker for the test and
- *      advance — a failure in test N never blocks tests N+1..end (the per-test
- *      setjmp/longjmp loop).
- *   3. Print a one-line run summary (passed / failed / total).
- *   4. Return 1 iff at least one test failed, else 0.
+ *   2. For each test: print its RUN line, then call g_tests[i].fn() directly.
  *
- * Failure counting is deliberately NOT repeated here. test_record_failure()
- * already bumped g_failure_count before it longjmp'd out of the failing test,
- * so the else branch below only prints a neutral marker line naming the test
- * and its own per-test counter — it leaves g_failure_count alone. That keeps a single source of
- * truth for "did anything fail anywhere", and the exit code reads that truth
- * directly (g_failure_count > 0). The local `failed` counter mirrors it only
- * for the summary line, where it pairs with `passed` to total g_test_count.
+ * Nothing here guards a failing assertion, tallies outcomes, prints a summary,
+ * or returns non-zero on failure — all of that is sibling scope and is re-added
+ * by the follow-on children of bf-22vg (the setjmp/longjmp recovery guard in
+ * child 2, the PASS/FAIL tally + run summary + non-zero exit code in child 3).
+ * For this intermediate state main() returns 0 unconditionally: it compiles and
+ * runs every test to completion as long as no assertion fires (a fired
+ * assertion's longjmp has no setjmp target until child 2 restores it).
  */
 int main(void)
 {
     qsort(g_tests, (size_t)g_test_count, sizeof(g_tests[0]), test_entry_cmp);
 
-    int passed = 0;
-    int failed = 0;
-
     for (int i = 0; i < g_test_count; i++) {
-        /*
-         * Per-test recovery guard. setjmp() establishes the longjmp() target
-         * that test_record_failure() jumps into on a failed assertion. On the
-         * direct call setjmp() returns 0 and the body runs as before; on a
-         * longjmp() return it yields non-zero and we take the else branch —
-         * the body is NOT re-invoked, the loop just falls through to the next
-         * i. That is the whole point: a failure in test N never blocks N+1.
-         *
-         * volatile analysis (C11 7.13.2.1): an automatic variable modified
-         * between setjmp() and longjmp() AND read after the longjmp returns
-         * has indeterminate value unless it is volatile-qualified. The loop
-         * index i IS read in the post-longjmp path (g_tests[i].name in the
-         * else branch), so the question is whether i is modified between the
-         * setjmp() call and a possible longjmp(). It is not: between them the
-         * body only READS i (g_tests[i].fn()), and the only write to i is the
-         * for-loop increment, which runs AFTER control returns here (whether
-         * via a normal body return or the longjmp). So no volatile is needed
-         * on i — confirmed safe.
-         */
-        if (setjmp(g_test_jmp) == 0) {
-            g_tests[i].fn();
-            printf("RUN: %s\n", g_tests[i].name);
-            passed++;
-        } else {
-            printf("RUN: %s (assertion failed)\n", g_tests[i].name);
-            failed++;
-        }
+        /* One observable line per test, then drive the body directly. */
+        printf("RUN: %s\n", g_tests[i].name);
+        g_tests[i].fn();
     }
 
-    printf("%d passed, %d failed of %d\n", passed, failed, g_test_count);
-
-    return g_failure_count > 0 ? 1 : 0;
+    return 0;
 }
