@@ -206,29 +206,42 @@ static int test_entry_cmp(const void *a, const void *b)
  * binary; THIS function's exit code is what make propagates, so a non-zero
  * return here fails CI.
  *
- * This is the deliberately minimal naive baseline for the bf-22vg re-split —
- * the starting state the parent names before the per-test machinery is layered
- * back on. Flow:
+ * This is child 2 of the bf-22vg re-split: child 1 (bf-1fd4) restored the naive
+ * direct-call loop, and THIS change (bf-27ud) layers the per-test recovery
+ * target back on — gating the body call on setjmp(). Flow:
  *   1. Sort the registry by name (test_entry_cmp) for a deterministic order.
  *      The TEST() constructors have already fully populated it before main().
- *   2. For each test: print its RUN line, then call g_tests[i].fn() directly.
+ *   2. For each test: print its RUN line, then setjmp() into g_test_jmp and call
+ *      g_tests[i].fn() only on the direct (zero) return. A non-zero return is a
+ *      longjmp from a failed assertion and falls straight through to the next
+ *      iteration (no else body), so a failure in test N never blocks N+1..end.
  *
- * Nothing here guards a failing assertion, tallies outcomes, prints a summary,
- * or returns non-zero on failure — all of that is sibling scope and is re-added
- * by the follow-on children of bf-22vg (the setjmp/longjmp recovery guard in
- * child 2, the PASS/FAIL tally + run summary + non-zero exit code in child 3).
- * For this intermediate state main() returns 0 unconditionally: it compiles and
- * runs every test to completion as long as no assertion fires (a fired
- * assertion's longjmp has no setjmp target until child 2 restores it).
+ * Still missing here — and deliberately sibling scope (child 3, bf-1na) — is
+ * everything that turns a passed/failed run into output and an exit code:
+ * PASS/FAIL labels, a pass/fail tally, the run summary line, and the non-zero
+ * exit on failure. For this intermediate state main() returns 0 unconditionally:
+ * it compiles and runs every test, and an assertion that fires now longjmps
+ * cleanly back to the setjmp above (the target bf-3id declared) instead of off
+ * into nowhere — but that failure is not yet surfaced or counted; the g_failure_count
+ * test_record_failure() bumps is not yet read here.
  */
 int main(void)
 {
     qsort(g_tests, (size_t)g_test_count, sizeof(g_tests[0]), test_entry_cmp);
 
     for (int i = 0; i < g_test_count; i++) {
-        /* One observable line per test, then drive the body directly. */
+        /*
+         * The RUN line is the one observable line per test and prints BEFORE the
+         * setjmp, so it appears regardless of how the body ends. The body itself
+         * runs only on the direct (zero) setjmp return; a non-zero return is a
+         * longjmp from a failed assertion and simply falls through to the next
+         * iteration — no else body — so the loop's i++ still advances and a
+         * failure in test N never blocks N+1..end.
+         */
         printf("RUN: %s\n", g_tests[i].name);
-        g_tests[i].fn();
+        if (setjmp(g_test_jmp) == 0) {
+            g_tests[i].fn();
+        }
     }
 
     return 0;
