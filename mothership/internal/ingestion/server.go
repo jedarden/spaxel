@@ -24,8 +24,15 @@ type CSIBroadcaster interface {
 }
 
 // FleetNotifier receives node lifecycle events for fleet management.
+//
+// OnNodeConnected's trailing posX/posY/posZ carry the node's hello-announced
+// 3D position (nil on all three when the node did not announce one — e.g. a
+// real ESP32; the mothership then preserves any user-placed position). They
+// flow to the fleet Manager, which persists them via the registry so the
+// node DB row is not left at the schema default, and then onward to the
+// fusion engine through the bf-3p6g connect/register sink (bf-24xp).
 type FleetNotifier interface {
-	OnNodeConnected(mac, firmware, chip string)
+	OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64)
 	OnNodeDisconnected(mac string)
 }
 
@@ -548,7 +555,7 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if fleetFn != nil {
-		fleetFn.OnNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip)
+		fleetFn.OnNodeConnected(hello.MAC, hello.FirmwareVersion, hello.Chip, hello.PosX, hello.PosY, hello.PosZ)
 	} else {
 		s.sendRole(nc, "rx", "")
 		s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold, "")

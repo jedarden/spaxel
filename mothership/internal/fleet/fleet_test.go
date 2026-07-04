@@ -188,7 +188,7 @@ func TestRegistryGetAllNodes(t *testing.T) {
 func TestManagerSingleNode_TxRx(t *testing.T) {
 	mgr, notif, _ := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 
 	role := notif.sentRole("aa:00:00:00:00:01")
 	if role != "tx_rx" {
@@ -207,8 +207,8 @@ func TestManagerSingleNode_TxRx(t *testing.T) {
 func TestManagerTwoNodes_TxRx(t *testing.T) {
 	mgr, notif, _ := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	mgr.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	mgr.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
 
 	r1 := notif.sentRole("aa:00:00:00:00:01")
 	r2 := notif.sentRole("aa:00:00:00:00:02")
@@ -226,9 +226,9 @@ func TestManagerTwoNodes_TxRx(t *testing.T) {
 func TestManagerThreeNodes_HalfTx(t *testing.T) {
 	mgr, notif, _ := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	mgr.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	mgr.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	mgr.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	mgr.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
 
 	roles := []string{
 		notif.sentRole("aa:00:00:00:00:01"),
@@ -253,9 +253,9 @@ func TestManagerThreeNodes_HalfTx(t *testing.T) {
 func TestManagerNodeDisconnect_Rebalance(t *testing.T) {
 	mgr, notif, _ := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
-	mgr.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3")
-	mgr.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
+	mgr.OnNodeConnected("aa:00:00:00:00:02", "v1", "S3", nil, nil, nil)
+	mgr.OnNodeConnected("aa:00:00:00:00:03", "v1", "S3", nil, nil, nil)
 
 	// Node 2 goes offline.
 	mgr.OnNodeDisconnected("aa:00:00:00:00:02")
@@ -283,7 +283,7 @@ func TestManagerNodeDisconnect_Rebalance(t *testing.T) {
 func TestManagerLastNodeDisconnect_ClearsState(t *testing.T) {
 	mgr, notif, _ := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 	mgr.OnNodeDisconnected("aa:00:00:00:00:01")
 
 	mgr.mu.RLock()
@@ -299,7 +299,7 @@ func TestManagerLastNodeDisconnect_ClearsState(t *testing.T) {
 func TestManagerSelfHeal_RepushesRoles(t *testing.T) {
 	mgr, notif, _ := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 
 	// Simulate notifier tracking connected nodes.
 	notif.mu.Lock()
@@ -322,7 +322,7 @@ func TestManagerSelfHeal_RepushesRoles(t *testing.T) {
 func TestManagerOverrideRole(t *testing.T) {
 	mgr, notif, bcaster := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 	prevCalls := bcaster.broadcastCount()
 
 	if err := mgr.OverrideRole("aa:00:00:00:00:01", "rx"); err != nil {
@@ -350,7 +350,7 @@ func TestManagerBroadcastOnConnect(t *testing.T) {
 	mgr, _, bcaster := newTestManager(t)
 
 	before := bcaster.broadcastCount()
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 	after := bcaster.broadcastCount()
 
 	if after <= before {
@@ -361,7 +361,7 @@ func TestManagerBroadcastOnConnect(t *testing.T) {
 func TestManagerBroadcastOnDisconnect(t *testing.T) {
 	mgr, _, bcaster := newTestManager(t)
 
-	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3")
+	mgr.OnNodeConnected("aa:00:00:00:00:01", "v1", "S3", nil, nil, nil)
 	before := bcaster.broadcastCount()
 	mgr.OnNodeDisconnected("aa:00:00:00:00:01")
 	after := bcaster.broadcastCount()
@@ -380,7 +380,7 @@ func TestManagerPersistenceAcrossRestart(t *testing.T) {
 	mgr1 := NewManager(reg)
 	n1 := newMockNotifier()
 	mgr1.SetNotifier(n1)
-	mgr1.OnNodeConnected("aa:00:00:00:00:01", "v1.2", "ESP32-S3")
+	mgr1.OnNodeConnected("aa:00:00:00:00:01", "v1.2", "ESP32-S3", nil, nil, nil)
 
 	// Second manager with same registry simulates a restart.
 	mgr2 := NewManager(reg)

@@ -181,9 +181,28 @@ func (m *Manager) ForwardNodePosition(mac string, x, y, z float64) {
 
 // OnNodeConnected is called when a node completes its hello handshake.
 // It persists the node, assigns a role, and broadcasts updated state.
-func (m *Manager) OnNodeConnected(mac, firmware, chip string) {
+//
+// posX/posY/posZ carry the node's hello-announced 3D position (nil on all
+// three when the node did not announce one). When present they are persisted
+// to the registry so the fleet/DB row matches the announced location instead
+// of the schema default — e.g. a spaxel-sim node announcing its corner
+// geometry (bf-24xp). When absent (a real ESP32, whose position the user sets
+// in the dashboard) any existing position is preserved. The position is then
+// forwarded to the fusion engine below via the existing GetNodePosition +
+// nodePositionSink path wired in bf-3p6g.
+func (m *Manager) OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64) {
 	if err := m.registry.UpsertNode(mac, firmware, chip); err != nil {
 		log.Printf("[WARN] fleet: upsert node %s: %v", mac, err)
+	}
+
+	// bf-24xp: a node may announce its 3D position in the hello handshake.
+	// Persist it now that the row exists (UpsertNode above), so the
+	// fleet/DB row is not left at the schema default. Only write when all
+	// three axes are present — a partially-announced position is ignored.
+	if posX != nil && posY != nil && posZ != nil {
+		if err := m.registry.SetNodePosition(mac, *posX, *posY, *posZ); err != nil {
+			log.Printf("[WARN] fleet: set hello position %s: %v", mac, err)
+		}
 	}
 
 	m.mu.Lock()

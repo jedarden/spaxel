@@ -646,7 +646,9 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 		node.Conn = conn
 		log.Printf("[SIM] Node %d connected", node.ID)
 
-		// Send hello message
+		// Send hello message. Announce the node's computed position
+		// (createVirtualNodes perimeter geometry) so the mothership persists it
+		// in the fleet/DB row instead of leaving it at the schema default (bf-24xp).
 		hello := map[string]interface{}{
 			"type":             "hello",
 			"mac":              macToString(node.MAC),
@@ -657,6 +659,9 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 			"uptime_ms":        1000,
 			"wifi_rssi":        -45,
 			"ip":               fmt.Sprintf("127.0.0.%d", node.ID+2),
+			"pos_x":            node.Position.X,
+			"pos_y":            node.Position.Y,
+			"pos_z":            node.Position.Z,
 		}
 
 		helloBytes, err := json.Marshal(hello)

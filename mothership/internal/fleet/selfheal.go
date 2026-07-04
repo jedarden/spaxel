@@ -128,8 +128,13 @@ func (shm *SelfHealManager) SetGDOPCalculator(calc GDOPCalculator) {
 	shm.mu.Unlock()
 }
 
-// OnNodeConnected handles a node connection event
-func (shm *SelfHealManager) OnNodeConnected(mac, firmware, chip string) {
+// OnNodeConnected handles a node connection event. posX/posY/posZ are the
+// hello-announced position (bf-24xp); the self-healer persists the node row
+// itself and ignores the announced position (the fleet Manager owns that).
+func (shm *SelfHealManager) OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64) {
+	_ = posX
+	_ = posY
+	_ = posZ
 	now := time.Now()
 
 	shm.mu.Lock()

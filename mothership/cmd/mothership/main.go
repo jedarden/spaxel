@@ -351,21 +351,21 @@ func (a *fleetRoomConfigAdapter) GetRoom() (width, height, depth float64) {
 // multiFleetNotifier fans out ingestion.FleetNotifier events to multiple fleet components.
 type multiFleetNotifier struct {
 	notifiers []interface {
-		OnNodeConnected(mac, firmware, chip string)
+		OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64)
 		OnNodeDisconnected(mac string)
 	}
 }
 
 func newMultiNotifier(notifiers ...interface {
-	OnNodeConnected(mac, firmware, chip string)
+	OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64)
 	OnNodeDisconnected(mac string)
 }) *multiFleetNotifier {
 	return &multiFleetNotifier{notifiers: notifiers}
 }
 
-func (m *multiFleetNotifier) OnNodeConnected(mac, firmware, chip string) {
+func (m *multiFleetNotifier) OnNodeConnected(mac, firmware, chip string, posX, posY, posZ *float64) {
 	for _, n := range m.notifiers {
-		n.OnNodeConnected(mac, firmware, chip)
+		n.OnNodeConnected(mac, firmware, chip, posX, posY, posZ)
 	}
 }
 
