@@ -230,18 +230,11 @@ int main(void)
     qsort(g_tests, (size_t)g_test_count, sizeof(g_tests[0]), test_entry_cmp);
 
     /*
-     * volatile is genuinely required, not cosmetic: i spans the setjmp/longjmp
-     * below and is read (the i < g_test_count test and the i++ advance) on the
-     * longjmp-return path, i.e. after control resumes here from a failed
-     * assertion. C11 7.13.2.1 makes a non-volatile automatic that has been
-     * changed between the setjmp and the longjmp indeterminate on return, and
-     * gcc's -Wclobbered (on under -Wall) flags exactly this loop-index-across-
-     * setjmp shape — empirically the identical loop warns once the incidental
-     * preceding qsort() call stops biasing gcc's register heuristic. volatile
-     * exempts i from both the indeterminate rule and the warning, with no
-     * behavior change (the counter still walks 0..g_test_count-1). This is the
-     * compile-cleanliness gate for the guard (parent bf-22vg): no pragma and no
-     * flag downgrade, per C11 7.13.2.1's sanctioned remedy.
+     * i spans the setjmp/longjmp recovery below, so it is volatile-qualified.
+     * The full per-variable C11 7.13.2.1 clobber audit — which variables are in
+     * scope across the boundary, why each is safe, and why volatile is kept
+     * despite the standard not strictly requiring it — lives at the setjmp call
+     * site further down this loop body.
      */
     for (volatile int i = 0; i < g_test_count; i++) {
         /*
@@ -311,6 +304,40 @@ int main(void)
          * baseline (bf-1fd4): the recovery gating added no test, dropped no test,
          * and reordered nothing. Umbrella bf-tof1 (and thereby parent bf-22vg)
          * acceptance is satisfied.
+         */
+        /*
+         * SETJMP/LONGJMP CLOBBER AUDIT — C11 7.13.2.1 (bf-31rd, child 2/3 of
+         * bf-53ut). The standard renders an automatic object indeterminate on
+         * longjmp return only if it is local to THIS function, non-volatile, AND
+         * changed between the setjmp() call and the longjmp(). No object in scope
+         * here meets all three; volatile on i (loop above) is kept solely to
+         * satisfy gcc's -Wclobbered, which is heuristic and ignores that
+         * distinction. Variables in scope across the boundary:
+         *
+         *  - i (automatic, loop index, volatile-qualified): written ONLY by the
+         *    for-init (i = 0) and the for-increment (i++). The increment runs
+         *    AFTER control resumes here — whether the body returned normally or a
+         *    failed assertion longjmp'd back — so no write to i lands between the
+         *    setjmp() call and a longjmp() fired inside g_tests[i].fn(); the body
+         *    only READS i. The 7.13.2.1 "changed between setjmp and longjmp"
+         *    condition is therefore not met, and i is determinate on the longjmp-
+         *    return path (where i++ and the i < g_test_count re-test read it).
+         *  - No local tallies (passed/failed counters) live in main().
+         *    g_failure_count is file-scope static, not automatic, so 7.13.2.1
+         *    does not apply to it at all; it is bumped inside
+         *    test_record_failure() before the longjmp, not in this frame.
+         *    g_test_jmp is likewise file-scope static.
+         *
+         * Why volatile anyway: gcc's -Wclobbered (on under -Wall) flags this
+         * exact loop-index-across-setjmp shape. Empirically the loop warns at
+         * -O1..-Os once the incidental preceding qsort() call stops biasing gcc's
+         * register heuristic (verified: with qsort present the heuristic happens
+         * to stay silent today; remove qsort and -Wclobbered fires on i). volatile
+         * exempts i from BOTH the indeterminate rule and the warning, with zero
+         * behavior change (the counter still walks 0..g_test_count-1) — the
+         * 7.13.2.1-sanctioned remedy, no pragma and no flag downgrade. Compile
+         * gate for the guard (parent bf-22vg): gcc -std=c11 -Wall -Wextra — and
+         * explicit -Wclobbered — is silent at -O0..-Os for this TU.
          */
         if (setjmp(g_test_jmp) == 0) {
             g_tests[i].fn();
