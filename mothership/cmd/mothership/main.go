@@ -4159,7 +4159,7 @@ func main() {
 	log.Printf("[INFO] Tracks API registered at /api/tracks")
 
 	// System status and occupancy REST API
-	statusHandler := api.NewStatusHandler(startupTotalStart, func() int { return len(ingestSrv.GetConnectedNodes()) })
+	statusHandler := api.NewStatusHandler(startupTotalStart, func() int { return len(ingestSrv.GetConnectedNodes()) }, version)
 	statusHandler.SetProcessorManager(pm)
 	statusHandler.SetZonesManager(zonesMgr)
 	statusHandler.RegisterRoutes(r)
