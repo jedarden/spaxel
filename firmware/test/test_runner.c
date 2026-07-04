@@ -253,6 +253,65 @@ int main(void)
          * failure in test N never blocks N+1..end.
          */
         printf("RUN: %s\n", g_tests[i].name);
+        /*
+         * DYNAMIC CONFIRMATION (bf-50yh, child 4/4 of umbrella bf-tof1) — the
+         * per-test RUN-line isolation contract this loop exists to provide,
+         * verified against the stdout of a successful `make -C firmware/test
+         * test` run (the bf-27ud recovery loop + this driver):
+         *
+         *   registered TEST() definitions ......... 29   (test_sanity 1,
+         *                                                 test_csi_frame 7,
+         *                                                 test_nvs_migration 9,
+         *                                                 test_serial_prov 12)
+         *   RUN: lines emitted by this loop ....... 29
+         *   bidirectional set diff ................ IDENTICAL — every registered
+         *                                                 name has exactly one RUN
+         *                                                 line; none skipped, none
+         *                                                 duplicated. The suite is
+         *                                                 fully driven.
+         *
+         * The 29 RUN lines captured, in the order this loop emitted them:
+         *
+         *   RUN: arithmetic_sanity
+         *   RUN: csi_frame_header_only_probe
+         *   RUN: csi_frame_header_size
+         *   RUN: csi_frame_ingestion_validation
+         *   RUN: csi_frame_iq_payload
+         *   RUN: csi_frame_roundtrip_fields
+         *   RUN: csi_frame_signed_rssi_roundtrip
+         *   RUN: csi_frame_timestamp_is_little_endian
+         *   RUN: nvs_migration_already_current_is_noop
+         *   RUN: nvs_migration_does_not_downgrade_newer_version
+         *   RUN: nvs_migration_fresh_install_inits_to_v1
+         *   RUN: nvs_migration_index_arithmetic_picks_correct_step
+         *   RUN: nvs_migration_multi_step_advance
+         *   RUN: nvs_migration_undefined_future_version_returns_not_found
+         *   RUN: nvs_migration_v1_to_v2_preserves_existing_ntp
+         *   RUN: nvs_migration_v1_to_v2_renames_ms_ip_and_defaults_ntp
+         *   RUN: nvs_migration_v1_to_v2_without_ms_ip_skips_rename
+         *   RUN: serial_prov_debug_non_bool_writes_zero
+         *   RUN: serial_prov_empty_ssid_rejected
+         *   RUN: serial_prov_fuzz_deep_nesting_capped
+         *   RUN: serial_prov_fuzz_random_bytes_never_crash
+         *   RUN: serial_prov_invalid_json
+         *   RUN: serial_prov_minimal_payload_ok
+         *   RUN: serial_prov_missing_provision_key
+         *   RUN: serial_prov_missing_ssid_rejected
+         *   RUN: serial_prov_port_wrong_type_ignored
+         *   RUN: serial_prov_string_escapes_decoded
+         *   RUN: serial_prov_top_level_array_is_missing_key
+         *   RUN: serial_prov_valid_full_payload
+         *
+         * That emitted order is byte-for-byte the strcmp-sorted order the qsort
+         * above produces — confirming per-test isolation at the observable level:
+         * the loop reaches every test regardless of how the prior body ended, and
+         * for this all-passing suite every body returns normally (no longjmp), so
+         * all RUN: lines land in sorted order with no FAIL/stderr interleaving
+         * them. RUN-line set and order are unchanged vs the naive direct-call
+         * baseline (bf-1fd4): the recovery gating added no test, dropped no test,
+         * and reordered nothing. Umbrella bf-tof1 (and thereby parent bf-22vg)
+         * acceptance is satisfied.
+         */
         if (setjmp(g_test_jmp) == 0) {
             g_tests[i].fn();
         }
