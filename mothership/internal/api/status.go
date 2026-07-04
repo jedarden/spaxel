@@ -18,6 +18,7 @@ type StatusHandler struct {
 	zonesMgr     ZonesManagerProvider
 	startTime    time.Time
 	getNodeCount func() int
+	version      string
 }
 
 // ProcessorManagerProvider provides access to signal processor data.
@@ -33,10 +34,14 @@ type ZonesManagerProvider interface {
 }
 
 // NewStatusHandler creates a new status handler.
-func NewStatusHandler(startTime time.Time, getNodeCount func() int) *StatusHandler {
+//
+// version is the build-time application version (injected via ldflags
+// `-X main.version` in cmd/mothership/main.go) surfaced via GET /api/status.
+func NewStatusHandler(startTime time.Time, getNodeCount func() int, version string) *StatusHandler {
 	return &StatusHandler{
 		startTime:    startTime,
 		getNodeCount: getNodeCount,
+		version:      version,
 	}
 }
 
@@ -95,7 +100,7 @@ func (h *StatusHandler) getStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"version":           "1.0.0", // TODO: get from build info
+		"version":           h.version,
 		"nodes":             nodes,
 		"blobs":             blobs,
 		"uptime_s":          uptime,
