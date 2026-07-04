@@ -77,6 +77,27 @@ func TestPhaseSanitizeProperty(t *testing.T) {
 			description: "Alternating between max positive and max negative",
 		},
 		{
+			name: "collinear I/Q (same line through origin)",
+			nSub: 64,
+			payloadGen: func(nSub int) []int8 {
+				// All (I,Q) samples lie on the same line through the origin
+				// (phase = π/4 on one ray, -3π/4 on the opposing ray), with
+				// varying magnitudes. Adjacent samples can sit at exactly ±π
+				// apart — the phase-unwrap wrap boundary — which must not
+				// produce NaN/Inf or panic.
+				payload := make([]int8, nSub*2)
+				mags := []int8{1, 10, 50, 127, 50, 10, -1, -10, -50, -127}
+				for k := 0; k < nSub; k++ {
+					m := mags[k%len(mags)]
+					payload[k*2] = m   // I
+					payload[k*2+1] = m // Q (collinear: Q == I along the diagonal)
+				}
+				return payload
+			},
+			rssiDBm:     -50,
+			description: "Collinear complex samples straddling the ±π unwrap boundary",
+		},
+		{
 			name: "I max, Q zero",
 			nSub: 64,
 			payloadGen: func(nSub int) []int8 {
@@ -226,15 +247,16 @@ func TestPhaseSanitizeProperty(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := tc.payloadGen(tc.nSub)
 
-			// The key property: PhaseSanitize should never return NaN or Inf
+			// The key property: PhaseSanitize should never return NaN or Inf.
+			// Every case in this table is a well-formed payload (nSub ≥ 1,
+			// payload length matches), so the function MUST succeed and
+			// produce finite output. An error here is a regression, not an
+			// acceptable outcome — invalid inputs are covered separately by
+			// TestPhaseSanitizeInvalidInputs.
 			result, err := PhaseSanitize(payload, tc.rssiDBm, tc.nSub)
-
 			if err != nil {
-				// Some inputs may legitimately fail (e.g., nSub=0)
-				// This is OK - the property is about not panicking and
-				// returning clean errors for invalid inputs
-				t.Logf("PhaseSanitize returned error (expected for some cases): %v", err)
-				return
+				t.Fatalf("PhaseSanitize returned unexpected error for valid edge case %q: %v",
+					tc.description, err)
 			}
 
 			// Verify result is not nil
