@@ -27,7 +27,13 @@ are constructed inline via struct literals inside the factory functions below. T
 | `replay.BlobUpdate` | replay/demo blob | `mothership/internal/replay/types.go:303` |
 | `simulator.BlobResult` | simulator output blob | `mothership/internal/simulator/engine.go:80` |
 | `explainability.BlobExplanation` | explainability record | `mothership/internal/explainability/handler.go:27` |
+| `explainability.BlobSnapshot` | explainability input snapshot | `mothership/internal/explainability/handler.go:95` |
 | `falldetect.BlobSnapshot` | fall-detect history record | `mothership/internal/falldetect/detector.go:69` |
+
+> Note: `explainability.BlobSnapshot` and `falldetect.BlobSnapshot` are **distinct
+> types** in different packages, both named `BlobSnapshot`. The former is an input fed to
+> `computeExplanation` (F1); the latter is a history record appended inside `processBlob`
+> (G1).
 
 ---
 
@@ -167,6 +173,23 @@ These create the live, UKF-backed blob tracks that carry identity through the pi
   for the trigger engine. **Not a dedicated factory function** — included because it is a
   distinct creation site that must track blob field changes.
 
+### E3. Explainability conversion loop (inline, inside `main`)
+- **Location:** `mothership/cmd/mothership/main.go:2116`
+  ```go
+  blobSnapshots := make([]explainability.BlobSnapshot, 0, len(blobs))
+  for _, blob := range blobs {
+      blobSnapshots = append(blobSnapshots, explainability.BlobSnapshot{
+          ID: blob.ID, X: blob.X, Y: blob.Y, Z: blob.Z, Confidence: blob.Weight,
+      })
+  }
+  ```
+- **Pattern:** Sibling of E2 — inline value construction inside `main()`'s fusion loop
+  (enclosing func `main()` at `main.go:481`), converting the active blob set into
+  `[]explainability.BlobSnapshot` to feed the explainability handler (the input consumed by
+  F1 `computeExplanation`). **Not a dedicated factory function** — included because it is
+  the only site that constructs `explainability.BlobSnapshot`, and it must track blob field
+  changes just like E2. (Discovered in the bf-67ao completeness sweep.)
+
 ---
 
 ## F. Explainability factories (produce `BlobExplanation`)
@@ -231,6 +254,7 @@ These create the live, UKF-backed blob tracks that carry identity through the pi
 | D2 | `(*replay.Pipeline).generateDemoBlobs` | `replay/pipeline.go:100` | `:114,:132` | `[]BlobUpdate` |
 | E1 | `(*blobTracker).track` | `cmd/mothership/main.go:5337` | `:5384` | `[]sigproc.TrackedBlob` |
 | E2 | automation loop (in `main`) | `cmd/mothership/main.go:2213` | `:2213` | (inline conversion) |
+| E3 | explainability loop (in `main`) | `cmd/mothership/main.go:2116` | `:2116` | (inline conversion) |
 | F1 | `(*explainability.Handler).computeExplanation` | `explainability/handler.go:356` | `:357` | `*BlobExplanation` |
 | F2 | `(*explainability.Handler).explainBlob` | `explainability/handler.go:180` | `:194` | (writes JSON) |
 | F3 | `(*explainability.Handler).explainBlobAtTime` | `explainability/handler.go:209` | `:255` | (writes JSON) |
@@ -241,7 +265,10 @@ These create the live, UKF-backed blob tracks that carry identity through the pi
 
 ## Acceptance Criteria Status
 
-- [x] All blob factory functions are identified — **15 functions** across 9 blob types.
+- [x] All blob factory functions are identified — **16 documented creation sites** (14
+  dedicated functions/methods + 2 inline conversion loops in `main()`) across **10 blob
+  types**. The 10th type (`explainability.BlobSnapshot`) and its sole creation site
+  (`main.go:2116`, entry E3) were added during the bf-67ao completeness sweep.
 - [x] Each location documented with file path and line number — see table above (function
   def + literal site).
 - [x] Function signature and blob creation pattern noted — each entry lists the full
@@ -259,3 +286,18 @@ These create the live, UKF-backed blob tracks that carry identity through the pi
 - Several earlier beads already surveyed literal sites and JS/TS blob objects
   (`bf-4bhd`, `bf-3tlw`, `bf-26ta`, `bf-5kns`, `bf-4ly4`); this report is the
   function-level (factory) view and does not duplicate the per-literal inventory.
+- **Test-only factories (deliberately excluded from the production catalogue above):** the
+  completeness sweep found these in `*_test.go`, all constructing/returning blob-typed
+  values but only as test fixtures or mocks:
+  - `internal/explainability/handler_test.go:30` `makeBlobAt(...) BlobSnapshot` — builds an
+    `explainability.BlobSnapshot` fixture.
+  - `internal/replay/integration_test.go:578` `processFramesDirectly(...) []BlobUpdate` and
+    `:606` `processFramesWithThreshold(...) []BlobUpdate` — run the replay pipeline over
+    test frames and return its `BlobUpdate` output (no literal of their own).
+  - `internal/api/tracks_test.go:17` `mockTracksProvider.GetTrackedBlobs() []TrackedBlob` —
+    mock interface stub returning a canned blob slice.
+  - `internal/replay/{engine,pipeline}_test.go` `mockBroadcaster.BroadcastReplayBlobs(...)`
+    — mocks that *receive* blobs as a parameter (not factories).
+- **Struct constructors (correctly excluded):** `cmd/mothership/main.go:5329`
+  `newBlobTracker() *blobTracker` constructs the *tracker*, not a blob. There are no
+  `NewBlob`/`makeBlob`/`CreateBlob` blob-constructor helpers in production code.
