@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/fleet"
+	"github.com/spaxel/mothership/internal/fusion"
 	"github.com/spaxel/mothership/internal/simulator"
 )
 
@@ -324,16 +325,35 @@ func TestImmediateSyncOnAddAndUpdate(t *testing.T) {
 // registry is what makes the tests below genuinely end-to-end: a position
 // written by the bridge is round-tripped through SQLite, not merely recorded by
 // a fake. (bf-69ym)
+//
+// bf-u7ds: AddVirtualNode/SetNodePosition also forward the new position through
+// forwardPos (mirroring the production adapter) so a simulator-driven registry
+// write reaches the blob-producing fusion engine at runtime, not only at
+// startup seeding. Tests set forwardPos to fleet.Manager.ForwardNodePosition,
+// exactly as cmd/mothership/main.go does.
 type fleetRegistryTestAdapter struct {
-	reg *fleet.Registry
+	reg        *fleet.Registry
+	forwardPos func(mac string, x, y, z float64)
 }
 
 func (a *fleetRegistryTestAdapter) AddVirtualNode(mac, name string, x, y, z float64) error {
-	return a.reg.AddVirtualNode(mac, name, x, y, z)
+	if err := a.reg.AddVirtualNode(mac, name, x, y, z); err != nil {
+		return err
+	}
+	if a.forwardPos != nil {
+		a.forwardPos(mac, x, y, z)
+	}
+	return nil
 }
 
 func (a *fleetRegistryTestAdapter) SetNodePosition(mac string, x, y, z float64) error {
-	return a.reg.SetNodePosition(mac, x, y, z)
+	if err := a.reg.SetNodePosition(mac, x, y, z); err != nil {
+		return err
+	}
+	if a.forwardPos != nil {
+		a.forwardPos(mac, x, y, z)
+	}
+	return nil
 }
 
 func (a *fleetRegistryTestAdapter) SetNodeRole(mac, role string) error {
@@ -484,6 +504,90 @@ func TestSimulatorHandlerToRegistry_CreateAndUpdate(t *testing.T) {
 	// Still exactly one registry row — an update must not duplicate.
 	if len(byName) != 1 {
 		t.Errorf("update: expected 1 registry node, got %d (%+v)", len(byName), byName)
+	}
+}
+
+// singleEnginePosition returns the fusion engine's single registered node
+// position, failing the test unless exactly one node is positioned. Used to
+// assert what the accumulation grid will localize against.
+func singleEnginePosition(t *testing.T, engine *fusion.Engine) simulator.Point {
+	t.Helper()
+	positions := engine.NodePositions()
+	if len(positions) != 1 {
+		t.Fatalf("expected exactly 1 fusion engine node position, got %d: %+v", len(positions), positions)
+	}
+	p := positions[0]
+	return simulator.Point{X: p.X, Y: p.Y, Z: p.Z}
+}
+
+// TestSimulatorHandlerToRegistry_PositionsReachFusionEngine (bf-u7ds) is the
+// end-to-end lock-in for the third registry-write path: a simulator-driven node
+// create/update must reach the blob-producing 3D fusion engine, not just the
+// fleet DB. The production wiring (cmd/mothership/main.go) builds the adapter
+// with forwardPos = fleetMgr.ForwardNodePosition, and the manager's
+// nodePositionSink is wired to fusion.Engine.SetNodePosition; this test
+// recreates that exact chain behind the SimulatorHandler and asserts the
+// engine's nodePos mirror updates on both AddNode and UpdateNode.
+//
+// Without the forwardPos hook, SyncToRegistry lands the position in SQLite but
+// the engine mirror stays stale and Fuse localizes against wrong/missing
+// geometry — the regression this bead guards against. Mirrors the two bf-3p6g
+// lock-ins (PATCH /position and OnNodeConnected) for the simulator path.
+func TestSimulatorHandlerToRegistry_PositionsReachFusionEngine(t *testing.T) {
+	reg := newFleetRegistry(t)
+	mgr := fleet.NewManager(reg)
+	engine := fusion.NewEngine(nil)
+	mgr.SetNodePositionSink(func(mac string, x, y, z float64) {
+		engine.SetNodePosition(mac, x, y, z)
+	})
+
+	adapter := &fleetRegistryTestAdapter{
+		reg:        reg,
+		forwardPos: mgr.ForwardNodePosition,
+	}
+	h := newWiredHandler(t, adapter)
+
+	space := simulator.DefaultSpace()
+
+	// Sanity: before any node is added the engine holds nothing to localize on.
+	if engine.NodeCount() != 0 {
+		t.Fatalf("engine should hold no positions before AddNode, got %d", engine.NodeCount())
+	}
+
+	// AddNode with no position: the bridge assigns spread geometry and the
+	// immediate sync must push it through to the engine's nodePos mirror.
+	postNode(t, h, map[string]interface{}{
+		"id":   "node-A",
+		"name": "Node A",
+	})
+	wantSpread := simulator.DefaultNodePositions(space, 1)
+	if len(wantSpread) != 1 {
+		t.Fatalf("DefaultNodePositions(1) returned %d slots, want 1", len(wantSpread))
+	}
+	got := singleEnginePosition(t, engine)
+	if got != wantSpread[0] {
+		t.Fatalf("AddNode: fusion engine position %v != spread %v", got, wantSpread[0])
+	}
+	if got.X == 0 && got.Y == 0 && got.Z == 0 {
+		t.Fatalf("AddNode: fusion engine landed at (0,0,0) — engine mirror not seeded")
+	}
+
+	// UpdateNode with a new explicit position: the engine mirror must move with it.
+	newPos := simulator.Point{X: 2.5, Y: 3.0, Z: 1.5}
+	putNode(t, h, "node-A", map[string]interface{}{
+		"id":   "node-A",
+		"name": "Node A",
+		"position": map[string]interface{}{
+			"x": newPos.X, "y": newPos.Y, "z": newPos.Z,
+		},
+	})
+	got = singleEnginePosition(t, engine)
+	if got != newPos {
+		t.Fatalf("UpdateNode: fusion engine position %v != new position %v", got, newPos)
+	}
+	// Still a single positioned node — an update must not orphan the old entry.
+	if engine.NodeCount() != 1 {
+		t.Errorf("UpdateNode: expected 1 fusion engine node, got %d", engine.NodeCount())
 	}
 }
 

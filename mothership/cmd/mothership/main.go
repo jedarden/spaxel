@@ -358,16 +358,40 @@ func (a *fleetRoomConfigAdapter) GetRoom() (width, height, depth float64) {
 // lets the simulator API drive an immediate SyncToRegistry into the live fleet
 // registry (bf-5lii), and unblocks the periodic sync that previously passed
 // *fleet.Registry to a method expecting the simulator interface (bf-4pqj).
+//
+// bf-u7ds: AddVirtualNode/SetNodePosition also forward the new position through
+// forwardPos — wired to fleet.Manager.ForwardNodePosition in main — so a
+// simulator-driven registry write reaches the blob-producing 3D fusion engine
+// (internal/fusion.Engine) at runtime, not only at startup seeding. Without
+// this, SyncToRegistry lands the position in the DB but the engine's nodePos
+// mirror stays stale and Fuse localizes against the wrong geometry. This mirrors
+// the write the REST handler does after registry.SetNodePosition
+// (Handler.updateNodePosition → ForwardNodePosition) and the connect/register
+// write (Manager.OnNodeConnected → ForwardNodePosition), converging all three
+// registry-write paths on the single ForwardNodePosition accessor.
 type fleetRegistryAdapter struct {
-	reg *fleet.Registry
+	reg        *fleet.Registry
+	forwardPos func(mac string, x, y, z float64)
 }
 
 func (a *fleetRegistryAdapter) AddVirtualNode(mac, name string, x, y, z float64) error {
-	return a.reg.AddVirtualNode(mac, name, x, y, z)
+	if err := a.reg.AddVirtualNode(mac, name, x, y, z); err != nil {
+		return err
+	}
+	if a.forwardPos != nil {
+		a.forwardPos(mac, x, y, z)
+	}
+	return nil
 }
 
 func (a *fleetRegistryAdapter) SetNodePosition(mac string, x, y, z float64) error {
-	return a.reg.SetNodePosition(mac, x, y, z)
+	if err := a.reg.SetNodePosition(mac, x, y, z); err != nil {
+		return err
+	}
+	if a.forwardPos != nil {
+		a.forwardPos(mac, x, y, z)
+	}
+	return nil
 }
 
 func (a *fleetRegistryAdapter) SetNodeRole(mac, role string) error {
@@ -4276,8 +4300,14 @@ func main() {
 		// (converting fleet.NodeRecord <-> simulator.NodeRecord). Shared by the
 		// periodic sync below and by the immediate syncs the simulator API triggers
 		// on node create/update, so both paths write through the same registry.
+		// bf-u7ds: forwardPos routes each position write to the fusion engine via
+		// the manager sink, so simulator-created/updated nodes reach the
+		// accumulation grid without waiting for the next startup seeding.
 		if fleetReg != nil {
-			registryAdapter = &fleetRegistryAdapter{reg: fleetReg}
+			registryAdapter = &fleetRegistryAdapter{
+				reg:        fleetReg,
+				forwardPos: fleetMgr.ForwardNodePosition,
+			}
 		}
 
 		// Start periodic sync from virtual node store to fleet registry (every 30 seconds).
