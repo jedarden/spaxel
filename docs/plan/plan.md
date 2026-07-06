@@ -2730,7 +2730,7 @@ When security mode is armed via the MQTT `command/security_mode` subscription, i
 |--------|------|---------|----------|
 | `GET` | `/api/sleep` | `?person=<name>&limit=30` | `[{date, duration_m, onset_latency_m, restlessness_index, breathing_rate_avg, breathing_regularity}]` |
 | `GET` | `/api/sleep/summary` | `?person=<name>` | Today's / last-night's summary |
-| `GET` | `/api/flow` | `?period=24h&person=<name>` | `{cells:[{x,y,count,vx,vy,dwell_s}]}` |
+| `GET` | `/api/analytics/flow` | `?period=24h&person=<name>` | `{cells:[{x,y,count,vx,vy,dwell_s}]}` |
 | `GET` | `/api/localization/weights` | — | `[{link_id, weight}]` |
 | `POST` | `/api/localization/weights/reset` | — | `{"ok":true}` |
 
