@@ -51,6 +51,14 @@ type Blob struct {
 	IdentitySource     string    `json:"identity_source,omitempty"`     // "ble_triangulation", "ble_only", or ""
 	IdentityLastSeen   time.Time `json:"-"`                             // Last time identity was confirmed
 
+	// Canonical identity fields (bf-5151). camelCase JSON keys match the dashboard
+	// Blob type in dashboard/types/spaxel.d.ts; the snake_case fields above are
+	// retained as deprecated aliases. Left at zero values (undefined) for existing
+	// blobs — populated later from the BLE identity sidecar.
+	PersonName       string `json:"personName,omitempty"`
+	AssignedColor    string `json:"assignedColor,omitempty"`
+	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed
+
 	ukf *UKF // internal — nil in copies returned to callers
 }
 
