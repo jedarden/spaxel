@@ -1,4 +1,12 @@
-# Blob Constructor Search Results (bf-5kns)
+> ⚠️ **Secondary — folded into the consolidated inventory.** This was an input to
+> `notes/bf-3ldj-findings.md`, which is itself **superseded** (see its banner). These four
+> `new Blob()` sites are the **browser binary-`Blob` download API** (file payloads, not Spaxel
+> domain blobs) and are catalogued as out-of-scope in `notes/bf-1q3m-consolidated.md` §4/§3.5
+> — read that file for the authoritative inventory. Retained for provenance only.
+
+---
+
+# Blob Constructor Search Results (bf-5kns) (secondary — see banner above)
 
 ## Summary
 Found **4 occurrences** of direct `Blob()` constructor calls across **3 files**.

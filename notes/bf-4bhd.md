@@ -1,4 +1,31 @@
-# Blob Creation Code Paths - Analysis Report
+> 🔴🔴🔴 **SUPERSEDED — DO NOT USE THIS FILE AS A BLOB INVENTORY.** 🔴🔴🔴
+>
+> This report has **drifted against current HEAD** and is **retained for provenance only**.
+> The **sole trusted blob inventory** is **`notes/bf-1q3m-consolidated.md`** — read that file
+> instead and ignore the `file:line` references below.
+>
+> **Why superseded** (per `notes/bf-1q3m-consolidated.md` §4.1):
+>
+> 1. **2D field-list drift (material).** This report claims `tracking.Blob` (2D) carries the
+>    fields `PersonName`, `AssignedColor`, and `IdentityResolved`. **Those fields no longer
+>    exist.** At HEAD the 2D identity field set is identical to the 3D type:
+>    `PersonID / PersonLabel / PersonColor / IdentityConfidence / IdentitySource /
+>    IdentityLastSeen`. (Verified 2026-07-06.) The "Pattern 1.1" literal below that allegedly
+>    sets `PersonName:""`, `AssignedColor:""`, `IdentityResolved:false` is therefore wrong —
+>    the literal sets **none** of the identity fields (Go zero values).
+> 2. **Line drift (+90 / +110).** The E1/E2/E3 boundary citations and the projection-table
+>    lines are all stale: E2 automation is actually `main.go:2303` (cited `:2213`, +90), E3
+>    explainability `main.go:2206` (cited `:2116`, +90), E1 sigproc `main.go:5494` (cited
+>    `:5384`, +110), and the projection table's explainability `:2116` / volume `:2236` are
+>    `:2206` / `:2326` (+90 each).
+>
+> **Status:** provenance only. A future agent must not consume this file for `file:line`
+> references or for the 2D Blob field list — it will re-introduce the very drift this effort
+> corrected. Use `notes/bf-1q3m-consolidated.md`.
+
+---
+
+# Blob Creation Code Paths - Analysis Report (SUPERSEDED — see banner above)
 
 ## Task: Find all blob creation code paths
 

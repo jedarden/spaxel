@@ -1,4 +1,13 @@
-# Blob Literal Locations - Complete Inventory
+> ⚠️ **Secondary — folded into the consolidated inventory.** This was an input to
+> `notes/bf-3ldj-findings.md`, which is itself **superseded** (see its banner). The
+> authoritative blob inventory is **`notes/bf-1q3m-consolidated.md`** — consume that file for
+> `file:line` references. Note: `bf-3ldj` §1.2 recorded that **two entries here are stale**
+> (`dashboard/js/state.js:290` and `tracking/tracker.go:160`) — do not propagate them.
+> Retained for provenance only.
+
+---
+
+# Blob Literal Locations - Complete Inventory (secondary — see banner above)
 
 ## Summary
 

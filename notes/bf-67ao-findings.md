@@ -1,4 +1,11 @@
-# Blob Factory Functions — Analysis Report
+> ⚠️ **Secondary — folded into the consolidated inventory.** This was an input to
+> `notes/bf-3ldj-findings.md`, which is itself **superseded** (see its banner). The
+> authoritative blob inventory is **`notes/bf-1q3m-consolidated.md`** — consume that file for
+> `file:line` references. Retained for provenance only.
+
+---
+
+# Blob Factory Functions — Analysis Report (secondary — see banner above)
 
 ## Task: bf-67ao — Find all functions/methods that create and return blob objects
 
