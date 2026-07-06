@@ -658,3 +658,125 @@ func TestSimulatorHandlerToRegistry_OriginNodesGetSpreadGeometry(t *testing.T) {
 		}
 	}
 }
+
+// TestPositionPropagation_FullPipeline (bf-95tx) is the end-to-end lock-in for
+// the COMPLETE simulator → fleet registry → fusion engine position path in a
+// single test. One node position, posted once through the simulator REST API,
+// must arrive — unchanged and in order — at every stage the runtime cares about:
+//
+//	1. simulator VirtualNodeStore       — the source of truth for virtual nodes
+//	2. fleet.Registry (SQLite)          — persisted; read by the dashboard/REST
+//	3. fusion.Engine nodePos mirror     — what Fuse localizes against at runtime
+//
+// bf-69ym locked in stages 1→2; bf-u7ds locked in stages 1→3. This test ties
+// them together: it traces ONE position value through all three stages in a
+// single run and asserts they agree at both AddNode and UpdateNode, with
+// per-stage logging so the full data path is observable under `go test -v`.
+// That is the demonstrable full-pipeline verification the position-propagation
+// bead (bf-95tx) requires.
+func TestPositionPropagation_FullPipeline(t *testing.T) {
+	// Wire the full chain exactly as cmd/mothership/main.go does:
+	// handler → bridge.SyncToRegistry → adapter → fleet.Registry (SQLite),
+	// with the adapter's forwardPos → fleet.Manager.ForwardNodePosition →
+	// nodePositionSink → fusion.Engine.SetNodePosition.
+	reg := newFleetRegistry(t)
+	mgr := fleet.NewManager(reg)
+	engine := fusion.NewEngine(nil)
+	mgr.SetNodePositionSink(func(mac string, x, y, z float64) {
+		engine.SetNodePosition(mac, x, y, z)
+	})
+	adapter := &fleetRegistryTestAdapter{
+		reg:        reg,
+		forwardPos: mgr.ForwardNodePosition,
+	}
+	h := newWiredHandler(t, adapter) // real VirtualNodeStore + bridge + adapter
+
+	// pipelineStages reads the posted node's position back from all three stages
+	// and logs each, so a `go test -v` run visibly traces the value's path:
+	// simulator → registry → fusion. nodeID keys the simulator store; name keys
+	// the fleet registry row (the bridge's virtualMAC is unexported); the single
+	// positioned node keys the fusion engine mirror.
+	pipelineStages := func(label, nodeID, name string) (simPos, regPos, fusPos simulator.Point) {
+		t.Helper()
+
+		// Stage 1 — simulator VirtualNodeStore (the source).
+		vs, err := h.virtualStore.GetNode(nodeID)
+		if err != nil {
+			t.Fatalf("%s: simulator store lookup %q: %v", label, nodeID, err)
+		}
+		simPos = simulator.Point{X: vs.Position.X, Y: vs.Position.Y, Z: vs.Position.Z}
+
+		// Stage 2 — fleet.Registry (SQLite), matched by Name.
+		byName := registryNodesByName(t, reg)
+		rec, ok := byName[name]
+		if !ok {
+			t.Fatalf("%s: node %q missing from fleet registry (have %d nodes)", label, name, len(byName))
+		}
+		regPos = simulator.Point{X: rec.PosX, Y: rec.PosY, Z: rec.PosZ}
+
+		// Stage 3 — fusion.Engine nodePos mirror (what Fuse localizes against).
+		fusPos = singleEnginePosition(t, engine)
+
+		t.Logf("[%s] position propagation  simulator=%v  registry=%v  fusion=%v",
+			label, simPos, regPos, fusPos)
+		return simPos, regPos, fusPos
+	}
+
+	// --- Create leg: post one node with an explicit position. ---
+	const nodeID, nodeName = "node-A", "Node A"
+	createPos := simulator.Point{X: 1.5, Y: 2.5, Z: 1.0}
+	postNode(t, h, map[string]interface{}{
+		"id":   nodeID,
+		"name": nodeName,
+		"position": map[string]interface{}{
+			"x": createPos.X, "y": createPos.Y, "z": createPos.Z,
+		},
+	})
+
+	simPos, regPos, fusPos := pipelineStages("create", nodeID, nodeName)
+	if simPos != createPos {
+		t.Errorf("create: simulator stage %v != posted %v", simPos, createPos)
+	}
+	if regPos != createPos {
+		t.Errorf("create: registry stage %v != posted %v", regPos, createPos)
+	}
+	if fusPos != createPos {
+		t.Errorf("create: fusion stage %v != posted %v", fusPos, createPos)
+	}
+
+	// --- Update leg: move the node and re-trace the full pipeline. ---
+	updatePos := simulator.Point{X: 3.5, Y: 4.5, Z: 2.0}
+	putNode(t, h, nodeID, map[string]interface{}{
+		"id":   nodeID,
+		"name": nodeName,
+		"position": map[string]interface{}{
+			"x": updatePos.X, "y": updatePos.Y, "z": updatePos.Z,
+		},
+	})
+
+	simPos, regPos, fusPos = pipelineStages("update", nodeID, nodeName)
+	if simPos != updatePos {
+		t.Errorf("update: simulator stage %v != posted %v", simPos, updatePos)
+	}
+	if regPos != updatePos {
+		t.Errorf("update: registry stage %v != posted %v", regPos, updatePos)
+	}
+	if fusPos != updatePos {
+		t.Errorf("update: fusion stage %v != posted %v", fusPos, updatePos)
+	}
+
+	// No stage may still hold the pre-update value after the position moved.
+	if simPos == createPos || regPos == createPos || fusPos == createPos {
+		t.Errorf("update: a stage still holds the stale pre-update position %v "+
+			"(sim=%v reg=%v fus=%v)", createPos, simPos, regPos, fusPos)
+	}
+
+	// Cross-stage consistency: a single node must stay a single node at every
+	// stage — an update must not orphan or duplicate it anywhere in the path.
+	if got := len(registryNodesByName(t, reg)); got != 1 {
+		t.Errorf("update: expected 1 fleet registry node, got %d", got)
+	}
+	if got := engine.NodeCount(); got != 1 {
+		t.Errorf("update: expected 1 fusion engine node, got %d", got)
+	}
+}
