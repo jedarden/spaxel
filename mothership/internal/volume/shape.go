@@ -1082,14 +1082,16 @@ type BlobPos struct {
 	PersonID string
 	X, Y, Z  float64
 
-	// Canonical identity fields (bf-5v3q). Left at zero values (undefined) for
-	// existing blobs — a follow-up bead populates them from the BLE identity
-	// sidecar so person-aware volume triggers ("when Alice enters…") can fire.
-	// IdentityResolved is *bool for tri-state semantics: nil=unattempted,
-	// &true=resolved, &false=failed.
-	PersonName       string `json:"person_name,omitempty"`
-	AssignedColor    string `json:"assigned_color,omitempty"`
-	IdentityResolved *bool  `json:"identity_resolved,omitempty"`
+	// Canonical identity fields (bf-5v3q). camelCase JSON keys match the dashboard
+	// Blob type in dashboard/types/spaxel.d.ts, mirroring signal.TrackedBlob /
+	// tracker.Blob / tracking.Blob / automation.TrackedBlob / explainability.BlobSnapshot.
+	// Left at zero values (undefined) for existing blobs — a follow-up bead populates
+	// them from the BLE identity sidecar so person-aware volume triggers ("when Alice
+	// enters…") can fire. IdentityResolved is *bool for tri-state semantics:
+	// nil=unattempted, &true=resolved, &false=failed.
+	PersonName       string `json:"personName,omitempty"`
+	AssignedColor    string `json:"assignedColor,omitempty"`
+	IdentityResolved *bool  `json:"identityResolved,omitempty"`
 }
 
 // IsInVolume is a convenience function to test if a point is in a trigger's volume.
