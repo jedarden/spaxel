@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/simulator"
 )
 
@@ -310,5 +311,246 @@ func TestImmediateSyncOnAddAndUpdate(t *testing.T) {
 				t.Errorf("position update saw (%.2f,%.2f,%.2f), want (2.50,3.00,1.50)", upd.PosX, upd.PosY, upd.PosZ)
 			}
 		})
+	}
+}
+
+// fleetRegistryTestAdapter mirrors cmd/mothership/main.go's fleetRegistryAdapter:
+// it exposes a real, SQLite-backed *fleet.Registry through the
+// simulator.RegistryNodeAdapter interface. The production adapter lives in
+// package main (not importable from tests), so this re-creates the identical
+// thin wrapper — write-side methods delegate directly, and GetNode/GetAllNodes
+// convert fleet.NodeRecord -> simulator.NodeRecord (Enabled follows the fleet's
+// role-based model: role "idle" means disabled). Routing through the real
+// registry is what makes the tests below genuinely end-to-end: a position
+// written by the bridge is round-tripped through SQLite, not merely recorded by
+// a fake. (bf-69ym)
+type fleetRegistryTestAdapter struct {
+	reg *fleet.Registry
+}
+
+func (a *fleetRegistryTestAdapter) AddVirtualNode(mac, name string, x, y, z float64) error {
+	return a.reg.AddVirtualNode(mac, name, x, y, z)
+}
+
+func (a *fleetRegistryTestAdapter) SetNodePosition(mac string, x, y, z float64) error {
+	return a.reg.SetNodePosition(mac, x, y, z)
+}
+
+func (a *fleetRegistryTestAdapter) SetNodeRole(mac, role string) error {
+	return a.reg.SetNodeRole(mac, role)
+}
+
+func (a *fleetRegistryTestAdapter) DeleteNode(mac string) error {
+	return a.reg.DeleteNode(mac)
+}
+
+func (a *fleetRegistryTestAdapter) GetNode(mac string) (*simulator.NodeRecord, error) {
+	rec, err := a.reg.GetNode(mac)
+	if err != nil {
+		return nil, err
+	}
+	return fleetNodeRecordToSimulatorView(rec), nil
+}
+
+func (a *fleetRegistryTestAdapter) GetAllNodes() ([]simulator.NodeRecord, error) {
+	nodes, err := a.reg.GetAllNodes()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]simulator.NodeRecord, 0, len(nodes))
+	for i := range nodes {
+		out = append(out, *fleetNodeRecordToSimulatorView(&nodes[i]))
+	}
+	return out, nil
+}
+
+// fleetNodeRecordToSimulatorView mirrors fleetNodeRecordToSimulator in
+// cmd/mothership/main.go.
+func fleetNodeRecordToSimulatorView(n *fleet.NodeRecord) *simulator.NodeRecord {
+	return &simulator.NodeRecord{
+		MAC:     n.MAC,
+		Name:    n.Name,
+		Role:    n.Role,
+		PosX:    n.PosX,
+		PosY:    n.PosY,
+		PosZ:    n.PosZ,
+		Virtual: n.Virtual,
+		Enabled: n.Role != "idle",
+	}
+}
+
+// newFleetRegistry opens a real fleet.Registry backed by a fresh temp SQLite
+// DB, closing it automatically when the test ends.
+func newFleetRegistry(t *testing.T) *fleet.Registry {
+	t.Helper()
+	reg, err := fleet.NewRegistry(filepath.Join(t.TempDir(), "fleet.db"))
+	if err != nil {
+		t.Fatalf("create fleet registry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	return reg
+}
+
+// registryNodesByName indexes the live fleet registry's nodes by Name for
+// assertion lookups. The bridge's virtualMAC is unexported, so tests key on the
+// human-readable name they supplied when creating the node.
+func registryNodesByName(t *testing.T, reg *fleet.Registry) map[string]*fleet.NodeRecord {
+	t.Helper()
+	nodes, err := reg.GetAllNodes()
+	if err != nil {
+		t.Fatalf("GetAllNodes: %v", err)
+	}
+	out := make(map[string]*fleet.NodeRecord, len(nodes))
+	for i := range nodes {
+		n := nodes[i]
+		out[n.Name] = &n
+	}
+	return out
+}
+
+// TestSimulatorHandlerToRegistry_CreateAndUpdate is the end-to-end lock-in for
+// the simulator→fleet-registry position flow (bf-69ym, split from bf-4oiz). It
+// wires a real SQLite-backed fleet.Registry behind the SimulatorHandler — the
+// same wiring cmd/mothership/main.go uses — and drives the complete path:
+//
+//	AddNode (simulator handler) -> VirtualNodeStore.CreateVirtualNode ->
+//	FleetRegistryBridge.SyncToRegistry -> adapter.AddVirtualNode -> fleet.Registry
+//
+// and then a position change via UpdateNode -> SetNodePosition. The create leg
+// asserts the node lands in the live registry at the spread geometry
+// DefaultNodePositions assigns (never the degenerate (0,0,0) / DB origin); the
+// update leg asserts the new position flows through to the same registry row.
+func TestSimulatorHandlerToRegistry_CreateAndUpdate(t *testing.T) {
+	reg := newFleetRegistry(t)
+	adapter := &fleetRegistryTestAdapter{reg: reg}
+	h := newWiredHandler(t, adapter) // real VirtualNodeStore + bridge + adapter
+
+	space := simulator.DefaultSpace()
+
+	// Create: post a node with no position. AddNode assigns it a spread slot
+	// from DefaultNodePositions and the immediate sync writes that into the live
+	// fleet registry (not just the in-memory NodeSet).
+	node := postNode(t, h, map[string]interface{}{
+		"id":   "node-A",
+		"name": "Node A",
+	})
+
+	wantSpread := simulator.DefaultNodePositions(space, 1)
+	if len(wantSpread) != 1 {
+		t.Fatalf("DefaultNodePositions(1) returned %d slots, want 1", len(wantSpread))
+	}
+	wantPos := wantSpread[0]
+
+	byName := registryNodesByName(t, reg)
+	rec, ok := byName["Node A"]
+	if !ok {
+		t.Fatalf("node \"Node A\" never reached the fleet registry; have %d nodes", len(byName))
+	}
+	if !rec.Virtual {
+		t.Errorf("registry node not marked virtual: %+v", rec)
+	}
+	gotPos := simulator.Point{X: rec.PosX, Y: rec.PosY, Z: rec.PosZ}
+	if gotPos != wantPos {
+		t.Errorf("create: registry position %v != DefaultNodePositions spread %v", gotPos, wantPos)
+	}
+	if gotPos.X == 0 && gotPos.Y == 0 && gotPos.Z == 0 {
+		t.Errorf("create: registry node landed at (0,0,0)")
+	}
+	// The handler-returned node and the registry must agree.
+	if node.Position != wantPos {
+		t.Errorf("create: handler position %v != spread position %v", node.Position, wantPos)
+	}
+
+	// Update: change the position; the new value must reach the live registry
+	// via SetNodePosition, not just the in-memory NodeSet.
+	newPos := simulator.Point{X: 2.5, Y: 3.0, Z: 1.5}
+	putNode(t, h, "node-A", map[string]interface{}{
+		"id":   "node-A",
+		"name": "Node A",
+		"position": map[string]interface{}{
+			"x": newPos.X, "y": newPos.Y, "z": newPos.Z,
+		},
+	})
+
+	byName = registryNodesByName(t, reg)
+	rec, ok = byName["Node A"]
+	if !ok {
+		t.Fatalf("node \"Node A\" disappeared from fleet registry after update")
+	}
+	upd := simulator.Point{X: rec.PosX, Y: rec.PosY, Z: rec.PosZ}
+	if upd != newPos {
+		t.Errorf("update: registry position %v != new position %v", upd, newPos)
+	}
+	// Still exactly one registry row — an update must not duplicate.
+	if len(byName) != 1 {
+		t.Errorf("update: expected 1 registry node, got %d (%+v)", len(byName), byName)
+	}
+}
+
+// TestSimulatorHandlerToRegistry_OriginNodesGetSpreadGeometry is the
+// end-to-end analogue of the bridge-level
+// TestSyncToRegistry_OriginNodesGetSpreadGeometry, but driven through the REST
+// handler and persisted in SQLite. Nodes created at the DB default origin
+// ({0,0,1}) must land in the live fleet registry at exactly the distinct,
+// spread-out geometry DefaultNodePositions assigns — never co-located at the
+// origin (which would collapse Fresnel excess path toward zero and prevent blob
+// formation; bf-18yn / bf-4q5w).
+func TestSimulatorHandlerToRegistry_OriginNodesGetSpreadGeometry(t *testing.T) {
+	const count = 4
+	reg := newFleetRegistry(t)
+	adapter := &fleetRegistryTestAdapter{reg: reg}
+	h := newWiredHandler(t, adapter)
+
+	space := simulator.DefaultSpace()
+	origin := simulator.Point{X: 0, Y: 0, Z: 1} // DefaultNodeOrigin
+
+	for _, id := range []string{"n-a", "n-b", "n-c", "n-d"} {
+		postNode(t, h, map[string]interface{}{
+			"id":   id,
+			"name": id,
+			"position": map[string]interface{}{
+				"x": origin.X, "y": origin.Y, "z": origin.Z,
+			},
+		})
+	}
+
+	nodes, err := reg.GetAllNodes()
+	if err != nil {
+		t.Fatalf("GetAllNodes: %v", err)
+	}
+	if len(nodes) != count {
+		t.Fatalf("expected %d registry nodes, got %d", count, len(nodes))
+	}
+
+	want := simulator.DefaultNodePositions(space, count)
+	wantSet := make(map[simulator.Point]bool, len(want))
+	for _, p := range want {
+		wantSet[p] = true
+	}
+
+	gotSet := make(map[simulator.Point]bool, len(nodes))
+	for _, n := range nodes {
+		if !n.Virtual {
+			t.Errorf("registry node %s not marked virtual", n.MAC)
+		}
+		p := simulator.Point{X: n.PosX, Y: n.PosY, Z: n.PosZ}
+		if p == origin || (p.X == 0 && p.Y == 0 && p.Z == 0) {
+			t.Errorf("registry node %s still at origin/zero: %v", n.MAC, p)
+		}
+		if gotSet[p] {
+			t.Errorf("duplicate registry position %v", p)
+		}
+		gotSet[p] = true
+	}
+
+	for p := range gotSet {
+		if !wantSet[p] {
+			t.Errorf("registry position %v is not a DefaultNodePositions slot", p)
+		}
+	}
+	for _, p := range want {
+		if !gotSet[p] {
+			t.Errorf("expected DefaultNodePositions slot %v missing from registry", p)
+		}
 	}
 }
