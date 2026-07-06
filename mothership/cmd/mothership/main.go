@@ -2209,6 +2209,14 @@ func main() {
 								Y:          blob.Y,
 								Z:          blob.Z,
 								Confidence: blob.Weight,
+								// Canonical identity fields (bf-4qto): propagate from the source
+								// sigproc.TrackedBlob so default-handling is consistent with the
+								// api.Track (tracks.go) and dashboard.blobJSON (hub.go) projections.
+								// Zero today (serializes as undefined); populated when the BLE
+								// identity sidecar writes onto the source blob.
+								PersonName:       blob.PersonName,
+								AssignedColor:    blob.AssignedColor,
+								IdentityResolved: blob.IdentityResolved,
 							})
 						}
 
@@ -2309,6 +2317,14 @@ func main() {
 							VY:         b.VY,
 							VZ:         b.VZ,
 							Confidence: b.Weight,
+							// Canonical identity fields (bf-4qto): propagate from the source
+							// sigproc.TrackedBlob so default-handling is consistent with the
+							// api.Track (tracks.go) and dashboard.blobJSON (hub.go) projections.
+							// Zero today (serializes as undefined); populated when the BLE
+							// identity sidecar writes onto the source blob.
+							PersonName:       b.PersonName,
+							AssignedColor:    b.AssignedColor,
+							IdentityResolved: b.IdentityResolved,
 						}
 					}
 					automationEngine.Evaluate(autoBlobs, func(blobID int) string {
@@ -2328,6 +2344,14 @@ func main() {
 							X:  blob.X,
 							Y:  blob.Y,
 							Z:  blob.Z,
+							// Canonical identity fields (bf-4qto): propagate from the source
+							// sigproc.TrackedBlob so default-handling is consistent with the
+							// api.Track (tracks.go) and dashboard.blobJSON (hub.go) projections.
+							// Zero today (serializes as undefined); populated when the BLE
+							// identity sidecar writes onto the source blob.
+							PersonName:       blob.PersonName,
+							AssignedColor:    blob.AssignedColor,
+							IdentityResolved: blob.IdentityResolved,
 						}
 					}
 					volumeTriggersHandler.EvaluateTriggers(volumeBlobs)
