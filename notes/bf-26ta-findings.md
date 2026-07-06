@@ -6,8 +6,12 @@ This document catalogs all locations in the spaxel codebase where blob objects a
 
 **Total Blob Creation Sites:**
 - **Go:** 10 types, 20+ creation sites across 8 files
-- **JavaScript:** 25 instances across 7 files  
+- **JavaScript:** 14 instances across 5 files
 - **TypeScript:** 0 instances (type definitions only)
+
+> **Note:** Counts re-verified against current code (2026-07-06). The previously reported
+> "25 across 7 files" over-counted `quick-actions.test.js` (16 reported, 5 actual literals)
+> and listed only 4 of the 6 `ambient.test.js` sites. Corrected totals below.
 
 ---
 
@@ -55,7 +59,7 @@ export interface Blob {
 
 ### Search Results Summary
 - **Total JavaScript files searched:** 80 (.js and .jsx files)
-- **Blob-shaped object literals found:** 25 instances across 7 files
+- **Blob-shaped object literals found:** 14 instances across 5 files
 - **Primary creation pattern:** `dashboard/js/state.js:290`
 
 ### Detailed JavaScript Locations
@@ -108,7 +112,17 @@ appState.blobs[id] = {
   blobs: [{id: 1, x: 3, y: 3, z: 0, confidence: 0.8}]
   ```
 
-**Pattern Types:** Full blob, Minimal blob, Position-only blob  
+- **Line 694-700:** Position blob at (1,1) — lerp source fixture
+  ```javascript
+  blobs: [{id: 1, x: 1, y: 1, z: 0, confidence: 0.8}]
+  ```
+
+- **Line 708-714:** Position blob at (3,3) — lerp target fixture
+  ```javascript
+  blobs: [{id: 1, x: 3, y: 3, z: 0, confidence: 0.8}]
+  ```
+
+**Pattern Types:** Full blob, Minimal blob, Position-only blob
 **Context:** Test fixtures for 3D ambient floor plan renderer
 
 ---
@@ -212,10 +226,10 @@ _blobStates.set(b.id, {
 |------|------------|--------------|---------|
 | `dashboard/js/state.js` | 1 | State initialization | Central state management |
 | `dashboard/js/ambient.test.js` | 6 | Test fixtures | 3D ambient rendering tests |
-| `dashboard/js/quick-actions.test.js` | 16 | Test fixtures | Spatial menu tests |
+| `dashboard/js/quick-actions.test.js` | 5 | Test fixtures | Spatial menu tests |
 | `dashboard/js/replay.test.js` | 1 | API mock | Session replay tests |
 | `dashboard/js/websocket.js` | 1 | Derived state | Position extrapolation |
-| **Total** | **25** | **Multiple patterns** | **5 files** |
+| **Total** | **14** | **Multiple patterns** | **5 files** |
 
 ---
 
