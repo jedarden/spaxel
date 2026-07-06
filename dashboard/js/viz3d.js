@@ -41,6 +41,12 @@ const Viz3D = (function () {
     let _currentZones  = new Map();  // zoneID -> zone data
     let _currentPortals = new Map(); // portalID -> portal data
 
+    // Coverage degradation overlay state
+    let _coverageOverlayMeshes = new Map();  // cellID -> THREE.Mesh (ground plane cells)
+    let _coverageOverlayVisible = false;      // Whether overlay is currently shown
+    let _coverageOverlayData = null;          // Current overlay data
+    let _coverageOverlayGroup = null;         // THREE.Group containing all overlay meshes
+
     const BLOB_COLORS  = [0xef5350, 0x66bb6a, 0x42a5f5, 0xffa726, 0xab47bc, 0x26c6da];
     const TRAIL_COLORS = [0xff8a80, 0xa5d6a7, 0x90caf9, 0xffcc80, 0xce93d8, 0x80deea];
 
@@ -860,8 +866,10 @@ const Viz3D = (function () {
 
         // Dashed circle on floor to indicate BLE-only position
         var circleGeo = new THREE.RingGeometry(0.25, 0.35, 32);
+        // Support new assigned_color field, fall back to person_color for backward compatibility
+        var colorHex = (match.assigned_color || match.person_color) ? parseInt((match.assigned_color || match.person_color).replace('#', '0x')) : 0x4fc3f7;
         var circleMat = new THREE.MeshBasicMaterial({
-            color: match.person_color ? parseInt(match.person_color.replace('#', '0x')) : 0x4fc3f7,
+            color: colorHex,
             transparent: true,
             opacity: 0.5,
             side: THREE.DoubleSide
@@ -2278,6 +2286,320 @@ const Viz3D = (function () {
         });
     }
 
+    // ── Coverage Degradation Overlay ────────────────────────────────────────────────
+
+    /**
+     * Show coverage degradation overlay when a node goes offline.
+     * Displays before/after GDOP comparison highlighting degraded zones.
+     * @param {Object} data - Coverage degradation event data
+     */
+    function showCoverageDegradation(data) {
+        if (!data) {
+            console.warn('[Viz3D] No degradation data provided');
+            return;
+        }
+
+        console.log('[Viz3D] Showing coverage degradation overlay:', data);
+
+        // Store the degradation data
+        _coverageOverlayData = data;
+        _coverageOverlayVisible = true;
+
+        // Clear previous overlay meshes
+        clearCoverageOverlay();
+
+        // Create overlay group if it doesn't exist
+        if (!_coverageOverlayGroup) {
+            _coverageOverlayGroup = new THREE.Group();
+            _scene.add(_coverageOverlayGroup);
+        }
+
+        // Get GDOP before/after arrays
+        var gdopBefore = data.gdopBefore || [];
+        var gdopAfter = data.gdopAfter || [];
+        var cols = data.gdopCols || 0;
+        var rows = data.gdopRows || 0;
+
+        if (gdopBefore.length === 0 || gdopAfter.length === 0 || cols === 0 || rows === 0) {
+            console.warn('[Viz3D] Invalid GDOP data for degradation overlay');
+            return;
+        }
+
+        // Calculate room dimensions for cell sizing
+        var roomWidth = _room ? _room.width : 10;
+        var roomDepth = _room ? _room.depth : 10;
+        var cellWidth = roomWidth / cols;
+        var cellDepth = roomDepth / rows;
+
+        // Get room origin for positioning
+        var originX = _room ? (_room.origin_x || 0) : 0;
+        var originZ = _room ? (_room.origin_z || 0) : 0;
+
+        // Create degradation cells
+        for (var i = 0; i < gdopBefore.length; i++) {
+            var gdopBeforeVal = gdopBefore[i];
+            var gdopAfterVal = gdopAfter[i];
+
+            // Skip cells with no coverage before or after
+            if (gdopBeforeVal >= 9999 || gdopAfterVal >= 9999) {
+                continue;
+            }
+
+            // Calculate degradation level
+            var degradationLevel = calculateGDOPDegradation(gdopBeforeVal, gdopAfterVal);
+
+            // Skip cells that didn't degrade significantly
+            if (degradationLevel === 'none') {
+                continue;
+            }
+
+            // Calculate cell position
+            var col = i % cols;
+            var row = Math.floor(i / cols);
+            var cellX = originX + (col + 0.5) * cellWidth;
+            var cellZ = originZ + (row + 0.5) * cellDepth;
+
+            // Get color based on degradation level
+            var color = getDegradationColor(degradationLevel, gdopAfterVal);
+
+            // Create cell mesh
+            var geo = new THREE.PlaneGeometry(cellWidth * 0.95, cellDepth * 0.95);
+            var mat = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+
+            var mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.set(cellX, 0.02, cellZ);
+            mesh.userData.cellIndex = i;
+            mesh.userData.degradationLevel = degradationLevel;
+
+            _coverageOverlayGroup.add(mesh);
+            _coverageOverlayMeshes.set(i, mesh);
+        }
+
+        // Create degradation legend
+        createDegradationLegend(data);
+
+        console.log('[Viz3D] Coverage degradation overlay created:', _coverageOverlayMeshes.size, 'degraded cells');
+    }
+
+    /**
+     * Calculate the degradation level between before and after GDOP values.
+     * @param {number} before - GDOP value before node loss
+     * @param {number} after - GDOP value after node loss
+     * @returns {string} - Degradation level: 'severe', 'moderate', 'mild', 'none'
+     */
+    function calculateGDOPDegradation(before, after) {
+        var delta = after - before;
+
+        // If GDOP didn't increase, no degradation
+        if (delta <= 0) {
+            return 'none';
+        }
+
+        // Calculate percentage increase
+        var pctIncrease = (delta / before) * 100;
+
+        // Categorize degradation
+        if (pctIncrease > 100 || after > 8) {
+            return 'severe'; // More than 2x worse or became poor (>8)
+        } else if (pctIncrease > 50 || after > 4) {
+            return 'moderate'; // 1.5x worse or became fair (>4)
+        } else if (pctIncrease > 20) {
+            return 'mild'; // Noticeable degradation (>20% increase)
+        }
+
+        return 'none';
+    }
+
+    /**
+     * Get color for degradation level.
+     * @param {string} level - Degradation level
+     * @param {number} gdopAfter - Current GDOP value
+     * @returns {number} - Three.js color value
+     */
+    function getDegradationColor(level, gdopAfter) {
+        switch (level) {
+            case 'severe':
+                return 0xdc2626; // Red-600
+            case 'moderate':
+                return 0xf59e0b; // Amber-500
+            case 'mild':
+                return 0xfbbf24; // Yellow-400
+            default:
+                return 0x6b7280; // Gray-500
+        }
+    }
+
+    /**
+     * Create legend for coverage degradation overlay.
+     * @param {Object} data - Degradation event data
+     */
+    function createDegradationLegend(data) {
+        // Remove existing legend sprites
+        if (_degradationLegendSprites) {
+            _degradationLegendSprites.forEach(function(sprite) {
+                _scene.remove(sprite);
+            });
+        }
+        _degradationLegendSprites = [];
+
+        // Get room position for legend placement
+        var roomWidth = _room ? _room.width : 10;
+        var roomDepth = _room ? _room.depth : 10;
+        var originX = _room ? (_room.origin_x || 0) : 0;
+        var originZ = _room ? (_room.origin_z || 0) : 0;
+
+        var legendX = originX + roomWidth + 0.5;
+        var legendY = 2.5;
+        var legendZ = originZ + roomDepth / 2;
+
+        // Create title sprite
+        var titleCanvas = document.createElement('canvas');
+        titleCanvas.width = 512;
+        titleCanvas.height = 64;
+        var titleCtx = titleCanvas.getContext('2d');
+
+        titleCtx.fillStyle = '#ffffff';
+        titleCtx.font = 'bold 28px Arial, sans-serif';
+        titleCtx.textAlign = 'left';
+        titleCtx.textBaseline = 'middle';
+        titleCtx.fillText('Coverage Degradation', 10, 32);
+
+        var titleTexture = new THREE.CanvasTexture(titleCanvas);
+        var titleSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: titleTexture,
+            transparent: true,
+            depthTest: false
+        }));
+        titleSprite.scale.set(3, 0.4, 1);
+        titleSprite.position.set(legendX, legendY, legendZ);
+        _scene.add(titleSprite);
+        _degradationLegendSprites.push(titleSprite);
+
+        // Create stats sprite
+        var statsCanvas = document.createElement('canvas');
+        statsCanvas.width = 512;
+        statsCanvas.height = 128;
+        var statsCtx = statsCanvas.getContext('2d');
+
+        var coverageBefore = (data.coverageBefore * 100).toFixed(0);
+        var coverageAfter = (data.coverageAfter * 100).toFixed(0);
+        var deltaPct = ((data.coverageAfter - data.coverageBefore) * 100).toFixed(1);
+
+        statsCtx.fillStyle = '#ffffff';
+        statsCtx.font = 'bold 24px Arial, sans-serif';
+        statsCtx.textAlign = 'left';
+        statsCtx.fillText('Before: ' + coverageBefore + '%', 10, 30);
+        statsCtx.fillText('After:  ' + coverageAfter + '%', 10, 60);
+
+        // Color code the delta
+        statsCtx.fillStyle = deltaPct < 0 ? '#ef4444' : '#22c55e';
+        statsCtx.fillText('Delta:  ' + (deltaPct > 0 ? '+' : '') + deltaPct + '%', 10, 90);
+
+        var statsTexture = new THREE.CanvasTexture(statsCanvas);
+        var statsSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: statsTexture,
+            transparent: true,
+            depthTest: false
+        }));
+        statsSprite.scale.set(3, 0.8, 1);
+        statsSprite.position.set(legendX, legendY - 0.5, legendZ);
+        _scene.add(statsSprite);
+        _degradationLegendSprites.push(statsSprite);
+
+        // Create degradation level legend
+        var legendItems = [
+            { color: [220, 38, 38], label: 'Severe', desc: '>2x worse or poor' },
+            { color: [245, 158, 11], label: 'Moderate', desc: '>1.5x or fair' },
+            { color: [251, 191, 36], label: 'Mild', desc: '>20% increase' }
+        ];
+
+        var itemY = legendY - 1.2;
+        legendItems.forEach(function(item, index) {
+            var itemCanvas = document.createElement('canvas');
+            itemCanvas.width = 512;
+            itemCanvas.height = 64;
+            var itemCtx = itemCanvas.getContext('2d');
+
+            // Draw color box
+            itemCtx.fillStyle = 'rgb(' + item.color.join(',') + ')';
+            itemCtx.fillRect(10, 16, 32, 32);
+
+            // Draw border
+            itemCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            itemCtx.lineWidth = 2;
+            itemCtx.strokeRect(10, 16, 32, 32);
+
+            // Draw label
+            itemCtx.fillStyle = '#ffffff';
+            itemCtx.font = 'bold 24px Arial, sans-serif';
+            itemCtx.textAlign = 'left';
+            itemCtx.textBaseline = 'middle';
+            itemCtx.fillText(item.label + ' (' + item.desc + ')', 50, 32);
+
+            var itemTexture = new THREE.CanvasTexture(itemCanvas);
+            var itemSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: itemTexture,
+                transparent: true,
+                depthTest: false
+            }));
+            itemSprite.scale.set(3, 0.4, 1);
+            itemSprite.position.set(legendX, itemY - index * 0.15, legendZ);
+            _scene.add(itemSprite);
+            _degradationLegendSprites.push(itemSprite);
+        });
+
+        // Store legend sprites
+        _degradationLegendSprites = _degradationLegendSprites.filter(function(sprite) {
+            return sprite !== undefined;
+        });
+    }
+
+    /**
+     * Clear the coverage degradation overlay.
+     */
+    function clearCoverageOverlay() {
+        // Remove all overlay meshes
+        _coverageOverlayMeshes.forEach(function(mesh) {
+            if (_coverageOverlayGroup) {
+                _coverageOverlayGroup.remove(mesh);
+            }
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        });
+        _coverageOverlayMeshes.clear();
+
+        // Remove legend sprites
+        if (_degradationLegendSprites) {
+            _degradationLegendSprites.forEach(function(sprite) {
+                _scene.remove(sprite);
+            });
+            _degradationLegendSprites = [];
+        }
+
+        console.log('[Viz3D] Coverage degradation overlay cleared');
+    }
+
+    /**
+     * Dismiss the coverage degradation overlay (when node recovers).
+     */
+    function dismissCoverageDegradation() {
+        _coverageOverlayVisible = false;
+        _coverageOverlayData = null;
+        clearCoverageOverlay();
+
+        console.log('[Viz3D] Coverage degradation overlay dismissed');
+    }
+
+    // Legend sprites for degradation overlay
+    let _degradationLegendSprites = [];
+
     // ── GDOP Overlay Visualization ───────────────────────────────────────────────────
 
     // GDOP overlay state
@@ -3227,7 +3549,8 @@ const Viz3D = (function () {
 
         // Get blob info
         const blob = _blobs3D.get(blobId);
-        const personName = blob && blob.personLabel ? blob.personLabel : 'Blob #' + blobId;
+        // Support new personName field, fall back to personLabel for backward compatibility
+        const personName = blob && (blob.personName || blob.personLabel) ? (blob.personName || blob.personLabel) : 'Blob #' + blobId;
         indicator.textContent = 'Following ' + personName;
         indicator.style.cursor = 'pointer';
         indicator.style.pointerEvents = 'auto';
@@ -3552,6 +3875,10 @@ const Viz3D = (function () {
                 personId: obj.personId || null,
                 personLabel: obj.personLabel || null,
                 personColor: obj.personColor || null,
+                // New identity fields
+                personName: obj.personName || null,
+                assignedColor: obj.assignedColor || null,
+                identityResolved: obj.identityResolved !== undefined ? obj.identityResolved : null,
                 trail: obj.trail ? obj.trail.slice() : []
             });
         });
@@ -3583,7 +3910,11 @@ const Viz3D = (function () {
                 posture: state.posture,
                 person_id: state.personId,
                 person_label: state.personLabel,
-                person_color: state.personColor
+                person_color: state.personColor,
+                // New identity fields
+                person_name: state.personName,
+                assigned_color: state.assignedColor,
+                identity_resolved: state.identityResolved
             });
         });
         if (liveBlobs.length > 0) {
@@ -3700,7 +4031,11 @@ const Viz3D = (function () {
         setFlowTimeFilter: setFlowTimeFilter,
         setFlowData: setFlowData,
         setDwellData: setDwellData,
-        setCorridorData: setCorridorData
+        setCorridorData: setCorridorData,
+
+        // Coverage Degradation Overlay
+        showCoverageDegradation: showCoverageDegradation,
+        dismissCoverageDegradation: dismissCoverageDegradation
     };
 })();
 
