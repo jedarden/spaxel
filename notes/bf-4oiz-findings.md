@@ -1,5 +1,28 @@
 # Registry Bridge Position Wiring — Audit (bf-4oiz, re-verified bf-4pqj)
 
+> **RESOLVED (bf-4oiz close-out, 2026-07-06):** The compile blocker documented in
+> the §Build Blocker below was fixed by **bf-5lii** (`fleetRegistryAdapter`
+> converts `fleet.NodeRecord` ↔ `simulator.NodeRecord`, and wires an *immediate*
+> `SyncToRegistry` on simulator node create/update so new nodes no longer wait up
+> to 30 s for the periodic ticker). **bf-69ym** then added two end-to-end tests
+> (`TestSimulatorHandlerToRegistry_CreateAndUpdate`,
+> `TestSimulatorHandlerToRegistry_OriginNodesGetSpreadGeometry`) that wire a real
+> SQLite-backed `*fleet.Registry` behind `SimulatorHandler` and prove a position
+> travels from the simulator handler all the way into the live registry — origin
+> nodes landing at `DefaultNodePositions` spread geometry, never co-located.
+>
+> Final close-out verification:
+> - `go build ./cmd/mothership` — **OK** (binary compiles).
+> - `go vet ./...` — **clean**.
+> - `go test ./...` — **all packages green** (simulator + api run fresh, `-count=1`).
+>
+> The full flow simulator → `VirtualNodeStore` → `FleetRegistryBridge.SyncToRegistry`
+> → `fleetRegistryAdapter` → `fleet.Registry` is wired and verified. The audit's two
+> mutation sites (`simulator.go` `CreateVirtualNode`/`UpdateNodePosition`) are the
+> only virtual-node position writers and both trigger an immediate sync; the 30 s
+> periodic ticker remains as a safety net. **bf-4oiz acceptance criteria met.** The
+> historical text below is retained for traceability.
+
 ## Summary
 
 **Prior claim (STALE):** The original bf-4oiz notes asserted the registry-bridge
@@ -181,9 +204,10 @@ carries it; fleet's does not).
 | Position formatting correct, backed by registry_bridge_test.go | ✅ float64 XYZ; tests assert exact round-trip; `go test ./internal/simulator/` passes. |
 | bf-4oiz-findings.md 'Current Data Flow' corrected (periodic sync wired) | ✅ This document. |
 | No production code changes | ✅ None made. |
-| `go vet ./...` green before close | ❌ **Fails** — see Build Blocker. Pre-existing, introduced by bf-5dpu (e92d5bc); out of scope for this verification bead. |
+| `go vet ./...` green before close | ✅ **Now green** — fixed by bf-5lii (`fleetRegistryAdapter`). Was ❌ at the time of the bf-4pqj audit; resolved before bf-4oiz close. |
 
 **Net:** the bridge logic and tests are verified correct; the stale "wiring
-missing" claim is corrected (wiring exists in source). The remaining gate is the
-compile-time adapter mismatch at main.go:4217, which must be fixed (a wiring
-concern, not a bridge-logic concern) before the periodic sync actually runs.
+missing" claim is corrected (wiring exists in source). The compile-time adapter
+mismatch at main.go:4217 flagged by bf-4pqj was resolved by bf-5lii, and the full
+simulator→fleet.Registry flow is now verified end-to-end by bf-69ym's tests.
+**bf-4oiz is complete.**
