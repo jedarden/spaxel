@@ -97,6 +97,18 @@ type BlobSnapshot struct {
 	X, Y, Z    float64
 	Confidence float64
 	Weight     float64 // Peak height in the grid
+
+	// Canonical identity fields (bf-5151). camelCase JSON keys match the dashboard
+	// Blob type in dashboard/types/spaxel.d.ts, mirroring signal.TrackedBlob /
+	// tracker.Blob / tracking.Blob / automation.TrackedBlob (commit 1446ccf). This is
+	// the explainability view of a blob, which previously lacked these fields (the
+	// Tier-1 #2 type gap from bf-1q3m). Left at zero values (undefined) for existing
+	// blobs — a follow-up bead populates them from the BLE identity sidecar, folding in
+	// the parallel identityMap. IdentityResolved is *bool to faithfully represent the
+	// tri-state semantics (nil=unattempted, &true=resolved, &false=failed).
+	PersonName       string `json:"personName,omitempty"`
+	AssignedColor    string `json:"assignedColor,omitempty"`
+	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed
 }
 
 // GridSnapshot captures the fusion grid for computing contributions.
