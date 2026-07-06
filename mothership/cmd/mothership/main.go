@@ -62,6 +62,7 @@ import (
 	"github.com/spaxel/mothership/internal/shutdown"
 	sigproc "github.com/spaxel/mothership/internal/signal"
 	"github.com/spaxel/mothership/internal/sleep"
+	"github.com/spaxel/mothership/internal/simulator"
 	"github.com/spaxel/mothership/internal/startup"
 	"github.com/spaxel/mothership/internal/timeline"
 	"github.com/spaxel/mothership/internal/volume"
@@ -4186,8 +4187,43 @@ func main() {
 	r.Get("/api/backup", backupHandler.HandleBackup)
 	log.Printf("[INFO] Backup API registered at /api/backup")
 
-	// Phase 8: Pre-deployment simulator REST API
-	simulatorHandler := api.NewSimulatorHandler()
+	// Phase 8: Pre-deployment simulator REST API with persistent virtual node store
+	// Create virtual node store for persistence
+	var virtualNodeStore *simulator.VirtualNodeStore
+	var registryBridge *simulator.FleetRegistryBridge
+
+	virtualNodeStore, err = simulator.NewVirtualNodeStore(simulator.StoreConfig{
+		DataDir: filepath.Join(cfg.DataDir, "simulator"),
+		Space:   simulator.DefaultSpace(),
+	})
+	if err != nil {
+		log.Printf("[WARN] Failed to create virtual node store: %v (simulator persistence disabled)", err)
+	} else {
+		defer closeQuietly(virtualNodeStore)
+		log.Printf("[INFO] Virtual node store at %s", filepath.Join(cfg.DataDir, "simulator"))
+
+		// Create fleet registry bridge to sync virtual nodes to the fleet registry
+		registryBridge = simulator.NewFleetRegistryBridge(virtualNodeStore)
+
+		// Start periodic sync from virtual node store to fleet registry (every 30 seconds)
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := registryBridge.SyncToRegistry(fleetReg); err != nil {
+						log.Printf("[WARN] Failed to sync virtual nodes to fleet registry: %v", err)
+					}
+				}
+			}
+		}()
+		log.Printf("[INFO] Fleet registry bridge started (sync interval: 30s)")
+	}
+
+	simulatorHandler := api.NewSimulatorHandler(virtualNodeStore, registryBridge)
 	simulatorHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Pre-deployment simulator API registered at /api/simulator/*")
 

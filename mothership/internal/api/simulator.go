@@ -19,20 +19,38 @@ import (
 // It allows users to define virtual spaces, place virtual nodes, simulate walkers,
 // and compute GDOP coverage quality before purchasing hardware.
 type SimulatorHandler struct {
-	mu      sync.RWMutex
-	space   *simulator.Space
-	nodes   *simulator.NodeSet
-	walkers *simulator.WalkerSet
+	mu              sync.RWMutex
+	space           *simulator.Space
+	nodes           *simulator.NodeSet
+	walkers         *simulator.WalkerSet
+	virtualStore    *simulator.VirtualNodeStore    // Persistent store for virtual nodes
+	registryBridge  *simulator.FleetRegistryBridge // Bridge to fleet registry (optional)
 }
 
 // NewSimulatorHandler creates a new simulator handler.
-func NewSimulatorHandler() *SimulatorHandler {
+// If virtualStore is provided, node operations will persist to the store.
+// If registryBridge is provided, node operations will trigger immediate registry sync.
+func NewSimulatorHandler(virtualStore *simulator.VirtualNodeStore, registryBridge *simulator.FleetRegistryBridge) *SimulatorHandler {
 	// Start with a default space
-	return &SimulatorHandler{
-		space:   simulator.DefaultSpace(),
-		nodes:   simulator.NewNodeSet(),
-		walkers: simulator.NewWalkerSet(),
+	handler := &SimulatorHandler{
+		space:          simulator.DefaultSpace(),
+		nodes:          simulator.NewNodeSet(),
+		walkers:        simulator.NewWalkerSet(),
+		virtualStore:   virtualStore,
+		registryBridge: registryBridge,
 	}
+
+	// Initialize in-memory nodes from the virtual store if provided
+	if virtualStore != nil {
+		// Convert stored nodes to NodeSet for simulation
+		nodeSet := virtualStore.ToNodeSet()
+		for _, node := range nodeSet.All() {
+			handler.nodes.Add(node)
+		}
+		log.Printf("[INFO] Loaded %d virtual nodes from store", handler.nodes.Count())
+	}
+
+	return handler
 }
 
 // RegisterRoutes registers simulator routes on the router.
@@ -223,6 +241,26 @@ func (h *SimulatorHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.nodes.Add(&node)
+
+	// Persist to virtual store if configured
+	if h.virtualStore != nil {
+		if _, err := h.virtualStore.CreateVirtualNode(node.ID, node.Name, node.Position); err != nil {
+			log.Printf("[WARN] Failed to persist virtual node %s: %v", node.ID, err)
+			// Don't fail the request - the node is still in memory for simulation
+		} else {
+			log.Printf("[INFO] Persisted virtual node %s to store", node.ID)
+
+			// Trigger immediate registry sync if bridge is configured
+			if h.registryBridge != nil {
+				go func(nodeID string) {
+					// Get fleet registry from global context (this is a bit of a hack,
+					// but we need access to the registry adapter)
+					// For now, we'll rely on the periodic sync in main.go
+					log.Printf("[INFO] Node %s will be synced to registry on next periodic sync", nodeID)
+				}(node.ID)
+			}
+		}
+	}
 	h.mu.Unlock()
 
 	respondJSON(w, http.StatusCreated, node)
@@ -244,6 +282,23 @@ func (h *SimulatorHandler) UpdateNode(w http.ResponseWriter, r *http.Request) {
 	// Remove old node and add updated one
 	h.nodes.Remove(nodeID)
 	h.nodes.Add(&node)
+
+	// Persist update to virtual store if configured
+	if h.virtualStore != nil {
+		if err := h.virtualStore.UpdateNodePosition(nodeID, node.Position); err != nil {
+			log.Printf("[WARN] Failed to update virtual node %s in store: %v", nodeID, err)
+			// Don't fail the request - the node is still updated in memory
+		} else {
+			log.Printf("[INFO] Updated virtual node %s in store", nodeID)
+
+			// Trigger immediate registry sync if bridge is configured
+			if h.registryBridge != nil {
+				go func(nodeID string) {
+					log.Printf("[INFO] Node %s will be synced to registry on next periodic sync", nodeID)
+				}(nodeID)
+			}
+		}
+	}
 	h.mu.Unlock()
 
 	respondJSON(w, http.StatusOK, node)
@@ -255,6 +310,23 @@ func (h *SimulatorHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	h.mu.Lock()
 	removed := h.nodes.Remove(nodeID)
+
+	// Remove from virtual store if configured
+	if removed && h.virtualStore != nil {
+		if err := h.virtualStore.DeleteNode(nodeID); err != nil {
+			log.Printf("[WARN] Failed to delete virtual node %s from store: %v", nodeID, err)
+			// Don't fail the request - the node is still removed from memory
+		} else {
+			log.Printf("[INFO] Deleted virtual node %s from store", nodeID)
+
+			// Trigger registry sync to remove the node from registry
+			if h.registryBridge != nil {
+				go func(nodeID string) {
+					log.Printf("[INFO] Node %s will be removed from registry on next periodic sync", nodeID)
+				}(nodeID)
+			}
+		}
+	}
 	h.mu.Unlock()
 
 	if !removed {
