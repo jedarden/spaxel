@@ -25,19 +25,23 @@ type SimulatorHandler struct {
 	walkers         *simulator.WalkerSet
 	virtualStore    *simulator.VirtualNodeStore    // Persistent store for virtual nodes
 	registryBridge  *simulator.FleetRegistryBridge // Bridge to fleet registry (optional)
+	registryAdapter simulator.RegistryNodeAdapter  // Fleet registry adapter for immediate syncs (optional)
 }
 
 // NewSimulatorHandler creates a new simulator handler.
 // If virtualStore is provided, node operations will persist to the store.
-// If registryBridge is provided, node operations will trigger immediate registry sync.
-func NewSimulatorHandler(virtualStore *simulator.VirtualNodeStore, registryBridge *simulator.FleetRegistryBridge) *SimulatorHandler {
+// If registryBridge and registryAdapter are both provided, node create/update
+// operations trigger an immediate SyncToRegistry into the fleet registry instead
+// of waiting for the 30s periodic sync in main.go.
+func NewSimulatorHandler(virtualStore *simulator.VirtualNodeStore, registryBridge *simulator.FleetRegistryBridge, registryAdapter simulator.RegistryNodeAdapter) *SimulatorHandler {
 	// Start with a default space
 	handler := &SimulatorHandler{
-		space:          simulator.DefaultSpace(),
-		nodes:          simulator.NewNodeSet(),
-		walkers:        simulator.NewWalkerSet(),
-		virtualStore:   virtualStore,
-		registryBridge: registryBridge,
+		space:           simulator.DefaultSpace(),
+		nodes:           simulator.NewNodeSet(),
+		walkers:         simulator.NewWalkerSet(),
+		virtualStore:    virtualStore,
+		registryBridge:  registryBridge,
+		registryAdapter: registryAdapter,
 	}
 
 	// Initialize in-memory nodes from the virtual store if provided
@@ -243,27 +247,43 @@ func (h *SimulatorHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	h.nodes.Add(&node)
 
 	// Persist to virtual store if configured
+	persisted := false
 	if h.virtualStore != nil {
 		if _, err := h.virtualStore.CreateVirtualNode(node.ID, node.Name, node.Position); err != nil {
 			log.Printf("[WARN] Failed to persist virtual node %s: %v", node.ID, err)
 			// Don't fail the request - the node is still in memory for simulation
 		} else {
 			log.Printf("[INFO] Persisted virtual node %s to store", node.ID)
-
-			// Trigger immediate registry sync if bridge is configured
-			if h.registryBridge != nil {
-				go func(nodeID string) {
-					// Get fleet registry from global context (this is a bit of a hack,
-					// but we need access to the registry adapter)
-					// For now, we'll rely on the periodic sync in main.go
-					log.Printf("[INFO] Node %s will be synced to registry on next periodic sync", nodeID)
-				}(node.ID)
-			}
+			persisted = true
 		}
 	}
 	h.mu.Unlock()
 
+	// Drive an immediate registry sync so the new node reaches the fleet registry
+	// without waiting up to 30s for the periodic ticker in main.go. Run outside the
+	// handler lock to avoid holding it across the fleet-registry DB round-trip; the
+	// virtual store and fleet registry are both goroutine-safe, so this races
+	// cleanly with the periodic sync.
+	if persisted {
+		h.syncRegistryNow(node.ID, "add")
+	}
+
 	respondJSON(w, http.StatusCreated, node)
+}
+
+// syncRegistryNow triggers an immediate SyncToRegistry of all virtual nodes into
+// the fleet registry. It is a no-op unless both the registry bridge and a
+// fleet-backed RegistryNodeAdapter are wired. op describes the triggering
+// operation ("add"/"update") for log attribution.
+func (h *SimulatorHandler) syncRegistryNow(nodeID, op string) {
+	if h.registryBridge == nil || h.registryAdapter == nil {
+		return
+	}
+	if err := h.registryBridge.SyncToRegistry(h.registryAdapter); err != nil {
+		log.Printf("[WARN] Immediate registry sync failed after %s of node %s: %v", op, nodeID, err)
+		return
+	}
+	log.Printf("[INFO] Synced node %s to fleet registry after %s", nodeID, op)
 }
 
 // UpdateNode updates an existing node
@@ -284,22 +304,23 @@ func (h *SimulatorHandler) UpdateNode(w http.ResponseWriter, r *http.Request) {
 	h.nodes.Add(&node)
 
 	// Persist update to virtual store if configured
+	updated := false
 	if h.virtualStore != nil {
 		if err := h.virtualStore.UpdateNodePosition(nodeID, node.Position); err != nil {
 			log.Printf("[WARN] Failed to update virtual node %s in store: %v", nodeID, err)
 			// Don't fail the request - the node is still updated in memory
 		} else {
 			log.Printf("[INFO] Updated virtual node %s in store", nodeID)
-
-			// Trigger immediate registry sync if bridge is configured
-			if h.registryBridge != nil {
-				go func(nodeID string) {
-					log.Printf("[INFO] Node %s will be synced to registry on next periodic sync", nodeID)
-				}(nodeID)
-			}
+			updated = true
 		}
 	}
 	h.mu.Unlock()
+
+	// Push the position change into the fleet registry immediately rather than
+	// waiting for the 30s periodic ticker. See AddNode for the locking rationale.
+	if updated {
+		h.syncRegistryNow(nodeID, "update")
+	}
 
 	respondJSON(w, http.StatusOK, node)
 }
