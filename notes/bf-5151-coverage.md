@@ -17,7 +17,7 @@
 
 | Question | Answer |
 |---|---|
-| HEAD verified | `37d628e` (`37d628ed2fd7033c70dfdad8b55e0646e41ad9b8`) |
+| HEAD verified | `908adf2` (`908adf2049ac2d89785e764d7d833a4547e547cb`) |
 | The three canonical identity fields | **`PersonName`** (`json:"personName,omitempty"`), **`AssignedColor`** (`json:"assignedColor,omitempty"`), **`IdentityResolved *bool`** (`json:"identityResolved,omitempty"` — tri-state: nil=unattempted, &true=resolved, &false=failed) |
 | Production blob-creation sites total | **21** = 5 primary + 16 projection/boundary (matches bf-1q3m §3) |
 | Sites whose **type carries the 3 canonical fields** (in-scope) | **6** |
@@ -27,7 +27,7 @@
 
 ---
 
-## 1. Method — the two greps, re-run at HEAD `37d628e`
+## 1. Method — the two greps, re-run at HEAD `908adf2`
 
 Exactly the two greps from bf-1q3m §1.1, run verbatim against `mothership/` (non-test files):
 
@@ -104,7 +104,7 @@ that the *type surface* exists so a populated value can flow.
 
 ## 3. In-scope types — all 8 carry the 3 canonical fields ✓
 
-Each verified at HEAD `37d628e`. Field file:line is where the field is declared on the struct.
+Each verified at HEAD `908adf2`. Field file:line is where the field is declared on the struct.
 
 | # | Type | Type def | `PersonName` | `AssignedColor` | `IdentityResolved` | Added by |
 |---|---|---|---|---|---|---|
@@ -207,7 +207,7 @@ trust cited hashes" discipline bf-1q3m §4 applied to its child notes.
 
 ## 7. Build & test gate
 
-Run from `mothership/` against HEAD `37d628e` + this bead's changes:
+Run from `mothership/` against HEAD `908adf2` + this bead's changes:
 
 ```bash
 gofmt -l .                          # → empty (clean)
@@ -234,18 +234,18 @@ gofmt rewrite; the rest cached-but-green).
 ## 8. Acceptance criteria status
 
 - [x] **`notes/bf-5151-coverage.md` exists mapping every production site → has-fields / out-of-scope-with-reason** — this file, §4 (5 primary + 16 projection + dead type).
-- [x] **Every in-scope blob-creation type confirmed to carry the 3 canonical fields at zero values** — §3, all 8 types verified at HEAD `37d628e`; construction literals leave them at Go zero values (`""`/`nil`), serialized as omitted.
+- [x] **Every in-scope blob-creation type confirmed to carry the 3 canonical fields at zero values** — §3, all 8 types verified at HEAD `908adf2`; construction literals leave them at Go zero values (`""`/`nil`), serialized as omitted.
 - [x] **Out-of-scope sites explicitly enumerated (none silently dropped)** — §5 lists all 15 production out-of-scope sites + the dead type, grouped by reason; §4.2 explicitly carries P3 (the anon-struct site that neither grep matches).
-- [x] **gofmt clean, `go vet ./mothership/...` clean, `go test ./mothership/...` passes** — §7: all three green at HEAD `37d628e` + this bead's changes (7 pre-existing-drift files reformatted mechanically).
+- [x] **gofmt clean, `go vet ./mothership/...` clean, `go test ./mothership/...` passes** — §7: all three green at HEAD `908adf2` + this bead's changes (7 pre-existing-drift files reformatted mechanically).
 
 ---
 
 ## 9. Provenance
 
-| Source | Used for | Status at HEAD `37d628e` |
+| Source | Used for | Status at HEAD `908adf2` |
 |---|---|---|
 | `notes/bf-1q3m-consolidated.md` §1.1 | the two inventory greps | re-run verbatim; 20 named hits + P3 anon-struct = 21 production sites (matches) |
 | `notes/bf-1q3m-consolidated.md` §6 | out-of-scope reasons (Tier list + "out of scope" list) | all reasons carried into §4/§5; classifications unchanged |
 | `notes/bf-1q3m-consolidated.md` §3 | the 21-site catalogue | all 21 present; minor line drift only (§1) |
 | Commits `a612584` / `01a415d` / `c3f4b0d` / `29a114c` / `7309564` | the field additions under test | all in HEAD; supersede task-cited `1446ccf`/`248d0e0` (§6) |
-| This report (bf-5151 coverage gate) | the gate that closes bf-5151's "no site missed" criterion | verified against `37d628e`, 2026-07-06 |
+| This report (bf-5151 coverage gate) | the gate that closes bf-5151's "no site missed" criterion | verified against `908adf2`, 2026-07-06 |
