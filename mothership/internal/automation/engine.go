@@ -1339,6 +1339,14 @@ type TrackedBlob struct {
 	X, Y, Z    float64
 	VX, VY, VZ float64
 	Confidence float64
+
+	// Canonical identity fields (bf-5151). camelCase JSON keys match the dashboard
+	// Blob type in dashboard/types/spaxel.d.ts. Left at zero values (undefined) for
+	// existing blobs — a follow-up bead populates them from the BLE identity sidecar
+	// so person-aware automations ("when Alice enters…") can fire.
+	PersonName       string `json:"personName,omitempty"`
+	AssignedColor    string `json:"assignedColor,omitempty"`
+	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed
 }
 
 // Evaluate processes tracked blobs and triggers automations based on zone/volume crossings.

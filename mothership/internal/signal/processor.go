@@ -596,6 +596,15 @@ type TrackedBlob struct {
 	IdentityConfidence float64 `json:"identity_confidence,omitempty"`
 	IdentitySource     string  `json:"identity_source,omitempty"`
 	Posture            string  `json:"posture,omitempty"`
+
+	// Canonical identity fields (bf-5151). camelCase JSON keys match the dashboard
+	// Blob type in dashboard/types/spaxel.d.ts; the snake_case PersonLabel/PersonColor
+	// above are retained as deprecated aliases for backward compatibility. Left at
+	// their zero values here (undefined) — a follow-up bead populates them from the
+	// BLE identity sidecar.
+	PersonName       string `json:"personName,omitempty"`
+	AssignedColor    string `json:"assignedColor,omitempty"`
+	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed
 }
 
 // SetTrackedBlobs stores the latest tracked blobs from the fusion engine.
