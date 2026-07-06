@@ -1,4 +1,11 @@
-# bf-26ta: TypeScript Blob-Shaped Object Literal Search Results
+> ⚠️ **Secondary — folded into the consolidated inventory.** Detailed child results of
+> `notes/bf-26ta-findings.md` (now secondary). The authoritative TS blob-type declaration is
+> catalogued in **`notes/bf-1bmg-js-ts.md`** (a blessed child of
+> `notes/bf-1q3m-consolidated.md`, the single source of truth). Retained for provenance only.
+
+---
+
+# bf-26ta: TypeScript Blob-Shaped Object Literal Search Results (secondary — see banner above)
 
 ## Task Summary
 Search all TypeScript files (.ts and .tsx) for blob-shaped object literals.

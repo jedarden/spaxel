@@ -1,4 +1,31 @@
-# Blob Creation Sites — Consolidated Report (bf-3ldj)
+> 🔴🔴🔴 **SUPERSEDED — DO NOT USE THIS FILE AS A BLOB INVENTORY.** 🔴🔴🔴
+>
+> Despite the "Single source of truth" language in the header below, this report has
+> **drifted against current HEAD** and is **retained for provenance only**. The **sole trusted
+> blob inventory** is **`notes/bf-1q3m-consolidated.md`** — read that file instead and ignore
+> the `file:line` references and the data-flow diagram (§6) below.
+>
+> **Why superseded** (per `notes/bf-1q3m-consolidated.md` §4.1):
+>
+> 1. **Line drift (+90 / +110).** The named leak-boundary citations are stale: E2 automation
+>    is actually `main.go:2303` (cited `:2213`, +90), E3 explainability `main.go:2206` (cited
+>    `:2116`, +90), E1 sigproc `main.go:5494` (cited `:5384`, +110).
+> 2. **Fundamental data-flow drift (material).** §6 below draws the live path through
+>    `tracker.TrackManager.UpdateWithIdentity` → `applyIdentity` and claims "✅ IDENTITY
+>    ATTACHED." **This path is NOT wired into `main.go` at HEAD** (zero references to
+>    `tracker.NewTracker` / `TrackManager` / `applyIdentity` / `UpdateWithIdentity`). The live
+>    identity path is entirely sidecar-based — resolved identity lives in
+>    `ble.IdentityMatcher`, queried per-blob by ID via `GetMatch()`, and is never written back
+>    onto the tracked blob struct. So "identity dropped at the conversion" really means
+>    "the conversion is where identity could be attached from the sidecar, and isn't."
+>
+> **Status:** provenance only. A future agent must not consume this file for `file:line`
+> references or for the data-flow diagram — it will re-introduce the line drift and the
+> wrong identity-attachment model. Use `notes/bf-1q3m-consolidated.md`.
+
+---
+
+# Blob Creation Sites — Consolidated Report (bf-3ldj) (SUPERSEDED — see banner above)
 
 > **Purpose:** Single source of truth aggregating the three blob-creation search beads, ready
 > for the next bead (parent umbrella `bf-4bhd`, then the implementation bead) to consume.

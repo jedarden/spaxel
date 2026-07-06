@@ -1,4 +1,11 @@
-# bf-26ta: JavaScript Blob-Shaped Object Literal Search Results
+> ⚠️ **Secondary — folded into the consolidated inventory.** Detailed child results of
+> `notes/bf-26ta-findings.md` (now secondary). The authoritative JS/TS blob-creation inventory
+> is **`notes/bf-1bmg-js-ts.md`** (a blessed child of `notes/bf-1q3m-consolidated.md`, the
+> single source of truth). Retained for provenance only.
+
+---
+
+# bf-26ta: JavaScript Blob-Shaped Object Literal Search Results (secondary — see banner above)
 
 ## Task Summary
 Search all JavaScript files (.js and .jsx) for blob-shaped object literals using the pattern defined in bf-3aij.
