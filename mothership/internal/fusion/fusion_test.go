@@ -419,12 +419,12 @@ func TestEngine_DefaultPlacementProducesPeaks(t *testing.T) {
 			// positions. The grid is sized to the same bounding box so every
 			// default-placed node lands in-bounds.
 			e := NewEngine(&Config{
-				Width:   maxX - minX,
-				Height:  maxY - minY,
-				Depth:   maxZ - minZ,
-				OriginX: minX,
-				OriginY: minY,
-				OriginZ: minZ,
+				Width:         maxX - minX,
+				Height:        maxY - minY,
+				Depth:         maxZ - minZ,
+				OriginX:       minX,
+				OriginY:       minY,
+				OriginZ:       minZ,
 				CellSize:      0.2,
 				MinDeltaRMS:   0.01,
 				MaxBlobs:      6,
@@ -535,10 +535,10 @@ func gridMaxValue(data []float64) float64 {
 // all-pairs motion link set (every node pair, DeltaRMS=1.0, Motion=true), and
 // the room are identical across both legs. Only where the nodes sit differs.
 //
-//  - Spread placement: links are non-degenerate, AddLinkInfluence paints the
-//    accumulation grid, it normalizes to a non-zero max, and Fuse emits peaks.
-//  - Co-located placement: every link has length < 0.1 m, AddLinkInfluence
-//    early-returns, the grid stays at zero, and Fuse emits no peaks.
+//   - Spread placement: links are non-degenerate, AddLinkInfluence paints the
+//     accumulation grid, it normalizes to a non-zero max, and Fuse emits peaks.
+//   - Co-located placement: every link has length < 0.1 m, AddLinkInfluence
+//     early-returns, the grid stays at zero, and Fuse emits no peaks.
 //
 // That the identical non-zero-peak assertion holds for one and fails for the
 // other is the demonstrable proof the bead's scope asks for: "test would fail
@@ -639,12 +639,12 @@ func fuseWithPlacement(minX, minY, minZ, maxX, maxY, maxZ float64,
 	count int, place func(int) []simulator.Point) (*Result, float64) {
 
 	e := NewEngine(&Config{
-		Width:   maxX - minX,
-		Height:  maxY - minY,
-		Depth:   maxZ - minZ,
-		OriginX: minX,
-		OriginY: minY,
-		OriginZ: minZ,
+		Width:         maxX - minX,
+		Height:        maxY - minY,
+		Depth:         maxZ - minZ,
+		OriginX:       minX,
+		OriginY:       minY,
+		OriginZ:       minZ,
 		CellSize:      0.2,
 		MinDeltaRMS:   0.01,
 		MaxBlobs:      6,

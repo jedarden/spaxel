@@ -57,10 +57,10 @@ type RateController struct {
 	adjacentNodes func(nodeMAC string) []string // returns MACs of adjacent nodes; may be nil
 
 	// Zone-aware fields
-	zones                  map[string]*zoneRateState // keyed by zone ID
-	zoneMembership         func(nodeMAC string) []string // returns zone IDs for a node
-	adjacentZones          func(zoneID string) []string // returns zone IDs adjacent to a zone
-	fleetIdle              bool // true when all zones are idle
+	zones          map[string]*zoneRateState     // keyed by zone ID
+	zoneMembership func(nodeMAC string) []string // returns zone IDs for a node
+	adjacentZones  func(zoneID string) []string  // returns zone IDs adjacent to a zone
+	fleetIdle      bool                          // true when all zones are idle
 }
 
 // NewRateController creates a RateController. configSender is called whenever a

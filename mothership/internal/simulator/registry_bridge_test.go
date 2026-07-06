@@ -69,7 +69,10 @@ func (f *fakeRegistry) GetAllNodes() ([]NodeRecord, error) {
 // storeWithNodes builds a fresh store (DefaultSpace) holding one virtual node
 // per entry. Each entry gives (id, position). Positions at the default origin
 // are created as-is (the origin is in-bounds for DefaultSpace).
-func storeWithNodes(t *testing.T, nodes ...struct{ ID string; Pos Point }) *VirtualNodeStore {
+func storeWithNodes(t *testing.T, nodes ...struct {
+	ID  string
+	Pos Point
+}) *VirtualNodeStore {
 	t.Helper()
 	store, _ := tempStore(t)
 	for _, n := range nodes {
@@ -83,9 +86,15 @@ func storeWithNodes(t *testing.T, nodes ...struct{ ID string; Pos Point }) *Virt
 // originStore builds a store with count nodes all at the default DB origin.
 func originStore(t *testing.T, count int) *VirtualNodeStore {
 	t.Helper()
-	entries := make([]struct{ ID string; Pos Point }, 0, count)
+	entries := make([]struct {
+		ID  string
+		Pos Point
+	}, 0, count)
 	for i := 0; i < count; i++ {
-		entries = append(entries, struct{ ID string; Pos Point }{
+		entries = append(entries, struct {
+			ID  string
+			Pos Point
+		}{
 			ID:  fmt.Sprintf("node-%d", i+1),
 			Pos: DefaultNodeOrigin,
 		})
@@ -168,8 +177,14 @@ func TestSyncToRegistry_ExplicitPositionsPreserved(t *testing.T) {
 	a := Point{X: 1, Y: 1, Z: 1.5}
 	b := Point{X: 4, Y: 4, Z: 2}
 	store := storeWithNodes(t,
-		struct{ ID string; Pos Point }{"a", a},
-		struct{ ID string; Pos Point }{"b", b},
+		struct {
+			ID  string
+			Pos Point
+		}{"a", a},
+		struct {
+			ID  string
+			Pos Point
+		}{"b", b},
 	)
 	bridge := NewFleetRegistryBridge(store)
 	reg := newFakeRegistry()
@@ -194,10 +209,22 @@ func TestSyncToRegistry_ExplicitPositionsPreserved(t *testing.T) {
 // unset ones, and asserts the final set is distinct and non-origin.
 func TestSyncToRegistry_MixedNodes(t *testing.T) {
 	store := storeWithNodes(t,
-		struct{ ID string; Pos Point }{"explicit", Point{X: 5, Y: 4, Z: 2}},
-		struct{ ID string; Pos Point }{"o1", DefaultNodeOrigin},
-		struct{ ID string; Pos Point }{"o2", DefaultNodeOrigin},
-		struct{ ID string; Pos Point }{"o3", DefaultNodeOrigin},
+		struct {
+			ID  string
+			Pos Point
+		}{"explicit", Point{X: 5, Y: 4, Z: 2}},
+		struct {
+			ID  string
+			Pos Point
+		}{"o1", DefaultNodeOrigin},
+		struct {
+			ID  string
+			Pos Point
+		}{"o2", DefaultNodeOrigin},
+		struct {
+			ID  string
+			Pos Point
+		}{"o3", DefaultNodeOrigin},
 	)
 	bridge := NewFleetRegistryBridge(store)
 	reg := newFakeRegistry()
@@ -285,7 +312,10 @@ func TestSyncOneNode_MatchesFullSync(t *testing.T) {
 // TestSyncOneNode_ExplicitPreserved asserts SyncOneNode passes an explicit
 // (non-origin) position through unchanged.
 func TestSyncOneNode_ExplicitPreserved(t *testing.T) {
-	store := storeWithNodes(t, struct{ ID string; Pos Point }{"a", Point{X: 2, Y: 3, Z: 1.2}})
+	store := storeWithNodes(t, struct {
+		ID  string
+		Pos Point
+	}{"a", Point{X: 2, Y: 3, Z: 1.2}})
 	bridge := NewFleetRegistryBridge(store)
 	reg := newFakeRegistry()
 

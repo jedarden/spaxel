@@ -1539,8 +1539,8 @@ func TestManagerOnNodeConnectedPersistsHelloPosition(t *testing.T) {
 	f64 := func(v float64) *float64 { return &v }
 
 	tests := []struct {
-		name              string
-		posX, posY, posZ  float64
+		name             string
+		posX, posY, posZ float64
 	}{
 		{name: "corner_geometry", posX: 6.0, posY: 0.0, posZ: 2.5},
 		{name: "interior_point", posX: 3.25, posY: 2.75, posZ: 1.1},

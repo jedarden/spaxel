@@ -102,10 +102,10 @@ func TestDefaultNodePositions_SpansRoom(t *testing.T) {
 
 			// Span must be a meaningful fraction of the room, not just an
 			// epsilon. Require it to cover at least half of each axis.
-			if (maxPX-minPX) < width*0.5 {
+			if (maxPX - minPX) < width*0.5 {
 				t.Errorf("count=%d: X span %v < half width %v", count, maxPX-minPX, width*0.5)
 			}
-			if (maxPY-minPY) < depth*0.5 {
+			if (maxPY - minPY) < depth*0.5 {
 				t.Errorf("count=%d: Y span %v < half depth %v", count, maxPY-minPY, depth*0.5)
 			}
 		})
