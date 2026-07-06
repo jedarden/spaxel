@@ -4,18 +4,21 @@
 
 ### Summary
 
-This report documents all locations where blob objects are created or constructed in the spaxel codebase. There are **FOUR distinct Blob types** across different packages:
+This report documents all locations where blob objects are created or constructed in the spaxel codebase. There are **FIVE distinct primary Blob types** across different packages (the tracked-blob lifecycle), plus **seven additional Blob-shaped projection types** that are derived from blobs for specific subsystems (see "Related Blob-shaped projection types" below).
 
 1. **`tracking.Blob`** - 2D floor tracker (X, Z coordinates)
 2. **`tracker.Blob`** - 3D tracker with identity support (X, Y, Z coordinates + posture)
 3. **`fusion.Blob`** - Simple fusion result (X, Y, Z + confidence)
 4. **`automation.TrackedBlob`** - Automation engine blob representation
+5. **`signal.TrackedBlob`** - Fusion-to-tracking pipeline blob (X, Y, Z + velocity + identity fields)
+
+> **Line numbers verified against current `main` (2026-07-06).** Sites move by a few lines as the codebase evolves; re-locate with `grep -n "&Blob{\|Blob{\|TrackedBlob{" mothership/` before editing.
 
 ---
 
 ## Blob Type Definitions
 
-### 1. `tracking.Blob` (mothership/internal/tracking/tracker.go)
+### 1. `tracking.Blob` (mothership/internal/tracking/tracker.go:21)
 ```go
 type Blob struct {
     ID       int
@@ -42,7 +45,7 @@ type Blob struct {
 }
 ```
 
-### 2. `tracker.Blob` (mothership/internal/tracker/tracker.go)
+### 2. `tracker.Blob` (mothership/internal/tracker/tracker.go:36)
 ```go
 type Blob struct {
     ID         int
@@ -64,7 +67,7 @@ type Blob struct {
 }
 ```
 
-### 3. `fusion.Blob` (mothership/internal/fusion/fusion.go)
+### 3. `fusion.Blob` (mothership/internal/fusion/fusion.go:36)
 ```go
 type Blob struct {
     X, Y, Z    float64 // world-space position (metres)
@@ -72,7 +75,7 @@ type Blob struct {
 }
 ```
 
-### 4. `automation.TrackedBlob` (mothership/internal/automation/engine.go)
+### 4. `automation.TrackedBlob` (mothership/internal/automation/engine.go:1337)
 ```go
 type TrackedBlob struct {
     ID         int
@@ -82,7 +85,12 @@ type TrackedBlob struct {
 }
 ```
 
-### 5. `signal.TrackedBlob` (mothership/internal/signal/processor.go)
+### 5. `signal.TrackedBlob` (mothership/internal/signal/processor.go:587)
+
+> **Type alias:** `api.TrackedBlob` at `mothership/internal/api/tracks.go:30` is a
+> pure alias (`type TrackedBlob = signal.TrackedBlob`), not a new struct. Any field
+> change to `signal.TrackedBlob` propagates to `api.TrackedBlob` automatically —
+> no separate edit needed, but be aware the type surfaces under two names.
 ```go
 type TrackedBlob struct {
     ID         int
@@ -106,7 +114,7 @@ type TrackedBlob struct {
 
 ### Pattern 1: Direct struct construction with `&Blob{}`
 
-#### 1.1 `tracking/tracker.go:163` - New blob from measurement
+#### 1.1 `tracking/tracker.go:160` - New blob from measurement
 ```go
 b := &Blob{
     ID:       t.nextID,
@@ -155,7 +163,7 @@ blobs[i] = Blob{X: p[0], Y: p[1], Z: p[2], Confidence: p[3]}
 
 ### Pattern 3: Slice allocation and copying
 
-#### 3.1 `tracking/tracker.go:206-208` - Return snapshot (deep copy)
+#### 3.1 `tracking/tracker.go:199-203` - Return snapshot (deep copy)
 ```go
 out := make([]Blob, len(t.blobs))
 for i, b := range t.blobs {
@@ -168,7 +176,7 @@ for i, b := range t.blobs {
 - **Context**: Tracker.Update() returning immutable snapshot
 - **Pattern**: Dereference pointer, deep-copy trail slice
 
-#### 3.2 `tracker/tracker.go:193-195` - Return 3D snapshot (deep copy)
+#### 3.2 `tracker/tracker.go:193-199` - Return 3D snapshot (deep copy)
 ```go
 out := make([]Blob, len(t.blobs))
 for i, b := range t.blobs {
@@ -182,7 +190,7 @@ for i, b := range t.blobs {
 - **Context**: Tracker.Update() returning immutable snapshot
 - **Pattern**: Similar to 3.1 but clears ukf field for caller safety
 
-#### 3.3 `tracker/identity.go:214-216` - Get all blobs copy
+#### 3.3 `tracker/identity.go:201` (`GetAllBlobs`), copy at `205-206` - Get all blobs copy
 ```go
 result := make([]Blob, len(tm.blobs))
 copy(result, tm.blobs)
@@ -247,18 +255,20 @@ result := &Result{Blobs: []Blob{{X: 1, Y: 1, Z: 1, Confidence: 0.5}}}
 
 ### Identity assignment (tracker/identity.go)
 
-#### applyIdentity() - Lines 167-182
+> These functions operate on `tracker.Blob` (the 3D tracker), whose identity
+> fields are `PersonID`, `PersonLabel`, `PersonColor`, `IdentityConfidence`,
+> `IdentitySource`, `IdentityLastSeen`. The extra fields `PersonName`,
+> `AssignedColor`, `IdentityResolved` belong only to `tracking.Blob` (2D).
+
+#### applyIdentity() - Lines 164-176
 ```go
 func (tm *TrackManager) applyIdentity(blob *Blob, info *IdentityInfo, now time.Time) {
     blob.PersonID = info.PersonID
     blob.PersonLabel = info.PersonLabel
     blob.PersonColor = info.PersonColor
-    blob.PersonName = info.PersonName
-    blob.AssignedColor = info.AssignedColor
-    blob.IdentityResolved = info.IdentityResolved
     blob.IdentityConfidence = info.IdentityConfidence
     blob.IdentityLastSeen = now
-    
+
     if info.IdentitySource != "" {
         blob.IdentitySource = info.IdentitySource
     } else {
@@ -269,15 +279,12 @@ func (tm *TrackManager) applyIdentity(blob *Blob, info *IdentityInfo, now time.T
 - **Context**: Applying BLE identity match to blob
 - **Pattern**: Field mutation on existing blob pointer
 
-#### clearIdentity() - Lines 185-194
+#### clearIdentity() - Lines 179-185
 ```go
 func (tm *TrackManager) clearIdentity(blob *Blob) {
     blob.PersonID = ""
     blob.PersonLabel = ""
     blob.PersonColor = ""
-    blob.PersonName = ""
-    blob.AssignedColor = ""
-    blob.IdentityResolved = false
     blob.IdentityConfidence = 0
     blob.IdentitySource = ""
 }
@@ -287,11 +294,55 @@ func (tm *TrackManager) clearIdentity(blob *Blob) {
 
 ---
 
+## Related Blob-shaped projection types
+
+Beyond the five primary Blob types above, the codebase defines seven additional
+`Blob*`-named structs. These are **projections** — read-only views built *from* a
+tracked blob for a specific subsystem, not new tracked entities. They do not own a
+UKF or a stable session ID. They matter for this inventory because any change to
+blob fields must be propagated to the projections that copy those fields.
+
+| Type | File:line | Built from | Purpose |
+|------|-----------|-----------|---------|
+| `tracking.BlobEvent` | `tracking/tracker.go:52` | `tracking.Blob` | Lifecycle event emitted on blob appear/disappear/re-ident (security-mode persistence, timeline) |
+| `falldetect.BlobSnapshot` | `falldetect/detector.go:69` | `tracker.Blob` | Z-trajectory input to the fall-detection state machine |
+| `explainability.BlobSnapshot` | `explainability/handler.go:95` | `tracker.Blob` | Per-link contribution / confidence breakdown for the "Why?" overlay |
+| `explainability.BlobExplanation` | `explainability/handler.go:27` | derived | Rendered explanation result (not a direct blob copy) |
+| `volume.BlobState` | `volume/shape.go:139` | tracked blob pos/vel | Input to spatial trigger volume point-in-volume tests (automation) |
+| `volume.BlobPos` | `volume/shape.go:1080` | blob pos | Lightweight position used inside the volume containment math |
+| `api.BlobPos` | `api/triggers.go:624` | blob pos | REST/JSON-facing position used by trigger evaluation in the API layer |
+| `replay.BlobUpdate` | `replay/types.go:303` | replay pipeline blob | Incremental blob frame pushed to the dashboard during time-travel replay |
+| `simulator.BlobResult` | `simulator/engine.go:80` | synthetic walker | Synthetic blob emitted by `spaxel-sim` (test fixture, not production) |
+
+**Construction pattern (all projections):** value-type struct literal
+(`SomeBlobSnapshot{ID: b.ID, X: b.X, ...}`) at the boundary where a tracked blob
+enters the subsystem.
+
+**Enumerated projection construction sites** (non-test, verified 2026-07-06) — every
+place a projection is *built*. A field added to a tracked blob that a projection copies
+must be propagated at each of these sites:
+
+| Site | Type built | Built from | Notes |
+|------|-----------|-----------|-------|
+| `cmd/mothership/main.go:2116` | `explainability.BlobSnapshot` | tracked blob | "Why?" overlay input; loop over all blobs |
+| `cmd/mothership/main.go:2236` | `volume.BlobPos` | tracked blob | volume-trigger evaluation; loop over all blobs |
+| `explainability/handler.go:194,255,357` | `BlobExplanation` | derived | rendered explanation result (3 return sites) |
+| `falldetect/detector.go:277` | `BlobSnapshot` | tracked blob | Z-trajectory input to fall-detect state machine |
+| `replay/pipeline.go:114,132` | `BlobUpdate` | replay blob | incremental frames pushed to dashboard during replay |
+| `simulator/engine.go:460` | `BlobResult` | synthetic walker | emitted by `spaxel-sim` (test fixture, not production) |
+| `tracking/tracker.go:173,188` | `BlobEvent` | tracked blob | appear/disappear lifecycle events |
+| `volume/shape.go:375,575,820,879` | `BlobState` | tracked blob | per-blob state in volume trigger state machine (4 sites) |
+
+Re-locate any moved site with:
+`grep -rn "BlobSnapshot{\|BlobState{\|BlobPos{\|BlobUpdate{\|BlobEvent{\|BlobResult{\|BlobExplanation{" mothership/`
+
+---
+
 ## Key Findings
 
 ### Files Requiring Updates for Blob Structure Changes
 
-1. **`mothership/internal/tracking/tracker.go`** (line 163)
+1. **`mothership/internal/tracking/tracker.go`** (line 160)
    - Constructor for new 2D blobs
    
 2. **`mothership/internal/tracker/tracker.go`** (line 162)
@@ -303,8 +354,8 @@ func (tm *TrackManager) clearIdentity(blob *Blob) {
 4. **`mothership/cmd/mothership/main.go`** (lines 2213, 5384)
    - Type conversion constructors for automation and signal packages
    
-5. **`mothership/internal/tracker/identity.go`** (lines 167-194)
-   - Identity field assignment and clearing
+5. **`mothership/internal/tracker/identity.go`** (lines 164-185)
+   - Identity field assignment (`applyIdentity`) and clearing (`clearIdentity`)
 
 ### Creation Patterns by Type
 
@@ -319,18 +370,20 @@ func (tm *TrackManager) clearIdentity(blob *Blob) {
 ### Identity Fields Affected
 
 When updating blob identity fields, these files need changes:
-- **Constructors**: tracker.go (2 locations) - initialize new fields
-- **Identity matching**: identity.go - applyIdentity() and clearIdentity()
-- **Type conversions**: main.go - automation and signal TrackedBlob conversions
+- **Constructors**: `tracking/tracker.go:160` (2D) and `tracker/tracker.go:162` (3D) — initialize new fields
+- **Identity matching**: `tracker/identity.go:164-185` — `applyIdentity()` and `clearIdentity()` (operate on `tracker.Blob` only)
+- **Type conversions**: `cmd/mothership/main.go:2213` (automation) and `:5384` (signal)
+- **Field-set caveat**: `tracking.Blob` (2D) carries `PersonName`, `AssignedColor`, `IdentityResolved`; `tracker.Blob` (3D) does **not**. Adding an identity field to one type does not automatically add it to the other — both definitions must be edited deliberately.
 
 ---
 
 ## Recommendations
 
-1. **For adding new identity fields**: Update all 5 creation sites
-2. **For changing blob structure**: Update type definitions and all constructors
-3. **For identity field logic**: Focus on tracker/identity.go
-4. **For testing**: Update fusion_test.go fixtures when structure changes
+1. **For adding new identity fields**: Update all 5 creation sites + the 2 identity functions
+2. **For changing blob structure**: Update the 5 type definitions, all constructors, and every projection type in the table above that copies the changed field
+3. **For identity field logic**: Focus on `tracker/identity.go` (note: only the 3D tracker has identity functions today)
+4. **For testing**: Update `fusion_test.go` fixtures when structure changes
+5. **For projection types**: Run the grep in the projection-types section to find each boundary construction site before changing copied fields
 
 ---
 
@@ -341,4 +394,4 @@ When updating blob identity fields, these files need changes:
 - [x] Creation pattern is noted (constructor, literal, factory, etc.)
 - [x] Report is ready for the next bead to use
 
-**Total blob creation sites found: 8 primary + 3 field mutation sites**
+**Totals:** 5 primary Blob types · 8 primary construction sites (3 direct struct literals + 3 slice/copy snapshots + 2 cross-package conversions) · 2 identity field-mutation functions · 9 additional Blob-shaped projection types · 15 projection construction sites enumerated across 7 files.
