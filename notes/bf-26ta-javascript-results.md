@@ -10,7 +10,11 @@ Search all JavaScript files (.js and .jsx) for blob-shaped object literals using
 
 ## Search Results Summary
 
-### Blob-Shaped Object Literals Found: **25 instances across 7 files**
+### Blob-Shaped Object Literals Found: **14 instances across 5 files**
+
+> **Re-verified 2026-07-06:** previously reported "25 across 7 files" over-counted
+> `quick-actions.test.js` (16 reported, 5 actual literals) and listed only 4 of the 6
+> `ambient.test.js` sites. Corrected below.
 
 ---
 
@@ -86,6 +90,16 @@ blobs: [{
     z: 0,
     confidence: 0.8
 }]
+```
+
+- **Line 694-700:** Position blob at (1,1) — lerp source fixture
+```javascript
+blobs: [{id: 1, x: 1, y: 1, z: 0, confidence: 0.8}]
+```
+
+- **Line 708-714:** Position blob at (3,3) — lerp target fixture
+```javascript
+blobs: [{id: 1, x: 3, y: 3, z: 0, confidence: 0.8}]
 ```
 
 **Context:** Test fixtures for the 3D ambient floor plan renderer. These blobs represent detected people in 2D floor space for testing the ambient visualization system.
@@ -359,10 +373,10 @@ const zone = {
 |------|------------|--------------|---------|
 | `dashboard/js/state.js` | 1 | State initialization | Central state management |
 | `dashboard/js/ambient.test.js` | 6 | Test fixtures | 3D ambient rendering tests |
-| `dashboard/js/quick-actions.test.js` | 16 | Test fixtures | Spatial menu tests |
+| `dashboard/js/quick-actions.test.js` | 5 | Test fixtures | Spatial menu tests |
 | `dashboard/js/replay.test.js` | 1 | API mock | Session replay tests |
 | `dashboard/js/websocket.js` | 1 | Derived state | Position extrapolation |
-| **Total** | **25** | **Multiple patterns** | **7 files** |
+| **Total** | **14** | **Multiple patterns** | **5 files** |
 
 ---
 
@@ -389,6 +403,6 @@ const zone = {
 
 ## Conclusion
 
-The JavaScript codebase contains **25 blob-shaped object literals** across 7 files, with patterns ranging from minimal state initialization to comprehensive test fixtures. The canonical creation pattern is in `state.js:290`, while test files provide diverse blob structures for comprehensive coverage of rendering, interaction, and replay functionality.
+The JavaScript codebase contains **14 blob-shaped object literals** across 5 files, with patterns ranging from minimal state initialization to comprehensive test fixtures. The canonical creation pattern is in `state.js:290`, while test files provide diverse blob structures for comprehensive coverage of rendering, interaction, and replay functionality.
 
 **Blob detection pattern:** Look for objects with `{id, x, y, z}` core structure, optionally extended with identity, velocity, or confidence fields.
