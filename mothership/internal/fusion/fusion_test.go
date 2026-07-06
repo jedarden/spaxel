@@ -524,6 +524,164 @@ func gridMaxValue(data []float64) float64 {
 	return max
 }
 
+// TestEngine_GeometryPlacementDrivesFusionPeaks (bf-4b1c) is the differential
+// lock-in for "geometry placement and fusion peaks." It runs the SAME
+// blob-producing harness under two placements and asserts the non-zero-peak
+// condition flips with geometry — passing with the default (spread) placement
+// a freshly-onboarded sim fleet receives, and failing with the old co-located
+// (0,0,1) DB-default collapse.
+//
+// Placement is held as the SOLE variable: the engine grid, the walker-free
+// all-pairs motion link set (every node pair, DeltaRMS=1.0, Motion=true), and
+// the room are identical across both legs. Only where the nodes sit differs.
+//
+//  - Spread placement: links are non-degenerate, AddLinkInfluence paints the
+//    accumulation grid, it normalizes to a non-zero max, and Fuse emits peaks.
+//  - Co-located placement: every link has length < 0.1 m, AddLinkInfluence
+//    early-returns, the grid stays at zero, and Fuse emits no peaks.
+//
+// That the identical non-zero-peak assertion holds for one and fails for the
+// other is the demonstrable proof the bead's scope asks for: "test would fail
+// with old co-located placement but passes with new geometry" — i.e. the test
+// is genuinely sensitive to the bf-4q5w regression, not trivially satisfiable.
+//
+// This complements TestEngine_DefaultPlacementProducesPeaks (bf-18yn: spread
+// alone, geometry-dependent synthetic links) and TestEngine_CoLocatedOrigin
+// YieldsNoPeaks (co-located alone): both halves in one run, geometry isolated.
+func TestEngine_GeometryPlacementDrivesFusionPeaks(t *testing.T) {
+	space := simulator.DefaultSpace()
+	minX, minY, minZ, maxX, maxY, maxZ := space.Bounds()
+
+	// spreadPlace is the default onboarding placement (distinct, room-spanning).
+	// colocatedPlace is the pre-spread DB-default collapse (all at (0,0,1)).
+	spreadPlace := func(count int) []simulator.Point {
+		return simulator.DefaultNodePositions(space, count)
+	}
+	colocatedPlace := func(count int) []simulator.Point {
+		pts := make([]simulator.Point, count)
+		for i := range pts {
+			pts[i] = simulator.Point{X: 0, Y: 0, Z: 1}
+		}
+		return pts
+	}
+
+	for _, count := range []int{2, 4} {
+		t.Run(fmt.Sprintf("nodes=%d", count), func(t *testing.T) {
+			// ---- spread (new geometry): must produce non-zero peaks ----
+			spreadResult, spreadGridMax := fuseWithPlacement(minX, minY, minZ,
+				maxX, maxY, maxZ, count, spreadPlace)
+
+			// Guard the placement itself did not regress to the collapse.
+			assertPlacementNotCollapsed(t, spreadPlace(count))
+
+			// Bead criterion: the accumulation grid is not all zeros. This is
+			// the geometry-pure signal and the one that holds for every fleet
+			// size (a single link still paints a non-zero ridge).
+			if spreadGridMax <= 0 {
+				t.Fatalf("spread placement produced an all-zero accumulation grid "+
+					"(gridMax=%.4f, activeLinks=%d) — default placement must let the "+
+					"grid accumulate non-zero peaks", spreadGridMax, spreadResult.ActiveLinks)
+			}
+			// A single link (count=2) paints a symmetric ridge with no strict
+			// local maximum, so the peak extractor legitimately yields no blob
+			// even though the grid is non-zero (documented in bf-18yn). With
+			// count>=4 the crossing links form a true maximum and must extract
+			// at least one blob — proving the non-zero grid localizes.
+			if count >= 4 && len(spreadResult.Blobs) == 0 {
+				t.Fatalf("spread placement of %d nodes produced 0 blobs despite "+
+					"gridMax=%.4f > 0 (activeLinks=%d) — crossing links must yield a peak",
+					count, spreadGridMax, spreadResult.ActiveLinks)
+			}
+			if len(spreadResult.Blobs) > 0 {
+				top := spreadResult.Blobs[0]
+				t.Logf("[spread] nodes=%d gridMax=%.4f blobs=%d top=(%.2f,%.2f,%.2f) conf=%.3f activeLinks=%d",
+					count, spreadGridMax, len(spreadResult.Blobs), top.X, top.Y, top.Z,
+					top.Confidence, spreadResult.ActiveLinks)
+			} else {
+				t.Logf("[spread] nodes=%d gridMax=%.4f blobs=0 (single-link ridge, no strict max) activeLinks=%d",
+					count, spreadGridMax, spreadResult.ActiveLinks)
+			}
+
+			// ---- co-located (old geometry): must produce ZERO peaks ----
+			coloResult, coloGridMax := fuseWithPlacement(minX, minY, minZ,
+				maxX, maxY, maxZ, count, colocatedPlace)
+
+			// The SAME non-zero-peak condition asserted above must FAIL here:
+			// an all-zero grid (no accumulation) and zero extracted blobs. If
+			// this leg ever starts producing peaks, the differential no longer
+			// isolates geometry and the regression-sensitivity claim is void.
+			if coloGridMax != 0 || len(coloResult.Blobs) != 0 {
+				t.Fatalf("co-located (0,0,1) placement must yield an all-zero grid and "+
+					"no peaks (got gridMax=%.4f, blobs=%d) — the differential only holds "+
+					"if co-located nodes cannot accumulate", coloGridMax, len(coloResult.Blobs))
+			}
+			t.Logf("[colocated] nodes=%d gridMax=%.4f blobs=%d activeLinks=%d — degenerate links, no accumulation",
+				count, coloGridMax, len(coloResult.Blobs), coloResult.ActiveLinks)
+
+			// Explicit differential: the geometry change flips gridMax from
+			// zero (old) to non-zero (new). This is the bead's central claim.
+			if !(spreadGridMax > 0 && coloGridMax == 0) {
+				t.Fatalf("differential broken: spread gridMax=%.4f colocated gridMax=%.4f — "+
+					"expected spread>0 and colocated==0", spreadGridMax, coloGridMax)
+			}
+		})
+	}
+}
+
+// fuseWithPlacement builds an engine sized to the given room bounds, seeds
+// `count` nodes at the placement the `place` callback returns, fires an
+// explicit geometry-independent motion link for every node pair (DeltaRMS=1.0),
+// runs one Fuse step, and returns the result plus the accumulation grid's max
+// voxel value. Placement is the ONLY thing that varies between callers — the
+// link set, grid, and room are identical — so the returned gridMax is a pure
+// function of geometry.
+func fuseWithPlacement(minX, minY, minZ, maxX, maxY, maxZ float64,
+	count int, place func(int) []simulator.Point) (*Result, float64) {
+
+	e := NewEngine(&Config{
+		Width:   maxX - minX,
+		Height:  maxY - minY,
+		Depth:   maxZ - minZ,
+		OriginX: minX,
+		OriginY: minY,
+		OriginZ: minZ,
+		CellSize:      0.2,
+		MinDeltaRMS:   0.01,
+		MaxBlobs:      6,
+		BlobThreshold: 0.1,
+	})
+
+	pts := place(count)
+	nodes := make([]NodePosition, len(pts))
+	for i, p := range pts {
+		mac := fmt.Sprintf("GN:%02d", i+1)
+		nodes[i] = NodePosition{MAC: mac, X: p.X, Y: p.Y, Z: p.Z}
+		e.SetNodePosition(mac, p.X, p.Y, p.Z)
+	}
+
+	// Explicit all-pairs motion links — geometry-independent. Same set for
+	// every placement, so only the node coordinates differ between legs.
+	links := make([]LinkMotion, 0, count*(count-1)/2)
+	for i := 0; i < len(nodes); i++ {
+		for j := i + 1; j < len(nodes); j++ {
+			links = append(links, LinkMotion{
+				NodeMAC:  nodes[i].MAC,
+				PeerMAC:  nodes[j].MAC,
+				DeltaRMS: 1.0,
+				Motion:   true,
+			})
+		}
+	}
+
+	r := e.Fuse(links)
+
+	var gridMax float64
+	if snap := e.GetGridSnapshot(); snap != nil {
+		gridMax = gridMaxValue(snap.Data)
+	}
+	return r, gridMax
+}
+
 // TestEngine_HealthWeight verifies that links with lower health scores contribute less to fusion.
 // Per spec: "each link's contribution to the 3D occupancy grid is multiplied by its health_score"
 func TestEngine_HealthWeight(t *testing.T) {
