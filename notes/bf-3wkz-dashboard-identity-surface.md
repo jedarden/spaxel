@@ -7,6 +7,11 @@
 >
 > **Verified against HEAD `6e92f90` on 2026-07-06.** One real mismatch found and fixed
 > (`volume.BlobPos`); everything else confirmed.
+>
+> **Independently re-verified at HEAD `7309564` on 2026-07-06** (second pass, retry of the same
+> bead): all 8 Go types re-checked to emit the canonical camelCase trio, `state.js:288-294` and
+> `websocket.js:159-174` re-confirmed, `go vet ./...` and `go test ./...` green. No further
+> changes required. See §7.
 
 ---
 
@@ -131,3 +136,25 @@ _blobStates.set(b.id, { x: b.x, z: b.z, vx: b.vx||0, vz: b.vz||0, ts: Date.now()
 | `notes/bf-5151*` (canonical identity fields) | camelCase convention authority | confirmed across 8 types |
 | `notes/bf-2ibc` (explainability.BlobSnapshot) | sibling child — camelCase reference pattern | confirmed at `handler.go:109-111` |
 | `notes/bf-5v3q` (volume.BlobPos) | sibling child — introduced snake_case | fixed here to camelCase |
+
+---
+
+## 7. Independent re-verification (second pass, HEAD `7309564`)
+
+The bead was retried (`failure-count:1`); the fix + this note landed in commit `7309564`
+(already on `origin/main`) but the bead was left open. This section records a fresh,
+independent confirmation rather than trusting the prior pass:
+
+- **8 Go types** — `grep` of `PersonName|AssignedColor|IdentityResolved` JSON tags across
+  `dashboard/hub.go:558-560`, `api/tracks.go:31-33`, `explainability/handler.go:109-111`,
+  `volume/shape.go:1090-1092`, `signal/processor.go:605-607`, `tracker/tracker.go:58-60`,
+  `tracking/tracker.go:45-47`, `automation/engine.go:1347-1349` — all emit
+  `personName`/`assignedColor`/`identityResolved` (the `*bool` tri-state for the flag). ✅
+- **`volume.BlobPos`** fix from §3 confirmed present at `shape.go:1090-1092` (camelCase). ✅
+- **JS creation path** — `dashboard/js/state.js:288-294` `updateBlob`: creation literal
+  `{ id: id }` at `:290`, server identity merged via `Object.assign(...)` at `:292`. ✅ no change
+- **JS dead-reckoning cache** — `dashboard/js/websocket.js:159-174` `_captureBlobStates`
+  caches `{ x, z, vx, vz, ts }` only; identity-free by design. ✅ left alone
+- **Gates** — `go vet ./...` exit 0; `go test ./...` all packages `ok`. ✅
+
+No source change was needed in this pass — the surface is correct and uniform. Bead closed.
