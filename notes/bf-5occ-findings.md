@@ -1,6 +1,10 @@
-# Position Format Validation: Registry vs Simulator
+# bf-5occ: Position Format Validation - Findings
 
 ## Overview
+
+**Bead ID:** bf-5occ
+**Task:** Validate position formatting for registry - check that positions received by registry_bridge.go are correctly formatted for registry consumption.
+**Status:** ❌ **FORMAT MISMATCH IDENTIFIED**
 
 Analysis of position data flow from simulator → registry_bridge → fleet registry identified a **coordinate system mismatch** between simulator and registry coordinate systems.
 
