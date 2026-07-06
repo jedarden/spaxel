@@ -550,7 +550,15 @@ type blobJSON struct {
 	PersonColor        string       `json:"person_color,omitempty"`
 	IdentityConfidence float64      `json:"identity_confidence,omitempty"`
 	IdentitySource     string       `json:"identity_source,omitempty"`
-	Replay             bool         `json:"replay"` // true when blob is from time-travel replay
+	// Canonical identity fields (bf-5151). camelCase JSON keys are the canonical
+	// dashboard-facing names; the snake_case PersonLabel/PersonColor above are
+	// retained as deprecated aliases. Propagated from tracking.Blob in
+	// BroadcastLocUpdate below — zero today because the source struct is not yet
+	// populated (a follow-up bead wires the BLE identity sidecar).
+	PersonName       string `json:"personName,omitempty"`
+	AssignedColor    string `json:"assignedColor,omitempty"`
+	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed
+	Replay           bool   `json:"replay"`                     // true when blob is from time-travel replay
 }
 
 // BroadcastLocUpdate sends localisation results to all dashboard clients.
@@ -576,6 +584,9 @@ func (h *Hub) BroadcastLocUpdate(blobs []tracking.Blob) {
 			PersonColor:        b.PersonColor,
 			IdentityConfidence: b.IdentityConfidence,
 			IdentitySource:     b.IdentitySource,
+			PersonName:         b.PersonName,
+			AssignedColor:      b.AssignedColor,
+			IdentityResolved:   b.IdentityResolved,
 		}
 	}
 

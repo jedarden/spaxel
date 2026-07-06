@@ -23,7 +23,15 @@ type Track struct {
 	PersonColor        string  `json:"person_color,omitempty"`
 	IdentityConfidence float64 `json:"identity_confidence,omitempty"`
 	IdentitySource     string  `json:"identity_source,omitempty"`
-	Posture            string  `json:"posture,omitempty"`
+	// Canonical identity fields (bf-5151). camelCase JSON keys are the canonical
+	// API-facing names; the snake_case PersonLabel/PersonColor above are retained
+	// as deprecated aliases. Propagated from signal.TrackedBlob in listTracks —
+	// zero today because the source struct is not yet populated (a follow-up bead
+	// wires the BLE identity sidecar).
+	PersonName       string `json:"personName,omitempty"`
+	AssignedColor    string `json:"assignedColor,omitempty"`
+	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed
+	Posture          string `json:"posture,omitempty"`
 }
 
 // TrackedBlob is an alias for signal.TrackedBlob.
@@ -113,6 +121,9 @@ func (h *TracksHandler) listTracks(w http.ResponseWriter, r *http.Request) {
 			PersonColor:        b.PersonColor,
 			IdentityConfidence: b.IdentityConfidence,
 			IdentitySource:     b.IdentitySource,
+			PersonName:         b.PersonName,
+			AssignedColor:      b.AssignedColor,
+			IdentityResolved:   b.IdentityResolved,
 			Posture:            b.Posture,
 		}
 	}
