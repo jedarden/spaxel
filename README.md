@@ -78,7 +78,7 @@ go build -o spaxel-sim ./cmd/sim
 # Hardware-free acceptance suite (no ESP32 needed)
 cd test/acceptance && go test ./...
 
-# Dashboard unit + accessibility tests
+# Dashboard unit + accessibility tests (CI quality gate)
 cd dashboard && npm test && npm run test:a11y
 ```
 
@@ -89,6 +89,8 @@ Firmware is built with ESP-IDF 5.2.x — see the *Firmware Build System* section
 - [`docs/plan/plan.md`](docs/plan/plan.md) — the complete design: architecture, components, schema, deployment, phases
 - [`docs/notes/`](docs/notes/) — implementation notes (recovery mechanisms, mDNS override, simulation testing, UX)
 - [`docs/research/`](docs/research/) — CSI fundamentals, physics, algorithms, accuracy limits, prior-art papers
+- [`docs/ci-accessibility-integration.md`](docs/ci-accessibility-integration.md) — CI accessibility testing quality gate (WCAG 2.1 AA)
+- [`docs/ci-benchmark-integration.md`](docs/ci-benchmark-integration.md) — CI timing benchmark quality gate (fusion loop)
 - [`dashboard/README.md`](dashboard/README.md) — dashboard test setup (Jest, axe-core + Playwright)
 - [`PROGRESS.md`](PROGRESS.md) — phase-by-phase implementation status
 
