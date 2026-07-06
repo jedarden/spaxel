@@ -147,10 +147,10 @@ func TestAddNode_KeepsExplicitPosition(t *testing.T) {
 // effects of SyncToRegistry so tests can assert the simulator API drove an
 // immediate write into the fleet registry (rather than only logging).
 type recordingRegistry struct {
-	mu          sync.Mutex
-	added       []simulator.NodeRecord
-	posUpdates  []simulator.NodeRecord
-	nodesByMAC  map[string]simulator.NodeRecord
+	mu         sync.Mutex
+	added      []simulator.NodeRecord
+	posUpdates []simulator.NodeRecord
+	nodesByMAC map[string]simulator.NodeRecord
 }
 
 func newRecordingRegistry() *recordingRegistry {
@@ -274,8 +274,8 @@ func TestImmediateSyncOnAddAndUpdate(t *testing.T) {
 
 			// AddNode: node must reach the registry synchronously, before any ticker.
 			node := postNode(t, h, map[string]interface{}{
-				"id": "node-A",
-				"name": "Node A",
+				"id":       "node-A",
+				"name":     "Node A",
 				"position": map[string]interface{}{"x": 1.0, "y": 1.0, "z": 1.0},
 			})
 
@@ -297,8 +297,8 @@ func TestImmediateSyncOnAddAndUpdate(t *testing.T) {
 
 			// UpdateNode: position change must push through immediately.
 			putNode(t, h, "node-A", map[string]interface{}{
-				"id":   "node-A",
-				"name": "Node A",
+				"id":       "node-A",
+				"name":     "Node A",
 				"position": map[string]interface{}{"x": 2.5, "y": 3.0, "z": 1.5},
 			})
 
@@ -665,9 +665,9 @@ func TestSimulatorHandlerToRegistry_OriginNodesGetSpreadGeometry(t *testing.T) {
 // single test. One node position, posted once through the simulator REST API,
 // must arrive — unchanged and in order — at every stage the runtime cares about:
 //
-//	1. simulator VirtualNodeStore       — the source of truth for virtual nodes
-//	2. fleet.Registry (SQLite)          — persisted; read by the dashboard/REST
-//	3. fusion.Engine nodePos mirror     — what Fuse localizes against at runtime
+//  1. simulator VirtualNodeStore       — the source of truth for virtual nodes
+//  2. fleet.Registry (SQLite)          — persisted; read by the dashboard/REST
+//  3. fusion.Engine nodePos mirror     — what Fuse localizes against at runtime
 //
 // bf-69ym locked in stages 1→2; bf-u7ds locked in stages 1→3. This test ties
 // them together: it traces ONE position value through all three stages in a
@@ -819,13 +819,13 @@ func TestPositionPropagation_ReachesAccumulationGrid(t *testing.T) {
 	midX, midZ := (posA.X+posB.X)/2, (posA.Z+posB.Z)/2
 
 	postNode(t, h, map[string]interface{}{
-		"id":   "node-A",
-		"name": "Node A",
+		"id":       "node-A",
+		"name":     "Node A",
 		"position": map[string]interface{}{"x": posA.X, "y": posA.Y, "z": posA.Z},
 	})
 	postNode(t, h, map[string]interface{}{
-		"id":   "node-B",
-		"name": "Node B",
+		"id":       "node-B",
+		"name":     "Node B",
 		"position": map[string]interface{}{"x": posB.X, "y": posB.Y, "z": posB.Z},
 	})
 
