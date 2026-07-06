@@ -3,6 +3,7 @@ package simulator
 
 import (
 	"fmt"
+	"log"
 	"sort"
 )
 
@@ -48,13 +49,16 @@ func (b *FleetRegistryBridge) space() *Space {
 // produces the same position as a full sync. The result therefore has no two
 // co-located points and is never entirely at the origin.
 func (b *FleetRegistryBridge) effectivePositions(nodes []*VirtualNodeState) map[string]Point {
+	log.Printf("[DEBUG] Computing effective positions for %d virtual nodes", len(nodes))
 	effective := make(map[string]Point, len(nodes))
 	var defaults []*VirtualNodeState
 	for _, n := range nodes {
 		if isDefaultOrigin(n.Position) {
 			defaults = append(defaults, n)
+			log.Printf("[DEBUG] Node %s at default origin (%.2f, %.2f, %.2f) - will be reassigned", n.ID, n.Position.X, n.Position.Y, n.Position.Z)
 		} else {
 			effective[n.ID] = n.Position
+			log.Printf("[DEBUG] Node %s keeping explicit position (%.2f, %.2f, %.2f)", n.ID, n.Position.X, n.Position.Y, n.Position.Z)
 		}
 	}
 	if len(defaults) == 0 {
@@ -141,16 +145,19 @@ func (b *FleetRegistryBridge) SyncToRegistry(registry RegistryNodeAdapter) error
 	}
 
 	nodes := b.store.ListNodes()
+	log.Printf("[DEBUG] Registry bridge syncing %d virtual nodes to fleet registry", len(nodes))
 	positions := b.effectivePositions(nodes)
 
 	for _, node := range nodes {
 		mac := b.virtualMAC(node.ID)
 		pos := positions[node.ID]
+		log.Printf("[DEBUG] Syncing node %s (MAC: %s) to position (%.2f, %.2f, %.2f)", node.ID, mac, pos.X, pos.Y, pos.Z)
 
 		// Check if node exists in registry
 		existing, err := registry.GetNode(mac)
 		if err != nil {
 			// Node doesn't exist, create it
+			log.Printf("[INFO] Creating new virtual node %s in registry at (%.2f, %.2f, %.2f)", node.ID, pos.X, pos.Y, pos.Z)
 			if err := registry.AddVirtualNode(
 				mac,
 				node.Name,
@@ -165,6 +172,8 @@ func (b *FleetRegistryBridge) SyncToRegistry(registry RegistryNodeAdapter) error
 			if existing.PosX != pos.X ||
 				existing.PosY != pos.Y ||
 				existing.PosZ != pos.Z {
+				log.Printf("[INFO] Updating position for node %s from (%.2f, %.2f, %.2f) to (%.2f, %.2f, %.2f)",
+					node.ID, existing.PosX, existing.PosY, existing.PosZ, pos.X, pos.Y, pos.Z)
 				if err := registry.SetNodePosition(mac,
 					pos.X,
 					pos.Y,
