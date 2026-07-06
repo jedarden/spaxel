@@ -209,6 +209,19 @@ func (h *SimulatorHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mu.Lock()
+	// If node has no explicit position (co-located at origin), assign a spread
+	// position so nodes don't collapse to the same point, which would cause
+	// Fresnel excess path |P-T|+|P-R|-|T-R| to approach 0 and prevent blob
+	// formation (bf-18yn, bf-4q5w). Use the existing spread-position
+	// infrastructure that mirrors cmd/sim's generateNodePositions.
+	if node.Position.X == 0 && node.Position.Y == 0 && node.Position.Z == 0 {
+		// Get current node count including the one we're about to add
+		currentNodes := h.nodes.All()
+		positions := simulator.DefaultNodePositions(h.space, len(currentNodes)+1)
+		if len(positions) > 0 {
+			node.Position = positions[len(currentNodes)]
+		}
+	}
 	h.nodes.Add(&node)
 	h.mu.Unlock()
 
