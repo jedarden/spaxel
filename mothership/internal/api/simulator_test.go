@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -779,4 +780,85 @@ func TestPositionPropagation_FullPipeline(t *testing.T) {
 	if got := engine.NodeCount(); got != 1 {
 		t.Errorf("update: expected 1 fusion engine node, got %d", got)
 	}
+}
+
+// TestPositionPropagation_ReachesAccumulationGrid (bf-3y9r) closes the last inch
+// of the position-propagation chain the prior children wired. bf-95tx proved a
+// posted position reaches the fusion engine's nodePos mirror, and the fusion
+// package's unit tests prove a populated mirror drives peak formation — but no
+// single test tied the two together through the live simulator chain. This one
+// does: two nodes posted through the simulator REST API flow through
+// registry → engine.nodePos, then one Fuse step with a link between those two
+// MACs must localize a blob near the link midpoint. A blob there is only
+// possible if BOTH positions reached the accumulation grid (Fuse's
+// AddLinkInfluence reads nodePos[mac] for both endpoints; a missing or
+// co-located position produces no peak — see TestEngine_CoLocatedOriginYieldsNoPeaks).
+// That is the demonstrable "positions reach the fusion engine accumulation grid"
+// verification this bead requires.
+func TestPositionPropagation_ReachesAccumulationGrid(t *testing.T) {
+	// Full production chain, exactly as cmd/mothership/main.go wires it.
+	reg := newFleetRegistry(t)
+	mgr := fleet.NewManager(reg)
+	engine := fusion.NewEngine(nil)
+	mgr.SetNodePositionSink(func(mac string, x, y, z float64) {
+		engine.SetNodePosition(mac, x, y, z)
+	})
+	adapter := &fleetRegistryTestAdapter{
+		reg:        reg,
+		forwardPos: mgr.ForwardNodePosition,
+	}
+	h := newWiredHandler(t, adapter)
+
+	// Two explicit, in-room positions forming a horizontal link. Their midpoint
+	// is the unambiguous blob site a single link localizes to. Neither is at the
+	// default origin, so they pass through the bridge unchanged. Coordinates are
+	// kept inside both the simulator's DefaultSpace (6×5×2.5) and the engine's
+	// default grid (10×3×10): X is the long floor axis, Y/Z shared.
+	posA := simulator.Point{X: 0.5, Y: 1.0, Z: 1.0}
+	posB := simulator.Point{X: 5.5, Y: 1.0, Z: 1.0}
+	midX, midZ := (posA.X+posB.X)/2, (posA.Z+posB.Z)/2
+
+	postNode(t, h, map[string]interface{}{
+		"id":   "node-A",
+		"name": "Node A",
+		"position": map[string]interface{}{"x": posA.X, "y": posA.Y, "z": posA.Z},
+	})
+	postNode(t, h, map[string]interface{}{
+		"id":   "node-B",
+		"name": "Node B",
+		"position": map[string]interface{}{"x": posB.X, "y": posB.Y, "z": posB.Z},
+	})
+
+	// Both simulator-created nodes must be positioned in the engine mirror.
+	positions := engine.NodePositions()
+	if len(positions) != 2 {
+		t.Fatalf("expected 2 positioned nodes in engine, got %d: %+v", len(positions), positions)
+	}
+	// The bridge's virtualMAC is unexported; read the actual MACs the engine holds.
+	macA, macB := positions[0].MAC, positions[1].MAC
+
+	// One active link between the two simulator-created nodes. A peak near the
+	// midpoint forms only if both endpoints' positions are in the grid lookup.
+	links := []fusion.LinkMotion{
+		{NodeMAC: macA, PeerMAC: macB, DeltaRMS: 1.0, Motion: true},
+	}
+	result := engine.Fuse(links)
+
+	if result.ActiveLinks == 0 {
+		t.Fatalf("Fuse reported 0 active links — an endpoint position never reached the grid lookup")
+	}
+	if len(result.Blobs) == 0 {
+		t.Fatalf("no blob localized from the link — positions did not reach the accumulation grid")
+	}
+	top := result.Blobs[0]
+	// A single horizontal link localizes its peak near the midpoint (mirrors the
+	// tolerance used by TestEngine_SingleLink_MidpointPeak).
+	if math.Abs(top.X-midX) > 1.5 {
+		t.Errorf("peak X %.2f not near link midpoint %.2f", top.X, midX)
+	}
+	if math.Abs(top.Z-midZ) > 1.5 {
+		t.Errorf("peak Z %.2f not near link midpoint %.2f", top.Z, midZ)
+	}
+	t.Logf("[grid] position propagation  midpoint=(%.2f,%.2f)  peak=(%.2f,%.2f,%.2f) conf=%.3f activeLinks=%d",
+		midX, midZ, top.X, top.Y, top.Z, top.Confidence, result.ActiveLinks)
 }
