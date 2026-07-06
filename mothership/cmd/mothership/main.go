@@ -349,6 +349,72 @@ func (a *fleetRoomConfigAdapter) GetRoom() (width, height, depth float64) {
 	return room.Width, room.Height, room.Depth
 }
 
+// fleetRegistryAdapter adapts *fleet.Registry to the
+// simulator.RegistryNodeAdapter interface used by the virtual-node registry
+// bridge. The two packages declare separate NodeRecord types — fleet.NodeRecord
+// is the rich persistence struct, simulator.NodeRecord is the minimal view the
+// bridge consumes — so GetNode/GetAllNodes convert between them. The write-side
+// methods have identical signatures and delegate directly. This adapter is what
+// lets the simulator API drive an immediate SyncToRegistry into the live fleet
+// registry (bf-5lii), and unblocks the periodic sync that previously passed
+// *fleet.Registry to a method expecting the simulator interface (bf-4pqj).
+type fleetRegistryAdapter struct {
+	reg *fleet.Registry
+}
+
+func (a *fleetRegistryAdapter) AddVirtualNode(mac, name string, x, y, z float64) error {
+	return a.reg.AddVirtualNode(mac, name, x, y, z)
+}
+
+func (a *fleetRegistryAdapter) SetNodePosition(mac string, x, y, z float64) error {
+	return a.reg.SetNodePosition(mac, x, y, z)
+}
+
+func (a *fleetRegistryAdapter) SetNodeRole(mac, role string) error {
+	return a.reg.SetNodeRole(mac, role)
+}
+
+func (a *fleetRegistryAdapter) DeleteNode(mac string) error {
+	return a.reg.DeleteNode(mac)
+}
+
+func (a *fleetRegistryAdapter) GetNode(mac string) (*simulator.NodeRecord, error) {
+	rec, err := a.reg.GetNode(mac)
+	if err != nil {
+		return nil, err
+	}
+	return fleetNodeRecordToSimulator(rec), nil
+}
+
+func (a *fleetRegistryAdapter) GetAllNodes() ([]simulator.NodeRecord, error) {
+	nodes, err := a.reg.GetAllNodes()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]simulator.NodeRecord, 0, len(nodes))
+	for i := range nodes {
+		out = append(out, *fleetNodeRecordToSimulator(&nodes[i]))
+	}
+	return out, nil
+}
+
+// fleetNodeRecordToSimulator maps a fleet.NodeRecord to the minimal
+// simulator.NodeRecord the registry bridge reads. "Enabled" follows the fleet's
+// role-based enable/disable model: role "idle" means disabled, anything else is
+// enabled. The bridge only consumes PosX/PosY/PosZ/Role from this view.
+func fleetNodeRecordToSimulator(n *fleet.NodeRecord) *simulator.NodeRecord {
+	return &simulator.NodeRecord{
+		MAC:     n.MAC,
+		Name:    n.Name,
+		Role:    n.Role,
+		PosX:    n.PosX,
+		PosY:    n.PosY,
+		PosZ:    n.PosZ,
+		Virtual: n.Virtual,
+		Enabled: n.Role != "idle",
+	}
+}
+
 // multiFleetNotifier fans out ingestion.FleetNotifier events to multiple fleet components.
 type multiFleetNotifier struct {
 	notifiers []interface {
@@ -4191,6 +4257,7 @@ func main() {
 	// Create virtual node store for persistence
 	var virtualNodeStore *simulator.VirtualNodeStore
 	var registryBridge *simulator.FleetRegistryBridge
+	var registryAdapter simulator.RegistryNodeAdapter
 
 	virtualNodeStore, err = simulator.NewVirtualNodeStore(simulator.StoreConfig{
 		DataDir: filepath.Join(cfg.DataDir, "simulator"),
@@ -4205,7 +4272,17 @@ func main() {
 		// Create fleet registry bridge to sync virtual nodes to the fleet registry
 		registryBridge = simulator.NewFleetRegistryBridge(virtualNodeStore)
 
-		// Start periodic sync from virtual node store to fleet registry (every 30 seconds)
+		// Adapter that exposes *fleet.Registry through simulator.RegistryNodeAdapter
+		// (converting fleet.NodeRecord <-> simulator.NodeRecord). Shared by the
+		// periodic sync below and by the immediate syncs the simulator API triggers
+		// on node create/update, so both paths write through the same registry.
+		if fleetReg != nil {
+			registryAdapter = &fleetRegistryAdapter{reg: fleetReg}
+		}
+
+		// Start periodic sync from virtual node store to fleet registry (every 30 seconds).
+		// This is a safety net — the simulator API also triggers an immediate sync on
+		// node create/update so new nodes don't have to wait for this ticker.
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
@@ -4214,7 +4291,10 @@ func main() {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					if err := registryBridge.SyncToRegistry(fleetReg); err != nil {
+					if registryAdapter == nil {
+						continue
+					}
+					if err := registryBridge.SyncToRegistry(registryAdapter); err != nil {
 						log.Printf("[WARN] Failed to sync virtual nodes to fleet registry: %v", err)
 					}
 				}
@@ -4223,7 +4303,7 @@ func main() {
 		log.Printf("[INFO] Fleet registry bridge started (sync interval: 30s)")
 	}
 
-	simulatorHandler := api.NewSimulatorHandler(virtualNodeStore, registryBridge)
+	simulatorHandler := api.NewSimulatorHandler(virtualNodeStore, registryBridge, registryAdapter)
 	simulatorHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Pre-deployment simulator API registered at /api/simulator/*")
 

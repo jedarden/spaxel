@@ -3,11 +3,16 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"sync"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/spaxel/mothership/internal/simulator"
 )
 
@@ -16,7 +21,7 @@ import (
 // remaining co-located, which would collapse Fresnel excess path length toward
 // 0 and prevent blob formation (bf-18yn, bf-4q5w).
 func TestAddNode_SpreadsDefaultOrigin(t *testing.T) {
-	handler := NewSimulatorHandler()
+	handler := NewSimulatorHandler(nil, nil, nil)
 	space := simulator.DefaultSpace()
 	handler.mu.Lock()
 	handler.space = space
@@ -101,7 +106,7 @@ func TestAddNode_SpreadsDefaultOrigin(t *testing.T) {
 // TestAddNode_KeepsExplicitPosition tests that nodes with explicit positions
 // are not modified.
 func TestAddNode_KeepsExplicitPosition(t *testing.T) {
-	handler := NewSimulatorHandler()
+	handler := NewSimulatorHandler(nil, nil, nil)
 
 	nodeJSON := map[string]interface{}{
 		"id": "test-node",
@@ -132,5 +137,178 @@ func TestAddNode_KeepsExplicitPosition(t *testing.T) {
 	if node.Position.X != 1.5 || node.Position.Y != 2.3 || node.Position.Z != 1.0 {
 		t.Errorf("explicit position not preserved: got (%.2f, %.2f, %.2f)",
 			node.Position.X, node.Position.Y, node.Position.Z)
+	}
+}
+
+// recordingRegistry is a simulator.RegistryNodeAdapter that records the side
+// effects of SyncToRegistry so tests can assert the simulator API drove an
+// immediate write into the fleet registry (rather than only logging).
+type recordingRegistry struct {
+	mu          sync.Mutex
+	added       []simulator.NodeRecord
+	posUpdates  []simulator.NodeRecord
+	nodesByMAC  map[string]simulator.NodeRecord
+}
+
+func newRecordingRegistry() *recordingRegistry {
+	return &recordingRegistry{nodesByMAC: make(map[string]simulator.NodeRecord)}
+}
+
+func (r *recordingRegistry) AddVirtualNode(mac, name string, x, y, z float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec := simulator.NodeRecord{MAC: mac, Name: name, PosX: x, PosY: y, PosZ: z, Virtual: true, Enabled: true}
+	r.nodesByMAC[mac] = rec
+	r.added = append(r.added, rec)
+	return nil
+}
+
+func (r *recordingRegistry) SetNodePosition(mac string, x, y, z float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec := r.nodesByMAC[mac]
+	rec.PosX, rec.PosY, rec.PosZ = x, y, z
+	r.nodesByMAC[mac] = rec
+	r.posUpdates = append(r.posUpdates, simulator.NodeRecord{MAC: mac, PosX: x, PosY: y, PosZ: z})
+	return nil
+}
+
+func (r *recordingRegistry) SetNodeRole(mac, role string) error { return nil }
+
+func (r *recordingRegistry) DeleteNode(mac string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.nodesByMAC, mac)
+	return nil
+}
+
+func (r *recordingRegistry) GetNode(mac string) (*simulator.NodeRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec, ok := r.nodesByMAC[mac]
+	if !ok {
+		return nil, fmt.Errorf("not found: %s", mac)
+	}
+	return &rec, nil
+}
+
+func (r *recordingRegistry) GetAllNodes() ([]simulator.NodeRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]simulator.NodeRecord, 0, len(r.nodesByMAC))
+	for _, rec := range r.nodesByMAC {
+		out = append(out, rec)
+	}
+	return out, nil
+}
+
+// newWiredHandler builds a SimulatorHandler backed by a real VirtualNodeStore
+// (in a temp dir), a FleetRegistryBridge over that store, and the given adapter.
+// This mirrors the wiring in cmd/mothership/main.go that drives immediate syncs.
+func newWiredHandler(t *testing.T, adapter simulator.RegistryNodeAdapter) *SimulatorHandler {
+	t.Helper()
+	store, err := simulator.NewVirtualNodeStore(simulator.StoreConfig{
+		DataDir: filepath.Join(t.TempDir(), "simulator"),
+		Space:   simulator.DefaultSpace(),
+	})
+	if err != nil {
+		t.Fatalf("create virtual store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	bridge := simulator.NewFleetRegistryBridge(store)
+	return NewSimulatorHandler(store, bridge, adapter)
+}
+
+// postNode issues a POST /api/simulator/nodes for the given node body.
+func postNode(t *testing.T, h *SimulatorHandler, body map[string]interface{}) simulator.Node {
+	t.Helper()
+	raw, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/simulator/nodes", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.AddNode(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("AddNode status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+	var node simulator.Node
+	if err := json.Unmarshal(w.Body.Bytes(), &node); err != nil {
+		t.Fatalf("decode node: %v", err)
+	}
+	return node
+}
+
+// putNode issues a PUT /api/simulator/nodes/{nodeID} with chi's URL param set.
+func putNode(t *testing.T, h *SimulatorHandler, nodeID string, body map[string]interface{}) {
+	t.Helper()
+	raw, _ := json.Marshal(body)
+	req := httptest.NewRequest("PUT", "/api/simulator/nodes/"+nodeID, bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("nodeID", nodeID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+	h.UpdateNode(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateNode status = %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
+	}
+}
+
+// TestImmediateSyncOnAddAndUpdate verifies the bf-5lii wiring: AddNode and
+// UpdateNode must drive an immediate SyncToRegistry into the fleet registry
+// instead of only logging that the node will sync on the next periodic tick.
+func TestImmediateSyncOnAddAndUpdate(t *testing.T) {
+	cases := []struct {
+		name    string
+		adapter simulator.RegistryNodeAdapter // nil exercises the no-op path
+	}{
+		{"wired adapter triggers immediate sync", newRecordingRegistry()},
+		{"nil adapter is a safe no-op", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newWiredHandler(t, c.adapter)
+			rec, _ := c.adapter.(*recordingRegistry)
+
+			// AddNode: node must reach the registry synchronously, before any ticker.
+			node := postNode(t, h, map[string]interface{}{
+				"id": "node-A",
+				"name": "Node A",
+				"position": map[string]interface{}{"x": 1.0, "y": 1.0, "z": 1.0},
+			})
+
+			if rec == nil {
+				return // no-op path: nothing further to assert, just no panic
+			}
+			if len(rec.added) == 0 {
+				t.Fatalf("AddNode did not trigger an immediate SyncToRegistry: no AddVirtualNode calls recorded")
+			}
+			added := rec.added[len(rec.added)-1]
+			if added.Name != "Node A" {
+				t.Errorf("registry saw name %q, want %q", added.Name, "Node A")
+			}
+			if added.PosX != node.Position.X || added.PosY != node.Position.Y || added.PosZ != node.Position.Z {
+				t.Errorf("registry saw position (%.2f,%.2f,%.2f), want node position (%.2f,%.2f,%.2f)",
+					added.PosX, added.PosY, added.PosZ, node.Position.X, node.Position.Y, node.Position.Z)
+			}
+			addedBeforeUpdate := len(rec.posUpdates)
+
+			// UpdateNode: position change must push through immediately.
+			putNode(t, h, "node-A", map[string]interface{}{
+				"id":   "node-A",
+				"name": "Node A",
+				"position": map[string]interface{}{"x": 2.5, "y": 3.0, "z": 1.5},
+			})
+
+			if len(rec.posUpdates) <= addedBeforeUpdate {
+				t.Fatalf("UpdateNode did not trigger an immediate SyncToRegistry: no new SetNodePosition call")
+			}
+			upd := rec.posUpdates[len(rec.posUpdates)-1]
+			if upd.MAC != added.MAC {
+				t.Errorf("position update MAC %q != add MAC %q", upd.MAC, added.MAC)
+			}
+			if upd.PosX != 2.5 || upd.PosY != 3.0 || upd.PosZ != 1.5 {
+				t.Errorf("position update saw (%.2f,%.2f,%.2f), want (2.50,3.00,1.50)", upd.PosX, upd.PosY, upd.PosZ)
+			}
+		})
 	}
 }
