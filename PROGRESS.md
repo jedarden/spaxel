@@ -806,6 +806,32 @@ RED from the pre-existing in-module sim-binary trap, out of scope — bf-4q5w).
 `blobs: 0` is correctly out of scope (next chain link, fusion `SetNodePosition`
 wiring, bf-4q5w / IO-6 hard-gate).
 
+### Re-verified again (bf-3hji, HEAD f281b7f, 2026-07-07)
+
+Fresh re-dispatch. Against the still-running strict-window mothership
+(`SPAXEL_MIGRATION_WINDOW_HOURS=0`, `SPAXEL_DATA_DIR=/tmp/spaxel-bf3hji-data-*`,
+bound `127.0.0.1:8080`, `/healthz` `status:"ok"`) — the bf-3zll healthy instance
+— rebuilt the sim from the repo-root go.work module and ran the exact command:
+
+```bash
+go build -o /tmp/spaxel-sim ./cmd/sim
+/tmp/spaxel-sim --mothership ws://localhost:8080/ws/node \
+  --nodes 4 --walkers 1 --rate 20 --duration 30 --ble --seed 42
+```
+
+- **4 nodes connect** — `[SIM] Node 0..3 connected to mothership`; sim exits 0.
+- **No REJECT/401/403** — 0 `REJECT` lines in the sim log; sim exit 0.
+- **frames/s > 0** — `[SIM]   Frames sent: 7200 / Duration: 30.0 seconds /
+  Average FPS: 240.0` (= 12 ordered node-pairs × 20 Hz); steady-state
+  `frames/s=237–245` across stats ticks.
+- **/api/nodes lists 4 online mid-run** — `/healthz` `nodes_online:4`; `/api/nodes`
+  returns 4 rows (`02:53:AC:00:00:0[0-3]`, `tx`/`tx`/`rx`/`rx`) all online
+  (`went_offline_at=0001-01-01T00:00:00Z`, the Go zero time = never disconnected),
+  `last_seen` within ~1 s of the probe.
+
+All four bf-3hji acceptance criteria met. `blobs: 0` remains correctly out of
+scope (next chain link — fusion `SetNodePosition` wiring, bf-4q5w / IO-6 gate).
+
 ### Independently re-verified (bf-4ads8, third chain link)
 
 Re-ran the exact documented command against a fresh `bf-3zll` healthy mothership
