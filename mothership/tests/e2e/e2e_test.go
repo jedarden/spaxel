@@ -903,7 +903,20 @@ func TestDashboardWebSocket(t *testing.T) {
 	t.Logf("Received %d blob count updates", len(blobCounts))
 }
 
-// TestFullE2EIntegration runs a comprehensive end-to-end test
+// TestFullE2EIntegration runs a comprehensive end-to-end test.
+//
+// It is the bf-5jeo verification capstone's full-stack check: the 4-node /
+// 2-walker / 30s simulator run must produce observable output on BOTH the
+// dashboard WebSocket feed (a tracked blob appeared) and the /api/events
+// "detection" stream (a detection event was persisted). Asserting neither — the
+// previous behavior — let detection regressions pass silently as long as the API
+// was merely reachable. The two hard assertions below close that dodge.
+//
+// NOTE: these assertions are deliberately strict and are expected to be RED until
+// the upstream fusion SetNodePosition wiring (bf-4q5w) lands, so that an empty
+// blob feed / detection-event list surfaces as a hard failure rather than silently
+// passing. That strictness is the entire point of the bf-5jeo capstone. Do NOT
+// weaken it (e.g. by re-accepting an empty feed or list) to make the test green.
 func TestFullE2EIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e test in short mode")
@@ -925,28 +938,65 @@ func TestFullE2EIntegration(t *testing.T) {
 		t.Fatalf("Failed to run simulator: %v", err)
 	}
 
-	// Assert during run
+	// Capture the dashboard WebSocket blob feed concurrently while the
+	// simulation runs and AssertDuringRun polls the live state. WatchDashboardWS
+	// blocks for `simDuration`, so it must run alongside AssertDuringRun rather
+	// than after it (the simulator has finished by then).
+	var blobCounts []int
+	var wsErr error
+	var wsWG sync.WaitGroup
+	wsWG.Add(1)
+	go func() {
+		defer wsWG.Done()
+		blobCounts, wsErr = h.WatchDashboardWS(ctx, simDuration)
+	}()
+
+	// Assert during run (kept as-is; AssertDuringRun itself is hardened by bf-2330).
 	if err := h.AssertDuringRun(ctx, simDuration, 4); err != nil {
 		t.Fatalf("Assertion failed during run: %v", err)
 	}
 
-	// Wait for simulator to complete
+	// Collect the dashboard WS capture.
+	wsWG.Wait()
+	if wsErr != nil {
+		t.Fatalf("Failed to watch dashboard WS: %v", wsErr)
+	}
+
+	// Wait for simulator to complete (grace period for any in-flight detection
+	// events to be persisted to the events table).
 	time.Sleep(simDuration + 2*time.Second)
 
-	// Assert after run: verify the events API is functional.
-	// Detection events are only generated when the fusion engine produces blobs
-	// (requiring sufficient signal variation). We verify the API responds correctly
-	// rather than asserting a minimum count.
+	// Hard assertion #1: the dashboard WebSocket feed must have shown at least one
+	// tracked blob during the run. A zero blob count means the fusion+tracking
+	// loop localized no walker from the 4-node/2-walker CSI stream — a detection
+	// regression, not a tolerated quiet-room condition. The helper (bf-2330) gates
+	// nil/empty/zero; we wrap its error with the peak observed and likely upstream
+	// cause so a RED failure is immediately actionable.
+	if assertErr := AssertBlobObserved(blobCounts); assertErr != nil {
+		t.Fatalf("expected >=1 blob in the dashboard WS feed during the run, "+
+			"but none was observed (the fusion/tracking pipeline localized no "+
+			"walker from the 4-node/2-walker CSI stream) [%v]", assertErr)
+	}
+
+	// Hard assertion #2: the /api/events "detection" stream must surface at least
+	// one detection event. Same rationale as above — an empty list is a detection
+	// regression, not a tolerated condition.
 	events, err := h.GetEvents(ctx, "detection", 100)
 	if err != nil {
 		t.Fatalf("Failed to get events: %v", err)
 	}
-
-	if events == nil {
-		t.Fatal("Expected non-nil events response from API")
+	if assertErr := AssertDetectionEventsObserved(events); assertErr != nil {
+		observed := 0
+		if events != nil {
+			observed = len(events.Events)
+		}
+		t.Fatalf("expected >=1 detection event but observed %d; "+
+			"the fusion/tracking pipeline produced no blobs (no walker was "+
+			"localized from the 4-node/2-walker CSI stream) [%v]",
+			observed, assertErr)
 	}
 
-	t.Logf("✓ Full E2E integration test passed (events API functional, %d detection events)", len(events.Events))
+	t.Logf("✓ Full E2E integration test passed (dashboard WS showed >=1 blob; %d detection events)", len(events.Events))
 }
 
 // IO_1_FreshInstall_FirstBoot tests the fresh install / first boot scenario.
