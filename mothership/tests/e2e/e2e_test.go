@@ -322,6 +322,61 @@ type Event struct {
 	Severity    string          `json:"severity"`
 }
 
+// GetBlobCount retrieves the current number of tracked blobs from /api/blobs.
+// The endpoint returns a JSON array of blobs; this helper returns len of that array.
+// It mirrors the GetNodes/GetEvents pattern and is used by AssertDuringRun to
+// observe blob production across a run window.
+func (h *TestHarness) GetBlobCount(ctx context.Context) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.APIURL+"/api/blobs", nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	// /api/blobs serializes the tracked-blob slice directly as a JSON array.
+	var blobs []json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&blobs); err != nil { //nolint:errcheck
+		return 0, err
+	}
+
+	return len(blobs), nil
+}
+
+// AssertBlobObserved asserts that the dashboard WebSocket feed showed at least one
+// tracked blob at some point. blobCounts is the per-tick slice returned by
+// WatchDashboardWS. Reusable across TestDetectionEvents / TestFullE2EIntegration /
+// the IO-6 hard-gate test (children of bf-5jeo).
+func AssertBlobObserved(blobCounts []int) error {
+	maxBlobs := 0
+	for _, c := range blobCounts {
+		if c > maxBlobs {
+			maxBlobs = c
+		}
+	}
+	if maxBlobs < 1 {
+		return fmt.Errorf("expected at least one blob in dashboard feed, but max blob count observed was %d across %d ticks",
+			maxBlobs, len(blobCounts))
+	}
+	return nil
+}
+
+// AssertDetectionEventsObserved asserts that a GetEvents(ctx, "detection", N) result
+// contains at least one detection event. Reusable across the e2e detection tests
+// (children of bf-5jeo).
+func AssertDetectionEventsObserved(events *EventsResponse) error {
+	if events == nil {
+		return errors.New("expected at least one detection event, but events response was nil")
+	}
+	if len(events.Events) < 1 {
+		return fmt.Errorf("expected at least one detection event, but got %d", len(events.Events))
+	}
+	return nil
+}
+
 // WatchDashboardWS connects to the dashboard WebSocket and returns blob counts
 func (h *TestHarness) WatchDashboardWS(ctx context.Context, duration time.Duration) ([]int, error) {
 	wsURL := "ws://localhost:8080/ws/dashboard"
@@ -377,8 +432,11 @@ func (h *TestHarness) AssertDuringRun(ctx context.Context, duration time.Duratio
 	defer ticker.Stop()
 
 	startTime := time.Now()
-	blobDetected := false
 	nodesSeenOnline := false
+	// Track blob/detection production across the WHOLE run window so we can
+	// hard-fail (below) if the fusion pipeline produced no output at all.
+	maxBlobs := 0              // peak concurrent tracked blobs seen via /api/blobs
+	detectionEventCount := 0  // peak detection-event count seen via /api/events
 
 	for time.Since(startTime) < duration {
 		select {
@@ -416,23 +474,44 @@ func (h *TestHarness) AssertDuringRun(ctx context.Context, duration time.Duratio
 				}
 			}
 
-			// Check for blobs - log if detection events appear within first 15s.
-			// Detection events require the full fusion+tracking pipeline to produce blobs,
-			// which depends on signal conditions. We do not assert this is required.
-			if elapsed >= 5 && elapsed <= 15 && !blobDetected {
-				events, err := h.GetEvents(ctx, "detection", 10)
-				if err == nil && len(events.Events) > 0 {
-					h.t.Logf("✓ Blob detected within first 15s (found %d detection events at %ds)", len(events.Events), elapsed)
-					blobDetected = true
+			// Track blob production across the whole run window (not just an
+			// early sub-window). Polling /api/blobs gives the current concurrent
+			// tracked-blob count; we keep the peak.
+			if elapsed >= 5 {
+				if blobCount, err := h.GetBlobCount(ctx); err == nil && blobCount > maxBlobs {
+					maxBlobs = blobCount
+				}
+			}
+
+			// Track detection events across the whole run window. Detection events
+			// are emitted only when the fusion+tracking pipeline produces blobs, so
+			// they are an independent confirmation of blob production.
+			if elapsed >= 5 {
+				if events, err := h.GetEvents(ctx, "detection", 100); err == nil {
+					if n := len(events.Events); n > detectionEventCount {
+						detectionEventCount = n
+					}
 				}
 			}
 		}
 	}
 
-	if blobDetected {
-		h.t.Logf("✓ Detection events observed during run")
-	} else {
-		h.t.Logf("No detection events during run (fusion pipeline may not have produced blobs)")
+	// Hard-fail: across the entire run window the fusion pipeline produced
+	// neither a tracked blob nor a detection event. This is a regression in
+	// detection, not a tolerated signal condition — so surface a descriptive
+	// error (elapsed time + counts observed) rather than silently returning nil.
+	elapsedTotal := int(time.Since(startTime).Seconds())
+	if maxBlobs < 1 && detectionEventCount < 1 {
+		return fmt.Errorf("no blobs or detection events observed during %ds run window "+
+			"(max concurrent blobs: %d, detection events: %d): fusion pipeline produced no output",
+			elapsedTotal, maxBlobs, detectionEventCount)
+	}
+
+	if maxBlobs >= 1 {
+		h.t.Logf("✓ Blobs observed during run (peak concurrent: %d)", maxBlobs)
+	}
+	if detectionEventCount >= 1 {
+		h.t.Logf("✓ Detection events observed during run (%d events)", detectionEventCount)
 	}
 
 	return nil
