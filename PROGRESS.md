@@ -717,16 +717,50 @@ CSI streaming path). It is the same binary the e2e harness builds
 
 ### Run against the healthy mothership (exact command)
 
+`--provision` (default) is shown explicitly below: it mints a REAL per-node HMAC
+token via `POST /api/provision`, so the fleet connects under
+`SPAXEL_MIGRATION_WINDOW_HOURS=0` (strict) exactly as well as the open default.
+Drop it for `--provision=false` (legacy dummy token, window-dependent) or pin a
+token with `--token <t>` (see "Auth policy" below).
+
 ```bash
+SPAXEL_MIGRATION_WINDOW_HOURS=0 ./mothership   # then, separately:
 /tmp/spaxel-sim \
   --mothership ws://localhost:8080/ws/node \
+  --provision \
   --nodes 4 --walkers 1 --rate 20 --duration 30 --ble --seed 42
 ```
 
-The sim auto-provisions a node token (`POST /api/provision`, falling back to a
-synthetic HMAC token) and presents it as `X-Spaxel-Token` on each WS dial. On a
-fresh boot the migration window is open, so the token-bearing virtual nodes are
-accepted (no reject).
+### Auth policy — window-independent (bf-4mle6)
+
+The hardware-free build authenticates on **real per-node HMAC tokens**, not the
+migration window. By default `spaxel-sim` is `--provision` (true):
+
+- `resolveTokens()` mints a REAL per-node token for every virtual node:
+  `provisionNodeToken()` POSTs `{"mac":<mac>}` to the mothership
+  `/api/provision`, which returns `node_token = HMAC-SHA256(installSecret, mac)`
+  (`cmd/sim/main.go`). The token is presented as `X-Spaxel-Token` on each node's
+  WS dial.
+- The ingestion server (`bf-1o7qi`) bridges that header into `hello.Token`
+  (`server.go:524-527`) — the validator reads only `hello.Token` — and the
+  always-wired validator (`main.go:4494` `SetTokenValidator(provSrv.ValidateToken)`)
+  accepts a valid token **regardless of the migration window**
+  (`server.go:537` `tokenOK := hello.Token != "" && validator(hello.MAC, hello.Token)`).
+  Only an empty/invalid token falls through to the window branch
+  (`server.go:538-549`), so a provisioned node is accepted and paired under
+  `SPAXEL_MIGRATION_WINDOW_HOURS=0` (strict) exactly as well as 24 or larger.
+
+The e2e harness proves this by running under `SPAXEL_MIGRATION_WINDOW_HOURS=0`
+in `TestHarness.Start` (`bf-qzrmq`, commit 250056c): the no-reject path is
+exercised against the STRICT window, not the open 24h default, so it is not a
+side effect of the implicit window.
+
+`--token <t>` overrides everything and applies `<t>` verbatim to every node
+(not window-independent unless `<t>` is itself a valid HMAC token).
+`--provision=false` is the legacy dummy-token path: nodes are admitted only
+while the migration window is open and REJECTED once it closes — explicitly NOT
+window-independent, kept only to reproduce the pre-fix behaviour documented in
+the bf-2hdbg write-up below.
 
 ### Verified behavior (4 nodes, 1 walker, 20 Hz, 30 s, --ble, --seed 42)
 
@@ -750,6 +784,17 @@ accepted (no reject).
   is deliberately RED until bf-4q5w and is not weakened here.
 
 ## bf-2hdbg — The migration window (not tokens) is what accepts sim nodes
+
+> **RESOLVED 2026-07-07 (bf-1o7qi + bf-4mle6).** This finding was accurate
+> *before the token path was fixed*: at the time the sim was genuinely tokenless
+> to the validator and admission was purely the 24h window. The fix landed
+> exactly where this bead predicted — on the token/supply side: `bf-1o7qi`
+> bridges the `X-Spaxel-Token` header into `hello.Token`, and `bf-4mle6` makes
+> `spaxel-sim` provision a REAL per-node HMAC token (`--provision`, default) — so
+> a sim node is now accepted on a valid token **regardless of the window** (see
+> "Auth policy" above). The detailed analysis below is preserved verbatim as the
+> historical root-cause record; its conclusion is superseded by the resolution at
+> the end of this section.
 
 Established 2026-07-07 (bead bf-2hdbg, third link of the bf-34lwt split; builds
 on the bf-3hji "no reject" finding above). The bf-3hji "no REJECT, sim nodes
@@ -840,16 +885,40 @@ deadline. This pins down exactly when REJECT fires.
   In both cases every tokenless sim node logs "rejected: missing token" and is
   sent `invalid_token` then disconnected.
 
-### Conclusion — "no reject" is a 24h-window MASK, not a real fix
+### Conclusion — RESOLVED by the provisioning fix (was: "a 24h-window mask")
 
-The current green "sim nodes connect without REJECT" state is entirely a
-property of the default 24h migration window that a fresh boot opens. It is
-**not** a fix to the token/auth path: sim nodes remain tokenless in the only
-place checked (`hello.Token`), and the acceptance decision at `server.go:515`
-is gated purely on the deadline, not on token validity. REJECT returns the
-moment the window is closed — set `SPAXEL_MIGRATION_WINDOW_HOURS=0`, or let the
-mothership run past 24h of uptime, and every tokenless sim node hits
-`server.go:525` `sendReject(conn, "invalid_token")` and is disconnected. The
-real fix is on the token/supply side (provision a real token into the hello
-body, or fix the dead header-read path), not on the window.
+**Status: RESOLVED (bf-1o7qi + bf-4mle6).** The original conclusion below was
+correct as of the bead's investigation and correctly identified the required
+fix direction ("the real fix is on the token/supply side"). That fix has now
+landed:
+
+- `bf-1o7qi` (`server.go:524-527`) bridges the `X-Spaxel-Token` header into
+  `hello.Token`, so a header-only client (the sim, and firmware following the
+  plan.md auth contract) is no longer tokenless to the validator.
+- `bf-4mle6` makes `spaxel-sim` provision a REAL per-node HMAC token via
+  `--provision` (default), presented as `X-Spaxel-Token` and validated
+  server-side by the always-wired validator (`server.go:537`) **regardless of
+  the migration window**.
+
+A provisioned sim node is therefore accepted and paired under
+`SPAXEL_MIGRATION_WINDOW_HOURS=0` (strict) exactly as well as 24h or larger —
+the e2e harness runs under the strict window (`bf-qzrmq`) to prove it. The
+window branch (`server.go:538-549`) now admits only the explicit legacy
+dummy-token path (`--provision=false`), which remains deliberately NOT
+window-independent so the pre-fix behaviour can still be reproduced.
+
+---
+
+*Historical conclusion (pre-fix, preserved verbatim):*
+
+The then-green "sim nodes connect without REJECT" state was entirely a property
+of the default 24h migration window that a fresh boot opens. It was not a fix
+to the token/auth path: sim nodes remained tokenless in the only place checked
+(`hello.Token`), and the acceptance decision was gated purely on the deadline,
+not on token validity. REJECT returned the moment the window was closed — set
+`SPAXEL_MIGRATION_WINDOW_HOURS=0`, or let the mothership run past 24h of
+uptime, and every tokenless sim node was sent `invalid_token` and disconnected.
+The real fix — identified here and since implemented in bf-1o7qi + bf-4mle6 —
+is on the token/supply side (provision a real token into the hello body, or fix
+the dead header-read path), not on the window.
 
