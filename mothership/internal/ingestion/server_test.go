@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spaxel/mothership/internal/provisioning"
 )
 
 // TestMalformedCounter_WarnThreshold verifies that WARN is logged when count exceeds 100
@@ -588,6 +590,170 @@ func TestMigrationWindow(t *testing.T) {
 				// Connection should close after reject
 				if ingestServer.IsNodeConnected("AA:BB:CC:DD:EE:FF") {
 					t.Fatal("Rejected node should not be in connected list")
+				}
+			}
+		})
+	}
+}
+
+// TestTokenValidation_HeaderTokenBridged exercises the bf-4iewr/bf-1o7qi fix: a
+// node that presents its token ONLY via the X-Spaxel-Token upgrade-request header
+// (the documented auth channel, used by spaxel-sim) must be accepted and marked
+// paired even when the migration window is closed. It wires the REAL
+// provisioning.Server.ValidateToken (HMAC-SHA256(installSecret, mac)) as the
+// validator and mints the token through the real provisioning handler, so the
+// bridge is proven end-to-end through the same HMAC path production uses.
+// Regression cases assert invalid/empty tokens are still rejected once the
+// window closes.
+func TestTokenValidation_HeaderTokenBridged(t *testing.T) {
+	// Real provisioning server with an auto-generated install secret persisted
+	// to a temp dir. HandleProvision and ValidateToken share that secret.
+	provSrv := provisioning.NewServer(t.TempDir(), "spaxel", 8080, "pool.ntp.org", "")
+
+	const mac = "AA:BB:CC:DD:EE:FF"
+
+	// Mint a REAL provisioned token for this MAC via the provisioning handler —
+	// exactly the token a node receives during Web Serial onboarding.
+	provisionToken := func() string {
+		req := httptest.NewRequest(http.MethodPost, "/api/provision", strings.NewReader(fmt.Sprintf(`{"mac":%q}`, mac)))
+		rec := httptest.NewRecorder()
+		provSrv.HandleProvision(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("provision failed: status %d body %s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			NodeToken string `json:"node_token"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode provision payload: %v", err)
+		}
+		if payload.NodeToken == "" {
+			t.Fatal("empty node_token from provisioning")
+		}
+		return payload.NodeToken
+	}
+	validToken := provisionToken()
+
+	// Setup invariant: provisioning and ValidateToken must agree on the token.
+	if !provSrv.ValidateToken(mac, validToken) {
+		t.Fatal("setup invariant failed: provisioning token not accepted by ValidateToken")
+	}
+
+	tests := []struct {
+		name        string
+		headerToken string // X-Spaxel-Token value; "" omits the header
+		helloToken  string // token in hello body; "" omits it (the sim case)
+		wantAccept  bool
+		wantUnpair  bool
+	}{
+		{
+			name:        "valid header token accepted + paired with window closed",
+			headerToken: validToken,
+			wantAccept:  true,
+			wantUnpair:  false,
+		},
+		{
+			name:        "no header and no body token rejected with window closed",
+			headerToken: "",
+			wantAccept:  false,
+		},
+		{
+			name:        "invalid header token rejected with window closed",
+			headerToken: strings.Repeat("0", 64), // well-formed 64-hex, but wrong
+			wantAccept:  false,
+		},
+		{
+			name:        "body token wins when both header and body present",
+			headerToken: strings.Repeat("0", 64), // wrong header is ignored
+			helloToken:  validToken,              // valid body wins
+			wantAccept:  true,
+			wantUnpair:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ingestServer := NewServer()
+			ingestServer.SetTokenValidator(provSrv.ValidateToken)
+			// Migration window CLOSED: leave migrationDeadline at its zero value,
+			// which the validator treats as strict (no grace) — see TestMigrationWindow.
+
+			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ingestServer.HandleNodeWS(w, r)
+			}))
+			defer httpServer.Close() //nolint:errcheck
+
+			wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+			dialer := websocket.Dialer{}
+			hdr := http.Header{}
+			if tt.headerToken != "" {
+				hdr.Set(spaxelTokenHeader, tt.headerToken)
+			}
+			conn, _, err := dialer.Dial(wsURL, hdr)
+			if err != nil {
+				t.Fatalf("Failed to connect: %v", err)
+			}
+			defer conn.Close() //nolint:errcheck
+
+			// Hello WITHOUT a body token (the sim's case) unless this case sets one.
+			hello := fmt.Sprintf(`{"type":"hello","mac":%q,"firmware_version":"1.0.0","chip":"ESP32-S3"}`, mac)
+			if tt.helloToken != "" {
+				hello = fmt.Sprintf(`{"type":"hello","mac":%q,"firmware_version":"1.0.0","chip":"ESP32-S3","token":%q}`,
+					mac, tt.helloToken)
+			}
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
+				t.Fatalf("send hello: %v", err)
+			}
+
+			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, data, rerr := conn.ReadMessage()
+
+			if tt.wantAccept {
+				if rerr != nil {
+					t.Fatalf("expected acceptance, got read error: %v", rerr)
+				}
+				var msg struct {
+					Type string `json:"type"`
+				}
+				if err := json.Unmarshal(data, &msg); err != nil {
+					t.Fatalf("parse response: %v (data=%s)", err, string(data))
+				}
+				if msg.Type == "reject" {
+					t.Fatalf("valid token was rejected: %s", string(data))
+				}
+				if !ingestServer.IsNodeConnected(mac) {
+					t.Fatal("node should be registered as connected")
+				}
+				// Paired (not Unpaired) is the whole point of the fix.
+				for _, info := range ingestServer.GetConnectedNodesInfo() {
+					if info.MAC == mac {
+						if info.Unpaired != tt.wantUnpair {
+							t.Fatalf("Unpaired=%v, want %v", info.Unpaired, tt.wantUnpair)
+						}
+						return
+					}
+				}
+				t.Fatal("node not found in GetConnectedNodesInfo")
+			} else {
+				// Rejected: either a reject frame then close, or an immediate read error.
+				rejected := false
+				if rerr == nil {
+					var msg struct {
+						Type   string `json:"type"`
+						Reason string `json:"reason"`
+					}
+					if jerr := json.Unmarshal(data, &msg); jerr == nil && msg.Type == "reject" {
+						rejected = true
+						if msg.Reason != "invalid_token" {
+							t.Fatalf("expected reason 'invalid_token', got %q", msg.Reason)
+						}
+					}
+				}
+				if !rejected {
+					t.Fatalf("expected rejection, got: err=%v data=%s", rerr, string(data))
+				}
+				if ingestServer.IsNodeConnected(mac) {
+					t.Fatal("rejected node must not be in connected list")
 				}
 			}
 		})
