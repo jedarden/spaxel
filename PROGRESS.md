@@ -776,6 +776,36 @@ the bf-2hdbg write-up below.
   zero `went_offline_at` (i.e. online), at real perimeter positions
   `(0,0,2)`/`(5,0,2)`/`(5,5,2)`/`(0,5,2)`.
 
+### Re-verified (bf-3hji parent gate, HEAD 5a78a42, 2026-07-07)
+
+Independently re-ran the exact documented command against a fresh STRICT-window
+mothership (`SPAXEL_MIGRATION_WINDOW_HOURS=0`, clean `mktemp` data dir); both
+binaries built from source (`go build -o /tmp/spaxel-sim ./cmd/sim` — the
+repo-root go.work module, not the stale in-module sim — and
+`go build -o /tmp/spaxel-mothership ./mothership/cmd/mothership`):
+
+```bash
+SPAXEL_BIND_ADDR=127.0.0.1:8080 SPAXEL_DATA_DIR=$(mktemp -d) \
+  SPAXEL_MIGRATION_WINDOW_HOURS=0 SPAXEL_LOG_LEVEL=info TZ=UTC /tmp/spaxel-mothership &
+/tmp/spaxel-sim --mothership ws://localhost:8080/ws/node \
+  --nodes 4 --walkers 1 --rate 20 --duration 30 --ble --seed 42
+```
+
+- **All 4 nodes connect** — 4× `[SIM] Node 0..3 connected` + 4× mothership
+  `[INFO] Node connected` (MACs `02:53:AC:00:00:0[0-3]`, roles `tx`/`tx`/`rx`/`rx`);
+  sim exits 0.
+- **No REJECT/401/403/invalid_token** — 0 in both the sim log and mothership stderr.
+- **frames/s > 0** — `[SIM] Stats` `frames/s=240.0`; final `Frames sent: 7200,
+  Duration: 30.0s, Average FPS: 240.0` (= 12 ordered node-pairs × 20 Hz).
+- **/api/nodes lists 4 online mid-run** — `/healthz` `nodes_online:4`; `/api/nodes`
+  returns 4 rows all online (zero `went_offline_at`) at real perimeter positions
+  `(0,0,2.5)`/`(6,0,2.5)`/`(0,5,2.5)`/`(6,5,2.5)`, `last_seen` within ~9s of probe.
+
+`go vet ./...` clean; all non-e2e unit tests pass (`mothership/tests/e2e` remains
+RED from the pre-existing in-module sim-binary trap, out of scope — bf-4q5w).
+`blobs: 0` is correctly out of scope (next chain link, fusion `SetNodePosition`
+wiring, bf-4q5w / IO-6 hard-gate).
+
 ### Independently re-verified (bf-4ads8, third chain link)
 
 Re-ran the exact documented command against a fresh `bf-3zll` healthy mothership
