@@ -182,6 +182,15 @@ const (
 
 	// Frame gauge buffer size for load shedding fullness detection.
 	frameGaugeSize = 256
+
+	// spaxelTokenHeader is the HTTP header carrying the node's HMAC token on the
+	// /ws/node upgrade request. This is the documented auth channel (plan.md >
+	// Authentication): the node includes its token here, and the mothership
+	// verifies it before completing the upgrade. The hello body may also carry a
+	// token (older/alternate clients); the body token takes precedence when both
+	// are present, and the header fills in for a node that omits it from hello
+	// (e.g. spaxel-sim, which only sends the header).
+	spaxelTokenHeader = "X-Spaxel-Token"
 )
 
 // NewServer creates a new ingestion server
@@ -502,6 +511,21 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 
 	nc.MAC = hello.MAC
 	nc.Hello = hello
+
+	// Bridge the X-Spaxel-Token WS-handshake header into the hello body token. The
+	// validator below only reads hello.Token; many clients (spaxel-sim, and any
+	// firmware following the documented plan.md auth contract) present their token
+	// solely as the upgrade-request header and omit it from the hello JSON. Without
+	// this bridge, hello.Token is always "" for such nodes and every connection
+	// falls through to the migration-window branch. The body token wins when both
+	// are present, so existing body-token clients are unaffected. This does not
+	// weaken the validator: an empty/invalid header is still rejected once the
+	// migration window closes (bf-4iewr / bf-1o7qi).
+	if hello.Token == "" {
+		if hdr := r.Header.Get(spaxelTokenHeader); hdr != "" {
+			hello.Token = hdr
+		}
+	}
 
 	// Token validation: if a validator is configured, reject unauthenticated nodes
 	// unless the migration window is still open, in which case allow but mark as Unpaired.
