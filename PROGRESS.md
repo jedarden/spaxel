@@ -694,3 +694,162 @@ kill %1   # SIGINT triggers the ordered 30s graceful shutdown
   (`Health check failed: ... connection refused (continuing anyway)`) and the
   dashboard is unbundled without the `embed` tag.
 
+## Hardware-Free Simulator → CSI Streaming (no reject)
+
+Established 2026-07-07 (bead bf-3hji, decomposed from bf-40hc; second link —
+builds on the bf-3zll healthy-mothership boot above). With the mothership
+healthy, `spaxel-sim` connects a 4-node fleet and streams synthetic CSI without
+being rejected. Canonical path: `TestHarness.RunSimulator` in
+`mothership/tests/e2e/e2e_test.go`; the commands below are the human-runnable
+equivalent.
+
+### Build the simulator (from the mothership module root)
+
+```bash
+cd mothership                          # module github.com/spaxel/mothership
+go build -o /tmp/spaxel-sim ./cmd/sim
+```
+
+`./cmd/sim` from the module root resolves to `mothership/cmd/sim` (the in-module
+simulator that supports `--ble`/`--seed`/`--scenario` and the WebSocket hello +
+CSI streaming path). It is the same binary the e2e harness builds
+(`exec.Dir = mothership/`, `./cmd/sim`).
+
+### Run against the healthy mothership (exact command)
+
+```bash
+/tmp/spaxel-sim \
+  --mothership ws://localhost:8080/ws/node \
+  --nodes 4 --walkers 1 --rate 20 --duration 30 --ble --seed 42
+```
+
+The sim auto-provisions a node token (`POST /api/provision`, falling back to a
+synthetic HMAC token) and presents it as `X-Spaxel-Token` on each WS dial. On a
+fresh boot the migration window is open, so the token-bearing virtual nodes are
+accepted (no reject).
+
+### Verified behavior (4 nodes, 1 walker, 20 Hz, 30 s, --ble, --seed 42)
+
+- All 4 nodes connect and receive roles (`tx`/`tx`/`rx`/`rx`); sim exits 0.
+- **No REJECT, no HTTP 401/403** anywhere — 0 `reject` lines in the sim log and
+  0 auth/policy-rejection lines in the mothership log. The mothership logs
+  `[INFO] Node connected: MAC=AA:BB:CC:00:00:0[0-3] firmware=sim-1.0.0` for all
+  four and the fleet optimises roles (coverage 0.0% -> 23.1%).
+- **frames/s > 0**: `[SIM] Stats` reports `fps=238.8` (10s) -> `239.6` (30s);
+  final `Frames sent: 7194, Average FPS: 239.5` (= 12 node-pairs × 20 Hz).
+- **/api/nodes lists the sim nodes online mid-run**: `/healthz` reports
+  `nodes_online: 4`; `/api/nodes` returns 4 rows with fresh `last_seen_at` and a
+  zero `went_offline_at` (i.e. online), at real perimeter positions
+  `(0,0,2)`/`(5,0,2)`/`(5,5,2)`/`(0,5,2)`.
+
+### Out of scope (tracked separately)
+
+- The sim reports `blobs detected: 0`. Blob production is the next link in the
+  chain — the fusion `SetNodePosition` wiring gap (bf-4q5w / IO-6 hard-gate).
+  This bead proves connect + stream + no-reject, which is green; the blob gate
+  is deliberately RED until bf-4q5w and is not weakened here.
+
+## bf-2hdbg — The migration window (not tokens) is what accepts sim nodes
+
+Established 2026-07-07 (bead bf-2hdbg, third link of the bf-34lwt split; builds
+on the bf-3hji "no reject" finding above). The bf-3hji "no REJECT, sim nodes
+accepted" result is **not** a real fix — it is a side effect of the 24h
+migration window that a fresh boot opens. Tokens have nothing to do with it:
+sim nodes are genuinely tokenless from the validator's perspective (the `token`
+they set is the *header*, which is the dead path per bf-29wyl; the validator
+checks only `hello.Token` in the message body per bf-5ig3e, and the sim's hello
+body carries no `token` field). The only thing admitting them is the migration
+deadline. This pins down exactly when REJECT fires.
+
+### Sim nodes are tokenless to the validator
+
+- The sim's hello body (`mothership/cmd/sim/main.go:652-664`) carries
+  `type/mac/firmware_version/capabilities/chip/flash_mb/uptime_ms/wifi_rssi/ip/pos_*
+  ` and **no `token` field**. The token is set only as the `X-Spaxel-Token`
+  HTTP header (`mothership/cmd/sim/main.go:633`) — the unread header path.
+- The validator checks the body field only —
+  `mothership/internal/ingestion/server.go:513`:
+  `tokenOK := hello.Token != "" && validator(hello.MAC, hello.Token)`, where
+  `hello.Token` maps `json:"token,omitempty"` (`message.go:22`). With no body
+  token, `tokenOK` is `false` for every sim node, unconditionally.
+
+### Acceptance is the migration window, nothing else
+
+- `mothership/internal/ingestion/server.go:510-518` is the acceptance branch:
+
+  ```
+  510:	deadline := s.migrationDeadline
+  ...
+  513:		tokenOK := hello.Token != "" && validator(hello.MAC, hello.Token)
+  514:		if !tokenOK {
+  515:			if !deadline.IsZero() && time.Now().Before(deadline) {
+  516:				log.Printf("[WARN] Node %s connected without valid token (migration window open until %s)",
+  517:					hello.MAC, deadline.Format(time.RFC3339))
+  518:				nc.Unpaired = true
+  ```
+
+  The `tokenOK` value is irrelevant to admission here — a tokenless node is
+  admitted as long as line 515 holds (`deadline` set AND now-before-deadline).
+  That is the bf-3hji "no reject" path: the node is accepted and flagged
+  `Unpaired`.
+
+- The window defaults to 24h. `mothership/internal/config/config.go:139`
+  `cfg.MigrationWindowHours = 24` (default before env override), field comment
+  at `config.go:43` "default 24, 0 = disabled". On a fresh boot the deadline is
+  computed and installed at `mothership/cmd/mothership/main.go:4495-4497`:
+
+  ```
+  4495:	if cfg.MigrationWindowHours > 0 {
+  4496:		deadline := time.Now().Add(time.Duration(cfg.MigrationWindowHours) * time.Hour)
+  4497:		ingestSrv.SetMigrationDeadline(deadline)
+  ```
+
+  Fresh boot + default 24 → deadline = now+24h → line 515 true for 24h → sim
+  nodes accepted as `Unpaired`, no reject (matches bf-3hji). Tokens never
+  entered the picture.
+
+### REJECT fires only when the window is closed
+
+- The reject branch is the `else` of line 515 —
+  `mothership/internal/ingestion/server.go:519-526`:
+
+  ```
+  519:			} else {
+  520:				if hello.Token == "" {
+  521:					log.Printf("[WARN] Node %s rejected: missing token", hello.MAC)
+  522:				} else {
+  523:					log.Printf("[WARN] Node %s rejected: invalid token", hello.MAC)
+  524:				}
+  525:				s.sendReject(conn, "invalid_token")
+  526:				conn.Close()
+  ```
+
+  `sendReject` writes `{"type":"reject","reason":"invalid_token"}`
+  (`mothership/internal/ingestion/server.go:841-845`) and the caller closes the
+  connection.
+
+- This `else` is reached when line 515 is false, i.e. either:
+  - `SPAXEL_MIGRATION_WINDOW_HOURS=0` → `main.go:4495` guard is false →
+    `SetMigrationDeadline` is never called → `migrationDeadline` stays at its
+    zero value → `deadline.IsZero()` is true → line 515 false → reject branch
+    (strict mode from startup, per the `config.go:137` comment "0 = disabled");
+    OR
+  - uptime > 24h → `time.Now().Before(deadline)` is false → line 515 false →
+    reject branch.
+
+  In both cases every tokenless sim node logs "rejected: missing token" and is
+  sent `invalid_token` then disconnected.
+
+### Conclusion — "no reject" is a 24h-window MASK, not a real fix
+
+The current green "sim nodes connect without REJECT" state is entirely a
+property of the default 24h migration window that a fresh boot opens. It is
+**not** a fix to the token/auth path: sim nodes remain tokenless in the only
+place checked (`hello.Token`), and the acceptance decision at `server.go:515`
+is gated purely on the deadline, not on token validity. REJECT returns the
+moment the window is closed — set `SPAXEL_MIGRATION_WINDOW_HOURS=0`, or let the
+mothership run past 24h of uptime, and every tokenless sim node hits
+`server.go:525` `sendReject(conn, "invalid_token")` and is disconnected. The
+real fix is on the token/supply side (provision a real token into the hello
+body, or fix the dead header-read path), not on the window.
+
