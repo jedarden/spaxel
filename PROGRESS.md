@@ -801,6 +801,83 @@ window-independent per "Auth policy" above) on 2026-07-07:
 Reproduces bf-3hji's connect + stream + no-reject result. `blobs: 0` remains out
 of scope here (next chain link, bf-4q5w / IO-6 hard-gate).
 
+### bf-vuzie — /api/nodes lists the 4 sim nodes online (final chain gate)
+
+Verified the last acceptance gate for the chain and parent bf-3hji: during a sim run
+the mothership REST API lists the 4 sim nodes and each is online per the e2e-harness
+definition of "online" — `GetNodes` computes `now - last_seen_at < 30s`
+(`mothership/tests/e2e/e2e_test.go`). Run on 2026-07-07 against a fresh strict-window
+mothership (`SPAXEL_MIGRATION_WINDOW_HOURS=0`, clean `mktemp` data dir):
+
+```bash
+go build -o /tmp/spaxel-sim ./cmd/sim        # repo-root go.work module — see trap below
+go build -o /tmp/mothership ./mothership/cmd/mothership
+SPAXEL_MIGRATION_WINDOW_HOURS=0 SPAXEL_BIND_ADDR=127.0.0.1:8080 \
+  SPAXEL_DATA_DIR=$(mktemp -d) TZ=UTC /tmp/mothership &
+/tmp/spaxel-sim --mothership ws://localhost:8080/ws/node \
+  --nodes 4 --walkers 1 --rate 20 --duration 30 --ble --seed 42
+# ~9s into the run:
+curl -s http://localhost:8080/api/nodes
+```
+
+`GET /api/nodes` mid-run returns **4 rows**, all online (`went_offline_at` = zero
+value on every row):
+
+`now` at probe time was `2026-07-07T19:41:12.042Z` (`date -u`, captured in the same
+shell as the `/api/nodes` curl).
+
+| mac | role | pos (x,y,z) | last_seen_at | Δ to now | online (<30s) |
+|-----|------|-------------|--------------|----------|---------------|
+| 02:53:AC:00:00:00 | tx | (0,0,2.5) | 2026-07-07T19:41:03.071Z | 8.97s | ✅ |
+| 02:53:AC:00:00:01 | tx | (6,0,2.5) | 2026-07-07T19:41:03.064Z | 8.98s | ✅ |
+| 02:53:AC:00:00:02 | rx | (0,5,2.5) | 2026-07-07T19:41:03.077Z | 8.97s | ✅ |
+| 02:53:AC:00:00:03 | rx | (6,5,2.5) | 2026-07-07T19:41:03.078Z | 8.96s | ✅ |
+
+- `/healthz` mid-run: `{"status":"ok","uptime_s":19,"nodes_online":4,"db":"ok",...}`.
+- Sample row: `{"mac":"02:53:AC:00:00:01","role":"tx","pos_x":6,"pos_y":0,"pos_z":2.5,
+  "virtual":false,"first_seen_at":"2026-07-07T19:41:03.040Z",
+  "last_seen_at":"2026-07-07T19:41:03.064Z","went_offline_at":"0001-01-01T00:00:00Z",
+  "firmware_version":"sim-1.0.0","chip_model":"ESP32-S3","health_score":0}`.
+- Provisioning path proven live: 4× `POST /api/provision → 200`, real per-node HMAC
+  tokens minted, 4× `[SIM] Node N: connected to mothership` and 4× mothership
+  `[INFO] Node connected` (one per MAC), **0** `reject`/`invalid_token`/`401`/`403`
+  in either log, and `Frames sent: 7200` (= 12 ordered node-pairs × 20 Hz × 30 s) —
+  the fleet is admitted on real tokens under the STRICT window, not the open 24h default.
+
+All three bf-vuzie acceptance criteria hold: `/api/nodes` returns the 4 sim nodes;
+each `last_seen_at` is within 30s of now (online per harness logic); sample JSON +
+node count recorded above.
+
+#### Sim-binary trap — why a naive reproduction gets 0 nodes
+
+The repo has **two** `cmd/sim` source trees; only the repo-root one connects under
+the strict window:
+
+- **`cmd/sim/` (repo root — go.work module `github.com/spaxel/sim`)** — the canonical,
+  current sim. `apiBaseFromMothership` drops the WS path, so provisioning POSTs to
+  `http://localhost:8080/api/provision` (200) and nodes connect on real tokens.
+  **This is the one to build** (`go build -o /tmp/spaxel-sim ./cmd/sim` from the repo
+  root).
+- **`mothership/cmd/sim/` (in-module — part of the mothership module, a `main.go.bak`
+  sits next to it)** — a stale copy. Its `apiBaseFromMothership` does NOT drop the
+  path, so it POSTs to `http://localhost:8080/ws/node/api/provision` → **404**;
+  provisioning fails, it falls back to a token the strict-window validator rejects
+  (`[WARN] Node ... rejected: invalid_token`), and `/api/nodes` returns `[]`.
+
+So the older instruction `cd mothership && go build -o /tmp/spaxel-sim ./cmd/sim`
+(quoted in the "Run against the healthy mothership" block above and inherited from
+bf-3hji/bf-4ads8) now builds the STALE in-module sim and reproduces the 0-node
+failure. Build the repo-root `cmd/sim` instead. The `tests/e2e` harness has the same
+mismatch: `TestHarness.RunSimulator`/`moduleRoot()` resolve `./cmd/sim` to
+`mothership/cmd/sim`, so the e2e suite is RED at HEAD under the strict window
+(`TestSimulatorConnection`, `TestConcurrentNodes`, `TestFullE2EIntegration`,
+`TestIO6HardGate_WalkerProducesTrackedBlob` all observe 0 online nodes; `go vet ./...`
+is clean and all non-e2e unit tests pass). `TestConcurrentNodes` additionally uses
+`SimulateNode`, which dials with no token at all and is rejected. These are
+pre-existing (introduced by the in-flight sim migration, not by this bead) and belong
+to a dedicated harness/sim-consolidation fix; they do not affect the direct
+`/api/nodes` verification above, which is green.
+
 ### Out of scope (tracked separately)
 
 - The sim reports `blobs detected: 0`. Blob production is the next link in the
