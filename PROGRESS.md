@@ -645,3 +645,52 @@ mothership/internal/api/            — briefing.go, briefing_test.go, guided.go
 ```
 
 **Phase 9 Status:** COMPLETE
+
+## Hardware-Free Runtime Boot
+
+Established 2026-07-07 (bead bf-3zll, decomposed from bf-40hc "hardware-free
+runtime blob path"). The mothership builds and boots to a healthy state with
+**no ESP32 hardware** and no Docker — the first link in the hardware-free
+runtime chain. The canonical path is exercised by the e2e harness
+(`mothership/tests/e2e/e2e_test.go`, `TestHarness.Start`); the commands below
+are the human-runnable equivalent.
+
+### Build (from a clean checkout, no build tags)
+
+```bash
+cd mothership                          # module github.com/spaxel/mothership
+go build -o /tmp/spaxel-mothership ./cmd/mothership
+```
+
+No `-tags=embed` is needed locally: that tag embeds `cmd/mothership/dashboard/`,
+which is only populated during the Docker build (`COPY dashboard/ ...`). A plain
+build omits the bundled dashboard (`[WARN] Dashboard directory not found: /dashboard`,
+harmless) — `/healthz` and all `/api/*` endpoints work regardless.
+
+### Boot to /healthz
+
+```bash
+DATADIR=$(mktemp -d /tmp/spaxel-data-XXXX)
+SPAXEL_BIND_ADDR=127.0.0.1:8080 \
+SPAXEL_DATA_DIR="$DATADIR" \
+SPAXEL_LOG_LEVEL=info \
+TZ=UTC \
+  /tmp/spaxel-mothership &
+
+# Verify (reaches ok in <1s; budget is ~15s per HealthTimeout):
+curl -fsS http://localhost:8080/healthz
+# -> {"status":"ok","uptime_s":0,"version":"dev","nodes_online":0,"db":"ok","shedding_level":0}
+
+# Stop:
+kill %1   # SIGINT triggers the ordered 30s graceful shutdown
+```
+
+### Verified behavior
+
+- `/healthz` returns `{"status":"ok",...}` in ~230 ms with the process alive.
+- All 7 startup phases complete (`[READY] All 7 phases completed in 231ms`).
+- No panic/crash in stderr. Two benign WARN lines are expected on first boot:
+  the process's own startup self-probe can race the listener bind
+  (`Health check failed: ... connection refused (continuing anyway)`) and the
+  dashboard is unbundled without the `embed` tag.
+
