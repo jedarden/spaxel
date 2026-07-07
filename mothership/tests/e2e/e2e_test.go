@@ -82,6 +82,23 @@ func (h *TestHarness) Start(ctx context.Context) error {
 		"SPAXEL_DATA_DIR="+tmpDir,
 		"SPAXEL_LOG_LEVEL=info",
 		"TZ=UTC",
+		// Window-independent auth policy (bf-4mle6 / bf-qzrmq): run the harness
+		// under the STRICT window (SPAXEL_MIGRATION_WINDOW_HOURS=0) — NOT the open
+		// 24h default — so the no-reject e2e path actually PROVES token-based
+		// admission regardless of window, instead of silently passing on the
+		// implicit/explicit 24h crutch.
+		//
+		// This works because spaxel-sim (child bf-ekr9c) defaults to --provision:
+		// resolveTokens() mints a REAL per-node HMAC-SHA256(installSecret, mac)
+		// token from the mothership /api/provision endpoint and presents it as the
+		// X-Spaxel-Token header on each node's WS dial. The ingestion server
+		// (bf-1o7qi) bridges that header into hello.Token, and the always-wired
+		// validator (main.go SetTokenValidator) accepts a valid token REGARDLESS of
+		// the migration window — server.go only falls through to the window branch
+		// for an empty/invalid token, and =0 leaves the deadline zero (past), so a
+		// tokenless node WOULD be rejected. The sim nodes therefore connect purely
+		// on the strength of their real tokens, not the window.
+		"SPAXEL_MIGRATION_WINDOW_HOURS=0",
 	)
 	h.MothershipCmd.Stdout = io.Discard
 	h.stderrBuf = &bytes.Buffer{}
