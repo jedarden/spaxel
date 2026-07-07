@@ -751,10 +751,16 @@ func TestSimulatorConnection(t *testing.T) {
 	t.Logf("Found %d/%d nodes online", onlineCount, len(nodes))
 }
 
-// TestDetectionEvents tests that the events API endpoint is functional after a simulation run.
-// Note: the detection event pipeline requires the full fusion+tracking loop to produce blobs,
-// which depends on signal conditions. We verify the API returns a valid (possibly empty)
-// response rather than requiring specific event counts.
+// TestDetectionEvents asserts that the events API reflects at least one detection
+// event after a 4-node / 2-walker simulation run. A detection event is only emitted
+// when the fusion+tracking loop produces a tracked blob, so this is a real check on
+// the detection pipeline — not merely an API-reachability smoke test.
+//
+// NOTE: this assertion is deliberately strict and is expected to be RED until the
+// upstream fusion SetNodePosition wiring (bf-4q5w) lands, so that an empty
+// detection-event list surfaces as a hard failure rather than silently passing.
+// That strictness is the entire point of the bf-5jeo verification capstone. Do
+// NOT weaken it (e.g. by re-accepting an empty list) to make the test green.
 func TestDetectionEvents(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e test in short mode")
@@ -770,29 +776,39 @@ func TestDetectionEvents(t *testing.T) {
 		t.Fatalf("Failed to start mothership: %v", err)
 	}
 
-	// Run simulator
+	// Run simulator: 4 nodes, 2 walkers, 20 Hz, 15 s.
 	duration := 15 * time.Second
 	if err := h.RunSimulator(ctx, 4, 2, 20, duration); err != nil {
 		t.Fatalf("Failed to run simulator: %v", err)
 	}
 
-	// Wait for simulation to complete
+	// Wait for simulation to complete (plus a short grace period for any
+	// in-flight detection events to be persisted to the events table).
 	time.Sleep(duration + 2*time.Second)
 
-	// Verify the events API endpoint is reachable and returns a valid response.
-	// Detection events are only generated when the fusion engine produces blobs,
-	// which requires sufficient signal variation — not guaranteed in a short sim run.
+	// Fetch detection events. The endpoint must return a valid response.
 	events, err := h.GetEvents(ctx, "detection", 100)
 	if err != nil {
 		t.Fatalf("Failed to get events: %v", err)
 	}
 
-	// The endpoint must return a valid (possibly empty) events list.
-	if events == nil {
-		t.Fatal("Expected non-nil events response")
+	// Hard assertion: at least one detection event must be present. An empty list
+	// means the fusion+tracking loop produced no blobs — a detection regression,
+	// not a tolerated quiet-room condition. The helper (bf-2330) gates nil and
+	// empty; we wrap its error with the count observed and the likely upstream
+	// cause so a RED failure is immediately actionable.
+	if assertErr := AssertDetectionEventsObserved(events); assertErr != nil {
+		observed := 0
+		if events != nil {
+			observed = len(events.Events)
+		}
+		t.Fatalf("expected >=1 detection event but observed %d; "+
+			"the fusion/tracking pipeline produced no blobs (no walker was "+
+			"localized from the 4-node/2-walker CSI stream) [%v]",
+			observed, assertErr)
 	}
 
-	t.Logf("Events API functional: found %d detection events", len(events.Events))
+	t.Logf("✓ Detection events observed: %d", len(events.Events))
 }
 
 // TestConcurrentNodes tests multiple concurrent node connections
