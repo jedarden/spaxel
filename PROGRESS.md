@@ -776,6 +776,31 @@ the bf-2hdbg write-up below.
   zero `went_offline_at` (i.e. online), at real perimeter positions
   `(0,0,2)`/`(5,0,2)`/`(5,5,2)`/`(0,5,2)`.
 
+### Independently re-verified (bf-4ads8, third chain link)
+
+Re-ran the exact documented command against a fresh `bf-3zll` healthy mothership
+(clean `mktemp` data dir; `--provision` left at default — the real-token path is
+window-independent per "Auth policy" above) on 2026-07-07:
+
+```bash
+/tmp/spaxel-sim --mothership ws://localhost:8080/ws/node \
+  --nodes 4 --walkers 1 --rate 20 --duration 30 --ble --seed 42
+```
+
+- All 4 nodes connect (`[SIM] Node 0..3: connected to mothership`; mothership
+  `[INFO] Node connected` for all four MACs `02:53:AC:00:00:0[0-3]`; sim exits 0).
+- **No REJECT** — 0 `reject` lines in the sim log and 0 auth/policy-rejection
+  lines in mothership stderr.
+- **frames/s > 0** — `[SIM] Stats` per-second `frames/s≈232..246`; final
+  `Frames sent: 7200, Duration: 30.0 s, Average FPS: 240.0` (12 ordered
+  node-pairs × 20 Hz).
+- Independent mothership-side check: `/healthz` mid-run reports
+  `nodes_online: 4`; `/api/nodes` lists the four sim MACs with live
+  `last_seen_at` and a zero `went_offline_at`.
+
+Reproduces bf-3hji's connect + stream + no-reject result. `blobs: 0` remains out
+of scope here (next chain link, bf-4q5w / IO-6 hard-gate).
+
 ### Out of scope (tracked separately)
 
 - The sim reports `blobs detected: 0`. Blob production is the next link in the
