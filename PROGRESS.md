@@ -783,6 +783,31 @@ the bf-2hdbg write-up below.
   This bead proves connect + stream + no-reject, which is green; the blob gate
   is deliberately RED until bf-4q5w and is not weakened here.
 
+### bf-4iewr — REJECT/token umbrella verified (strict window, negative control)
+
+The umbrella goal of bf-4iewr — *the hardware-free mothership does NOT reject
+spaxel-sim nodes* — is verified end-to-end against the STRICT window
+(`SPAXEL_MIGRATION_WINDOW_HOURS=0`, so `SetMigrationDeadline` is never called
+and the deadline stays zero-value). The fixes live at HEAD: the `bf-1o7qi`
+header bridge (`server.go:524-527`) + `bf-4mle6` real-token provisioning.
+
+Verified directly (mothership `mothership/mothership`, sim `cmd/sim/sim`,
+both built from source; 2026-07-07):
+
+- **Positive (default `--provision`):** `--nodes 2 --walkers 0 --duration 12`.
+  Both nodes provision a real HMAC token, connect, receive `role`+`config`, and
+  stream CSI at ~40 frames/s. Mothership logs `[INFO] Node connected` for both.
+  **Zero** `reject`/`invalid_token`/`401`/`403` in mothership stderr. Pass.
+- **Negative control (`--token bogus...`):** the same strict-window mothership
+  **rejects** the bogus-token node — `[WARN] Node 02:53:AC:00:00:00 rejected:
+  invalid token` — and the sim exits on reject. This proves the validator is
+  **live and enforcing** under the strict window: legitimate sim nodes connect
+  on the strength of their real tokens, not because auth was disabled. Pass.
+
+Both acceptance criteria of bf-4iewr hold: root cause confirmed (validator wired
+unconditionally at `main.go:4494`; the pre-`bf-1o7qi` dead header path is fixed),
+and zero REJECT in mothership stderr when the sim connects.
+
 ## bf-2hdbg — The migration window (not tokens) is what accepts sim nodes
 
 > **RESOLVED 2026-07-07 (bf-1o7qi + bf-4mle6).** This finding was accurate
