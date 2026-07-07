@@ -51,7 +51,8 @@ const (
 var (
 	// CLI flags
 	flagMothership = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
-	flagToken      = flag.String("token", "", "Provisioning token (auto-generated if empty)")
+	flagToken      = flag.String("token", "", "Explicit auth token applied verbatim to every node (overrides --provision; not window-independent unless it is itself a valid HMAC token)")
+	flagProvision  = flag.Bool("provision", true, "Mint a real per-node HMAC token from the mothership /api/provision endpoint (default, window-independent). Set --provision=false for the legacy dummy-token path")
 	flagNodes      = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
 	flagWalkers    = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
 	flagRate       = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
@@ -66,8 +67,15 @@ type VirtualNode struct {
 	ID       int
 	MAC      [6]byte
 	Position Point
-	Conn     *websocket.Conn
-	mu       sync.Mutex
+	// Token is the per-node auth token presented as X-Spaxel-Token on the WS
+	// dial. By default it is a REAL HMAC-SHA256(installSecret, mac) minted from
+	// the mothership /api/provision endpoint (see resolveTokens), which the
+	// validator accepts and pairs regardless of the migration window. A dummy
+	// value (legacy --provision=false path) is only admitted while the window
+	// is open.
+	Token string
+	Conn  *websocket.Conn
+	mu    sync.Mutex
 }
 
 // Walker represents a simulated person
@@ -116,15 +124,6 @@ func main() {
 	rng := rand.New(rand.NewSource(*flagSeed))
 	log.Printf("[SIM] Random seed: %d", *flagSeed)
 
-	// Generate or validate token
-	token := *flagToken
-	if token == "" {
-		// For testing, generate a dummy token
-		// In production, this should be derived from the install secret
-		token = fmt.Sprintf("%064x", rng.Uint64())
-		log.Printf("[SIM] Auto-generated token (first 16 chars): %s...", token[:16])
-	}
-
 	// Create virtual nodes at fixed positions (corners, evenly distributed)
 	nodes := createVirtualNodes(*flagNodes, space, rng)
 
@@ -144,11 +143,22 @@ func main() {
 	ctx, cancel := contextWithCancel()
 	defer cancel()
 
+	// Resolve each node's auth token. This is the hardware-free build's auth
+	// policy (bf-4mle6): by default mint a REAL per-node HMAC token from the
+	// mothership /api/provision endpoint (HMAC-SHA256(installSecret, mac)). The
+	// validator accepts and pairs a node presenting a valid token REGARDLESS of
+	// the migration window (server.go acceptance branch), so the sim no longer
+	// depends on the implicit/default 24h window being open — it connects under
+	// SPAXEL_MIGRATION_WINDOW_HOURS=0 (strict) exactly as well as 24 or larger.
+	if err := resolveTokens(ctx, nodes, rng); err != nil {
+		log.Fatalf("[SIM] %v", err)
+	}
+
 	// Channel for reject notifications
 	rejectChan := make(chan struct{}, len(nodes))
 
 	// Connect all nodes to mothership
-	if err := connectNodes(ctx, nodes, token, rng, rejectChan); err != nil {
+	if err := connectNodes(ctx, nodes, rng, rejectChan); err != nil {
 		log.Fatalf("[SIM] Failed to connect nodes: %v", err)
 	}
 
@@ -291,8 +301,123 @@ func contextWithCancel() (context.Context, context.CancelFunc) {
 	return context.WithCancel(context.Background())
 }
 
+// resolveTokens assigns each virtual node its auth token according to the
+// hardware-free build's auth policy (bf-4mle6):
+//
+//   - --token <t>: <t> is applied verbatim to every node. Manual/explicit
+//     override; not window-independent unless <t> is itself a valid HMAC token.
+//   - --provision (default): mint a REAL per-node HMAC token from the
+//     mothership /api/provision endpoint (HMAC-SHA256(installSecret, mac)). The
+//     validator accepts and pairs a valid token regardless of the migration
+//     window, so the sim connects under SPAXEL_MIGRATION_WINDOW_HOURS=0 (strict)
+//     as well as 24 or larger — no implicit dependence on the 24h default.
+//   - --provision=false: fall back to a synthetic dummy token (legacy). Nodes are
+//     admitted only while the migration window is open and are REJECTED once it
+//     closes — explicitly NOT window-independent.
+func resolveTokens(ctx context.Context, nodes []*VirtualNode, rng *rand.Rand) error {
+	switch {
+	case *flagToken != "":
+		for _, n := range nodes {
+			n.Token = *flagToken
+		}
+		log.Printf("[SIM] Using explicit --token for all nodes (first 16): %s...", firstN(*flagToken, 16))
+	case *flagProvision:
+		apiBase, err := apiBaseFromMothership(*flagMothership)
+		if err != nil {
+			return fmt.Errorf("derive provisioning API URL from --mothership %q: %w", *flagMothership, err)
+		}
+		log.Printf("[SIM] Provisioning real per-node tokens via %s/api/provision (window-independent auth)", apiBase)
+		for _, n := range nodes {
+			mac := macToString(n.MAC)
+			tok, err := provisionNodeToken(ctx, apiBase, mac)
+			if err != nil {
+				return fmt.Errorf("provision token for node %d (%s): %w "+
+					"(start the mothership first, or pass --token / --provision=false)", n.ID, mac, err)
+			}
+			n.Token = tok
+			log.Printf("[SIM] Node %d (%s): provisioned real token (first 16): %s...", n.ID, mac, firstN(tok, 16))
+		}
+	default:
+		dummy := fmt.Sprintf("%064x", rng.Uint64())
+		for _, n := range nodes {
+			n.Token = dummy
+		}
+		log.Printf("[SIM] WARNING: dummy token (--provision=false) — nodes will be REJECTED once the migration window closes; not window-independent")
+	}
+	return nil
+}
+
+// apiBaseFromMothership derives the HTTP API base URL from the --mothership WS
+// endpoint URL by swapping the scheme (ws->http, wss->https) and dropping the
+// path (the mothership serves /api/provision at the host root). http/https
+// inputs pass through unchanged.
+func apiBaseFromMothership(wsURL string) (string, error) {
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		return "", err
+	}
+	var scheme string
+	switch u.Scheme {
+	case "ws", "http":
+		scheme = "http"
+	case "wss", "https":
+		scheme = "https"
+	default:
+		return "", fmt.Errorf("unsupported scheme %q (expected ws/wss/http/https)", u.Scheme)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("missing host")
+	}
+	return scheme + "://" + u.Host, nil
+}
+
+// provisionNodeToken mints a real per-node HMAC token from the mothership's
+// /api/provision endpoint. It POSTs {"mac":<mac>} and returns the node_token
+// (HMAC-SHA256(installSecret, mac)). The token validates against the ingestion
+// server's ValidateToken regardless of the migration window.
+func provisionNodeToken(ctx context.Context, apiBase, mac string) (string, error) {
+	body := fmt.Sprintf(`{"mac":%q}`, mac)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase+"/api/provision", strings.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var payload struct {
+		NodeToken string `json:"node_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	if payload.NodeToken == "" {
+		return "", fmt.Errorf("empty node_token in response")
+	}
+	return payload.NodeToken, nil
+}
+
+// firstN returns the first n bytes of s, or all of s if shorter. Used to log a
+// token prefix without leaking the full secret.
+func firstN(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
+
 // connectNodes connects all virtual nodes to the mothership via WebSocket
-func connectNodes(ctx context.Context, nodes []*VirtualNode, token string, rng *rand.Rand, rejectChan chan<- struct{}) error {
+func connectNodes(ctx context.Context, nodes []*VirtualNode, rng *rand.Rand, rejectChan chan<- struct{}) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(nodes))
 
@@ -308,9 +433,10 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode, token string, rng *
 				return
 			}
 
-			// Create request with token header
+			// Create request with token header. n.Token is the per-node HMAC
+			// token resolved by resolveTokens (real token by default).
 			reqHeader := http.Header{}
-			reqHeader.Set("X-Spaxel-Token", token)
+			reqHeader.Set("X-Spaxel-Token", n.Token)
 
 			// Connect to WebSocket
 			conn, resp, err := websocket.DefaultDialer.DialContext(ctx, u.String(), reqHeader)
