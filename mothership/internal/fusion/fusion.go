@@ -1,12 +1,22 @@
 package fusion
 
 import (
+	"log"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spaxel/mothership/internal/explainability"
 )
+
+// bf-2eub9 DEBUG: transient instrumentation. Counts Fuse ticks and, every
+// debugEvery ticks, logs why Fuse did or did not emit peaks (link counts at
+// each gate, the DeltaRMS range, nodePos coverage, active links, peak count).
+// Remove once the runtime sim->blob path is verified.
+var debugFuseTick uint64
+
+const debugEvery = 10 // log every Nth fusion tick (~1s at 10 Hz)
 
 // LinkMotion describes one link's current motion state for 3D fusion.
 type LinkMotion struct {
@@ -185,21 +195,34 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 		posB     NodePosition
 	}, 0)
 
+	// bf-2eub9 DEBUG accumulators (transient).
+	var dbgMotionOK, dbgDeltaOK, dbgPosOK int
+	var dbgMinD, dbgMaxD float64
 	for _, lm := range links {
-		if !lm.Motion || lm.DeltaRMS < minDelta {
+		if !lm.Motion {
 			continue
+		}
+		dbgMotionOK++
+		if lm.DeltaRMS < minDelta {
+			continue
+		}
+		dbgDeltaOK++
+		if dbgDeltaOK == 1 || lm.DeltaRMS < dbgMinD {
+			dbgMinD = lm.DeltaRMS
+		}
+		if lm.DeltaRMS > dbgMaxD {
+			dbgMaxD = lm.DeltaRMS
 		}
 		posA, okA := nodePos[lm.NodeMAC]
 		posB, okB := nodePos[lm.PeerMAC]
 		if !okA || !okB {
 			continue
 		}
-		// Apply health score weighting: default to 1.0 if not set
+		dbgPosOK++
 		healthWeight := lm.HealthScore
 		if healthWeight <= 0 {
 			healthWeight = 1.0
 		}
-		// Weight activation by health score
 		weightedActivation := lm.DeltaRMS * healthWeight
 		e.grid.AddLinkInfluence(
 			posA.X, posA.Y, posA.Z,
@@ -227,6 +250,12 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 			posA:     posA,
 			posB:     posB,
 		})
+	}
+
+	// bf-2eub9 DEBUG: log gate breakdown every debugEvery ticks.
+	if atomic.AddUint64(&debugFuseTick, 1)%debugEvery == 0 {
+		log.Printf("[FUSE-DBG] links=%d nodePos=%d motionOK=%d deltaOK=%d(minDelta=%.4f dRange=%.4f..%.4f) posResolved=%d active=%d maxBlobs=%d blobThresh=%.3f",
+			len(links), len(nodePos), dbgMotionOK, dbgDeltaOK, minDelta, dbgMinD, dbgMaxD, dbgPosOK, activeLinks, e.maxBlobs, e.blobThresh)
 	}
 
 	result := &Result{

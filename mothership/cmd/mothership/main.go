@@ -5403,9 +5403,26 @@ func copyFileToPath(src, dst string) error {
 	return err
 }
 
-// splitLinkID parses a link ID in format "nodeMAC-peerMAC" into its components
+// splitLinkID parses a directional link ID "nodeMAC<sep>peerMAC" into its two
+// MAC components, returning nil for anything that is not two MACs.
+//
+// The producer (CSIFrame.LinkID in internal/ingestion) joins the two MACs with
+// a single separator. Each MAC is a fixed 17-char "XX:XX:XX:XX:XX:XX" string,
+// so the canonical two-MAC form is exactly 35 chars with the boundary at index
+// 17 — regardless of whether the separator is a colon
+// ("AA:BB:CC:DD:EE:FF:11:22:33:44:55:66", the actual producer format) or a dash
+// ("AA:BB:CC:DD:EE:FF-11:22:33:44:55:66", the previously documented format).
+//
+// bf-20q9o: the prior implementation scanned only for '-' and returned nil for
+// every colon-joined link, so gatherFusionLinks returned an empty slice and no
+// sim/real CSI ever reached Fuse (0 active links -> 0 peaks -> 0 blobs). The
+// fixed-width split below handles both real formats; the dash scan is kept only
+// as a defensive fallback for a dash-joined form with trailing content.
 func splitLinkID(linkID string) []string {
-	// Link ID format is "aa:bb:cc:dd:ee:ff-11:22:33:44:55:66"
+	const macLen = 17 // len("XX:XX:XX:XX:XX:XX")
+	if len(linkID) == macLen*2+1 {
+		return []string{linkID[:macLen], linkID[macLen+1:]}
+	}
 	for i := len(linkID) - 1; i >= 0; i-- {
 		if linkID[i] == '-' {
 			return []string{linkID[:i], linkID[i+1:]}
