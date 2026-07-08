@@ -97,6 +97,19 @@ cleanup() {
   sleep 1
   [ -n "$MS_PID" ]  && kill -9 "$MS_PID" 2>/dev/null || true
   wait 2>/dev/null || true
+  # CAPTURE_DIR hook (bf-15oi): if set, persist the text log artifacts
+  # (mothership.log, sim.log, identity_blob.json) to a durable location before
+  # the temp dir is removed, so the run can be scanned/referenced after exit.
+  # Only the human-readable logs/evidence are copied — NOT the data dir's
+  # binaries (csi_replay.bin can be hundreds of MB; the *.db shards are
+  # regenerable) — so a capture run never drops a giant blob into the repo.
+  # Purely additive — unset (the default) preserves the prior cleanup behaviour.
+  if [ -n "${CAPTURE_DIR:-}" ]; then
+    mkdir -p "$CAPTURE_DIR"
+    for f in mothership.log sim.log identity_blob.json; do
+      [ -f "$DATA_DIR/$f" ] && cp -a "$DATA_DIR/$f" "$CAPTURE_DIR/" 2>/dev/null || true
+    done
+  fi
   rm -rf "$DATA_DIR"
 }
 trap cleanup EXIT INT TERM
