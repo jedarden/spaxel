@@ -1,8 +1,8 @@
 # Hardware-Free Runtime Reproduce
 
 **Canonical script:** `scripts/run-sim-local.sh`
-**Verified:** 2026-07-08 at HEAD `5bbe52c` (post bf-243os sim→blob path fix)
-**Resolves:** the ambiguity that caused bf-40hc's repeated failures; closes the chain bf-3zll → bf-3hji → bf-51fq → (this) bf-5cr3.
+**Verified:** 2026-07-08 — `5bbe52c` (post bf-243os sim→blob path fix) and re-verified at HEAD `f859f3e` for bf-40hc acceptance.
+**Resolves:** the ambiguity that caused bf-40hc's repeated failures; closes the chain bf-3zll → bf-3hji → bf-51fq → bf-5cr3, and **satisfies bf-40hc** (hardware-free runtime path that creates a blob).
 
 This is the single deterministic artifact that captures the working end-to-end
 runtime path — **sim connects → CSI ingested → phase/fusion → tracked blob** — with
@@ -147,6 +147,32 @@ sim_verify: [SIM] PASS: 2 blobs detected for 2 walkers
 reject_in_sim_log=0
 fps=Average FPS: ~360
 ```
+
+---
+
+## Acceptance — bf-40hc (independently re-verified 2026-07-08, HEAD `f859f3e`)
+
+`./scripts/run-sim-local.sh` is the bf-40hc deliverable. Re-running it at `f859f3e`
+produced `exit 0` with this evidence, mapping each acceptance criterion:
+
+| bf-40hc acceptance criterion | Verified evidence (2026-07-08, HEAD `f859f3e`) |
+|------------------------------|-----------------------------------------------|
+| Documented command starts the mothership without a runtime panic/crash | `[run-sim] mothership healthy` after the `/healthz` poll; clean startup, no panic — mothership served the full 25 s run and shut down via the trap |
+| At least one blob object observable at runtime (API / WebSocket / tracker log) | Independent `/api/blobs` poller: `peak_blob_count=2`, `first_blob_at=1s` (nodes_online=4 throughout); `sim --verify` secondary cross-check: `[SIM] PASS: 2 blobs detected for 2 walkers` |
+| Reproduce command written into the bead body or a referenced note | This file + `scripts/run-sim-local.sh`; exact flags: `--nodes 4 --walkers 2 --rate 30 --space 5x5x2.5 --duration 25 --seed 42 --verify` |
+
+Reference run captured: `peak=2  first_blob=1s  sim_exit=0  verify=PASS  rejects=0  fps≈363`.
+
+**Out of scope — do not confuse with bf-40hc:** the `tests/e2e` tests
+`TestDetectionEvents`, `TestFullE2EIntegration`, and `TestConcurrentNodes` are
+**deliberately RED by design** (see their inline NOTE comments) — they are gated on
+the upstream fusion `SetNodePosition` wiring (**bf-4q5w**) and are the strictness
+contract of the **bf-5jeo** verification capstone. `TestConcurrentNodes` additionally
+connects raw tokenless nodes against the harness's `SPAXEL_MIGRATION_WINDOW_HOURS=0`
+strict mode, so its rejects are a harness artifact, not a pipeline defect. They must
+NOT be weakened to turn green, and they are not a bf-40hc regression: bf-40hc asserts
+only that *a* hardware-free runtime path emits a tracked blob, which `run-sim-local.sh`
+deterministically proves.
 
 ---
 
