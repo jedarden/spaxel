@@ -163,6 +163,13 @@
             }
 
             // Update state
+            // NOTE: currentState.blobs MUST be copied here — drawPeople() iterates
+            // currentState.blobs (not the position maps) to render each person and
+            // read its identity fields. Without this line blobs never reached
+            // drawPeople, so people were never drawn in ambient mode and the
+            // identity-field backward-compat contract (parent bf-2gmx) was
+            // untestable at runtime. Mirrors the zones/portals/nodes/alerts copies.
+            if (state.blobs) currentState.blobs = state.blobs;
             if (state.zones) currentState.zones = state.zones;
             if (state.portals) currentState.portals = state.portals;
             if (state.nodes) currentState.nodes = state.nodes;
