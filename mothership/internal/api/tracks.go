@@ -25,9 +25,11 @@ type Track struct {
 	IdentitySource     string  `json:"identity_source,omitempty"`
 	// Canonical identity fields (bf-5151). camelCase JSON keys are the canonical
 	// API-facing names; the snake_case PersonLabel/PersonColor above are retained
-	// as deprecated aliases. Propagated from signal.TrackedBlob in listTracks —
-	// zero today because the source struct is not yet populated (a follow-up bead
-	// wires the BLE identity sidecar).
+	// as deprecated aliases. Propagated from signal.TrackedBlob in listTracks;
+	// the source struct is populated each fusion tick by the Stage 2 identity
+	// write-back (cmd/mothership/main.go, guarded by `if identityMatcher != nil`)
+	// from ble.IdentityMatcher.GetMatch, so a served track carries non-empty
+	// identity whenever the matcher has a person match for that blob ID.
 	PersonName       string `json:"personName,omitempty"`
 	AssignedColor    string `json:"assignedColor,omitempty"`
 	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed

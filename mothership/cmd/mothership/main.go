@@ -2125,6 +2125,32 @@ func main() {
 					}
 					identityMatcher.UpdateBlobs(matcherBlobs)
 
+					// Stage 2b: write resolved BLE identity back onto the served
+					// TrackedBlob slice (bf-5h1t). UpdateBlobs resolves matches,
+					// but every runtime surface (/api/blobs, /api/tracks, the
+					// explainability snapshots below) reads identity off the
+					// TrackedBlob — so without this write-back live blobs always
+					// carry empty identity even when a person is matched. Mark
+					// IdentityResolved tri-state (nil=unattempted when no matcher,
+					// &true=resolved, &false=attempted-but-unmatched) and re-publish.
+					identityYes, identityNo := true, false
+					for i := range blobs {
+						match := identityMatcher.GetMatch(blobs[i].ID)
+						if match == nil {
+							blobs[i].IdentityResolved = &identityNo
+							continue
+						}
+						blobs[i].PersonID = match.PersonID
+						blobs[i].PersonLabel = match.PersonName
+						blobs[i].PersonColor = match.PersonColor
+						blobs[i].IdentityConfidence = match.Confidence
+						blobs[i].IdentitySource = "ble"
+						blobs[i].PersonName = match.PersonName
+						blobs[i].AssignedColor = match.PersonColor
+						blobs[i].IdentityResolved = &identityYes
+					}
+					pm.SetTrackedBlobs(blobs)
+
 					// Collect ground truth samples for self-improving localization
 					if groundTruthCollector != nil {
 						// Build per-link delta and health maps from motion states
