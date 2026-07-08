@@ -346,17 +346,25 @@ func main() {
 		cancel()
 	case <-durationTimer:
 		log.Printf("[SIM] Duration elapsed")
-		cancel()
+		// Do NOT cancel here: keep the simulation streaming so verifyBlobs
+		// can sample live tracked blobs. Tracked blobs decay to 0 once CSI
+		// stops, so verifying after cancel() always saw an empty set.
+		// cancel() is called after verify below.
 	}
 
-	// Verify blob count if requested
+	// Verify blob count if requested (while streaming is still active, so the
+	// tracker is still producing blobs from live CSI).
 	if *flagVerify {
 		if err := verifyBlobs(*flagWalkers, walkers, space); err != nil {
 			log.Printf("[SIM] Verification FAILED: %v", err)
+			cancel()
 			os.Exit(1)
 		}
 		log.Printf("[SIM] Verification PASSED")
 	}
+
+	// Stop streaming now that verify (if any) is done.
+	cancel()
 
 	// Print final statistics
 	printFinalStats(stats, len(walkers), httpBaseURL)
