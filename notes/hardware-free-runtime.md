@@ -1,7 +1,7 @@
 # Hardware-Free Runtime Reproduce
 
 **Canonical script:** `scripts/run-sim-local.sh`
-**Verified:** 2026-07-08 — `5bbe52c` (post bf-243os sim→blob path fix) and re-verified at HEAD `f859f3e` for bf-40hc acceptance.
+**Verified:** 2026-07-08 — `5bbe52c` (post bf-243os sim→blob path fix), re-verified at HEAD `f859f3e` for bf-40hc acceptance, and final-clean-rebuild re-verified at HEAD `c927f67` (the bf-40hc doc commit itself).
 **Resolves:** the ambiguity that caused bf-40hc's repeated failures; closes the chain bf-3zll → bf-3hji → bf-51fq → bf-5cr3, and **satisfies bf-40hc** (hardware-free runtime path that creates a blob).
 
 This is the single deterministic artifact that captures the working end-to-end
@@ -173,6 +173,81 @@ strict mode, so its rejects are a harness artifact, not a pipeline defect. They 
 NOT be weakened to turn green, and they are not a bf-40hc regression: bf-40hc asserts
 only that *a* hardware-free runtime path emits a tracked blob, which `run-sim-local.sh`
 deterministically proves.
+
+---
+
+## BLE identity matcher (--ble) — bf-1yr1w
+
+`run-sim-local.sh` proves the CSI→blob path. **`scripts/run-sim-ble-match.sh`** layers
+the `--ble` opt-in on top and asserts the identity **matcher** (`ble.IdentityMatcher`)
+resolves a seeded person onto a *live CSI blob* — the second link of the bf-2m534 identity
+chain. The first link (register a person + bind the sim's advertised device) is the
+**fixture**, documented in **[`notes/ble-identity-fixture.md`](ble-identity-fixture.md)** —
+link to it, do not duplicate it. The matcher script reuses that exact REST sequence
+internally.
+
+### The recipe
+
+```bash
+./scripts/run-sim-ble-match.sh
+# builds mothership + canonical sim (mothership/cmd/sim — has --ble; never repo-root cmd/sim),
+# starts a fresh-data-dir mothership, applies the fixture (register person "Alice" +
+# bind sim walker-0 addr AA:BB:CC:DD:EE:00), then runs:
+#   sim --ble --nodes 4 --walkers 1 --rate 30 --space 5x5x2.5 --duration 25 --seed 42
+# polls GET /api/ble/matches and exits 0 once GetMatch() returns the seeded person
+# attached to a REAL blob (blob_id != -1).
+```
+
+### Params (why these, not run-sim-local's)
+
+| Env | Value | Note |
+|-----|-------|------|
+| `SIM_WALKERS` | **`1`** | NOT the `2` from `run-sim-local.sh` — see gotcha below |
+| `SIM_RATE` | `30` | same as gotcha #2; deterministic CSI blobs the matcher needs |
+| `SIM_DURATION` | `25` | same as run-sim-local |
+| `SIM_SEED` | `42` | pins walker paths; walker 0 always advertises `AA:BB:CC:DD:EE:00` |
+| `SIM_NODES` | `4` | multi-node RSSI → triangulation clears MinMatchConfidence |
+| `SIM_SPACE` | `5x5x2.5` | default room geometry |
+| `SIM_PORT` | `8088` | loopback; avoids 8080 |
+| `SIM_WALKER_MAC` | `AA:BB:CC:DD:EE:00` | sim walker-0 convention (see fixture note) |
+| `SIM_PERSON_NAME` / `SIM_PERSON_COLOR` | `Alice` / `#4488ff` | the seeded identity |
+
+### Gotcha — `walkers=1`, not `2`
+
+The fixture registers **exactly one** person + device, so the sim must emit exactly one
+walker (Alice's). With `walkers=2` (run-sim-local's blob-stress default) the CSI blob
+nearest Alice's triangulated point was the **second** walker's (cornered away from her),
+leaving a ~1.73 m gap so `f_distance` killed `matchConf` (0.143 < gate 0.60) — diagnosis
+bf-6crd7 / bf-6d2ii. With one walker the blob is Alice's own, co-located at ~0.6 m →
+`matchConf ≈ 0.71`. This is **not** a threshold loosening: `MaxBLEBlobDistance=2.0` and
+`MinMatchConfidence=0.6` are unchanged.
+
+### Observation surface
+
+`GET /api/ble/matches` → `identityMatcher.GetAllMatches()` (`cmd/mothership/main.go:~3070`).
+It returns **both** real blob matches (`blob_id >= 0`) and BLE-only placeholder tracks
+(`blob_id == -1`: triangulated device with no nearby blob). A PASS record is a real blob
+match — `blob_id != -1` AND `person_name == "Alice"` AND `confidence >= 0.6`:
+
+```json
+{"blob_id":7,"person_name":"Alice","device_addr":"AA:BB:CC:DD:EE:00",
+ "confidence":0.714,"is_ble_only":false}
+```
+
+### PASS evidence (HEAD `7757149`, 2026-07-08)
+
+```
+[match] peak_blobs (via /api/blobs): 2
+[match] alice_blob_match: blob_id=7 conf=0.7139527093753523 device=AA:BB:CC:DD:EE:00 (at 6s)
+[match] final /api/ble/matches summary:
+  [{"blob_id":7,"person_name":"Alice","device_addr":"AA:BB:CC:DD:EE:00",
+    "confidence":0.7139527093753523,"is_ble_only":false}]
+[match] PASS: GetMatch() returns "Alice" for blob_id=7 (conf=0.714) via /api/ble/matches
+```
+
+Closes bf-1yr1w criterion 3: the `--ble` matcher recipe is now recorded here, not only in
+the fixture note. The matcher → `/api/blobs` identity capstone is **bf-2m534**
+(`scripts/run-sim-identity.sh`), which depends on this PASS — keep it green.
 
 ---
 
