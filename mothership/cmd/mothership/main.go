@@ -587,7 +587,14 @@ func main() {
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), startup.TotalTimeout)
 	defer startupCancel()
 
-	ctx, cancel := context.WithCancel(startupCtx)
+	// ctx is the application-lifetime context for long-lived background
+	// goroutines (fusion loop, periodic savers, monitors). It must NOT be a
+	// child of startupCtx: startupCancel() below cancels startupCtx once the
+	// 7 startup phases complete, and a child ctx would propagate that cancel
+	// to every background loop — killing them the instant startup finishes.
+	// bf-1r1ya: that left the Phase-6 fusion loop dead before its first tick,
+	// so fusionEngine.Fuse() never ran and no blobs were ever produced.
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	startupTotalStart := time.Now()

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -122,41 +121,55 @@ func verifyBlobs(expectedWalkers int, walkers []*Walker, space *Space) (err erro
 	log.Printf("[SIM] Waiting 2 seconds for pipeline to settle...")
 	time.Sleep(2 * time.Second)
 
-	blobsURL := strings.TrimSuffix(httpURL.String(), "/ws")
-	blobsURL = strings.TrimSuffix(blobsURL, "/")
-	blobsURL += "/api/blobs"
+	// The blobs API lives at the origin root (/api/blobs), independent of the
+	// WebSocket path (which may be /ws, /ws/node, etc.). Drop the WS path
+	// entirely rather than trimming a specific suffix — trimming "/ws" is a
+	// no-op when the node endpoint is /ws/node, which produced a 404.
+	httpURL.Path = ""
+	httpURL.RawPath = ""
+	blobsURL := httpURL.String() + "/api/blobs"
 
-	resp, err := http.Get(blobsURL)
-	if err != nil {
-		return fmt.Errorf("failed to query blobs: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			if err == nil {
-				err = fmt.Errorf("failed to close response body: %w", closeErr)
-			}
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("blobs API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
+	// Blobs are emitted intermittently — fusion produces peaks only while
+	// walkers move enough to cross the DeltaRMS threshold, so a single
+	// point-in-time query can land on a 0-blob instant. Poll over a short
+	// window and keep the peak blob count (and the corresponding blob set for
+	// the position check below), matching blob_observation.sh's observation
+	// method.
+	const pollAttempts = 12
+	const pollInterval = 500 * time.Millisecond
 	var blobs []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&blobs); err != nil {
-		return fmt.Errorf("failed to decode blobs response: %w", err)
+	blobCount := 0
+	for i := 0; i < pollAttempts; i++ {
+		resp, err := http.Get(blobsURL)
+		if err != nil {
+			return fmt.Errorf("failed to query blobs: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			return fmt.Errorf("blobs API returned status %d: %s", resp.StatusCode, string(body))
+		}
+		var sample []map[string]interface{}
+		decodeErr := json.NewDecoder(resp.Body).Decode(&sample)
+		resp.Body.Close()
+		if decodeErr != nil {
+			return fmt.Errorf("failed to decode blobs response: %w", decodeErr)
+		}
+		if len(sample) > blobCount {
+			blobs, blobCount = sample, len(sample)
+		}
+		if i < pollAttempts-1 {
+			time.Sleep(pollInterval)
+		}
 	}
 
-	blobCount := len(blobs)
-
-	// Check blob count within ±1 tolerance
+	// Check peak blob count within ±1 tolerance.
 	tolerance := 1
 	minExpected := expectedWalkers - tolerance
 	maxExpected := expectedWalkers + tolerance
 
 	if blobCount < minExpected || blobCount > maxExpected {
-		return fmt.Errorf("FAIL: expected %d blobs (±%d), got %d", expectedWalkers, tolerance, blobCount)
+		return fmt.Errorf("FAIL: expected %d blobs (±%d), got peak %d over %d samples", expectedWalkers, tolerance, blobCount, pollAttempts)
 	}
 
 	// If walkers are in room bounds, check each walker has a blob within 2m
