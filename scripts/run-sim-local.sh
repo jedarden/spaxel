@@ -18,7 +18,7 @@
 #
 # Usage:  ./scripts/run-sim-local.sh
 # Env:    SIM_NODES, SIM_WALKERS, SIM_RATE, SIM_DURATION, SIM_SEED, SIM_PORT,
-#         SIM_SPACE (override defaults; see below)
+#         SIM_SPACE, SIM_BLE (override defaults; see below)
 # Exit:   0 if >=1 blob is observed via /api/blobs, 1 otherwise.
 #
 # Requires: go, curl, jq.
@@ -44,6 +44,11 @@ SIM_RATE="${SIM_RATE:-30}"
 SIM_DURATION="${SIM_DURATION:-25}"
 SIM_SEED="${SIM_SEED:-42}"
 SIM_SPACE="${SIM_SPACE:-5x5x2.5}"
+# SIM_BLE=1 opts in to synthetic BLE advertisements (--ble). Default off: this
+# script's gate is the CSI->blob path, NOT identity. The --ble + fixture + matcher
+# gate lives in scripts/run-sim-ble-match.sh (bf-1yr1w, notes/hardware-free-runtime.md
+# "BLE identity matcher (--ble)"). Opting in here only exercises BLE ingestion.
+SIM_BLE="${SIM_BLE:-0}"
 
 log() { printf '[run-sim] %s\n' "$*"; }
 die() { printf '[run-sim] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -87,7 +92,7 @@ trap cleanup EXIT INT TERM
 
 log "mothership: $MS"
 log "sim:        $SIM"
-log "params: nodes=$SIM_NODES walkers=$SIM_WALKERS rate=$SIM_RATE duration=${SIM_DURATION}s seed=$SIM_SEED space=$SIM_SPACE port=$PORT"
+log "params: nodes=$SIM_NODES walkers=$SIM_WALKERS rate=$SIM_RATE duration=${SIM_DURATION}s seed=$SIM_SEED space=$SIM_SPACE port=$PORT ble=$SIM_BLE"
 
 # --- Start mothership on an ephemeral data dir ---------------------------------
 # SPAXEL_MDNS_ENABLED=false: loopback reproduce, no multicast needed (the sim
@@ -114,15 +119,16 @@ log "mothership healthy"
 
 # --- Start sim with --verify (canonical acceptance cross-check) ----------------
 # The sim streams for $SIM_DURATION, then its verifyBlobs polls /api/blobs
-# (2s settle + 12x500ms) and asserts blob_count == walkers ±1.
-"$SIM" \
-  --mothership "ws://localhost:$PORT/ws/node" \
-  --nodes "$SIM_NODES" --walkers "$SIM_WALKERS" --rate "$SIM_RATE" \
-  --space "$SIM_SPACE" \
-  --duration "$SIM_DURATION" --seed "$SIM_SEED" --verify \
-  > "$DATA_DIR/sim.log" 2>&1 &
+# (2s settle + 12x500ms) and asserts blob_count == walkers ±1. SIM_BLE=1 appends
+# --ble (synthetic BLE advertisements); default off keeps the canonical path green.
+sim_args=(--mothership "ws://localhost:$PORT/ws/node"
+  --nodes "$SIM_NODES" --walkers "$SIM_WALKERS" --rate "$SIM_RATE"
+  --space "$SIM_SPACE"
+  --duration "$SIM_DURATION" --seed "$SIM_SEED" --verify)
+[ "$SIM_BLE" = "1" ] && sim_args+=(--ble)
+"$SIM" "${sim_args[@]}" > "$DATA_DIR/sim.log" 2>&1 &
 SIM_PID=$!
-log "sim started (pid $SIM_PID, --verify enabled)"
+log "sim started (pid $SIM_PID, --verify enabled, ble=$SIM_BLE)"
 
 # --- Independent /api/blobs poller over the streaming window (authoritative) ---
 # A node is online when went_offline_at is the Go zero timestamp (0001-01-01T00:00:00Z)
