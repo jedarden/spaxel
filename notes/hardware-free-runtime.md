@@ -265,6 +265,35 @@ Closes bf-1yr1w criterion 3: the `--ble` matcher recipe is now recorded here, no
 the fixture note. The matcher → `/api/blobs` identity capstone is **bf-2m534**
 (`scripts/run-sim-identity.sh`), which depends on this PASS — keep it green.
 
+### Identity capstone PASS — bf-gdfwx (live `/api/blobs`, 2026-07-08)
+
+`scripts/run-sim-identity.sh` is the THIRD and final link of the identity chain
+(matcher-active → match-found → written-onto-served-blob → observable-at-`/api/blobs`).
+It drives the same hardware-free runtime with `--ble`, seeds the BLE registry with a
+registered person BEFORE the sim starts (the fix for bf-gdfwx's two prior failures —
+the early CSI blob window is narrow at walkers=1), then asserts a live `/api/blobs` blob
+carries non-empty canonical identity.
+
+Run (reproduce): `./scripts/run-sim-identity.sh` — exit 0. Flags/sequence:
+`nodes=4 walkers=1 rate=30 duration=25s seed=42 ble=on SIM_PERSON_NAME=Alice
+SIM_WALKER_MAC=AA:BB:CC:DD:EE:00 SIM_PORT=8088`, fixture applied pre-sim, 0.5s poll cadence.
+
+Live `/api/blobs` blob (the served, canonical-identity-bearing blob):
+```json
+{"ID":7,"X":2.5,"Y":2.3,"Z":1.9,"Weight":0.6923,
+ "person_id":"6960f453-c765-4018-a180-9fbeddfc1b3a","person_label":"Alice",
+ "person_color":"#ec4899","identity_confidence":0.6000597064722052,"identity_source":"ble",
+ "personName":"Alice","assignedColor":"#ec4899","identityResolved":true}
+```
+Corroboration from the runtime matcher surface (`GET /api/ble/matches`):
+```json
+[{"blob_id":7,"person_name":"Alice","device_addr":"AA:BB:CC:DD:EE:00",
+  "confidence":0.6000597064722052,"is_ble_only":false}]
+```
+Satisfies bf-gdfwx acceptance: canonical identity populated **and** observed from the
+live REST response (`personName="Alice"`, `assignedColor="#ec4899"`,
+`identityResolved=true`), no panic, evidence recorded here (reused, not re-derived).
+
 ---
 
 ## For later beads (bf-f841 and beyond)
