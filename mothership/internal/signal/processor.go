@@ -599,9 +599,14 @@ type TrackedBlob struct {
 
 	// Canonical identity fields (bf-5151). camelCase JSON keys match the dashboard
 	// Blob type in dashboard/types/spaxel.d.ts; the snake_case PersonLabel/PersonColor
-	// above are retained as deprecated aliases for backward compatibility. Left at
-	// their zero values here (undefined) — a follow-up bead populates them from the
-	// BLE identity sidecar.
+	// above are retained as deprecated aliases for backward compatibility. Populated
+	// by the live 10 Hz fusion loop's identity write-back (cmd/mothership/main.go,
+	// the "Stage 2b" block guarded by `if identityMatcher != nil`): each tick it
+	// calls identityMatcher.GetMatch(blobID) and, on a non-nil match, copies
+	// PersonName/AssignedColor here and sets IdentityResolved=&true, then
+	// re-publishes the slice via SetTrackedBlobs so /api/blobs and /api/tracks
+	// serve them. Unmatched blobs get IdentityResolved=&false; the field stays nil
+	// (unattempted) only when no identityMatcher is configured.
 	PersonName       string `json:"personName,omitempty"`
 	AssignedColor    string `json:"assignedColor,omitempty"`
 	IdentityResolved *bool  `json:"identityResolved,omitempty"` // tri-state: nil=unattempted, &true=resolved, &false=failed
@@ -609,43 +614,32 @@ type TrackedBlob struct {
 
 // SetTrackedBlobs stores the latest tracked blobs from the fusion engine.
 //
-// INVESTIGATION NOTE (bf-2fz8 / bf-3gw1 umbrella): this setter is the ONLY
-// writer of pm.trackedBlobs, and as of this writing it has NO callers anywhere
-// in the repo (verified by grep across all non-test and test code). Therefore
-// pm.trackedBlobs is always nil and GetTrackedBlobs() always returns an empty
-// slice. Every reader sees zero blobs, so IO-6 ("walker produces a tracked
-// blob") cannot pass. Verified read sites of GetTrackedBlobs:
-//   - live 10 Hz loop:           cmd/mothership/main.go:1866
-//   - /api/blobs REST handler:   cmd/mothership/main.go:4056
-//   - anomalyPositionAdapter:    cmd/mothership/main.go:4840
-//   - API-layer wrappers:        internal/api/status.go:84, internal/api/tracks.go:99
+// Live-path callers (the earlier bf-2fz8 "no callers / trackedBlobs always nil"
+// finding is resolved by the bf-3f6q + bf-243os fusion-track wiring):
+//   - Stage 1 of the 10 Hz fusion loop publishes identity-less blobs right after
+//     blobTracker derives them from the 3D Fresnel engine's peaks
+//     (cmd/mothership/main.go).
+//   - The Stage 2 identity write-back re-publishes the SAME slice with BLE
+//     identity resolved onto each blob (PersonName/AssignedColor/IdentityResolved)
+//     whenever identityMatcher.GetMatch returns a match, so served blobs carry
+//     non-empty canonical identity.
 //
-// The intended producer is internal/fusion.NewEngine (the 3D Fresnel engine,
-// internal/fusion/fusion.go:93), but that constructor is NEVER called in
-// non-test code — the internal/fusion package is imported by exactly one file,
-// internal/localizer/fusion/timing_budget_test.go (a test); the only NewEngine
-// call sites are in that test and internal/fusion/fusion_test.go. A second
-// engine, internal/localization.NewEngine (2D Fresnel,
-// internal/localization/fusion.go:53), IS constructed in the live path via
-// NewSelfImprovingLocalizer (main.go:1005) and runs Fuse (main.go:2593), but
-// the returned *FusionResult is DISCARDED — nothing reads .Peaks; only
-// GetLearnedWeights() is read afterward (main.go:2599) for weight persistence.
-// No signal.TrackedBlob literal exists outside test code.
-//
-// CONCLUSION: no engine currently feeds the live blob loop. To satisfy IO-6,
-// internal/fusion.NewEngine MUST be newly constructed in non-test code and
-// wired (Fuse -> TrackedBlob -> SetTrackedBlobs), OR the existing
-// localization.Engine FusionResult.Peaks must be converted to TrackedBlobs
-// and stored here via SetTrackedBlobs.
+// This setter remains the ONLY writer of pm.trackedBlobs; GetTrackedBlobs is the
+// matching reader. Readers include /api/blobs, /api/tracks, the 10 Hz dashboard
+// broadcast, anomaly positioning, and fall detection.
 func (pm *ProcessorManager) SetTrackedBlobs(blobs []TrackedBlob) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	pm.trackedBlobs = blobs
 }
 
-// GetTrackedBlobs returns the latest tracked blobs from the fusion engine.
-// See SetTrackedBlobs for the bf-2fz8 finding: until that setter is wired to
-// an engine, this always returns nil.
+// GetTrackedBlobs returns the latest tracked blobs served to /api/blobs,
+// /api/tracks, the 10 Hz dashboard broadcast, anomaly positioning, and fall
+// detection. It reflects whatever the most recent SetTrackedBlobs stored —
+// i.e. the Stage 2 identity write-back's slice, which carries resolved
+// canonical identity (PersonName/AssignedColor/IdentityResolved) whenever a
+// matcher is configured and a person matches a blob. Returns nil only before
+// the first tracked blob is published.
 func (pm *ProcessorManager) GetTrackedBlobs() []TrackedBlob {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
