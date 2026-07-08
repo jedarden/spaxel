@@ -186,6 +186,22 @@ chain. The first link (register a person + bind the sim's advertised device) is 
 link to it, do not duplicate it. The matcher script reuses that exact REST sequence
 internally.
 
+### `--ble` opt-in in `run-sim-local.sh` (`SIM_BLE=1`)
+
+The canonical script now carries the `--ble` opt-in itself (bf-1yr1w), so you don't
+have to fork it to exercise BLE ingestion:
+
+```bash
+SIM_BLE=1 ./scripts/run-sim-local.sh      # appends --ble to the sim invocation
+./scripts/run-sim-local.sh                # default: --ble OFF, canonical CSI→blob path unchanged
+```
+
+Default-off — `run-sim-local.sh`'s gate is still the CSI→blob path. Re-verified green
+both ways at HEAD `c42989e` (2026-07-08): default `peak=2` and `SIM_BLE=1` `peak=2`,
+both with `[SIM] PASS: 2 blobs detected for 2 walkers` / `sim --verify PASSED`. The
+opt-in only turns on BLE advertisement ingestion; it does **not** seed a person or
+assert identity. The fixture + matcher gate is `scripts/run-sim-ble-match.sh` below.
+
 ### The recipe
 
 ```bash
@@ -234,7 +250,7 @@ match — `blob_id != -1` AND `person_name == "Alice"` AND `confidence >= 0.6`:
  "confidence":0.714,"is_ble_only":false}
 ```
 
-### PASS evidence (HEAD `7757149`, 2026-07-08)
+### PASS evidence (HEAD `7757149`; re-verified `c42989e`, 2026-07-08)
 
 ```
 [match] peak_blobs (via /api/blobs): 2
