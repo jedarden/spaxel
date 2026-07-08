@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/simulator"
 )
 
@@ -1133,15 +1134,28 @@ func sendBLEMessages(nodes []*VirtualNode, walkers []*Walker) {
 			dz := walker.Position.Z - node.Position.Z
 			dist := math.Sqrt(dx*dx + dy*dy + dz*dz)
 
-			rssi := -50.0 - 20.0*math.Log10(dist/1.0)
+			// RSSI MUST be emitted under the matcher's OWN log-distance path-loss
+			// model (internal/ble: RefRSSI, PathLossExp, RefDistance) so the matcher's
+			// rssiToDistance(rssi) inverts RSSI back to the TRUE node→walker distance.
+			// A mismatched model (the old -50-20*log10(d)) made rssiToDistance
+			// systematically underestimate distance (~0.25x), triangulating every
+			// device too close to the node cluster and landing it off its CSI blob, so
+			// the identity match never cleared MaxBLEBlobDistance/MinMatchConfidence
+			// (bf-1yr1w). Mirroring the matcher's constants here guarantees round-trip.
+			rssi := float64(ble.RefRSSI) - 10.0*ble.PathLossExp*math.Log10(dist/ble.RefDistance)
 			if rssi < -90 {
 				rssi = -90
 			}
 
+			// RSSI key MUST be "rssi_dbm" to match ingestion.BLEDevice's JSON tag
+			// (internal/ingestion/message.go) and the documented node→mothership BLE
+			// protocol. Emitting "rssi" silently left RSSIdBm at its zero value, so
+			// rssiToDistance(0) collapsed triangulation to ~2.5mm-from-every-node and
+			// the identity matcher never cleared MinMatchConfidence (bf-1yr1w).
 			devices = append(devices, map[string]interface{}{
-				"addr": fmt.Sprintf("AA:BB:CC:DD:EE:%02X", walker.ID),
-				"rssi": int(rssi),
-				"name": fmt.Sprintf("sim-person-%d", walker.ID),
+				"addr":     fmt.Sprintf("AA:BB:CC:DD:EE:%02X", walker.ID),
+				"rssi_dbm": int(rssi),
+				"name":     fmt.Sprintf("sim-person-%d", walker.ID),
 			})
 		}
 

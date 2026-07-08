@@ -3,10 +3,14 @@ package ble
 import (
 	"log"
 	"math"
+	"os"
 	"reflect"
 	"sync"
 	"time"
 )
+
+// bleDebug reports whether SPAXEL_BLE_DEBUG is set (live matcher diagnostics).
+func bleDebug() bool { return os.Getenv("SPAXEL_BLE_DEBUG") != "" }
 
 // Triangulation parameters per specification
 const (
@@ -202,6 +206,16 @@ func (m *IdentityMatcher) triangulateAllDevices(now time.Time) []*TriangulatedDe
 
 		// Triangulate position
 		pos, conf, residual := m.triangulate(readings)
+		if bleDebug() {
+			log.Printf("[BLEDBG] triangulate addr=%s readings=%d pos=(%.2f,%.2f,%.2f) conf=%.3f residual=%.3f",
+				addr, len(readings), pos.X, pos.Y, pos.Z, conf, residual)
+			for _, r := range readings {
+				nx, ny, nz, ok := m.nodePos.GetNodePosition(r.NodeMAC)
+				d := rssiToDistance(r.RSSIdBm)
+				log.Printf("[BLEDBG]   reading node=%s rssi=%d dist=%.2f nodepos=(%.2f,%.2f,%.2f) ok=%v",
+					r.NodeMAC, r.RSSIdBm, d, nx, ny, nz, ok)
+			}
+		}
 		if conf < 0.1 {
 			continue // Too low confidence
 		}
@@ -399,8 +413,13 @@ func (m *IdentityMatcher) assignBLEToBlobs(devices []*TriangulatedDevice, blobs 
 				continue
 			}
 
-			// Horizontal distance (ignore Y/height for BLE since antenna height is variable)
-			hDist := math.Sqrt(math.Pow(td.Position.X-b.X, 2) + math.Pow(td.Position.Z-b.Z, 2))
+			// Horizontal distance over the floor plane (X,Y). Z is the height axis:
+			// the triangulated Z is pinned to the anchor mounting plane (all nodes share
+			// a height, so Z is degenerate) and the CSI blob centroid sits at person
+			// height (~1m). Using Z here would misread that vertical gap as horizontal
+			// distance and suppress f_distance. Matches the floor-plane convention used
+			// by createBLEOnlyTracks below and by the sim/fusion runtime (X,Y floor; Z up).
+			hDist := math.Sqrt(math.Pow(td.Position.X-b.X, 2) + math.Pow(td.Position.Y-b.Y, 2))
 
 			if hDist < bestDist {
 				bestDist = hDist
@@ -409,6 +428,10 @@ func (m *IdentityMatcher) assignBLEToBlobs(devices []*TriangulatedDevice, blobs 
 		}
 
 		if bestBlob == nil {
+			if bleDebug() {
+				log.Printf("[BLEDBG] assign addr=%s NO blob within %.1fm (td pos=(%.2f,%.2f,%.2f) conf=%.3f nodes=%d)",
+					td.Device.Addr, MaxBLEBlobDistance, td.Position.X, td.Position.Y, td.Position.Z, td.Confidence, td.NodeCount)
+			}
 			continue
 		}
 
@@ -426,6 +449,13 @@ func (m *IdentityMatcher) assignBLEToBlobs(devices []*TriangulatedDevice, blobs 
 
 		// Compute match confidence
 		matchConf := computeMatchConfidence(td, bestDist)
+		if bleDebug() {
+			// TEMP (bf-6d2ii): log blob centroid (X,Y) vs triangulated (X,Y) to
+			// quantify the geometric divergence. Revert after diagnosis.
+			log.Printf("[BLEDBG] assign addr=%s blob=%d hDist=%.2fm matchConf=%.3f (gate=%.2f) tdconf=%.3f nodes=%d resid=%.3f tdXY=(%.2f,%.2f) blobXY=(%.2f,%.2f) nBlobs=%d",
+				td.Device.Addr, bestBlob.ID, bestDist, matchConf, MinMatchConfidence, td.Confidence, td.NodeCount, td.Residual,
+				td.Position.X, td.Position.Y, bestBlob.X, bestBlob.Y, len(blobs))
+		}
 		if matchConf < MinMatchConfidence {
 			continue
 		}
