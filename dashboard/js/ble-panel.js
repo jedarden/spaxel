@@ -825,6 +825,11 @@
     }
 
     function getColorForPerson(personName) {
+        // Identity name fields (person_name/personName) are optional on the wire;
+        // never dereference an undefined name. Currently has no callers, but
+        // harden the helper so it is safe for any future caller
+        // (audit bf-gcotl / parent bf-2gmx).
+        if (!personName) return '#888888'; // device default color (matches line ~181)
         // Check if we have a person with this name in our people list
         var person = state.people.find(function(p) { return p.name === personName; });
         if (person && person.color) {

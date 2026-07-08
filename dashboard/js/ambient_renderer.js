@@ -766,6 +766,11 @@
     }
 
     function getPersonColor(personName) {
+        // Identity name fields (personName/person_label) are optional on the wire;
+        // never dereference an undefined name. Today's sole caller guards with
+        // `if (personName)`, but harden the helper so the contract holds for any
+        // future caller (audit bf-gcotl / parent bf-2gmx).
+        if (!personName) return '#6b7280'; // Grey for unknown (matches line ~629)
         // Generate consistent color from name
         let hash = 0;
         for (let i = 0; i < personName.length; i++) {
