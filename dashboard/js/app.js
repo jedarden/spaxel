@@ -60,7 +60,7 @@
         lastFrameTime: 0,        // Time of last rendered frame
         fpsHistory: [],          // Recent FPS samples for detecting struggling devices
         strugglingDevice: false, // Auto-detected low performance flag
-        manualFrameRateCap: null // User-specified frame rate cap (null = auto-detect)
+        manualFrameRateCap: null, // User-specified frame rate cap (null = auto-detect)
         // System health tracking
         systemHealth: 0,
         worstLinkID: null,
