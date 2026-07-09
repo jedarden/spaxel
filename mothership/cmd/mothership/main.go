@@ -361,6 +361,53 @@ func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, filename string) 
 	http.ServeFile(w, r, path)
 }
 
+// dashboardStaticHandler returns an http.Handler that serves the dashboard's
+// static files (CSS, JS, index.html, ...) from staticDir via http.ServeFile, so
+// the browser receives the correct Content-Type per extension. Extension-less
+// paths fall back to index.html (SPA routing). This is the filesystem-based
+// serving path used when the dashboard is not embedded in the binary
+// (development and test builds); the embedded-build path is set up inline in
+// main via fs.Sub.
+//
+// main() and the bf-3uud3 regression test share this exact handler, so a drift
+// between what production serves and what the test exercises is impossible by
+// construction. That shared seam is what lets the regression test guarantee the
+// bf-1cgqe "404 / text/plain" failure cannot silently recur: both call sites
+// resolve MIME the same way (http.ServeFile), and the test asserts on that.
+func dashboardStaticHandler(staticDir string) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := filepath.Join(staticDir, r.URL.Path)
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			path = filepath.Join(path, "index.html")
+		}
+		if _, err := os.Stat(path); err == nil {
+			http.ServeFile(w, r, path)
+			return
+		}
+		if filepath.Ext(r.URL.Path) == "" {
+			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+			return
+		}
+		http.NotFound(w, r)
+	})
+}
+
+// registerDashboardStatic registers the dashboard's catch-all static-file route
+// (r.Get("/*")) against staticDir. It returns true when the handler is
+// registered, and false (registering nothing) when staticDir is empty or is not
+// a directory. Extracted from main() so the bf-3uud3 regression test can wire
+// the identical handler against the real dashboard/ assets.
+func registerDashboardStatic(r chi.Router, staticDir string) bool {
+	if staticDir == "" {
+		return false
+	}
+	if info, err := os.Stat(staticDir); err != nil || !info.IsDir() {
+		return false
+	}
+	r.Get("/*", dashboardStaticHandler(staticDir))
+	return true
+}
+
 // fleetRoomConfigAdapter adapts fleet.Registry to notify.RoomConfigProvider.
 type fleetRoomConfigAdapter struct {
 	reg *fleet.Registry
@@ -4643,21 +4690,7 @@ func main() {
 		}
 		if resolvedDir != "" {
 			log.Printf("[INFO] Serving dashboard from filesystem at %s", resolvedDir)
-			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-				path := filepath.Join(resolvedDir, r.URL.Path)
-				if info, err := os.Stat(path); err == nil && info.IsDir() {
-					path = filepath.Join(path, "index.html")
-				}
-				if _, err := os.Stat(path); err == nil {
-					http.ServeFile(w, r, path)
-					return
-				}
-				if filepath.Ext(r.URL.Path) == "" {
-					http.ServeFile(w, r, filepath.Join(resolvedDir, "index.html"))
-					return
-				}
-				http.NotFound(w, r)
-			})
+			registerDashboardStatic(r, resolvedDir)
 		} else {
 			log.Printf("[WARN] Dashboard directory not found: tried configured %q then CWD candidates ./dashboard, ./../dashboard, /app/dashboard, and an executable-relative dashboard/ search — static files not served", cfg.StaticDir)
 		}
