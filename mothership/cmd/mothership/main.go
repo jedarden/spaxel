@@ -285,9 +285,34 @@ func computeZoneQuality(zone zones.Zone, pm *sigproc.ProcessorManager, hc *healt
 }
 
 func findDashboardDir() string {
+	// CWD-relative candidates. "./dashboard" resolves when the binary runs from
+	// the repo root (where dashboard/ lives); "./../dashboard" resolves when run
+	// from the mothership/ subdirectory. "/app/dashboard" is the container path.
 	for _, dir := range []string{"./dashboard", "./../dashboard", "/app/dashboard"} {
 		if _, err := os.Stat(dir); err == nil {
 			return dir
+		}
+	}
+	// Repo-root-relative candidate (CWD-independent): resolve the running
+	// binary's own directory and walk upward looking for a "dashboard"
+	// subdirectory. This finds dashboard/ when the binary lives somewhere inside
+	// the repo checkout but is invoked from an unrelated working directory
+	// (e.g. /tmp), where the CWD-relative candidates above do not resolve.
+	if exe, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		dir := filepath.Dir(exe)
+		for i := 0; i < 8; i++ {
+			cand := filepath.Join(dir, "dashboard")
+			if info, err := os.Stat(cand); err == nil && info.IsDir() {
+				return cand
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break // reached filesystem root
+			}
+			dir = parent
 		}
 	}
 	return ""
@@ -4599,34 +4624,42 @@ func main() {
 			})
 		}
 	} else {
-		// Fallback to filesystem-based serving for development
-		staticDir := cfg.StaticDir
-		if staticDir == "" {
-			staticDir = findDashboardDir()
-		}
-		if staticDir != "" {
-			if _, err := os.Stat(staticDir); err == nil {
-				log.Printf("[INFO] Serving dashboard from filesystem at %s", staticDir)
-				r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-					path := filepath.Join(staticDir, r.URL.Path)
-					if info, err := os.Stat(path); err == nil && info.IsDir() {
-						path = filepath.Join(path, "index.html")
-					}
-					if _, err := os.Stat(path); err == nil {
-						http.ServeFile(w, r, path)
-						return
-					}
-					if filepath.Ext(r.URL.Path) == "" {
-						http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
-						return
-					}
-					http.NotFound(w, r)
-				})
-			} else {
-				log.Printf("[WARN] Dashboard directory not found: %s", staticDir)
+		// Fallback to filesystem-based serving for development.
+		// cfg.StaticDir defaults to "/dashboard" (a container path). When the
+		// binary runs on the host (e.g. from the repo root, where dashboard/
+		// lives) that path does not exist, so os.Stat(cfg.StaticDir) fails. In
+		// that case fall back to findDashboardDir() and serve from whichever
+		// candidate exists, rather than giving up and returning chi's default
+		// 404 for every /css, /js and index.html request. Emit a single WARN
+		// only when ALL candidates are missing.
+		resolvedDir := ""
+		if cfg.StaticDir != "" {
+			if _, err := os.Stat(cfg.StaticDir); err == nil {
+				resolvedDir = cfg.StaticDir
 			}
+		}
+		if resolvedDir == "" {
+			resolvedDir = findDashboardDir()
+		}
+		if resolvedDir != "" {
+			log.Printf("[INFO] Serving dashboard from filesystem at %s", resolvedDir)
+			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+				path := filepath.Join(resolvedDir, r.URL.Path)
+				if info, err := os.Stat(path); err == nil && info.IsDir() {
+					path = filepath.Join(path, "index.html")
+				}
+				if _, err := os.Stat(path); err == nil {
+					http.ServeFile(w, r, path)
+					return
+				}
+				if filepath.Ext(r.URL.Path) == "" {
+					http.ServeFile(w, r, filepath.Join(resolvedDir, "index.html"))
+					return
+				}
+				http.NotFound(w, r)
+			})
 		} else {
-			log.Printf("[WARN] No dashboard directory found, static files not served")
+			log.Printf("[WARN] Dashboard directory not found: tried configured %q then CWD candidates ./dashboard, ./../dashboard, /app/dashboard, and an executable-relative dashboard/ search — static files not served", cfg.StaticDir)
 		}
 	}
 
