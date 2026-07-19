@@ -1,0 +1,53 @@
+# console capture — identity-less — http://localhost:8088/live
+# navOk=true blobSeen=false messages=44 pageErrors=5 identityHits=0
+[log] [CrowdFlow] Crowd flow visualization module loaded
+[log] [Fresnel] Module loaded
+[log] [Layers] Module loaded
+[log] [Panels] Panel framework initialized
+[log] [State] State management initialized
+[log] [Router] Router module loaded
+[log] [SettingsPanel] Settings panel module loaded
+[log] [WS] Reconnection manager initialized
+[log] [Timeline] Timeline module loaded
+[log] [VolumeEditor] Module loaded
+[log] [Sleep] Module initialized
+[log] [Simulate] Simulator module loaded
+[log] [Quick Actions] Module loaded
+[log] [FXAA] Module loaded
+[log] [Mobile] Initializing mobile expert mode...
+[log] [Mobile] Hamburger menu created
+[log] [Mobile] Mobile expert mode initialized
+[log] [Mobile] Module loaded
+[log] [CrowdFlow] Initializing crowd flow visualization
+[log] [CrowdFlow] Auto-refresh started (5 min interval)
+[log] [Router] Mode changed: live -> live
+[log] [Router] Initialized with mode: live
+[log] [FloorPlan] Initializing
+[log] [Feedback] Module initialized
+[log] [Accuracy] Module initialized
+[log] [Fleet] Initializing fleet health panel
+[log] [Fleet] Fleet health panel ready
+[log] [Timeline] Initializing
+[log] [Timeline] Virtualization enabled with IntersectionObserver
+[log] [SecurityPanel] Module initialized
+[log] [Replay] Initializing time-travel replay
+[log] [Replay] Ready
+[log] [Simulate] Initializing pre-deployment simulator
+[log] [Quick Actions] Initializing...
+[log] [Quick Actions] Context menu created
+[log] [Quick Actions] Initialized
+[log] [Spaxel] Briefing module initialized
+[error] Failed to load resource: the server responded with a status of 400 (Bad Request)
+[error] [SidebarTimeline] Failed to load events: Error: Failed to fetch events: Bad Request
+    at http://localhost:8088/js/sidebar-timeline.js:559:36
+[error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[warning] [Spaxel] Failed to fetch briefing: Error: Failed to fetch briefing
+    at http://localhost:8088/js/briefing.js:191:27
+[log] [Quick Actions] State changed: system.security_mode
+[log] [Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 221648, oldest_pos: 32, oldest_timestamp_ms: 1783560563339}
+[log] [Help] Module initialized with 73 articles
+[pageerror:SyntaxError] Unexpected token ')'
+[pageerror:SyntaxError] Unexpected token 'function'
+[pageerror:SyntaxError] Unexpected identifier 'systemHealth'
+[pageerror:SyntaxError] Invalid left-hand side in assignment
+[pageerror:SyntaxError] Unexpected token ')'

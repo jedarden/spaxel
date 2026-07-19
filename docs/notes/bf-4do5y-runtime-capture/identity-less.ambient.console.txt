@@ -1,0 +1,7 @@
+# console capture — identity-less — http://localhost:8088/ambient
+# navOk=true blobSeen=false messages=2 pageErrors=2 identityHits=1
+# renderEvidence: {"canvas":true,"w":300,"h":150,"fallbackPx":0}
+[log] [AmbientRenderer] Module loaded
+[log] [AmbientBriefing] Module loaded
+[pageerror:SyntaxError] Unexpected token ')'
+[pageerror:TypeError] SpaxelAuth.checkStatus is not a function
