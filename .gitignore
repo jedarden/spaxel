@@ -47,3 +47,6 @@ node_modules/
 /mothership/mothership
 /mothership/test_goroutine
 /mothership/test_syntax
+
+# Python bytecode cache (managed_components pytest/conftest scripts)
+__pycache__/
