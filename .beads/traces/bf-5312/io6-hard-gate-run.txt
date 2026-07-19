@@ -1,0 +1,65 @@
+Trace evidence for bead bf-5312 — IO-6 hard-gate scenario run (RED state)
+=========================================================================
+Captured: 2026-07-06 (run of TestIO6HardGate_WalkerProducesTrackedBlob)
+Head at run time: 3b00ccf (working tree = this bead's strict test, uncommitted)
+
+COMMAND
+  cd mothership && go test ./tests/e2e/ \
+    -run TestIO6HardGate_WalkerProducesTrackedBlob -v -timeout 250s
+
+RESULT: FAIL (exit 1) — gate is RED. Duration 32.52s.
+
+This is the CRITICAL TRIAGE GATE path of bf-5312: blobs are zero because the
+upstream fusion Engine.SetNodePosition wiring (bf-4q5w, status=open) has NOT
+landed. The assertion was NOT weakened — the failure + diagnostics below are
+filed back to bf-4q5w.
+
+OBSERVED OUTPUT
+--- RUN   TestIO6HardGate_WalkerProducesTrackedBlob
+    Mothership started (PID 469674); Mothership healthy (uptime 0s)
+    Simulator started (PID 469718)
+    ✓ All 4 nodes online within first 5s (elapsed: 1s)        # sim+ingestion OK
+    IO-6 hard-gate failed during run: no blobs or detection events observed
+      during 30s run window (max concurrent blobs: 0, detection events: 0):
+      fusion pipeline produced no output
+      IO-6 hard-gate diagnostics (feed to bf-4q5w, do NOT weaken the assertion):
+        run-window maxima: peak concurrent blobs=0, detection events=0
+        /api/status: nodes=4 blobs=0 detection_quality=0 uptime_s=30
+        node positions announced by spaxel-sim (prove real geometry reached the DB):
+          mac=AA:BB:CC:00:00:00 role=tx pos=(0.000, 0.000, 2.000)
+          mac=AA:BB:CC:00:00:01 role=tx pos=(5.000, 0.000, 2.000)
+          mac=AA:BB:CC:00:00:02 role=rx pos=(5.000, 5.000, 2.000)
+          mac=AA:BB:CC:00:00:03 role=rx pos=(0.000, 5.000, 2.000)
+          -> 1/4 nodes at xy=(0,0); distinct geometry was announced = true
+        conclusion: CSI + node geometry reach the mothership, but the fusion
+          engine's SetNodePosition is never wired (bf-4q5w), so the Fresnel
+          accumulation grid has no meaningful peaks and no tracked blob is
+          produced. This is a wiring gap, not a tolerated quiet-room condition.
+--- FAIL: TestIO6HardGate_WalkerProducesTrackedBlob (32.52s)
+
+INTERPRETATION (the bf-4q5w finding, confirmed empirically)
+  * spaxel-sim announces 4 nodes at DISTINCT corners of a 5x5 space
+    ((0,0),(5,0),(5,5),(0,5)) at z=2.0, and the mothership PERSISTS them
+    (/api/nodes returns exactly those positions). So real geometry reaches
+    the DB — the simulator path is NOT the bug.
+  * Despite that, /api/status reports nodes=4 blobs=0 detection_quality=0,
+    and 30s of 4-node/2-walker/20Hz CSI produced 0 blobs and 0 detection
+    events. The fusion loop runs but emits no peak.
+  * Root cause (matches bf-4q5w / internal/signal/processor.go:607-640):
+    internal/fusion Engine.SetNodePosition(mac,x,y,z) is NEVER called in the
+    non-test wiring, so the engine still sees all nodes at the (0,0,1)
+    default. Co-located nodes collapse the Fresnel excess path length
+    |P-T|+|P-R|-|T-R| to ~0 everywhere -> no meaningful grid peaks -> no
+    blobs -> SetTrackedBlobs never receives anything -> GetTrackedBlobs()
+    always nil -> IO-6 cannot pass.
+  * This is a wiring gap, NOT a tolerated quiet-room condition. Keep the
+    IO-6 assertion strict; the fix belongs in bf-4q5w
+    (cmd/mothership/main.go: call Engine.SetNodePosition per node at startup
+     from the DB nodes table, and on position-change/node-register).
+
+ACTION TAKEN
+  - Committed the strict (non-weakened) IO-6 hard-gate test + diagnostic
+    capture (this bead, bf-5312) so the scenario EXISTS per AC#1.
+  - Filed this evidence back to bf-4q5w (br comment).
+  - bf-5312 left BLOCKED (not closed): the gate is RED pending bf-4q5w.
+    Per triage gate item (a): "keep this child blocked."

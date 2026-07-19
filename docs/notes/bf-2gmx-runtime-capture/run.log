@@ -1,0 +1,45 @@
+[run-sim] building canonical binaries from source (reuse if present)...
+[run-sim] existing /tmp/spaxel-sim lacks --verify (stale/standalone build); rebuilding...
+[run-sim] mothership: /tmp/spaxel-mothership
+[run-sim] sim:        /tmp/spaxel-sim
+[run-sim] params: nodes=4 walkers=2 rate=30 duration=25s seed=42 space=5x5x2.5 port=8088 ble=0
+[run-sim] mothership healthy
+[run-sim] sim started (pid 2442642, --verify enabled, ble=0)
+  t= 1s  nodes_online=4  blobs=2  peak=2
+  t= 2s  nodes_online=4  blobs=2  peak=2
+  t= 3s  nodes_online=4  blobs=0  peak=2
+  t= 4s  nodes_online=4  blobs=0  peak=2
+  t= 5s  nodes_online=4  blobs=2  peak=2
+  t= 6s  nodes_online=4  blobs=2  peak=2
+  t= 7s  nodes_online=4  blobs=0  peak=2
+  t= 8s  nodes_online=4  blobs=0  peak=2
+  t= 9s  nodes_online=4  blobs=2  peak=2
+  t=10s  nodes_online=4  blobs=0  peak=2
+  t=11s  nodes_online=4  blobs=2  peak=2
+  t=12s  nodes_online=4  blobs=2  peak=2
+  t=13s  nodes_online=4  blobs=2  peak=2
+  t=14s  nodes_online=4  blobs=2  peak=2
+  t=15s  nodes_online=4  blobs=0  peak=2
+  t=16s  nodes_online=4  blobs=0  peak=2
+Terminated
+  t=17s  nodes_online=0  blobs=0  peak=2
+  t=18s  nodes_online=0  blobs=0  peak=2
+  t=19s  nodes_online=0  blobs=0  peak=2
+  t=20s  nodes_online=0  blobs=0  peak=2
+  t=21s  nodes_online=0  blobs=0  peak=2
+  t=22s  nodes_online=0  blobs=0  peak=2
+  t=23s  nodes_online=0  blobs=0  peak=2
+  t=24s  nodes_online=0  blobs=0  peak=2
+  t=25s  nodes_online=0  blobs=0  peak=2
+grep: /tmp/spaxel-runsim-data-KE8lrJ/sim.log: No such file or directory
+grep: /tmp/spaxel-runsim-data-KE8lrJ/sim.log: No such file or directory
+
+[run-sim] ---- RESULT ----
+[run-sim] peak_blob_count=2
+[run-sim] first_blob_at=1s
+[run-sim] samples=25  nodes=4 walkers=2 rate=30 duration=25s seed=42
+[run-sim] sim_exit=143  (0 = --verify PASSED)
+[run-sim] sim_verify: 
+[run-sim] reject_in_sim_log=0
+[run-sim] fps=n/a
+[run-sim] PASS: >=1 blob via /api/blobs (peak=2); sim --verify=143 (late-window sample; /api/blobs is authoritative)

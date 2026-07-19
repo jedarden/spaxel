@@ -1,0 +1,16 @@
+{
+  "bead_id": "bf-2eub9",
+  "agent": "claude-code-glm-5",
+  "provider": "zai",
+  "model": "glm-5",
+  "exit_code": 0,
+  "outcome": "success",
+  "duration_ms": 504894,
+  "input_tokens": null,
+  "output_tokens": null,
+  "cost_usd": null,
+  "captured_at": "2026-07-08T01:35:02.511557775Z",
+  "trace_format": "claude_json",
+  "pruned": false,
+  "template_version": null
+}

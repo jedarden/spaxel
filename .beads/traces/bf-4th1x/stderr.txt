@@ -1,0 +1,3 @@
+Running as unit: run-p1798031-i47925022.scope; invocation ID: e0f51bc71e5343cc9dec731eb1532d82
+SessionEnd hook [/home/coding/.ccdash/hooks/session-end.sh] failed: /bin/sh: line 1: /home/coding/.ccdash/hooks/session-end.sh: cannot execute: required file not found
+

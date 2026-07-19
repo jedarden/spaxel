@@ -1,0 +1,43 @@
+{
+  "path": "/ambient",
+  "url": "http://localhost:8088/ambient",
+  "navOk": true,
+  "navErr": "",
+  "blobSeen": false,
+  "renderEvidence": {
+    "canvas": true,
+    "w": 300,
+    "h": 150,
+    "fallbackPx": 0
+  },
+  "messageCount": 2,
+  "messages": [
+    {
+      "type": "log",
+      "text": "[AmbientRenderer] Module loaded"
+    },
+    {
+      "type": "log",
+      "text": "[AmbientBriefing] Module loaded"
+    }
+  ],
+  "pageErrorCount": 2,
+  "pageErrors": [
+    {
+      "name": "SyntaxError",
+      "message": "Unexpected token ')'",
+      "stack": ""
+    },
+    {
+      "name": "TypeError",
+      "message": "SpaxelAuth.checkStatus is not a function",
+      "stack": "TypeError: SpaxelAuth.checkStatus is not a function\n    at HTMLDocument.<anonymous> (http://localhost:8088/ambient:80:32)"
+    }
+  ],
+  "identityHits": [
+    {
+      "where": "pageerror",
+      "text": "SpaxelAuth.checkStatus is not a function TypeError: SpaxelAuth.checkStatus is not a function\n    at HTMLDocument.<anonymous> (http://localhost:8088/ambient:80:32)"
+    }
+  ]
+}
