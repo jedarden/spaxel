@@ -1,7 +1,7 @@
 # Spaxel — Implementation Plan
 
-**Last updated:** 2026-07-03
-**Status:** COMPLETE — maintenance mode (all 9 phases implemented; the 83 implementation beads referenced above have been archived — ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357)
+**Last updated:** 2026-07-20
+**Status:** COMPLETE — maintenance mode (all 9 phases implemented; the 83 implementation beads referenced above have been archived — ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357). See ADR-001 below for the current architectural decision under evaluation.
 
 WiFi CSI-based indoor positioning for self-hosted home environments.
 
@@ -4226,3 +4226,44 @@ These are unresolved design questions. Each is tagged with the earliest phase wh
 - **Node self-positioning** *(Phase 3 — defer)*: MDS-MAP from pairwise ToF could eliminate manual position entry. Feasibility with ESP32 ToF resolution (~7.5 m) is questionable — defer to a future phase. Until then, manual positioning via the 3D editor is the only path.
 - **IEEE 802.11bf** *(monitor — no action until ESP32 support ships)*: The sensing standard (approved May 2025) provides standardized sensing frames that could replace promiscuous mode CSI capture entirely. Monitor ESP-IDF release notes for support. If added, it will be a firmware-layer change only.
 - **Multi-installation coordination** *(out of scope — see Non-Goals)*: Could multiple Spaxel instances in adjacent apartments share boundary link data to improve wall-adjacent detection? Deferred — privacy and network topology implications need thought. Not a blocker for any current phase.
+
+---
+
+## ADR-001: 2026-07-20 — Decouple ESP32 firmware build from the mothership image to ship native arm64 (Raspberry Pi) images
+
+### Context
+
+Spaxel's own capacity plan (see *Resource Limits & Performance Budgets*) names **Raspberry Pi 4 (4 GB RAM) running a 6-node fleet at 20 Hz** as the tested minimum reference platform — i.e. the plan already treats arm64 hardware as a first-class target, not a stretch case. Raspberry Pi (and arm64 NAS/SBC boards generally) is also the most common "home server" class of hardware among the self-hosted-home audience this product is built for.
+
+Despite that, the published image (`ronaldraygun/spaxel` on Docker Hub, built by the `spaxel-build` WorkflowTemplate in `jedarden/declarative-config`) is **amd64-only**. The stated reason (Deployment > Dockerfile, Quality Gates) is that the firmware-builder stage uses `espressif/idf:v5.2`, whose ESP-IDF toolchain only runs on x86_64, so `docker buildx build` is pinned to `--platform linux/amd64`.
+
+The current `Dockerfile` already carries partial scaffolding toward multi-arch support: the firmware-builder stage (stage 1) branches on `$TARGETPLATFORM` and emits a placeholder `.bin` on non-amd64 platforms, and the runtime stage (stage 3) accepts a `TARGETARCH` build arg. But the Go builder (stage 2) **hardcodes `GOOS=linux GOARCH=amd64`** unconditionally — it does not read `$TARGETARCH`/`$TARGETPLATFORM` at all. If `spaxel-build` were pointed at `--platform linux/amd64,linux/arm64` today without further changes, the arm64 manifest would silently contain an amd64 `spaxel` binary and crash immediately (`exec format error`) on real Raspberry Pi hardware. This is a latent, currently-dormant bug in unused scaffolding, not a working feature — worth fixing regardless of when arm64 ships, since it will bite the first person who flips that platform flag.
+
+The practical consequence today: a Raspberry Pi owner — exactly the target user the plan validates against — cannot `docker pull ronaldraygun/spaxel` and get a working container. Their only path is a from-source build requiring a full Go toolchain plus the multi-gigabyte ESP-IDF v5.2 SDK, which directly contradicts the README's "single Docker container" pitch and quickstart.
+
+### Decision
+
+Decouple ESP32-S3 firmware compilation from the per-architecture mothership image build:
+
+1. Build the ESP32-S3 firmware **once**, unconditionally on an amd64 CI runner (no `$TARGETPLATFORM` branching needed once it's not embedded in a multi-arch buildx matrix), as an explicit step in the `spaxel-build` WorkflowTemplate, producing a versioned `spaxel-firmware-<VERSION>-merged.bin` artifact.
+2. Publish that artifact keyed by `VERSION` (e.g. as an OCI artifact alongside the image, or an internal object store) so the runtime image stage can pull exactly one prebuilt binary regardless of which platform it's assembling.
+3. Remove firmware compilation from the per-platform `Dockerfile` path entirely — stage 3 (runtime) fetches/`COPY --from=` the single prebuilt firmware binary for every target platform, instead of re-running (or placeholder-skipping) ESP-IDF inside the multi-arch matrix.
+4. Fix the Go builder stage to be genuinely cross-platform: build with `--platform=$BUILDPLATFORM` (native compilation, no QEMU) and set `GOOS=linux GOARCH=$TARGETARCH`, removing the hardcoded `GOARCH=amd64`. This also retires the dormant mis-tagging bug described above.
+5. Change `spaxel-build` to `docker buildx build --platform linux/amd64,linux/arm64 ... --push`, publishing a real multi-arch manifest list under `ronaldraygun/spaxel:$(cat VERSION)`.
+6. Update the Quality Gates and Deployment sections of this plan once implemented — Quality Gate #4 currently asserts amd64-only "by design"; that assertion is superseded by this ADR. (This also resolves the plan's own internal inconsistency: the Phase 2 entry criteria under *Phase Plan* already required "Docker image builds cleanly for `linux/amd64` and `linux/arm64`," which the current Quality Gates section contradicts.)
+
+### Alternatives Considered
+
+- **Emulate amd64 under QEMU inside the ESP-IDF stage on arm64 runners (or vice versa) and keep firmware building inline per-arch.** Rejected: doesn't remove the fundamental cross-compilation problem, is drastically slower than native (ESP-IDF is already the heaviest stage in the build), and — critically — keeps firmware compilation coupled to the mothership build matrix, so a Go-only patch release with zero firmware changes still pays the full ESP-IDF build cost on every architecture, every time.
+- **Ship arm64 images without an embedded firmware binary; fetch it from GitHub Releases on first run instead.** Rejected for now: introduces a runtime network dependency and a new offline-first-run failure mode for a product whose core pitch is "no cloud dependency, works fully local." Worth reconsidering only if the versioned-artifact approach in the Decision proves operationally brittle.
+- **Do nothing; document "build from source for arm64."** Rejected: requires installing a Go toolchain and the multi-GB ESP-IDF SDK, which defeats the single-container quickstart and is a real adoption barrier for exactly the audience (Raspberry Pi home-server owners) the plan's own capacity testing targets.
+- **Just fix the `GOARCH` hardcoding and accept slower per-arch ESP-IDF builds via QEMU, without decoupling the artifact.** Rejected for the same coupling reason as the first alternative — it fixes the correctness bug but not the CI-time and versioning problems that motivate the decoupling.
+
+### Consequences
+
+- **Positive:** Unlocks arm64 (Raspberry Pi 4/5, and Apple Silicon Docker Desktop for local dev) as a real `docker pull` target, making the plan's own "tested minimum" hardware actually installable via the documented quickstart.
+- **Positive:** Retires a dormant correctness bug (hardcoded `GOARCH=amd64` in a stage that already has multi-arch-looking scaffolding) before it ever ships a broken arm64 manifest.
+- **Positive:** Decouples firmware versioning from mothership build platform — a mothership-only (Go/dashboard) patch release no longer needs to touch the ESP-IDF stage at all once the firmware artifact is cached by `VERSION`, shrinking CI time for the common case.
+- **Cost:** Requires new artifact-passing plumbing between the firmware build and the image build in the `spaxel-build` WorkflowTemplate (`jedarden/declarative-config`, `k8s/iad-ci/argo-workflows/`) — a one-time engineering investment, not a manifest tweak.
+- **Cost:** Multi-arch `buildx --push` roughly doubles wall time for the Go/runtime stages relative to single-arch, though this is far cheaper than duplicating the ESP-IDF stage per architecture, which is precisely why decoupling is the chosen shape.
+- **Follow-up:** Tracked as beads against this repo (`docs/plan/plan.md` ADR-001) — see the `artifact-improvement`-labeled beads for the concrete implementation steps (Dockerfile GOARCH fix, WorkflowTemplate artifact plumbing, multi-arch buildx flag flip, plan doc reconciliation).
