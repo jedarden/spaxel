@@ -292,7 +292,8 @@
         document.getElementById('modal-title').textContent = trigger ? 'Edit Trigger' : 'New Trigger';
         document.getElementById('trigger-name').value = trigger?.name || '';
         document.getElementById('trigger-condition').value = trigger?.condition || 'enter';
-        document.getElementById('trigger-cooldown')?.value = trigger?.cooldown || 60;
+        const _cd = document.getElementById('trigger-cooldown');
+        if (_cd) _cd.value = trigger?.cooldown || 60;
 
         // Load volume if editing
         if (trigger?.shape) {
