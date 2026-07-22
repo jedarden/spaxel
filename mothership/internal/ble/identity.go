@@ -49,6 +49,24 @@ type IdentityMatch struct {
 	IsBLEOnly         bool      `json:"is_ble_only"` // True if no CSI blob within range
 }
 
+// Label returns the canonical human-facing identity for this match — the
+// registered PersonName when present, falling back to the BLE device name for
+// person-less objects/tags, and empty when neither is known. It is the accessor
+// every human-facing projection (falldetect, zone-crossing, anomaly/notify)
+// reads identity through at runtime (bf-2v9g): projections previously read
+// DeviceName directly, which is the BLE hardware name ("iPhone") and is
+// frequently empty for registered-person devices. Nil-safe: a nil receiver
+// returns the empty string without panicking.
+func (m *IdentityMatch) Label() string {
+	if m == nil {
+		return ""
+	}
+	if m.PersonName != "" {
+		return m.PersonName
+	}
+	return m.DeviceName
+}
+
 // Position represents a 3D position.
 type Position struct {
 	X, Y, Z float64
