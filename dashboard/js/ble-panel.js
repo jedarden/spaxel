@@ -745,10 +745,6 @@
         return html;
     }
 
-    // Store reference to current device for modal handlers
-    state.currentModalDevice = device;
-}
-
     // ============================================
     // Utility Functions
     // ============================================
