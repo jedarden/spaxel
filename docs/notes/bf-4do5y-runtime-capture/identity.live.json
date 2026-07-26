@@ -5,7 +5,7 @@
   "navErr": "",
   "blobSeen": false,
   "renderEvidence": null,
-  "messageCount": 42,
+  "messageCount": 88,
   "messages": [
     {
       "type": "log",
@@ -37,6 +37,10 @@
     },
     {
       "type": "log",
+      "text": "[BLEPanel] BLE device panel module loaded"
+    },
+    {
+      "type": "log",
       "text": "[WS] Reconnection manager initialized"
     },
     {
@@ -49,11 +53,23 @@
     },
     {
       "type": "log",
+      "text": "[AutomationBuilder] Registered with SpaxelPanels"
+    },
+    {
+      "type": "log",
+      "text": "[AutomationBuilder] Module loaded"
+    },
+    {
+      "type": "log",
       "text": "[Sleep] Module initialized"
     },
     {
       "type": "log",
       "text": "[Simulate] Simulator module loaded"
+    },
+    {
+      "type": "log",
+      "text": "[Ambient Mode] Module loaded"
     },
     {
       "type": "log",
@@ -101,6 +117,34 @@
     },
     {
       "type": "log",
+      "text": "[Spaxel] Dashboard initializing..."
+    },
+    {
+      "type": "log",
+      "text": "[FXAA] Desktop detected, skipping FXAA initialization (MSAA will be used)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Scene initialized"
+    },
+    {
+      "type": "log",
+      "text": "[VolumeEditor] Initialized"
+    },
+    {
+      "type": "log",
+      "text": "[WS] Connecting (attempt 1)..."
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Dashboard ready"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] FXAA initialization complete, active: false"
+    },
+    {
+      "type": "log",
       "text": "[Feedback] Module initialized"
     },
     {
@@ -129,6 +173,14 @@
     },
     {
       "type": "log",
+      "text": "[AutomationBuilder] Initializing"
+    },
+    {
+      "type": "warning",
+      "text": "[AutomationBuilder] #automations-panel not found"
+    },
+    {
+      "type": "log",
       "text": "[Replay] Initializing time-travel replay"
     },
     {
@@ -138,6 +190,14 @@
     {
       "type": "log",
       "text": "[Simulate] Initializing pre-deployment simulator"
+    },
+    {
+      "type": "log",
+      "text": "[Ambient Mode] Initializing..."
+    },
+    {
+      "type": "log",
+      "text": "[Ambient Mode] Initialized"
     },
     {
       "type": "log",
@@ -164,6 +224,10 @@
       "text": "[SidebarTimeline] Failed to load events: Error: Failed to fetch events: Bad Request\n    at http://localhost:8088/js/sidebar-timeline.js:559:36"
     },
     {
+      "type": "error",
+      "text": "WebSocket connection to 'ws://localhost:8088/undefined' failed: Error during WebSocket handshake: Unexpected response code: 200"
+    },
+    {
       "type": "log",
       "text": "[Quick Actions] State changed: system.security_mode"
     },
@@ -173,36 +237,141 @@
     },
     {
       "type": "log",
-      "text": "[Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 1708808, oldest_pos: 32, oldest_timestamp_ms: 1783560563339}"
+      "text": "[Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 1761296, oldest_pos: 32, oldest_timestamp_ms: 1785033667411}"
+    },
+    {
+      "type": "error",
+      "text": "[WS] Error: Event"
+    },
+    {
+      "type": "error",
+      "text": "[Spaxel] WebSocket error: Event"
+    },
+    {
+      "type": "log",
+      "text": "[WS] Closed: 1006 "
+    },
+    {
+      "type": "log",
+      "text": "[WS] Reconnecting in 1466 ms"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] WebSocket closed: 1006 "
+    },
+    {
+      "type": "log",
+      "text": "[WS] Connecting (attempt 2)..."
+    },
+    {
+      "type": "log",
+      "text": "[WS] Connected"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] WebSocket connected"
+    },
+    {
+      "type": "log",
+      "text": "[WS] Reconnected after 1.5s"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Received snapshot, rebuilding state"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] BLE scan: 2 devices"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (10:41:38 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] BLE scan: 2 devices"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 (10:41:37 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 (10:41:37 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (10:41:38 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (10:41:39 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:01 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:01 (10:41:39 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:01:AA:BB:CC:00:00:03 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:01:AA:BB:CC:00:00:03 (10:41:39 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: detection in  by blob #11"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] detection null detection in  (10:41:39 PM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: detection in  by blob #12"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] detection null detection in  (10:41:39 PM)"
     }
   ],
-  "pageErrorCount": 5,
+  "pageErrorCount": 1,
   "pageErrors": [
     {
-      "name": "SyntaxError",
-      "message": "Unexpected token ')'",
-      "stack": ""
-    },
-    {
-      "name": "SyntaxError",
-      "message": "Unexpected token 'function'",
-      "stack": ""
-    },
-    {
-      "name": "SyntaxError",
-      "message": "Unexpected identifier 'systemHealth'",
-      "stack": ""
-    },
-    {
-      "name": "SyntaxError",
-      "message": "Invalid left-hand side in assignment",
-      "stack": ""
-    },
-    {
-      "name": "SyntaxError",
-      "message": "Unexpected token ')'",
-      "stack": ""
+      "name": "ReferenceError",
+      "message": "_onVolumeChanged is not defined",
+      "stack": "ReferenceError: _onVolumeChanged is not defined\n    at Object.onVolumeChanged (http://localhost:8088/js/volume-editor.js:530:26)\n    at HTMLDocument.init (http://localhost:8088/js/automation-builder.js:39:26)"
     }
   ],
-  "identityHits": []
+  "identityHits": [
+    {
+      "where": "pageerror",
+      "text": "_onVolumeChanged is not defined ReferenceError: _onVolumeChanged is not defined\n    at Object.onVolumeChanged (http://localhost:8088/js/volume-editor.js:530:26)\n    at HTMLDocument.init (http://localhost:8088/js/automation-builder.js:39:26)"
+    }
+  ]
 }

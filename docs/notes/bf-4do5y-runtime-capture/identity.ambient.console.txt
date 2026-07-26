@@ -1,7 +1,2318 @@
 # console capture — identity — http://localhost:8088/ambient
-# navOk=true blobSeen=false messages=2 pageErrors=2 identityHits=1
-# renderEvidence: {"canvas":true,"w":300,"h":150,"fallbackPx":0}
+# navOk=true blobSeen=false messages=778 pageErrors=1 identityHits=1
+# renderEvidence: {"canvas":true,"w":1200,"h":760,"fallbackPx":223}
 [log] [AmbientRenderer] Module loaded
 [log] [AmbientBriefing] Module loaded
-[pageerror:SyntaxError] Unexpected token ')'
+[log] [Ambient Mode] Module loaded
+[log] [Ambient Mode] Initializing...
+[log] [AmbientRenderer] Initialized
+[log] [AmbientBriefing] Initialized
+[log] [Ambient Mode] Connecting WebSocket: ws://localhost:8088/ws/dashboard
+[log] [Ambient Mode] Enabled
+[log] [Ambient Mode] Initialized
+[log] [Ambient Mode] WebSocket connected
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
+[error] [Ambient Mode] Error parsing WebSocket message: SyntaxError: Unexpected token 'o', "[object Blob]" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ws.onmessage (http://localhost:8088/js/ambient.js:310:35)
 [pageerror:TypeError] SpaxelAuth.checkStatus is not a function
