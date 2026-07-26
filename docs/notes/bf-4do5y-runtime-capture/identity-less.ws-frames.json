@@ -1,0 +1,247 @@
+{
+  "meta": {
+    "ws_url": "ws://localhost:8088/ws/dashboard",
+    "port": "8088",
+    "captured_for_ms": 12001,
+    "binary_frames": 4368,
+    "text_frames": 241,
+    "text_frames_carrying_blobs": 0,
+    "type_histogram_text": {
+      "snapshot": 1,
+      "event": 98,
+      "<no-type>": 120,
+      "motion_state": 22
+    },
+    "blob_array_len_by_type": {
+      "snapshot": {
+        "seen": 0,
+        "maxLen": 0
+      },
+      "event": {
+        "seen": 0,
+        "maxLen": 0
+      },
+      "<no-type>": {
+        "seen": 0,
+        "maxLen": 0
+      },
+      "motion_state": {
+        "seen": 0,
+        "maxLen": 0
+      }
+    },
+    "blob_field_census": {},
+    "api_samples": 24,
+    "api_samples_with_blobs": 8,
+    "api_peak_blob_count": 2
+  },
+  "snapshot_full": "{\"links\":[{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\"}],\"motion_states\":[{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\",\"motion_detected\":true,\"delta_rms\":6.557749909304941,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\",\"motion_detected\":true,\"delta_rms\":2.8757190110117796,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\",\"motion_detected\":true,\"delta_rms\":2.7123113582203007,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\",\"motion_detected\":true,\"delta_rms\":6.49540944694848,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\",\"motion_detected\":true,\"delta_rms\":1.299192669412459,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\",\"motion_detected\":true,\"delta_rms\":1.3013183254635157,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0}],\"nodes\":[{\"mac\":\"AA:BB:CC:00:00:00\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:01\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:02\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:03\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true}],\"timestamp_ms\":1785048619486,\"type\":\"snapshot\",\"zones\":[]}",
+  "sample_text_frame_by_type": {
+    "snapshot": "{\"links\":[{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\"}],\"motion_states\":[{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\",\"motion_detected\":true,\"delta_rms\":6.557749909304941,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\",\"motion_detected\":true,\"delta_rms\":2.8757190110117796,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\",\"motion_detected\":true,\"delta_rms\":2.7123113582203007,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\",\"motion_detected\":true,\"delta_rms\":6.49540944694848,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\",\"motion_detected\":true,\"delta_rms\":1.299192669412459,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\",\"motion_detected\":true,\"delta_rms\":1.3013183254635157,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0}],\"nodes\":[{\"mac\":\"AA:BB:CC:00:00:00\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:01\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:02\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:03\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true}],\"timestamp_ms\":1785048619486,\"type\":\"snapshot\",\"zones\":[]}",
+    "event": "{\"event\":{\"blob_id\":1,\"detail_json\":\"{\\\"confidence\\\":0.7412639871100298,\\\"posture\\\":\\\"\\\",\\\"vx\\\":0,\\\"vy\\\":0,\\\"vz\\\":0,\\\"x\\\":4.7,\\\"y\\\":0.30000000000000004,\\\"z\\\":1.9000000000000001}\",\"id\":8,\"kind\":\"detection\",\"person_name\":\"\",\"severity\":\"info\",\"ts\":1785048619575,\"zone\":\"\"},\"type\":\"event\"}",
+    "<no-type>": "{\"events\":[{\"blob_id\":0,\"id\":\"presence:AA:BB:CC:00:00:00:AA:BB:CC:00:00:01:1785048618008\",\"kind\":\"presence_transition\",\"person_name\":\"\",\"ts\":1785048618008,\"zone\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\"},{\"blob_id\":0,\"id\":\"presence:AA:BB:CC:00:00:01:AA:BB:CC:00:00:00:1785048618008\",\"kind\":\"presence_transition\",\"person_name\":\"\",\"ts\":1785048618008,\"zone\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\"},{\"blob_id\":0,\"id\":\"presence:AA:BB:CC:00:00:01:AA:BB:CC:00:00:03:1785048618008\",\"kind\":\"presence_transition\",\"person_name\":\"\",\"ts\":1785048618008,\"zone\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\"},{\"blob_id\":0,\"id\":\"presence:AA:BB:CC:00:00:03:AA:BB:CC:00:00:01:1785048618009\",\"kind\":\"presence_transition\",\"person_name\":\"\",\"ts\":1785048618009,\"zone\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\"},{\"blob_id\":0,\"id\":\"presence:AA:BB:CC:00:00:02:AA:BB:CC:00:00:00:1785048619196\",\"kind\":\"presence_transition\",\"person_name\":\"\",\"ts\":1785048619196,\"zone\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\"},{\"blob_id\":0,\"id\":\"presence:AA:BB:CC:00:00:00:AA:BB:CC:00:00:02:1785048619196\",\"kind\":\"presence_transition\",\"person_name\":\"\",\"ts\":1785048619196,\"zone\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\"}],\"links\":[{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\"},{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\"},{\"id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:00\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\",\"node_mac\":\"AA:BB:CC:00:00:02\",\"peer_mac\":\"AA:BB:CC:00:00:00\",\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:02\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\"},{\"id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\",\"node_mac\":\"AA:BB:CC:00:00:01\",\"peer_mac\":\"AA:BB:CC:00:00:03\",\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\"},{\"id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\",\"node_mac\":\"AA:BB:CC:00:00:03\",\"peer_mac\":\"AA:BB:CC:00:00:01\",\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\"}],\"motion_states\":[{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:00\",\"motion_detected\":true,\"delta_rms\":5.283439969382226,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:02\",\"motion_detected\":true,\"delta_rms\":5.227391144474748,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:02\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:01\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:01\",\"motion_detected\":true,\"delta_rms\":7.319505418452286,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:02:AA:BB:CC:00:00:03\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:01\",\"motion_detected\":true,\"delta_rms\":2.0594655220289395,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:00\",\"motion_detected\":true,\"delta_rms\":2.0515031135104262,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:00:AA:BB:CC:00:00:03\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:01:AA:BB:CC:00:00:03\",\"motion_detected\":true,\"delta_rms\":7.338098381010966,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"MOTION_DETECTED\",\"breathing_bpm\":0},{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:02\",\"motion_detected\":false,\"delta_rms\":0,\"confidence\":1,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"CLEAR\",\"breathing_bpm\":0}],\"nodes\":[{\"mac\":\"AA:BB:CC:00:00:03\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:00\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:01\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true},{\"mac\":\"AA:BB:CC:00:00:02\",\"firmware_version\":\"sim-1.0.0\",\"chip\":\"ESP32-S3\",\"unpaired\":true}],\"portals\":[],\"timestamp_ms\":1785048619577,\"zones\":[]}",
+    "motion_state": "{\"links\":[{\"link_id\":\"AA:BB:CC:00:00:03:AA:BB:CC:00:00:00\",\"motion_detected\":true,\"delta_rms\":2.1566912105990066,\"confidence\":0,\"diurnal_confidence\":0,\"diurnal_ready\":false,\"breathing_state\":\"\",\"breathing_bpm\":0}],\"type\":\"motion_state\"}"
+  },
+  "api_blob_samples": [
+    {
+      "t_ms": 1785048619488,
+      "count": 2,
+      "first_blob": {
+        "ID": 1,
+        "X": 4.7,
+        "Y": 0.30000000000000004,
+        "Z": 1.9000000000000001,
+        "VX": 0,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 0.8205906258260548,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048620001,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048620501,
+      "count": 2,
+      "first_blob": {
+        "ID": 5,
+        "X": 2.3000000000000003,
+        "Y": 2.3000000000000003,
+        "Z": 1.9000000000000001,
+        "VX": 0,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 0.7085869364329636,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048621001,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048621501,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048622001,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048622501,
+      "count": 2,
+      "first_blob": {
+        "ID": 9,
+        "X": 0.30000000000000004,
+        "Y": 0.30000000000000004,
+        "Z": 1.9000000000000001,
+        "VX": 0,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 0.8414122308187298,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048623001,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048623501,
+      "count": 2,
+      "first_blob": {
+        "ID": 13,
+        "X": 2.5,
+        "Y": 2.3000000000000003,
+        "Z": 1.9000000000000001,
+        "VX": 0,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 0.9129631698195214,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048624000,
+      "count": 2,
+      "first_blob": {
+        "ID": 13,
+        "X": 2.7,
+        "Y": 2.3000000000000003,
+        "Z": 1.9000000000000001,
+        "VX": 1.9904279919780197,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 0.865205825602333,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048624501,
+      "count": 2,
+      "first_blob": {
+        "ID": 15,
+        "X": 4.7,
+        "Y": 0.30000000000000004,
+        "Z": 1.9000000000000001,
+        "VX": 0,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 1,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048625001,
+      "count": 2,
+      "first_blob": {
+        "ID": 15,
+        "X": 4.7,
+        "Y": 0.30000000000000004,
+        "Z": 1.9000000000000001,
+        "VX": 0,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 0.9329952996079963,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048625501,
+      "count": 2,
+      "first_blob": {
+        "ID": 15,
+        "X": 4.7,
+        "Y": 0.30000000000000004,
+        "Z": 1.9000000000000001,
+        "VX": 0,
+        "VY": 0,
+        "VZ": 0,
+        "Weight": 0.9601971635917386,
+        "identityResolved": false
+      }
+    },
+    {
+      "t_ms": 1785048626001,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048626501,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048627001,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048627502,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048628002,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048628502,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048629002,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048629502,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048630001,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048630502,
+      "count": -1,
+      "first_blob": null
+    },
+    {
+      "t_ms": 1785048631002,
+      "count": -1,
+      "first_blob": null
+    }
+  ]
+}
