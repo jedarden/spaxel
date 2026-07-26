@@ -65,6 +65,7 @@ import (
 	"github.com/spaxel/mothership/internal/sleep"
 	"github.com/spaxel/mothership/internal/startup"
 	"github.com/spaxel/mothership/internal/timeline"
+	"github.com/spaxel/mothership/internal/tracking"
 	"github.com/spaxel/mothership/internal/volume"
 	"github.com/spaxel/mothership/internal/webhook"
 	"github.com/spaxel/mothership/internal/zones"
@@ -2360,6 +2361,22 @@ func main() {
 					}
 				}
 				shedder.EndStage(st2)
+
+				// Stage 2c: Bridge live blobs into the dashboard WebSocket feed
+				// (bf-4gd4j / bf-5wrsb). The fusion loop published blobs only via
+				// pm.SetTrackedBlobs, which /api/blobs reads directly — but that path
+				// bypasses the dashboard hub, so Hub.BroadcastLocUpdate (the sole writer
+				// of h.snap.blobsJSON, read by buildSnapshot() and the 10 Hz tickDelta())
+				// never ran and /ws/dashboard carried NO blobs (verdict bf-16tsv). At
+				// this point `blobs` is non-empty (the empty guard above continued) and
+				// identity-enriched if a matcher is configured; converting it to
+				// []tracking.Blob feeds the snapshot (first msg on connect), the 10 Hz
+				// delta ticks, and a direct loc_update broadcast — the frames the
+				// dashboard viz3d render path consumes (app.js routes msg.blobs ->
+				// Viz3D.handleLocUpdate -> applyLocUpdate).
+				if dashboardHub != nil {
+					dashboardHub.BroadcastLocUpdate(trackedBlobsToTracking(blobs))
+				}
 
 				// Stage 3: Update zones occupancy
 				st3 := shedder.BeginStage("zone_occupancy")
@@ -5578,6 +5595,40 @@ type blobTracker struct {
 
 func newBlobTracker() *blobTracker {
 	return &blobTracker{nextID: 1, prev: make(map[int]sigproc.TrackedBlob)}
+}
+
+// trackedBlobsToTracking converts the fusion loop's []sigproc.TrackedBlob — the
+// slice published via pm.SetTrackedBlobs, which /api/blobs reads directly — into
+// []tracking.Blob for Hub.BroadcastLocUpdate, the sole writer of h.snap.blobsJSON
+// consumed by the dashboard snapshot/delta protocol (bf-4gd4j / bf-5wrsb). Root
+// cause per bf-16tsv: BroadcastLocUpdate had no caller, so /ws/dashboard carried
+// no blobs even though /api/blobs returned them. Y/VY and the tracker's Trail are
+// not represented in the dashboard wire format (BroadcastLocUpdate serialises only
+// X/Z/VX/VZ/Weight/Posture/identity), so they are intentionally dropped here.
+func trackedBlobsToTracking(blobs []sigproc.TrackedBlob) []tracking.Blob {
+	out := make([]tracking.Blob, len(blobs))
+	now := time.Now()
+	for i, b := range blobs {
+		out[i] = tracking.Blob{
+			ID:                 b.ID,
+			X:                  b.X,
+			Z:                  b.Z,
+			VX:                 b.VX,
+			VZ:                 b.VZ,
+			Weight:             b.Weight,
+			LastSeen:           now,
+			Posture:            tracking.Posture(b.Posture),
+			PersonID:           b.PersonID,
+			PersonLabel:        b.PersonLabel,
+			PersonColor:        b.PersonColor,
+			IdentityConfidence: b.IdentityConfidence,
+			IdentitySource:     b.IdentitySource,
+			PersonName:         b.PersonName,
+			AssignedColor:      b.AssignedColor,
+			IdentityResolved:   b.IdentityResolved,
+		}
+	}
+	return out
 }
 
 // track converts a fusion Result's peaks into TrackedBlobs, associating each
