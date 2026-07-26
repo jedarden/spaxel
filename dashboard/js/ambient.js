@@ -501,6 +501,7 @@
             updateStatus();
             checkAlerts();
         }
+    }
 
     // ============================================
     // Status Updates
