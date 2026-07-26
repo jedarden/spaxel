@@ -1,1 +1,1 @@
-null
+[{"ID":17,"X":2.5,"Y":2.3000000000000003,"Z":1.9000000000000001,"VX":0,"VY":0,"VZ":0,"Weight":0.8823489238250115,"person_id":"26759374-4ed1-4518-9e3d-5c7b9ab9d8f7","person_label":"Alice","person_color":"#f59e0b","identity_confidence":0.6000597064722052,"identity_source":"ble","personName":"Alice","assignedColor":"#f59e0b","identityResolved":true},{"ID":18,"X":2.5,"Y":2.3000000000000003,"Z":2.1,"VX":0,"VY":0,"VZ":0,"Weight":0.8823489238250115,"identityResolved":false}]
