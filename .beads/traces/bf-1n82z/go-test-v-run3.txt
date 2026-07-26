@@ -1,0 +1,36 @@
+=== RUN   TestIO6HardGate_WalkerProducesTrackedBlob
+    e2e_test.go:111: Mothership started (PID: 2907514)
+    e2e_test.go:164: Mothership healthy (uptime: 0s)
+    e2e_test.go:217: Simulator started (PID: 2907540)
+    e2e_test.go:488: ✓ All 4 nodes online within first 5s (elapsed: 1s)
+    e2e_test.go:528: ✓ Blobs observed during run (peak concurrent: 2)
+    e2e_test.go:531: ✓ Detection events observed during run (100 events)
+    io6_gate_test.go:221: IO-6 hard-gate (dashboard WS feed) failed: expected >=1 tracked blob from a 4-node/2-walker run, but none was observed [expected at least one blob in dashboard feed, but max blob count observed was 0 across 20 ticks]
+        IO-6 hard-gate diagnostics (feed to bf-4q5w, do NOT weaken the assertion):
+          run-window maxima: peak concurrent blobs=0, detection events=100
+          /api/status: nodes=0 blobs=0 detection_quality=59 uptime_s=32
+          node positions announced by spaxel-sim (prove real geometry reached the DB):
+            mac=AA:BB:CC:00:00:00 role=tx pos=(0.000, 0.000, 2.000)
+            mac=AA:BB:CC:00:00:01 role=tx pos=(5.000, 0.000, 2.000)
+            mac=AA:BB:CC:00:00:02 role=rx pos=(5.000, 5.000, 2.000)
+            mac=AA:BB:CC:00:00:03 role=rx pos=(0.000, 5.000, 2.000)
+            -> 1/4 nodes at xy=(0,0); distinct geometry was announced = true
+          conclusion: CSI + node geometry reach the mothership, but the fusion engine's
+          SetNodePosition is never wired (bf-4q5w), so the Fresnel accumulation grid has no
+          meaningful peaks and no tracked blob is produced. This is a wiring gap, not a
+          tolerated quiet-room condition — keep the IO-6 assertion strict.
+--- FAIL: TestIO6HardGate_WalkerProducesTrackedBlob (34.54s)
+FAIL
+FAIL	github.com/spaxel/mothership/tests/e2e	35.928s
+FAIL
+
+---
+Run 3 (re-dispatch confirmation). Re-ran the SCOPE command at HEAD=e2a177c on the
+bf-1n82z re-dispatch to confirm the RED signature is not stale. Failure mode is
+byte-for-byte identical to runs 1 and 2: same trip point (io6_gate_test.go:221, the
+dashboard WS feed blob assertion), same post-run /api/status (nodes=0 blobs=0
+detection_quality=59), same distinct-geometry diagnostic (1/4 at origin). Only
+fleet-role assignment varies between runs (node 00/01 = tx here vs tx/tx_rx in
+run 1) — nondeterminism in the role engine that does not affect the outcome.
+Confirmed fresh: auth ADMITS all 4 nodes (✓ online within 1s), so the failure is
+the blob assertion, NOT auth/startup/build/timeout. Exit code 1, ~34.5s.

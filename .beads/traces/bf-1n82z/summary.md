@@ -11,6 +11,7 @@
 |------|----------|
 | `go-test-v.txt`       | Full `go test -tags io6_gate -run TestIO6HardGate_WalkerProducesTrackedBlob ./tests/e2e/... -v` output (run 1) |
 | `go-test-v-run2.txt`  | Repeat run — confirms the failure mode is deterministic, not flaky |
+| `go-test-v-run3.txt`  | Re-dispatch confirmation run at HEAD — same failure mode (third consecutive) |
 | `diagnostic-dump.txt` | Extracted diagnostic dump + node-position-vs-blob-state contrast + honest nuance |
 
 ## Command run
@@ -64,7 +65,8 @@ kept RED until the wiring lands.
 
 ## Determinism
 
-Two consecutive runs produced the same failure mode (same trip point at the WS-feed
-assertion, same peak-2 /api/blobs, same 100 detection events, same distinct-geometry
-diagnostic). Minor role-assignment variation between runs (fleet role engine) did not
-affect the outcome. Not a flaky 0-blob — see the bf-4q5w notes re: SIM_RATE 20.
+Three consecutive runs (two in the original capture, one re-dispatch confirmation at
+HEAD=e2a177c) produced the same failure mode (same trip point at the WS-feed assertion,
+same peak-2 /api/blobs, same 100 detection events, same distinct-geometry diagnostic).
+Minor role-assignment variation between runs (fleet role engine) did not affect the
+outcome. Not a flaky 0-blob — see the bf-4q5w notes re: SIM_RATE 20.
