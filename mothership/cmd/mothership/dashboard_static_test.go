@@ -139,6 +139,32 @@ func TestDashboardStaticAssets(t *testing.T) {
 			}
 		})
 	}
+
+	// HEAD coverage (bf-1cgqe): the catch-all static route must serve HEAD —
+	// `curl -sI` and any HEAD preflight — with the correct Content-Type, not
+	// chi's 405 for a GET-only route. http.ServeFile serves headers-only with an
+	// empty body for HEAD, so we also assert the body is empty.
+	for _, tc := range cases {
+		t.Run("head/"+tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodHead, tc.target, nil)
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("HEAD %s: status = %d, want 200 (the bf-1cgqe regression served 405 here for a GET-only route)", tc.target, rec.Code)
+			}
+			ct := rec.Header().Get("Content-Type")
+			if !mimeMatches(ct, tc.wantMIME) {
+				t.Fatalf("HEAD %s: Content-Type = %q, want %q prefix", tc.target, ct, tc.wantMIME)
+			}
+			if strings.HasPrefix(ct, "text/plain") {
+				t.Fatalf("HEAD %s: Content-Type = %q, must not be text/plain", tc.target, ct)
+			}
+			if rec.Body.Len() != 0 {
+				t.Fatalf("HEAD %s: response body must be empty, got %d bytes", tc.target, rec.Body.Len())
+			}
+		})
+	}
 }
 
 // TestDashboardStaticAssetsGuardUnregistered proves the assertions have teeth

@@ -394,10 +394,17 @@ func dashboardStaticHandler(staticDir string) http.HandlerFunc {
 }
 
 // registerDashboardStatic registers the dashboard's catch-all static-file route
-// (r.Get("/*")) against staticDir. It returns true when the handler is
+// against staticDir for both GET and HEAD. It returns true when the handler is
 // registered, and false (registering nothing) when staticDir is empty or is not
 // a directory. Extracted from main() so the bf-3uud3 regression test can wire
 // the identical handler against the real dashboard/ assets.
+//
+// HEAD is registered alongside GET (bf-1cgqe) because the route was previously
+// GET-only, so `curl -sI` / HEAD preflighters got chi's 405 Method Not Allowed
+// instead of the asset's Content-Type. http.ServeFile (used by
+// dashboardStaticHandler) already serves headers-only with an empty body for
+// HEAD, so routing HEAD to the same handler yields the correct Content-Type
+// without duplicating any serving logic.
 func registerDashboardStatic(r chi.Router, staticDir string) bool {
 	if staticDir == "" {
 		return false
@@ -405,7 +412,9 @@ func registerDashboardStatic(r chi.Router, staticDir string) bool {
 	if info, err := os.Stat(staticDir); err != nil || !info.IsDir() {
 		return false
 	}
-	r.Get("/*", dashboardStaticHandler(staticDir))
+	handler := dashboardStaticHandler(staticDir)
+	r.Get("/*", handler)
+	r.Head("/*", handler)
 	return true
 }
 
@@ -4682,10 +4691,14 @@ func main() {
 			log.Printf("[WARN] Failed to create dashboard sub filesystem: %v", err)
 		} else {
 			log.Printf("[INFO] Serving dashboard from embedded filesystem")
-			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-				// Try to serve the file, fall back to index.html for SPA routes
-				http.StripPrefix("/", http.FileServer(http.FS(dashboardHTTP))).ServeHTTP(w, r)
-			})
+			// GET and HEAD both route to the file server (bf-1cgqe): the route was
+			// previously GET-only, so `curl -sI` / HEAD preflighters got chi's 405
+			// instead of the asset's Content-Type. http.FileServer already serves
+			// headers-only with an empty body for HEAD, so the same handler serves
+			// both methods correctly.
+			fileServer := http.StripPrefix("/", http.FileServer(http.FS(dashboardHTTP))).ServeHTTP
+			r.Get("/*", fileServer)
+			r.Head("/*", fileServer)
 		}
 	} else {
 		// Fallback to filesystem-based serving for development.
