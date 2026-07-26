@@ -10,14 +10,14 @@
     "blobCount": 2,
     "blobs": [
       {
-        "id": 19,
+        "id": 17,
         "x": 4.7,
         "z": 1.9000000000000001,
         "vx": 0,
         "vz": 0
       },
       {
-        "id": 20,
+        "id": 18,
         "x": 4.7,
         "z": 2.1,
         "vx": 0,
@@ -27,7 +27,7 @@
     "samples": 60,
     "peakSeenAt": 0
   },
-  "messageCount": 161,
+  "messageCount": 157,
   "messages": [
     {
       "type": "log",
@@ -271,11 +271,11 @@
     },
     {
       "type": "log",
-      "text": "[Help] Module initialized with 73 articles"
+      "text": "[Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 260528, oldest_pos: 32, oldest_timestamp_ms: 1785057826919}"
     },
     {
       "type": "log",
-      "text": "[Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 264578, oldest_pos: 32, oldest_timestamp_ms: 1785057159357}"
+      "text": "[Help] Module initialized with 73 articles"
     },
     {
       "type": "error",
@@ -291,7 +291,7 @@
     },
     {
       "type": "log",
-      "text": "[WS] Reconnecting in 1125 ms"
+      "text": "[WS] Reconnecting in 1376 ms"
     },
     {
       "type": "log",
@@ -315,7 +315,7 @@
     },
     {
       "type": "log",
-      "text": "[WS] Reconnected after 1.1s"
+      "text": "[WS] Reconnected after 1.4s"
     },
     {
       "type": "log",
@@ -323,19 +323,19 @@
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #17"
+      "text": "[Spaxel] Event: detection in  by blob #15"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:52 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #18"
+      "text": "[Spaxel] Event: detection in  by blob #16"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:52 AM)"
     },
     {
       "type": "log",
@@ -343,7 +343,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (5:12:44 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (5:23:51 AM)"
     },
     {
       "type": "log",
@@ -351,7 +351,23 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (5:12:44 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (5:23:51 AM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: detection in  by blob #15"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] detection null detection in  (5:23:52 AM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: detection in  by blob #16"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] detection null detection in  (5:23:52 AM)"
     },
     {
       "type": "log",
@@ -359,7 +375,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -367,7 +383,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -375,7 +391,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -383,7 +399,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -391,7 +407,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -399,39 +415,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
-    },
-    {
-      "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
-    },
-    {
-      "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
-    },
-    {
-      "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
-    },
-    {
-      "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
-    },
-    {
-      "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
-    },
-    {
-      "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
-    },
-    {
-      "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
-    },
-    {
-      "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -439,7 +423,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 (5:12:45 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -447,31 +431,23 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 (5:12:45 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:45 AM)"
-    },
-    {
-      "type": "log",
-      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0"
-    },
-    {
-      "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (5:12:45 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
@@ -479,135 +455,143 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (5:12:45 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:53 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #19"
+      "text": "[Spaxel] Event: detection in  by blob #18"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
-      "text": "[Spaxel] Event: detection in  by blob #20"
+      "text": "[Spaxel] Event: detection in  by blob #17"
     },
     {
       "type": "log",
-      "text": "[Timeline] detection null detection in  (5:12:46 AM)"
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: detection in  by blob #18"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] detection null detection in  (5:23:54 AM)"
     },
     {
       "type": "log",
@@ -615,7 +599,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (5:12:48 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (5:23:55 AM)"
     },
     {
       "type": "log",
@@ -623,15 +607,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (5:12:48 AM)"
-    },
-    {
-      "type": "log",
-      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 by blob #0"
-    },
-    {
-      "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (5:12:48 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (5:23:55 AM)"
     },
     {
       "type": "log",
@@ -639,7 +615,15 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (5:12:48 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (5:23:56 AM)"
+    },
+    {
+      "type": "log",
+      "text": "[Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 by blob #0"
+    },
+    {
+      "type": "log",
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (5:23:56 AM)"
     },
     {
       "type": "log",
@@ -647,7 +631,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 (5:12:49 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 (5:23:56 AM)"
     },
     {
       "type": "log",
@@ -655,7 +639,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 (5:12:49 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 (5:23:56 AM)"
     },
     {
       "type": "log",
@@ -663,7 +647,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (5:12:49 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (5:23:57 AM)"
     },
     {
       "type": "log",
@@ -671,7 +655,7 @@
     },
     {
       "type": "log",
-      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (5:12:50 AM)"
+      "text": "[Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (5:23:57 AM)"
     }
   ],
   "pageErrorCount": 0,
