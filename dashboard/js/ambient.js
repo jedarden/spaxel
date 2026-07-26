@@ -306,6 +306,16 @@
         };
 
         ws.onmessage = function(event) {
+            // The /ws/dashboard feed interleaves JSON text frames (snapshot,
+            // incremental updates) with binary CSI frames (raw I/Q forwarded for
+            // the live page's diagnostic amplitude view). The ambient view only
+            // consumes the JSON frames, so mirror app.js's handleMessage and
+            // skip non-string payloads instead of feeding them to JSON.parse —
+            // otherwise every binary frame throws "[object Blob] is not valid
+            // JSON", flooding the console and starving the snapshot handler.
+            if (typeof event.data !== 'string') {
+                return;
+            }
             try {
                 const data = JSON.parse(event.data);
                 handleWebSocketMessage(data);

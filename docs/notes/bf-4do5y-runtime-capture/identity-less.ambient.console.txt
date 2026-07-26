@@ -1,6 +1,6 @@
 # console capture — identity-less — http://localhost:8088/ambient
 # navOk=true blobSeen=false messages=10 pageErrors=0 identityHits=0
-# renderEvidence: {"canvas":true,"w":1200,"h":760,"fallbackPx":194}
+# renderEvidence: {"canvas":true,"w":1200,"h":760,"fallbackPx":208}
 [log] [AmbientRenderer] Module loaded
 [log] [AmbientBriefing] Module loaded
 [log] [Ambient Mode] Module loaded

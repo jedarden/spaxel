@@ -219,6 +219,33 @@ SIM_PID=""
 hits_less=$(count_identity_hits "identity-less")
 log "phase=identity-less: identity-related console hits = $hits_less"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# bf-4e7w3: SIM_BLE=0 means "identity-less phase ONLY" — skip the --ble
+# identity-resolved phase 2 entirely. The full two-phase run blew the 10-minute
+# bead budget three times (exit-124); phase 1 alone, with pre-built binaries,
+# fits comfortably. Default (SIM_BLE unset, empty, or != 0/false/no) runs both
+# phases for the full bf-4do5y live-console acceptance. Leave PHASE="identity-less"
+# so the EXIT trap still flushes the phase-1 logs into the capture dir.
+# ─────────────────────────────────────────────────────────────────────────────
+skip_identity_phase=0
+case "${SIM_BLE:-1}" in 0|false|no|off) skip_identity_phase=1 ;; esac
+if [ "$skip_identity_phase" -eq 1 ]; then
+  log "SIM_BLE=${SIM_BLE:-<unset>}: skipping identity (--ble) phase 2 (identity-less only)."
+  echo ""
+  log "================ VERDICT (identity-less only) ================"
+  log "phase identity-less : console identity-hits=$hits_less  blob-peak=$peak"
+  log "identity-less blob fields: $(identity_field_report "$BLOB_LESS")"
+  fail=0
+  if [ "$hits_less" -ne 0 ]; then log "FAIL: identity-less console had $hits_less identity-related hit(s)"; fail=1; fi
+  if [ "${peak:-0}" -le 0 ]; then log "FAIL: identity-less phase produced no blob";                           fail=1; fi
+  if [ "$fail" -eq 0 ]; then
+    log "PASS: identity-less console clean (0 identity-related hits); blobs rendered."
+    exit 0
+  fi
+  log "FAIL: see $CAPTURE_DIR for captured consoles."
+  exit 1
+fi
+
 # ============================================================================
 # PHASE 2 — identity-resolved (--ble + registered person)
 # ============================================================================
