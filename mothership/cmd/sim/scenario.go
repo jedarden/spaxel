@@ -293,13 +293,20 @@ func (s *OTAScenarioState) SimulateOTAReboot(ctx context.Context, params OTAScen
 
 // reconnectNode reconnects a node to mothership after reboot
 func reconnectNode(ctx context.Context, node *VirtualNode, allNodes []*VirtualNode) error {
-	// Reuse connection logic from main.go
-	token := *flagToken
-	if token == "" {
+	// Resolve a per-node token: --token <t> override, else mint a REAL token for
+	// this node's announced MAC via /api/provision (same window-independent path
+	// as connectNodes). The validator recomputes HMAC(installSecret, hello.MAC),
+	// so the reconnecting node must present its own MAC-keyed token — not a
+	// shared placeholder token, which would be rejected as "invalid token".
+	var token string
+	if *flagToken != "" {
+		token = *flagToken
+	} else {
+		mac := macToString(node.MAC)
 		var err error
-		token, err = provisionToken()
+		token, err = provisionNodeToken(ctx, getHTTPBaseURL(*flagMothership), mac)
 		if err != nil {
-			return err
+			return fmt.Errorf("provision token for node %d (%s): %w", node.ID, mac, err)
 		}
 	}
 
