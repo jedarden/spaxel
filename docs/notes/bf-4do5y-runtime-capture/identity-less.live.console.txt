@@ -1,5 +1,6 @@
 # console capture — identity-less — http://localhost:8088/live
-# navOk=true blobSeen=false messages=122 pageErrors=1 identityHits=1
+# navOk=true blobSeen=false messages=298 pageErrors=0 identityHits=0
+# renderEvidence: {"error":"Error: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object."}
 [log] [CrowdFlow] Crowd flow visualization module loaded
 [log] [Fresnel] Module loaded
 [log] [Layers] Module loaded
@@ -46,6 +47,10 @@
 [log] [Replay] Initializing time-travel replay
 [log] [Replay] Ready
 [log] [Simulate] Initializing pre-deployment simulator
+[log] [Simulate] Simulator UI initialized
+[warning] [Simulate] Viz3D not ready yet
+[log] [Simulate] Space applied: {width: 10, depth: 8, height: 2.5, walls: Array(0)}
+[log] [Simulate] Ready
 [log] [Ambient Mode] Initializing...
 [log] [Ambient Mode] Initialized
 [log] [Quick Actions] Initializing...
@@ -55,73 +60,243 @@
 [error] Failed to load resource: the server responded with a status of 400 (Bad Request)
 [error] [SidebarTimeline] Failed to load events: Error: Failed to fetch events: Bad Request
     at http://localhost:8088/js/sidebar-timeline.js:559:36
-[error] Failed to load resource: the server responded with a status of 404 (Not Found)
-[warning] [Spaxel] Failed to fetch briefing: Error: Failed to fetch briefing
-    at http://localhost:8088/js/briefing.js:191:27
 [error] WebSocket connection to 'ws://localhost:8088/undefined' failed: Error during WebSocket handshake: Unexpected response code: 200
 [log] [Quick Actions] State changed: system.security_mode
-[log] [Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 243032, oldest_pos: 32, oldest_timestamp_ms: 1785033667411}
+[log] [Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 279968, oldest_pos: 32, oldest_timestamp_ms: 1785043799780}
 [log] [Help] Module initialized with 73 articles
 [error] [WS] Error: Event
 [error] [Spaxel] WebSocket error: Event
 [log] [WS] Closed: 1006 
-[log] [WS] Reconnecting in 676 ms
+[log] [WS] Reconnecting in 780 ms
 [log] [Spaxel] WebSocket closed: 1006 
+[log] [Quick Actions] 3D integration ready
 [log] [WS] Connecting (attempt 2)...
 [log] [WS] Connected
 [log] [Spaxel] WebSocket connected
-[log] [WS] Reconnected after 0.7s
+[log] [WS] Reconnected after 0.8s
 [log] [Spaxel] Received snapshot, rebuilding state
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:12 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #3
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[log] [Spaxel] Event: detection in  by blob #4
-[log] [Timeline] detection null detection in  (10:41:13 PM)
-[pageerror:ReferenceError] _onVolumeChanged is not defined
+[log] [Spaxel] Event: detection in  by blob #17
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #18
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (1:30:04 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (1:30:04 AM)
+[log] [Spaxel] Event: detection in  by blob #17
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #18
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #17
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #18
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #17
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #18
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #17
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #18
+[log] [Timeline] detection null detection in  (1:30:05 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 (1:30:06 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (1:30:06 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:06 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #19
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: detection in  by blob #20
+[log] [Timeline] detection null detection in  (1:30:07 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (1:30:08 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (1:30:08 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (1:30:09 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (1:30:09 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 (1:30:09 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 (1:30:09 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (1:30:10 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (1:30:10 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (1:30:11 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (1:30:11 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 (1:30:11 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 (1:30:11 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 (1:30:11 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 (1:30:11 AM)
+[log] [Spaxel] Event: detection in  by blob #21
+[log] [Timeline] detection null detection in  (1:30:12 AM)
+[log] [Spaxel] Event: detection in  by blob #22
+[log] [Timeline] detection null detection in  (1:30:12 AM)
+[log] [Spaxel] Event: detection in  by blob #21
+[log] [Timeline] detection null detection in  (1:30:12 AM)
+[log] [Spaxel] Event: detection in  by blob #22
+[log] [Timeline] detection null detection in  (1:30:12 AM)
+[log] [Spaxel] Event: detection in  by blob #21
+[log] [Timeline] detection null detection in  (1:30:12 AM)
+[log] [Spaxel] Event: detection in  by blob #22
+[log] [Timeline] detection null detection in  (1:30:12 AM)
+[log] [Spaxel] Event: detection in  by blob #21
+[log] [Timeline] detection null detection in  (1:30:13 AM)
+[log] [Spaxel] Event: detection in  by blob #22
+[log] [Timeline] detection null detection in  (1:30:13 AM)
+[log] [Spaxel] Event: detection in  by blob #23
+[log] [Timeline] detection null detection in  (1:30:13 AM)
+[log] [Spaxel] Event: detection in  by blob #24
+[log] [Timeline] detection null detection in  (1:30:13 AM)
+[log] [Spaxel] Event: detection in  by blob #25
+[log] [Timeline] detection null detection in  (1:30:13 AM)
+[log] [Spaxel] Event: detection in  by blob #26
+[log] [Timeline] detection null detection in  (1:30:13 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (1:30:14 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (1:30:14 AM)
+[log] [Quick Actions] State changed: system.security_mode
+[log] [Spaxel] Event: detection in  by blob #25
+[log] [Timeline] detection null detection in  (1:30:14 AM)
+[log] [Spaxel] Event: detection in  by blob #26
+[log] [Timeline] detection null detection in  (1:30:14 AM)
+[log] [Spaxel] Event: detection in  by blob #23
+[log] [Timeline] detection null detection in  (1:30:14 AM)
+[log] [Spaxel] Event: detection in  by blob #24
+[log] [Timeline] detection null detection in  (1:30:14 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (1:30:15 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (1:30:15 AM)
+[log] [Spaxel] Event: detection in  by blob #25
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: detection in  by blob #26
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: detection in  by blob #25
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: detection in  by blob #26
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: detection in  by blob #25
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: detection in  by blob #26
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: detection in  by blob #25
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: detection in  by blob #26
+[log] [Timeline] detection null detection in  (1:30:16 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:00 (1:30:17 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:03 (1:30:17 AM)
+[log] [Spaxel] Event: detection in  by blob #25
+[log] [Timeline] detection null detection in  (1:30:17 AM)
+[log] [Spaxel] Event: detection in  by blob #26
+[log] [Timeline] detection null detection in  (1:30:17 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:18 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:18 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:18 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:18 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (1:30:19 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #27
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: detection in  by blob #28
+[log] [Timeline] detection null detection in  (1:30:19 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:00:AA:BB:CC:00:00:02 (1:30:20 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:00 (1:30:20 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:03:AA:BB:CC:00:00:02 (1:30:21 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:03 (1:30:21 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:01:AA:BB:CC:00:00:02 (1:30:21 AM)
+[log] [Spaxel] Event: presence_transition in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 by blob #0
+[log] [Timeline] presence_transition null Someone presence detected in AA:BB:CC:00:00:02:AA:BB:CC:00:00:01 (1:30:21 AM)
