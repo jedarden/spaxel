@@ -4040,6 +4040,21 @@ const Viz3D = (function () {
     };
 })();
 
+// Attach the module to window. The IIFE above assigns the public API to a lexical
+// `const Viz3D`, which sibling scripts reach via the global lexical scope (e.g.
+// placement.js: `Viz3D.getNodeMesh(...)`). But a `const` is NOT a property of
+// `window`, so `window.Viz3D` was undefined. That silently disabled every feature
+// guarded by `if (window.Viz3D)` — the HTML layer-toggle wrappers below
+// (toggleFlowLayer/toggleDwellLayer/toggleCorridorLayer/setFlowTimeFilter),
+// explainability.js's X-ray overlay, and anomaly.js zone rendering — and it also
+// made the bf-1018k live-console capture report blobSeen=false for /live: the
+// harness proves blobs rendered by reading window.Viz3D.getBlobStates(), which
+// reads the in-memory _blobs3D map. Exposing it here is the intended design (the
+// explainability/quick-actions tests already mock window.Viz3D expecting it).
+if (typeof window !== 'undefined') {
+    window.Viz3D = Viz3D;
+}
+
 // ── Global wrapper functions for HTML event handlers ─────────────────────────────
 
 /**
