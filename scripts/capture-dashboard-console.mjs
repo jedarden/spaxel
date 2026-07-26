@@ -136,33 +136,98 @@ async function capturePage(browser, path) {
         navOk = false; navErr = String(e);
     }
 
-    // Wait for at least one blob to reach the renderer (ambient exposes
-    // window.SpaxelAmbientRenderer.getState().blobs). For /live (viz3d) there is
-    // no uniform getter, so fall back to a fixed settle wait.
+    // Wait for at least one blob to reach the renderer. /ambient exposes
+    // window.SpaxelAmbientRenderer.getState().blobs; /live (viz3d) tracks its
+    // blobs in window.Viz3D (getBlobStates/forEachBlob). Both getters are
+    // probed each tick — a page exposing neither returns -1 and we fall back to
+    // a fixed settle wait. Probing both matters: without the Viz3D probe, /live
+    // always reports blobSeen=false even though it has rendered blobs, because
+    // only the ambient getter was checked (the bf-1018k false-negative).
     let blobSeen = false;
     const start = Date.now();
     while (Date.now() - start < blobTimeoutMs) {
         try {
             const n = await page.evaluate(() => {
-                const r = window.SpaxelAmbientRenderer;
-                if (r && typeof r.getState === 'function') {
-                    const s = r.getState();
+                const ar = window.SpaxelAmbientRenderer;
+                if (ar && typeof ar.getState === 'function') {
+                    const s = ar.getState();
                     return (s && s.blobs) ? s.blobs.length : 0;
                 }
-                return -1; // page has no ambient getter
+                // /live (WebGL/viz3d): tracked blobs live in the Viz3D blob map.
+                if (window.Viz3D && typeof window.Viz3D.getBlobStates === 'function') {
+                    return window.Viz3D.getBlobStates().length;
+                }
+                return -1; // page exposes neither getter
             });
             if (n > 0) { blobSeen = true; break; }
-            if (n < 0) break; // non-ambient page: stop polling, settle below
+            if (n < 0) break; // no renderer getter: stop polling, settle below
         } catch (_) { /* page navigating; retry */ }
         await page.waitForTimeout(250);
     }
     // Settle so a render frame (and any late error) lands.
     await page.waitForTimeout(settleMs);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // bf-5y3qt DIAGNOSIS — why renderEvidence reports blobCount:0 despite blobs
+    // ─────────────────────────────────────────────────────────────────────────
+    // ROOT CAUSE: probe-timing vs blob lifecycle, NOT a render bug.
+    //   • The /live page IS receiving & creating blobs: handleLocUpdate()
+    //     (viz3d.js:1613-1614) → applyLocUpdate(msg.blobs) adds them to _blobs3D.
+    //     The captured console lines "[Spaxel] Event: detection ... by blob #3"
+    //     / "by blob #4" prove blobs reach the dashboard and are tracked.
+    //   • BUT applyLocUpdate()'s removal loop (viz3d.js:798-800) evicts any blob
+    //     id NOT in the current frame's `seen` set, so _blobs3D holds ONLY the
+    //     blobs present in the MOST RECENT /ws/dashboard frame. A walker
+    //     momentarily out of detection range → frame carries blobs:[] → all
+    //     blobs removed. _blobs3D is thus populated only during brief sub-100ms
+    //     in-range windows at fusion-tick (10 Hz) boundaries.
+    //   • getBlobStates() (viz3d.js:3491-3503) reads _blobs3D directly — no
+    //     history/TTL — so it legitimately returns [] at any instant that is
+    //     between in-range frames.
+    //   • The renderEvidence probe below is a SINGLE shot fired after the
+    //     blobSeen loop + a settleMs wait. It almost always lands on an empty
+    //     instant → {viz3d:true, blobCount:0, blobs:[]}. The blobSeen poll
+    //     (250 ms cadence, early-break on first hit) can also miss the brief
+    //     in-range windows, so blobSeen can read false even though detections
+    //     fired during the window.
+    //
+    // CHOSEN FIX (to be applied by the next child — NOT applied here):
+    //   Option A — sample over a time-window and report the MAX, not a single
+    //   instant. Concretely, in THIS else-branch (lines ~179-187 below): replace
+    //   the one-shot page.evaluate(getBlobStates) with a short sampling loop
+    //   (e.g. poll every ~50 ms for ~2-3 s, mirroring the blobSeen loop but
+    //   WITHOUT early-break), tracking maxBlobCount and capturing the blob
+    //   states at the peak; return
+    //     { page:'live', viz3d:true, blobCount:maxBlobCount, blobs:peakBlobs,
+    //       samples:N, peakSeenAt:ms }
+    //   so renderEvidence reflects the best frame seen across the window rather
+    //   than one unlucky instant. This is harness-only: viz3d.js is correct as
+    //   designed and must NOT be changed to satisfy a probe (rejecting option C,
+    //   which would alter getBlobStates' documented "current-frame" contract).
+    //
+    //   Complementary safeguard (option B, config-only): in
+    //   scripts/run-sim-dashboard-console.sh raise SIM_WALKERS (2→3) and/or
+    //   lengthen SIM_DURATION so detections span the whole capture window,
+    //   de-risking the harness against sparse-walker flakiness. Primary fix is A.
+    // ─────────────────────────────────────────────────────────────────────────
     let renderEvidence = null;
     if (path.includes('ambient')) {
         try { renderEvidence = await ambientFallbackEvidence(page); }
         catch (e) { renderEvidence = { error: String(e) }; }
+    } else {
+        // /live (WebGL/viz3d): the ambient fallback-color canvas scan does not
+        // apply (Three.js renders to a WebGL context, not a 2D canvas), so a
+        // tracked blob present in Viz3D is the render evidence. Captures the
+        // blob states so identity-less.live.json renderEvidence is non-null.
+        try {
+            renderEvidence = await page.evaluate(() => {
+                if (window.Viz3D && typeof window.Viz3D.getBlobStates === 'function') {
+                    const bs = window.Viz3D.getBlobStates();
+                    return { page: 'live', viz3d: true, blobCount: bs.length, blobs: bs.slice(0, 5) };
+                }
+                return { page: 'live', viz3d: false };
+            });
+        } catch (e) { renderEvidence = { error: String(e) }; }
     }
 
     await context.close();

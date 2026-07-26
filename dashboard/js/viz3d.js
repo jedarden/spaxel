@@ -3486,6 +3486,21 @@ const Viz3D = (function () {
     /**
      * Get current blob states for extrapolation on disconnect.
      * Returns array of { id, x, z, vx, vz } for each tracked blob.
+     *
+     * PROBE-TIMING CAVEAT (bf-5y3qt diagnosis): this reflects ONLY blobs present
+     * in the most recent loc-update frame, because applyLocUpdate() (see the
+     * removal loop at viz3d.js:798-800) evicts any blob id NOT in the current
+     * frame's `seen` set the instant a /ws/dashboard frame omits it. A walker
+     * momentarily out of detection range → that frame carries blobs:[] → every
+     * blob is removed. So _blobs3D is populated only during the brief sub-100ms
+     * windows when a walker is in-range at a fusion-tick boundary.
+     *
+     * This is correct render behaviour (show only currently-tracked blobs), NOT
+     * a bug. A single-instant probe of getBlobStates() therefore legitimately
+     * returns [] when it lands between in-range frames — see the harness note
+     * in scripts/capture-dashboard-console.mjs (renderEvidence probe) and the
+     * chosen fix there (option A: sample over a window, report the max).
+     *
      * @returns {Array}
      */
     function getBlobStates() {
