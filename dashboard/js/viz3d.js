@@ -701,6 +701,66 @@ const Viz3D = (function () {
     }
 
     // ── blob management ───────────────────────────────────────────────────────
+    //
+    // bf-1h7h: a tracked blob renders as one of two representations:
+    //   - generic marker (sphere)  — default, for identity-unresolved blobs
+    //   - humanoid SkinnedMesh      — once BLE/server identity resolves it to a
+    //                                 known person (obj.identityResolved === true)
+    // Unresolved blobs therefore stay as generic markers (backward compatible),
+    // while resolved blobs upgrade to a humanoid figure. A blob can transition
+    // either way as identity resolves or lapses; the active representation is
+    // tracked on obj.rep ('marker' | 'humanoid').
+
+    function _buildGenericMarker(color) {
+        const geo  = new THREE.SphereGeometry(0.28, 16, 12);
+        const mat  = new THREE.MeshPhongMaterial({
+            color: color || 0x888888,
+            emissive: color || 0x888888,
+            emissiveIntensity: 0.12,
+            shininess: 30,
+            transparent: true,
+            opacity: 0.85,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = 0.28;  // rest the sphere on the floor plane
+        return mesh;
+    }
+
+    // Tear down whichever representation is currently mounted on obj.group and
+    // release its GPU resources + mixer slot. Leaves obj with no representation.
+    function _teardownBlobRep(obj) {
+        if (obj.humanoid) {
+            obj.group.remove(obj.humanoid.mesh);
+            const i = _mixers.indexOf(obj.humanoid.mixer);
+            if (i !== -1) _mixers.splice(i, 1);
+            obj.humanoid.mesh.geometry.dispose();
+            obj.humanoid.mesh.material.dispose();
+            obj.humanoid = null;
+        }
+        if (obj.marker) {
+            obj.group.remove(obj.marker);
+            obj.marker.geometry.dispose();
+            obj.marker.material.dispose();
+            obj.marker = null;
+        }
+        obj.rep = null;
+    }
+
+    // Swap a blob's on-screen representation. No-op if already in the target rep.
+    function _setBlobRepresentation(obj, wantHumanoid) {
+        const target = wantHumanoid ? 'humanoid' : 'marker';
+        if (obj.rep === target) return;
+        _teardownBlobRep(obj);
+        if (wantHumanoid) {
+            obj.humanoid = _buildHumanoid(obj.baseColor);
+            obj.group.add(obj.humanoid.mesh);
+            _mixers.push(obj.humanoid.mixer);
+        } else {
+            obj.marker = _buildGenericMarker(obj.baseColor);
+            obj.group.add(obj.marker);
+        }
+        obj.rep = target;
+    }
 
     function _createBlobObj(id) {
         const ci    = id % BLOB_COLORS.length;
@@ -710,9 +770,10 @@ const Viz3D = (function () {
         group.userData.blobId = id;  // Store blob ID for interaction
         _scene.add(group);
 
-        const humanoid = _buildHumanoid(color);
-        group.add(humanoid.mesh);
-        _mixers.push(humanoid.mixer);
+        // Start as a generic marker; applyLocUpdate upgrades to a humanoid once
+        // identity resolves (bf-1h7h).
+        const marker = _buildGenericMarker(color);
+        group.add(marker);
 
         // footprint trail (max 60 pts, Y=floor)
         const trailPos = new Float32Array(60 * 3);
@@ -735,15 +796,14 @@ const Viz3D = (function () {
         );
         _scene.add(pillar);
 
-        return { group, humanoid, trail, pillar, blobId: id };
+        return { group, humanoid: null, marker, rep: 'marker', baseColor: color, trail, pillar, blobId: id };
     }
 
     function _removeBlobObj(id, obj) {
         _scene.remove(obj.group);
         _scene.remove(obj.trail);
         _scene.remove(obj.pillar);
-        const idx = _mixers.indexOf(obj.humanoid.mixer);
-        if (idx !== -1) _mixers.splice(idx, 1);
+        _teardownBlobRep(obj);
         _blobs3D.delete(id);
         if (_followId === id) _followId = null;
     }
@@ -802,10 +862,19 @@ const Viz3D = (function () {
                 obj.identityResolved = id.identityResolved;
             }
 
+            // bf-1h7h: pick the on-screen representation from identity. A resolved
+            // blob renders as a humanoid figure; an unresolved blob stays as a
+            // generic sphere marker (backward compatible).
+            _setBlobRepresentation(obj, !!obj.identityResolved);
+
             const speed = Math.sqrt(b.vx*b.vx + b.vz*b.vz);
-            _setPosture(obj.humanoid, speed > 0.25 ? 'walking' : 'standing');
+            if (obj.humanoid) {
+                _setPosture(obj.humanoid, speed > 0.25 ? 'walking' : 'standing');
+                if (speed > 0.25) {
+                    obj.humanoid.actions.walking.timeScale = Math.min(speed * 1.8, 2.5);
+                }
+            }
             if (speed > 0.25) {
-                obj.humanoid.actions.walking.timeScale = Math.min(speed * 1.8, 2.5);
                 obj.group.rotation.y = Math.atan2(b.vx, b.vz);
             }
 
