@@ -3,14 +3,14 @@
   "url": "http://localhost:8088/ambient",
   "navOk": true,
   "navErr": "",
-  "blobSeen": false,
+  "blobSeen": true,
   "renderEvidence": {
     "canvas": true,
     "w": 1200,
     "h": 760,
-    "fallbackPx": 177
+    "fallbackPx": 16
   },
-  "messageCount": 10,
+  "messageCount": 12,
   "messages": [
     {
       "type": "log",
@@ -47,6 +47,14 @@
     {
       "type": "log",
       "text": "[Ambient Mode] Initialized"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    },
+    {
+      "type": "error",
+      "text": "[AmbientBriefing] Error fetching briefing: Error: HTTP 404\n    at Object.fetchAndShow (http://localhost:8088/js/ambient_briefing.js:152:31)"
     },
     {
       "type": "log",
