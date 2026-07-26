@@ -221,6 +221,36 @@
         return empty;
     }
 
+    // Neutral gray applied to identity-unresolved (unidentified) blobs.
+    // Matches the viz3d generic-marker material default (0x888888) so an
+    // unresolved sphere reads as a consistent, intentionally-neutral marker
+    // rather than one of the bright BLOB_COLORS. See bead bf-3j3s.
+    var UNIDENTIFIED_GRAY = '#888888';
+
+    /**
+     * Pick the mesh color for a blob from an identity-resolve result.
+     *
+     * A resolved person renders in its assigned per-person color (the registry
+     * color when set, else the stable hash-derived color from colorForName);
+     * an unresolved blob renders in neutral gray. Pure: returns a CSS color
+     * string, never throws, tolerates null/missing input. Used by viz3d to
+     * color humanoid meshes (bf-3j3s).
+     *
+     * @param {{identityResolved?:boolean, assignedColor?:string|null}|null} resolved
+     *        The result of resolve() (or any object carrying the same fields —
+     *        viz3d stores personName/assignedColor/identityResolved directly on
+     *        the blob obj, which satisfies this shape).
+     * @param {string} [defaultColor] - override for the unresolved default.
+     * @returns {string} CSS color string
+     */
+    function meshColor(resolved, defaultColor) {
+        var gray = asColor(defaultColor) || UNIDENTIFIED_GRAY;
+        if (resolved && resolved.identityResolved && asColor(resolved.assignedColor)) {
+            return resolved.assignedColor;
+        }
+        return gray;
+    }
+
     /**
      * Resolve identity for a list of blobs. Returns a NEW array of shallow
      * copies with personName/assignedColor/identityResolved populated. Does not
@@ -248,7 +278,9 @@
         resolveAll: resolveAll,
         findDeviceForBlob: findDeviceForBlob,
         colorForName: colorForName,
-        isRealName: isRealName
+        meshColor: meshColor,
+        isRealName: isRealName,
+        UNIDENTIFIED_GRAY: UNIDENTIFIED_GRAY
     };
 
     if (typeof console !== 'undefined') {

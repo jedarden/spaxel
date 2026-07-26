@@ -665,11 +665,20 @@ const Viz3D = (function () {
         return { standing, walking, seated, lying };
     }
 
-    function _buildHumanoid(color) {
+    function _buildHumanoid(cssColor) {
         const bones = _buildBones();
         const geo   = _buildBodyGeometry();
+        // bf-3j3s: per-person color. new THREE.Color() accepts '#rrggbb' and
+        // 'hsl(...)' alike, so the figure renders in its assigned color even
+        // when BlobIdentity backfilled a hash-derived hsl() color (the old
+        // parseInt('#...') path in updateIdentities could not parse hsl). A
+        // modest emissive of the same hue keeps the color readable under the
+        // scene's ambient(0.6) + directional(0.4) lighting without looking neon.
+        const c     = new THREE.Color(cssColor || '#888888');
         const mat   = new THREE.MeshPhongMaterial({
-            color: color || 0x4fc3f7,
+            color: c,
+            emissive: c,
+            emissiveIntensity: 0.18,
             skinning: true,
             shininess: 40,
         });
@@ -711,11 +720,12 @@ const Viz3D = (function () {
     // either way as identity resolves or lapses; the active representation is
     // tracked on obj.rep ('marker' | 'humanoid').
 
-    function _buildGenericMarker(color) {
+    function _buildGenericMarker(cssColor) {
         const geo  = new THREE.SphereGeometry(0.28, 16, 12);
+        const c    = new THREE.Color(cssColor || '#888888');
         const mat  = new THREE.MeshPhongMaterial({
-            color: color || 0x888888,
-            emissive: color || 0x888888,
+            color: c,
+            emissive: c,
             emissiveIntensity: 0.12,
             shininess: 30,
             transparent: true,
@@ -724,6 +734,43 @@ const Viz3D = (function () {
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.y = 0.28;  // rest the sphere on the floor plane
         return mesh;
+    }
+
+    // ── per-person mesh color (bf-3j3s) ───────────────────────────────────────
+    //
+    // A blob's mesh color comes from its resolved identity, not the index-based
+    // BLOB_COLORS palette: a resolved person renders in its assigned per-person
+    // color (the registry/server color, else the stable hash-derived color from
+    // BlobIdentity.colorForName — so "Alice" is always the same hue every
+    // session), and an identity-unresolved blob renders in neutral gray. All
+    // mesh-color decisions funnel through BlobIdentity.meshColor() here so the
+    // build path (_setBlobRepresentation), the per-tick update path
+    // (applyLocUpdate), and the BLEPanel path (updateIdentities) stay in sync.
+    // Returns a CSS color string ('#rrggbb' or 'hsl(...)'); '#888888' when
+    // BlobIdentity is unavailable.
+    function _blobMeshColor(obj) {
+        if (window.BlobIdentity && typeof window.BlobIdentity.meshColor === 'function') {
+            return window.BlobIdentity.meshColor(obj);
+        }
+        return '#888888';
+    }
+
+    // Recolor whichever representation is mounted on obj (humanoid or marker) to
+    // its current per-person color. Cheap (one THREE.Color + two uniform copies);
+    // called every fusion tick so the mesh tracks identity as it resolves or
+    // lapses WITHOUT rebuilding the SkinnedMesh. Caches the last-applied string
+    // and skips when unchanged; the cache is invalidated in _teardownBlobRep so a
+    // freshly-built representation always gets recolored.
+    function _applyBlobMeshColor(obj) {
+        var css = _blobMeshColor(obj);
+        if (obj._lastMeshColor === css) return;
+        obj._lastMeshColor = css;
+        var three = new THREE.Color(css);
+        var mesh = obj.humanoid ? obj.humanoid.mesh : obj.marker;
+        if (mesh && mesh.material) {
+            mesh.material.color.copy(three);
+            if (mesh.material.emissive) mesh.material.emissive.copy(three);
+        }
     }
 
     // Tear down whichever representation is currently mounted on obj.group and
@@ -744,6 +791,9 @@ const Viz3D = (function () {
             obj.marker = null;
         }
         obj.rep = null;
+        // bf-3j3s: a freshly-built representation must be recolored on the next
+        // _applyBlobMeshColor, so drop the cached color here.
+        obj._lastMeshColor = null;
     }
 
     // Swap a blob's on-screen representation. No-op if already in the target rep.
@@ -751,12 +801,15 @@ const Viz3D = (function () {
         const target = wantHumanoid ? 'humanoid' : 'marker';
         if (obj.rep === target) return;
         _teardownBlobRep(obj);
+        // bf-3j3s: build the new representation in its per-person color so it
+        // never flashes the default before the next _applyBlobMeshColor tick.
+        const meshCol = _blobMeshColor(obj);
         if (wantHumanoid) {
-            obj.humanoid = _buildHumanoid(obj.baseColor);
+            obj.humanoid = _buildHumanoid(meshCol);
             obj.group.add(obj.humanoid.mesh);
             _mixers.push(obj.humanoid.mixer);
         } else {
-            obj.marker = _buildGenericMarker(obj.baseColor);
+            obj.marker = _buildGenericMarker(meshCol);
             obj.group.add(obj.marker);
         }
         obj.rep = target;
@@ -770,9 +823,10 @@ const Viz3D = (function () {
         group.userData.blobId = id;  // Store blob ID for interaction
         _scene.add(group);
 
-        // Start as a generic marker; applyLocUpdate upgrades to a humanoid once
-        // identity resolves (bf-1h7h).
-        const marker = _buildGenericMarker(color);
+        // Start as a generic marker in the neutral unresolved gray; identity
+        // resolution in applyLocUpdate upgrades a resolved blob to a humanoid in
+        // its per-person color (bf-1h7h / bf-3j3s). Unresolved blobs stay gray.
+        const marker = _buildGenericMarker(_blobMeshColor({ identityResolved: false }));
         group.add(marker);
 
         // footprint trail (max 60 pts, Y=floor)
@@ -866,6 +920,14 @@ const Viz3D = (function () {
             // blob renders as a humanoid figure; an unresolved blob stays as a
             // generic sphere marker (backward compatible).
             _setBlobRepresentation(obj, !!obj.identityResolved);
+
+            // bf-3j3s: keep the mesh color in sync with the resolved identity
+            // every tick. _setBlobRepresentation already builds a freshly-swapped
+            // rep in the right color, but a rep that stays the same (e.g. a
+            // resolved humanoid whose registry color changes, or a marker while
+            // identity is mid-resolution) must still recolor without a rebuild.
+            // Cheap + cached (no-op when the color string is unchanged).
+            _applyBlobMeshColor(obj);
 
             const speed = Math.sqrt(b.vx*b.vx + b.vz*b.vz);
             if (obj.humanoid) {

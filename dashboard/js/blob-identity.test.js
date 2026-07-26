@@ -309,4 +309,66 @@ describe('BlobIdentity matcher (bf-iner)', function () {
             expect(r.assignedColor).toBe('#3b82f6');
         });
     });
+
+    // meshColor — per-person mesh color for humanoid figures (bf-3j3s).
+    // A resolved person renders in its assigned color; an unresolved blob
+    // renders in neutral gray. Pure and robust to malformed input.
+    describe('meshColor (bf-3j3s)', function () {
+        var cases = [
+            // [label, resolvedResult, expected]
+            ['resolved with explicit registry color',
+                { identityResolved: true, assignedColor: '#3b82f6' }, '#3b82f6'],
+            ['resolved with hash-derived hsl color',
+                { identityResolved: true, assignedColor: 'hsl(123, 70%, 60%)' }, 'hsl(123, 70%, 60%)'],
+            ['resolved but color missing → meshColor treats null assignedColor as unresolved, defensively (resolve() itself never returns this)',
+                { identityResolved: true, assignedColor: null }, '#888888'],
+            ['unresolved (identityResolved false)',
+                { identityResolved: false, assignedColor: null }, '#888888'],
+            ['empty resolve() result',
+                { personName: null, assignedColor: null, identityResolved: false }, '#888888'],
+            ['null input', null, '#888888'],
+            ['undefined input', undefined, '#888888'],
+            ['object with no identity fields', { personName: null }, '#888888'],
+        ];
+        cases.forEach(function (c) {
+            it('returns the expected color: ' + c[0], function () {
+                expect(BlobIdentity.meshColor(c[1])).toBe(c[2]);
+            });
+        });
+
+        it('uses the default neutral gray (#888888) — matches viz3d marker material', function () {
+            expect(BlobIdentity.UNIDENTIFIED_GRAY).toBe('#888888');
+            expect(BlobIdentity.meshColor({ identityResolved: false })).toBe('#888888');
+        });
+
+        it('honors a caller-supplied default color override', function () {
+            expect(BlobIdentity.meshColor(null, '#9e9e9e')).toBe('#9e9e9e');
+            // A blank/invalid override falls back to the canonical gray.
+            expect(BlobIdentity.meshColor(null, '')).toBe('#888888');
+        });
+
+        it('never lets an empty-string assignedColor through for a "resolved" blob', function () {
+            expect(BlobIdentity.meshColor({ identityResolved: true, assignedColor: '' }))
+                .toBe(BlobIdentity.UNIDENTIFIED_GRAY);
+        });
+
+        it('end-to-end: resolve() then meshColor() for an identified person', function () {
+            var blob = { id: 2, person: 'Alice' };
+            var r = BlobIdentity.resolve(blob, []);
+            // resolve() backfills a stable hash color when none is registered.
+            expect(r.identityResolved).toBe(true);
+            expect(r.assignedColor).toBeTruthy();
+            expect(BlobIdentity.meshColor(r)).toBe(r.assignedColor);
+        });
+
+        it('end-to-end: resolve() then meshColor() for an unidentified blob → gray', function () {
+            var r = BlobIdentity.resolve({ id: 9 }, []);
+            expect(r.identityResolved).toBe(false);
+            expect(BlobIdentity.meshColor(r)).toBe('#888888');
+        });
+
+        it('is exposed as a function on window.BlobIdentity', function () {
+            expect(typeof BlobIdentity.meshColor).toBe('function');
+        });
+    });
 });
