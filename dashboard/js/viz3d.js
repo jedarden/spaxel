@@ -771,6 +771,13 @@ const Viz3D = (function () {
     function applyLocUpdate(blobs) {
         const seen = new Set();
         const now = Date.now();
+        // BLE identity source: the live scan relayed by the dashboard
+        // (window.spaxelGetState().bleDevices), shaped as an array of device
+        // records each linking to a blob via blob_id. Fetched once per tick.
+        // bf-iner: data-only identity resolution — no rendering here.
+        const bleDevices = (typeof window.spaxelGetState === 'function')
+            ? (window.spaxelGetState().bleDevices || [])
+            : [];
         blobs.forEach(b => {
             seen.add(b.id);
             let obj = _blobs3D.get(b.id);
@@ -783,6 +790,17 @@ const Viz3D = (function () {
             obj.group.position.set(b.x, 0, b.z);
             obj.lastPosition = { x: b.x, z: b.z };
             obj.lastVelocity = { vx: b.vx || 0, vz: b.vz || 0 };
+
+            // Resolve & store identity (data-only). Rendering of labels/colors
+            // is handled separately by updateIdentities(); here we only populate
+            // the blob data structure (obj.personName/assignedColor/identityResolved),
+            // which the snapshot export (see getSnapshot) already reads.
+            if (window.BlobIdentity) {
+                var id = window.BlobIdentity.resolve(b, bleDevices);
+                obj.personName = id.personName;
+                obj.assignedColor = id.assignedColor;
+                obj.identityResolved = id.identityResolved;
+            }
 
             const speed = Math.sqrt(b.vx*b.vx + b.vz*b.vz);
             _setPosture(obj.humanoid, speed > 0.25 ? 'walking' : 'standing');
