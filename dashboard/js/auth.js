@@ -484,6 +484,16 @@
             checkAuthStatus();
         },
 
+        // Returns a promise resolving to whether a non-interactive view (e.g.
+        // /ambient) may proceed: true when no PIN is configured (no auth barrier,
+        // e.g. a fresh install or hardware-free sim) OR an authenticated session
+        // exists. Used by ambient.html's bootstrap before enabling ambient mode.
+        checkStatus: function() {
+            return checkAuthStatus().then(function() {
+                return !authState.pinConfigured || authState.isAuthenticated;
+            });
+        },
+
         logout: function() {
             return logout();
         },

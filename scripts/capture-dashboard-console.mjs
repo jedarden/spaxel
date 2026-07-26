@@ -246,7 +246,12 @@ async function capturePage(browser, path) {
         // untouched (its current-frame contract is correct as designed — option C
         // rejected). The sampling loop runs in-browser via one evaluate round-trip.
         try {
-            renderEvidence = await page.evaluate(async (sampleMs, windowMs) => {
+            // bf-4e7w3: Playwright's page.evaluate takes ONE arg, not N — the
+            // bf-5t5ny fix passed (renderSampleMs, renderWindowMs) as two
+            // positional args, so every /live capture threw "Too many arguments"
+            // and the render-window sampling NEVER ran (renderEvidence always
+            // errored → blobCount never observed). Wrap both in one object.
+            renderEvidence = await page.evaluate(async ({ sampleMs, windowMs }) => {
                 if (!(window.Viz3D && typeof window.Viz3D.getBlobStates === 'function')) {
                     return { page: 'live', viz3d: false };
                 }
@@ -267,7 +272,7 @@ async function capturePage(browser, path) {
                     blobCount: maxBlobCount, blobs: peakBlobs,
                     samples, peakSeenAt,
                 };
-            }, renderSampleMs, renderWindowMs);
+            }, { sampleMs: renderSampleMs, windowMs: renderWindowMs });
         } catch (e) { renderEvidence = { error: String(e) }; }
     }
 
