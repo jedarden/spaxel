@@ -1211,4 +1211,3 @@ describe('SidebarTimeline', function() {
             });
         });
     });
-});

@@ -3602,7 +3602,8 @@ const Viz3D = (function () {
                             opacity: line.material.opacity,
                             transparent: line.material.transparent,
                             color: line.material.color ? line.material.color.getHex() : null
-                        };
+                        }
+                    }
 
                     // Apply highlight
                     line.material.opacity = 1.0;
