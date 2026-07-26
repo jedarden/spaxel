@@ -773,6 +773,150 @@ const Viz3D = (function () {
         }
     }
 
+    // ── per-person name labels (bf-3dip) ──────────────────────────────────────
+    //
+    // A floating "{personName} is in {zone}" text label sits above each
+    // identity-resolved humanoid mesh (the bf-1h7h / bf-3j3s representation).
+    // The label is parented to obj.group, so it tracks its mesh and moves with
+    // it every fusion tick for free. The zone half of the text is resolved from
+    // the blob's floor-plane position via the pure ZoneLookup.nameAt lookup over
+    // _currentZones. Sprite material => always faces the camera; depthTest off +
+    // high renderOrder => never occluded by walls / roof, always screen-readable.
+
+    var _BLOB_LABEL_W = 512;
+    var _BLOB_LABEL_H = 80;
+    var _BLOB_LABEL_WORLD_W = 1.8;   // metres wide in-world; height follows aspect
+
+    // (Re)paint a label canvas: dark rounded background, person-coloured border,
+    // white text auto-scaled down to fit. Mutates the passed canvas. Never
+    // throws — guards the CanvasTexture path the 60fps loop depends on.
+    function _drawBlobLabel(canvas, ctx, text, color) {
+        var border = color || '#4fc3f7';
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        var r = 12, m = 2;
+        ctx.fillStyle = 'rgba(15, 18, 24, 0.82)';
+        ctx.beginPath();
+        ctx.roundRect(m, m, canvas.width - 2 * m, canvas.height - 2 * m, r);
+        ctx.fill();
+
+        ctx.strokeStyle = border;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(m, m, canvas.width - 2 * m, canvas.height - 2 * m, r);
+        ctx.stroke();
+
+        // White on dark for maximum contrast; shrink the font until the (now
+        // longer "Alice is in Kitchen") string fits within the canvas padding.
+        var padX = 22;
+        var maxW = canvas.width - padX * 2;
+        var size = 36;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold ' + size + 'px Arial, sans-serif';
+        while (size > 18 && ctx.measureText(text).width > maxW) {
+            size -= 2;
+            ctx.font = 'bold ' + size + 'px Arial, sans-serif';
+        }
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    }
+
+    // Build a fresh name-label sprite positioned above the humanoid head.
+    function _createBlobLabel(text, color) {
+        var canvas = document.createElement('canvas');
+        canvas.width = _BLOB_LABEL_W;
+        canvas.height = _BLOB_LABEL_H;
+        _drawBlobLabel(canvas, canvas.getContext('2d'), text, color);
+
+        var texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+
+        var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            depthTest: false,        // render on top, never wall-occluded
+            depthWrite: false
+        }));
+        sprite.renderOrder = 999;
+        sprite.scale.set(_BLOB_LABEL_WORLD_W,
+                         _BLOB_LABEL_WORLD_W * _BLOB_LABEL_H / _BLOB_LABEL_W, 1);
+        sprite.position.set(0, 2.0, 0);  // above the ~1.8 m humanoid head
+        sprite.userData.labelText = text;
+        sprite.userData.labelColor = color || '#4fc3f7';
+        return sprite;
+    }
+
+    // Redraw an existing label's canvas in place. Cheaper than rebuilding the
+    // Sprite / CanvasTexture (no GC churn in the hot loop).
+    function _redrawBlobLabel(sprite, text, color) {
+        if (!sprite || !sprite.material || !sprite.material.map) return;
+        var canvas = sprite.material.map.image;
+        _drawBlobLabel(canvas, canvas.getContext('2d'), text, color);
+        sprite.material.map.needsUpdate = true;
+        sprite.userData.labelText = text;
+        if (color) sprite.userData.labelColor = color;
+    }
+
+    // Compose the label string for a blob: "{personName} is in {zone}" when the
+    // blob sits inside a defined zone, else just "{personName}". Never throws.
+    function _blobLabelText(obj, x, z) {
+        var zone = '';
+        if (window.ZoneLookup && typeof window.ZoneLookup.nameAt === 'function') {
+            try { zone = window.ZoneLookup.nameAt(x, z, _currentZones) || ''; }
+            catch (e) { zone = ''; }   // malformed zone data must not crash render
+        }
+        var name = obj.personName || '';
+        return zone ? (name + ' is in ' + zone) : name;
+    }
+
+    // Create / update / remove a blob's floating name label each fusion tick.
+    // Cached: the canvas only repaints when the label text or colour actually
+    // changes (zone transitions, identity resolution/lapse), so the 60fps loop
+    // is unaffected. Only identity-resolved blobs carry a label.
+    function _updateBlobLabel(obj, x, z) {
+        var want = !!(obj.identityResolved && obj.personName);
+
+        if (!want) {
+            if (obj.nameLabel) {
+                obj.group.remove(obj.nameLabel);
+                if (obj.nameLabel.material.map) obj.nameLabel.material.map.dispose();
+                obj.nameLabel.material.dispose();
+                obj.nameLabel = null;
+                obj.nameLabelText = '';
+            }
+            return;
+        }
+
+        var text  = _blobLabelText(obj, x, z);
+        var color = obj.assignedColor || null;
+
+        if (!obj.nameLabel) {
+            obj.nameLabel = _createBlobLabel(text, color);
+            obj.group.add(obj.nameLabel);
+            obj.nameLabelText = text;
+            return;
+        }
+        if (obj.nameLabelText !== text ||
+            (color && obj.nameLabel.userData.labelColor !== color)) {
+            _redrawBlobLabel(obj.nameLabel, text, color);
+            obj.nameLabelText = text;
+        }
+    }
+
+    // Release a blob's label GPU resources (texture + material). The sprite is a
+    // child of obj.group, so scene-graph removal happens with the group; this
+    // only disposes its GL objects to avoid a per-blob leak.
+    function _disposeBlobLabel(obj) {
+        if (!obj.nameLabel) return;
+        if (obj.nameLabel.material) {
+            if (obj.nameLabel.material.map) obj.nameLabel.material.map.dispose();
+            obj.nameLabel.material.dispose();
+        }
+        obj.nameLabel = null;
+        obj.nameLabelText = '';
+    }
+
     // Tear down whichever representation is currently mounted on obj.group and
     // release its GPU resources + mixer slot. Leaves obj with no representation.
     function _teardownBlobRep(obj) {
@@ -928,6 +1072,12 @@ const Viz3D = (function () {
             // identity is mid-resolution) must still recolor without a rebuild.
             // Cheap + cached (no-op when the color string is unchanged).
             _applyBlobMeshColor(obj);
+
+            // bf-3dip: floating "{personName} is in {zone}" label above the
+            // humanoid. Cached redraw (only on zone/identity change); no-op for
+            // unresolved blobs. Tracks the mesh — the sprite is parented to the
+            // group, so it moves with the figure every tick.
+            _updateBlobLabel(obj, b.x, b.z);
 
             const speed = Math.sqrt(b.vx*b.vx + b.vz*b.vz);
             if (obj.humanoid) {
