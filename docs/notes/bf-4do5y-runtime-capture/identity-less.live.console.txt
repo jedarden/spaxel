@@ -1,5 +1,5 @@
 # console capture — identity-less — http://localhost:8088/live
-# navOk=true blobSeen=false messages=44 pageErrors=5 identityHits=0
+# navOk=true blobSeen=false messages=122 pageErrors=1 identityHits=1
 [log] [CrowdFlow] Crowd flow visualization module loaded
 [log] [Fresnel] Module loaded
 [log] [Layers] Module loaded
@@ -7,11 +7,15 @@
 [log] [State] State management initialized
 [log] [Router] Router module loaded
 [log] [SettingsPanel] Settings panel module loaded
+[log] [BLEPanel] BLE device panel module loaded
 [log] [WS] Reconnection manager initialized
 [log] [Timeline] Timeline module loaded
 [log] [VolumeEditor] Module loaded
+[log] [AutomationBuilder] Registered with SpaxelPanels
+[log] [AutomationBuilder] Module loaded
 [log] [Sleep] Module initialized
 [log] [Simulate] Simulator module loaded
+[log] [Ambient Mode] Module loaded
 [log] [Quick Actions] Module loaded
 [log] [FXAA] Module loaded
 [log] [Mobile] Initializing mobile expert mode...
@@ -23,6 +27,13 @@
 [log] [Router] Mode changed: live -> live
 [log] [Router] Initialized with mode: live
 [log] [FloorPlan] Initializing
+[log] [Spaxel] Dashboard initializing...
+[log] [FXAA] Desktop detected, skipping FXAA initialization (MSAA will be used)
+[log] [Spaxel] Scene initialized
+[log] [VolumeEditor] Initialized
+[log] [WS] Connecting (attempt 1)...
+[log] [Spaxel] Dashboard ready
+[log] [Spaxel] FXAA initialization complete, active: false
 [log] [Feedback] Module initialized
 [log] [Accuracy] Module initialized
 [log] [Fleet] Initializing fleet health panel
@@ -30,9 +41,13 @@
 [log] [Timeline] Initializing
 [log] [Timeline] Virtualization enabled with IntersectionObserver
 [log] [SecurityPanel] Module initialized
+[log] [AutomationBuilder] Initializing
+[warning] [AutomationBuilder] #automations-panel not found
 [log] [Replay] Initializing time-travel replay
 [log] [Replay] Ready
 [log] [Simulate] Initializing pre-deployment simulator
+[log] [Ambient Mode] Initializing...
+[log] [Ambient Mode] Initialized
 [log] [Quick Actions] Initializing...
 [log] [Quick Actions] Context menu created
 [log] [Quick Actions] Initialized
@@ -43,11 +58,70 @@
 [error] Failed to load resource: the server responded with a status of 404 (Not Found)
 [warning] [Spaxel] Failed to fetch briefing: Error: Failed to fetch briefing
     at http://localhost:8088/js/briefing.js:191:27
+[error] WebSocket connection to 'ws://localhost:8088/undefined' failed: Error during WebSocket handshake: Unexpected response code: 200
 [log] [Quick Actions] State changed: system.security_mode
-[log] [Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 221648, oldest_pos: 32, oldest_timestamp_ms: 1783560563339}
+[log] [Replay] Store info: {has_data: true, file_size_mb: 360, write_pos: 243032, oldest_pos: 32, oldest_timestamp_ms: 1785033667411}
 [log] [Help] Module initialized with 73 articles
-[pageerror:SyntaxError] Unexpected token ')'
-[pageerror:SyntaxError] Unexpected token 'function'
-[pageerror:SyntaxError] Unexpected identifier 'systemHealth'
-[pageerror:SyntaxError] Invalid left-hand side in assignment
-[pageerror:SyntaxError] Unexpected token ')'
+[error] [WS] Error: Event
+[error] [Spaxel] WebSocket error: Event
+[log] [WS] Closed: 1006 
+[log] [WS] Reconnecting in 676 ms
+[log] [Spaxel] WebSocket closed: 1006 
+[log] [WS] Connecting (attempt 2)...
+[log] [WS] Connected
+[log] [Spaxel] WebSocket connected
+[log] [WS] Reconnected after 0.7s
+[log] [Spaxel] Received snapshot, rebuilding state
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:12 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #3
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[log] [Spaxel] Event: detection in  by blob #4
+[log] [Timeline] detection null detection in  (10:41:13 PM)
+[pageerror:ReferenceError] _onVolumeChanged is not defined
