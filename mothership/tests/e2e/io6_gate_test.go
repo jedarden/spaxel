@@ -81,24 +81,30 @@ func (h *TestHarness) GetStatus(ctx context.Context) (*StatusResponse, error) {
 }
 
 // CaptureIO6Diagnostics assembles the diagnostic evidence the IO-6 hard-gate
-// triage flow files back to upstream bf-4q5w when the gate is RED (zero blobs).
+// triage flow uses when the gate is RED (zero blobs).
 //
-// The contrast it captures IS the bf-4q5w finding:
-//   - node positions: the simulator announces real corner geometry in `hello`
-//     (createVirtualNodes), and the mothership persists it — so /api/nodes
-//     shows nodes spread across the space, NOT co-located at the (0,0,1)
-//     schema default.
-//   - blob/grid state: /api/blobs and /api/status nonetheless report zero
-//     tracked blobs and zero detection events, because no engine feeds the
-//     live blob loop (internal/signal/processor.go SetTrackedBlobs has zero
-//     non-test callers; fusion Engine.SetNodePosition is never wired).
+// The conclusion it emits is DATA-DRIVEN (bf-48juo), so the RED state stays
+// actionable instead of misattributing the wrong root cause:
 //
-// peakBlobs/detectionCount are the run-window maxima observed by the caller.
-// The returned string is logged on failure and reported to bf-4q5w rather than
+//   - distinct geometry admitted (>=1 node with positions away from the
+//     (0,0,1) schema default) AND zero blobs -> the bf-4q5w finding: CSI +
+//     node geometry reach the mothership, but no engine feeds the live blob
+//     loop (internal/signal/processor.go SetTrackedBlobs has zero non-test
+//     callers; fusion Engine.SetNodePosition is never wired).
+//   - no node admitted (empty /api/nodes, or all nodes collapsed to the
+//     (0,0,1) schema default) -> auth/provision failure, NOT bf-4q5w. The
+//     fusion engine never saw node geometry because no node was admitted in
+//     the first place. bf-5k1z found the old unconditional bf-4q5w conclusion
+//     printing alongside nodes=0, misattributing an auth failure to the wiring
+//     gap.
+//
+// The raw data lines (status, per-node positions, atOrigin tally) are emitted
+// unchanged either way. peakBlobs/detectionCount are the run-window maxima
+// observed by the caller. The returned string is logged on failure rather than
 // weakening the assertion.
 func (h *TestHarness) CaptureIO6Diagnostics(ctx context.Context, peakBlobs, detectionCount int) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "IO-6 hard-gate diagnostics (feed to bf-4q5w, do NOT weaken the assertion):\n")
+	fmt.Fprintf(&sb, "IO-6 hard-gate diagnostics (do NOT weaken the assertion):\n")
 	fmt.Fprintf(&sb, "  run-window maxima: peak concurrent blobs=%d, detection events=%d\n", peakBlobs, detectionCount)
 
 	if status, err := h.GetStatus(ctx); err == nil {
@@ -108,7 +114,15 @@ func (h *TestHarness) CaptureIO6Diagnostics(ctx context.Context, peakBlobs, dete
 		fmt.Fprintf(&sb, "  /api/status: fetch failed: %v\n", err)
 	}
 
+	// Node-admission state is hoisted out of the fetch block so the conclusion
+	// below can branch on it. The raw data lines (per-node positions, atOrigin
+	// tally) are emitted unchanged either way.
+	recordCount := 0
+	atOrigin := 0
+	recordsFetched := false
 	if records, err := h.GetNodeRecords(ctx); err == nil {
+		recordsFetched = true
+		recordCount = len(records)
 		fmt.Fprintf(&sb, "  node positions announced by spaxel-sim (prove real geometry reached the DB):\n")
 		for _, n := range records {
 			fmt.Fprintf(&sb, "    mac=%s role=%s pos=(%.3f, %.3f, %.3f)\n",
@@ -117,22 +131,39 @@ func (h *TestHarness) CaptureIO6Diagnostics(ctx context.Context, peakBlobs, dete
 		// Diagnostic summary: are the announced positions actually distinct, or did
 		// they collapse to the (0,0,1) schema default? Distinct positions + zero
 		// blobs is the signature of the bf-4q5w wiring gap.
-		atOrigin := 0
 		for _, n := range records {
 			if n.PosX == 0 && n.PosY == 0 {
 				atOrigin++
 			}
 		}
 		fmt.Fprintf(&sb, "    -> %d/%d nodes at xy=(0,0); distinct geometry was announced = %v\n",
-			atOrigin, len(records), atOrigin < len(records))
+			atOrigin, recordCount, atOrigin < recordCount)
 	} else {
 		fmt.Fprintf(&sb, "  /api/nodes: fetch failed: %v\n", err)
 	}
 
-	sb.WriteString("  conclusion: CSI + node geometry reach the mothership, but the fusion engine's\n" +
-		"  SetNodePosition is never wired (bf-4q5w), so the Fresnel accumulation grid has no\n" +
-		"  meaningful peaks and no tracked blob is produced. This is a wiring gap, not a\n" +
-		"  tolerated quiet-room condition — keep the IO-6 assertion strict.")
+	// DATA-DRIVEN CONCLUSION (bf-48juo). Only attribute zero blobs to the fusion
+	// wiring gap when the node geometry genuinely reached the DB distinctly
+	// (>=1 node admitted, not all collapsed to the schema origin). An empty
+	// /api/nodes or all nodes at origin means no node was admitted in the first
+	// place (auth/provision failure) and must NOT be misattributed to bf-4q5w —
+	// the bf-5k1z trace showed the old unconditional conclusion doing exactly that.
+	switch {
+	case recordCount >= 1 && atOrigin < recordCount:
+		sb.WriteString("  conclusion: CSI + node geometry reach the mothership, but the fusion engine's\n" +
+			"  SetNodePosition is never wired (bf-4q5w), so the Fresnel accumulation grid has no\n" +
+			"  meaningful peaks and no tracked blob is produced. This is a wiring gap, not a\n" +
+			"  tolerated quiet-room condition — keep the IO-6 assertion strict.")
+	case !recordsFetched:
+		sb.WriteString("  conclusion: could not fetch /api/nodes, so node-admission state is unknown —\n" +
+			"  do NOT attribute to bf-4q5w from this evidence alone; re-run the gate and, if it\n" +
+			"  stays empty, see the auth-fix child.\n")
+	default:
+		fmt.Fprintf(&sb, "  conclusion: no nodes admitted (auth/provision failure) — %d/%d nodes at\n"+
+			"  xy=(0,0); do NOT attribute to bf-4q5w, the fusion engine never saw node geometry\n"+
+			"  because no node was admitted in the first place — see the auth-fix child.\n",
+			atOrigin, recordCount)
+	}
 	return sb.String()
 }
 
