@@ -38,9 +38,14 @@ PORT="${SIM_PORT:-8088}"
 CAPTURE_DIR="${CAPTURE_DIR:-$ROOT/docs/notes/bf-4do5y-runtime-capture}"
 
 SIM_NODES="${SIM_NODES:-4}"
-SIM_WALKERS="${SIM_WALKERS:-2}"
+# bf-5t5ny (option B complementary safeguard): viz3d _blobs3D holds only blobs
+# present in the most recent /ws/dashboard frame, so a walker momentarily out
+# of detection range empties it until the next in-range fusion tick. 3 walkers
+# (was 2) keep at least one in range across the capture window, and a longer
+# duration (60s, was 40s) widens the overlap with the browser-side probe loop.
+SIM_WALKERS="${SIM_WALKERS:-3}"
 SIM_RATE="${SIM_RATE:-30}"
-SIM_DURATION="${SIM_DURATION:-40}"   # long enough to keep blobs live during the browser capture
+SIM_DURATION="${SIM_DURATION:-60}"   # long enough to keep blobs live during the browser capture
 SIM_SEED="${SIM_SEED:-42}"
 SIM_SPACE="${SIM_SPACE:-5x5x2.5}"
 
