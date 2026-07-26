@@ -1,46 +1,46 @@
-2026/07/26 04:38:29.020008 [SIM] CSI Simulator CLI starting
-2026/07/26 04:38:29.020163 [SIM] Random seed: 42
-2026/07/26 04:38:29.020177 [SIM] Configuration:
-2026/07/26 04:38:29.020181 [SIM]   Mothership: ws://localhost:8088/ws/node
-2026/07/26 04:38:29.020185 [SIM]   Scenario: normal
-2026/07/26 04:38:29.020188 [SIM]   Nodes: 4
-2026/07/26 04:38:29.020191 [SIM]   Walkers: 3
-2026/07/26 04:38:29.020193 [SIM]   Rate: 30 Hz
-2026/07/26 04:38:29.020196 [SIM]   Duration: 60 s
-2026/07/26 04:38:29.020199 [SIM]   Space: 5.0x5.0x2.5 m
-2026/07/26 04:38:29.020206 [SIM]   Walls: 0
-2026/07/26 04:38:29.020208 [SIM]   BLE: false
-2026/07/26 04:38:29.022834 [SIM] Auto-provisioned token: 8364555a485d09fb...
-2026/07/26 04:38:29.022864 [SIM] Node 0 connecting to ws://localhost:8088/ws/node
-2026/07/26 04:38:29.024073 [SIM] Node 0 connected
-2026/07/26 04:38:29.036259 [SIM] Node 0 received role: tx_rx
-2026/07/26 04:38:29.036359 [SIM] Node 1 connecting to ws://localhost:8088/ws/node
-2026/07/26 04:38:29.036569 [SIM] Node 0 config update: map[rate_hz:20 type:config variance_threshold:0.02]
-2026/07/26 04:38:29.037630 [SIM] Node 1 connected
-2026/07/26 04:38:29.044576 [SIM] Node 1 received role: tx
-2026/07/26 04:38:29.044615 [SIM] Node 2 connecting to ws://localhost:8088/ws/node
-2026/07/26 04:38:29.044898 [SIM] Node 1 config update: map[rate_hz:20 type:config variance_threshold:0.02]
-2026/07/26 04:38:29.045316 [SIM] Node 0 role update: tx_rx
-2026/07/26 04:38:29.045750 [SIM] Node 2 connected
-2026/07/26 04:38:29.052336 [SIM] Node 2 received role: rx
-2026/07/26 04:38:29.052362 [SIM] Node 3 connecting to ws://localhost:8088/ws/node
-2026/07/26 04:38:29.052590 [SIM] Node 2 config update: map[rate_hz:20 type:config variance_threshold:0.02]
-2026/07/26 04:38:29.053584 [SIM] Node 3 connected
-2026/07/26 04:38:29.060357 [SIM] Node 3 received role: tx
-2026/07/26 04:38:29.060518 [SIM] Node 3 config update: map[rate_hz:20 tx_slot_us:25000 type:config variance_threshold:0.02]
-2026/07/26 04:38:29.065301 [SIM] Node 0 role update: tx
-2026/07/26 04:38:29.065564 [SIM] Node 1 role update: rx
-2026/07/26 04:38:29.075571 [SIM] Node 0 role update: tx
-2026/07/26 04:38:29.077352 [SIM] Node 1 role update: rx
-2026/07/26 04:38:29.077616 [SIM] Node 2 role update: rx
-2026/07/26 04:38:29.080209 [SIM] Node 0 role update: tx
-2026/07/26 04:38:29.081959 [SIM] Node 1 role update: tx
-2026/07/26 04:38:29.082087 [SIM] Node 2 role update: rx
-2026/07/26 04:38:29.082161 [SIM] Node 3 role update: rx
-2026/07/26 04:38:29.126971 [SIM] Node 0 config update: map[rate_hz:50 type:config]
-2026/07/26 04:38:29.127693 [SIM] Node 1 config update: map[rate_hz:50 type:config]
-2026/07/26 04:38:29.128458 [SIM] Node 3 config update: map[rate_hz:50 type:config]
-2026/07/26 04:38:30.315612 [SIM] Node 2 config update: map[rate_hz:50 type:config]
-2026/07/26 04:38:38.884844 [SIM] Node 3 config update: map[rate_hz:20 tx_slot_us:34239 type:config variance_threshold:0.02]
-2026/07/26 04:38:38.884911 [SIM] Node 1 config update: map[rate_hz:20 tx_slot_us:11224 type:config variance_threshold:0.02]
-2026/07/26 04:38:39.023909 [SIM] Stats: frames=3612 fps=361.1 blobs=0 elapsed=10.0s
+2026/07/26 05:12:39.285024 [SIM] CSI Simulator CLI starting
+2026/07/26 05:12:39.285185 [SIM] Random seed: 42
+2026/07/26 05:12:39.285195 [SIM] Configuration:
+2026/07/26 05:12:39.285198 [SIM]   Mothership: ws://localhost:8088/ws/node
+2026/07/26 05:12:39.285202 [SIM]   Scenario: normal
+2026/07/26 05:12:39.285204 [SIM]   Nodes: 4
+2026/07/26 05:12:39.285207 [SIM]   Walkers: 3
+2026/07/26 05:12:39.285210 [SIM]   Rate: 30 Hz
+2026/07/26 05:12:39.285212 [SIM]   Duration: 60 s
+2026/07/26 05:12:39.285215 [SIM]   Space: 5.0x5.0x2.5 m
+2026/07/26 05:12:39.285222 [SIM]   Walls: 0
+2026/07/26 05:12:39.285224 [SIM]   BLE: false
+2026/07/26 05:12:39.288773 [SIM] Auto-provisioned token: 8364555a485d09fb...
+2026/07/26 05:12:39.288824 [SIM] Node 0 connecting to ws://localhost:8088/ws/node
+2026/07/26 05:12:39.290113 [SIM] Node 0 connected
+2026/07/26 05:12:39.299483 [SIM] Node 0 received role: tx_rx
+2026/07/26 05:12:39.299513 [SIM] Node 1 connecting to ws://localhost:8088/ws/node
+2026/07/26 05:12:39.299698 [SIM] Node 0 config update: map[rate_hz:20 type:config variance_threshold:0.02]
+2026/07/26 05:12:39.300503 [SIM] Node 1 connected
+2026/07/26 05:12:39.307738 [SIM] Node 1 received role: tx
+2026/07/26 05:12:39.307774 [SIM] Node 2 connecting to ws://localhost:8088/ws/node
+2026/07/26 05:12:39.307988 [SIM] Node 1 config update: map[rate_hz:20 type:config variance_threshold:0.02]
+2026/07/26 05:12:39.308423 [SIM] Node 0 role update: tx_rx
+2026/07/26 05:12:39.308829 [SIM] Node 2 connected
+2026/07/26 05:12:39.316028 [SIM] Node 2 received role: rx
+2026/07/26 05:12:39.316141 [SIM] Node 3 connecting to ws://localhost:8088/ws/node
+2026/07/26 05:12:39.316419 [SIM] Node 2 config update: map[rate_hz:20 type:config variance_threshold:0.02]
+2026/07/26 05:12:39.317495 [SIM] Node 3 connected
+2026/07/26 05:12:39.324308 [SIM] Node 3 received role: tx
+2026/07/26 05:12:39.324425 [SIM] Node 3 config update: map[rate_hz:20 tx_slot_us:25000 type:config variance_threshold:0.02]
+2026/07/26 05:12:39.330735 [SIM] Node 0 role update: tx
+2026/07/26 05:12:39.334401 [SIM] Node 1 role update: rx
+2026/07/26 05:12:39.340438 [SIM] Node 0 role update: tx
+2026/07/26 05:12:39.340513 [SIM] Node 1 role update: rx
+2026/07/26 05:12:39.340617 [SIM] Node 2 role update: rx
+2026/07/26 05:12:39.342266 [SIM] Node 0 role update: tx
+2026/07/26 05:12:39.343418 [SIM] Node 1 role update: tx
+2026/07/26 05:12:39.343445 [SIM] Node 2 role update: rx
+2026/07/26 05:12:39.343465 [SIM] Node 3 role update: rx
+2026/07/26 05:12:39.391270 [SIM] Node 0 config update: map[rate_hz:50 type:config]
+2026/07/26 05:12:39.391379 [SIM] Node 1 config update: map[rate_hz:50 type:config]
+2026/07/26 05:12:39.393310 [SIM] Node 3 config update: map[rate_hz:50 type:config]
+2026/07/26 05:12:40.579533 [SIM] Node 2 config update: map[rate_hz:50 type:config]
+2026/07/26 05:12:49.162142 [SIM] Node 1 config update: map[rate_hz:20 tx_slot_us:9240 type:config variance_threshold:0.02]
+2026/07/26 05:12:49.162328 [SIM] Node 3 config update: map[rate_hz:20 tx_slot_us:38380 type:config variance_threshold:0.02]
+2026/07/26 05:12:49.286315 [SIM] Stats: frames=3612 fps=361.2 blobs=0 elapsed=10.0s
