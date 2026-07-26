@@ -4,8 +4,6 @@ package main
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -601,15 +599,30 @@ func loadPathsFromFile(filename string) ([][]Point, error) {
 // Each node gets its own persistent connection with background goroutines
 // for ping, health, and message reading.
 func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
-	// Get or generate token
-	token := *flagToken
-	if token == "" {
-		var err error
-		token, err = provisionToken()
-		if err != nil {
-			return fmt.Errorf("failed to provision token: %w", err)
+	// Resolve per-node auth tokens before dialing. The ingestion validator
+	// recomputes HMAC-SHA256(installSecret, hello.MAC) and compares it against the
+	// X-Spaxel-Token header, so a token is only valid for the exact MAC it was
+	// minted for. --token <t> applies one explicit token to every node (manual
+	// override); the default mints a REAL per-node token from /api/provision keyed
+	// on each node's actual announced MAC. This makes every node authenticate on
+	// the strength of its real token regardless of the migration window, so the
+	// sim connects under the strict window (SPAXEL_MIGRATION_WINDOW_HOURS=0) and
+	// eliminates '[WARN] Node ... rejected: invalid token'.
+	apiBase := getHTTPBaseURL(*flagMothership)
+	tokens := make(map[int]string, len(nodes))
+	for _, node := range nodes {
+		if *flagToken != "" {
+			tokens[node.ID] = *flagToken
+			continue
 		}
-		log.Printf("[SIM] Auto-provisioned token: %s...", token[:min(16, len(token))])
+		mac := macToString(node.MAC)
+		tok, err := provisionNodeToken(ctx, apiBase, mac)
+		if err != nil {
+			return fmt.Errorf("failed to provision token for node %d (%s): %w "+
+				"(start the mothership first, or pass --token)", node.ID, mac, err)
+		}
+		tokens[node.ID] = tok
+		log.Printf("[SIM] Node %d (%s): provisioned real token (first 16): %s...", node.ID, mac, tok[:min(16, len(tok))])
 	}
 
 	// Parse mothership URL
@@ -639,7 +652,7 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 		}
 
 		headers := http.Header{}
-		headers.Set("X-Spaxel-Token", token)
+		headers.Set("X-Spaxel-Token", tokens[node.ID])
 
 		log.Printf("[SIM] Node %d connecting to %s", node.ID, nodeURL)
 
@@ -719,47 +732,50 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 	return nil
 }
 
-// provisionToken provisions a token. Tries the mothership API first,
-// falls back to a synthetic HMAC token.
-func provisionToken() (string, error) {
-	// Parse mothership URL to get HTTP endpoint
-	wsURL, err := url.Parse(*flagMothership)
+// provisionNodeToken mints a REAL per-node HMAC token from the mothership's
+// /api/provision endpoint. It POSTs {"mac":<mac>} and returns the node_token
+// (HMAC-SHA256(installSecret, mac)). The token validates against the ingestion
+// server's ValidateToken regardless of the migration window, so the sim
+// authenticates under SPAXEL_MIGRATION_WINDOW_HOURS=0 (strict) as well as 24 or
+// larger — no dependence on the shared 24h default.
+//
+// Unlike the previous provisionToken(), which minted ONE token for a hardcoded
+// placeholder MAC ("AA:BB:CC:00:00:00") and reused it for every node, this mints
+// a distinct token per node's actual announced MAC. The validator recomputes
+// HMAC(installSecret, hello.MAC), so a shared token only ever validated for the
+// single node whose MAC matched the placeholder — every other node was rejected
+// with "invalid token" under the strict window.
+func provisionNodeToken(ctx context.Context, apiBase, mac string) (string, error) {
+	provisionURL := apiBase + "/api/provision"
+	body := fmt.Sprintf(`{"mac":%q}`, mac)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provisionURL, strings.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("invalid mothership URL: %w", err)
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 
-	httpURL := *wsURL
-	if httpURL.Scheme == "ws" {
-		httpURL.Scheme = "http"
-	} else if httpURL.Scheme == "wss" {
-		httpURL.Scheme = "https"
+	var payload struct {
+		NodeToken string `json:"node_token"`
 	}
-
-	// Trim /ws suffix to get base URL
-	baseURL := strings.TrimSuffix(httpURL.String(), "/ws")
-	baseURL = strings.TrimSuffix(baseURL, "/")
-	provisionURL := baseURL + "/api/provision"
-
-	// Try POST /api/provision with synthetic credentials
-	body := strings.NewReader(`{"mac":"AA:BB:CC:00:00:00"}`)
-	resp, err := http.Post(provisionURL, "application/json", body)
-	if err == nil && resp.StatusCode == http.StatusOK {
-		var result map[string]interface{}
-		if json.NewDecoder(resp.Body).Decode(&result) == nil {
-			_ = resp.Body.Close()
-			if token, ok := result["node_token"].(string); ok && token != "" {
-				return token, nil
-			}
-		}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
 	}
-	if resp != nil {
-		_ = resp.Body.Close()
+	if payload.NodeToken == "" {
+		return "", fmt.Errorf("empty node_token in response")
 	}
-
-	// Fallback: generate synthetic token
-	h := hmac.New(sha256.New, []byte("sim-install-secret"))
-	h.Write([]byte("sim-node"))
-	return fmt.Sprintf("%064x", h.Sum(nil)), nil
+	return payload.NodeToken, nil
 }
 
 // closeAllNodes closes all node WebSocket connections
