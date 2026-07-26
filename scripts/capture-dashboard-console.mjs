@@ -48,6 +48,22 @@ const outdir = args.outdir || '/tmp/spaxel-console-cap';
 const label = args.label || 'run';
 const blobTimeoutMs = parseInt(args['blob-timeout'] || '15000', 10);
 const settleMs = parseInt(args.settle || '2000', 10);
+// bf-5y3qt / bf-5t5ny: viz3d _blobs3D is populated ONLY during the brief
+// sub-100ms windows when a walker is in-range at a 10Hz fusion-tick boundary
+// (see the getBlobStates() contract in viz3d.js — applyLocUpdate() evicts any
+// blob id absent from the current /ws/dashboard frame the instant it is
+// omitted). A single-instant probe therefore almost always lands on an empty
+// instant, and a coarse poll can step right over an in-range window. So:
+//   • blobSeen  is polled at blobSeenPollMs (tightened from 250ms) so it can
+//     actually catch those windows; it still early-breaks on the first hit.
+//   • renderEvidence samples getBlobStates() across renderWindowMs at
+//     renderSampleMs WITHOUT early-break, reporting the PEAK frame seen —
+//     not one unlucky instant. viz3d.js itself is correct as designed and is
+//     NOT changed (option C rejected; it would break the current-frame
+//     contract documented on getBlobStates()).
+const blobSeenPollMs = parseInt(args['blob-seen-poll-ms'] || '50', 10);
+const renderWindowMs = parseInt(args['render-window'] || '3000', 10);
+const renderSampleMs = parseInt(args['render-sample-ms'] || '50', 10);
 mkdirSync(outdir, { recursive: true });
 
 // Patterns whose presence would indicate an identity-field backward-compat
@@ -162,13 +178,16 @@ async function capturePage(browser, path) {
             if (n > 0) { blobSeen = true; break; }
             if (n < 0) break; // no renderer getter: stop polling, settle below
         } catch (_) { /* page navigating; retry */ }
-        await page.waitForTimeout(250);
+        // bf-5t5ny: 250ms cadence could step over a sub-100ms in-range window;
+        // poll at blobSeenPollMs (50ms) so blobSeen reliably catches one.
+        await page.waitForTimeout(blobSeenPollMs);
     }
     // Settle so a render frame (and any late error) lands.
     await page.waitForTimeout(settleMs);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // bf-5y3qt DIAGNOSIS — why renderEvidence reports blobCount:0 despite blobs
+    // bf-5y3qt DIAGNOSIS / bf-5t5ny FIX — why renderEvidence reported
+    // blobCount:0 despite blobs, and how the harness now handles it
     // ─────────────────────────────────────────────────────────────────────────
     // ROOT CAUSE: probe-timing vs blob lifecycle, NOT a render bug.
     //   • The /live page IS receiving & creating blobs: handleLocUpdate()
@@ -184,31 +203,30 @@ async function capturePage(browser, path) {
     //   • getBlobStates() (viz3d.js:3491-3503) reads _blobs3D directly — no
     //     history/TTL — so it legitimately returns [] at any instant that is
     //     between in-range frames.
-    //   • The renderEvidence probe below is a SINGLE shot fired after the
-    //     blobSeen loop + a settleMs wait. It almost always lands on an empty
+    //   • The OLD renderEvidence probe was a SINGLE shot fired after the
+    //     blobSeen loop + a settleMs wait. It almost always landed on an empty
     //     instant → {viz3d:true, blobCount:0, blobs:[]}. The blobSeen poll
-    //     (250 ms cadence, early-break on first hit) can also miss the brief
-    //     in-range windows, so blobSeen can read false even though detections
-    //     fired during the window.
+    //     (250 ms cadence) could also step over the brief in-range windows, so
+    //     blobSeen could read false even though detections fired.
     //
-    // CHOSEN FIX (to be applied by the next child — NOT applied here):
+    // APPLIED FIX (bf-5t5ny):
     //   Option A — sample over a time-window and report the MAX, not a single
-    //   instant. Concretely, in THIS else-branch (lines ~179-187 below): replace
-    //   the one-shot page.evaluate(getBlobStates) with a short sampling loop
-    //   (e.g. poll every ~50 ms for ~2-3 s, mirroring the blobSeen loop but
-    //   WITHOUT early-break), tracking maxBlobCount and capturing the blob
-    //   states at the peak; return
+    //   instant. The /live else-branch below now polls getBlobStates() every
+    //   renderSampleMs (~50 ms) across renderWindowMs (~2-3 s) WITHOUT
+    //   early-break, tracking maxBlobCount and capturing the blob states at the
+    //   peak, returning
     //     { page:'live', viz3d:true, blobCount:maxBlobCount, blobs:peakBlobs,
-    //       samples:N, peakSeenAt:ms }
-    //   so renderEvidence reflects the best frame seen across the window rather
-    //   than one unlucky instant. This is harness-only: viz3d.js is correct as
-    //   designed and must NOT be changed to satisfy a probe (rejecting option C,
-    //   which would alter getBlobStates' documented "current-frame" contract).
+    //       samples:N, peakSeenAt:ms }.
+    //   The blobSeen poll cadence is tightened (250 ms → blobSeenPollMs, 50 ms)
+    //   so it can catch the sub-100ms in-range windows. Both are harness-only:
+    //   viz3d.js is correct as designed and must NOT be changed to satisfy a
+    //   probe (rejecting option C, which would alter getBlobStates' documented
+    //   "current-frame" contract).
     //
     //   Complementary safeguard (option B, config-only): in
-    //   scripts/run-sim-dashboard-console.sh raise SIM_WALKERS (2→3) and/or
-    //   lengthen SIM_DURATION so detections span the whole capture window,
-    //   de-risking the harness against sparse-walker flakiness. Primary fix is A.
+    //   scripts/run-sim-dashboard-console.sh raise SIM_WALKERS (2→3) and
+    //   lengthen SIM_DURATION (40→60) so detections span the whole capture
+    //   window, de-risking the harness against sparse-walker flakiness.
     // ─────────────────────────────────────────────────────────────────────────
     let renderEvidence = null;
     if (path.includes('ambient')) {
@@ -217,16 +235,39 @@ async function capturePage(browser, path) {
     } else {
         // /live (WebGL/viz3d): the ambient fallback-color canvas scan does not
         // apply (Three.js renders to a WebGL context, not a 2D canvas), so a
-        // tracked blob present in Viz3D is the render evidence. Captures the
-        // blob states so identity-less.live.json renderEvidence is non-null.
+        // tracked blob present in Viz3D is the render evidence.
+        //
+        // bf-5t5ny FIX (option A applied): instead of probing a single instant,
+        // sample getBlobStates() across renderWindowMs at renderSampleMs WITHOUT
+        // early-break and keep the PEAK frame. _blobs3D is only populated during
+        // the brief sub-100ms in-range windows at 10Hz fusion-tick boundaries, so
+        // a one-shot read almost always returns blobCount:0; the peak across a
+        // window reflects the best frame actually rendered. viz3d.js is left
+        // untouched (its current-frame contract is correct as designed — option C
+        // rejected). The sampling loop runs in-browser via one evaluate round-trip.
         try {
-            renderEvidence = await page.evaluate(() => {
-                if (window.Viz3D && typeof window.Viz3D.getBlobStates === 'function') {
-                    const bs = window.Viz3D.getBlobStates();
-                    return { page: 'live', viz3d: true, blobCount: bs.length, blobs: bs.slice(0, 5) };
+            renderEvidence = await page.evaluate(async (sampleMs, windowMs) => {
+                if (!(window.Viz3D && typeof window.Viz3D.getBlobStates === 'function')) {
+                    return { page: 'live', viz3d: false };
                 }
-                return { page: 'live', viz3d: false };
-            });
+                let maxBlobCount = 0, peakBlobs = [], samples = 0, peakSeenAt = 0;
+                const start = Date.now();
+                while (Date.now() - start < windowMs) {
+                    const bs = window.Viz3D.getBlobStates();
+                    samples++;
+                    if (bs.length > maxBlobCount) {
+                        maxBlobCount = bs.length;
+                        peakBlobs = bs.slice(0, 5);
+                        peakSeenAt = Date.now() - start;
+                    }
+                    await new Promise(r => setTimeout(r, sampleMs));
+                }
+                return {
+                    page: 'live', viz3d: true,
+                    blobCount: maxBlobCount, blobs: peakBlobs,
+                    samples, peakSeenAt,
+                };
+            }, renderSampleMs, renderWindowMs);
         } catch (e) { renderEvidence = { error: String(e) }; }
     }
 
