@@ -229,14 +229,14 @@
                     ${authState.setupStep === 'enter' ? `
                         <p class="auth-instruction">Enter a 4-8 digit PIN to secure your dashboard:</p>
                         <div class="pin-inputs" id="setup-pin-inputs">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="0" autofocus>
-                            <input type="password" class="pin-digit" maxlength="1" data-index="1">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="2">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="3">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="4">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="5">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="6">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="7">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="0" aria-label="PIN digit 1" autofocus>
+                            <input type="password" class="pin-digit" maxlength="1" data-index="1" aria-label="PIN digit 2">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="2" aria-label="PIN digit 3">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="3" aria-label="PIN digit 4">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="4" aria-label="PIN digit 5">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="5" aria-label="PIN digit 6">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="6" aria-label="PIN digit 7">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="7" aria-label="PIN digit 8">
                         </div>
                         <p class="auth-hint">Your PIN should be 4-8 digits</p>
                         ${authState.setupError ? `<p class="auth-error">${authState.setupError}</p>` : ''}
@@ -244,14 +244,14 @@
                     ` : `
                         <p class="auth-instruction">Confirm your PIN by entering it again:</p>
                         <div class="pin-inputs" id="confirm-pin-inputs">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="0" autofocus>
-                            <input type="password" class="pin-digit" maxlength="1" data-index="1">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="2">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="3">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="4">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="5">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="6">
-                            <input type="password" class="pin-digit" maxlength="1" data-index="7">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="0" aria-label="PIN digit 1" autofocus>
+                            <input type="password" class="pin-digit" maxlength="1" data-index="1" aria-label="PIN digit 2">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="2" aria-label="PIN digit 3">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="3" aria-label="PIN digit 4">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="4" aria-label="PIN digit 5">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="5" aria-label="PIN digit 6">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="6" aria-label="PIN digit 7">
+                            <input type="password" class="pin-digit" maxlength="1" data-index="7" aria-label="PIN digit 8">
                         </div>
                         ${authState.setupError ? `<p class="auth-error">${authState.setupError}</p>` : ''}
                         <button class="auth-button primary" id="setup-confirm-btn" disabled>Confirm & Setup</button>
@@ -276,14 +276,14 @@
                 </div>
                 <div class="auth-body">
                     <div class="pin-inputs" id="login-pin-inputs">
-                        <input type="password" class="pin-digit" maxlength="1" data-index="0" autofocus>
-                        <input type="password" class="pin-digit" maxlength="1" data-index="1">
-                        <input type="password" class="pin-digit" maxlength="1" data-index="2">
-                        <input type="password" class="pin-digit" maxlength="1" data-index="3">
-                        <input type="password" class="pin-digit" maxlength="1" data-index="4">
-                        <input type="password" class="pin-digit" maxlength="1" data-index="5">
-                        <input type="password" class="pin-digit" maxlength="1" data-index="6">
-                        <input type="password" class="pin-digit" maxlength="1" data-index="7">
+                        <input type="password" class="pin-digit" maxlength="1" data-index="0" aria-label="PIN digit 1" autofocus>
+                        <input type="password" class="pin-digit" maxlength="1" data-index="1" aria-label="PIN digit 2">
+                        <input type="password" class="pin-digit" maxlength="1" data-index="2" aria-label="PIN digit 3">
+                        <input type="password" class="pin-digit" maxlength="1" data-index="3" aria-label="PIN digit 4">
+                        <input type="password" class="pin-digit" maxlength="1" data-index="4" aria-label="PIN digit 5">
+                        <input type="password" class="pin-digit" maxlength="1" data-index="5" aria-label="PIN digit 6">
+                        <input type="password" class="pin-digit" maxlength="1" data-index="6" aria-label="PIN digit 7">
+                        <input type="password" class="pin-digit" maxlength="1" data-index="7" aria-label="PIN digit 8">
                     </div>
                     ${authState.loginError ? `<p class="auth-error">${authState.loginError}</p>` : ''}
                     <button class="auth-button primary" id="login-btn" disabled>Login</button>
