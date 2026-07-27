@@ -4605,7 +4605,7 @@ func main() {
 
 		// Auto-update REST API
 		if autoUpdateMgr != nil {
-			autoAPIHandler := ota.NewAutoAPIHandler(autoUpdateMgr, zonesTz)
+			autoAPIHandler := ota.NewAutoAPIHandler(autoUpdateMgr, zonesTz, mainDB)
 			autoAPIHandler.RegisterRoutes(r)
 			log.Printf("[INFO] Auto-update API registered")
 
