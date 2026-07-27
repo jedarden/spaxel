@@ -2,25 +2,30 @@
 package ota
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/spaxel/mothership/internal/events"
 )
 
 // AutoAPIHandler provides REST API endpoints for auto-update management.
 type AutoAPIHandler struct {
 	mgr      *AutoUpdateManager
 	timezone *time.Location
+	db       *sql.DB
 }
 
 // NewAutoAPIHandler creates a new auto-update API handler.
-func NewAutoAPIHandler(mgr *AutoUpdateManager, timezone *time.Location) *AutoAPIHandler {
+func NewAutoAPIHandler(mgr *AutoUpdateManager, timezone *time.Location, db *sql.DB) *AutoAPIHandler {
 	return &AutoAPIHandler{
 		mgr:      mgr,
 		timezone: timezone,
+		db:       db,
 	}
 }
 
@@ -172,13 +177,97 @@ func (h *AutoAPIHandler) handleConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleHistory handles GET /api/ota/auto/history
-// TODO: Implement persistent history storage
 func (h *AutoAPIHandler) handleHistory(w http.ResponseWriter, r *http.Request) {
-	// For now, return empty history
-	// In the future, this would query the events table for ota_update events
-	history := []map[string]interface{}{}
+	if h.db == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "database not available")
+		return
+	}
 
-	writeJSON(w, http.StatusOK, history)
+	// Parse limit parameter (default 50, max 500)
+	limit := 50
+	if s := r.URL.Query().Get("limit"); s != "" {
+		if n, err := json.Number(s).Int64(); err == nil && n > 0 {
+			limit = int(n)
+		}
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	if limit < 1 {
+		limit = 50
+	}
+
+	// Parse before cursor for pagination (timestamp_ms as string)
+	var beforeTS int64
+	if s := r.URL.Query().Get("before"); s != "" {
+		if n, err := json.Number(s).Int64(); err == nil {
+			beforeTS = n
+		}
+	}
+
+	// Query OTA update events from the timeline
+	queryEvents, _, hasMore, err := events.QueryEvents(h.db, events.QueryParams{
+		Type:     events.EventTypeOTAUpdate,
+		Limit:    limit,
+		BeforeTS: beforeTS,
+	})
+	if err != nil {
+		log.Printf("[ERROR] Failed to query OTA history: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to query history")
+		return
+	}
+
+	// Convert events to response format
+	history := make([]map[string]interface{}, 0, len(queryEvents))
+	for _, event := range queryEvents {
+		// Parse detail JSON to extract OTA-specific fields
+		var detail map[string]interface{}
+		if err := json.Unmarshal([]byte(event.DetailJSON), &detail); err != nil {
+			// If parsing fails, create a simple detail map
+			detail = map[string]interface{}{
+				"message": event.DetailJSON,
+			}
+		}
+
+		// Build history entry
+		entry := map[string]interface{}{
+			"id":          event.ID,
+			"timestamp":   event.TimestampMs,
+			"type":        event.Type,
+			"severity":    event.Severity,
+			"detail":      detail,
+		}
+
+		// Extract OTA-specific fields if present
+		if otaEvent, ok := detail["ota_event"].(string); ok {
+			entry["ota_event"] = otaEvent
+		}
+		if mac, ok := detail["mac"].(string); ok {
+			entry["mac"] = mac
+		}
+		if message, ok := detail["message"].(string); ok {
+			entry["message"] = message
+		}
+		if metadata, ok := detail["metadata"].(map[string]interface{}); ok {
+			entry["metadata"] = metadata
+		}
+
+		history = append(history, entry)
+	}
+
+	// Build response with pagination metadata
+	response := map[string]interface{}{
+		"history":  history,
+		"has_more": hasMore,
+	}
+
+	// Use timestamp for cursor (not ID) to match query parameter type
+	if hasMore && len(queryEvents) > 0 {
+		// The cursor is the timestamp of the last event in the page
+		response["cursor"] = fmt.Sprintf("%d", queryEvents[len(queryEvents)-1].TimestampMs)
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 // isInQuietWindow checks if current time is within the quiet window
