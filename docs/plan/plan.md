@@ -4267,3 +4267,45 @@ Decouple ESP32-S3 firmware compilation from the per-architecture mothership imag
 - **Cost:** Requires new artifact-passing plumbing between the firmware build and the image build in the `spaxel-build` WorkflowTemplate (`jedarden/declarative-config`, `k8s/iad-ci/argo-workflows/`) — a one-time engineering investment, not a manifest tweak.
 - **Cost:** Multi-arch `buildx --push` roughly doubles wall time for the Go/runtime stages relative to single-arch, though this is far cheaper than duplicating the ESP-IDF stage per architecture, which is precisely why decoupling is the chosen shape.
 - **Follow-up:** Tracked as beads against this repo (`docs/plan/plan.md` ADR-001) — see the `artifact-improvement`-labeled beads for the concrete implementation steps (Dockerfile GOARCH fix, WorkflowTemplate artifact plumbing, multi-arch buildx flag flip, plan doc reconciliation).
+
+---
+
+## ADR-002: 2026-07-29 — Provision nodes over both UART0 and native USB-Serial/JTAG, and default the console to USB-Serial/JTAG
+
+### Context
+
+The onboarding design in *Component Design > 7. Onboarding Flow* has the user click **Add Node** in the dashboard, which opens a Web Serial connection to a USB-attached ESP32-S3, waits for the firmware's `SPAXEL READY <MAC>` banner, and writes a `{"provision": {...}}` line. The firmware implements the device half of this in `firmware/main/provision.c`, which binds `UART_NUM_0` (`provision.c:14`) and does all reads and writes against that peripheral (`provision.c:22-124`).
+
+The first on-hardware validation of the firmware (2026-07-28) established that this cannot work on a large and growing class of boards. On the ESP32-S3, `UART_NUM_0` is GPIO43/44. Reaching it from a host requires a USB-UART bridge chip (CP210x, CH340, FTDI) wired to those pins. But the ESP32-S3 also has a *native* USB-Serial/JTAG peripheral, and many current devkits and all bare modules expose only that: the validation board presents USB ID `303a:1001` ("Espressif USB JTAG/serial debug unit") and `lsusb` shows no bridge chip at all. On such a board GPIO43/44 are not connected to anything.
+
+This was confirmed empirically, not inferred. With a provisioning window open for its full 120 s, a well-formed payload written to the host CDC device produced no acknowledgement of any kind, and the window closed reporting `no provisioning received`. Two distinct mechanisms are in play and it is worth separating them, because fixing one does not fix the other:
+
+1. **Provisioning I/O.** `uart_read_bytes()` / `uart_write_bytes()` on `UART_NUM_0` address the UART peripheral directly. This is independent of ESP-IDF console routing — no console setting can redirect it. The `SPAXEL READY <MAC>` banner (`provision.c:52,64`) is likewise invisible to the host, so the dashboard cannot even detect that a window is open.
+2. **Console/log routing.** `firmware/sdkconfig.defaults` sets no `CONFIG_ESP_CONSOLE_*` option, so the build inherits UART0 as the primary console. On a native-USB-only board the result is a device that boots in complete silence over its only host connection. Measured: across a 150 s capture, only bootloader-stage bytes arrived and no application-stage log line ever appeared — despite the generated config carrying `CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y`, so the secondary-console option cannot be relied on for this. Setting USB-Serial/JTAG as the *primary* console immediately yielded the full boot log, which is how the other bring-up defects were found at all.
+
+The silence in (2) is the direct reason roughly 3,100 lines of firmware accumulated three months of unverified changes: there was no feedback channel on the hardware most likely to be plugged in.
+
+### Decision
+
+1. **Provision over both transports concurrently.** For the duration of the provisioning window, the firmware listens on `UART_NUM_0` *and* on the native USB-Serial/JTAG peripheral (`usb_serial_jtag_read_bytes()` / `usb_serial_jtag_write_bytes()`). The `SPAXEL READY <MAC>` banner is emitted on both at the existing 1 Hz cadence, and the JSON response is returned on whichever transport delivered the request. First complete valid line wins; remaining input in the window is ignored so a payload arriving on both transports cannot double-provision.
+2. **Keep UART0 working, unchanged.** Bridge-equipped devkits and bare modules wired to a USB-TTL adapter remain first-class. This is explicitly additive — the existing path is not migrated, deprecated, or made conditional.
+3. **Default the ESP32-S3 console to USB-Serial/JTAG**, selected via a board-variant defaults file layered through `SDKCONFIG_DEFAULTS` rather than by editing the shared `sdkconfig.defaults` in place, so the UART0-console configuration stays reachable and tested for bridge boards.
+4. **Treat "no observable console on the default build" as a release-blocking defect**, not a configuration preference. A board that boots silently over its only host link is undebuggable in the field, and the cost of that is now documented history rather than speculation.
+5. **The protocol itself does not change.** Framing, the JSON schema, and the response contract are untouched; the parser already has host-test coverage (`firmware/test/test_serial_prov.c`). This ADR adds a second byte source, it does not re-specify onboarding. The dashboard needs no change either — Web Serial sees a CDC device either way.
+
+### Alternatives Considered
+
+- **Require a USB-UART bridge board; document UART0 as the only provisioning transport.** Rejected. It silently excludes bare ESP32-S3 modules and the growing set of devkits that ship native-USB-only, and it pushes a hardware-purchasing constraint onto users to work around a firmware limitation. It also leaves the console-silence problem completely unaddressed, which is the more damaging half of this.
+- **Migrate provisioning to USB-Serial/JTAG only, dropping UART0.** Rejected. It is a straight regression for bridge-equipped devkits and for bare modules provisioned over a USB-TTL adapter, and it would strand anyone who has already onboarded nodes that way. The incremental cost of keeping both is a second byte source in one already-existing loop.
+- **Select the transport at build time via Kconfig, producing per-board firmware images.** Rejected as the default. It moves a discoverability problem onto the user (they must know which port their board exposes before choosing a build), multiplies the images CI must produce and the matrix that must be tested, and makes a wrong guess look identical to broken hardware — a silent window with no banner. Listening on both makes the correct behaviour automatic. Retained only as the mechanism for the *console* choice (decision 3), where a single primary console must be picked and where the build already knows the board variant.
+- **Provision over WiFi only, via the captive portal, and drop serial provisioning entirely.** Rejected. The captive portal is a genuinely useful second path and is already implemented, but it cannot be the only one: it depends on the node's AP and HTTP stack being healthy, which is precisely what is unavailable when a node is misbehaving. Serial provisioning is the recovery path and must not depend on the radio. (Separately, the portal has its own defect — it restarts every 60 s and fails to rebind DNS and HTTP with `EADDRINUSE`, leaving a bare SSID after the first minute — tracked as its own bead. That an independent onboarding path was simultaneously broken is the argument for keeping two.)
+
+### Consequences
+
+- **Positive:** A stock ESP32-S3 provisions successfully out of the box regardless of whether the board has a bridge chip, with no user-visible configuration and no change to the dashboard flow.
+- **Positive:** The default build becomes observable on the port the user actually has plugged in, which is a prerequisite for diagnosing anything in the field and for any future hardware-in-the-loop testing.
+- **Positive:** Two independent onboarding paths (serial and captive portal) are preserved, so neither a radio-side nor a host-side failure is unrecoverable.
+- **Cost:** A second byte source in the provisioning window's read loop, plus banner emission on both transports — modest, contained within `provision.c`, and covered by existing parser tests.
+- **Cost:** A board-variant sdkconfig layer to maintain, and both console configurations need to stay tested rather than one.
+- **Risk:** Panic-output visibility on the chosen console must be verified deliberately (by triggering a fault once), not assumed from the fact that boot logs appear. Field crash diagnosis depends on it.
+- **Follow-up:** Tracked under the `hardware-bringup` umbrella bead for the first ESP32-S3 validation — see the provisioning-transport and console-routing beads for implementation, and the CI firmware-compile-gate bead for the process fix that keeps this class of defect from recurring.
