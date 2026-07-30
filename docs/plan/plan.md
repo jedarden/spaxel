@@ -1,7 +1,7 @@
 # Spaxel — Implementation Plan
 
 **Last updated:** 2026-07-30
-**Status:** FEATURE-COMPLETE ON PAPER, NOT YET VALIDATED ON HARDWARE — all 9 phases are implemented and the 83 implementation beads have been archived; ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357. The first end-to-end bring-up against a real ESP32-S3 (2026-07-30) registered a node successfully but ingested **zero CSI frames**: ambient/passive-radar sensing has never run end to end, and the node-pair modes need a second board. Treat "implemented" in this document as "written and unit-tested," not "observed working on hardware," until the ADR-003 follow-ups close. See ADR-001, ADR-002, and ADR-003 below for the current architectural decisions under evaluation.
+**Status:** FEATURE-COMPLETE ON PAPER, NOT YET VALIDATED ON HARDWARE — all 9 phases are implemented and the 83 implementation beads have been archived; ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357. The first end-to-end bring-up against a real ESP32-S3 (2026-07-30) registered a node successfully but ingested **zero CSI frames**: ambient/passive-radar sensing has never run end to end, and the node-pair modes need a second board. Treat "implemented" in this document as "written and unit-tested," not "observed working on hardware," until the ADR-003 follow-ups close. OTA was exercised on real hardware the same day: the update transport works (1.6 MB, ~19 s, slot switch confirmed), but the advertised firmware URL is unroutable in every default deployment, successful updates are misreported as rollbacks, and nodes do not reconnect after a mothership restart — see ADR-004. See ADR-001, ADR-002, ADR-003, and ADR-004 below for the current architectural decisions under evaluation.
 
 WiFi CSI-based indoor positioning for self-hosted home environments.
 
@@ -4357,3 +4357,72 @@ Activate ambient sensing as a first-class, single-node-capable mode:
 - **Risk:** The virtual router node has no surveyed position, so any GDOP/coverage computation that includes it is operating on an assumed geometry. Coverage currently reports `CoverageScore: 0` with one real node; this needs revisiting once virtual nodes actually appear.
 - **Follow-up:** Tracked under the ambient-sensing umbrella bead created against this ADR, with `bf-41h7g` and `bf-5x46` as blocking dependencies.
 
+---
+
+## ADR-004: 2026-07-30 — Make OTA trustworthy: derive the advertised firmware URL from a routable address, report the real firmware version, and recover the node link without a power cycle
+
+### Context
+
+Nodes are intended to be distributed to powered locations and left there, so remote update is not a convenience feature — it is the only way to fix a node that is already mounted. OTA was therefore exercised end to end against the USB-attached bench node on 2026-07-30, deliberately chosen because a bad flash on that node is recoverable with `esptool` and the existing full-flash backup, which will not be true of a node behind a wall.
+
+**The transport itself works.** With a routable URL, a 1.6 MB image downloaded, verified, wrote, and booted in roughly 19 seconds, and the bootloader confirms the slot actually changed:
+
+```
+I (433)   boot: Loaded app from partition at offset 0x10000    <- factory
+I (60215) ws: Starting OTA download: http://192.168.50.1:8080/firmware/spaxel-firmware-0.1.358.bin
+I (79025) ws: OTA complete, rebooting
+I (450)   boot: Loaded app from partition at offset 0x200000   <- ota_0
+I (33602) ws: OTA validation: marked valid after role received
+```
+
+The dual-slot A/B layout, the `esp_https_ota` write path, the status reporting (`downloading` → `verifying` → `rebooting`, with progress percentages arriving at the mothership), and the rollback-cancel-on-first-role-message handshake all behave correctly. **Everything around that transport is broken**, in three distinct ways, and each was observed rather than inferred.
+
+**1. The advertised firmware URL is not routable.** `mothership/cmd/mothership/main.go:4512` constructs the OTA manager as `ota.NewManager(otaSrv, "http://"+cfg.BindAddr)`. `cfg.BindAddr` defaults to `0.0.0.0:8080`, and the k8s Deployment sets exactly that (`SPAXEL_BIND_ADDR=0.0.0.0:8080`). The node is therefore handed `http://0.0.0.0:8080/firmware/<file>` — a wildcard *bind* address, never a valid *destination*. Observed on hardware:
+
+```
+ws: OTA triggered: http://0.0.0.0:8080/firmware/spaxel-firmware-0.1.358.bin
+esp-tls: [sock=55] delayed connect error: Software caused connection abort
+HTTP_CLIENT: Connection failed, sock < 0
+```
+
+The trigger endpoint nonetheless returned `{"ok":true}`. **OTA cannot work in any default deployment**, including the current cluster one, and the API reports success while it fails. Re-binding to a routable address was the single change that made the update above succeed.
+
+**2. The node's reported firmware version is a hardcoded literal, so every successful update looks like a rollback.** `firmware/main/websocket.c:282` sends `cJSON_AddStringToObject(root, "firmware_version", "1.0.0")` — a constant, never derived from the repo `VERSION` (currently `0.1.357`), the build, or ESP-IDF's own app descriptor (`esp_app_get_description()->version`). The mothership derives the expected version from the uploaded filename and compares the two in `OnNodeReconnected`, producing:
+
+```
+[WARN] ota: 50:78:7D:1A:3D:C8 rolled back to 1.0.0 (expected 0.1.358)
+```
+
+on an update that demonstrably did not roll back — the bootloader trace above shows the node running `ota_0` and marking it valid. Two version namespaces that can never agree are being compared. This is not cosmetic: `internal/ota/autoupdate.go:489-490` treats an `OTARollback` verdict on the canary node as grounds to call `failUpdateCycle`, so a **fleet-wide auto-update aborts permanently on its first successful canary**. Staged rollout is unusable until the version reported by the node and the version expected by the mothership come from the same source.
+
+**3. Nodes do not re-establish the link after a mothership restart.** Restarting the mothership left the node emitting `E websocket_client: Websocket client is not connected` continuously for over 100 seconds with `nodes_online: 0`, and it never recovered; a hard reset was required. `NODE_STATE_CONNECTED` does set `g_state.state = NODE_STATE_MOTHERSHIP_DISCOVERY` on `SPAXEL_EVENT_WS_DISCONNECTED` (`firmware/main/main.c`), so the intended recovery path exists but is not completing — the client appears to retry against a dead handle rather than being torn down and recreated. For a mounted fleet this means any mothership restart or upgrade strands every node until each is physically power-cycled, which defeats the purpose of remote update.
+
+Two lesser defects surfaced in the same session and are recorded here for completeness: `SendOTAVersion` returns `HTTP 500 firmware "0.1.358" not found` for a version that `GET /api/firmware` simultaneously reports as present and `is_latest`, so the by-version trigger path disagrees with the listing path; and mDNS discovery failed (`wifi: mDNS query failed or no results`) with `SPAXEL_MDNS_ENABLED=true`, the node falling back to its provisioned `ms_ip` — harmless here only because a static IP had been provisioned.
+
+### Decision
+
+1. **Separate the advertised base URL from the bind address.** Introduce explicit configuration (e.g. `SPAXEL_ADVERTISED_BASE_URL`) for the URL handed to nodes, defaulting to a routable interface address rather than `cfg.BindAddr`. Binding to `0.0.0.0` must remain the correct and recommended way to listen on all interfaces; it must simply stop leaking into node-facing URLs.
+2. **Refuse to advertise an unroutable URL.** Treat `0.0.0.0`, `::`, and empty hosts as configuration errors at startup — fail loudly rather than emit updates that cannot be fetched. An OTA trigger that cannot possibly succeed must not return `{"ok":true}`.
+3. **Report the real firmware version from the node.** Source `firmware_version` in the hello frame from ESP-IDF's app descriptor (`esp_app_get_description()->version`), populated from the project version at build time, and align that project version with the repo `VERSION` so the mothership's filename-derived expectation and the node's self-report share one namespace.
+4. **Do not infer rollback from a version mismatch alone.** Corroborate with the running partition (`esp_ota_get_running_partition()`), which the firmware already queries, and report that in the hello frame. A rollback verdict that can be produced by a naming discrepancy is not safe to hang `failUpdateCycle` on.
+5. **Make the node reconnect without human intervention.** Tear down and recreate the websocket client on disconnect, with bounded backoff, so a mothership restart is a transient event rather than a fleet outage. This is a prerequisite for shipping any node to a location that is inconvenient to reach.
+6. **Gate distribution on a green OTA run.** No node leaves the bench until an upload → trigger → download → write → reboot → confirm cycle has been observed end to end, *and* a deliberately-bad image has been shown to roll back and recover. The rollback half remains **unverified** — only the success path has been exercised so far.
+
+### Alternatives Considered
+
+- **Document "set `SPAXEL_BIND_ADDR` to a routable IP" and change no code.** Rejected. It makes the default deployment silently broken, forces operators to give up listening on all interfaces to get working updates, and leaves the `{"ok":true}`-on-guaranteed-failure behaviour in place. The bind address and the advertised address are genuinely different concerns and should be configured separately.
+- **Have the node infer the mothership's address for OTA from its existing websocket connection rather than trusting the URL.** Rejected as the primary fix, though attractive: it would have masked this bug entirely. It hard-codes an assumption that firmware is always served from the same host and port as the control channel, which forecloses serving images from a separate host or cache later. Worth revisiting as a defensive fallback once the URL is correct.
+- **Compare versions only, and treat any mismatch as a failed update.** Rejected — that is the current behaviour, and it produced a false rollback verdict on a demonstrably successful update. Partition-based corroboration is the ground truth and the firmware can already read it.
+- **Have the mothership rewrite `0.0.0.0` to a guessed local IP at send time.** Rejected. Guessing which of several interfaces a given node can reach is not reliable on multi-homed hosts (the bench host alone has ethernet, an AP interface, Tailscale, and a docker bridge), and a wrong guess reintroduces exactly the silent failure this ADR exists to remove.
+
+### Consequences
+
+- **Positive:** OTA becomes usable in a default deployment instead of requiring a non-obvious bind-address change that trades away listening on all interfaces.
+- **Positive:** Staged/canary auto-update becomes possible at all — today the first *successful* canary aborts the cycle.
+- **Positive:** A mothership restart stops being a fleet-wide outage requiring physical access to every node.
+- **Positive:** The transport itself is now known-good on real hardware (1.6 MB in ~19 s, slot switch confirmed by bootloader trace), so the remaining work is accounting and recovery rather than anything speculative.
+- **Cost:** A new configuration surface (advertised URL) that must be documented and set correctly in the k8s Deployment and the quickstart, plus a startup validation path.
+- **Cost:** Firmware version plumbing touches the build (project version → app descriptor) as well as the hello frame, and needs a coordinated mothership-side change to stop comparing against filenames.
+- **Risk:** The rollback path is still unproven. A deliberately-corrupt image must be shown to fail, roll back, and rejoin the fleet before any node is deployed somewhere physically awkward — otherwise the safety net that justifies remote update is itself unverified.
+- **Risk:** `esptool` over USB-Serial/JTAG proved unreliable during this session (`Write timeout` on `read-flash`, already tracked as `bf-26pa`), so physical recovery is *not* a smooth fallback even on a cabled node. This raises, not lowers, the bar for OTA correctness.
+- **Follow-up:** Tracked under the OTA-reliability umbrella bead created against this ADR.
