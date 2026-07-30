@@ -1,7 +1,7 @@
 # Spaxel — Implementation Plan
 
-**Last updated:** 2026-07-20
-**Status:** COMPLETE — maintenance mode (all 9 phases implemented; the 83 implementation beads referenced above have been archived — ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357). See ADR-001 below for the current architectural decision under evaluation.
+**Last updated:** 2026-07-30
+**Status:** FEATURE-COMPLETE ON PAPER, NOT YET VALIDATED ON HARDWARE — all 9 phases are implemented and the 83 implementation beads have been archived; ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357. The first end-to-end bring-up against a real ESP32-S3 (2026-07-30) registered a node successfully but ingested **zero CSI frames**: ambient/passive-radar sensing has never run end to end, and the node-pair modes need a second board. Treat "implemented" in this document as "written and unit-tested," not "observed working on hardware," until the ADR-003 follow-ups close. See ADR-001, ADR-002, and ADR-003 below for the current architectural decisions under evaluation.
 
 WiFi CSI-based indoor positioning for self-hosted home environments.
 
@@ -4309,3 +4309,51 @@ The silence in (2) is the direct reason roughly 3,100 lines of firmware accumula
 - **Cost:** A board-variant sdkconfig layer to maintain, and both console configurations need to stay tested rather than one.
 - **Risk:** Panic-output visibility on the chosen console must be verified deliberately (by triggering a fault once), not assumed from the fact that boot logs appear. Field crash diagnosis depends on it.
 - **Follow-up:** Tracked under the `hardware-bringup` umbrella bead for the first ESP32-S3 validation — see the provisioning-transport and console-routing beads for implementation, and the CI firmware-compile-gate bead for the process fix that keeps this class of defect from recurring.
+
+---
+
+## ADR-003: 2026-07-30 — Activate ambient (passive-radar) sensing by wiring AP auto-detection and carrying the passive BSSID through role assignment
+
+### Context
+
+The first end-to-end hardware bring-up of a real node completed on 2026-07-30. A single ESP32-S3 was provisioned via the captive portal, associated to a bench-hosted AP (HT20, channel 1), and registered against a locally-built mothership: `nodes_online: 1`, accepted as `Unpaired` under the migration window. Despite a healthy node and a healthy mothership, `/api/links` returned `[]` and **not one CSI frame was ever ingested**.
+
+The cause is not a single defect but three independent gaps that each, on their own, reduce ambient sensing to zero output. All three are in shipped code paths that no test exercises, because until this bring-up nothing had ever run the firmware against a real mothership.
+
+**1. CSI is never armed on the happy path.** `csi_init()` runs in `app_main` (`firmware/main/main.c:456`) *before* `esp_wifi_start()`, so `esp_wifi_set_csi_config()` fails with `ESP_ERR_WIFI_NOT_STARTED` and the configuration is discarded (tracked as `bf-5x46`). The only recovery is `csi_set_role()`, which in `NODE_STATE_CONNECTED` is reached solely inside `if (bits & SPAXEL_EVENT_ROLE_CHANGED)` (`main.c:322-324`). That event fires only when the assigned role *differs* from the persisted one (`firmware/main/websocket.c:581`). A node persists `role=tx_rx` in NVS; the fleet optimiser assigns `tx_rx`; the roles are equal, no event fires, and CSI stays dead for the lifetime of the boot. This was confirmed by forcing `tx_rx → rx → tx_rx` through `/api/nodes/{mac}/role`, which immediately produced `csi: Setting role`, `wifi:ic_enable_sniffer`, and `csi: TX started`. The init-ordering fix alone closes today's instance, but the re-arm gap is a separate defect and outlives it: once a node persists `role=passive`, every subsequent reboot re-enters CONNECTED with a matching role and never arms CSI again.
+
+**2. Ambient AP auto-detection is built but never constructed.** The intended passive-radar design is fully present and inert. The firmware reports `ap_bssid` and `ap_channel` in its hello frame (`websocket.c:299-304`); the mothership parses them (`internal/ingestion/message.go:20-21`); the ingestion server holds an `apDetector` field, exposes `SetAPDetector` (`server.go:295-298`), and calls `apDet.ProcessHello(...)` behind a nil guard (`server.go:564-572`); and `internal/apdetector` implements consensus BSSID selection across nodes plus virtual-node creation for the router. But `apdetector.NewDetector` and `SetAPDetector` are **never called from anywhere outside the package**, so `s.apDetector` is permanently nil and `ProcessHello` never executes (tracked as `bf-41h7g`). The visible symptom is the mothership logging `syncing 0 virtual nodes` forever, and `/api/nodes/virtual` having nothing to serve.
+
+**3. The passive BSSID cannot be delivered even manually.** `setRoleRequest` carries only `Role` (`internal/fleet/handler.go:337-339`), so the HTTP API has no field for a BSSID. `Manager.OverrideRole` (`manager.go:277-289`) persists the role and then calls `SendRoleToMAC(mac, role, "")`. Every other call site does the same: `manager.go:285`, `manager.go:410`, `healer.go:226`, `selfheal.go:183`, `selfheal.go:361`, `selfheal.go:593` — all six hardcode `""`, despite `SendRoleToMAC`'s own doc comment stating the parameter is "required only when role is passive". With an empty string the field is dropped by `omitempty`, `handle_role_msg` leaves `g_state.passive_bssid` at its zero value, and `csi_set_role` enables a filter on `00:00:00:00:00:00` (`firmware/main/csi.c:212-219`) which matches no frame, so `csi.c:93-95` silently discards 100% of captured CSI. There is also no `passive_bssid` column in the node registry (`registry.go:97-98`) in which to persist a detected value, though the schema's role CHECK already admits `'passive'` (`internal/db/migrations.go:146`).
+
+The net effect is that the only modes that can produce data today are the node-pair ones (`tx`/`rx`/`tx_rx`), which require at least two nodes. Ambient sensing — the single-node mode the architecture is designed around, and the one that makes a lone node useful — is unreachable.
+
+### Decision
+
+Activate ambient sensing as a first-class, single-node-capable mode:
+
+1. **Construct and inject the AP detector at startup.** Call `apdetector.NewDetector(db)` in the mothership's wiring and pass it to `ingestion.Server.SetAPDetector` before serving, so hello-reported BSSIDs feed consensus selection and virtual-router-node creation. This retires `bf-41h7g` rather than working around it.
+2. **Persist the passive BSSID.** Add a `passive_bssid TEXT NOT NULL DEFAULT ''` column to the nodes registry via a forward migration, so a detected-or-overridden BSSID survives restarts and is visible to every role-assignment path.
+3. **Carry the BSSID through role assignment everywhere.** Extend `setRoleRequest` with `passive_bssid`, widen `Manager.OverrideRole` to accept it, and change all six `SendRoleToMAC` call sites to look up the stored BSSID instead of passing `""`. A self-heal or re-optimise must never silently downgrade a working passive node to an all-zeros filter.
+4. **Fail loud on an empty passive BSSID.** Reject `role=passive` with no BSSID at the API boundary (HTTP 400) and log-and-refuse it at the sender. The current behaviour — accept, transmit, and silently drop every frame — is the single most expensive property of this bug and must not survive the fix.
+5. **Arm CSI unconditionally on entering `NODE_STATE_CONNECTED`**, not only on `SPAXEL_EVENT_ROLE_CHANGED`. Combined with the `bf-5x46` init-ordering fix, this makes CSI state a function of the node's current role rather than of the *history* of role messages, which is what makes a persisted `passive` role survivable across reboots.
+6. **Preserve manual override against the optimiser.** A operator-set role (particularly `passive`) must not be reverted by the next fleet re-optimisation; the optimiser was observed re-asserting `tx_rx` on a 60 s cadence during bring-up.
+7. **Deliver the firmware half over OTA.** The dual-slot A/B layout with rollback already exists (`firmware/partitions.csv`: `factory` + `ota_0` + `otadata`, with `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`), as do `/api/nodes/{mac}/ota`, `/api/nodes/update-all`, and `/api/firmware/upload`. Nodes distributed to powered locations must be updatable without physical recovery, and the firmware fixes in (5) are the first real test of that path.
+
+### Alternatives Considered
+
+- **Require two nodes and ship only `tx`/`rx` pairing.** Rejected. It works today with zero code change, and it remains the right mode for multi-node deployments, but it makes a single node worthless and contradicts the plan's own Component 2 / Phase 3 passive-radar design, which exists in code precisely to avoid this constraint.
+- **Hardcode the target BSSID in firmware or NVS at provisioning time.** Rejected. It gives the fleet no visibility into what each node is sensing, silently breaks whenever the router is replaced or its BSSID changes, and cannot express the consensus logic (`apdetector` deliberately requires a minimum fraction of nodes to agree before committing to a BSSID) that stops one mis-associated node from dragging the fleet onto the wrong AP.
+- **Let each node autonomously pick its strongest-RSSI AP and sense that.** Rejected. Without fleet-level consensus, nodes in different rooms can settle on different APs, producing links that share no common reference and silently corrupting any spatial reasoning built on top. Consensus selection is the reason `apdetector` exists.
+- **Skip `apdetector` and expose only a manual BSSID field.** Rejected as the default, retained as the override. Manual entry is genuinely useful for bench work and for forcing a specific AP, and decision (3) delivers it — but requiring every user to find and type a BSSID to get their first node working is an onboarding regression against a design that can detect it automatically.
+
+### Consequences
+
+- **Positive:** A single node becomes independently useful, which is the difference between "buy two boards to see anything" and "plug one in." This is the mode the plan's own Phase 3 targets.
+- **Positive:** Retires two tracked defects (`bf-41h7g`, and the re-arm half of the CSI gap alongside `bf-5x46`) and removes a dead-code path rather than accumulating a parallel one.
+- **Positive:** Replaces a silent 100%-drop failure with a loud rejection, so the next person to misconfigure passive mode learns it in a 400 rather than in an empty `/api/links`.
+- **Cost:** A schema migration plus a signature change threaded through six call sites — mechanical, but it touches self-heal and optimiser paths that must be re-tested rather than assumed.
+- **Risk:** Ambient CSI rate is bounded by how much the sensed AP actually transmits. A quiet AP emits beacons at roughly 10 Hz, below the 50 Hz the rate controller targets when active (`RateIdle`/`RateActive`, 2 Hz/50 Hz). Whether beacon-only ambient traffic clears the detection thresholds is **unverified** and must be measured before this is called done; if it does not, a deliberate traffic source on the sensed link becomes a deployment requirement rather than an optimisation.
+- **Risk:** The virtual router node has no surveyed position, so any GDOP/coverage computation that includes it is operating on an assumed geometry. Coverage currently reports `CoverageScore: 0` with one real node; this needs revisiting once virtual nodes actually appear.
+- **Follow-up:** Tracked under the ambient-sensing umbrella bead created against this ADR, with `bf-41h7g` and `bf-5x46` as blocking dependencies.
+
