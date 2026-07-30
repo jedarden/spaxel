@@ -145,6 +145,25 @@ func (s *Server) GetByFilename(filename string) *FirmwareMeta {
 	return nil
 }
 
+// GetByVersion returns metadata for a firmware by its version string, or nil.
+//
+// Callers reaching this from the API pass a version (e.g. "0.1.358"), which is
+// not the map key — the map is keyed by filename. Looking a version up via
+// GetByFilename silently missed, so `POST /api/nodes/{mac}/ota` with a version
+// that `GET /api/firmware` reported as present returned "not found".
+// See ADR-004 / bf-2cb85.
+func (s *Server) GetByVersion(version string) *FirmwareMeta {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, m := range s.firmware {
+		if m.Version == version {
+			cp := *m
+			return &cp
+		}
+	}
+	return nil
+}
+
 // FirmwareDir returns the directory where firmware binaries are stored.
 func (s *Server) FirmwareDir() string {
 	return s.firmwareDir

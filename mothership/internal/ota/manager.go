@@ -2,11 +2,17 @@ package ota
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 )
+
+// ErrFirmwareNotFound is returned when the requested firmware version or
+// filename is not present, so callers can map it to 404 rather than a generic
+// 500. See ADR-004 / bf-2cb85.
+var ErrFirmwareNotFound = errors.New("firmware not found")
 
 // NodeOTAState tracks where a node is in the OTA update lifecycle.
 type NodeOTAState int
@@ -114,16 +120,25 @@ func (m *Manager) GetProgress() map[string]NodeOTAProgress {
 func (m *Manager) SendOTA(mac string) error {
 	meta := m.server.GetLatest()
 	if meta == nil {
-		return fmt.Errorf("no firmware available")
+		return fmt.Errorf("%w: no firmware uploaded", ErrFirmwareNotFound)
 	}
 	return m.sendOTAWithMeta(mac, meta)
 }
 
-// SendOTAVersion triggers an OTA update for a single node using a specific firmware version.
-func (m *Manager) SendOTAVersion(mac, filename string) error {
-	meta := m.server.GetByFilename(filename)
+// SendOTAVersion triggers an OTA update for a single node using a specific
+// firmware, identified by either its version string or its filename.
+//
+// The API passes a version, but this previously looked up by filename only, so
+// a version that GET /api/firmware listed as present resolved to "not found".
+// Accept both: version first (what callers actually supply), then filename for
+// backwards compatibility. See ADR-004 / bf-2cb85.
+func (m *Manager) SendOTAVersion(mac, versionOrFilename string) error {
+	meta := m.server.GetByVersion(versionOrFilename)
 	if meta == nil {
-		return fmt.Errorf("firmware %q not found", filename)
+		meta = m.server.GetByFilename(versionOrFilename)
+	}
+	if meta == nil {
+		return fmt.Errorf("%w: %q", ErrFirmwareNotFound, versionOrFilename)
 	}
 	return m.sendOTAWithMeta(mac, meta)
 }
@@ -135,6 +150,15 @@ func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta) error {
 
 	if sender == nil {
 		return fmt.Errorf("sender not configured")
+	}
+
+	// Refuse rather than hand the node a URL it cannot fetch. Previously the
+	// base URL was derived from the bind address, so a default deployment sent
+	// "http://0.0.0.0:8080/firmware/..." and the node failed to connect while
+	// the API reported success. See ADR-004 / bf-2f0uu.
+	if m.baseURL == "" {
+		return fmt.Errorf("OTA unavailable: no advertised base URL configured " +
+			"(set SPAXEL_ADVERTISED_BASE_URL to an address reachable from the nodes)")
 	}
 
 	url := fmt.Sprintf("%s/firmware/%s", m.baseURL, meta.Filename)
@@ -175,7 +199,7 @@ func (m *Manager) SendOTAAll(ctx context.Context, rollingGap time.Duration) erro
 
 	meta := m.server.GetLatest()
 	if meta == nil {
-		return fmt.Errorf("no firmware available")
+		return fmt.Errorf("%w: no firmware uploaded", ErrFirmwareNotFound)
 	}
 
 	macs := sender.GetConnectedMACs()

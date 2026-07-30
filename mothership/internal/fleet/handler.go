@@ -752,7 +752,13 @@ func (h *Handler) triggerNodeOTA(w http.ResponseWriter, r *http.Request) {
 			err = h.otaMgr.SendOTA(mac)
 		}
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to trigger OTA: %v", err), http.StatusInternalServerError)
+			// A missing firmware version is a client error, not a server fault.
+			// See ADR-004 / bf-2cb85.
+			status := http.StatusInternalServerError
+			if errors.Is(err, ota.ErrFirmwareNotFound) {
+				status = http.StatusNotFound
+			}
+			http.Error(w, fmt.Sprintf("failed to trigger OTA: %v", err), status)
 			return
 		}
 	}
