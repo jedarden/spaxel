@@ -4509,7 +4509,11 @@ func main() {
 	// OTA firmware server and manager
 	firmwareDir := filepath.Join(cfg.DataDir, "firmware")
 	otaSrv := ota.NewServer(firmwareDir)
-	otaMgr := ota.NewManager(otaSrv, "http://"+cfg.BindAddr)
+	// Nodes fetch firmware from this URL, so it must be routable FROM the node.
+	// It is deliberately NOT derived from cfg.BindAddr: binding to 0.0.0.0 is
+	// correct, but handing a node "http://0.0.0.0:8080/firmware/..." is not.
+	// See ADR-004 / bf-2f0uu.
+	otaMgr := ota.NewManager(otaSrv, cfg.AdvertisedBaseURL)
 	otaMgr.SetSender(ingestSrv)
 	ingestSrv.SetOTAManager(otaMgr)
 	fleetHandler.SetOTAManager(otaMgr)
