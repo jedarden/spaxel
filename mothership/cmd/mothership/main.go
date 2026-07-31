@@ -29,6 +29,7 @@ import (
 	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/automation"
 	"github.com/spaxel/mothership/internal/autoupdate"
+	"github.com/spaxel/mothership/internal/apdetector"
 	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/briefing"
 	appconfig "github.com/spaxel/mothership/internal/config"
@@ -4627,6 +4628,17 @@ func main() {
 	provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort, cfg.NTPServer, cfg.InstallSecret)
 	r.Post("/api/provision", provSrv.HandleProvision)
 	ingestSrv.SetTokenValidator(provSrv.ValidateToken)
+
+	// Passive-radar AP auto-detection. The detector aggregates the ap_bssid each
+	// node reports in its hello frame, picks a consensus BSSID across the fleet,
+	// and creates the router virtual node that passive links form against.
+	//
+	// This was fully implemented but never constructed: SetAPDetector existed and
+	// ProcessHello was called behind a nil guard, so s.apDetector was permanently
+	// nil and ambient sensing could never start. See ADR-003 / bf-4p0ne, bf-41h7g.
+	apDet := apdetector.NewDetector(mainDB)
+	ingestSrv.SetAPDetector(apDet)
+	log.Printf("[INFO] Passive-radar AP auto-detection enabled")
 	if cfg.MigrationWindowHours > 0 {
 		deadline := time.Now().Add(time.Duration(cfg.MigrationWindowHours) * time.Hour)
 		ingestSrv.SetMigrationDeadline(deadline)
