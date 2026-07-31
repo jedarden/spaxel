@@ -180,6 +180,10 @@ static esp_err_t save_nvs_rate(uint8_t rate) {
 }
 
 static void state_machine_task(void *arg) {
+    // Tracks whether CSI has been armed for the current CONNECTED session, so
+    // entering CONNECTED arms it exactly once rather than on every loop pass.
+    bool csi_armed_this_session = false;
+
     int wifi_fail_count = 0;
     int discovery_fail_count = 0;
     TickType_t last_state_change = xTaskGetTickCount();
@@ -295,6 +299,22 @@ static void state_machine_task(void *arg) {
                 break;
 
             case NODE_STATE_CONNECTED:
+                // Arm CSI whenever we enter CONNECTED, not only on a role CHANGE.
+                //
+                // csi_init() runs before esp_wifi_start() and fails with
+                // ESP_ERR_WIFI_NOT_STARTED, so the boot-time configuration is
+                // discarded. Recovery used to depend solely on
+                // SPAXEL_EVENT_ROLE_CHANGED, which only fires when the assigned
+                // role DIFFERS from the persisted one — so a node whose stored
+                // role already matched what the fleet assigned never armed CSI
+                // and silently captured nothing for the whole boot.
+                // See ADR-003 / bf-3mb8j, bf-5x46.
+                if (!csi_armed_this_session) {
+                    ESP_LOGI(TAG, "Arming CSI for role %s", node_role_str(g_state.role));
+                    csi_set_role(g_state.role, g_state.passive_bssid);
+                    csi_armed_this_session = true;
+                }
+
                 // Normal operation - wait for disconnect or commands
                 {
                     EventBits_t bits = xEventGroupWaitBits(
@@ -325,6 +345,7 @@ static void state_machine_task(void *arg) {
 
                     if (bits & SPAXEL_EVENT_WS_DISCONNECTED) {
                         ESP_LOGW(TAG, "WebSocket disconnected");
+                        csi_armed_this_session = false;
                         g_state.state = NODE_STATE_MOTHERSHIP_DISCOVERY;
                     }
 
