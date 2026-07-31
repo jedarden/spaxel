@@ -223,7 +223,7 @@ func (fh *FleetHealer) selfHeal() {
 		fh.mu.RUnlock()
 
 		if exists {
-			notifier.SendRoleToMAC(mac, role, "")
+			notifier.SendRoleToMAC(mac, role, fh.registry.PassiveBSSIDFor(mac, role))
 		}
 	}
 }
