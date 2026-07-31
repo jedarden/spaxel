@@ -1,6 +1,7 @@
 #include "websocket.h"
 #include "spaxel.h"
 #include "csi.h"
+#include "version.h"
 #include "wifi.h"
 #include "ntp.h"
 #include "led.h"
@@ -279,7 +280,21 @@ esp_err_t websocket_send_hello(void) {
     }
 
     // Firmware version (from build)
-    cJSON_AddStringToObject(root, "firmware_version", "1.0.0");
+    // Report the ACTUAL build version, not a literal. The mothership compares
+    // this against the version it derived from the uploaded firmware filename;
+    // with a hardcoded "1.0.0" they could never agree, so every successful OTA
+    // was reported as a rollback — and autoupdate treats a canary rollback as
+    // grounds to abort the whole update cycle. See ADR-004 / bf-556tl.
+    cJSON_AddStringToObject(root, "firmware_version", SPAXEL_FIRMWARE_VERSION);
+
+    // Running partition, so the mothership can corroborate an update by which
+    // slot actually booted rather than by version string alone.
+    {
+        const esp_partition_t *running = esp_ota_get_running_partition();
+        if (running) {
+            cJSON_AddStringToObject(root, "running_partition", running->label);
+        }
+    }
 
     // Capabilities
     cJSON *caps = cJSON_CreateArray();
@@ -354,7 +369,11 @@ esp_err_t websocket_send_health(void) {
         cJSON_AddNumberToObject(root, "temperature_c", tsens_value);
     }
 
-    cJSON_AddNumberToObject(root, "csi_rate_hz", g_state.packet_rate);
+    // csi_rate_hz is the MEASURED rate. Reporting the configured target here
+    // meant a node emitting nothing still claimed 20 Hz. The configured value is
+    // still reported, under a name that says what it is. See bf-54cx2.
+    cJSON_AddNumberToObject(root, "csi_rate_hz", csi_measured_rate_hz());
+    cJSON_AddNumberToObject(root, "csi_rate_configured_hz", g_state.packet_rate);
     cJSON_AddNumberToObject(root, "wifi_channel", wifi_get_channel());
 
     // Get IP address
