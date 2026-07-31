@@ -311,6 +311,10 @@ func (m *Manager) OverrideRoleWithBSSID(mac, role, passiveBSSID string) error {
 	if err := m.registry.SetNodeRole(mac, role); err != nil {
 		return err
 	}
+	// Pin it, or the next optimiser cycle reverts it. See bf-4kdww.
+	if err := m.registry.SetNodeRoleLocked(mac, true); err != nil {
+		return err
+	}
 	m.mu.RLock()
 	notifier := m.notifier
 	m.mu.RUnlock()
@@ -421,6 +425,14 @@ func (m *Manager) rebalanceRoles() {
 			role = "tx_rx"
 		}
 
+		// Never overwrite an operator-set role. Previously the optimiser reasserted
+		// its own assignment every cycle, so a manually set role=passive flapped
+		// back to tx_rx within 60s and ambient sensing could not stay enabled.
+		// See ADR-003 / bf-4kdww.
+		if m.registry.IsNodeRoleLocked(mac) {
+			continue
+		}
+
 		_ = m.registry.SetNodeRole(mac, role) //nolint:errcheck
 
 		// Stagger TX slot: divide 1s into nTX slots.
@@ -440,7 +452,8 @@ func (m *Manager) rebalanceRoles() {
 		// Update collision detector tracking
 		m.updateTXNodeCollisionTrackingLocked(mac, role)
 
-		notifier.SendRoleToMAC(mac, role, m.registry.PassiveBSSIDFor(mac, role))
+		sendRole, sendBSSID := m.registry.RoleAssignmentFor(mac, role)
+		notifier.SendRoleToMAC(mac, sendRole, sendBSSID)
 		notifier.SendConfigToMAC(mac, rateHz, txSlotUS, 0.02)
 	}
 }
@@ -456,7 +469,8 @@ func (m *Manager) applyRoleAndConfig(mac, role string) {
 		return
 	}
 
-	notifier.SendRoleToMAC(mac, role, m.registry.PassiveBSSIDFor(mac, role))
+	sendRole, sendBSSID := m.registry.RoleAssignmentFor(mac, role)
+	notifier.SendRoleToMAC(mac, sendRole, sendBSSID)
 
 	rateHz := 20
 
@@ -512,7 +526,8 @@ func (m *Manager) selfHeal() {
 			continue
 		}
 		// Re-push stored role for nodes that are online.
-		notifier.SendRoleToMAC(n.MAC, n.Role, m.registry.PassiveBSSIDFor(n.MAC, n.Role))
+		sendRole, sendBSSID := m.registry.RoleAssignmentFor(n.MAC, n.Role)
+		notifier.SendRoleToMAC(n.MAC, sendRole, sendBSSID)
 	}
 }
 
