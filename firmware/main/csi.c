@@ -49,6 +49,19 @@ esp_err_t csi_init(void) {
         return ESP_ERR_NO_MEM;
     }
 
+    // Start RX task
+    xTaskCreatePinnedToCore(csi_rx_task, "csi_rx", 8192, NULL, 5, NULL, 1);
+
+    ESP_LOGI(TAG, "CSI queue and RX task ready");
+    return ESP_OK;
+}
+
+esp_err_t csi_wifi_start(void) {
+    static bool s_wifi_csi_enabled = false;
+    if (s_wifi_csi_enabled) {
+        return ESP_OK;
+    }
+
     // Configure CSI
     wifi_csi_config_t csi_config = {
         .lltf_en = true,
@@ -80,10 +93,8 @@ esp_err_t csi_init(void) {
         return err;
     }
 
-    // Start RX task
-    xTaskCreatePinnedToCore(csi_rx_task, "csi_rx", 8192, NULL, 5, NULL, 1);
-
-    ESP_LOGI(TAG, "CSI initialized");
+    s_wifi_csi_enabled = true;
+    ESP_LOGI(TAG, "CSI enabled on radio");
     return ESP_OK;
 }
 

@@ -10,9 +10,23 @@ extern float g_variance_threshold;
 
 /**
  * Initialize CSI capture subsystem.
- * Sets up WiFi promiscuous mode and CSI callback.
+ * Creates the CSI queue and starts the RX processing task. Safe to call at
+ * boot, before WiFi has started — does not touch any esp_wifi_* CSI APIs.
  */
 esp_err_t csi_init(void);
+
+/**
+ * Enable CSI capture on the radio: esp_wifi_set_csi_config(),
+ * esp_wifi_set_csi_rx_cb(), esp_wifi_set_csi(true).
+ *
+ * These calls require WiFi to already be started — esp_wifi_start() is not
+ * called until the state machine task attempts a connection, well after
+ * csi_init() runs at boot. Calling them earlier fails with
+ * ESP_ERR_WIFI_NOT_STARTED and is silently discarded. Call this from the
+ * WIFI_EVENT_STA_START handler, not from csi_init(). Idempotent: only the
+ * first call after boot takes effect. See ADR-003 / bf-5x46.
+ */
+esp_err_t csi_wifi_start(void);
 
 /**
  * Set node role for CSI capture.
