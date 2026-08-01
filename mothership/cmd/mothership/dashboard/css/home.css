@@ -1,0 +1,195 @@
+/* ───────────────────────────────────────────────────────────────
+   Spaxel Home Page — Status headline + 3 cards (§8e)
+   ─────────────────────────────────────────────────────────────── */
+
+.home-body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top nav (uses shared .app-header from layout.css) ── */
+
+/* ── Status headline (Row 1) ── */
+.home-status {
+  padding: var(--space-6);
+  text-align: center;
+}
+.home-status__banner {
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-card);
+  font-size: var(--text-base);
+  font-weight: var(--fw-heading);
+  line-height: var(--lh-body);
+  max-width: 700px;
+  margin: 0 auto;
+}
+.home-status__banner--ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid var(--ok-border);
+}
+.home-status__banner--warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid var(--warn-border);
+}
+.home-status__banner--alert {
+  background: var(--alert-bg);
+  color: var(--alert);
+  border: 1px solid var(--alert-border);
+}
+
+/* ── Card grid (Row 2) ── */
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+  padding: 0 var(--space-6) var(--space-6);
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Card ── */
+.home-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  cursor: pointer;
+}
+.home-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+.home-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.home-card__title {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-heading);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.home-card__icon {
+  font-size: var(--text-lg);
+  color: var(--text-muted);
+}
+.home-card__count {
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-heading);
+  line-height: var(--lh-heading);
+}
+.home-card__detail {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  min-height: 2.4em;
+}
+.home-card__meta {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.home-card__tag {
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--bg-active);
+  color: var(--text-secondary);
+}
+.home-card__tag--ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.home-card__tag--warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.home-card__tag--alert {
+  background: var(--alert-bg);
+  color: var(--alert);
+}
+
+/* ── Optional row (Row 3) ── */
+.home-extras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-6);
+  padding: 0 var(--space-6) var(--space-8);
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+}
+.home-extras__item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: var(--space-4) var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  display: none;
+}
+.home-extras__item--visible {
+  display: block;
+}
+.home-extras__item--armed {
+  border-color: var(--alert-border);
+  background: var(--alert-bg);
+  color: var(--alert);
+}
+
+/* ── Mobile bottom nav (uses shared .app-mobile-nav from layout.css) ── */
+
+/* ── Connection indicator ── */
+.home-status__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  vertical-align: middle;
+  margin-right: var(--space-2);
+}
+.home-status__dot--connected {
+  background: var(--ok);
+  box-shadow: 0 0 6px var(--ok);
+}
+.home-status__dot--disconnected {
+  background: var(--alert);
+}
+
+/* ── Responsive: tablet (single column cards) ── */
+@media (max-width: 1023px) {
+  .home-cards {
+    grid-template-columns: 1fr;
+    max-width: 600px;
+  }
+}
+
+/* ── Responsive: mobile ── */
+@media (max-width: 639px) {
+  .home-status {
+    padding: var(--space-4);
+  }
+  .home-cards {
+    padding: 0 var(--space-4) var(--space-4);
+    gap: var(--space-4);
+  }
+  .home-extras {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+}
