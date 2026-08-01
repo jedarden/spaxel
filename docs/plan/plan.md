@@ -1,7 +1,7 @@
 # Spaxel — Implementation Plan
 
-**Last updated:** 2026-07-20
-**Status:** COMPLETE — maintenance mode (all 9 phases implemented; the 83 implementation beads referenced above have been archived — ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357). See ADR-001 below for the current architectural decision under evaluation.
+**Last updated:** 2026-07-30
+**Status:** FEATURE-COMPLETE ON PAPER, NOT YET VALIDATED ON HARDWARE — all 9 phases are implemented and the 83 implementation beads have been archived; ongoing fixes are tracked in PROGRESS.md, repo currently at VERSION 0.1.357. The first end-to-end bring-up against a real ESP32-S3 (2026-07-30) registered a node successfully but ingested **zero CSI frames**: ambient/passive-radar sensing has never run end to end, and the node-pair modes need a second board. Treat "implemented" in this document as "written and unit-tested," not "observed working on hardware," until the ADR-003 follow-ups close. OTA was exercised on real hardware the same day: the update transport works (1.6 MB, ~19 s, slot switch confirmed), but the advertised firmware URL is unroutable in every default deployment, successful updates are misreported as rollbacks, and nodes do not reconnect after a mothership restart — see ADR-004. See ADR-001, ADR-002, ADR-003, and ADR-004 below for the current architectural decisions under evaluation.
 
 WiFi CSI-based indoor positioning for self-hosted home environments.
 
@@ -4267,3 +4267,164 @@ Decouple ESP32-S3 firmware compilation from the per-architecture mothership imag
 - **Cost:** Requires new artifact-passing plumbing between the firmware build and the image build in the `spaxel-build` WorkflowTemplate (`jedarden/declarative-config`, `k8s/iad-ci/argo-workflows/`) — a one-time engineering investment, not a manifest tweak.
 - **Cost:** Multi-arch `buildx --push` roughly doubles wall time for the Go/runtime stages relative to single-arch, though this is far cheaper than duplicating the ESP-IDF stage per architecture, which is precisely why decoupling is the chosen shape.
 - **Follow-up:** Tracked as beads against this repo (`docs/plan/plan.md` ADR-001) — see the `artifact-improvement`-labeled beads for the concrete implementation steps (Dockerfile GOARCH fix, WorkflowTemplate artifact plumbing, multi-arch buildx flag flip, plan doc reconciliation).
+
+---
+
+## ADR-002: 2026-07-29 — Provision nodes over both UART0 and native USB-Serial/JTAG, and default the console to USB-Serial/JTAG
+
+### Context
+
+The onboarding design in *Component Design > 7. Onboarding Flow* has the user click **Add Node** in the dashboard, which opens a Web Serial connection to a USB-attached ESP32-S3, waits for the firmware's `SPAXEL READY <MAC>` banner, and writes a `{"provision": {...}}` line. The firmware implements the device half of this in `firmware/main/provision.c`, which binds `UART_NUM_0` (`provision.c:14`) and does all reads and writes against that peripheral (`provision.c:22-124`).
+
+The first on-hardware validation of the firmware (2026-07-28) established that this cannot work on a large and growing class of boards. On the ESP32-S3, `UART_NUM_0` is GPIO43/44. Reaching it from a host requires a USB-UART bridge chip (CP210x, CH340, FTDI) wired to those pins. But the ESP32-S3 also has a *native* USB-Serial/JTAG peripheral, and many current devkits and all bare modules expose only that: the validation board presents USB ID `303a:1001` ("Espressif USB JTAG/serial debug unit") and `lsusb` shows no bridge chip at all. On such a board GPIO43/44 are not connected to anything.
+
+This was confirmed empirically, not inferred. With a provisioning window open for its full 120 s, a well-formed payload written to the host CDC device produced no acknowledgement of any kind, and the window closed reporting `no provisioning received`. Two distinct mechanisms are in play and it is worth separating them, because fixing one does not fix the other:
+
+1. **Provisioning I/O.** `uart_read_bytes()` / `uart_write_bytes()` on `UART_NUM_0` address the UART peripheral directly. This is independent of ESP-IDF console routing — no console setting can redirect it. The `SPAXEL READY <MAC>` banner (`provision.c:52,64`) is likewise invisible to the host, so the dashboard cannot even detect that a window is open.
+2. **Console/log routing.** `firmware/sdkconfig.defaults` sets no `CONFIG_ESP_CONSOLE_*` option, so the build inherits UART0 as the primary console. On a native-USB-only board the result is a device that boots in complete silence over its only host connection. Measured: across a 150 s capture, only bootloader-stage bytes arrived and no application-stage log line ever appeared — despite the generated config carrying `CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y`, so the secondary-console option cannot be relied on for this. Setting USB-Serial/JTAG as the *primary* console immediately yielded the full boot log, which is how the other bring-up defects were found at all.
+
+The silence in (2) is the direct reason roughly 3,100 lines of firmware accumulated three months of unverified changes: there was no feedback channel on the hardware most likely to be plugged in.
+
+### Decision
+
+1. **Provision over both transports concurrently.** For the duration of the provisioning window, the firmware listens on `UART_NUM_0` *and* on the native USB-Serial/JTAG peripheral (`usb_serial_jtag_read_bytes()` / `usb_serial_jtag_write_bytes()`). The `SPAXEL READY <MAC>` banner is emitted on both at the existing 1 Hz cadence, and the JSON response is returned on whichever transport delivered the request. First complete valid line wins; remaining input in the window is ignored so a payload arriving on both transports cannot double-provision.
+2. **Keep UART0 working, unchanged.** Bridge-equipped devkits and bare modules wired to a USB-TTL adapter remain first-class. This is explicitly additive — the existing path is not migrated, deprecated, or made conditional.
+3. **Default the ESP32-S3 console to USB-Serial/JTAG**, selected via a board-variant defaults file layered through `SDKCONFIG_DEFAULTS` rather than by editing the shared `sdkconfig.defaults` in place, so the UART0-console configuration stays reachable and tested for bridge boards.
+4. **Treat "no observable console on the default build" as a release-blocking defect**, not a configuration preference. A board that boots silently over its only host link is undebuggable in the field, and the cost of that is now documented history rather than speculation.
+5. **The protocol itself does not change.** Framing, the JSON schema, and the response contract are untouched; the parser already has host-test coverage (`firmware/test/test_serial_prov.c`). This ADR adds a second byte source, it does not re-specify onboarding. The dashboard needs no change either — Web Serial sees a CDC device either way.
+
+### Alternatives Considered
+
+- **Require a USB-UART bridge board; document UART0 as the only provisioning transport.** Rejected. It silently excludes bare ESP32-S3 modules and the growing set of devkits that ship native-USB-only, and it pushes a hardware-purchasing constraint onto users to work around a firmware limitation. It also leaves the console-silence problem completely unaddressed, which is the more damaging half of this.
+- **Migrate provisioning to USB-Serial/JTAG only, dropping UART0.** Rejected. It is a straight regression for bridge-equipped devkits and for bare modules provisioned over a USB-TTL adapter, and it would strand anyone who has already onboarded nodes that way. The incremental cost of keeping both is a second byte source in one already-existing loop.
+- **Select the transport at build time via Kconfig, producing per-board firmware images.** Rejected as the default. It moves a discoverability problem onto the user (they must know which port their board exposes before choosing a build), multiplies the images CI must produce and the matrix that must be tested, and makes a wrong guess look identical to broken hardware — a silent window with no banner. Listening on both makes the correct behaviour automatic. Retained only as the mechanism for the *console* choice (decision 3), where a single primary console must be picked and where the build already knows the board variant.
+- **Provision over WiFi only, via the captive portal, and drop serial provisioning entirely.** Rejected. The captive portal is a genuinely useful second path and is already implemented, but it cannot be the only one: it depends on the node's AP and HTTP stack being healthy, which is precisely what is unavailable when a node is misbehaving. Serial provisioning is the recovery path and must not depend on the radio. (Separately, the portal has its own defect — it restarts every 60 s and fails to rebind DNS and HTTP with `EADDRINUSE`, leaving a bare SSID after the first minute — tracked as its own bead. That an independent onboarding path was simultaneously broken is the argument for keeping two.)
+
+### Consequences
+
+- **Positive:** A stock ESP32-S3 provisions successfully out of the box regardless of whether the board has a bridge chip, with no user-visible configuration and no change to the dashboard flow.
+- **Positive:** The default build becomes observable on the port the user actually has plugged in, which is a prerequisite for diagnosing anything in the field and for any future hardware-in-the-loop testing.
+- **Positive:** Two independent onboarding paths (serial and captive portal) are preserved, so neither a radio-side nor a host-side failure is unrecoverable.
+- **Cost:** A second byte source in the provisioning window's read loop, plus banner emission on both transports — modest, contained within `provision.c`, and covered by existing parser tests.
+- **Cost:** A board-variant sdkconfig layer to maintain, and both console configurations need to stay tested rather than one.
+- **Risk:** Panic-output visibility on the chosen console must be verified deliberately (by triggering a fault once), not assumed from the fact that boot logs appear. Field crash diagnosis depends on it.
+- **Follow-up:** Tracked under the `hardware-bringup` umbrella bead for the first ESP32-S3 validation — see the provisioning-transport and console-routing beads for implementation, and the CI firmware-compile-gate bead for the process fix that keeps this class of defect from recurring.
+
+---
+
+## ADR-003: 2026-07-30 — Activate ambient (passive-radar) sensing by wiring AP auto-detection and carrying the passive BSSID through role assignment
+
+### Context
+
+The first end-to-end hardware bring-up of a real node completed on 2026-07-30. A single ESP32-S3 was provisioned via the captive portal, associated to a bench-hosted AP (HT20, channel 1), and registered against a locally-built mothership: `nodes_online: 1`, accepted as `Unpaired` under the migration window. Despite a healthy node and a healthy mothership, `/api/links` returned `[]` and **not one CSI frame was ever ingested**.
+
+The cause is not a single defect but three independent gaps that each, on their own, reduce ambient sensing to zero output. All three are in shipped code paths that no test exercises, because until this bring-up nothing had ever run the firmware against a real mothership.
+
+**1. CSI is never armed on the happy path.** `csi_init()` runs in `app_main` (`firmware/main/main.c:456`) *before* `esp_wifi_start()`, so `esp_wifi_set_csi_config()` fails with `ESP_ERR_WIFI_NOT_STARTED` and the configuration is discarded (tracked as `bf-5x46`). The only recovery is `csi_set_role()`, which in `NODE_STATE_CONNECTED` is reached solely inside `if (bits & SPAXEL_EVENT_ROLE_CHANGED)` (`main.c:322-324`). That event fires only when the assigned role *differs* from the persisted one (`firmware/main/websocket.c:581`). A node persists `role=tx_rx` in NVS; the fleet optimiser assigns `tx_rx`; the roles are equal, no event fires, and CSI stays dead for the lifetime of the boot. This was confirmed by forcing `tx_rx → rx → tx_rx` through `/api/nodes/{mac}/role`, which immediately produced `csi: Setting role`, `wifi:ic_enable_sniffer`, and `csi: TX started`. The init-ordering fix alone closes today's instance, but the re-arm gap is a separate defect and outlives it: once a node persists `role=passive`, every subsequent reboot re-enters CONNECTED with a matching role and never arms CSI again.
+
+**2. Ambient AP auto-detection is built but never constructed.** The intended passive-radar design is fully present and inert. The firmware reports `ap_bssid` and `ap_channel` in its hello frame (`websocket.c:299-304`); the mothership parses them (`internal/ingestion/message.go:20-21`); the ingestion server holds an `apDetector` field, exposes `SetAPDetector` (`server.go:295-298`), and calls `apDet.ProcessHello(...)` behind a nil guard (`server.go:564-572`); and `internal/apdetector` implements consensus BSSID selection across nodes plus virtual-node creation for the router. But `apdetector.NewDetector` and `SetAPDetector` are **never called from anywhere outside the package**, so `s.apDetector` is permanently nil and `ProcessHello` never executes (tracked as `bf-41h7g`). The visible symptom is the mothership logging `syncing 0 virtual nodes` forever, and `/api/nodes/virtual` having nothing to serve.
+
+**3. The passive BSSID cannot be delivered even manually.** `setRoleRequest` carries only `Role` (`internal/fleet/handler.go:337-339`), so the HTTP API has no field for a BSSID. `Manager.OverrideRole` (`manager.go:277-289`) persists the role and then calls `SendRoleToMAC(mac, role, "")`. Every other call site does the same: `manager.go:285`, `manager.go:410`, `healer.go:226`, `selfheal.go:183`, `selfheal.go:361`, `selfheal.go:593` — all six hardcode `""`, despite `SendRoleToMAC`'s own doc comment stating the parameter is "required only when role is passive". With an empty string the field is dropped by `omitempty`, `handle_role_msg` leaves `g_state.passive_bssid` at its zero value, and `csi_set_role` enables a filter on `00:00:00:00:00:00` (`firmware/main/csi.c:212-219`) which matches no frame, so `csi.c:93-95` silently discards 100% of captured CSI. There is also no `passive_bssid` column in the node registry (`registry.go:97-98`) in which to persist a detected value, though the schema's role CHECK already admits `'passive'` (`internal/db/migrations.go:146`).
+
+The net effect is that the only modes that can produce data today are the node-pair ones (`tx`/`rx`/`tx_rx`), which require at least two nodes. Ambient sensing — the single-node mode the architecture is designed around, and the one that makes a lone node useful — is unreachable.
+
+### Decision
+
+Activate ambient sensing as a first-class, single-node-capable mode:
+
+1. **Construct and inject the AP detector at startup.** Call `apdetector.NewDetector(db)` in the mothership's wiring and pass it to `ingestion.Server.SetAPDetector` before serving, so hello-reported BSSIDs feed consensus selection and virtual-router-node creation. This retires `bf-41h7g` rather than working around it.
+2. **Persist the passive BSSID.** Add a `passive_bssid TEXT NOT NULL DEFAULT ''` column to the nodes registry via a forward migration, so a detected-or-overridden BSSID survives restarts and is visible to every role-assignment path.
+3. **Carry the BSSID through role assignment everywhere.** Extend `setRoleRequest` with `passive_bssid`, widen `Manager.OverrideRole` to accept it, and change all six `SendRoleToMAC` call sites to look up the stored BSSID instead of passing `""`. A self-heal or re-optimise must never silently downgrade a working passive node to an all-zeros filter.
+4. **Fail loud on an empty passive BSSID.** Reject `role=passive` with no BSSID at the API boundary (HTTP 400) and log-and-refuse it at the sender. The current behaviour — accept, transmit, and silently drop every frame — is the single most expensive property of this bug and must not survive the fix.
+5. **Arm CSI unconditionally on entering `NODE_STATE_CONNECTED`**, not only on `SPAXEL_EVENT_ROLE_CHANGED`. Combined with the `bf-5x46` init-ordering fix, this makes CSI state a function of the node's current role rather than of the *history* of role messages, which is what makes a persisted `passive` role survivable across reboots.
+6. **Preserve manual override against the optimiser.** A operator-set role (particularly `passive`) must not be reverted by the next fleet re-optimisation; the optimiser was observed re-asserting `tx_rx` on a 60 s cadence during bring-up.
+7. **Deliver the firmware half over OTA.** The dual-slot A/B layout with rollback already exists (`firmware/partitions.csv`: `factory` + `ota_0` + `otadata`, with `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`), as do `/api/nodes/{mac}/ota`, `/api/nodes/update-all`, and `/api/firmware/upload`. Nodes distributed to powered locations must be updatable without physical recovery, and the firmware fixes in (5) are the first real test of that path.
+
+### Alternatives Considered
+
+- **Require two nodes and ship only `tx`/`rx` pairing.** Rejected. It works today with zero code change, and it remains the right mode for multi-node deployments, but it makes a single node worthless and contradicts the plan's own Component 2 / Phase 3 passive-radar design, which exists in code precisely to avoid this constraint.
+- **Hardcode the target BSSID in firmware or NVS at provisioning time.** Rejected. It gives the fleet no visibility into what each node is sensing, silently breaks whenever the router is replaced or its BSSID changes, and cannot express the consensus logic (`apdetector` deliberately requires a minimum fraction of nodes to agree before committing to a BSSID) that stops one mis-associated node from dragging the fleet onto the wrong AP.
+- **Let each node autonomously pick its strongest-RSSI AP and sense that.** Rejected. Without fleet-level consensus, nodes in different rooms can settle on different APs, producing links that share no common reference and silently corrupting any spatial reasoning built on top. Consensus selection is the reason `apdetector` exists.
+- **Skip `apdetector` and expose only a manual BSSID field.** Rejected as the default, retained as the override. Manual entry is genuinely useful for bench work and for forcing a specific AP, and decision (3) delivers it — but requiring every user to find and type a BSSID to get their first node working is an onboarding regression against a design that can detect it automatically.
+
+### Consequences
+
+- **Positive:** A single node becomes independently useful, which is the difference between "buy two boards to see anything" and "plug one in." This is the mode the plan's own Phase 3 targets.
+- **Positive:** Retires two tracked defects (`bf-41h7g`, and the re-arm half of the CSI gap alongside `bf-5x46`) and removes a dead-code path rather than accumulating a parallel one.
+- **Positive:** Replaces a silent 100%-drop failure with a loud rejection, so the next person to misconfigure passive mode learns it in a 400 rather than in an empty `/api/links`.
+- **Cost:** A schema migration plus a signature change threaded through six call sites — mechanical, but it touches self-heal and optimiser paths that must be re-tested rather than assumed.
+- **Risk:** Ambient CSI rate is bounded by how much the sensed AP actually transmits. A quiet AP emits beacons at roughly 10 Hz, below the 50 Hz the rate controller targets when active (`RateIdle`/`RateActive`, 2 Hz/50 Hz). Whether beacon-only ambient traffic clears the detection thresholds is **unverified** and must be measured before this is called done; if it does not, a deliberate traffic source on the sensed link becomes a deployment requirement rather than an optimisation.
+- **Risk:** The virtual router node has no surveyed position, so any GDOP/coverage computation that includes it is operating on an assumed geometry. Coverage currently reports `CoverageScore: 0` with one real node; this needs revisiting once virtual nodes actually appear.
+- **Follow-up:** Tracked under the ambient-sensing umbrella bead created against this ADR, with `bf-41h7g` and `bf-5x46` as blocking dependencies.
+
+---
+
+## ADR-004: 2026-07-30 — Make OTA trustworthy: derive the advertised firmware URL from a routable address, report the real firmware version, and recover the node link without a power cycle
+
+### Context
+
+Nodes are intended to be distributed to powered locations and left there, so remote update is not a convenience feature — it is the only way to fix a node that is already mounted. OTA was therefore exercised end to end against the USB-attached bench node on 2026-07-30, deliberately chosen because a bad flash on that node is recoverable with `esptool` and the existing full-flash backup, which will not be true of a node behind a wall.
+
+**The transport itself works.** With a routable URL, a 1.6 MB image downloaded, verified, wrote, and booted in roughly 19 seconds, and the bootloader confirms the slot actually changed:
+
+```
+I (433)   boot: Loaded app from partition at offset 0x10000    <- factory
+I (60215) ws: Starting OTA download: http://192.168.50.1:8080/firmware/spaxel-firmware-0.1.358.bin
+I (79025) ws: OTA complete, rebooting
+I (450)   boot: Loaded app from partition at offset 0x200000   <- ota_0
+I (33602) ws: OTA validation: marked valid after role received
+```
+
+The dual-slot A/B layout, the `esp_https_ota` write path, the status reporting (`downloading` → `verifying` → `rebooting`, with progress percentages arriving at the mothership), and the rollback-cancel-on-first-role-message handshake all behave correctly. **Everything around that transport is broken**, in three distinct ways, and each was observed rather than inferred.
+
+**1. The advertised firmware URL is not routable.** `mothership/cmd/mothership/main.go:4512` constructs the OTA manager as `ota.NewManager(otaSrv, "http://"+cfg.BindAddr)`. `cfg.BindAddr` defaults to `0.0.0.0:8080`, and the k8s Deployment sets exactly that (`SPAXEL_BIND_ADDR=0.0.0.0:8080`). The node is therefore handed `http://0.0.0.0:8080/firmware/<file>` — a wildcard *bind* address, never a valid *destination*. Observed on hardware:
+
+```
+ws: OTA triggered: http://0.0.0.0:8080/firmware/spaxel-firmware-0.1.358.bin
+esp-tls: [sock=55] delayed connect error: Software caused connection abort
+HTTP_CLIENT: Connection failed, sock < 0
+```
+
+The trigger endpoint nonetheless returned `{"ok":true}`. **OTA cannot work in any default deployment**, including the current cluster one, and the API reports success while it fails. Re-binding to a routable address was the single change that made the update above succeed.
+
+**2. The node's reported firmware version is a hardcoded literal, so every successful update looks like a rollback.** `firmware/main/websocket.c:282` sends `cJSON_AddStringToObject(root, "firmware_version", "1.0.0")` — a constant, never derived from the repo `VERSION` (currently `0.1.357`), the build, or ESP-IDF's own app descriptor (`esp_app_get_description()->version`). The mothership derives the expected version from the uploaded filename and compares the two in `OnNodeReconnected`, producing:
+
+```
+[WARN] ota: 50:78:7D:1A:3D:C8 rolled back to 1.0.0 (expected 0.1.358)
+```
+
+on an update that demonstrably did not roll back — the bootloader trace above shows the node running `ota_0` and marking it valid. Two version namespaces that can never agree are being compared. This is not cosmetic: `internal/ota/autoupdate.go:489-490` treats an `OTARollback` verdict on the canary node as grounds to call `failUpdateCycle`, so a **fleet-wide auto-update aborts permanently on its first successful canary**. Staged rollout is unusable until the version reported by the node and the version expected by the mothership come from the same source.
+
+**3. Nodes do not re-establish the link after a mothership restart.** Restarting the mothership left the node emitting `E websocket_client: Websocket client is not connected` continuously for over 100 seconds with `nodes_online: 0`, and it never recovered; a hard reset was required. `NODE_STATE_CONNECTED` does set `g_state.state = NODE_STATE_MOTHERSHIP_DISCOVERY` on `SPAXEL_EVENT_WS_DISCONNECTED` (`firmware/main/main.c`), so the intended recovery path exists but is not completing — the client appears to retry against a dead handle rather than being torn down and recreated. For a mounted fleet this means any mothership restart or upgrade strands every node until each is physically power-cycled, which defeats the purpose of remote update.
+
+Two lesser defects surfaced in the same session and are recorded here for completeness: `SendOTAVersion` returns `HTTP 500 firmware "0.1.358" not found` for a version that `GET /api/firmware` simultaneously reports as present and `is_latest`, so the by-version trigger path disagrees with the listing path; and mDNS discovery failed (`wifi: mDNS query failed or no results`) with `SPAXEL_MDNS_ENABLED=true`, the node falling back to its provisioned `ms_ip` — harmless here only because a static IP had been provisioned.
+
+### Decision
+
+1. **Separate the advertised base URL from the bind address.** Introduce explicit configuration (e.g. `SPAXEL_ADVERTISED_BASE_URL`) for the URL handed to nodes, defaulting to a routable interface address rather than `cfg.BindAddr`. Binding to `0.0.0.0` must remain the correct and recommended way to listen on all interfaces; it must simply stop leaking into node-facing URLs.
+2. **Refuse to advertise an unroutable URL, but degrade rather than crash.** An explicitly-set `SPAXEL_ADVERTISED_BASE_URL` with a wildcard or non-HTTP host is a fatal startup error — that is an operator typo and should be caught immediately. Failed *auto-derivation* is different: leave the URL empty, log `[WARN] OTA disabled: …`, and have the OTA path refuse to send with that reason. An OTA trigger that cannot possibly succeed must not return `{"ok":true}`.
+
+   *(Refined during implementation. The original decision made any wildcard bind a fatal error, which would have crashlooped the existing k8s Deployment — it sets `SPAXEL_BIND_ADDR=0.0.0.0:8080` — and taken down CSI ingestion, the dashboard and everything else over an update-path misconfiguration. Auto-derivation is also deliberately conservative: a wildcard bind resolves to an interface address only when exactly one candidate exists, and refuses to guess on a multi-homed host, since a wrong guess reintroduces precisely the silent failure this ADR removes.)*
+3. **Report the real firmware version from the node.** Source `firmware_version` in the hello frame from ESP-IDF's app descriptor (`esp_app_get_description()->version`), populated from the project version at build time, and align that project version with the repo `VERSION` so the mothership's filename-derived expectation and the node's self-report share one namespace.
+4. **Do not infer rollback from a version mismatch alone.** Corroborate with the running partition (`esp_ota_get_running_partition()`), which the firmware already queries, and report that in the hello frame. A rollback verdict that can be produced by a naming discrepancy is not safe to hang `failUpdateCycle` on.
+5. **Make the node reconnect without human intervention.** Tear down and recreate the websocket client on disconnect, with bounded backoff, so a mothership restart is a transient event rather than a fleet outage. This is a prerequisite for shipping any node to a location that is inconvenient to reach.
+6. **Gate distribution on a green OTA run.** No node leaves the bench until an upload → trigger → download → write → reboot → confirm cycle has been observed end to end, *and* a deliberately-bad image has been shown to roll back and recover. The rollback half remains **unverified** — only the success path has been exercised so far.
+
+### Alternatives Considered
+
+- **Document "set `SPAXEL_BIND_ADDR` to a routable IP" and change no code.** Rejected. It makes the default deployment silently broken, forces operators to give up listening on all interfaces to get working updates, and leaves the `{"ok":true}`-on-guaranteed-failure behaviour in place. The bind address and the advertised address are genuinely different concerns and should be configured separately.
+- **Have the node infer the mothership's address for OTA from its existing websocket connection rather than trusting the URL.** Rejected as the primary fix, though attractive: it would have masked this bug entirely. It hard-codes an assumption that firmware is always served from the same host and port as the control channel, which forecloses serving images from a separate host or cache later. Worth revisiting as a defensive fallback once the URL is correct.
+- **Compare versions only, and treat any mismatch as a failed update.** Rejected — that is the current behaviour, and it produced a false rollback verdict on a demonstrably successful update. Partition-based corroboration is the ground truth and the firmware can already read it.
+- **Have the mothership rewrite `0.0.0.0` to a guessed local IP at send time.** Rejected. Guessing which of several interfaces a given node can reach is not reliable on multi-homed hosts (the bench host alone has ethernet, an AP interface, Tailscale, and a docker bridge), and a wrong guess reintroduces exactly the silent failure this ADR exists to remove.
+
+### Consequences
+
+- **Positive:** OTA becomes usable in a default deployment instead of requiring a non-obvious bind-address change that trades away listening on all interfaces.
+- **Positive:** Staged/canary auto-update becomes possible at all — today the first *successful* canary aborts the cycle.
+- **Positive:** A mothership restart stops being a fleet-wide outage requiring physical access to every node.
+- **Positive:** The transport itself is now known-good on real hardware (1.6 MB in ~19 s, slot switch confirmed by bootloader trace), so the remaining work is accounting and recovery rather than anything speculative.
+- **Cost:** A new configuration surface (advertised URL) that must be documented and set correctly in the k8s Deployment and the quickstart, plus a startup validation path.
+- **Cost:** Firmware version plumbing touches the build (project version → app descriptor) as well as the hello frame, and needs a coordinated mothership-side change to stop comparing against filenames.
+- **Risk:** The rollback path is still unproven. A deliberately-corrupt image must be shown to fail, roll back, and rejoin the fleet before any node is deployed somewhere physically awkward — otherwise the safety net that justifies remote update is itself unverified.
+- **Risk:** `esptool` over USB-Serial/JTAG proved unreliable during this session (`Write timeout` on `read-flash`, already tracked as `bf-26pa`), so physical recovery is *not* a smooth fallback even on a cabled node. This raises, not lowers, the bar for OTA correctness.
+- **Follow-up:** Tracked under the OTA-reliability umbrella bead created against this ADR.

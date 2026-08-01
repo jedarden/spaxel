@@ -3,6 +3,8 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 )
 
 // AllMigrations returns the complete list of schema migrations in order.
@@ -98,7 +100,108 @@ func AllMigrations() []Migration {
 			Description: "add prediction subsystem tables",
 			Up:          migration_018_add_prediction_tables,
 		},
+		{
+			Version:     19,
+			Description: "add nodes.manufacturer for passive-radar AP virtual nodes",
+			Up:          migration_019_add_nodes_manufacturer,
+		},
+		{
+			Version:     20,
+			Description: "allow role='ap' so passive-radar router virtual nodes can be stored",
+			Up:          migration_020_allow_ap_role,
+		},
 	}
+}
+
+// migration_020_allow_ap_role extends the nodes.role CHECK constraint to permit
+// 'ap', the role apdetector assigns to the router virtual node it creates for
+// passive-radar sensing.
+//
+// role='ap' is load-bearing, not cosmetic: ota/autoupdate.go skips nodes whose
+// role is "ap" so the fleet updater never tries to flash a router. Changing
+// apdetector to write a permitted role instead would make the auto-updater
+// treat the AP as an updatable node.
+//
+// The constraint blocked every virtual-node insert, so passive links had
+// nothing to form against. It went unnoticed because apdetector was never
+// constructed and the insert never ran. See ADR-003 / bf-4p0ne.
+//
+// SQLite cannot ALTER a CHECK constraint, so the table is rebuilt. The new
+// schema is derived from sqlite_master rather than hand-written, because the
+// nodes table has accumulated columns from several ALTER migrations and any
+// hand-written CREATE would silently drift from — or drop — them.
+func migration_020_allow_ap_role(tx *sql.Tx) error {
+	const oldCheck = `role IN ('tx','rx','tx_rx','passive','idle')`
+	const newCheck = `role IN ('tx','rx','tx_rx','passive','idle','ap')`
+
+	var createSQL string
+	err := tx.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='nodes'`,
+	).Scan(&createSQL)
+	if err == sql.ErrNoRows {
+		return nil // created with the correct constraint by the initial schema
+	}
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(createSQL, oldCheck) {
+		return nil // already permits 'ap', or the constraint has a different shape
+	}
+
+	newSQL := strings.Replace(createSQL, oldCheck, newCheck, 1)
+	newSQL = strings.Replace(newSQL, "CREATE TABLE nodes", "CREATE TABLE nodes_new", 1)
+	if !strings.Contains(newSQL, "nodes_new") {
+		return fmt.Errorf("could not rename nodes table in its CREATE statement")
+	}
+
+	for _, stmt := range []string{
+		newSQL,
+		`INSERT INTO nodes_new SELECT * FROM nodes`,
+		`DROP TABLE nodes`,
+		`ALTER TABLE nodes_new RENAME TO nodes`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("rebuild nodes table: %w", err)
+		}
+	}
+	return nil
+}
+
+// migration_019_add_nodes_manufacturer adds the manufacturer column that
+// apdetector.upsertVirtualNode writes when it creates the router virtual node.
+//
+// The sibling virtual-node columns (virtual, node_type, ap_bssid, ap_channel)
+// were added together in an earlier migration but manufacturer was omitted.
+// Nothing caught it because apdetector was never constructed, so that INSERT
+// never ran. The first time it did — once the detector was wired up — it failed
+// with "table nodes has no column named manufacturer", and no router virtual
+// node could be created, so passive links had nothing to form against.
+// A new version is required rather than amending the earlier migration, since
+// existing databases have already recorded that version as applied.
+// See ADR-003 / bf-4p0ne.
+func migration_019_add_nodes_manufacturer(tx *sql.Tx) error {
+	var exists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='nodes'`,
+	).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return nil // created with the column by the initial schema
+	}
+
+	var colExists bool
+	if err := tx.QueryRow(
+		`SELECT COUNT(*) > 0 FROM pragma_table_info('nodes') WHERE name = 'manufacturer'`,
+	).Scan(&colExists); err != nil {
+		return err
+	}
+	if colExists {
+		return nil
+	}
+
+	_, err := tx.Exec(`ALTER TABLE nodes ADD COLUMN manufacturer TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 // migration_001_initial_schema creates the initial database schema.

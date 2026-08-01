@@ -42,6 +42,17 @@ typedef struct {
 void csi_get_stats(csi_stats_t *stats);
 
 /**
+ * Measured CSI frame rate in Hz, from frames actually sent since the previous
+ * call.
+ *
+ * This is deliberately NOT the configured packet rate. Health reported
+ * g_state.packet_rate — the target loaded from NVS — so a node capturing and
+ * sending zero CSI frames reported 20 Hz forever, and a completely dead sensing
+ * path looked perfectly healthy. See ADR-003 / bf-54cx2.
+ */
+uint32_t csi_measured_rate_hz(void);
+
+/**
  * Start TX packet transmission.
  */
 esp_err_t csi_start_tx(void);

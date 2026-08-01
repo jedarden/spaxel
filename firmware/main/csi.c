@@ -299,6 +299,33 @@ static void csi_tx_task(void *arg) {
     vTaskDelete(NULL);
 }
 
+// Sampling state for csi_measured_rate_hz().
+static uint32_t s_rate_last_frames = 0;
+static int64_t  s_rate_last_us     = 0;
+
+uint32_t csi_measured_rate_hz(void) {
+    int64_t  now    = esp_timer_get_time();
+    uint32_t frames = s_stats.frames_sent;
+
+    if (s_rate_last_us == 0) {
+        // First call establishes the baseline; no interval to measure yet.
+        s_rate_last_us     = now;
+        s_rate_last_frames = frames;
+        return 0;
+    }
+
+    int64_t dt_us = now - s_rate_last_us;
+    if (dt_us <= 0) {
+        return 0;
+    }
+
+    uint32_t delta = frames - s_rate_last_frames; // wraps correctly on uint32
+    s_rate_last_us     = now;
+    s_rate_last_frames = frames;
+
+    return (uint32_t)(((int64_t)delta * 1000000) / dt_us);
+}
+
 void csi_get_stats(csi_stats_t *stats) {
     if (stats) {
         memcpy(stats, &s_stats, sizeof(csi_stats_t));

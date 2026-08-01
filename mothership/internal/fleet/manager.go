@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"errors"
 	"context"
 	"log"
 	"sort"
@@ -274,15 +275,51 @@ func (m *Manager) BroadcastRegistry() {
 
 // OverrideRole manually sets a node's role, pushing the update to the node if online,
 // and broadcasting the updated registry state.
+// ErrPassiveBSSIDRequired is returned when role=passive is requested without a
+// BSSID and none is stored. Accepting it would enable an all-zeros CSI filter
+// that silently drops every frame. See ADR-003 / bf-1p5g8.
+var ErrPassiveBSSIDRequired = errors.New("role=passive requires passive_bssid")
+
 func (m *Manager) OverrideRole(mac, role string) error {
+	return m.OverrideRoleWithBSSID(mac, role, "")
+}
+
+// OverrideRoleWithBSSID sets a node's role, persisting the passive BSSID when
+// the role is "passive" so every later re-assignment can re-send it.
+//
+// A passive role with an empty BSSID is rejected: the firmware would enable a
+// filter on 00:00:00:00:00:00, match nothing, and silently drop 100% of CSI
+// while looking perfectly healthy. See ADR-003 / bf-6auk5, bf-1p5g8.
+func (m *Manager) OverrideRoleWithBSSID(mac, role, passiveBSSID string) error {
+	if role == "passive" {
+		if passiveBSSID == "" {
+			// Fall back to a previously stored BSSID before refusing, so a plain
+			// re-assert of "passive" does not need the caller to repeat it.
+			stored, err := m.registry.GetNodePassiveBSSID(mac)
+			if err != nil {
+				return err
+			}
+			if stored == "" {
+				return ErrPassiveBSSIDRequired
+			}
+			passiveBSSID = stored
+		}
+		if err := m.registry.SetNodePassiveBSSID(mac, passiveBSSID); err != nil {
+			return err
+		}
+	}
 	if err := m.registry.SetNodeRole(mac, role); err != nil {
+		return err
+	}
+	// Pin it, or the next optimiser cycle reverts it. See bf-4kdww.
+	if err := m.registry.SetNodeRoleLocked(mac, true); err != nil {
 		return err
 	}
 	m.mu.RLock()
 	notifier := m.notifier
 	m.mu.RUnlock()
 	if notifier != nil {
-		notifier.SendRoleToMAC(mac, role, "")
+		notifier.SendRoleToMAC(mac, role, passiveBSSID)
 	}
 	m.broadcastRegistry()
 	return nil
@@ -388,6 +425,14 @@ func (m *Manager) rebalanceRoles() {
 			role = "tx_rx"
 		}
 
+		// Never overwrite an operator-set role. Previously the optimiser reasserted
+		// its own assignment every cycle, so a manually set role=passive flapped
+		// back to tx_rx within 60s and ambient sensing could not stay enabled.
+		// See ADR-003 / bf-4kdww.
+		if m.registry.IsNodeRoleLocked(mac) {
+			continue
+		}
+
 		_ = m.registry.SetNodeRole(mac, role) //nolint:errcheck
 
 		// Stagger TX slot: divide 1s into nTX slots.
@@ -407,7 +452,8 @@ func (m *Manager) rebalanceRoles() {
 		// Update collision detector tracking
 		m.updateTXNodeCollisionTrackingLocked(mac, role)
 
-		notifier.SendRoleToMAC(mac, role, "")
+		sendRole, sendBSSID := m.registry.RoleAssignmentFor(mac, role)
+		notifier.SendRoleToMAC(mac, sendRole, sendBSSID)
 		notifier.SendConfigToMAC(mac, rateHz, txSlotUS, 0.02)
 	}
 }
@@ -423,7 +469,8 @@ func (m *Manager) applyRoleAndConfig(mac, role string) {
 		return
 	}
 
-	notifier.SendRoleToMAC(mac, role, "")
+	sendRole, sendBSSID := m.registry.RoleAssignmentFor(mac, role)
+	notifier.SendRoleToMAC(mac, sendRole, sendBSSID)
 
 	rateHz := 20
 
@@ -479,7 +526,8 @@ func (m *Manager) selfHeal() {
 			continue
 		}
 		// Re-push stored role for nodes that are online.
-		notifier.SendRoleToMAC(n.MAC, n.Role, "")
+		sendRole, sendBSSID := m.registry.RoleAssignmentFor(n.MAC, n.Role)
+		notifier.SendRoleToMAC(n.MAC, sendRole, sendBSSID)
 	}
 }
 

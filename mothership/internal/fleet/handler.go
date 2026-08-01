@@ -336,6 +336,9 @@ var validRoles = map[string]bool{
 
 type setRoleRequest struct {
 	Role string `json:"role"`
+	// PassiveBSSID is required when Role is "passive"; without it the firmware
+	// filters CSI on 00:00:00:00:00:00 and drops everything. See bf-6auk5.
+	PassiveBSSID string `json:"passive_bssid,omitempty"`
 }
 
 func (h *Handler) setNodeRole(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +363,12 @@ func (h *Handler) setNodeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.mgr.OverrideRole(mac, req.Role); err != nil {
+	if err := h.mgr.OverrideRoleWithBSSID(mac, req.Role, req.PassiveBSSID); err != nil {
+		if errors.Is(err, ErrPassiveBSSIDRequired) {
+			// Fail loudly instead of accepting a config that silently yields no CSI.
+			http.Error(w, "role=passive requires passive_bssid", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -752,7 +760,13 @@ func (h *Handler) triggerNodeOTA(w http.ResponseWriter, r *http.Request) {
 			err = h.otaMgr.SendOTA(mac)
 		}
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to trigger OTA: %v", err), http.StatusInternalServerError)
+			// A missing firmware version is a client error, not a server fault.
+			// See ADR-004 / bf-2cb85.
+			status := http.StatusInternalServerError
+			if errors.Is(err, ota.ErrFirmwareNotFound) {
+				status = http.StatusNotFound
+			}
+			http.Error(w, fmt.Sprintf("failed to trigger OTA: %v", err), status)
 			return
 		}
 	}

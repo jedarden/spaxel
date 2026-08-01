@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -19,6 +20,16 @@ import (
 type Config struct {
 	// Network
 	BindAddr string // HTTP bind address (default "0.0.0.0:8080")
+
+	// AdvertisedBaseURL is the base URL handed to nodes for fetching firmware
+	// (e.g. "http://192.168.1.10:8080"). It MUST be routable from the nodes.
+	//
+	// This is deliberately distinct from BindAddr: binding to 0.0.0.0 is the
+	// correct way to listen on every interface, but 0.0.0.0 is a wildcard bind
+	// address and never a valid destination. Deriving the OTA URL from BindAddr
+	// handed nodes "http://0.0.0.0:8080/firmware/..." and made OTA impossible in
+	// every default deployment. See ADR-004.
+	AdvertisedBaseURL string
 
 	// Paths
 	DataDir         string // Persistent data directory (default "/data")
@@ -60,6 +71,30 @@ func Load() (*Config, error) {
 
 	// SPAXEL_BIND_ADDR - string, default '0.0.0.0:8080'
 	cfg.BindAddr = envOr("SPAXEL_BIND_ADDR", "0.0.0.0:8080")
+
+	// SPAXEL_ADVERTISED_BASE_URL - string, default derived from BindAddr.
+	// The base URL nodes are given to fetch firmware. Must be routable FROM the
+	// nodes, which a 0.0.0.0 bind address never is. See ADR-004.
+	if advertised := os.Getenv("SPAXEL_ADVERTISED_BASE_URL"); advertised != "" {
+		if err := validateAdvertisedBaseURL(advertised); err != nil {
+			errs = append(errs, err)
+		} else {
+			cfg.AdvertisedBaseURL = strings.TrimRight(advertised, "/")
+		}
+	} else {
+		// Auto-derivation failing is NOT fatal. The mothership does far more than
+		// serve firmware, and refusing to start — taking down CSI ingestion, the
+		// dashboard and everything else — because the OTA URL is ambiguous would
+		// be wildly disproportionate. Instead leave it empty and warn loudly; the
+		// OTA path refuses to send and reports why. An explicitly-set-but-invalid
+		// value above IS fatal, because that is an operator typo, not ambiguity.
+		derived, err := deriveAdvertisedBaseURL(cfg.BindAddr)
+		if err != nil {
+			log.Printf("[WARN] OTA disabled: %v", err)
+		} else {
+			cfg.AdvertisedBaseURL = derived
+		}
+	}
 
 	// SPAXEL_DATA_DIR - string, default '/data'
 	cfg.DataDir = envOr("SPAXEL_DATA_DIR", "/data")
@@ -200,6 +235,100 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+// isWildcardHost reports whether host is a wildcard bind address (0.0.0.0, ::)
+// or empty. Such an address is valid to bind to but is never reachable as a
+// destination, so it must never appear in a URL handed to a node.
+func isWildcardHost(host string) bool {
+	if host == "" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsUnspecified()
+}
+
+// validateAdvertisedBaseURL rejects URLs that nodes could not fetch from.
+func validateAdvertisedBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("SPAXEL_ADVERTISED_BASE_URL=%s invalid: %w", raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("SPAXEL_ADVERTISED_BASE_URL=%s invalid: scheme must be http or https", raw)
+	}
+	if isWildcardHost(u.Hostname()) {
+		return fmt.Errorf("SPAXEL_ADVERTISED_BASE_URL=%s invalid: %q is a wildcard bind address, not routable from nodes", raw, u.Hostname())
+	}
+	return nil
+}
+
+// deriveAdvertisedBaseURL builds a node-facing base URL from the bind address.
+//
+// A concrete bind host is used directly. A wildcard bind host is resolved to a
+// routable interface address ONLY when exactly one candidate exists; with zero
+// or several it fails at startup instead of guessing. A wrong guess on a
+// multi-homed host would reintroduce exactly the silent OTA failure this
+// function exists to prevent, and a startup error is far cheaper to diagnose
+// than a node that reports a successful trigger and then cannot download.
+func deriveAdvertisedBaseURL(bindAddr string) (string, error) {
+	host, port, err := net.SplitHostPort(bindAddr)
+	if err != nil {
+		return "", fmt.Errorf("cannot derive advertised base URL from SPAXEL_BIND_ADDR=%s: %w", bindAddr, err)
+	}
+	if !isWildcardHost(host) {
+		return "http://" + net.JoinHostPort(host, port), nil
+	}
+
+	candidates, err := routableIPv4s()
+	if err != nil {
+		return "", fmt.Errorf("cannot derive advertised base URL: %w", err)
+	}
+	switch len(candidates) {
+	case 1:
+		derived := "http://" + net.JoinHostPort(candidates[0], port)
+		log.Printf("[CONFIG] SPAXEL_ADVERTISED_BASE_URL not set; derived %s from the only routable interface", derived)
+		return derived, nil
+	case 0:
+		return "", fmt.Errorf(
+			"SPAXEL_BIND_ADDR=%s is a wildcard and no routable interface was found: "+
+				"set SPAXEL_ADVERTISED_BASE_URL to the address nodes should fetch firmware from", bindAddr)
+	default:
+		return "", fmt.Errorf(
+			"SPAXEL_BIND_ADDR=%s is a wildcard and this host has %d routable addresses (%s): "+
+				"set SPAXEL_ADVERTISED_BASE_URL explicitly so nodes are not handed a guess",
+			bindAddr, len(candidates), strings.Join(candidates, ", "))
+	}
+}
+
+// routableIPv4s returns non-loopback, non-link-local IPv4 addresses on up interfaces.
+func routableIPv4s() ([]string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip := ipNet.IP.To4()
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			out = append(out, ip.String())
+		}
+	}
+	return out, nil
+}
+
 // isValidLogLevel checks if the log level is valid.
 func isValidLogLevel(level string) bool {
 	switch strings.ToLower(level) {
@@ -213,6 +342,7 @@ func isValidLogLevel(level string) bool {
 // logConfig logs all non-sensitive configuration values at INFO level.
 func logConfig(cfg *Config) {
 	log.Printf("[CONFIG] SPAXEL_BIND_ADDR=%s", cfg.BindAddr)
+	log.Printf("[CONFIG] SPAXEL_ADVERTISED_BASE_URL=%s", cfg.AdvertisedBaseURL)
 	log.Printf("[CONFIG] SPAXEL_DATA_DIR=%s", cfg.DataDir)
 	log.Printf("[CONFIG] SPAXEL_STATIC_DIR=%s", cfg.StaticDir)
 	log.Printf("[CONFIG] SPAXEL_SEED_FIRMWARE_DIR=%s", cfg.SeedFirmwareDir)

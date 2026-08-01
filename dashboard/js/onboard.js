@@ -1654,6 +1654,15 @@
             return;
         }
 
+        // A caller (production resume logic aside, this is also how tests drive the
+        // wizard to a specific step via the internals exposed below) may have already
+        // primed state.currentStepIndex away from its -1 default before calling
+        // start(). Respect that rather than clobbering it from persisted storage.
+        if (state.currentStepIndex >= 0) {
+            goToStep(state.currentStepIndex);
+            return;
+        }
+
         var saved = loadState();
         if (saved && typeof saved.currentStepIndex === 'number' && saved.currentStepIndex >= 0) {
             state.currentStepIndex = saved.currentStepIndex;

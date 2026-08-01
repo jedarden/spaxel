@@ -144,6 +144,16 @@ func (r *Registry) migrate() error {
 		"ALTER TABLE nodes ADD COLUMN health_score REAL NOT NULL DEFAULT 0",
 		"ALTER TABLE nodes ADD COLUMN manufacturer TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE nodes ADD COLUMN role_before_disable TEXT NOT NULL DEFAULT ''",
+		// Ambient/passive-radar sensing: the AP BSSID this node filters CSI on.
+		// Must persist, because every role-assignment path (optimiser, self-heal,
+		// operator override) has to re-send it; sending an empty BSSID makes the
+		// firmware filter on 00:00:00:00:00:00 and silently drop all CSI.
+		// See ADR-003 / bf-303qg.
+		"ALTER TABLE nodes ADD COLUMN passive_bssid TEXT NOT NULL DEFAULT ''",
+		// Operator-set roles must survive fleet re-optimisation. Without this the
+		// optimiser reasserts its own choice on its next cycle, so a manually set
+		// role=passive flapped back to tx_rx within 60s. See ADR-003 / bf-4kdww.
+		"ALTER TABLE nodes ADD COLUMN role_locked INTEGER NOT NULL DEFAULT 0",
 	}
 	for _, m := range migrations {
 		_, _ = r.db.Exec(m) // Ignore errors (column may already exist)
@@ -186,6 +196,99 @@ func (r *Registry) SetNodePosition(mac string, x, y, z float64) error {
 func (r *Registry) SetNodeRole(mac, role string) error {
 	_, err := r.db.Exec(`UPDATE nodes SET role=? WHERE mac=?`, role, mac)
 	return err
+}
+
+// SetNodeRoleLocked marks a node's role as operator-set, so fleet
+// re-optimisation leaves it alone. See ADR-003 / bf-4kdww.
+func (r *Registry) SetNodeRoleLocked(mac string, locked bool) error {
+	v := 0
+	if locked {
+		v = 1
+	}
+	_, err := r.db.Exec(`UPDATE nodes SET role_locked=? WHERE mac=?`, v, mac)
+	return err
+}
+
+// IsNodeRoleLocked reports whether a node's role was set by an operator and
+// must not be overwritten by the optimiser.
+func (r *Registry) IsNodeRoleLocked(mac string) bool {
+	var locked int
+	if err := r.db.QueryRow(`SELECT role_locked FROM nodes WHERE mac=?`, mac).Scan(&locked); err != nil {
+		return false
+	}
+	return locked == 1
+}
+
+// RoleAssignmentFor resolves what should actually be sent to a node, given the
+// role a caller proposes. It returns the role plus the passive BSSID that must
+// accompany it.
+//
+// This is the single choke point every SendRoleToMAC call site must go through.
+// Patching only the optimiser was not enough: self-heal, the healer, and the
+// reconnect re-push all send roles too, so an operator-set role=passive was
+// still overwritten by tx_rx every cycle and the node thrashed between
+// configurations. See ADR-003 / bf-4kdww, bf-6auk5.
+func (r *Registry) RoleAssignmentFor(mac, proposed string) (string, string) {
+	role := proposed
+	if r.IsNodeRoleLocked(mac) {
+		if locked, err := r.GetNodeRole(mac); err == nil && locked != "" {
+			role = locked
+		}
+	}
+	return role, r.PassiveBSSIDFor(mac, role)
+}
+
+// GetNodeRole returns the stored role for a node.
+func (r *Registry) GetNodeRole(mac string) (string, error) {
+	var role string
+	err := r.db.QueryRow(`SELECT role FROM nodes WHERE mac=?`, mac).Scan(&role)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return role, err
+}
+
+// PassiveBSSIDFor returns the stored passive BSSID for a node, or "" for any
+// non-passive role.
+//
+// Every SendRoleToMAC call site must route through this instead of passing a
+// literal "". Previously all of them passed "", so a self-heal or a fleet
+// re-optimise would silently downgrade a working passive node to an all-zeros
+// filter that drops 100% of CSI while the node still looks healthy.
+// See ADR-003 / bf-6auk5.
+func (r *Registry) PassiveBSSIDFor(mac, role string) string {
+	if role != "passive" {
+		return ""
+	}
+	bssid, err := r.GetNodePassiveBSSID(mac)
+	if err != nil {
+		log.Printf("[WARN] fleet: cannot read passive BSSID for %s: %v", mac, err)
+		return ""
+	}
+	if bssid == "" {
+		log.Printf("[WARN] fleet: node %s assigned role=passive with no stored BSSID; "+
+			"it will filter on 00:00:00:00:00:00 and report no CSI", mac)
+	}
+	return bssid
+}
+
+// SetNodePassiveBSSID stores the AP BSSID a passive-radar node senses on.
+// See ADR-003 / bf-303qg.
+func (r *Registry) SetNodePassiveBSSID(mac, bssid string) error {
+	_, err := r.db.Exec(`UPDATE nodes SET passive_bssid=? WHERE mac=?`, bssid, mac)
+	return err
+}
+
+// GetNodePassiveBSSID returns the stored passive BSSID, or "" if unset.
+// Every role-assignment path must consult this rather than sending an empty
+// BSSID, which the firmware turns into an all-zeros filter that drops all CSI.
+func (r *Registry) GetNodePassiveBSSID(mac string) (string, error) {
+	var bssid string
+	err := r.db.QueryRow(`SELECT passive_bssid FROM nodes WHERE mac=?`, mac).Scan(&bssid)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return bssid, err
 }
 
 // SetNodePreviousRole saves the current role as previous_role for reconnect grace period.

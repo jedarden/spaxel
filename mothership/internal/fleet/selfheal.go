@@ -180,7 +180,8 @@ func (shm *SelfHealManager) OnNodeConnected(mac, firmware, chip string, posX, po
 		}
 
 		if notifier != nil {
-			notifier.SendRoleToMAC(mac, previousRole, "")
+			sendRole, sendBSSID := shm.registry.RoleAssignmentFor(mac, previousRole)
+			notifier.SendRoleToMAC(mac, sendRole, sendBSSID)
 		}
 
 		// Broadcast recovery event
@@ -358,7 +359,8 @@ func (shm *SelfHealManager) selfHeal() {
 	// Re-push roles to all online nodes
 	for _, mac := range onlineList {
 		if role, ok := roles[mac]; ok {
-			notifier.SendRoleToMAC(mac, role, "")
+			sendRole, sendBSSID := shm.registry.RoleAssignmentFor(mac, role)
+			notifier.SendRoleToMAC(mac, sendRole, sendBSSID)
 		}
 	}
 }
@@ -590,7 +592,8 @@ func (shm *SelfHealManager) applyRolesToNodes(assignments []RoleAssignment, onli
 		}
 
 		// Send to node
-		notifier.SendRoleToMAC(assignment.MAC, assignment.Role, "")
+		sendRole, sendBSSID := shm.registry.RoleAssignmentFor(assignment.MAC, assignment.Role)
+		notifier.SendRoleToMAC(assignment.MAC, sendRole, sendBSSID)
 	}
 }
 

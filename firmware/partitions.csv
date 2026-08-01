@@ -1,10 +1,38 @@
 # Name,   Type, SubType, Offset,  Size, Flags
-# NVS, PHY init, and OTA data in standard low-flash locations
+# NVS, PHY init, and OTA data in standard low-flash locations.
+# NVS stays at 0x9000/0x6000 — unchanged from the previous layout — so nodes
+# reflashed onto this table keep their WiFi credentials and provisioned flag,
+# provided the flash is written WITHOUT erase-flash.
 nvs,      data, nvs,     0x9000,  0x6000,
 phy_init, data, phy,     0xF000,  0x1000,
-# Factory app at standard 0x10000 offset (~1.9MB — fits current ~1.7MB binary)
-factory,  app,  factory, 0x10000, 0x1F0000,
-# Single OTA partition for A/B updates with rollback (fits in 4MB flash)
-ota_0,    app,  ota_0,   0x200000,0x1F0000,
-# OTA data partition — bootloader uses this to track which OTA slot to boot
-otadata,  data, ota,     0x3F0000,0x2000,
+# OTA data partition — the bootloader uses this to track which slot to boot.
+otadata,  data, ota,     0x10000, 0x2000,
+# TRUE A/B: two OTA-type slots, so esp_ota_get_next_update_partition() can
+# alternate ota_0 <-> ota_1 indefinitely.
+#
+# The previous layout was `factory` + a single `ota_0`, commented as "A/B" but
+# not actually A/B: esp_ota_get_next_update_partition() cycles among OTA
+# partitions ONLY, and `factory` is not one. With a single OTA slot a node
+# running from factory could take exactly one update, after which
+# esp_ota_get_next_update_partition() returned the running partition and
+# esp_ota_begin() rejected it with ESP_ERR_OTA_PARTITION_CONFLICT.
+#
+# Confirmed on hardware 2026-07-30: the second OTA on a node already running
+# from ota_0 failed in the same second at 0%, err="write_failed", having
+# transferred nothing — versus ~19s streaming to 100% for the first.
+#
+# 4MB (confirmed via `esptool flash-id`: Device 0x4016) cannot hold A/B plus a
+# factory recovery image (3 x ~1.55MiB > 4MiB), so factory is dropped. That is
+# the standard A/B product trade-off: bootloader rollback covers a bad image,
+# and only a both-slots-bad node needs serial recovery.
+#
+# Slot size 0x1F0000 = 2,031,616 B. Current app is 1,623,392 B => 79.9% used,
+# ~399 KiB free. Enabling HTTPS on the OTA client and/or signed-app
+# verification will consume a large share of that headroom — see bf-1uefm and
+# the NimBLE evaluation in bf-5ryzr.
+#
+# Both app offsets are 64KiB-aligned (0x20000, 0x210000) as ESP-IDF requires,
+# and ota_1 ends exactly at 0x400000.
+# See ADR-004 / bf-436bh.
+ota_0,    app,  ota_0,   0x20000, 0x1F0000,
+ota_1,    app,  ota_1,   0x210000,0x1F0000,
