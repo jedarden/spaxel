@@ -27,7 +27,16 @@
 static const char *TAG = "ws";
 
 static esp_websocket_client_handle_t s_ws = NULL;
-static SemaphoreHandle_t s_tx_mutex = NULL;
+// Guards every read AND write of s_ws/s_connected, not just concurrent
+// sends. websocket_disconnect() (called from the state machine's reconnect
+// path) used to null and destroy s_ws with no coordination against the CSI
+// RX task / health task mid-send -- a send that read a non-NULL s_ws just
+// before disconnect tore it down would call esp_websocket_client_send_*()
+// on a freed handle. Observed on hardware as a LoadProhibited panic during
+// a mothership-restart reconnect (bf-3c282). Recursive because
+// websocket_connect() calls websocket_disconnect() while already holding
+// the lock.
+static SemaphoreHandle_t s_ws_mutex = NULL;
 static volatile bool s_connected = false;
 
 // OTA state
@@ -89,19 +98,33 @@ static void handle_identify_msg(cJSON *root);
 static void ota_task(void *arg);
 
 esp_err_t websocket_init(void) {
-    s_tx_mutex = xSemaphoreCreateMutex();
-    if (!s_tx_mutex) {
-        ESP_LOGE(TAG, "Failed to create TX mutex");
+    s_ws_mutex = xSemaphoreCreateRecursiveMutex();
+    if (!s_ws_mutex) {
+        ESP_LOGE(TAG, "Failed to create WS mutex");
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
 }
 
 bool websocket_connect(const char *host, uint16_t port) {
-    if (s_ws) {
-        websocket_disconnect();
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
+    // Tear down any existing client BEFORE taking the lock below.
+    // esp_websocket_client_stop()/_destroy() (called inside
+    // websocket_disconnect()) can block for a while tearing down a stuck
+    // socket -- ESP-IDF's own docs for both calls say "cannot be called from
+    // the websocket event handler" for exactly this reason. Holding
+    // s_ws_mutex across that call, as an earlier version of this function
+    // did via a nested websocket_disconnect() call, meant every other task's
+    // fast-fail connected-check (health, BLE, CSI TX) queued up behind it for
+    // the same duration -- observed on hardware as the whole node (all
+    // periodic logging included) going silent for minutes after a mothership
+    // restart, self-recovering only because the underlying teardown
+    // eventually finished on its own. websocket_disconnect() manages its own
+    // locking internally and always releases before its own teardown call,
+    // so this is safe to call unconditionally and unlocked.
+    websocket_disconnect();
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
 
     // Build WebSocket URI
     char uri[128];
@@ -109,10 +132,21 @@ bool websocket_connect(const char *host, uint16_t port) {
 
     ESP_LOGI(TAG, "Connecting to %s", uri);
 
-    // Configure WebSocket client
+    // Configure WebSocket client.
+    //
+    // disable_auto_reconnect=true is load-bearing: the client defaults to
+    // reconnecting itself in a background task after any transport error,
+    // using this same handle. That races the state machine's own reconnect
+    // loop (main.c NODE_STATE_MOTHERSHIP_DISCOVERY), which already destroys
+    // and recreates the client on every attempt with mDNS/cached-IP fallback
+    // and backoff. With both active, a mothership restart produced two
+    // concurrent connection attempts on overlapping handles -- observed on
+    // hardware as connect, then an immediate spurious disconnect a few tens
+    // of ms later, before settling. In the field this raced into a stuck
+    // state requiring a physical power cycle. See ADR-004 / bf-3c282.
     esp_websocket_client_config_t cfg = {
         .uri = uri,
-        .reconnect_timeout_ms = 5000,
+        .disable_auto_reconnect = true,
         .network_timeout_ms = 30000,
         .ping_interval_sec = 30,
         .task_stack = 8192,
@@ -127,6 +161,7 @@ bool websocket_connect(const char *host, uint16_t port) {
     s_ws = esp_websocket_client_init(&cfg);
     if (!s_ws) {
         ESP_LOGE(TAG, "Failed to init WebSocket client");
+        xSemaphoreGiveRecursive(s_ws_mutex);
         return false;
     }
 
@@ -137,12 +172,16 @@ bool websocket_connect(const char *host, uint16_t port) {
     esp_err_t err = esp_websocket_client_start(s_ws);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start WebSocket: %s", esp_err_to_name(err));
-        esp_websocket_client_destroy(s_ws);
+        esp_websocket_client_handle_t bad = s_ws;
         s_ws = NULL;
+        xSemaphoreGiveRecursive(s_ws_mutex);
+        esp_websocket_client_destroy(bad);  // outside the lock -- see comment above
         return false;
     }
+    xSemaphoreGiveRecursive(s_ws_mutex);
 
-    // Wait for connection
+    // Wait for connection. Lock released above -- this just polls a bool for
+    // up to 5s and must not block senders/disconnect for that long.
     int timeout = 50; // 5 seconds
     while (!s_connected && timeout-- > 0) {
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -169,12 +208,20 @@ bool websocket_connect(const char *host, uint16_t port) {
 }
 
 void websocket_disconnect(void) {
-    if (s_ws) {
-        esp_websocket_client_stop(s_ws);
-        esp_websocket_client_destroy(s_ws);
-        s_ws = NULL;
-    }
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    esp_websocket_client_handle_t old = s_ws;
+    // Clear the shared handle and connected flag BEFORE tearing down, so any
+    // sender that acquires the lock after this point sees s_ws == NULL and
+    // bails out instead of touching a handle that's mid-teardown or freed.
+    s_ws = NULL;
     s_connected = false;
+    xSemaphoreGiveRecursive(s_ws_mutex);
+
+    if (old) {
+        esp_websocket_client_stop(old);
+        esp_websocket_client_destroy(old);
+    }
+
     stop_ota_validation_timer();
 
     // Stop any running LED blink on disconnect
@@ -182,7 +229,10 @@ void websocket_disconnect(void) {
 }
 
 bool websocket_is_connected(void) {
-    return s_connected && s_ws != NULL;
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    bool result = s_connected && s_ws != NULL;
+    xSemaphoreGiveRecursive(s_ws_mutex);
+    return result;
 }
 
 static void ws_event_handler(void *args, esp_event_base_t base,
@@ -252,11 +302,14 @@ esp_err_t websocket_send_csi(const uint8_t *peer_mac, uint64_t timestamp_us,
     // Pack I/Q payload
     memcpy(frame + 24, iq_data, n_sub * 2);
 
-    // Send binary frame
-    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-    int sent = esp_websocket_client_send_bin(s_ws, (char *)frame, frame_len,
-                                              portMAX_DELAY);
-    xSemaphoreGive(s_tx_mutex);
+    // Send binary frame. Re-check under the lock: s_ws may have been torn
+    // down by websocket_disconnect() between the fast-path check above and
+    // here -- see s_ws_mutex comment.
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    int sent = (s_connected && s_ws)
+        ? esp_websocket_client_send_bin(s_ws, (char *)frame, frame_len, portMAX_DELAY)
+        : -1;
+    xSemaphoreGiveRecursive(s_ws_mutex);
 
     free(frame);
 
@@ -326,10 +379,13 @@ esp_err_t websocket_send_hello(void) {
         return ESP_ERR_NO_MEM;
     }
 
-    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-    int sent = esp_websocket_client_send_text(s_ws, json, strlen(json),
-                                               portMAX_DELAY);
-    xSemaphoreGive(s_tx_mutex);
+    // Re-check under the lock: s_ws may have been torn down by
+    // websocket_disconnect() between the fast-path check above and here.
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    int sent = (s_connected && s_ws)
+        ? esp_websocket_client_send_text(s_ws, json, strlen(json), portMAX_DELAY)
+        : -1;
+    xSemaphoreGiveRecursive(s_ws_mutex);
 
     free(json);
     return (sent > 0) ? ESP_OK : ESP_FAIL;
@@ -397,10 +453,13 @@ esp_err_t websocket_send_health(void) {
         return ESP_ERR_NO_MEM;
     }
 
-    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-    int sent = esp_websocket_client_send_text(s_ws, json, strlen(json),
-                                               portMAX_DELAY);
-    xSemaphoreGive(s_tx_mutex);
+    // Re-check under the lock: s_ws may have been torn down by
+    // websocket_disconnect() between the fast-path check above and here.
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    int sent = (s_connected && s_ws)
+        ? esp_websocket_client_send_text(s_ws, json, strlen(json), portMAX_DELAY)
+        : -1;
+    xSemaphoreGiveRecursive(s_ws_mutex);
 
     free(json);
     return (sent > 0) ? ESP_OK : ESP_FAIL;
@@ -435,10 +494,13 @@ esp_err_t websocket_send_ble(const char *devices_json) {
         return ESP_ERR_NO_MEM;
     }
 
-    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-    int sent = esp_websocket_client_send_text(s_ws, json, strlen(json),
-                                               portMAX_DELAY);
-    xSemaphoreGive(s_tx_mutex);
+    // Re-check under the lock: s_ws may have been torn down by
+    // websocket_disconnect() between the fast-path check above and here.
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    int sent = (s_connected && s_ws)
+        ? esp_websocket_client_send_text(s_ws, json, strlen(json), portMAX_DELAY)
+        : -1;
+    xSemaphoreGiveRecursive(s_ws_mutex);
 
     free(json);
     return (sent > 0) ? ESP_OK : ESP_FAIL;
@@ -474,10 +536,13 @@ esp_err_t websocket_send_motion_hint(float variance) {
         return ESP_ERR_NO_MEM;
     }
 
-    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-    int sent = esp_websocket_client_send_text(s_ws, json, strlen(json),
-                                               portMAX_DELAY);
-    xSemaphoreGive(s_tx_mutex);
+    // Re-check under the lock: s_ws may have been torn down by
+    // websocket_disconnect() between the fast-path check above and here.
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    int sent = (s_connected && s_ws)
+        ? esp_websocket_client_send_text(s_ws, json, strlen(json), portMAX_DELAY)
+        : -1;
+    xSemaphoreGiveRecursive(s_ws_mutex);
 
     free(json);
     return (sent > 0) ? ESP_OK : ESP_FAIL;
@@ -510,10 +575,13 @@ esp_err_t websocket_send_ota_status(const char *state, uint8_t progress_pct,
         return ESP_ERR_NO_MEM;
     }
 
-    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-    int sent = esp_websocket_client_send_text(s_ws, json, strlen(json),
-                                               portMAX_DELAY);
-    xSemaphoreGive(s_tx_mutex);
+    // Re-check under the lock: s_ws may have been torn down by
+    // websocket_disconnect() between the fast-path check above and here.
+    xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
+    int sent = (s_connected && s_ws)
+        ? esp_websocket_client_send_text(s_ws, json, strlen(json), portMAX_DELAY)
+        : -1;
+    xSemaphoreGiveRecursive(s_ws_mutex);
 
     free(json);
     return (sent > 0) ? ESP_OK : ESP_FAIL;
@@ -548,7 +616,13 @@ void websocket_handle_message(const char *json, size_t len) {
         cJSON *reason = cJSON_GetObjectItem(root, "reason");
         ESP_LOGE(TAG, "Rejected by mothership: %s",
                  reason ? reason->valuestring : "unknown");
-        websocket_disconnect();
+        // Don't call websocket_disconnect() here -- this runs on the
+        // websocket client's own event-handler task, and both
+        // esp_websocket_client_stop()/_destroy() are documented as unsafe to
+        // call from that context (can hang tearing down their own task).
+        // Defer to the state machine, same as a normal WEBSOCKET_EVENT_DISCONNECTED.
+        s_connected = false;
+        xEventGroupSetBits(g_state.events, SPAXEL_EVENT_WS_DISCONNECTED);
     }
     // Unknown types are silently ignored (forward-compatible)
 
