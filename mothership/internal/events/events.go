@@ -211,7 +211,13 @@ func QueryEvents(db *sql.DB, params QueryParams) ([]Event, string, bool, error) 
 		}
 	}
 
-	query += " ORDER BY id DESC LIMIT ?"
+	// Order by timestamp DESC when using BeforeTS cursor, otherwise by ID DESC
+	// This ensures correct pagination when using timestamp-based cursors
+	if params.BeforeTS > 0 {
+		query += " ORDER BY timestamp_ms DESC LIMIT ?"
+	} else {
+		query += " ORDER BY id DESC LIMIT ?"
+	}
 	args = append(args, params.Limit+1) // Fetch one extra to check for more results
 
 	rows, err := db.Query(query, args...)
@@ -240,7 +246,12 @@ func QueryEvents(db *sql.DB, params QueryParams) ([]Event, string, bool, error) 
 	if hasMore {
 		// Remove the extra event
 		events = events[:params.Limit]
-		nextCursor = fmt.Sprintf("%d", events[len(events)-1].ID)
+		// Return timestamp-based cursor when using BeforeTS, otherwise ID-based
+		if params.BeforeTS > 0 {
+			nextCursor = fmt.Sprintf("%d", events[len(events)-1].TimestampMs)
+		} else {
+			nextCursor = fmt.Sprintf("%d", events[len(events)-1].ID)
+		}
 	}
 
 	return events, nextCursor, hasMore, nil
