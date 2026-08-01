@@ -83,7 +83,12 @@
   /* ── Text ── */
   --text-primary:   var(--slate-12);
   --text-secondary: var(--slate-11);
-  --text-muted:     var(--slate-9);
+  /* Not var(--slate-9): #6b6e7b on --bg-card (#1e2024) is 3.2:1, below the
+     4.5:1 WCAG AA floor for normal text. #868a9a clears both --bg-card and
+     --bg-page with margin (4.75:1 / 5.12:1) while staying visibly dimmer
+     than --text-secondary. slate-9 itself is untouched since nothing else
+     references it. */
+  --text-muted:     #868a9a;
   --text-on-accent: #fff;
 
   /* ── Border ── */

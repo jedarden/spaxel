@@ -8,3 +8,8 @@ secret_protection:
     - "updatePresenceIndicator"
     - "handlePresenceUpdate"
     - "ratecontrol\\.go"
+    # ESP-IDF Kconfig symbol names (firmware/sdkconfig*) are long uppercase
+    # identifiers that trip the "Azure Key" heuristic — e.g.
+    # CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG. These are public ESP-IDF
+    # build-option names, never secrets. Matches the identifier only, not values.
+    - "CONFIG_[A-Z0-9_]+"

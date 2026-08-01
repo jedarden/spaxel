@@ -778,9 +778,21 @@ func TestHandlerSetNodeRole(t *testing.T) {
 			expectedRole: "tx_rx",
 		},
 		{
-			name:         "successful role change to passive",
+			// Passive REQUIRES a BSSID. Without one the firmware enables a filter
+			// on 00:00:00:00:00:00, matches nothing, and silently drops 100% of
+			// CSI while the node still reports healthy. This previously returned
+			// 200 and produced a node that looked fine and sensed nothing.
+			// See ADR-003 / bf-1p5g8.
+			name:        "role change to passive without bssid is rejected",
+			mac:         "AA:BB:CC:DD:EE:FF",
+			requestBody: `{"role": "passive"}`,
+			nodeExists:  true,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:         "successful role change to passive with bssid",
 			mac:          "AA:BB:CC:DD:EE:FF",
-			requestBody:  `{"role": "passive"}`,
+			requestBody:  `{"role": "passive", "passive_bssid": "4c:34:88:f4:df:8a"}`,
 			nodeExists:   true,
 			wantStatus:   http.StatusOK,
 			expectedRole: "passive",

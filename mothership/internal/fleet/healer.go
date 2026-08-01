@@ -223,7 +223,8 @@ func (fh *FleetHealer) selfHeal() {
 		fh.mu.RUnlock()
 
 		if exists {
-			notifier.SendRoleToMAC(mac, role, "")
+			sendRole, sendBSSID := fh.registry.RoleAssignmentFor(mac, role)
+			notifier.SendRoleToMAC(mac, sendRole, sendBSSID)
 		}
 	}
 }

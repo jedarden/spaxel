@@ -60,7 +60,8 @@ RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
         0x10000 build/spaxel-firmware.bin
 
 # Stage 2: Build the Go binary (cross-platform)
-FROM golang:1.25-bookworm AS builder
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS builder
 
 WORKDIR /app
 
@@ -81,8 +82,9 @@ COPY dashboard/ ./cmd/mothership/dashboard/
 # -tags=embed enables dashboard embedding via go:embed
 ARG VERSION=dev
 ARG TARGETPLATFORM
+ARG TARGETARCH
 RUN CGO_ENABLED=0 \
-    GOOS=linux GOARCH=amd64 \
+    GOOS=linux GOARCH=$TARGETARCH \
     go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -tags=embed \
@@ -91,7 +93,7 @@ RUN CGO_ENABLED=0 \
 # Also build the CSI simulator so the same image can run synthetic-node load
 # against a deployed mothership (used by the in-cluster simulator workload).
 RUN CGO_ENABLED=0 \
-    GOOS=linux GOARCH=amd64 \
+    GOOS=linux GOARCH=$TARGETARCH \
     go build \
     -ldflags="-s -w" \
     -o spaxel-sim ./cmd/sim

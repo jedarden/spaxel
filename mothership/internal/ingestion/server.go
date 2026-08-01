@@ -417,8 +417,16 @@ func (s *Server) SendIdentifyToMAC(mac string, durationMS int) bool {
 	msg := IdentifyMessage{Type: "identify", DurationMS: durationMS}
 	data, _ := json.Marshal(msg)
 	nc.writeMu.Lock()
-	nc.Conn.WriteMessage(websocket.TextMessage, data)
+	err := nc.Conn.WriteMessage(websocket.TextMessage, data)
 	nc.writeMu.Unlock()
+	if err != nil {
+		// A write to a half-dead connection must not be reported as success.
+		// The node can be present in s.connections while its socket is already
+		// gone, so the membership check above is necessary but not sufficient.
+		// See bf-5o010.
+		log.Printf("[WARN] %s: write to %s failed: %v", "SendIdentifyToMAC", mac, err)
+		return false
+	}
 	log.Printf("[INFO] Sent identify command to node %s: duration=%dms", mac, durationMS)
 	return true
 }
@@ -435,8 +443,16 @@ func (s *Server) SendRebootToMAC(mac string, delayMS int) bool {
 	msg := RebootMessage{Type: "reboot", DelayMS: delayMS}
 	data, _ := json.Marshal(msg)
 	nc.writeMu.Lock()
-	nc.Conn.WriteMessage(websocket.TextMessage, data)
+	err := nc.Conn.WriteMessage(websocket.TextMessage, data)
 	nc.writeMu.Unlock()
+	if err != nil {
+		// A write to a half-dead connection must not be reported as success.
+		// The node can be present in s.connections while its socket is already
+		// gone, so the membership check above is necessary but not sufficient.
+		// See bf-5o010.
+		log.Printf("[WARN] %s: write to %s failed: %v", "SendRebootToMAC", mac, err)
+		return false
+	}
 	log.Printf("[INFO] Sent reboot command to node %s: delay=%dms", mac, delayMS)
 	return true
 }
@@ -875,8 +891,14 @@ func (s *Server) sendRole(nc *NodeConnection, role string, passiveBSSID string) 
 	data, _ := json.Marshal(msg)
 
 	nc.writeMu.Lock()
-	nc.Conn.WriteMessage(websocket.TextMessage, data)
+	err := nc.Conn.WriteMessage(websocket.TextMessage, data)
 	nc.writeMu.Unlock()
+	if err != nil {
+		// Not fatal to the caller, but a silently dropped role/config is how a
+		// node ends up running a configuration nobody believes it has.
+		// See bf-5o010.
+		log.Printf("[WARN] ingestion: write to %s failed, command dropped: %v", nc.MAC, err)
+	}
 }
 
 // sendConfig sends configuration to a node
@@ -897,8 +919,14 @@ func (s *Server) sendConfig(nc *NodeConnection, rateHz int, txSlotUS int, varian
 	data, _ := json.Marshal(msg)
 
 	nc.writeMu.Lock()
-	nc.Conn.WriteMessage(websocket.TextMessage, data)
+	err := nc.Conn.WriteMessage(websocket.TextMessage, data)
 	nc.writeMu.Unlock()
+	if err != nil {
+		// Not fatal to the caller, but a silently dropped role/config is how a
+		// node ends up running a configuration nobody believes it has.
+		// See bf-5o010.
+		log.Printf("[WARN] ingestion: write to %s failed, command dropped: %v", nc.MAC, err)
+	}
 }
 
 // SetShuttingDown sets the shutdown flag. This causes HandleNodeWS to return HTTP 503
