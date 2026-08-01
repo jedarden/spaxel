@@ -301,14 +301,17 @@ static void state_machine_task(void *arg) {
             case NODE_STATE_CONNECTED:
                 // Arm CSI whenever we enter CONNECTED, not only on a role CHANGE.
                 //
-                // csi_init() runs before esp_wifi_start() and fails with
-                // ESP_ERR_WIFI_NOT_STARTED, so the boot-time configuration is
-                // discarded. Recovery used to depend solely on
-                // SPAXEL_EVENT_ROLE_CHANGED, which only fires when the assigned
-                // role DIFFERS from the persisted one — so a node whose stored
-                // role already matched what the fleet assigned never armed CSI
-                // and silently captured nothing for the whole boot.
-                // See ADR-003 / bf-3mb8j, bf-5x46.
+                // Recovery used to depend solely on SPAXEL_EVENT_ROLE_CHANGED,
+                // which only fires when the assigned role DIFFERS from the
+                // persisted one — so a node whose stored role already matched
+                // what the fleet assigned never armed CSI and silently
+                // captured nothing for the whole boot. See ADR-003 / bf-3mb8j.
+                //
+                // Enabling CSI on the radio itself (esp_wifi_set_csi_config /
+                // _rx_cb / _csi(true)) is handled separately, once, from the
+                // WIFI_EVENT_STA_START handler in wifi.c — those calls fail
+                // with ESP_ERR_WIFI_NOT_STARTED if issued before
+                // esp_wifi_start() completes. See ADR-003 / bf-5x46.
                 if (!csi_armed_this_session) {
                     ESP_LOGI(TAG, "Arming CSI for role %s", node_role_str(g_state.role));
                     csi_set_role(g_state.role, g_state.passive_bssid);

@@ -1,5 +1,6 @@
 #include "wifi.h"
 #include "spaxel.h"
+#include "csi.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_wifi.h"
@@ -36,6 +37,10 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         switch (id) {
             case WIFI_EVENT_STA_START:
                 ESP_LOGI(TAG, "WiFi STA started");
+                // esp_wifi_start() has now actually completed, so the CSI
+                // esp_wifi_* calls (invalid before this point) are safe.
+                // See ADR-003 / bf-5x46.
+                csi_wifi_start();
                 break;
 
             case WIFI_EVENT_STA_CONNECTED:
