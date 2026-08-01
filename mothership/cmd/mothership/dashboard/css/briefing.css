@@ -1,0 +1,288 @@
+/* Morning Briefing Card Styles */
+
+#briefing-card {
+	position: fixed;
+	top: var(--space-16);
+	left: 50%;
+	transform: translateX(-50%);
+	width: 90%;
+	max-width: 600px;
+	background: var(--bg-frosted);
+	border-radius: var(--radius-card);
+	padding: var(--space-6);
+	z-index: 200;
+	box-shadow: 0 8px 32px var(--shadow-xl);
+	border: 1px solid var(--border-default);
+	opacity: 0;
+	transition: opacity 0.3s ease;
+	pointer-events: none;
+}
+
+#briefing-card.visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+#briefing-card .briefing-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: var(--space-4);
+}
+
+#briefing-card .briefing-title {
+	font-size: var(--text-lg);
+	font-weight: 600;
+	color: var(--blue-10);
+}
+
+#briefing-card .briefing-date {
+	font-size: var(--text-xs);
+	color: var(--text-muted);
+}
+
+#briefing-card .briefing-close {
+	background: none;
+	border: none;
+	color: var(--text-muted);
+	font-size: var(--text-lg);
+	cursor: pointer;
+	padding: var(--space-1) var(--space-2);
+	transition: color 0.2s;
+}
+
+#briefing-card .briefing-close:hover {
+	color: var(--text-on-accent);
+}
+
+#briefing-card .briefing-content {
+	font-size: var(--text-md);
+	line-height: 1.6;
+	color: var(--slate-11);
+	white-space: pre-line;
+}
+
+#briefing-card .briefing-section {
+	margin-bottom: var(--space-4);
+	padding: var(--space-3);
+	border-radius: var(--radius-card);
+	background: var(--border-subtle);
+}
+
+#briefing-card .briefing-section.alert {
+	background: var(--alert-bg);
+	border-left: 3px solid var(--alert);
+}
+
+#briefing-card .briefing-section.sleep {
+	background: var(--section-sleep-bg);
+	border-left: 3px solid var(--ok);
+}
+
+#briefing-card .briefing-section.people {
+	background: var(--section-people-bg);
+	border-left: 3px solid var(--blue-9);
+}
+
+#briefing-card .briefing-section.anomaly {
+	background: var(--section-anomaly-bg);
+	border-left: 3px solid var(--warn);
+}
+
+#briefing-card .briefing-section.health {
+	background: var(--section-health-bg);
+	border-left: 3px solid var(--slate-10);
+}
+
+#briefing-card .briefing-section.prediction {
+	background: var(--section-predict-bg);
+	border-left: 3px solid var(--blue-8);
+}
+
+#briefing-card .briefing-section.learning {
+	background: var(--section-learn-bg);
+	border-left: 3px solid var(--warn);
+}
+
+#briefing-card .briefing-actions {
+	display: flex;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
+}
+
+#briefing-card .briefing-btn {
+	flex: 1;
+	padding: 10px var(--space-4);
+	border: none;
+	border-radius: var(--radius-control);
+	font-size: var(--text-sm);
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+#briefing-card .briefing-btn.primary {
+	background: var(--blue-10);
+	color: var(--bg-card);
+}
+
+#briefing-card .briefing-btn.primary:hover {
+	background: var(--blue-10);
+}
+
+#briefing-card .briefing-btn.secondary {
+	background: var(--bg-hover);
+	color: var(--slate-11);
+}
+
+#briefing-card .briefing-btn.secondary:hover {
+	background: var(--border-strong);
+}
+
+#briefing-card .briefing-loading {
+	text-align: center;
+	padding: var(--space-5);
+	color: var(--text-muted);
+}
+
+#briefing-card .briefing-spinner {
+	display: inline-block;
+	width: 24px;
+	height: 24px;
+	border: 3px solid var(--bg-hover);
+	border-top-color: var(--blue-10);
+	border-radius: 50%;
+	animation: briefing-spin 1s linear infinite;
+}
+
+@keyframes briefing-spin {
+	to { transform: rotate(360deg); }
+}
+
+/* Ambient mode briefing */
+.ambient-mode #briefing-card {
+	background: var(--overlay-strong);
+	backdrop-filter: blur(10px);
+	max-width: 500px;
+}
+
+.ambient-mode #briefing-card .briefing-content {
+	font-size: var(--text-base);
+}
+
+/* Briefing indicator in status bar */
+#briefing-indicator {
+	position: fixed;
+	top: 50%;
+	right: var(--space-5);
+	transform: translateY(-50%);
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	background: var(--blue-muted);
+	border: 2px solid var(--blue-10);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	z-index: 150;
+	opacity: 0;
+	transition: opacity 0.3s;
+}
+
+#briefing-indicator.visible {
+	opacity: 1;
+}
+
+#briefing-indicator:hover {
+	background: var(--blue-border);
+}
+
+#briefing-indicator svg {
+	width: 20px;
+	height: 20px;
+	fill: var(--blue-10);
+}
+
+/* Briefing settings panel */
+#briefing-settings {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: var(--bg-frosted-strong);
+	border-radius: var(--radius-card);
+	padding: var(--space-6);
+	z-index: 300;
+	min-width: 400px;
+	box-shadow: 0 8px 32px var(--shadow-xl);
+	border: 1px solid var(--bg-hover);
+	display: none;
+}
+
+#briefing-settings.visible {
+	display: block;
+}
+
+#briefing-settings h3 {
+	font-size: var(--text-xl);
+	color: var(--blue-10);
+	margin-bottom: var(--space-5);
+}
+
+#briefing-settings .setting-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: var(--space-4);
+}
+
+#briefing-settings .setting-label {
+	font-size: var(--text-sm);
+	color: var(--slate-11);
+}
+
+#briefing-settings .setting-input {
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-control);
+	border: 1px solid var(--border-strong);
+	background: var(--border-subtle);
+	color: var(--slate-11);
+	font-size: var(--text-sm);
+}
+
+#briefing-settings .setting-toggle {
+	position: relative;
+	width: 44px;
+	height: 24px;
+	background: var(--bg-hover);
+	border-radius: var(--radius-card);
+	cursor: pointer;
+	transition: background 0.2s;
+}
+
+#briefing-settings .setting-toggle.active {
+	background: var(--blue-10);
+}
+
+#briefing-settings .setting-toggle::after {
+	content: '';
+	position: absolute;
+	top: var(--space-half);
+	left: var(--space-half);
+	width: 20px;
+	height: 20px;
+	background: var(--text-on-accent);
+	border-radius: 50%;
+	transition: transform 0.2s;
+}
+
+#briefing-settings .setting-toggle.active::after {
+	transform: translateX(20px);
+}
+
+#briefing-settings .settings-actions {
+	display: flex;
+	gap: var(--space-3);
+	margin-top: var(--space-6);
+}
