@@ -8,6 +8,13 @@ cmake_minimum_required(VERSION 3.16)
 # firmware filename). Falling back to `git describe` produced a version that
 # could never match, and the node reported a hardcoded "1.0.0" regardless — so
 # every successful OTA was logged as a rollback. See ADR-004 / bf-556tl.
+# Re-run CMake when VERSION changes. Without this the version is baked at first
+# configure and a later bump silently no-ops: the build succeeds, the filename
+# says the new version, and the firmware still reports the old one — which is
+# precisely the mismatch that made every successful OTA look like a rollback.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION")
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION")
     file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" PROJECT_VERSION)
     string(STRIP "${PROJECT_VERSION}" PROJECT_VERSION)

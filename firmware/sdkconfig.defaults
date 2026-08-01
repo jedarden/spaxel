@@ -43,8 +43,22 @@ CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH=n
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
 
-# Watchdog configuration
-CONFIG_ESP_TASK_WDT_INIT=n
+# Watchdog configuration.
+#
+# Previously disabled, which meant a hung task left the node unreachable
+# forever — and on real hardware the only recovery was a physical USB replug.
+# For nodes mounted around a living space that is the difference between a
+# transient glitch and a trip up a ladder, so the watchdog is now ON.
+#
+# The timeout is deliberately generous relative to the 60s OTA boot-validation
+# window: ESPHome shipped a regression (2026.4.0) where a too-aggressive task
+# watchdog reset devices BEFORE that window closed and triggered spurious OTA
+# rollbacks. Tune these two together, never independently. See bf-2tgcx.
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=30
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
+CONFIG_ESP_TASK_WDT_PANIC=y
 
 # mDNS
 CONFIG_MDNS_MAX_SERVICES=10
