@@ -1,4 +1,7 @@
 // Auto-generated at build time - do not edit
 #pragma once
 
-#define SPAXEL_FIRMWARE_VERSION "@PROJECT_VERSION@"
+// Sourced from SPAXEL_VERSION, not PROJECT_VERSION: ESP-IDF's project() macro
+// reassigns PROJECT_VERSION, which produced an empty version string here and a
+// blank firmware_version on the wire. See ADR-004 / bf-556tl.
+#define SPAXEL_FIRMWARE_VERSION "@SPAXEL_VERSION@"
