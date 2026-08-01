@@ -16,6 +16,7 @@ type StatusHandler struct {
 	mu           sync.RWMutex
 	pm           ProcessorManagerProvider
 	zonesMgr     ZonesManagerProvider
+	identMgr     IdentityProvider
 	startTime    time.Time
 	getNodeCount func() int
 	version      string
@@ -31,6 +32,21 @@ type ProcessorManagerProvider interface {
 type ZonesManagerProvider interface {
 	GetAllZones() []*zones.Zone
 	GetZoneOccupancy(zoneID string) *zones.ZoneOccupancy
+}
+
+// IdentityProvider provides identity resolution for blobs.
+type IdentityProvider interface {
+	// GetMatch returns identity information for a blob, or nil if no match.
+	GetMatch(blobID int) *IdentityMatch
+}
+
+// IdentityMatch represents identity information for a blob.
+// This mirrors the relevant fields from ble.IdentityMatch.
+type IdentityMatch struct {
+	PersonName string `json:"person_name,omitempty"`
+	PersonID   string `json:"person_id,omitempty"`
+	DeviceName string `json:"device_name,omitempty"`
+	IsBLEOnly  bool   `json:"is_ble_only,omitempty"`
 }
 
 // NewStatusHandler creates a new status handler.
@@ -57,6 +73,13 @@ func (h *StatusHandler) SetZonesManager(zm ZonesManagerProvider) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.zonesMgr = zm
+}
+
+// SetIdentityProvider sets the identity provider.
+func (h *StatusHandler) SetIdentityProvider(im IdentityProvider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.identMgr = im
 }
 
 // RegisterRoutes registers status and occupancy endpoints.
@@ -143,14 +166,45 @@ func (h *StatusHandler) getOccupancy(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Convert blob IDs to person labels if we have a processor manager
-		// For now, return empty people list - identity resolution requires
-		// additional provider interface
+		// Resolve blob IDs to person names using the identity provider
+		people := h.resolvePeopleIDs(occ.BlobIDs)
+
 		result[z.Name] = occupancyResponse{
 			Count:  occ.Count,
-			People: []string{}, // TODO: resolve blob IDs to person labels
+			People: people,
 		}
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+// resolvePeopleIDs converts a list of blob IDs to a list of person names.
+// Only includes blobs with BLE-identified persons. Unidentified blobs are omitted.
+func (h *StatusHandler) resolvePeopleIDs(blobIDs []int) []string {
+	if len(blobIDs) == 0 || h.identMgr == nil {
+		return []string{}
+	}
+
+	// Use a map to deduplicate person names
+	peopleMap := make(map[string]bool)
+	for _, blobID := range blobIDs {
+		if match := h.identMgr.GetMatch(blobID); match != nil {
+			// Use PersonName if available (BLE-identified person), otherwise DeviceName
+			// Skip unidentified blobs (match.PersonName == "" && match.DeviceName == "")
+			personName := match.PersonName
+			if personName == "" {
+				personName = match.DeviceName
+			}
+			if personName != "" {
+				peopleMap[personName] = true
+			}
+		}
+	}
+
+	// Convert map to slice
+	result := make([]string, 0, len(peopleMap))
+	for person := range peopleMap {
+		result = append(result, person)
+	}
+	return result
 }

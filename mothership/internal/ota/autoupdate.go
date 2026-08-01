@@ -23,14 +23,15 @@ type AutoUpdateManager struct {
 	zoneVacancyChecker ZoneVacancyChecker
 
 	// State
-	running           bool
-	cancel            context.CancelFunc
-	wg                sync.WaitGroup
-	currentCanaryNode string
-	baselineQuality   float64
-	updateStartTime   time.Time
-	updateState       UpdateState
-	pendingFirmware   *FirmwareMeta
+	running               bool
+	cancel                context.CancelFunc
+	wg                     sync.WaitGroup
+	currentCanaryNode     string
+	canaryPreviousVersion string // Firmware version before canary update, for rollback
+	baselineQuality       float64
+	updateStartTime       time.Time
+	updateState           UpdateState
+	pendingFirmware       *FirmwareMeta
 }
 
 // SettingsProvider provides access to system settings.
@@ -50,6 +51,7 @@ type NodeProvider interface {
 	GetNodeHealthScore(mac string) float64
 	GetNodeRole(mac string) string
 	GetNodePosition(mac string) (x, y, z float64, err error)
+	GetNodeFirmwareVersion(mac string) string
 }
 
 // EventNotifier publishes events to the timeline.
@@ -374,9 +376,19 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	}
 	m.mu.Unlock()
 
+	// Store the canary node's current firmware version for potential rollback
+	m.mu.Lock()
+	if m.nodeProvider != nil {
+		m.canaryPreviousVersion = m.nodeProvider.GetNodeFirmwareVersion(canaryMAC)
+	} else {
+		m.canaryPreviousVersion = ""
+	}
+	m.mu.Unlock()
+
 	m.publishEvent("canary_deploy", canaryMAC, fmt.Sprintf("Deploying canary update to node %s", canaryMAC), map[string]interface{}{
-		"firmware_version": firmware.Version,
-		"baseline_quality": m.baselineQuality,
+		"firmware_version":         firmware.Version,
+		"previous_firmware_version": m.canaryPreviousVersion,
+		"baseline_quality":          m.baselineQuality,
 	})
 
 	// Trigger OTA on canary node
@@ -521,20 +533,34 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 
 	// Decision threshold
 	if qualityChanged > config.QualityThreshold {
-		// Quality degraded beyond threshold, abort
+		// Quality degraded beyond threshold, abort and trigger rollback
 		m.mu.Lock()
 		m.updateState = StateRollback
+		previousVersion := m.canaryPreviousVersion
 		m.mu.Unlock()
 
 		m.publishEvent("canary_failed", canaryMAC, fmt.Sprintf("Canary quality degraded %.2f%%, aborting update", qualityDelta*100), map[string]interface{}{
-			"threshold":     config.QualityThreshold,
-			"quality_delta": qualityDelta,
+			"threshold":        config.QualityThreshold,
+			"quality_delta":    qualityDelta,
+			"rollback_version": previousVersion,
 		})
 
 		log.Printf("[WARN] ota: canary quality degraded %.2f%% (threshold %.2f%%), aborting auto-update",
 			qualityDelta*100, config.QualityThreshold*100)
 
-		// TODO: Implement rollback - trigger OTA to previous version for canary
+		// Trigger rollback to previous firmware version
+		if previousVersion != "" {
+			if err := m.otaManager.SendOTAVersion(canaryMAC, previousVersion); err != nil {
+				log.Printf("[ERROR] ota: failed to trigger rollback for canary %s to version %s: %v",
+					canaryMAC, previousVersion, err)
+				m.failUpdateCycle(fmt.Sprintf("canary quality degraded and rollback failed: %v", err))
+				return
+			}
+			log.Printf("[INFO] ota: triggered rollback for canary %s to version %s", canaryMAC, previousVersion)
+		} else {
+			log.Printf("[WARN] ota: cannot rollback canary %s: previous firmware version unknown", canaryMAC)
+		}
+
 		m.failUpdateCycle(fmt.Sprintf("canary quality degraded: %.2f%%", qualityDelta*100))
 		return
 	}
