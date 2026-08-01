@@ -28,8 +28,20 @@ endif()
 
 message(STATUS "Building SPAXEL firmware version: ${PROJECT_VERSION}")
 
+# Keep the version in a variable ESP-IDF does not own.
+#
+# ESP-IDF wraps project() with its own macro, which reassigns PROJECT_VERSION —
+# so configure_file() below saw an EMPTY value and generated
+# SPAXEL_FIRMWARE_VERSION "", which the node then reported as a blank version.
+# SPAXEL_VERSION survives because nothing else touches it.
+set(SPAXEL_VERSION "${PROJECT_VERSION}")
+
+# PROJECT_VER is what ESP-IDF stamps into the app descriptor, which is what
+# esp_app_get_description()->version returns and what OTA/rollback logic reads.
+set(PROJECT_VER "${SPAXEL_VERSION}")
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(spaxel-firmware VERSION "${PROJECT_VERSION}")
+project(spaxel-firmware VERSION "${SPAXEL_VERSION}")
 
 # Generate version header
 configure_file(
