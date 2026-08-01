@@ -422,12 +422,50 @@ static void state_machine_task(void *arg) {
 }
 
 // Health reporting task
+// Supervisory self-recovery.
+//
+// A node that cannot reach the mothership must eventually reboot itself rather
+// than retry forever. Three distinct unrecoverable hangs were observed on real
+// hardware, all of which this catches:
+//   1. a websocket retry loop spamming "Websocket client is not connected"
+//   2. a connect loop returning EHOSTUNREACH while the AP simultaneously showed
+//      the station associated at -35 dBm with a valid lease and zero tx failures
+//   3. silence after an OTA reboot — booted, but never rejoined
+//
+// In every case the only recovery was physical: a USB replug. That is the one
+// thing a node mounted around the house cannot receive, and with several nodes
+// deployed a rare per-node hang becomes a routine trip up a ladder.
+//
+// A reboot is cheap and safe here: WiFi credentials and the provisioned flag
+// live in NVS, and the bootloader's rollback protection still applies, so the
+// worst case is a node that reboots periodically and stays reachable — which is
+// strictly better than one that is silently gone.
+// 3 minutes: a mothership restart completes in seconds, so a node still adrift
+// after three minutes is not "waiting", it is stuck. Rebooting costs ~30s of
+// downtime and reliably rejoins; staying stuck costs a physical visit. With
+// several nodes deployed, every mothership restart would otherwise strand the
+// whole fleet at once — which is exactly what was observed.
+#define SPAXEL_MOTHERSHIP_LOST_REBOOT_MS (3 * 60 * 1000)
+
 static void health_task(void *arg) {
+    int64_t last_connected_us = esp_timer_get_time();
+
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(SPAXEL_HEALTH_INTERVAL_MS));
 
         if (g_state.state == NODE_STATE_CONNECTED) {
+            last_connected_us = esp_timer_get_time();
             websocket_send_health();
+            continue;
+        }
+
+        int64_t lost_ms = (esp_timer_get_time() - last_connected_us) / 1000;
+        if (lost_ms >= SPAXEL_MOTHERSHIP_LOST_REBOOT_MS) {
+            ESP_LOGE(TAG,
+                     "No mothership connection for %lld ms (state=%s) — rebooting to recover",
+                     (long long)lost_ms, node_state_str(g_state.state));
+            vTaskDelay(pdMS_TO_TICKS(200)); // let the log drain
+            esp_restart();
         }
     }
 }
