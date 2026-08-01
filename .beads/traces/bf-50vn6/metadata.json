@@ -1,0 +1,16 @@
+{
+  "bead_id": "bf-50vn6",
+  "agent": "echo-test",
+  "provider": null,
+  "model": null,
+  "exit_code": 0,
+  "outcome": "success",
+  "duration_ms": 2,
+  "input_tokens": null,
+  "output_tokens": null,
+  "cost_usd": null,
+  "captured_at": "2026-07-27T16:03:45.307799273Z",
+  "trace_format": "raw_text",
+  "pruned": false,
+  "template_version": null
+}

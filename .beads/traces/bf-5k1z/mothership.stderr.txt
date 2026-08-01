@@ -1,0 +1,174 @@
+2026/07/26 15:01:10 [CONFIG] SPAXEL_BIND_ADDR=127.0.0.1:8080
+2026/07/26 15:01:10 [CONFIG] SPAXEL_DATA_DIR=/tmp/spaxel-bf5k1z-KFJxWw
+2026/07/26 15:01:10 [CONFIG] SPAXEL_STATIC_DIR=/dashboard
+2026/07/26 15:01:10 [CONFIG] SPAXEL_SEED_FIRMWARE_DIR=/firmware
+2026/07/26 15:01:10 [CONFIG] SPAXEL_MDNS_ENABLED=true
+2026/07/26 15:01:10 [CONFIG] SPAXEL_MDNS_NAME=spaxel
+2026/07/26 15:01:10 [CONFIG] SPAXEL_LOG_LEVEL=info
+2026/07/26 15:01:10 [CONFIG] SPAXEL_FUSION_RATE_HZ=10
+2026/07/26 15:01:10 [CONFIG] SPAXEL_REPLAY_MAX_MB=360
+2026/07/26 15:01:10 [CONFIG] SPAXEL_INSTALL_SECRET=(not set, will auto-generate)
+2026/07/26 15:01:10 [CONFIG] SPAXEL_NTP_SERVER=pool.ntp.org
+2026/07/26 15:01:10 [CONFIG] TZ=UTC
+2026/07/26 15:01:10 [INFO] Spaxel mothership vdev starting
+2026/07/26 15:01:10 [DEBUG] Config: bind=127.0.0.1:8080 data=/tmp/spaxel-bf5k1z-KFJxWw static=/dashboard mdns=spaxel
+2026/07/26 15:01:10 [PHASE 1/7 — Data directory]
+2026/07/26 15:01:10 [PHASE 1/7 OK] (0ms)
+2026/07/26 15:01:10 [PHASE 2/7 — SQLite]
+2026/07/26 15:01:10 [PHASE 2/7 OK] (11ms)
+2026/07/26 15:01:10 [PHASE 3/7 — Schema migrations]
+2026/07/26 15:01:10 [INFO] Initializing new database
+2026/07/26 15:01:10 [INFO] Pre-migration backup created: /tmp/spaxel-bf5k1z-KFJxWw/backups/pre-upgrade-v0-to-v18-20260726-150110.sqlite
+2026/07/26 15:01:10 [INFO] Applying migration 1: initial schema
+2026/07/26 15:01:10 [INFO] Migration 1 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 2: add diurnal_baselines table
+2026/07/26 15:01:10 [INFO] Migration 2 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 3: add anomaly_patterns table
+2026/07/26 15:01:10 [INFO] Migration 3 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 4: add prediction_models table
+2026/07/26 15:01:10 [INFO] Migration 4 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 5: add ble_device_aliases table
+2026/07/26 15:01:10 [INFO] Migration 5 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 6: add virtual node columns for passive radar AP
+2026/07/26 15:01:10 [INFO] Migration 6 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 7: add webhook_log, trigger_state tables and trigger error columns
+2026/07/26 15:01:10 [INFO] Migration 7 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 8: add breathing anomaly columns to sleep_records
+2026/07/26 15:01:10 [INFO] Migration 8 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 9: add unique constraint on sleep_records person+date
+2026/07/26 15:01:10 [INFO] Migration 9 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 10: add floorplan table for image upload and calibration
+2026/07/26 15:01:10 [INFO] Migration 10 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 11: add FTS5 table and triggers for events search
+2026/07/26 15:01:10 [INFO] Migration 11 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 12: add crowd flow visualization tables
+2026/07/26 15:01:10 [INFO] Migration 12 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 13: add person and sections_json columns to briefings table
+2026/07/26 15:01:10 [INFO] Migration 13 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 14: add id, delivered, acknowledged columns to briefings table
+2026/07/26 15:01:10 [INFO] Migration 14 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 15: add feature_notifications table for feature discovery
+2026/07/26 15:01:10 [INFO] Migration 15 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 16: add crossing_events table for portal crossing log
+2026/07/26 15:01:10 [INFO] Migration 16 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 17: add predicted_enter to triggers table CHECK constraint
+2026/07/26 15:01:10 [INFO] Migration 17 applied successfully
+2026/07/26 15:01:10 [INFO] Applying migration 18: add prediction subsystem tables
+2026/07/26 15:01:10 [INFO] Migration 18 applied successfully
+2026/07/26 15:01:10 [INFO] All migrations applied successfully (version 0 → 18)
+2026/07/26 15:01:10 [INFO] Schema migration complete (version 18)
+2026/07/26 15:01:10 [PHASE 3/7 OK] (39ms)
+2026/07/26 15:01:10 [PHASE 4/7 — Config & secrets]
+2026/07/26 15:01:10 [PHASE 4/7 OK] (0ms)
+2026/07/26 15:01:10 [INFO] Main database at /tmp/spaxel-bf5k1z-KFJxWw/spaxel.db
+2026/07/26 15:01:10 [INFO] Events handler initialized (shared DB)
+2026/07/26 15:01:10 [INFO] Events handler initialized (shared DB)
+2026/07/26 15:01:10 [INFO] Timeline storage subscriber started
+2026/07/26 15:01:10 [DEBUG] Install secret loaded from database
+2026/07/26 15:01:10 [INFO] Auth API registered at /api/auth/*
+2026/07/26 15:01:10 [INFO] Settings API registered at /api/settings
+2026/07/26 15:01:10 [INFO] Integration settings API registered at /api/settings/integration
+2026/07/26 15:01:10 [INFO] Notification settings API registered at /api/settings/notifications
+2026/07/26 15:01:10 [INFO] Notifications API registered at /api/notifications/*
+2026/07/26 15:01:10 [INFO] Feature discovery notifications API registered at /api/help/*
+2026/07/26 15:01:10 [INFO] Feature discovery monitor started (check interval: 5m0s)
+2026/07/26 15:01:10 [INFO] Feature discovery monitor started
+2026/07/26 15:01:10 [INFO] CSI recording buffer at /tmp/spaxel-bf5k1z-KFJxWw/csi_replay.bin (360 MB max, retention=48h0m0s)
+2026/07/26 15:01:10 [INFO] Replay REST API registered at /api/replay/*
+2026/07/26 15:01:10 [INFO] Per-link CSI recorder at /tmp/spaxel-bf5k1z-KFJxWw/csi (retention=48h, max=1125899906842624MB/link)
+2026/07/26 15:01:10 [INFO] Fleet registry at /tmp/spaxel-bf5k1z-KFJxWw/fleet.db
+2026/07/26 15:01:10 [PHASE 5/7 — Subsystems]
+2026/07/26 15:01:10 [PHASE 5/7] Subsystem BLE registry started (22ms)
+2026/07/26 15:01:10 [INFO] BLE registry at /tmp/spaxel-bf5k1z-KFJxWw/ble.db
+2026/07/26 15:01:10 [PHASE 5/7] Subsystem Zones manager started (13ms)
+2026/07/26 15:01:10 [INFO] Zones manager at /tmp/spaxel-bf5k1z-KFJxWw/zones.db
+2026/07/26 15:01:10 [INFO] Flow analytics at /tmp/spaxel-bf5k1z-KFJxWw/analytics.db
+2026/07/26 15:01:10 [INFO] Anomaly detector at /tmp/spaxel-bf5k1z-KFJxWw/anomaly.db (learning period: 7 days)
+2026/07/26 15:01:10 [INFO] Automation engine at /tmp/spaxel-bf5k1z-KFJxWw/automation.db
+2026/07/26 15:01:10 [INFO] Fall detector initialized
+2026/07/26 15:01:10 [INFO] Morning briefing handler initialized
+2026/07/26 15:01:10 [INFO] Sleep monitor started (window: 22:00-7:00, report at 7:00)
+2026/07/26 15:01:10 [INFO] Sleep quality monitor started (window: 22:00-07:00, report at 07:00)
+2026/07/26 15:01:10 [INFO] Prediction store using main database
+2026/07/26 15:01:10 [INFO] prediction: loaded 0 stored person zone entries
+2026/07/26 15:01:10 [INFO] prediction: loaded 0 pending predictions
+2026/07/26 15:01:10 [INFO] Prediction accuracy tracker using main database
+2026/07/26 15:01:10 [INFO] Horizon predictor initialized (15m horizon, 1000 Monte Carlo runs)
+2026/07/26 15:01:10 [INFO] Presence prediction initialized
+2026/07/26 15:01:10 [INFO] Notification service at /tmp/spaxel-bf5k1z-KFJxWw/notify.db
+2026/07/26 15:01:10 [INFO] Briefing scheduler started (time: 07:00, push: false)
+2026/07/26 15:01:10 [INFO] Morning briefing scheduler started (time: 07:00, push: false)
+2026/07/26 15:01:10 [INFO] Loaded 0 learned link weights from /tmp/spaxel-bf5k1z-KFJxWw/weights.db
+2026/07/26 15:01:10 [INFO] Loaded 0 saved link weights from weight store
+2026/07/26 15:01:10 [INFO] 3D fusion engine node-position assertion: no nodes positioned yet
+2026/07/26 15:01:10 [INFO] Self-improving localizer started (adjustment interval: 10s)
+2026/07/26 15:01:10 [INFO] Self-improving localization started (room: 6.0x5.0m, interval: 10s)
+2026/07/26 15:01:10 [INFO] 3D fusion engine ready (room: 6.0x5.0x2.5m, origin 0.0,0.0, 0 nodes positioned)
+2026/07/26 15:01:10 [INFO] Ground truth store at /tmp/spaxel-bf5k1z-KFJxWw/groundtruth.db
+2026/07/26 15:01:10 [INFO] Loaded spatial weights into cache (0 links)
+2026/07/26 15:01:10 [INFO] Spatial weight learner initialized (min samples: 100, improvement threshold: 5%)
+2026/07/26 15:01:10 [INFO] Periodic spatial weight save started (interval: 30s)
+2026/07/26 15:01:10 [INFO] Ground truth collector initialized (min BLE confidence: 0.7, max distance: 0.5m)
+2026/07/26 15:01:10 [INFO] Spatial weight learner connected to fusion engine
+2026/07/26 15:01:10 [INFO] Learning feedback store at /tmp/spaxel-bf5k1z-KFJxWw/learning.db
+2026/07/26 15:01:10 [INFO] Learning feedback processor started (interval: 6h0m0s)
+2026/07/26 15:01:10 [INFO] Briefing providers wired up
+2026/07/26 15:01:10 [INFO] Guided troubleshooting manager initialized
+2026/07/26 15:01:10 [INFO] TX slot collision detection enabled (threshold: 5% over 60s window)
+2026/07/26 15:01:10 [INFO] Zone history snapshot recording started (hourly)
+2026/07/26 15:01:10 [INFO] guidedtroubleshoot: manager started (interval: 5m0s)
+2026/07/26 15:01:10 [INFO] Volume triggers handler initialized
+2026/07/26 15:01:10 [INFO] Phase 5 diagnostic engine started (interval: 15m)
+2026/07/26 15:01:10 [INFO] diagnostics: engine started (interval: 15m0s)
+2026/07/26 15:01:10 [INFO] Restored 0 EMA baselines and 0 diurnal baselines
+2026/07/26 15:01:10 [INFO] Baseline persistence enabled (save interval: 30s)
+2026/07/26 15:01:10 [INFO] Health persistence enabled at /tmp/spaxel-bf5k1z-KFJxWw/health.db
+2026/07/26 15:01:10 [INFO] Phase 5 health monitoring enabled (health: 5s, weather: 1m0s)
+2026/07/26 15:01:10 [INFO] Flow analytics background tasks started (prune: 24h, corridors: 7d)
+2026/07/26 15:01:10 [INFO] Self-improving localization fusion started (rate: 10Hz, save interval: 30s)
+2026/07/26 15:01:10 [INFO] Horizon predictor providers wired
+2026/07/26 15:01:10 [INFO] Prediction update loop started (interval: 60s)
+2026/07/26 15:01:10 [INFO] Prediction evaluation loop started (interval: 30s)
+2026/07/26 15:01:10 [INFO] Disk-space monitor started (interval: 60s, warning: 100MB, critical: 20MB)
+2026/07/26 15:01:10 [INFO] Zones and portals API registered at /api/zones/* and /api/portals/*
+2026/07/26 15:01:10 [INFO] BLE REST API registered at /api/ble/* and /api/people/*
+2026/07/26 15:01:10 [INFO] Feedback API registered at /api/feedback
+2026/07/26 15:01:10 [INFO] Guided troubleshooting API registered at /api/guided/*
+2026/07/26 15:01:10 [INFO] Detection explainability API enabled
+2026/07/26 15:01:10 [INFO] Self-improving localization API registered at /api/localization/*
+2026/07/26 15:01:10 [INFO] Sleep quality API registered at /api/sleep/*
+2026/07/26 15:01:10 [INFO] Morning briefing API registered at /api/briefing/*
+2026/07/26 15:01:10 [INFO] Tracked blobs API registered at /api/blobs
+2026/07/26 15:01:10 [INFO] Tracks API registered at /api/tracks
+2026/07/26 15:01:10 [INFO] Status API registered at /api/status and /api/occupancy
+2026/07/26 15:01:10 [INFO] Diurnal baseline API registered at /api/diurnal/*
+2026/07/26 15:01:10 [INFO] Baseline API registered at /api/baseline/*
+2026/07/26 15:01:10 [INFO] Backup API registered at /api/backup
+2026/07/26 15:01:10 [INFO] Virtual node store at /tmp/spaxel-bf5k1z-KFJxWw/simulator
+2026/07/26 15:01:10 [INFO] Fleet registry bridge started (sync interval: 30s)
+2026/07/26 15:01:10 [INFO] Loaded 0 virtual nodes from store
+2026/07/26 15:01:10 [INFO] Pre-deployment simulator API registered at /api/simulator/*
+2026/07/26 15:01:10 [INFO] Events timeline API registered at /api/events/*
+2026/07/26 15:01:10 [INFO] OTA firmware server at /tmp/spaxel-bf5k1z-KFJxWw/firmware
+2026/07/26 15:01:10 [INFO] ota: auto-update manager started
+2026/07/26 15:01:10 [PHASE 5/7] Subsystem Auto-update manager started (0ms)
+2026/07/26 15:01:10 [INFO] Auto-update manager started (canary strategy, quiet window)
+2026/07/26 15:01:10 [INFO] Auto-update API registered
+2026/07/26 15:01:10 [events archive] Next run scheduled for Mon, 27 Jul 2026 02:00:00 UTC (in 10h58m49s)
+2026/07/26 15:01:10 [INFO] provisioning: generated new install secret at /tmp/spaxel-bf5k1z-KFJxWw/install_secret.bin
+2026/07/26 15:01:10 [INFO] Serving dashboard from filesystem at ./../dashboard
+2026/07/26 15:01:10 [PHASE 5/7 OK] (130ms)
+2026/07/26 15:01:10 [PHASE 6/7 — HTTP + mDNS]
+2026/07/26 15:01:10 [INFO] mDNS advertising spaxel._spaxel._tcp.local:8080
+2026/07/26 15:01:10 [INFO] Doctor diagnostics API registered at /api/doctor
+2026/07/26 15:01:10 [PHASE 6/7 OK] (1ms)
+2026/07/26 15:01:10 [PHASE 7/7 — Health]
+2026/07/26 15:01:10 [INFO] HTTP server listening on 127.0.0.1:8080
+2026/07/26 15:01:10 [WARN] Health check failed: Get "http://127.0.0.1:8080/healthz": dial tcp 127.0.0.1:8080: connect: connection refused (continuing anyway)
+2026/07/26 15:01:10 [PHASE 7/7 OK] (0ms)
+2026/07/26 15:01:10 [READY] All 7 phases completed in 193ms
+2026/07/26 15:01:11 [WARN] Node AA:BB:CC:00:00:00 rejected: invalid token
+2026/07/26 15:01:15 [INFO] prediction: updated 0 predictions
+2026/07/26 15:01:15 [INFO] Prediction: initial predictions computed
+2026/07/26 15:01:40 [DEBUG] Registry bridge syncing 0 virtual nodes to fleet registry
+2026/07/26 15:01:40 [DEBUG] Computing effective positions for 0 virtual nodes

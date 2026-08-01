@@ -1,0 +1,41 @@
+t(s) | /api/nodes (mac[-8:]=x,y,z) | /api/blobs | detections
+-----+----------------------------+------------+------------
+3    |                            | ?          | 0         
+6    |                            | ?          | 0         
+9    |                            | ?          | 0         
+12   |                            | ?          | 0         
+15   |                            | ?          | 0         
+18   |                            | ?          | 0         
+21   |                            | ?          | 0         
+24   |                            | ?          | 0         
+27   |                            | ?          | 0         
+30   |                            | ?          | 0         
+33   |                            | ?          | 0         
+36   |                            | ?          | 0         
+39   |                            | ?          | 0         
+42   |                            | ?          | 0         
+45   |                            | ?          | 0         
+48   |                            | ?          | 0         
+=== sim.stderr (provisioning + connection evidence) ===
+2026/07/26 11:01:11.230410 [SIM] CSI Simulator CLI starting
+2026/07/26 11:01:11.230569 [SIM] Random seed: 42
+2026/07/26 11:01:11.230580 [SIM] Configuration:
+2026/07/26 11:01:11.230583 [SIM]   Mothership: ws://127.0.0.1:8080/ws/node
+2026/07/26 11:01:11.230587 [SIM]   Scenario: normal
+2026/07/26 11:01:11.230590 [SIM]   Nodes: 4
+2026/07/26 11:01:11.230593 [SIM]   Walkers: 2
+2026/07/26 11:01:11.230596 [SIM]   Rate: 20 Hz
+2026/07/26 11:01:11.230598 [SIM]   Duration: 45 s
+2026/07/26 11:01:11.230601 [SIM]   Space: 5.0x5.0x2.5 m
+2026/07/26 11:01:11.230609 [SIM]   Walls: 0
+2026/07/26 11:01:11.230612 [SIM]   BLE: true
+2026/07/26 11:01:11.232219 [SIM] Auto-provisioned token: 8364555a485d09fb...
+2026/07/26 11:01:11.232258 [SIM] Node 0 connecting to ws://127.0.0.1:8080/ws/node
+2026/07/26 11:01:11.232791 [SIM] Node 0 connected
+2026/07/26 11:01:11.233366 [SIM] Failed to connect nodes: node 0 rejected: invalid_token
+=== mothership stderr: admission vs rejection ===
+2026/07/26 15:01:10 [INFO] 3D fusion engine node-position assertion: no nodes positioned yet
+2026/07/26 15:01:10 [INFO] 3D fusion engine ready (room: 6.0x5.0x2.5m, origin 0.0,0.0, 0 nodes positioned)
+2026/07/26 15:01:10 [INFO] Spatial weight learner connected to fusion engine
+2026/07/26 15:01:10 [INFO] provisioning: generated new install secret at /tmp/spaxel-bf5k1z-KFJxWw/install_secret.bin
+2026/07/26 15:01:11 [WARN] Node AA:BB:CC:00:00:00 rejected: invalid token
