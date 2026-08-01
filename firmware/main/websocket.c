@@ -108,12 +108,22 @@ static void ota_check_cb(void *arg) {
 
 static void ota_validation_timeout_cb(void *arg) {
     if (!s_ota_confirmed) {
-        ESP_LOGW(TAG, "OTA validation: timed out (role_received=%d, csi_rate_hz=%lu), "
-                 "rollback on next reset",
+        ESP_LOGE(TAG, "OTA validation: timed out (role_received=%d, csi_rate_hz=%lu), "
+                 "rebooting to trigger rollback",
                  s_ota_role_received, (unsigned long)csi_measured_rate_hz());
         if (s_ota_check_timer) {
             esp_timer_stop(s_ota_check_timer);
         }
+        // esp_ota_mark_app_valid_cancel_rollback() was never called, so the
+        // partition is still ESP_OTA_IMG_PENDING_VERIFY -- but the bootloader
+        // only acts on that at boot time. A build that fails validation
+        // without crashing (e.g. connects fine but a sensing path is
+        // silently dead) would otherwise just keep running in that
+        // unconfirmed state forever with no actual rollback, since nothing
+        // else forces a reset. Force one here so the safety net this
+        // validation exists for actually engages. See bf-23nar.
+        vTaskDelay(pdMS_TO_TICKS(500));  // let the log line above flush
+        esp_restart();
     }
 }
 
