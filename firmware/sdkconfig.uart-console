@@ -1,0 +1,11 @@
+# Board variant: console on UART0 (GPIO43/44).
+#
+# For ESP32-S3 boards WITH a USB-UART bridge chip (CP210x, CH340, FTDI), or bare
+# modules wired to a USB-TTL adapter. Layer it over the defaults:
+#
+#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.uart-console" build
+#
+# The shipped default is USB-Serial/JTAG because native-USB-only boards are
+# silent on a UART0 console and therefore undiagnosable. See ADR-002.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
