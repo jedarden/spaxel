@@ -1,8 +1,8 @@
 # Spaxel Mothership Dockerfile
 # Multi-stage build: ESP32 firmware (amd64 only) → Go binary → minimal runtime image
-# Build arguments for multi-platform support
-ARG TARGETPLATFORM=linux/amd64
-ARG TARGETARCH=amd64
+# Build arguments for multi-platform support (set by buildx --platform automatically)
+ARG TARGETPLATFORM
+ARG TARGETARCH
 
 # Stage 1: Build ESP32-S3 firmware (amd64 only - ESP-IDF is x86_64)
 FROM espressif/idf:v5.2 AS firmware-builder
@@ -76,8 +76,9 @@ COPY mothership/ ./
 # The go:embed directive in cmd/mothership/main.go references the local dashboard directory
 COPY dashboard/ ./cmd/mothership/dashboard/
 
-# Build the binary. CI builds amd64 only (ESP-IDF firmware is x86_64-only),
-# so GOOS/GOARCH are pinned to linux/amd64.
+# Build the binary for the target platform (set by buildx --platform).
+# Builds native binaries per-architecture (amd64, arm64) using --platform=$BUILDPLATFORM.
+# ESP32 firmware is built once on amd64 and copied into all platform images.
 # CGO_ENABLED=0 because we use pure-Go SQLite (modernc.org/sqlite)
 # -tags=embed enables dashboard embedding via go:embed
 ARG VERSION=dev
@@ -101,7 +102,7 @@ RUN CGO_ENABLED=0 \
 # Stage 3: Minimal runtime image - distroless nonroot
 # Dashboard is embedded in the Go binary via go:embed, not copied as files
 FROM gcr.io/distroless/static-debian12:nonroot
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 
 # Copy the binary (dashboard is embedded via go:embed)
 COPY --from=builder /app/spaxel /spaxel
