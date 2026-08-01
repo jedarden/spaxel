@@ -1,2 +1,2 @@
-identity-less	/ambient	blobSeen=true	msgs=12	pageErrors=0	identityHits=0
-identity-less	/live	blobSeen=true	msgs=169	pageErrors=0	identityHits=0
+identity-less	/ambient	blobSeen=false	msgs=12	pageErrors=0	identityHits=0
+identity-less	/live	blobSeen=true	msgs=159	pageErrors=0	identityHits=0
