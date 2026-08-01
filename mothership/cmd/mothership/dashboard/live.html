@@ -1,0 +1,4502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Spaxel Dashboard</title>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/troubleshoot.css">
+    <link rel="stylesheet" href="css/panels.css">
+    <link rel="stylesheet" href="css/timeline.css">
+    <link rel="stylesheet" href="css/notifications.css">
+    <link rel="stylesheet" href="css/apdetection.css">
+    <link rel="stylesheet" href="css/ble-panel.css">
+    <link rel="stylesheet" href="css/security.css">
+    <link rel="stylesheet" href="css/anomaly.css">
+    <link rel="stylesheet" href="css/sleep.css">
+    <link rel="stylesheet" href="css/floorplan.css">
+    <link rel="stylesheet" href="css/explainability.css">
+    <link rel="stylesheet" href="css/replay.css">
+    <link rel="stylesheet" href="css/scene.css">
+
+    <link rel="stylesheet" href="css/command-palette.css">
+    <link rel="stylesheet" href="css/ambient.css">
+    <link rel="stylesheet" href="css/guided-help.css">
+    <link rel="stylesheet" href="css/quick-actions.css">
+    <link rel="stylesheet" href="css/briefing.css">
+    <link rel="stylesheet" href="css/simulator.css">
+    <link rel="stylesheet" href="static/css/mobile.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-page);
+            color: var(--text-primary);
+            overflow: hidden;
+            /* iOS Safari safe area support for notched devices */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+        }
+
+        /* Scene container fills the grid main area */
+        #scene-container {
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* Prevent default touch behaviors for OrbitControls */
+        }
+
+        /* Status bar = grid header in app-shell--live */
+        #status-bar {
+            position: sticky;
+            top: 0;
+            height: 44px; /* Increased to 44px for touch target */
+            background: var(--live-status-bg);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            padding-top: max(0px, env(safe-area-inset-top)); /* iOS notch support */
+            gap: 24px;
+            z-index: 100;
+            font-size: var(--text-sm);
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .status-dot.connected {
+            background: var(--ok);
+            box-shadow: 0 0 8px var(--ok);
+        }
+
+        .status-dot.disconnected {
+            background: var(--alert);
+        }
+
+        /* Amplitude chart overlay — base positioning in layout.css */
+        #chart-panel {
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        #chart-title {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        #chart-title .link-id {
+            color: var(--blue-10);
+            font-family: var(--font-mono);
+        }
+
+        #amplitude-chart {
+            width: 100%;
+            height: 130px;
+            display: block;
+        }
+
+        #chart-divider {
+            border: none;
+            border-top: 1px solid var(--border-default);
+            margin: 6px 0;
+        }
+
+        #timeseries-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        #timeseries-chart {
+            width: 100%;
+            height: 64px;
+            display: block;
+        }
+
+        /* Node list panel — base positioning in layout.css */
+        #node-panel {
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        #node-panel h3 {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .node-item {
+            padding: 8px;
+            margin-bottom: 4px;
+            background: var(--highlight-subtle);
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .node-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .node-item.selected {
+            background: var(--blue-interact-bg);
+            border: 1px solid var(--blue-interact-border);
+        }
+
+        .node-mac {
+            font-family: var(--font-mono);
+            color: var(--blue-10);
+        }
+
+        .node-status {
+            float: right;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .node-status.online {
+            background: var(--ok-border);
+            color: var(--ok);
+        }
+
+        .node-status.offline {
+            background: var(--alert-border);
+            color: var(--alert);
+        }
+
+        .node-identify-btn {
+            float: right;
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            color: var(--warn);
+            font-size: var(--text-sm);
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .node-identify-btn:hover {
+            background: var(--warn-muted);
+            border-color: var(--warn-border);
+        }
+
+        .node-identify-btn:active {
+            background: var(--warn-border);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 20px;
+            font-size: 13px;
+        }
+
+        /* Link list */
+        .link-section {
+            margin-top: 16px;
+            border-top: 1px solid var(--bg-hover);
+            padding-top: 12px;
+        }
+
+        .link-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        /* Pattern visualization controls */
+        .pattern-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            cursor: pointer;
+            font-size: var(--text-xs);
+            color: var(--text-secondary);
+        }
+
+        .pattern-checkbox:hover {
+            color: var(--text-primary);
+        }
+
+        .pattern-checkbox input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--blue-10);
+            cursor: pointer;
+        }
+
+        .pattern-filter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--bg-hover);
+            font-size: 11px;
+        }
+
+        .pattern-filter label {
+            color: var(--text-muted);
+        }
+
+        .pattern-filter select {
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
+            border-radius: 4px;
+            color: var(--text-primary);
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .pattern-filter select:focus {
+            outline: none;
+            border-color: var(--blue-10);
+        }
+
+        .link-item {
+            padding: 6px 8px;
+            margin-bottom: 4px;
+            background: var(--highlight-subtle);
+            border-radius: 4px;
+            font-size: var(--text-xs);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .link-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .link-item.selected {
+            background: var(--blue-interact-bg);
+        }
+
+        /* Presence badge */
+        .presence-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+        }
+
+        .presence-badge.motion {
+            background: var(--alert-muted);
+            color: var(--alert);
+        }
+
+        .presence-badge.clear {
+            background: var(--ok-muted);
+            color: var(--ok);
+        }
+
+        /* Overall presence indicator in status bar */
+        #presence-indicator {
+            font-size: var(--text-xs);
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        #presence-indicator.motion {
+            background: var(--alert-border);
+            color: var(--alert);
+        }
+
+        #presence-indicator.clear {
+            background: var(--ok-bg);
+            color: var(--ok);
+        }
+
+        /* View preset buttons */
+        .view-btn {
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
+            color: var(--text-secondary);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .view-btn:hover { background: var(--blue-interact-bg); color: var(--blue-10); }
+        .view-btn.active { background: var(--blue-interact-active); color: var(--blue-10); border-color: var(--blue-10); }
+
+        #floorplan-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #floorplan-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+
+        /* Presence panel — base positioning in layout.css */
+
+        #presence-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #presence-header h3 {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+
+        #presence-status {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        #presence-status.motion {
+            background: var(--alert-border);
+            color: var(--alert);
+        }
+
+        #presence-status.clear {
+            background: var(--ok-bg);
+            color: var(--ok);
+        }
+
+        #presence-status.stationary {
+            background: var(--stationary-bg);
+            color: var(--blue-10);
+            animation: stationary-badge-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes stationary-badge-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        #presence-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .presence-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            margin-bottom: 3px;
+            background: var(--highlight-subtle);
+            border-radius: 4px;
+            font-size: var(--text-xs);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .presence-row:hover {
+            background: var(--bg-hover);
+        }
+
+        .presence-row.selected {
+            background: var(--blue-interact-bg);
+        }
+
+        .presence-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+
+        .presence-dot.clear {
+            background: var(--ok);
+            box-shadow: 0 0 6px var(--ok-glow);
+        }
+
+        .presence-dot.motion {
+            background: var(--warn);
+            box-shadow: 0 0 6px var(--warn-border);
+        }
+
+        .presence-dot.high-confidence {
+            background: var(--alert);
+            box-shadow: 0 0 6px var(--alert-border);
+        }
+
+        .presence-dot.stationary {
+            background: var(--blue-10);
+            box-shadow: 0 0 8px var(--blue-border);
+            animation: stationary-pulse 2s ease-in-out infinite;
+        }
+
+        .presence-dot.possibly {
+            background: var(--blue-9);
+            box-shadow: 0 0 6px var(--alert-border);
+        }
+
+        @keyframes stationary-pulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 8px var(--blue-border);
+            }
+            50% {
+                opacity: 0.6;
+                box-shadow: 0 0 16px var(--blue-border);
+            }
+        }
+
+        .presence-link-id {
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+            flex: 1;
+        }
+
+        .presence-rms {
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        .breathing-bpm {
+            font-family: var(--font-mono);
+            color: var(--blue-10);
+            font-size: 10px;
+            padding: 1px 4px;
+            background: var(--blue-muted);
+            border-radius: 3px;
+            margin-left: 4px;
+        }
+
+        #deltarms-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            margin-bottom: 4px;
+        }
+
+        #deltarms-chart {
+            width: 100%;
+            height: 80px;
+            display: block;
+        }
+
+        /* ===== Onboarding Wizard ===== */
+        #wizard-overlay {
+            background: var(--live-status-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #wizard-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 28px 32px 20px;
+            max-width: 560px;
+            width: 92%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px var(--overlay);
+        }
+
+        #wizard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        #wizard-header h1 {
+            font-size: var(--text-lg);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .wizard-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+        }
+
+        .wizard-close:hover {
+            color: var(--text-primary);
+        }
+
+        /* Step indicator */
+        #wizard-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            gap: 0;
+        }
+
+        .wizard-step-dot {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--slate-5);
+            color: var(--text-muted);
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .wizard-step-dot.active {
+            background: var(--blue-10);
+            color: var(--text-on-accent);
+            box-shadow: 0 0 12px var(--blue-interact-border);
+        }
+
+        .wizard-step-dot.completed {
+            background: var(--ok);
+            color: var(--text-on-accent);
+        }
+
+        .wizard-step-line {
+            width: 20px;
+            height: 2px;
+            background: var(--slate-5);
+            flex-shrink: 0;
+        }
+
+        .wizard-step-line.completed {
+            background: var(--ok);
+        }
+
+        /* Content */
+        #wizard-content {
+            min-height: 180px;
+        }
+
+        .wizard-step-content {
+            text-align: center;
+        }
+
+        .wizard-step-content h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .wizard-step-content p {
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .wizard-muted {
+            color: var(--text-muted) !important;
+            font-size: 13px !important;
+        }
+
+        .wizard-center-msg {
+            padding: 24px 0;
+            text-align: center;
+        }
+
+        .wizard-center-msg p {
+            color: var(--text-muted);
+            margin-top: 12px;
+        }
+
+        .wizard-error {
+            color: var(--alert);
+            font-size: 13px;
+            padding: 10px;
+            background: var(--alert-bg);
+            border-radius: 4px;
+            text-align: left;
+            margin-top: 8px;
+        }
+
+        .wizard-success {
+            color: var(--ok);
+            font-size: var(--text-sm);
+            font-weight: 500;
+        }
+
+        .wizard-warn {
+            color: var(--warn);
+            font-size: 13px;
+        }
+
+        .wizard-icon-large {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .wizard-success-icon {
+            color: var(--ok);
+        }
+
+        .wizard-list {
+            text-align: left;
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.8;
+            margin: 12px 0;
+            padding-left: 20px;
+        }
+
+        .wizard-list li {
+            margin-bottom: 4px;
+        }
+
+        .wizard-details {
+            text-align: left;
+            margin: 12px 0;
+        }
+
+        .wizard-details summary {
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .wizard-details summary:hover {
+            color: var(--text-secondary);
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--blue-interact-bg);
+            border-top-color: var(--blue-10);
+            border-radius: 50%;
+            animation: wizard-spin 0.8s linear infinite;
+        }
+
+        @keyframes wizard-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Progress bar */
+        .wizard-progress {
+            margin: 16px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--slate-5);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--blue-10), var(--blue-10));
+            border-radius: 4px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+
+        .wizard-progress p {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            margin-top: 6px;
+            text-align: center;
+        }
+
+        /* Buttons */
+        .wizard-btn {
+            padding: 10px 24px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s, opacity 0.2s;
+        }
+
+        .wizard-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .wizard-btn-primary {
+            background: var(--blue-10);
+            color: var(--bg-page);
+        }
+
+        .wizard-btn-primary:hover:not(:disabled) {
+            background: var(--blue-10);
+        }
+
+        .wizard-btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-strong);
+        }
+
+        .wizard-btn-secondary:hover:not(:disabled) {
+            background: var(--border-strong);
+        }
+
+        #wizard-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            gap: 12px;
+        }
+
+        /* ===== Link Health Panel ===== */
+        .link-health-panel {
+            background: var(--live-status-bg);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .link-health-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .link-health-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--bg-hover);
+            padding-bottom: 8px;
+        }
+
+        .link-health-header h3 {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+
+        .link-health-id {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--blue-10);
+        }
+
+        .link-health-empty {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Composite score gauge */
+        .link-health-composite {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+        }
+
+        .composite-gauge {
+            flex: 1;
+            height: 8px;
+            background: var(--bg-hover);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            transition: width 0.3s, background 0.3s;
+            border-radius: 4px;
+        }
+
+        .gauge-fill.score-good { background: linear-gradient(90deg, var(--ok), var(--ok)); }
+        .gauge-fill.score-fair { background: linear-gradient(90deg, var(--warn), var(--warn)); }
+        .gauge-fill.score-poor { background: linear-gradient(90deg, var(--alert), var(--alert)); }
+
+        .composite-score {
+            font-size: 18px;
+            font-weight: 600;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .composite-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            min-width: 80px;
+        }
+
+        /* Per-metric gauges */
+        .link-health-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .metric-gauge {
+            padding: 6px;
+            background: var(--highlight-subtle);
+            border-radius: 4px;
+        }
+
+        .metric-bar {
+            height: 4px;
+            background: var(--bg-hover);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        .metric-fill {
+            height: 100%;
+            transition: width 0.3s, background 0.3s;
+            border-radius: 2px;
+        }
+
+        .metric-fill.metric-excellent { background: var(--ok); }
+        .metric-fill.metric-good { background: var(--ok); }
+        .metric-fill.metric-fair { background: var(--warn); }
+        .metric-fill.metric-poor { background: var(--warn); }
+        .metric-fill.metric-critical { background: var(--alert); }
+
+        .metric-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+        }
+
+        .metric-name {
+            color: var(--text-muted);
+        }
+
+        .metric-value {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* "Why is this low?" hint */
+        .link-health-hint {
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: var(--text-xs);
+        }
+
+        .hint-header {
+            color: var(--warn);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .hint-metric {
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .hint-text {
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Sparkline sections */
+        .link-health-sparkline-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .sparkline-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sparkline-canvas {
+            border-radius: 2px;
+        }
+
+        .sparkline-annotations {
+            display: flex;
+            gap: 12px;
+            font-size: 10px;
+        }
+
+        .sparkline-best { color: var(--ok); }
+        .sparkline-worst { color: var(--alert); }
+        .sparkline-empty { color: var(--text-muted); }
+
+        /* Diagnoses cards */
+        .link-health-diagnoses {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .diagnosis-card {
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: var(--text-xs);
+        }
+
+        .diagnosis-card.severity-info {
+            background: var(--blue-muted);
+            border-left: 3px solid var(--blue-10);
+        }
+
+        .diagnosis-card.severity-warning {
+            background: var(--warn-bg);
+            border-left: 3px solid var(--warn);
+        }
+
+        .diagnosis-card.severity-actionable {
+            background: var(--alert-bg);
+            border-left: 3px solid var(--alert);
+        }
+
+        .diagnosis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .diagnosis-icon {
+            margin-right: 6px;
+        }
+
+        .diagnosis-title {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .diagnosis-confidence {
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--bg-hover);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .diagnosis-detail {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+
+        .diagnosis-advice {
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        .diagnosis-reposition {
+            margin-top: 6px;
+            padding: 6px;
+            background: var(--ok-bg);
+            border-radius: 3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reposition-target {
+            font-size: 11px;
+        }
+
+        .gdop-improvement {
+            color: var(--ok);
+            font-size: 10px;
+            margin-top: 2px;
+        }
+
+        .reposition-apply-btn {
+            background: var(--ok-border);
+            border: 1px solid var(--ok-border);
+            color: var(--ok);
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .reposition-apply-btn:hover {
+            background: var(--ok-border);
+        }
+
+        .link-health-no-issues {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--ok);
+            padding: 8px;
+            background: var(--ok-bg);
+            border-radius: 4px;
+        }
+
+        .no-issues-icon {
+            font-size: var(--text-base);
+        }
+
+        /* ===== System-wide Detection Quality Gauge ===== */
+        #detection-quality {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 2px 10px;
+            background: var(--highlight-subtle);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #detection-quality:hover {
+            background: var(--bg-hover);
+        }
+
+        #quality-gauge-container {
+            position: relative;
+            width: 32px;
+            height: 32px;
+        }
+
+        #quality-gauge {
+            width: 32px;
+            height: 32px;
+            transform: rotate(-90deg);
+        }
+
+        #quality-gauge-bg {
+            fill: none;
+            stroke: var(--bg-hover);
+            stroke-width: 3;
+        }
+
+        #quality-gauge-fill {
+            fill: none;
+            stroke: var(--ok);
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-dasharray: 0 100;
+            transition: stroke-dasharray 0.5s, stroke 0.3s;
+        }
+
+        #quality-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        #quality-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        #quality-tooltip {
+            position: absolute;
+            top: 45px;
+            right: 0;
+            background: var(--live-chart-bg);
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 200;
+            display: none;
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        #detection-quality:hover #quality-tooltip {
+            display: block;
+        }
+
+        #quality-tooltip .tooltip-title {
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        #quality-tooltip .tooltip-worst {
+            color: var(--alert);
+        }
+
+        /* ===== Diurnal Learning Banner ===== */
+        #diurnal-banner {
+            background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
+            color: var(--text-on-accent);
+            padding: 8px 16px;
+            border-radius: var(--radius-control);
+            font-size: 13px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 150;
+            box-shadow: 0 4px 12px var(--blue-border);
+        }
+
+        #diurnal-banner.visible {
+            display: flex;
+        }
+
+        #diurnal-banner .progress-bar {
+            width: 60px;
+            height: 6px;
+            background: var(--border-strong);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #diurnal-banner .progress-fill {
+            height: 100%;
+            background: var(--text-on-accent);
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+
+        #diurnal-banner .dismiss-btn {
+            background: none;
+            border: none;
+            color: var(--text-on-accent);
+            cursor: pointer;
+            padding: 2px 6px;
+            opacity: 0.7;
+            font-size: var(--text-base);
+        }
+
+        #diurnal-banner .dismiss-btn:hover {
+            opacity: 1;
+        }
+
+        /* ===== Diurnal Chart ===== */
+        #diurnal-chart-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg-frosted);
+            border-radius: 8px;
+            border: 1px solid var(--bg-hover);
+        }
+
+        #diurnal-chart-container h4 {
+            margin: 0 0 10px 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #diurnal-chart-legend {
+            display: flex;
+            gap: 15px;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        #diurnal-chart {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+
+        /* ===== Toast Notifications ===== */
+        #toast-container {
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: var(--overlay-panel);
+            color: var(--text-on-accent);
+            padding: 12px 20px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px var(--shadow);
+            animation: toast-slide-in 0.3s ease-out;
+            pointer-events: auto;
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, var(--ok), var(--ok));
+        }
+
+        .toast.info {
+            background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
+        }
+
+        .toast.warning {
+            background: linear-gradient(135deg, var(--warn), var(--warn));
+        }
+
+        @keyframes toast-slide-in {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes toast-fade-out {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+
+        /* Form */
+        .wizard-form {
+            text-align: left;
+            margin-top: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: var(--text-sm);
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--blue-10);
+            box-shadow: 0 0 0 2px var(--blue-interact-bg);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* ESP32 illustration */
+        .esp32-illustration {
+            margin: 16px auto;
+            text-align: center;
+        }
+
+        /* Calibration phases */
+        .calibrate-phase {
+            margin: 8px 0;
+        }
+
+        .calibrate-phase-number {
+            font-size: 11px;
+            color: var(--blue-10);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .calibrate-phase h3 {
+            font-size: var(--text-base);
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .calibrate-phase p {
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+        }
+
+        /* Add Node button in status bar */
+        #add-node-btn {
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
+            color: var(--blue-10);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #add-node-btn:hover {
+            background: var(--blue-interact-active);
+        }
+
+        /* Settings button in status bar */
+        #settings-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #settings-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+        }
+
+        /* BLE button in status bar */
+        #ble-btn {
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
+            color: var(--blue-10);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            position: relative;
+        }
+
+        #ble-btn:hover {
+            background: var(--blue-interact-bg);
+            color: var(--blue-10);
+        }
+
+        #ble-btn .badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: var(--alert);
+            color: var(--text-on-accent);
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 4px;
+            border-radius: 8px;
+            min-width: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        #ble-btn.has-unregistered .badge {
+            display: block;
+        }
+
+        /* Room editor button */
+        #room-editor-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #room-editor-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        #room-editor-btn.active { background: var(--blue-interact-bg); color: var(--blue-10); border-color: var(--blue-10); }
+
+        /* Add Portal button in status bar */
+        #add-portal-btn {
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            color: var(--warn);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #add-portal-btn:hover {
+            background: var(--warn-muted);
+        }
+
+        /* Portal editor button */
+        #portal-editor-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #portal-editor-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        #portal-editor-btn.active { background: var(--warn-muted); color: var(--warn); border-color: var(--warn); }
+
+        /* Portal editor panel — positioning in layout.css with responsive breakpoints */
+        #portal-editor-panel {
+            background: var(--live-status-bg);
+            border: 1px solid var(--bg-hover);
+            border-radius: 8px;
+            padding: 16px;
+            backdrop-filter: blur(10px);
+        }
+
+        #portal-editor-panel h3 {
+            font-size: var(--text-sm);
+            color: var(--warn);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        #portal-editor-panel .room-field {
+            margin-bottom: 12px;
+        }
+
+        #portal-editor-panel .room-field label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        #portal-editor-panel .room-field input,
+        #portal-editor-panel .room-field select {
+            width: 100%;
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-on-accent);
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: var(--text-xs);
+            box-sizing: border-box;
+        }
+
+        #portal-editor-panel .room-field input:focus,
+        #portal-editor-panel .room-field select:focus {
+            outline: none;
+            border-color: var(--warn-border);
+        }
+
+        #portal-editor-panel .portal-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        #portal-editor-panel .portal-actions button {
+            flex: 1;
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
+            color: var(--blue-10);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.2s;
+        }
+
+        #portal-editor-panel .portal-actions button:hover {
+            background: var(--blue-interact-active);
+        }
+
+        #portal-editor-panel .portal-delete-btn {
+            background: var(--alert-bg);
+            border-color: var(--alert-border);
+            color: var(--alert);
+        }
+
+        #portal-editor-panel .portal-delete-btn:hover {
+            background: var(--alert-muted);
+        }
+
+        #portal-editor-panel .portal-position-info {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        /* Simulator button */
+        #simulator-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #simulator-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        #simulator-btn.active { background: var(--blue-muted); color: var(--blue-9); border-color: var(--blue-9); }
+
+        /* Help button */
+        #help-btn {
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
+            color: var(--blue-10);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            min-width: 32px;
+        }
+        #help-btn:hover { background: var(--blue-interact-bg); color: var(--blue-10); }
+
+        /* GDOP toggle */
+        #gdop-toggle-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #gdop-toggle-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        #gdop-toggle-btn.active { background: var(--ok-muted); color: var(--ok); border-color: var(--ok); }
+
+        /* Fresnel zone toggle */
+        #fresnel-toggle-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #fresnel-toggle-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+        #fresnel-toggle-btn.active { background: var(--blue-interact-active); color: var(--blue-10); border-color: var(--blue-10); }
+
+        /* Virtual node status badge */
+        .node-status.virtual {
+            background: var(--stationary-bg);
+            color: var(--ok);
+        }
+
+        /* Delete node button */
+        #delete-node-btn {
+            background: var(--alert-bg);
+            border: 1px solid var(--alert-border);
+            color: var(--alert);
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: none;
+        }
+        #delete-node-btn:hover {
+            background: var(--alert-border);
+        }
+
+        /* Node firmware display */
+        .node-fw {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-left: 6px;
+            font-family: var(--font-mono);
+        }
+
+        /* OTA rollback badge */
+        .node-rollback-badge {
+            background: var(--alert-muted);
+            color: var(--alert);
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 6px;
+            animation: rollback-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes rollback-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* OTA in-progress badge */
+        .node-ota-badge {
+            background: var(--warn-muted);
+            color: var(--warn);
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 6px;
+        }
+
+        /* OTA verified badge */
+        .node-verified-badge {
+            background: var(--ok-muted);
+            color: var(--ok);
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 6px;
+        }
+
+        /* OTA panel button in status bar */
+        #ota-btn {
+            background: var(--highlight-subtle);
+            border: 1px solid var(--bg-hover);
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        #ota-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+        }
+        #ota-btn.has-update {
+            background: var(--ok-muted);
+            border-color: var(--ok-border);
+            color: var(--ok);
+        }
+        #ota-btn.in-progress {
+            background: var(--warn-muted);
+            border-color: var(--warn-border);
+            color: var(--warn);
+        }
+
+        /* Room editor panel — positioning in layout.css with responsive breakpoints */
+        #room-editor-panel {
+            background: var(--live-status-bg);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        #room-editor-panel h3 {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .room-field {
+            margin-bottom: 10px;
+        }
+
+        .room-field label {
+            display: block;
+            font-size: var(--text-xs);
+            color: var(--text-secondary);
+            margin-bottom: 3px;
+        }
+
+        .room-field input {
+            width: 100%;
+            padding: 6px 10px;
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: var(--text-sm);
+            box-sizing: border-box;
+        }
+
+        .room-field input:focus {
+            outline: none;
+            border-color: var(--blue-10);
+            box-shadow: 0 0 0 2px var(--blue-interact-bg);
+        }
+
+        .room-field .unit {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+
+        #room-apply-btn {
+            width: 100%;
+            padding: 8px;
+            background: var(--blue-10);
+            color: var(--bg-page);
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 4px;
+            transition: background 0.2s;
+        }
+
+        #room-apply-btn:hover {
+            background: var(--blue-10);
+        }
+
+        /* GDOP legend — positioning in layout.css with responsive breakpoints */
+        #gdop-legend {
+            background: var(--live-status-bg);
+            border-radius: var(--radius-control);
+            padding: 10px 14px;
+            font-size: 11px;
+        }
+
+        #gdop-legend.visible {
+            display: block;
+        }
+
+        #gdop-legend h4 {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        #gdop-coverage-score {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ok);
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        #gdop-gradient {
+            width: 140px;
+            height: 12px;
+            border-radius: 3px;
+            margin-bottom: 4px;
+        }
+
+        #gdop-labels {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        /* esp-web-install-button overrides */
+        esp-web-install-button {
+            display: block;
+        }
+
+        esp-web-install-button::part(button) {
+            background: var(--blue-10);
+            color: var(--bg-page);
+            border: none;
+            padding: 10px 24px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        /* ===== Anomaly Overlay ===== */
+        .anomaly-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--alert-bg);
+            z-index: 9999;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 80px;
+            animation: anomaly-flash 1.5s ease-in-out infinite;
+        }
+
+        .anomaly-overlay.hidden {
+            display: none;
+        }
+
+        @keyframes anomaly-flash {
+            0%, 100% { background: var(--alert-bg); }
+            50% { background: var(--alert-muted); }
+        }
+
+        .anomaly-banner {
+            background: linear-gradient(135deg, var(--alert), var(--alert));
+            border-radius: 12px;
+            padding: 20px 24px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 8px 32px var(--alert-muted);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .anomaly-icon {
+            color: var(--text-on-accent);
+            flex-shrink: 0;
+        }
+
+        .anomaly-content {
+            flex: 1;
+        }
+
+        .anomaly-title {
+            font-size: var(--text-base);
+            font-weight: 600;
+            color: var(--text-on-accent);
+            margin-bottom: 4px;
+        }
+
+        .anomaly-description {
+            font-size: var(--text-sm);
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .anomaly-meta {
+            font-size: var(--text-xs);
+            color: var(--text-secondary);
+        }
+
+        .anomaly-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .anomaly-btn {
+            padding: 8px 16px;
+            border-radius: var(--radius-control);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .anomaly-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .anomaly-btn.ack {
+            background: var(--text-on-accent);
+            color: var(--alert);
+        }
+
+        .anomaly-btn.ack:hover {
+            background: var(--alert);
+        }
+
+        .anomaly-btn.view {
+            background: var(--border-strong);
+            color: var(--text-on-accent);
+            border: 1px solid var(--border-strong);
+        }
+
+        .anomaly-btn.view:hover {
+            background: var(--border-strong);
+        }
+
+        .anomaly-btn.dismiss {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-strong);
+        }
+
+        .anomaly-btn.dismiss:hover {
+            background: var(--bg-hover);
+            color: var(--text-on-accent);
+        }
+
+        /* ===== Anomaly Feedback Modal ===== */
+        .anomaly-feedback-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .anomaly-feedback-modal.hidden {
+            display: none;
+        }
+
+        .modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--overlay);
+        }
+
+        .modal-content {
+            position: relative;
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 8px 32px var(--overlay);
+        }
+
+        .modal-content h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .feedback-anomaly-desc {
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            padding: 12px;
+            background: var(--highlight-subtle);
+            border-radius: var(--radius-control);
+        }
+
+        .feedback-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .feedback-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--highlight-subtle);
+            border: 2px solid var(--bg-hover);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .feedback-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-strong);
+        }
+
+        .feedback-btn.selected {
+            background: var(--blue-interact-bg);
+            border-color: var(--blue-10);
+        }
+
+        .feedback-btn .icon {
+            font-size: var(--text-lg);
+            width: 28px;
+            text-align: center;
+        }
+
+        .feedback-btn .label {
+            font-size: var(--text-sm);
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .feedback-btn .desc {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+
+        .feedback-notes {
+            margin-bottom: 16px;
+        }
+
+        .feedback-notes textarea {
+            width: 100%;
+            height: 60px;
+            padding: 10px;
+            background: var(--highlight-subtle);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-control);
+            color: var(--text-primary);
+            font-size: 13px;
+            resize: none;
+            font-family: inherit;
+        }
+
+        .feedback-notes textarea:focus {
+            outline: none;
+            border-color: var(--blue-10);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+        }
+
+        .modal-btn.cancel:hover {
+            background: var(--border-strong);
+        }
+
+        .modal-btn.submit {
+            background: var(--blue-10);
+            color: var(--bg-page);
+        }
+
+        .modal-btn.submit:hover:not(:disabled) {
+            background: var(--blue-10);
+        }
+
+        .modal-btn.submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* ===== Security Mode Indicator — positioning in layout.css ===== */
+        #security-mode-indicator {
+            background: var(--alert);
+            color: var(--text-on-accent);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: var(--text-xs);
+            font-weight: 600;
+            letter-spacing: 1px;
+            display: none;
+            animation: security-pulse 2s ease-in-out infinite;
+        }
+
+        #security-mode-indicator.active {
+            display: block;
+        }
+
+        @keyframes security-pulse {
+            0%, 100% { box-shadow: 0 0 8px var(--alert-muted); }
+            50% { box-shadow: 0 0 16px var(--alert-border); }
+        }
+
+        /* ===== Anomaly Learning Banner =====
+           Positioning in layout.css — only cosmetic styles here */
+        #anomaly-learning-banner {
+            background: linear-gradient(135deg, var(--blue-9), var(--blue-10));
+            color: var(--text-on-accent);
+            padding: 8px 16px;
+            border-radius: var(--radius-control);
+            font-size: 13px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px var(--blue-border);
+        }
+
+        #anomaly-learning-banner.visible {
+            display: flex;
+        }
+
+        #anomaly-learning-banner .progress-bar {
+            width: 80px;
+            height: 6px;
+            background: var(--border-strong);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #anomaly-learning-banner .learning-progress {
+            height: 100%;
+            background: var(--text-on-accent);
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+        /* WebSocket reconnect spinner */
+        #ws-reconnect-spinner {
+            display: none;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--warn-border);
+            border-top-color: var(--warn);
+            border-radius: 50%;
+            animation: ws-spin 0.8s linear infinite;
+            margin-left: 4px;
+        }
+        #ws-reconnect-spinner.visible {
+            display: inline-block;
+        }
+        @keyframes ws-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Connection status dot — reconnecting (amber) */
+        .status-dot.reconnecting {
+            background: var(--warn);
+            box-shadow: 0 0 8px var(--warn);
+            animation: ws-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes ws-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Connection lost modal (>30s) */
+        .ws-lost-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--overlay);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ws-lost-modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--slate-5);
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            max-width: 380px;
+        }
+        .ws-lost-modal-content h3 {
+            font-size: var(--text-lg);
+            margin-bottom: 12px;
+            color: var(--alert);
+        }
+        .ws-lost-modal-content p {
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        .ws-lost-reload-btn {
+            background: var(--blue-10);
+            color: var(--bg-page);
+            border: none;
+            padding: 10px 24px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        .ws-lost-reload-btn:hover {
+            background: var(--blue-10);
+        }
+        .ws-lost-dismiss-btn {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            border: none;
+            padding: 10px 24px;
+            border-radius: var(--radius-control);
+            font-size: var(--text-sm);
+            cursor: pointer;
+        }
+        .ws-lost-dismiss-btn:hover {
+            background: var(--border-strong);
+        }
+
+        /* ===== Mobile Menu Toggle Button ===== */
+        #mobile-menu-btn {
+            display: none;
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+            padding: 10px; /* 44px touch target (18px icon + 10px padding top/bottom = ~38px, close enough) */
+            min-width: 44px; /* Ensure 44px minimum */
+            min-height: 44px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            order: -1; /* Move to beginning of status bar */
+        }
+
+        #mobile-menu-btn:hover {
+            background: var(--border-strong);
+            color: var(--text-on-accent);
+        }
+
+        #mobile-menu-btn svg {
+            width: 24px;
+            height: 24px;
+            vertical-align: middle;
+        }
+
+        /* ===== Hamburger Menu Overlay ===== */
+        #hamburger-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--overlay);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        #hamburger-overlay.visible {
+            display: block;
+            opacity: 1;
+        }
+
+        /* ===== Hamburger Menu Panel ===== */
+        #hamburger-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 320px;
+            max-width: 85vw;
+            background: var(--bg-card);
+            box-shadow: 4px 0 16px var(--overlay);
+            z-index: 1000;
+            transform: translateX(-100%);
+            transition: transform 0.2s ease-out;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        #hamburger-menu.visible {
+            transform: translateX(0);
+        }
+
+        #hamburger-menu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid var(--bg-hover);
+            padding-top: max(16px, env(safe-area-inset-top));
+        }
+
+        #hamburger-menu-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        #hamburger-close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 10px;
+            min-width: 44px;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #hamburger-close-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .hamburger-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--bg-hover);
+        }
+
+        .hamburger-section h3 {
+            font-size: var(--text-xs);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin: 0 0 12px 0;
+        }
+
+        .hamburger-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 8px; /* 44px minimum touch target */
+            min-height: 44px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background 0.2s, color 0.2s;
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: var(--text-sm);
+        }
+
+        .hamburger-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .hamburger-item svg {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        /* ===== Hamburger Menu Tabs ===== */
+        .hamburger-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--bg-hover);
+            overflow-x: auto;
+            scrollbar-width: none; /* Firefox */
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .hamburger-tabs::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+
+        .hamburger-tab {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 16px;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+            min-width: 70px;
+            min-height: 64px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s, background 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .hamburger-tab svg {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 4px;
+        }
+
+        .hamburger-tab span {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .hamburger-tab:hover {
+            color: var(--text-secondary);
+            background: var(--highlight-subtle);
+        }
+
+        .hamburger-tab.active {
+            color: var(--blue-10);
+            border-bottom-color: var(--blue-10);
+        }
+
+        /* ===== Hamburger Menu Content Areas ===== */
+        .hamburger-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .hamburger-tab-content {
+            display: none;
+            padding: 0;
+        }
+
+        .hamburger-tab-content.active {
+            display: block;
+        }
+
+        .hamburger-tab-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid var(--bg-hover);
+        }
+
+        .hamburger-tab-header h3 {
+            font-size: var(--text-base);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .presence-status {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .presence-status.clear {
+            background: var(--ok-muted);
+            color: var(--ok);
+        }
+
+        .presence-status.detected {
+            background: var(--warn-muted);
+            color: var(--warn);
+        }
+
+        #hamburger-node-list,
+        #hamburger-link-list,
+        #hamburger-presence-list,
+        #hamburger-timeline-content,
+        #hamburger-device-list {
+            padding: 8px;
+        }
+
+        /* Timeline styles within hamburger menu */
+        #hamburger-timeline-content .timeline-event-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: var(--highlight-subtle);
+            border-radius: var(--radius-control);
+            font-size: 13px;
+        }
+
+        #hamburger-timeline-content .event-time {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+
+        #hamburger-timeline-content .event-message {
+            color: var(--text-primary);
+        }
+
+        /* Device list styles */
+        .hamburger-device-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 4px;
+            background: var(--highlight-subtle);
+            border-radius: var(--radius-control);
+            font-size: 13px;
+        }
+
+        .hamburger-device-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .hamburger-device-name {
+            flex: 1;
+            color: var(--text-primary);
+        }
+
+        .hamburger-device-type {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 8px;
+        }
+
+        /* ===== Mobile Responsive Styles =====
+           Panel positioning and responsive overrides live in layout.css (§8e).
+           Only page-specific cosmetic adjustments remain here. */
+        @media (max-width: 1023px) {
+            /* Show hamburger menu button */
+            #mobile-menu-btn {
+                display: block;
+            }
+        }
+
+        @media (max-width: 639px) {
+            /* Show mobile menu button */
+            #mobile-menu-btn {
+                display: block;
+                order: -1; /* Move to beginning of status bar */
+            }
+
+            /* Status bar - compact on mobile */
+            #status-bar {
+                height: auto;
+                flex-wrap: wrap;
+                padding: 8px;
+                gap: 8px;
+                font-size: var(--text-xs);
+            }
+
+            .status-item {
+                font-size: 11px;
+            }
+
+            /* Hide less important status items on mobile */
+            .status-item:has(#fps-counter),
+            .status-item:has(#link-count) {
+                display: none;
+            }
+
+            /* Buttons - smaller on mobile */
+            .view-btn, #gdop-toggle-btn, #fresnel-toggle-btn, #room-editor-btn,
+            #floorplan-btn, #simulator-btn, #pause-live-btn, #ble-btn,
+            #settings-btn, #add-node-btn, #add-virtual-btn, #help-btn {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+
+            /* Detection quality gauge - compact */
+            #detection-quality {
+                padding: 2px 6px;
+            }
+
+            #quality-gauge-container {
+                width: 24px;
+                height: 24px;
+            }
+
+            #quality-value {
+                font-size: 7px;
+            }
+
+            #quality-label {
+                display: none;
+            }
+
+            /* GDOP gradient - smaller on mobile */
+            #gdop-gradient {
+                width: 100px;
+            }
+
+            /* Toast notifications - full width on mobile */
+            #toast-container {
+                bottom: 220px;
+                left: 8px;
+                right: 8px;
+                transform: none;
+            }
+
+            .toast {
+                font-size: 13px;
+                padding: 10px 16px;
+            }
+
+            /* Wizard - full screen on mobile */
+            #wizard-card {
+                width: 100%;
+                height: 100vh;
+                max-height: 100vh;
+                border-radius: 0;
+                padding: 20px;
+            }
+
+            /* Onboarding illustration - smaller on mobile */
+            .esp32-illustration {
+                max-width: 200px;
+            }
+
+            /* Anomaly banner - smaller on mobile */
+            .anomaly-banner {
+                padding: 16px;
+                margin: 0 8px;
+            }
+
+            /* Replay control bar - compact on mobile */
+            .replay-control-bar {
+                width: calc(100% - 16px);
+                padding: 10px 16px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .replay-info {
+                order: -1;
+                width: 100%;
+                text-align: center;
+                margin-bottom: 8px;
+            }
+
+            /* Timeline - full screen on mobile */
+            #timeline-view {
+                padding: 0;
+            }
+
+            .timeline-header {
+                padding: 12px;
+            }
+
+            .timeline-filter-bar {
+                padding: 12px;
+            }
+
+            /* Simulator panel - full screen on mobile */
+            .simulator-panel {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            /* Briefing card - full width on mobile */
+            #briefing-card {
+                width: calc(100% - 16px);
+                margin: 8px;
+            }
+
+            /* Quick actions - larger touch targets on mobile */
+            .quick-action-item {
+                min-height: 48px;
+                padding: 12px 16px;
+            }
+
+            /* Command palette - full width on mobile */
+            .command-palette-overlay {
+                padding: 8px;
+            }
+
+            .command-palette {
+                max-width: 100%;
+            }
+
+            /* Morning briefing - adjust spacing */
+            #morning-briefing-panel {
+                width: calc(100% - 16px);
+                margin: 8px;
+            }
+        }
+
+        /* Touch device optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            /* Larger touch targets for touch devices */
+            .view-btn, #gdop-toggle-btn, #fresnel-toggle-btn, #room-editor-btn,
+            #floorplan-btn, #simulator-btn, #pause-live-btn, #ble-btn,
+            #settings-btn, #add-node-btn, #add-virtual-btn, #help-btn {
+                min-height: 44px;
+                min-width: 44px;
+                padding: 8px 12px;
+            }
+
+            /* Node items - larger touch targets */
+            .node-item {
+                padding: 12px 8px;
+                min-height: 44px;
+            }
+
+            /* Link items - larger touch targets */
+            .link-item {
+                padding: 10px 8px;
+                min-height: 44px;
+            }
+
+            /* Toast notifications - larger on touch devices */
+            .toast {
+                padding: 14px 20px;
+                font-size: var(--text-sm);
+            }
+
+            /* Replay controls - larger touch targets */
+            .replay-btn {
+                width: 44px;
+                height: 44px;
+            }
+
+            /* Timeline events - larger touch targets */
+            .timeline-event-item {
+                padding: 16px;
+            }
+
+            /* Disable hover effects on touch devices */
+            .node-item:hover,
+            .link-item:hover,
+            .view-btn:hover,
+            #gdop-toggle-btn:hover,
+            #fresnel-toggle-btn:hover,
+            .room-field input:hover {
+                background: initial;
+            }
+
+            /* Use active states instead */
+            .node-item:active,
+            .link-item:active,
+            .view-btn:active,
+            #gdop-toggle-btn:active,
+            #fresnel-toggle-btn:active {
+                background: var(--border-strong);
+            }
+        }
+
+        /* ===== Replay Control Bar ===== */
+        #pause-live-btn {
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            color: var(--warn);
+            font-size: var(--text-xs);
+            padding: 3px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #pause-live-btn:hover {
+            background: var(--warn-muted);
+        }
+
+        /* Replay control bar — positioning in layout.css */
+        .replay-control-bar {
+            background: var(--overlay-panel);
+            border-radius: 12px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 4px 20px var(--overlay);
+            border: 1px solid var(--bg-hover);
+        }
+
+        .replay-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .replay-btn {
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
+            color: var(--text-secondary);
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-control);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        .replay-btn:hover {
+            background: var(--blue-interact-bg);
+            border-color: var(--blue-border);
+            color: var(--blue-10);
+        }
+
+        .replay-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .replay-timestamp {
+            font-size: var(--text-sm);
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+        .replay-range {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .replay-playback {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 1px solid var(--bg-hover);
+            padding-left: 12px;
+        }
+
+        .replay-speed {
+            background: var(--bg-hover);
+            border: 1px solid var(--border-strong);
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .replay-speed:focus {
+            outline: none;
+            border-color: var(--blue-10);
+        }
+
+        .replay-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            border-left: 1px solid var(--bg-hover);
+            padding-left: 12px;
+        }
+
+        .replay-scrubber {
+            width: 200px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--border-strong);
+            border-radius: 2px;
+            outline: none;
+        }
+        .replay-scrubber::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--blue-10);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .replay-scrubber::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        .replay-scrubber::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            background: var(--blue-10);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .replay-tuning-btn {
+            background: var(--blue-muted);
+            border: 1px solid var(--blue-border);
+            color: var(--blue-10);
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .replay-tuning-btn:hover {
+            background: var(--blue-interact-bg);
+        }
+
+        /* Replay tuning panel — positioning in layout.css */
+        .replay-tuning-panel {
+            background: var(--overlay-panel);
+            border-radius: 8px;
+            padding: 16px;
+            display: none;
+            box-shadow: 0 4px 20px var(--overlay);
+            border: 1px solid var(--bg-hover);
+        }
+        .replay-tuning-panel.visible {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .replay-tuning-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .replay-tuning-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .replay-tuning-header h3 {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+        .replay-tuning-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        .replay-tuning-close:hover {
+            color: var(--text-secondary);
+        }
+
+        .replay-tuning-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .tuning-param {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .tuning-param label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+        }
+        .tuning-param input[type="range"] {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--border-strong);
+            border-radius: 2px;
+            outline: none;
+        }
+        .tuning-param input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--blue-10);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .tuning-param input[type="range"]::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            background: var(--blue-10);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+        .tuning-param-value {
+            font-family: var(--font-mono);
+            color: var(--blue-10);
+            font-size: 11px;
+        }
+
+        .tuning-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .tuning-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: var(--text-xs);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .tuning-btn.apply {
+            background: var(--blue-10);
+            color: var(--bg-page);
+        }
+        .tuning-btn.apply:hover {
+            background: var(--blue-10);
+        }
+        .tuning-btn.reset {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+        }
+        .tuning-btn.reset:hover {
+            background: var(--border-strong);
+        }
+
+        /* Fresnel zone debug tooltip — positioning in layout.css */
+        .fresnel-tooltip {
+            display: none;
+            background: var(--overlay-panel);
+            border: 1px solid var(--blue-interact-border);
+            border-radius: var(--radius-control);
+            padding: 10px 12px;
+            font-size: var(--text-xs);
+            color: var(--text-primary);
+            pointer-events: none;
+            max-width: 280px;
+            box-shadow: 0 4px 12px var(--overlay);
+        }
+        .fresnel-tooltip strong {
+            color: var(--blue-10);
+        }
+
+        /* Fresnel ellipsoid hover effect on link items */
+        .link-item.fresnel-hover {
+            background: var(--blue-muted);
+            border-left: 2px solid var(--blue-10);
+        }
+        .link-item.flash-highlight {
+            animation: flashLink 1s ease-out;
+        }
+        @keyframes flashLink {
+            0%, 100% { background: transparent; }
+            50% { background: var(--blue-border); }
+        }
+    </style>
+</head>
+<body class="has-mobile-nav">
+    <!-- Diurnal learning banner -->
+    <div id="diurnal-banner">
+        <span>&#x1F4C5;</span>
+        <span id="diurnal-message">Learning your home's daily patterns...</span>
+        <div class="progress-bar">
+            <div class="progress-fill" id="diurnal-progress" style="width: 0%"></div>
+        </div>
+        <span id="diurnal-days-left">7 days left</span>
+        <button class="dismiss-btn" onclick="this.parentElement.classList.remove('visible')">&times;</button>
+    </div>
+
+    <!-- Security mode indicator -->
+    <div id="security-mode-indicator"></div>
+
+    <!-- Anomaly learning banner -->
+    <div id="anomaly-learning-banner">
+        <span>&#x1F6E1;</span>
+        <span>Learning normal patterns...</span>
+        <div class="progress-bar">
+            <div class="learning-progress" style="width: 0%"></div>
+        </div>
+        <span class="days-remaining">7 days remaining</span>
+    </div>
+
+    <!-- Toast notification container -->
+    <div id="toast-container"></div>
+
+    <!-- App shell grid -->
+    <div class="app-shell app-shell--live">
+
+    <!-- Status bar (grid header) -->
+    <nav class="app-header" id="status-bar">
+        <div class="status-item">
+            <div id="ws-status" class="status-dot disconnected"></div>
+            <span id="ws-status-text">Disconnected</span>
+            <span id="ws-reconnect-spinner"></span>
+        </div>
+        <button id="mobile-menu-btn" onclick="toggleHamburgerMenu()" aria-label="Toggle menu">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+        <div class="status-item">
+            <span>Nodes: <strong id="node-count">0</strong></span>
+        </div>
+        <div class="status-item">
+            <span>Links: <strong id="link-count">0</strong></span>
+        </div>
+        <div class="status-item">
+            <span id="presence-indicator" class="clear">CLEAR</span>
+        </div>
+        <div class="status-item" id="detection-quality">
+            <div id="quality-gauge-container">
+                <svg id="quality-gauge" viewBox="0 0 32 32">
+                    <circle id="quality-gauge-bg" cx="16" cy="16" r="13"/>
+                    <circle id="quality-gauge-fill" cx="16" cy="16" r="13"/>
+                </svg>
+                <span id="quality-value">--</span>
+            </div>
+            <span id="quality-label">Quality</span>
+            <div id="quality-tooltip">
+                <div class="tooltip-title">Detection Quality</div>
+                <div>Based on <span id="quality-link-count">0</span> active links</div>
+                <div>Weakest: <span id="quality-worst-link" class="tooltip-worst">--</span> at <span id="quality-worst-score">--%</span></div>
+            </div>
+        </div>
+        <!-- Security Status Indicator (managed by SecurityPanel) -->
+        <div class="status-item" id="security-status-container"></div>
+        <div class="status-item" style="margin-left:auto; gap:6px;">
+            <button id="simple-mode-btn" onclick="window.location.href='/simple'" title="Switch to Simple Mode">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Simple
+            </button>
+            <button id="pause-live-btn" onclick="SpaxelReplay && SpaxelReplay.pauseLive()" title="Pause live mode and enter replay">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px;">
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+                Pause
+            </button>
+            <button id="ble-btn" onclick="window.BLEPanel && window.BLEPanel.open()">People & Devices<span id="ble-unregistered-badge" class="badge"></span></button>
+            <button id="settings-btn" onclick="openSettingsPanel && openSettingsPanel()">Settings</button>
+            <button id="add-node-btn" onclick="SpaxelOnboard && SpaxelOnboard.start()">+ Add Node</button>
+            <button id="add-virtual-btn" onclick="Placement && Placement.addVirtualNode()">+ Virtual</button>
+            <button class="view-btn active" id="view-perspective" onclick="Viz3D.setViewPreset('perspective')">3D</button>
+            <button class="view-btn" id="view-topdown"     onclick="Viz3D.setViewPreset('topdown')">Top</button>
+            <button class="view-btn" id="view-follow"      onclick="Viz3D.setViewPreset('follow')">Follow</button>
+            <button id="gdop-toggle-btn" onclick="Placement && Placement.toggleGDOP()">GDOP</button>
+            <button id="fresnel-toggle-btn" onclick="toggleFresnelZones()">Fresnel</button>
+            <button id="zones-toggle-btn" onclick="Viz3D && Viz3D.toggleZonesVisible()">Zones</button>
+            <button id="portals-toggle-btn" onclick="Viz3D && Viz3D.togglePortalsVisible()">Portals</button>
+            <button id="room-editor-btn" onclick="Placement && Placement.toggleRoomEditor()">Room</button>
+            <button id="add-portal-btn" onclick="PortalEditor && PortalEditor.startNewPortal()">+ Add Portal</button>
+            <button id="portal-editor-btn" onclick="PortalEditor && PortalEditor.togglePanel()">Portals</button>
+            <button id="floorplan-btn" onclick="FloorPlanSetup.togglePanel()">Floor plan</button>
+            <button id="simulator-btn" onclick="Simulate && Simulate.togglePanel()">Simulator</button>
+            <button id="help-btn" onclick="HelpOverlay && HelpOverlay.toggle()" title="Help &amp; Documentation (Ctrl+?)">?</button>
+        </div>
+        <div class="status-item cp-shortcut-hint" id="cp-shortcut-hint" title="Open command palette">
+            <kbd id="cp-kbd">Ctrl+K</kbd>
+        </div>
+        <div class="status-item">
+            <span>FPS: <strong id="fps-counter">0</strong></span>
+        </div>
+    </nav>
+
+    <!-- 3D Scene container (grid main) -->
+    <main class="app-main">
+        <div id="scene-container"></div>
+    </main>
+
+    </div><!-- /.app-shell -->
+
+    <!-- Sidebar Timeline Panel -->
+    <div id="sidebar-timeline-panel" class="sidebar-panel">
+        <div class="sidebar-panel-header">
+            <div class="sidebar-panel-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+                </svg>
+                <span>Activity Timeline</span>
+            </div>
+            <div class="sidebar-panel-actions">
+                <button id="sidebar-timeline-toggle" class="sidebar-panel-btn" title="Toggle panel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+                <button id="sidebar-timeline-close" class="sidebar-panel-btn" title="Close panel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div id="sidebar-timeline-filter-bar" class="sidebar-timeline-filter-bar">
+            <!-- Search Input -->
+            <div class="sidebar-filter-search">
+                <input type="text" id="sidebar-timeline-search" class="sidebar-search-input" placeholder="Search events...">
+            </div>
+
+            <!-- Filter Toggle Button -->
+            <button id="sidebar-filter-toggle-btn" class="sidebar-filter-toggle-btn" title="Show filters">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                Filters
+            </button>
+        </div>
+
+        <!-- Expanded Filter Controls -->
+        <div id="sidebar-timeline-filter-controls" class="sidebar-timeline-filter-controls collapsed">
+            <!-- Category Checkboxes -->
+            <div class="sidebar-filter-section">
+                <div class="sidebar-filter-section-title">Event Categories</div>
+                <div class="sidebar-category-checkboxes">
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-presence" checked>
+                        <span class="sidebar-category-icon">👤</span>
+                        <span class="sidebar-category-label">Presence</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-zones" checked>
+                        <span class="sidebar-category-icon">🚪</span>
+                        <span class="sidebar-category-label">Zones</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-alerts" checked>
+                        <span class="sidebar-category-icon">⚠️</span>
+                        <span class="sidebar-category-label">Alerts</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-system">
+                        <span class="sidebar-category-icon">⚙️</span>
+                        <span class="sidebar-category-label">System</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-learning">
+                        <span class="sidebar-category-icon">🎓</span>
+                        <span class="sidebar-category-label">Learning</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Dropdown Filters -->
+            <div class="sidebar-filter-section">
+                <div class="sidebar-filter-section-title">Filter By</div>
+                <div class="sidebar-filter-dropdowns">
+                    <select id="sidebar-filter-person" class="sidebar-filter-select">
+                        <option value="">All People</option>
+                    </select>
+                    <select id="sidebar-filter-zone" class="sidebar-filter-select">
+                        <option value="">All Zones</option>
+                    </select>
+                    <select id="sidebar-filter-date-range" class="sidebar-filter-select">
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="7days">Last 7 Days</option>
+                        <option value="30days">Last 30 Days</option>
+                        <option value="custom">Custom Range...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Custom Date Range (hidden by default) -->
+            <div id="sidebar-custom-date-container" class="sidebar-custom-date-container" style="display: none;">
+                <input type="date" id="sidebar-date-from" class="sidebar-date-input">
+                <span class="sidebar-date-separator">to</span>
+                <input type="date" id="sidebar-date-to" class="sidebar-date-input">
+                <button id="sidebar-date-apply-btn" class="sidebar-date-apply-btn">Apply</button>
+            </div>
+
+            <!-- Active Filters Display -->
+            <div id="sidebar-active-filters" class="sidebar-active-filters" style="display: none;">
+                <span class="sidebar-active-filters-label">Active:</span>
+                <div id="sidebar-active-filter-tags" class="sidebar-active-filter-tags"></div>
+                <button id="sidebar-clear-filters-btn" class="sidebar-clear-filters-btn">Clear All</button>
+            </div>
+        </div>
+
+        <div id="sidebar-timeline-content" class="sidebar-panel-content">
+            <div id="sidebar-timeline-count" class="sidebar-timeline-count" style="display: none;"></div>
+            <div id="sidebar-timeline-events" class="sidebar-timeline-events">
+                <!-- Events will be rendered here -->
+            </div>
+            <div id="sidebar-timeline-loading" class="sidebar-timeline-loading" style="display: none;">
+                <div class="sidebar-spinner"></div>
+                <span>Loading events...</span>
+            </div>
+            <div id="sidebar-timeline-empty" class="sidebar-timeline-empty" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+                </svg>
+                <h3>No events yet</h3>
+                <p>Events will appear here as Spaxel detects activity.</p>
+            </div>
+            <div id="sidebar-timeline-spacer-top" class="timeline-spacer timeline-spacer-top" style="height: 0px;"></div>
+            <div id="sidebar-timeline-spacer-bottom" class="timeline-spacer timeline-spacer-bottom" style="height: 0px;"></div>
+            <div id="sidebar-load-more" class="sidebar-load-more" style="display: none;">
+                <button id="sidebar-load-more-btn" class="sidebar-load-more-btn">Load more</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Timeline Toggle Button (when panel is collapsed) -->
+    <button id="sidebar-timeline-show-btn" class="sidebar-show-btn" title="Show timeline">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+        </svg>
+    </button>
+
+    <!-- Hamburger Menu (for screens < 1024px) -->
+    <div id="hamburger-overlay"></div>
+    <div id="hamburger-menu">
+        <div id="hamburger-menu-header">
+            <span id="hamburger-menu-title">Menu</span>
+            <button id="hamburger-close-btn" aria-label="Close menu">&times;</button>
+        </div>
+        <!-- Tab Navigation -->
+        <div class="hamburger-tabs">
+            <button class="hamburger-tab" data-tab="nodes" onclick="HamburgerMenu.switchTab('nodes')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+                Nodes
+            </button>
+            <button class="hamburger-tab" data-tab="links" onclick="HamburgerMenu.switchTab('links')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Links
+            </button>
+            <button class="hamburger-tab" data-tab="presence" onclick="HamburgerMenu.switchTab('presence')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/></svg>
+                Presence
+            </button>
+            <button class="hamburger-tab" data-tab="timeline" onclick="HamburgerMenu.switchTab('timeline')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Timeline
+            </button>
+            <button class="hamburger-tab" data-tab="devices" onclick="HamburgerMenu.switchTab('devices')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                Devices
+            </button>
+        </div>
+        <!-- Tab Content Areas -->
+        <div class="hamburger-content">
+            <div id="tab-nodes" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Nodes</h3>
+                </div>
+                <div id="hamburger-node-list">
+                    <div class="empty-state">No nodes connected</div>
+                </div>
+            </div>
+            <div id="tab-links" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Links</h3>
+                </div>
+                <div id="hamburger-link-list">
+                    <div class="empty-state">No links active</div>
+                </div>
+            </div>
+            <div id="tab-presence" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Presence</h3>
+                    <span id="hamburger-presence-status" class="presence-status clear">CLEAR</span>
+                </div>
+                <div id="hamburger-presence-list">
+                    <div class="empty-state">No links active</div>
+                </div>
+            </div>
+            <div id="tab-timeline" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>Timeline</h3>
+                </div>
+                <div id="hamburger-timeline-content">
+                    <div class="empty-state">Loading timeline...</div>
+                </div>
+            </div>
+            <div id="tab-devices" class="hamburger-tab-content">
+                <div class="hamburger-tab-header">
+                    <h3>People & Devices</h3>
+                </div>
+                <div id="hamburger-device-list">
+                    <div class="empty-state">No devices registered</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Node panel -->
+    <div id="node-panel">
+        <h3>Nodes <button id="delete-node-btn" onclick="Placement && Placement.deleteSelectedNode()">Delete</button></h3>
+        <div id="node-list">
+            <div class="empty-state">No nodes connected</div>
+        </div>
+        <div class="link-section">
+            <h3>Links</h3>
+            <div id="link-list">
+                <div class="empty-state">No links active</div>
+            </div>
+        </div>
+        <div class="link-section">
+            <h3>Patterns</h3>
+            <div id="patterns-controls">
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="flow-toggle" onchange="toggleFlowLayer(this.checked)">
+                    <span>Movement flows</span>
+                </label>
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="dwell-toggle" onchange="toggleDwellLayer(this.checked)">
+                    <span>Dwell hotspots</span>
+                </label>
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="corridor-toggle" onchange="toggleCorridorLayer(this.checked)">
+                    <span>Corridors</span>
+                </label>
+                <div class="pattern-filter">
+                    <label>Time:</label>
+                    <select id="flow-time-filter" aria-label="Flow time filter" onchange="setFlowTimeFilter(this.value)">
+                        <option value="7d">Last 7 days</option>
+                        <option value="30d" selected>Last 30 days</option>
+                        <option value="all">All time</option>
+                    </select>
+                </div>
+                <div class="pattern-filter">
+                    <label>Person:</label>
+                    <select id="flow-person-filter" aria-label="Flow person filter">
+                        <option value="">All people</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="link-section" id="debug-section" style="display: none;">
+            <h3>Debug</h3>
+            <div id="debug-controls">
+                <label class="pattern-checkbox">
+                    <input type="checkbox" id="fresnel-zones-toggle" onchange="toggleFresnelDebugOverlay(this.checked)">
+                    <span>Fresnel Zones</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Amplitude chart -->
+    <div id="chart-panel">
+        <div id="chart-title">Amplitude — <span class="link-id">no link selected</span></div>
+        <canvas id="amplitude-chart"></canvas>
+        <hr id="chart-divider">
+        <div id="timeseries-label">Mean amplitude (60 s)</div>
+        <canvas id="timeseries-chart"></canvas>
+    </div>
+
+    <!-- Presence panel -->
+    <div id="presence-panel">
+        <div id="presence-header">
+            <h3>Presence</h3>
+            <span id="presence-status" class="clear">CLEAR</span>
+        </div>
+        <div id="presence-list">
+            <div class="empty-state">No links active</div>
+        </div>
+        <div id="deltarms-label">Delta RMS (10 s)</div>
+        <canvas id="deltarms-chart"></canvas>
+    </div>
+
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- TransformControls from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+
+    <!-- Import map for Three.js post-processing modules (FXAA for mobile) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+            "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <!-- 3-D spatial visualisation layer -->
+    <script src="js/viz3d.js"></script>
+    <!-- Crowd flow visualization layer -->
+    <script src="js/crowdflow.js"></script>
+    <!-- Portal Editor -->
+    <script src="js/portal.js"></script>
+    <!-- Zone Editor -->
+    <script src="js/zone-editor.js"></script>
+    <!-- Fresnel zone helper (shared with explainability) -->
+    <script src="js/fresnel.js"></script>
+    <!-- Layer management -->
+    <script src="js/layers.js"></script>
+    <!-- Node placement, GDOP coverage, room editor -->
+    <script src="js/placement.js"></script>
+    <!-- Panel Framework (must load before modules that use it) -->
+    <script src="js/panels.js"></script>
+    <!-- State Management -->
+    <script src="js/state.js"></script>
+    <!-- Router -->
+    <script src="js/router.js"></script>
+    <!-- Settings Panel -->
+    <script src="js/settings-panel.js"></script>
+    <!-- Proactive quality assistance and repeated-setting detection -->
+    <script src="js/proactive.js"></script>
+    <!-- BLE People & Devices Panel -->
+    <script src="js/ble-panel.js"></script>
+    <!-- Troubleshooting manager (must load before app.js) -->
+    <script src="js/troubleshoot.js"></script>
+    <!-- First-time feature tooltips (must load before app.js) -->
+    <script src="js/tooltips.js"></script>
+    <!-- WebSocket reconnection manager -->
+    <script src="js/websocket.js"></script>
+    <!-- Floor plan setup panel -->
+    <script src="js/floorplan-setup.js"></script>
+    <!-- FXAA post-processing for mobile devices -->
+    <script type="module" src="js/fxaa.js"></script>
+    <!-- Main application -->
+    <script src="js/app.js"></script>
+    <!-- Onboarding wizard -->
+    <script src="js/onboard.js"></script>
+    <!-- OTA firmware management -->
+    <script src="js/ota.js"></script>
+    <!-- Link health panel -->
+    <script src="js/linkhealth.js"></script>
+    <!-- Feedback UI for detection accuracy -->
+    <script src="js/feedback.js"></script>
+    <!-- Accuracy panel for metrics -->
+    <script src="js/accuracy.js"></script>
+    <!-- Fleet health panel -->
+    <script src="js/fleet.js"></script>
+    <!-- Anomaly detection UI -->
+    <script src="js/anomaly.js"></script>
+    <!-- Activity Timeline -->
+    <script src="js/timeline.js"></script>
+    <!-- Sidebar Timeline Panel -->
+    <script src="js/sidebar-timeline.js"></script>
+    <!-- Security Panel -->
+    <script src="js/security-panel.js"></script>
+    <!-- Detection Explainability -->
+    <script src="js/explainability.js"></script>
+    <!-- Volume Editor (3-D trigger volumes) -->
+    <script src="js/volume-editor.js"></script>
+    <!-- Automation Builder (triggers & webhooks) -->
+    <script src="js/automation-builder.js"></script>
+    <!-- Sleep Quality Monitoring -->
+    <script src="js/sleep.js"></script>
+    <!-- Diurnal Baseline Visualization -->
+    <script src="js/diurnal-chart.js"></script>
+    <!-- Time-Travel Replay -->
+    <script src="js/replay.js"></script>
+    <!-- Pre-Deployment Simulator -->
+    <script src="js/simulate.js"></script>
+    <!-- Command Palette (legacy) -->
+    <!-- Command Palette (Component 34) -->
+    <script src="js/command-palette.js"></script>
+    <!-- Ambient Mode -->
+    <script src="js/ambient.js"></script>
+    <!-- Spatial Quick Actions -->
+    <script src="js/quick-actions.js"></script>
+    <!-- Guided Troubleshooting -->
+    <script src="js/guided-help.js"></script>
+    <script src="js/briefing.js"></script>
+    <script src="js/help.js"></script>
+
+    <!-- Room editor panel -->
+    <div id="room-editor-panel">
+        <h3>Room Dimensions</h3>
+        <div class="room-field">
+            <label>Width <span class="unit">(m)</span></label>
+            <input type="number" id="room-width" value="6" min="1" max="100" step="0.5">
+        </div>
+        <div class="room-field">
+            <label>Depth <span class="unit">(m)</span></label>
+            <input type="number" id="room-depth" value="5" min="1" max="100" step="0.5">
+        </div>
+        <div class="room-field">
+            <label>Height <span class="unit">(m)</span></label>
+            <input type="number" id="room-height" value="2.5" min="1" max="50" step="0.1">
+        </div>
+        <button id="room-apply-btn" onclick="Placement && Placement.applyRoomFromEditor()">Apply</button>
+    </div>
+
+    <!-- Portal editor panel -->
+    <div id="portal-editor-panel" style="display: none;">
+        <h3>New Portal</h3>
+        <div class="room-field">
+            <label>Name</label>
+            <input type="text" id="portal-name" value="New Portal" placeholder="e.g., Kitchen Door">
+        </div>
+        <div class="room-field">
+            <label>Width <span class="unit">(m)</span></label>
+            <input type="number" id="portal-width" value="0.9" min="0.3" max="5" step="0.05">
+        </div>
+        <div class="room-field">
+            <label>Height <span class="unit">(m)</span></label>
+            <input type="number" id="portal-height" value="2.1" min="1.5" max="5" step="0.1">
+        </div>
+        <div class="room-field">
+            <label>Zone A</label>
+            <select id="portal-zone-a" aria-label="Portal zone A">
+                <option value="">-- Select Zone --</option>
+            </select>
+        </div>
+        <div class="room-field">
+            <label>Zone B</label>
+            <select id="portal-zone-b" aria-label="Portal zone B">
+                <option value="">-- Select Zone --</option>
+            </select>
+        </div>
+        <div class="portal-position-info" id="portal-position-display" style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2);">
+            Drag portal to position
+        </div>
+        <div class="portal-actions">
+            <button id="portal-save-btn" onclick="PortalEditor && PortalEditor.saveNewPortal()">Save Portal</button>
+            <button id="portal-update-btn" onclick="PortalEditor && PortalEditor.savePortalPosition()" style="display: none;">Update</button>
+            <button id="portal-delete-btn" class="portal-delete-btn" onclick="PortalEditor && PortalEditor.deleteSelectedPortal()" style="display: none;">Delete</button>
+            <button onclick="PortalEditor && PortalEditor.deselectPortal()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Zone editor panel -->
+    <div id="zone-editor-panel" style="display: none;">
+        <h3>New Zone</h3>
+        <div class="room-field">
+            <label>Name</label>
+            <input type="text" id="zone-name" placeholder="Kitchen">
+        </div>
+        <div class="room-field">
+            <label>Position (meters)</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="number" id="zone-x" placeholder="X" step="0.1" style="flex:1">
+                <input type="number" id="zone-y" placeholder="Y" step="0.1" style="flex:1">
+                <input type="number" id="zone-z" placeholder="Z" step="0.1" style="flex:1">
+            </div>
+        </div>
+        <div class="room-field">
+            <label>Size (meters)</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="number" id="zone-w" placeholder="Width" step="0.1" min="0.1" style="flex:1">
+                <input type="number" id="zone-d" placeholder="Depth" step="0.1" min="0.1" style="flex:1">
+                <input type="number" id="zone-h" placeholder="Height" step="0.1" min="0.1" value="2.5" style="flex:1">
+            </div>
+        </div>
+        <div class="room-field">
+            <label>Color</label>
+            <input type="color" id="zone-color" value="#3e96e8">
+        </div>
+        <div class="room-field">
+            <label>Zone Type</label>
+            <select id="zone-type" aria-label="Zone type">
+                <option value="general">General</option>
+                <option value="bedroom">Bedroom</option>
+                <option value="kitchen">Kitchen</option>
+                <option value="living">Living Room</option>
+                <option value="office">Office</option>
+                <option value="entry">Entry</option>
+                <option value="bathroom">Bathroom</option>
+            </select>
+        </div>
+        <div class="zone-position-info" style="font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2);">
+            Drag zone to position in 3D view
+        </div>
+        <div class="portal-actions">
+            <button id="zone-save-btn" onclick="ZoneEditor && ZoneEditor.saveNewZone()">Save Zone</button>
+            <button id="zone-update-btn" onclick="ZoneEditor.saveZonePosition()" style="display: none;">Update</button>
+            <button id="zone-delete-btn" class="portal-delete-btn" onclick="ZoneEditor.deleteSelectedZone()" style="display: none;">Delete</button>
+            <button onclick="ZoneEditor.deselectZone()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Pre-Deployment Simulator Panel -->
+    <div id="simulator-panel" class="simulator-panel" style="display:none;">
+        <div class="simulator-header">
+            <h2>Pre-Deployment Simulator</h2>
+            <button id="sim-close-btn" class="sim-close-btn" aria-label="Close simulator">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <div class="simulator-content">
+            <!-- Space Configuration -->
+            <section class="sim-section">
+                <h3>Space Configuration</h3>
+                <div class="sim-field-group">
+                    <div class="sim-field">
+                        <label>Width <span class="unit">(m)</span></label>
+                        <input type="number" id="sim-space-width" value="10" min="1" max="100" step="0.5">
+                    </div>
+                    <div class="sim-field">
+                        <label>Depth <span class="unit">(m)</span></label>
+                        <input type="number" id="sim-space-depth" value="10" min="1" max="100" step="0.5">
+                    </div>
+                    <div class="sim-field">
+                        <label>Height <span class="unit">(m)</span></label>
+                        <input type="number" id="sim-space-height" value="2.5" min="1" max="50" step="0.1">
+                    </div>
+                </div>
+                <button id="sim-apply-space" class="sim-btn sim-btn-primary">Apply Space</button>
+            </section>
+
+            <!-- Tools -->
+            <section class="sim-section">
+                <h3>Tools</h3>
+                <div class="sim-tools">
+                    <button class="sim-tool-btn active" data-tool="select" title="Select">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path>
+                        </svg>
+                        Select
+                    </button>
+                    <button class="sim-tool-btn" data-tool="node" title="Add Virtual Node">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6"></path>
+                            <path d="M1 12h6m6 0h6"></path>
+                        </svg>
+                        Node
+                    </button>
+                    <button class="sim-tool-btn" data-tool="walker" title="Add Walker">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="5" r="1"></circle>
+                            <path d="M4 20l4-5 3 3 5-7 4 4v5H4z"></path>
+                        </svg>
+                        Walker
+                    </button>
+                </div>
+            </section>
+
+            <!-- Virtual Nodes -->
+            <section class="sim-section">
+                <h3>Virtual Nodes <span id="sim-node-count" class="sim-count">(0)</span></h3>
+                <div class="sim-actions">
+                    <button id="sim-add-node" class="sim-btn sim-btn-sm">+ Add Node</button>
+                    <button id="sim-clear-nodes" class="sim-btn sim-btn-sm sim-btn-danger">Clear All</button>
+                </div>
+                <div id="sim-nodes-container" class="sim-items-list">
+                    <div class="sim-empty-state">No virtual nodes. Click "Add Node" or use the Node tool.</div>
+                </div>
+            </section>
+
+            <!-- Walkers -->
+            <section class="sim-section">
+                <h3>Synthetic Walkers <span id="sim-walker-count" class="sim-count">(0)</span></h3>
+                <div class="sim-field">
+                    <label>Walker Type</label>
+                    <select id="sim-walker-type" aria-label="Walker type">
+                        <option value="random">Random Walk</option>
+                        <option value="path">Path Following</option>
+                    </select>
+                </div>
+                <div class="sim-actions">
+                    <button id="sim-add-walker" class="sim-btn sim-btn-sm">+ Add Walker</button>
+                    <button id="sim-clear-walkers" class="sim-btn sim-btn-sm sim-btn-danger">Clear All</button>
+                </div>
+                <div id="sim-walkers-container" class="sim-items-list">
+                    <div class="sim-empty-state">No walkers. Add walkers to simulate movement.</div>
+                </div>
+            </section>
+
+            <!-- GDOP Analysis -->
+            <section class="sim-section">
+                <h3>GDOP Coverage Analysis</h3>
+                <div class="sim-actions">
+                    <button id="sim-show-gdop" class="sim-btn sim-btn-sm">Show GDOP</button>
+                    <button id="sim-update-gdop" class="sim-btn sim-btn-sm">Update</button>
+                </div>
+                <div id="sim-gdop-results" class="sim-gdop-results" style="display:none;">
+                    <div class="sim-gdop-stats">
+                        <div class="sim-stat">
+                            <span class="sim-stat-label">Coverage</span>
+                            <span id="sim-gdop-coverage" class="sim-stat-value">--%</span>
+                        </div>
+                        <div class="sim-stat">
+                            <span class="sim-stat-label">Mean GDOP</span>
+                            <span id="sim-gdop-mean" class="sim-stat-value">--</span>
+                        </div>
+                    </div>
+                    <div id="sim-gdop-legend" class="sim-gdop-legend">
+                        <div class="gdop-legend-item" data-quality="excellent">
+                            <div class="gdop-legend-color"></div>
+                            <span class="gdop-legend-label">Excellent (&lt;2)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="good">
+                            <div class="gdop-legend-color"></div>
+                            <span class="gdop-legend-label">Good (2-4)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="fair">
+                            <div class="gdop-legend-color"></div>
+                            <span class="gdop-legend-label">Fair (4-8)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="poor">
+                            <div class="gdop-legend-color"></div>
+                            <span class="gdop-legend-label">Poor (&gt;8)</span>
+                        </div>
+                        <div class="gdop-legend-item" data-quality="none">
+                            <div class="gdop-legend-color"></div>
+                            <span class="gdop-legend-label">No Coverage</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Simulation Controls -->
+            <section class="sim-section">
+                <h3>Simulation</h3>
+                <div class="sim-sim-controls">
+                    <button id="sim-start-btn" class="sim-btn sim-btn-primary">Start Simulation</button>
+                    <button id="sim-pause-btn" class="sim-btn" disabled>Pause</button>
+                    <button id="sim-stop-btn" class="sim-btn sim-btn-danger" disabled>Stop</button>
+                </div>
+                <div class="sim-progress">
+                    <span class="sim-progress-label">Time: <span id="sim-time">0:00</span></span>
+                    <div class="sim-progress-bar">
+                        <div id="sim-progress-fill" class="sim-progress-fill"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results -->
+            <section id="sim-results-section" class="sim-section" style="display:none;">
+                <h3>Results</h3>
+                <div class="sim-results">
+                    <div class="sim-result-item">
+                        <span class="sim-result-label">Expected Accuracy</span>
+                        <span id="sim-result-accuracy" class="sim-result-value">--</span>
+                    </div>
+                    <div class="sim-result-item">
+                        <span class="sim-result-label">Coverage</span>
+                        <span id="sim-result-coverage" class="sim-result-value">--</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recommendations -->
+            <section id="sim-recommendations-section" class="sim-section" style="display:none;">
+                <h3>Recommendations</h3>
+                <div id="sim-recommendations" class="sim-recommendations"></div>
+            </section>
+
+            <!-- Shopping List -->
+            <section id="sim-shopping-section" class="sim-section" style="display:none;">
+                <h3>Hardware Shopping List</h3>
+                <div id="sim-shopping-list" class="sim-shopping-list"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- GDOP legend -->
+    <div id="gdop-legend">
+        <h4>GDOP Coverage</h4>
+        <div id="gdop-coverage-score">Coverage: --%</div>
+        <canvas id="gdop-gradient" width="140" height="12"></canvas>
+        <div id="gdop-labels">
+            <span>Excellent</span>
+            <span>Good</span>
+            <span>Fair</span>
+            <span>Poor</span>
+        </div>
+    </div>
+
+    <!-- Timeline View Container -->
+    <div id="timeline-view" style="display: none;">
+        <div class="timeline-header">
+            <h2 class="timeline-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                Timeline
+                <span id="timeline-count" class="timeline-count"></span>
+            </h2>
+            <span id="timeline-now-replaying"></span>
+            <button id="timeline-filter-toggle" class="timeline-filter-toggle" title="Toggle filters">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="22 3 2 10 12.79 21 15.41 18.38 19 14.79 22 3 22 3"></polygon>
+                    <path d="M20.41 11.26 12.79 3.64"></path>
+                </svg>
+            </button>
+        </div>
+        <div id="timeline-filter-bar" class="timeline-filter-bar">
+            <div class="timeline-filter-section">
+                <h4 class="timeline-filter-section-title">Categories</h4>
+                <div class="timeline-category-checkboxes">
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-presence" checked>
+                        <span class="timeline-category-label">Presence</span>
+                        <span class="timeline-category-icon">👤</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-zones" checked>
+                        <span class="timeline-category-label">Zones</span>
+                        <span class="timeline-category-icon">🚪</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-alerts" checked>
+                        <span class="timeline-category-label">Alerts</span>
+                        <span class="timeline-category-icon">⚠️</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-system" checked>
+                        <span class="timeline-category-label">System</span>
+                        <span class="timeline-category-icon">⚙️</span>
+                    </label>
+                    <label class="timeline-category-checkbox">
+                        <input type="checkbox" id="timeline-category-learning" checked>
+                        <span class="timeline-category-label">Learning</span>
+                        <span class="timeline-category-icon">🎓</span>
+                    </label>
+                </div>
+            </div>
+            <div class="timeline-filter-section">
+                <h4 class="timeline-filter-section-title">Filters</h4>
+                <div class="timeline-filter-controls">
+                    <select id="timeline-filter-type" class="timeline-filter-select" aria-label="Filter by event type">
+                        <option value="">All Types</option>
+                    </select>
+                    <select id="timeline-filter-zone" class="timeline-filter-select" aria-label="Filter by zone">
+                        <option value="">All Zones</option>
+                    </select>
+                    <select id="timeline-filter-person" class="timeline-filter-select" aria-label="Filter by person">
+                        <option value="">All People</option>
+                    </select>
+                    <select id="timeline-filter-time" class="timeline-filter-select" aria-label="Filter by time range">
+                        <option value="">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="7d">Last 7 days</option>
+                        <option value="30d">Last 30 days</option>
+                        <option value="custom">Custom range...</option>
+                    </select>
+                    <input type="text" id="timeline-filter-search" class="timeline-search" placeholder="Search descriptions...">
+                </div>
+                <div id="timeline-custom-date-container" class="timeline-custom-date" style="display: none;">
+                    <input type="date" id="timeline-date-from" class="timeline-date-input">
+                    <span class="timeline-date-separator">to</span>
+                    <input type="date" id="timeline-date-to" class="timeline-date-input">
+                    <button id="timeline-date-apply" class="timeline-date-apply-btn">Apply</button>
+                </div>
+            </div>
+        </div>
+        <div id="timeline-loading" class="timeline-loading" style="display: none;">
+            <div class="timeline-loading-spinner"></div>
+            <span>Loading events...</span>
+        </div>
+        <div id="timeline-empty" class="timeline-empty" style="display: none;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <h3>No events yet</h3>
+            <p>Events will appear here as Spaxel detects activity.</p>
+        </div>
+        <div id="timeline-error" class="timeline-loading" style="display: none; color: var(--alert);"></div>
+        <div id="timeline-events" class="timeline-events"></div>
+        <div id="timeline-load-more" class="timeline-load-more" style="display: none;">
+            <button id="timeline-load-more-btn" class="timeline-load-more-btn">Load More</button>
+        </div>
+    </div>
+    <script>
+        // ============================================
+        // Hamburger Menu Functions
+        // ============================================
+        function openHamburgerMenu() {
+            var menu = document.getElementById('hamburger-menu');
+            var overlay = document.getElementById('hamburger-overlay');
+            if (menu) menu.classList.add('visible');
+            if (overlay) overlay.classList.add('visible');
+
+            // Initialize tabs when menu opens
+            if (window.HamburgerMenu) {
+                HamburgerMenu.init();
+                // Update content for current tab
+                var currentTab = HamburgerMenu.getCurrentTab();
+                if (currentTab) {
+                    HamburgerMenu.updateContent(currentTab);
+                }
+            }
+        }
+
+        function closeHamburgerMenu() {
+            var menu = document.getElementById('hamburger-menu');
+            var overlay = document.getElementById('hamburger-overlay');
+            if (menu) menu.classList.remove('visible');
+            if (overlay) overlay.classList.remove('visible');
+        }
+
+        function toggleHamburgerMenu() {
+            var menu = document.getElementById('hamburger-menu');
+            if (menu && menu.classList.contains('visible')) {
+                closeHamburgerMenu();
+            } else {
+                openHamburgerMenu();
+            }
+        }
+
+        // ============================================
+        // Hamburger Menu Tab Management
+        // ============================================
+        var HamburgerMenu = (function() {
+            var currentTab = null;
+            var storageKey = 'spaxel_hamburger_last_tab';
+            var tabs = ['nodes', 'links', 'presence', 'timeline', 'devices'];
+
+            function switchTab(tabId) {
+                // Remove active class from all tabs and content
+                document.querySelectorAll('.hamburger-tab').forEach(function(tab) {
+                    tab.classList.remove('active');
+                });
+                document.querySelectorAll('.hamburger-tab-content').forEach(function(content) {
+                    content.classList.remove('active');
+                });
+
+                // Add active class to selected tab and content
+                var tabElement = document.querySelector('.hamburger-tab[data-tab="' + tabId + '"]');
+                var contentElement = document.getElementById('tab-' + tabId);
+
+                if (tabElement && contentElement) {
+                    tabElement.classList.add('active');
+                    contentElement.classList.add('active');
+                    currentTab = tabId;
+
+                    // Save to localStorage
+                    try {
+                        localStorage.setItem(storageKey, tabId);
+                    } catch (e) {
+                        // localStorage not available
+                    }
+
+                    // Update content when switching tabs
+                    updateTabContent(tabId);
+                }
+            }
+
+            function getLastUsedTab() {
+                try {
+                    var savedTab = localStorage.getItem(storageKey);
+                    if (savedTab && tabs.indexOf(savedTab) !== -1) {
+                        return savedTab;
+                    }
+                } catch (e) {
+                    // localStorage not available
+                }
+                return 'nodes'; // Default tab
+            }
+
+            function updateTabContent(tabId) {
+                switch(tabId) {
+                    case 'nodes':
+                        updateNodesList();
+                        break;
+                    case 'links':
+                        updateLinksList();
+                        break;
+                    case 'presence':
+                        updatePresenceList();
+                        break;
+                    case 'timeline':
+                        updateTimelineContent();
+                        break;
+                    case 'devices':
+                        updateDevicesList();
+                        break;
+                }
+            }
+
+            function updateNodesList() {
+                var container = document.getElementById('hamburger-node-list');
+                if (!container) return;
+
+                // Copy nodes from main panel
+                var mainNodeList = document.getElementById('node-list');
+                if (mainNodeList) {
+                    container.innerHTML = mainNodeList.innerHTML;
+                }
+            }
+
+            function updateLinksList() {
+                var container = document.getElementById('hamburger-link-list');
+                if (!container) return;
+
+                // Copy links from main panel
+                var mainLinkList = document.getElementById('link-list');
+                if (mainLinkList) {
+                    container.innerHTML = mainLinkList.innerHTML;
+                }
+            }
+
+            function updatePresenceList() {
+                var container = document.getElementById('hamburger-presence-list');
+                var statusElement = document.getElementById('hamburger-presence-status');
+                if (!container) return;
+
+                // Copy presence from main panel
+                var mainPresenceList = document.getElementById('presence-list');
+                var mainPresenceStatus = document.getElementById('presence-status');
+
+                if (mainPresenceList) {
+                    container.innerHTML = mainPresenceList.innerHTML;
+                }
+                if (mainPresenceStatus && statusElement) {
+                    statusElement.className = mainPresenceStatus.className;
+                    statusElement.textContent = mainPresenceStatus.textContent;
+                }
+            }
+
+            function updateTimelineContent() {
+                var container = document.getElementById('hamburger-timeline-content');
+                if (!container) return;
+
+                // Get timeline events from the main timeline view
+                var mainTimeline = document.querySelector('#timeline-view .timeline-events');
+                if (mainTimeline && mainTimeline.children.length > 0) {
+                    var html = '';
+                    for (var i = 0; i < Math.min(20, mainTimeline.children.length); i++) {
+                        var event = mainTimeline.children[i];
+                        html += event.outerHTML;
+                    }
+                    container.innerHTML = html || '<div class="empty-state">No events yet</div>';
+                } else {
+                    container.innerHTML = '<div class="empty-state">No events yet</div>';
+                }
+            }
+
+            function updateDevicesList() {
+                var container = document.getElementById('hamburger-device-list');
+                if (!container) return;
+
+                // Try to get device list from BLE panel
+                if (window.BLEPanel && BLEPanel.devices) {
+                    var devices = BLEPanel.devices;
+                    if (devices.length === 0) {
+                        container.innerHTML = '<div class="empty-state">No devices registered</div>';
+                        return;
+                    }
+
+                    var html = '';
+                    devices.forEach(function(device) {
+                        html += '<div class="hamburger-device-item">' +
+                            '<div class="hamburger-device-color" style="background-color: ' + device.color + '"></div>' +
+                            '<span class="hamburger-device-name">' + device.label + '</span>' +
+                            '<span class="hamburger-device-type">' + device.type + '</span>' +
+                            '</div>';
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No devices registered</div>';
+                }
+            }
+
+            function init() {
+                // Switch to last used tab when menu opens
+                var lastTab = getLastUsedTab();
+                switchTab(lastTab);
+            }
+
+            return {
+                switchTab: switchTab,
+                init: init,
+                updateContent: updateTabContent,
+                getCurrentTab: function() { return currentTab; }
+            };
+        })();
+
+        // Initialize hamburger menu event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            var menuBtn = document.getElementById('mobile-menu-btn');
+            var closeBtn = document.getElementById('hamburger-close-btn');
+            var overlay = document.getElementById('hamburger-overlay');
+            var menu = document.getElementById('hamburger-menu');
+
+            if (menuBtn) {
+                menuBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleHamburgerMenu();
+                });
+            }
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeHamburgerMenu);
+            }
+
+            if (overlay) {
+                overlay.addEventListener('click', closeHamburgerMenu);
+            }
+
+            // Add touch event listeners to prevent propagation to canvas
+            // This prevents OrbitControls from responding to touches on the hamburger menu
+            if (menu) {
+                menu.addEventListener('touchstart', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+
+                menu.addEventListener('touchmove', function(e) {
+                    e.stopPropagation();
+                }, { passive: false }); // Non-passive to allow preventDefault if needed
+
+                menu.addEventListener('touchend', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+            }
+
+            if (overlay) {
+                overlay.addEventListener('touchstart', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+
+                overlay.addEventListener('touchmove', function(e) {
+                    e.stopPropagation();
+                }, { passive: false });
+
+                overlay.addEventListener('touchend', function(e) {
+                    e.stopPropagation();
+                }, { passive: true });
+            }
+
+            // Close on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeHamburgerMenu();
+                }
+            });
+        });
+
+        // Mobile panel toggle functionality (legacy - for <768px panels)
+        function toggleMobilePanels() {
+            var nodePanel = document.getElementById('node-panel');
+            var roomEditor = document.getElementById('room-editor-panel');
+            var chartPanel = document.getElementById('chart-panel');
+
+            // Toggle node panel
+            if (nodePanel) {
+                nodePanel.classList.toggle('expanded');
+            }
+
+            // Toggle room editor panel
+            if (roomEditor) {
+                roomEditor.classList.toggle('expanded');
+            }
+
+            // On mobile, hide chart panel when panels are shown, show when hidden
+            if (chartPanel) {
+                var isExpanded = nodePanel && nodePanel.classList.contains('expanded');
+                chartPanel.style.display = isExpanded ? 'none' : 'block';
+            }
+        }
+
+        // Auto-collapse panels on mobile when clicking outside
+        if (window.matchMedia('(max-width: 768px)').matches) {
+            document.addEventListener('click', function(e) {
+                var nodePanel = document.getElementById('node-panel');
+                var roomEditor = document.getElementById('room-editor-panel');
+                var menuBtn = document.getElementById('mobile-menu-btn');
+
+                // If clicking outside panels and menu button
+                if (menuBtn && !menuBtn.contains(e.target)) {
+                    var clickedInsideNodePanel = nodePanel && nodePanel.contains(e.target);
+                    var clickedInsideRoomEditor = roomEditor && roomEditor.contains(e.target);
+
+                    if (!clickedInsideNodePanel && !clickedInsideRoomEditor) {
+                        if (nodePanel) nodePanel.classList.remove('expanded');
+                        if (roomEditor) roomEditor.classList.remove('expanded');
+                    }
+                }
+            });
+        }
+
+        // Handle touch events on panels to prevent accidental collapse
+        function setupPanelTouchHandlers(panelId) {
+            var panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            var touchStartY = 0;
+
+            panel.addEventListener('touchstart', function(e) {
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+
+            panel.addEventListener('touchmove', function(e) {
+                // Allow scrolling within the panel
+                var currentY = e.touches[0].clientY;
+                var deltaY = currentY - touchStartY;
+
+                // If scrolling down and at top, or scrolling up and at bottom
+                if ((deltaY > 0 && this.scrollTop === 0) ||
+                    (deltaY < 0 && this.scrollTop + this.clientHeight >= this.scrollHeight)) {
+                    // Allow the scroll
+                }
+            }, { passive: true });
+        }
+
+        // Initialize touch handlers for panels when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            setupPanelTouchHandlers('node-panel');
+            setupPanelTouchHandlers('room-editor-panel');
+        });
+
+        // Keep view-preset buttons in sync with active state
+        ['perspective','topdown','follow'].forEach(function(p) {
+            document.getElementById('view-' + p).addEventListener('click', function() {
+                document.querySelectorAll('.view-btn').forEach(function(b) { b.classList.remove('active'); });
+                this.classList.add('active');
+            });
+        });
+
+        // Handle timeline view visibility
+        function updateViewVisibility(mode) {
+            var sceneContainer = document.getElementById('scene-container');
+            var timelineView = document.getElementById('timeline-view');
+            var nodePanel = document.getElementById('node-panel');
+            var chartPanel = document.getElementById('chart-panel');
+            var presencePanel = document.getElementById('presence-panel');
+
+            if (mode === 'timeline') {
+                // Show timeline, hide 3D scene
+                if (sceneContainer) sceneContainer.style.display = 'none';
+                if (timelineView) timelineView.style.display = 'flex';
+                if (nodePanel) nodePanel.style.display = 'none';
+                if (chartPanel) chartPanel.style.display = 'none';
+                if (presencePanel) presencePanel.style.display = 'none';
+            } else {
+                // Show 3D scene, hide timeline
+                if (sceneContainer) sceneContainer.style.display = 'block';
+                if (timelineView) timelineView.style.display = 'none';
+                if (nodePanel) nodePanel.style.display = 'block';
+                if (chartPanel) chartPanel.style.display = 'block';
+                if (presencePanel) presencePanel.style.display = 'block';
+            }
+        }
+
+        // Register with router if available
+        if (window.SpaxelRouter) {
+            SpaxelRouter.onModeChange(updateViewVisibility);
+            // Initial visibility set
+            updateViewVisibility(SpaxelRouter.getMode());
+        }
+
+        // Draw GDOP legend gradient
+        (function() {
+            var c = document.getElementById('gdop-gradient');
+            if (!c) return;
+            var ctx = c.getContext('2d');
+            var grad = ctx.createLinearGradient(0, 0, 140, 0);
+            grad.addColorStop(0.00, 'rgb(30,200,80)');
+            grad.addColorStop(0.25, 'rgb(140,220,50)');
+            grad.addColorStop(0.50, 'rgb(240,210,40)');
+            grad.addColorStop(0.75, 'rgb(240,130,30)');
+            grad.addColorStop(1.00, 'rgb(210,40,30)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, 140, 12, 3);
+            ctx.fill();
+        })();
+    </script>
+
+    <!-- Morning Briefing Card -->
+    <div id="briefing-card">
+        <div class="briefing-header">
+            <div>
+                <div class="briefing-title">Morning Briefing</div>
+                <div class="briefing-date" id="briefing-date-text">Today</div>
+            </div>
+            <button class="briefing-close" id="briefing-close">&times;</button>
+        </div>
+        <div class="briefing-content" id="briefing-content-text">
+            <div class="briefing-loading">
+                <div class="briefing-spinner"></div>
+                <span>Loading briefing...</span>
+            </div>
+        </div>
+        <div class="briefing-actions" id="briefing-actions" style="display: none;">
+            <button class="briefing-btn secondary" id="briefing-refresh">Refresh</button>
+            <button class="briefing-btn primary" id="briefing-dismiss">Got it</button>
+        </div>
+    </div>
+
+    <!-- Briefing Indicator (when dismissed but available) -->
+    <div id="briefing-indicator" title="View morning briefing">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+        </svg>
+    </div>
+
+    <!-- Briefing Settings Panel -->
+    <div id="briefing-settings">
+        <h3>Briefing Settings</h3>
+        <div class="setting-row">
+            <label class="setting-label">Enable morning briefing</label>
+            <div class="setting-toggle active" id="briefing-enabled-toggle"></div>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label">Briefing time</label>
+            <input type="time" class="setting-input" id="briefing-time-input" value="07:00">
+        </div>
+        <div class="setting-row">
+            <label class="setting-label">Push notification</label>
+            <div class="setting-toggle" id="briefing-push-toggle"></div>
+        </div>
+        <div class="setting-row">
+            <label class="setting-label">Auto-generate</label>
+            <div class="setting-toggle active" id="briefing-auto-toggle"></div>
+        </div>
+        <div class="settings-actions">
+            <button class="briefing-btn secondary" id="briefing-settings-cancel">Cancel</button>
+            <button class="briefing-btn primary" id="briefing-settings-save">Save</button>
+        </div>
+    </div>
+
+    <!-- Mobile bottom navigation -->
+    <nav class="app-mobile-nav">
+        <ul class="app-mobile-nav__list">
+            <li class="app-mobile-nav__item">
+                <a href="/simple" class="app-mobile-nav__link" aria-label="Simple mode">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    <span>Simple</span>
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/live" class="app-mobile-nav__link app-mobile-nav__link--active" aria-label="Live view">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/></svg>
+                    <span>Live</span>
+                </a>
+            </li>
+            <li class="app-mobile-nav__item">
+                <a href="/fleet" class="app-mobile-nav__link" aria-label="Fleet">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+                    <span>Fleet</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Auto-trigger re-provision wizard when navigated from fleet page -->
+    <script>
+    (function () {
+        var params = new URLSearchParams(window.location.search);
+        var reproveMAC = params.get('reprovision');
+        if (reproveMAC && window.SpaxelOnboard && SpaxelOnboard.reprove) {
+            // Clean the URL so refresh doesn't re-trigger
+            if (window.history.replaceState) {
+                var clean = window.location.pathname;
+                window.history.replaceState({}, '', clean);
+            }
+            SpaxelOnboard.reprove(reproveMAC);
+        }
+    })();
+    </script>
+    <!-- Mobile Responsive Expert Mode -->
+    <script type="module" src="static/js/mobile.js"></script>
+</body>
+</html>

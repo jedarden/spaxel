@@ -914,8 +914,7 @@ the strict window:
   `http://localhost:8080/api/provision` (200) and nodes connect on real tokens.
   **This is the one to build** (`go build -o /tmp/spaxel-sim ./cmd/sim` from the repo
   root).
-- **`mothership/cmd/sim/` (in-module — part of the mothership module, a `main.go.bak`
-  sits next to it)** — a stale copy. Its `apiBaseFromMothership` does NOT drop the
+- **`mothership/cmd/sim/` (in-module — part of the mothership module)** — a stale copy. Its `apiBaseFromMothership` does NOT drop the
   path, so it POSTs to `http://localhost:8080/ws/node/api/provision` → **404**;
   provisioning fails, it falls back to a token the strict-window validator rejects
   (`[WARN] Node ... rejected: invalid_token`), and `/api/nodes` returns `[]`.

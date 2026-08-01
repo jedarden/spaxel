@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Integrations - Spaxel Dashboard</title>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#18191b">
+    <link rel="stylesheet" href="css/integrations.css">
+</head>
+<body class="has-mobile-nav">
+<div class="app-shell app-shell--full">
+
+    <!-- ── Top nav ── -->
+    <nav class="app-header">
+        <a href="/" class="app-header__logo">&#x26F6; Spaxel</a>
+        <div class="app-header__links">
+            <a href="/" class="app-header__link">Home</a>
+            <a href="/live" class="app-header__link">Live View</a>
+            <a href="/fleet" class="app-header__link">Fleet</a>
+        </div>
+    </nav>
+
+    <!-- ── Main content ── -->
+    <main class="app-main">
+    <div class="integrations-container">
+
+        <a href="index.html" class="back-link">← Back to Dashboard</a>
+
+        <div class="integrations-header">
+            <h1>Integrations</h1>
+            <p>Configure home automation integrations for Spaxel</p>
+        </div>
+
+        <!-- MQTT Integration Card -->
+        <div class="integration-card" id="mqtt-card">
+            <div class="integration-card-header">
+                <div class="integration-card-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    MQTT Integration
+                </div>
+                <div class="integration-status" id="mqtt-status">
+                    <span class="status-dot disconnected" id="mqtt-status-dot"></span>
+                    <span id="mqtt-status-text">Disconnected</span>
+                </div>
+            </div>
+            <p class="integration-description">
+                Automatically configure Spaxel entities in Home Assistant via MQTT discovery.
+                Person presence, zone occupancy, fall detection, and system health will be published.
+            </p>
+
+            <form id="mqtt-form">
+                <div class="form-group">
+                    <label for="mqtt-broker">Broker URL</label>
+                    <input type="text" id="mqtt-broker" placeholder="tcp://homeassistant.local:1883" required>
+                    <div class="form-hint">Examples: tcp://broker.local:1883, mqtt://broker.local:1883, mqtts://broker.local:8883</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="mqtt-username">Username (optional)</label>
+                    <input type="text" id="mqtt-username" placeholder="username">
+                </div>
+
+                <div class="form-group">
+                    <label for="mqtt-password">Password (optional)</label>
+                    <input type="password" id="mqtt-password" placeholder="password">
+                    <div class="form-hint">Leave blank to keep existing password</div>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="mqtt-tls">
+                    <label for="mqtt-tls">Use TLS (mqtts://)</label>
+                </div>
+
+                <div class="form-group">
+                    <label for="mqtt-discovery-prefix">Discovery Prefix</label>
+                    <input type="text" id="mqtt-discovery-prefix" value="homeassistant">
+                    <div class="form-hint">Home Assistant MQTT discovery topic prefix (default: homeassistant)</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full" id="save-mqtt-btn">Save MQTT Settings</button>
+
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" id="test-mqtt-btn">Test Connection</button>
+                    <button type="button" class="btn btn-secondary" id="publish-discovery-btn">Publish Discovery</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- System Webhook Card -->
+        <div class="integration-card" id="webhook-card">
+            <div class="integration-card-header">
+                <div class="integration-card-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    System Webhook
+                </div>
+                <div class="integration-status" id="webhook-status">
+                    <span class="status-dot" id="webhook-status-dot"></span>
+                    <span id="webhook-status-text">Disabled</span>
+                </div>
+            </div>
+            <p class="integration-description">
+                Send all Spaxel events to a custom webhook URL for integration with external services.
+                Events are sent as JSON with an X-Spaxel-Event header indicating the event type.
+            </p>
+
+            <form id="webhook-form">
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="webhook-enabled">
+                    <label for="webhook-enabled">Enable System Webhook</label>
+                </div>
+
+                <div class="form-group hidden" id="webhook-url-group">
+                    <label for="webhook-url">Webhook URL</label>
+                    <input type="url" id="webhook-url" placeholder="https://your-server.com/spaxel-webhook">
+                    <div class="form-hint">Events will be POSTed as JSON with X-Spaxel-Event header</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full" id="save-webhook-btn">Save Webhook Settings</button>
+
+                <button type="button" class="btn btn-secondary btn-full btn-margin-top" id="test-webhook-btn">Test Webhook</button>
+            </form>
+        </div>
+    </div>
+    </main>
+
+</div><!-- /.app-shell -->
+
+<!-- ── Mobile bottom nav (outside grid) ── -->
+<nav class="app-mobile-nav">
+    <ul class="app-mobile-nav__list">
+        <li class="app-mobile-nav__item"><a href="/" class="app-mobile-nav__link">Home</a></li>
+        <li class="app-mobile-nav__item"><a href="/live" class="app-mobile-nav__link">Live</a></li>
+        <li class="app-mobile-nav__item"><a href="/fleet" class="app-mobile-nav__link">Fleet</a></li>
+        <li class="app-mobile-nav__item"><a href="/integrations" class="app-mobile-nav__link app-mobile-nav__link--active">Integrations</a></li>
+    </ul>
+</nav>
+
+    <script src="js/integrations.js"></script>
+    <script>
+        // Override the panel rendering for standalone page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load settings on page load
+            if (window.SpaxelIntegrations) {
+                window.SpaxelIntegrations.fetch().catch(function(err) {
+                    showToast('Failed to load integration settings', 'error');
+                });
+            }
+
+            // Set up event listeners
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // MQTT form submission
+            const mqttForm = document.getElementById('mqtt-form');
+            if (mqttForm) {
+                mqttForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    saveMQTTSettings();
+                });
+            }
+
+            // Webhook enabled toggle
+            const webhookEnabled = document.getElementById('webhook-enabled');
+            if (webhookEnabled) {
+                webhookEnabled.addEventListener('change', function() {
+                    const urlGroup = document.getElementById('webhook-url-group');
+                    if (urlGroup) {
+                        urlGroup.classList.toggle('hidden', !this.checked);
+                    }
+                });
+            }
+
+            // Webhook form submission
+            const webhookForm = document.getElementById('webhook-form');
+            if (webhookForm) {
+                webhookForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    saveWebhookSettings();
+                });
+            }
+
+            // Test buttons
+            const testMQTTBtn = document.getElementById('test-mqtt-btn');
+            if (testMQTTBtn) {
+                testMQTTBtn.addEventListener('click', function() {
+                    testIntegration('mqtt');
+                });
+            }
+
+            const publishDiscoveryBtn = document.getElementById('publish-discovery-btn');
+            if (publishDiscoveryBtn) {
+                publishDiscoveryBtn.addEventListener('click', publishDiscovery);
+            }
+
+            const testWebhookBtn = document.getElementById('test-webhook-btn');
+            if (testWebhookBtn) {
+                testWebhookBtn.addEventListener('click', function() {
+                    testIntegration('webhook');
+                });
+            }
+        }
+
+        function saveMQTTSettings() {
+            const broker = document.getElementById('mqtt-broker').value.trim();
+            const username = document.getElementById('mqtt-username').value.trim();
+            const password = document.getElementById('mqtt-password').value;
+            const tls = document.getElementById('mqtt-tls').checked;
+            const discoveryPrefix = document.getElementById('mqtt-discovery-prefix').value.trim();
+
+            if (!broker) {
+                showToast('Broker URL is required', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            const updates = {
+                mqtt: {
+                    broker: broker,
+                    username: username,
+                    tls: tls,
+                    discovery_prefix: discoveryPrefix || 'homeassistant'
+                }
+            };
+
+            if (password) {
+                updates.mqtt.password = password;
+            }
+
+            window.SpaxelIntegrations.save(updates)
+                .then(function() {
+                    showLoading(false);
+                    showToast('MQTT settings saved successfully', 'success');
+                })
+                .catch(function(err) {
+                    showLoading(false);
+                    showToast('Failed to save MQTT settings: ' + err.message, 'error');
+                });
+        }
+
+        function saveWebhookSettings() {
+            const enabled = document.getElementById('webhook-enabled').checked;
+            const url = document.getElementById('webhook-url').value.trim();
+
+            if (enabled && !url) {
+                showToast('Webhook URL is required when enabled', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            const updates = {
+                webhook: {
+                    enabled: enabled,
+                    url: enabled ? url : ''
+                }
+            };
+
+            window.SpaxelIntegrations.save(updates)
+                .then(function() {
+                    showLoading(false);
+                    showToast('Webhook settings saved successfully', 'success');
+                })
+                .catch(function(err) {
+                    showLoading(false);
+                    showToast('Failed to save webhook settings: ' + err.message, 'error');
+                });
+        }
+
+        function testIntegration(type) {
+            showLoading(true);
+
+            window.SpaxelIntegrations.test(type)
+                .then(function(result) {
+                    showLoading(false);
+                    showToast(result.message || 'Test successful', 'success');
+                })
+                .catch(function(err) {
+                    showLoading(false);
+                    showToast('Test failed: ' + err.message, 'error');
+                });
+        }
+
+        function publishDiscovery() {
+            // Check if MQTT is connected
+            const statusDot = document.getElementById('mqtt-status-dot');
+            if (!statusDot || !statusDot.classList.contains('connected')) {
+                showToast('MQTT must be connected to publish discovery', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            // In a full implementation, this would call an API endpoint
+            // For now, simulate the action
+            setTimeout(function() {
+                showLoading(false);
+                showToast('Discovery configurations published to Home Assistant', 'success');
+            }, 500);
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                if (show) {
+                    overlay.classList.add('active');
+                } else {
+                    overlay.classList.remove('active');
+                }
+            }
+        }
+
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            if (toast) {
+                toast.textContent = message;
+                toast.className = 'toast show ' + type;
+                setTimeout(function() {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Integration status update
+        function updateIntegrationStatus(type, connected, message) {
+            const statusDot = document.getElementById(type + '-status-dot');
+            const statusText = document.getElementById(type + '-status-text');
+
+            if (statusDot) {
+                statusDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+            }
+
+            if (statusText && message) {
+                statusText.textContent = message;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -23,7 +23,16 @@
     let _drawStart = null; // {x, z} for box start or cylinder center
     let _drawPreview = null; // Preview mesh during drawing
     let _heightSlider = null;
+    // Callback holders for integration callbacks registered via the public
+    // onVolumeCreated/onVolumeChanged/onVolumeDeleted setters below. All three
+    // MUST be declared: this file is 'use strict' (line 9), so assigning to an
+    // undeclared identifier (e.g. `_onVolumeChanged = callback`) throws a
+    // ReferenceError at runtime when AutomationBuilder registers its callbacks
+    // during dashboard init — a load-order-dependent console error that broke
+    // the bf-4do5y live-dashboard backward-compat gate flakily.
     let _onVolumeCreated = null;
+    let _onVolumeChanged = null;
+    let _onVolumeDeleted = null;
 
     // Volume visualization materials
     const VOLUME_MATERIALS = {
