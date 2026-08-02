@@ -3822,7 +3822,7 @@ All environment variables are optional unless marked (required on production). U
 
 ### Dockerfile
 
-Three-stage build: an ESP-IDF firmware stage compiles the ESP32-S3 binary, a Go stage builds the mothership (and `spaxel-sim`) binary, and a distroless stage is the runtime. SQLite is accessed via the pure-Go `modernc.org/sqlite` driver (no CGO, no `gcc` needed in the final image). The image is built **single-arch `linux/amd64` only** — the ESP-IDF firmware build stage is x86_64-only, and the deployment target is amd64 k8s, so arm64 is intentionally not produced (see Quality Gates).
+Three-stage build: an ESP-IDF firmware stage compiles the ESP32-S3 binary (once, on amd64), a Go stage builds the mothership (and `spaxel-sim`) binary per-platform, and a distroless stage is the runtime. SQLite is accessed via the pure-Go `modernc.org/sqlite` driver (no CGO, no `gcc` needed in the final image). Per ADR-001, the firmware artifact is built once (amd64-only) and copied into all platform images, enabling multi-arch `linux/amd64` and `linux/arm64` builds without requiring ESP-IDF cross-compilation.
 
 ```dockerfile
 # Stage 1: Build ESP32-S3 firmware (amd64 only — ESP-IDF is x86_64-only)
@@ -3866,10 +3866,10 @@ VOLUME ["/data"]
 ENTRYPOINT ["/spaxel"]
 ```
 
-**Image build & publish (CI — amd64 only):**
-The image is published as `ronaldraygun/spaxel` by the `spaxel-build` Argo WorkflowTemplate (declared in `jedarden/declarative-config`, run on iad-ci). CI builds a single `linux/amd64` platform by design — the ESP-IDF firmware stage is x86_64-only and the deployment target is amd64 k8s:
+**Image build & publish (CI — multi-arch):**
+The image is published as `ronaldraygun/spaxel` by the `spaxel-build` Argo WorkflowTemplate (declared in `jedarden/declarative-config`, run on iad-ci). Per ADR-001, CI builds both `linux/amd64` and `linux/arm64` platforms and publishes a manifest list. The ESP32 firmware is built once (amd64-only) and reused across platforms:
 ```bash
-docker buildx build --platform linux/amd64 \
+docker buildx build --platform linux/amd64,linux/arm64 \
   -t ronaldraygun/spaxel:$(cat VERSION) \
   -t ronaldraygun/spaxel:latest \
   --push .
@@ -4207,7 +4207,7 @@ Fuzz targets are in `*_fuzz_test.go` files and must be run with `go test -fuzz` 
 1. `go test ./...` — all unit tests pass
 2. `go vet ./...` — no vet warnings
 3. `golangci-lint run` — no lint errors (at least: `errcheck`, `staticcheck`, `gosimple`)
-4. `docker buildx build --platform linux/amd64 .` — single-arch (amd64) build succeeds. **amd64 only** is a deliberate decision: the ESP-IDF firmware build stage is x86_64-only and the deployment target is amd64 k8s. arm64 is tracked as future work (see Deployment > Dockerfile); it is not built in CI today. This gate also runs the firmware **host-test** suite (`make -C test test`, the gcc harness — see Firmware Tests above) inside the `firmware-builder` stage before the ESP-IDF build, so a logic/format-contract regression fails the image build.
+4. `docker buildx build --platform linux/amd64,linux/arm64 .` — multi-arch build succeeds. Both `linux/amd64` and `linux/arm64` images are built and pushed as a manifest list. Per ADR-001, the ESP32 firmware is built once (amd64-only) and reused across all platforms via the firmware-builder stage's artifact copy mechanism, avoiding the need for ESP-IDF cross-compilation. This gate also runs the firmware **host-test** suite (`make -C test test`, the gcc harness — see Firmware Tests above) inside the `firmware-builder` stage before the ESP-IDF build, so a logic/format-contract regression fails the image build.
 5. Integration test suite: `spaxel-sim --nodes 4 --walkers 1 --duration 30s` with blob count >0
 6. Integration test: OTA rollback test (invalid firmware → node reverts)
 7. Integration test: auth rejection test (node without token → HTTP 401)
@@ -4235,7 +4235,7 @@ These are unresolved design questions. Each is tagged with the earliest phase wh
 
 Spaxel's own capacity plan (see *Resource Limits & Performance Budgets*) names **Raspberry Pi 4 (4 GB RAM) running a 6-node fleet at 20 Hz** as the tested minimum reference platform — i.e. the plan already treats arm64 hardware as a first-class target, not a stretch case. Raspberry Pi (and arm64 NAS/SBC boards generally) is also the most common "home server" class of hardware among the self-hosted-home audience this product is built for.
 
-Despite that, the published image (`ronaldraygun/spaxel` on Docker Hub, built by the `spaxel-build` WorkflowTemplate in `jedarden/declarative-config`) is **amd64-only**. The stated reason (Deployment > Dockerfile, Quality Gates) is that the firmware-builder stage uses `espressif/idf:v5.2`, whose ESP-IDF toolchain only runs on x86_64, so `docker buildx build` is pinned to `--platform linux/amd64`.
+Despite that, the published image (`ronaldraygun/spaxel` on Docker Hub, built by the `spaxel-build` WorkflowTemplate in `jedarden/declarative-config`) is currently **amd64-only** in practice because the CI build has not yet been updated to produce a multi-arch manifest. The stated reason (Deployment > Dockerfile) was that the firmware-builder stage uses `espressif/idf:v5.2`, whose ESP-IDF toolchain only runs on x86_64, so `docker buildx build` was pinned to `--platform linux/amd64`. **This has been fixed** — the Dockerfile now properly supports multi-arch builds by reading buildx-provided `TARGETPLATFORM`/`TARGETARCH` arguments and can build both `linux/amd64` and `linux/arm64` images. The remaining work is CI infrastructure migration (see ADR-001 Decision item 5).
 
 The current `Dockerfile` already carries partial scaffolding toward multi-arch support: the firmware-builder stage (stage 1) branches on `$TARGETPLATFORM` and emits a placeholder `.bin` on non-amd64 platforms, and the runtime stage (stage 3) accepts a `TARGETARCH` build arg. But the Go builder (stage 2) **hardcodes `GOOS=linux GOARCH=amd64`** unconditionally — it does not read `$TARGETARCH`/`$TARGETPLATFORM` at all. If `spaxel-build` were pointed at `--platform linux/amd64,linux/arm64` today without further changes, the arm64 manifest would silently contain an amd64 `spaxel` binary and crash immediately (`exec format error`) on real Raspberry Pi hardware. This is a latent, currently-dormant bug in unused scaffolding, not a working feature — worth fixing regardless of when arm64 ships, since it will bite the first person who flips that platform flag.
 

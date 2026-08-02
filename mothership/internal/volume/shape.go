@@ -618,10 +618,11 @@ func (s *Store) evaluateEnter(t *Trigger, state *TriggerState, blobs []BlobPos, 
 	var fired bool
 
 	for _, blob := range blobs {
-		// Check person filter
-		// TODO: Filter by person ID when blob has person info
+		// Check person filter - skip this blob if PersonID doesn't match the configured filter
 		if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
-			_ = blob.PersonID // Placeholder for person filter implementation
+			if t.ConditionParams.PersonID != blob.PersonID {
+				continue
+			}
 		}
 
 		blobState := state.Blobs[blob.ID]
