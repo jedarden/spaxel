@@ -666,3 +666,167 @@ func extractNodePositions(nodes *NodeSet) []Point {
 	}
 	return positions
 }
+
+// computeGDOPImprovement computes the real GDOP improvement for a hypothetical node reposition.
+// It takes the current node layout, a node MAC address to move, and a target position.
+// Returns the relative improvement as a fraction: (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
+// Results are clamped to the range [-1.0, 1.0] where negative values indicate degradation.
+func computeGDOPImprovement(currentLayout []*Node, nodeMAC string, targetPos Point) float64 {
+	// Step 1: Compute worst-case GDOP for current layout
+	currentWorstGDOP := computeWorstGDOP(currentLayout)
+
+	// Handle edge case: current layout has no coverage
+	if math.IsInf(currentWorstGDOP, 1) {
+		// If current has no coverage, any improvement is meaningless
+		return 0.0
+	}
+
+	// Step 2: Create hypothetical layout with node moved to target position
+	hypotheticalLayout := make([]*Node, 0, len(currentLayout))
+	found := false
+	for _, node := range currentLayout {
+		newNode := &Node{
+			ID:       node.ID,
+			Name:     node.Name,
+			Type:     node.Type,
+			Role:     node.Role,
+			Position: node.Position,
+			Enabled:  node.Enabled,
+			APBSSID:  node.APBSSID,
+			APChannel: node.APChannel,
+		}
+
+		// Move the target node to the new position
+		if node.ID == nodeMAC || node.GenerateMAC() == nodeMAC {
+			newNode.Position = targetPos
+			found = true
+		}
+
+		hypotheticalLayout = append(hypotheticalLayout, newNode)
+	}
+
+	// If node not found, no change possible
+	if !found {
+		return 0.0
+	}
+
+	// Step 3: Compute worst-case GDOP for hypothetical layout
+	newWorstGDOP := computeWorstGDOP(hypotheticalLayout)
+
+	// Handle edge case: hypothetical layout has no coverage
+	if math.IsInf(newWorstGDOP, 1) {
+		// Moving to this position results in complete coverage loss
+		return -1.0
+	}
+
+	// Step 4: Compute relative improvement
+	// Improvement = (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
+	// Positive value = improvement (GDOP decreased)
+	// Negative value = degradation (GDOP increased)
+	improvement := (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
+
+	// Step 5: Clamp to sane range [-1.0, 1.0]
+	if improvement > 1.0 {
+		improvement = 1.0
+	} else if improvement < -1.0 {
+		improvement = -1.0
+	}
+
+	return improvement
+}
+
+// computeWorstGDOP calculates the worst-case GDOP value across all cells for a given node layout
+func computeWorstGDOP(nodes []*Node) float64 {
+	if len(nodes) < 2 {
+		return math.Inf(1) // Need at least 2 nodes for localization
+	}
+
+	// Create a NodeSet and generate links
+	nodeSet := NewNodeSet()
+	for _, node := range nodes {
+		if node != nil {
+			nodeSet.Add(node)
+		}
+	}
+
+	links := GenerateAllLinks(nodeSet)
+	if len(links) < 2 {
+		return math.Inf(1) // Need at least 2 links for GDOP calculation
+	}
+
+	// Determine grid bounds from node positions
+	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
+	maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+
+	for _, node := range nodes {
+		if node != nil && node.Enabled {
+			p := node.Position
+			if p.X < minX {
+				minX = p.X
+			}
+			if p.X > maxX {
+				maxX = p.X
+			}
+			if p.Y < minY {
+				minY = p.Y
+			}
+			if p.Y > maxY {
+				maxY = p.Y
+			}
+			if p.Z < minZ {
+				minZ = p.Z
+			}
+			if p.Z > maxZ {
+				maxZ = p.Z
+			}
+		}
+	}
+
+	// If no valid bounds found, use defaults
+	if math.IsInf(minX, 1) || math.IsInf(maxX, -1) {
+		minX, maxX = -5.0, 5.0
+		minY, maxY = -5.0, 5.0
+		minZ, maxZ = 0.0, 3.0
+	}
+
+	// Add margin to bounds
+	margin := 1.0
+	minX -= margin
+	minY -= margin
+	maxX += margin
+	maxY += margin
+
+	// Create GDOP computer
+	gdopComp := NewGDOPComputer(links, GridConfig{
+		MinX:     minX,
+		MinY:     minY,
+		Width:    maxX - minX,
+		Depth:    maxY - minY,
+		CellSize: 0.2, // 20cm grid cells
+	})
+
+	// Compute GDOP for all cells
+	results := gdopComp.ComputeAll()
+
+	// Find worst GDOP value (excluding infinity)
+	// Track if we found any valid cells
+	foundValid := false
+	worstGDOP := 0.0
+	for _, row := range results {
+		for _, cell := range row {
+			if !math.IsInf(cell.GDOP, 0) {
+				foundValid = true
+				if cell.GDOP > worstGDOP {
+					worstGDOP = cell.GDOP
+				}
+			}
+		}
+	}
+
+	// If all cells are infinity (no coverage), return infinity
+	if !foundValid {
+		return math.Inf(1)
+	}
+
+	return worstGDOP
+}
