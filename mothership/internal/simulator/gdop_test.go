@@ -187,12 +187,19 @@ func TestComputeWorstGDOP(t *testing.T) {
 	})
 
 	t.Run("CollinearNodesYieldHigherGDOP", func(t *testing.T) {
-		// Use a smaller room (6x6m) to ensure cells are within zone 3
+		// Use a smaller room (6x6m) to ensure cells are within zone 3.
+		// Node Z must match ComputeAt's hardcoded 1m evaluation height:
+		// coverage requires two links' Fresnel zones (<=3, ~18cm path-length
+		// excess) to overlap, which for a non-crossing polygon like a triangle
+		// only happens right at shared vertices -- a Z mismatch there adds a
+		// path-length penalty comparable to the vertex-to-cell distance itself
+		// and pushes every cell's zone past the threshold, making the grid
+		// come back entirely uncovered (worst GDOP = infinity for any layout).
 		// Collinear nodes should have higher GDOP than well-positioned nodes
 		nodes := []*Node{
-			NewNode("node1", "Node 1", NodeTypeVirtual, Point{X: 0, Y: 0, Z: 2.0}),
-			NewNode("node2", "Node 2", NodeTypeVirtual, Point{X: 3, Y: 0, Z: 2.0}),
-			NewNode("node3", "Node 3", NodeTypeVirtual, Point{X: 6, Y: 0, Z: 2.0}),
+			NewNode("node1", "Node 1", NodeTypeVirtual, Point{X: 0, Y: 0, Z: 1.0}),
+			NewNode("node2", "Node 2", NodeTypeVirtual, Point{X: 3, Y: 0, Z: 1.0}),
+			NewNode("node3", "Node 3", NodeTypeVirtual, Point{X: 6, Y: 0, Z: 1.0}),
 		}
 		for _, node := range nodes {
 			node.Role = RoleTXRX
@@ -202,9 +209,9 @@ func TestComputeWorstGDOP(t *testing.T) {
 
 		// Well-positioned nodes (triangular layout) should have finite, reasonable GDOP
 		wellPositionedNodes := []*Node{
-			NewNode("node1", "Node 1", NodeTypeVirtual, Point{X: 0, Y: 0, Z: 2.0}),
-			NewNode("node2", "Node 2", NodeTypeVirtual, Point{X: 6, Y: 0, Z: 2.0}),
-			NewNode("node3", "Node 3", NodeTypeVirtual, Point{X: 3, Y: 5, Z: 2.0}),
+			NewNode("node1", "Node 1", NodeTypeVirtual, Point{X: 0, Y: 0, Z: 1.0}),
+			NewNode("node2", "Node 2", NodeTypeVirtual, Point{X: 6, Y: 0, Z: 1.0}),
+			NewNode("node3", "Node 3", NodeTypeVirtual, Point{X: 3, Y: 5, Z: 1.0}),
 		}
 		for _, node := range wellPositionedNodes {
 			node.Role = RoleTXRX
