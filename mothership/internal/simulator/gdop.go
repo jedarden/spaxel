@@ -755,8 +755,8 @@ func computeWorstGDOP(nodes []*Node) float64 {
 	}
 
 	// Determine grid bounds from node positions
-	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
-	maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+	minX, minY := math.Inf(1), math.Inf(1)
+	maxX, maxY := math.Inf(-1), math.Inf(-1)
 
 	for _, node := range nodes {
 		if node != nil && node.Enabled {
@@ -773,12 +773,6 @@ func computeWorstGDOP(nodes []*Node) float64 {
 			if p.Y > maxY {
 				maxY = p.Y
 			}
-			if p.Z < minZ {
-				minZ = p.Z
-			}
-			if p.Z > maxZ {
-				maxZ = p.Z
-			}
 		}
 	}
 
@@ -786,7 +780,6 @@ func computeWorstGDOP(nodes []*Node) float64 {
 	if math.IsInf(minX, 1) || math.IsInf(maxX, -1) {
 		minX, maxX = -5.0, 5.0
 		minY, maxY = -5.0, 5.0
-		minZ, maxZ = 0.0, 3.0
 	}
 
 	// Add margin to bounds
