@@ -2035,10 +2035,21 @@ func main() {
 		return diagnostics.Vec3{X: node.PosX, Y: node.PosY, Z: node.PosZ}, true
 	})
 
+	// findMaxGDOP finds the maximum GDOP value in a flat GDOP map
+	findMaxGDOP := func(gdopMap []float32) float64 {
+		maxGDOP := float32(0.0)
+		for _, gdop := range gdopMap {
+			if gdop > maxGDOP {
+				maxGDOP = gdop
+			}
+		}
+		return float64(maxGDOP)
+	}
+
 	// computeGDOPImprovement calculates the real GDOP improvement for moving a node
 	// to a hypothetical position. Returns the improvement ratio: (currentWorst - newWorst) / currentWorst
 	// Positive values mean improvement, negative values mean degradation.
-	func computeGDOPImprovement(nodeMAC string, targetPos diagnostics.Vec3) float64 {
+	computeGDOPImprovement := func(nodeMAC string, targetPos diagnostics.Vec3) float64 {
 		// Get current node positions
 		allNodes, err := fleetReg.GetAllNodes()
 		if err != nil || len(allNodes) < 2 {
@@ -2105,17 +2116,6 @@ func main() {
 		}
 
 		return improvement
-	}
-
-	// findMaxGDOP finds the maximum GDOP value in a flat GDOP map
-	func findMaxGDOP(gdopMap []float32) float64 {
-		maxGDOP := float32(0.0)
-		for _, gdop := range gdopMap {
-			if gdop > maxGDOP {
-				maxGDOP = gdop
-			}
-		}
-		return float64(maxGDOP)
 	}
 
 	// Wire GDOP improvement accessor
