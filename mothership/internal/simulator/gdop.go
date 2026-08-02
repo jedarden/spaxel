@@ -667,10 +667,48 @@ func extractNodePositions(nodes *NodeSet) []Point {
 	return positions
 }
 
-// computeGDOPImprovement computes the real GDOP improvement for a hypothetical node reposition.
-// It takes the current node layout, a node MAC address to move, and a target position.
-// Returns the relative improvement as a fraction: (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
-// Results are clamped to the range [-1.0, 1.0] where negative values indicate degradation.
+// computeGDOPImprovement computes the GDOP improvement for a hypothetical node repositioning.
+//
+// This function evaluates how much the overall coverage would improve or degrade if a
+// specific node were moved to a new target position. It computes the worst-case GDOP
+// for both the current layout and a hypothetical layout with the node moved, then
+// returns the relative improvement.
+//
+// Algorithm:
+// 1. Compute worst-case GDOP for current layout across entire space
+// 2. Create hypothetical layout with target node moved to new position
+// 3. Compute worst-case GDOP for hypothetical layout
+// 4. Calculate improvement: (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
+//
+// Parameters:
+//   currentLayout - Slice of all nodes in their current positions
+//   nodeMAC       - MAC address (or ID) of the node to move
+//   targetPos     - Target position to move the node to
+//
+// Returns:
+//   Relative improvement in range [-1.0, 1.0]:
+//   - Positive (0 to 1): Improvement (lower GDOP is better)
+//   - Negative (-1 to 0): Degradation (higher GDOP is worse)
+//   - 0.0: No change, node not found, or no coverage baseline
+//   - 1.0: Maximum improvement (reduced to near-zero GDOP)
+//   - -1.0: Complete coverage loss at target position
+//
+// Requirements:
+//   - Minimum 2 nodes in layout required
+//   - At least 2 links required for meaningful GDOP calculation
+//   - Node MAC/ID must exist in currentLayout
+//
+// Example usage:
+//
+//   layout := []*Node{
+//     NewNode("node1", "Node 1", NodeTypeVirtual, Point{X: 0, Y: 0, Z: 2.0}),
+//     NewNode("node2", "Node 2", NodeTypeVirtual, Point{X: 10, Y: 0, Z: 2.0}),
+//     NewNode("node3", "Node 3", NodeTypeVirtual, Point{X: 0, Y: 10, Z: 2.0}),
+//   }
+//   targetPos := Point{X: 5, Y: 5, Z: 2.0} // Move to center
+//   improvement := computeGDOPImprovement(layout, "node1", targetPos)
+//   // Returns ~0.3 (30% improvement) for moving corner node to center
+//
 func computeGDOPImprovement(currentLayout []*Node, nodeMAC string, targetPos Point) float64 {
 	// Step 1: Compute worst-case GDOP for current layout
 	currentWorstGDOP := computeWorstGDOP(currentLayout)
@@ -735,7 +773,45 @@ func computeGDOPImprovement(currentLayout []*Node, nodeMAC string, targetPos Poi
 	return improvement
 }
 
-// computeWorstGDOP calculates the worst-case GDOP value across all cells for a given node layout
+// computeWorstGDOP calculates the worst-case GDOP value across all grid cells for a given node layout.
+//
+// This function evaluates the coverage quality of a node layout by finding the cell with
+// the highest (worst) GDOP value. A good layout should have a low worst-case GDOP,
+// indicating that even the worst-covered area has reasonable localization accuracy.
+//
+// Algorithm:
+// 1. Generate all links from the node set (TX→RX pairs)
+// 2. Create a grid covering the space bounded by node positions ± 1m margin
+// 3. Compute GDOP for each cell using angular diversity of covering links
+// 4. Return the maximum GDOP found (worst coverage)
+//
+// Parameters:
+//   nodes - Slice of nodes to evaluate. Must have at least 2 nodes.
+//
+// Returns:
+//   Worst-case GDOP value:
+//   - < 2.0: Excellent layout (worst area still has good coverage)
+//   - 2.0-4.0: Good layout
+//   - 4.0-8.0: Fair layout (some areas with poor coverage)
+//   - > 8.0: Poor layout (significant coverage gaps)
+//   - Infinity: No coverage (insufficient nodes or links)
+//
+// Requirements:
+//   - Minimum 2 nodes required
+//   - At least 2 valid links required (depends on node roles)
+//   - Nodes must have valid (non-infinite) positions
+//
+// Example usage:
+//
+//   nodes := []*Node{
+//     NewNode("node1", "Node 1", NodeTypeVirtual, Point{X: 0, Y: 0, Z: 2.0}),
+//     NewNode("node2", "Node 2", NodeTypeVirtual, Point{X: 10, Y: 0, Z: 2.0}),
+//     NewNode("node3", "Node 3", NodeTypeVirtual, Point{X: 0, Y: 10, Z: 2.0}),
+//     NewNode("node4", "Node 4", NodeTypeVirtual, Point{X: 10, Y: 10, Z: 2.0}),
+//   }
+//   worstGDOP := computeWorstGDOP(nodes)
+//   // Returns ~1.8 for well-positioned 4-node corner layout
+//
 func computeWorstGDOP(nodes []*Node) float64 {
 	if len(nodes) < 2 {
 		return math.Inf(1) // Need at least 2 nodes for localization
