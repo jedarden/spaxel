@@ -34,6 +34,7 @@ type Handler struct {
 	nodeID      NodeIdentifier
 	otaMgr      *ota.Manager
 	migProvider MigrationDeadlineProvider
+	db          *sql.DB
 }
 
 // NewHandler creates a new fleet REST handler backed by mgr.
@@ -54,6 +55,11 @@ func (h *Handler) SetNodeIdentifier(ni NodeIdentifier) {
 // SetMigrationDeadlineProvider wires in the source of the migration window deadline.
 func (h *Handler) SetMigrationDeadlineProvider(p MigrationDeadlineProvider) {
 	h.migProvider = p
+}
+
+// SetDatabase sets the database connection for baseline operations.
+func (h *Handler) SetDatabase(db *sql.DB) {
+	h.db = db
 }
 
 // RegisterRoutes mounts fleet endpoints on r.
@@ -544,12 +550,138 @@ func (h *Handler) updateAllNodes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) rebaselineAllNodes(w http.ResponseWriter, r *http.Request) {
-	// This is a placeholder - the actual baseline manager would handle this
-	// For now, return a success response
+	// Get connected node MACs
+	if h.nodeID == nil {
+		writeJSON(w, map[string]interface{}{
+			"ok":    true,
+			"count": 0,
+		})
+		return
+	}
+
+	macs := h.nodeID.GetConnectedMACs()
+	if len(macs) == 0 {
+		writeJSON(w, map[string]interface{}{
+			"ok":    true,
+			"count": 0,
+		})
+		return
+	}
+
+	// Trigger baseline capture asynchronously
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		if err := h.captureBaselinesForNodes(ctx, macs); err != nil {
+			log.Printf("[ERROR] fleet: rebaselineAllNodes failed: %v", err)
+		}
+	}()
+
+	// Return immediately with the count of connected nodes
 	writeJSON(w, map[string]interface{}{
 		"ok":    true,
-		"count": 0,
+		"count": len(macs),
 	})
+}
+
+// captureBaselinesForNodes triggers baseline capture for all links involving the given nodes.
+// This runs in a goroutine and logs errors per link.
+func (h *Handler) captureBaselinesForNodes(ctx context.Context, macs []string) error {
+	if h.db == nil {
+		return errors.New("database not connected")
+	}
+
+	// Query all unique link_ids from the baselines table that involve any of the connected MACs
+	// link_id format is "TX_MAC:RX_MAC", so we check if either side matches any connected MAC
+	query := `
+		SELECT DISTINCT link_id, n_sub
+		FROM baselines b1
+		WHERE captured_at = (
+			SELECT MAX(captured_at)
+			FROM baselines b2
+			WHERE b2.link_id = b1.link_id
+		)
+	`
+	rows, err := h.db.Query(query)
+	if err != nil {
+		return fmt.Errorf("failed to query links: %w", err)
+	}
+	defer rows.Close()
+
+	// Collect all link_ids and their n_sub values
+	type linkInfo struct {
+		linkID string
+		nSub   int
+	}
+	var links []linkInfo
+
+	for rows.Next() {
+		var linkID string
+		var nSub int
+		if err := rows.Scan(&linkID, &nSub); err != nil {
+			log.Printf("[ERROR] Failed to scan link row: %v", err)
+			continue
+		}
+
+		// Check if this link involves any of the connected MACs
+		// link_id format is "TX_MAC:RX_MAC" (MACs are 17 chars each, format is AA:BB:CC:DD:EE:FF)
+		// Total length is 35 chars (17 + 1 colon + 17)
+		involvesConnected := false
+		for _, mac := range macs {
+			// Check if MAC is the TX (first 17 chars)
+			if len(linkID) >= 17 && linkID[:17] == mac {
+				involvesConnected = true
+				break
+			}
+			// Check if MAC is the RX (last 17 chars, after the colon at position 17)
+			if len(linkID) >= 35 && linkID[18:] == mac {
+				involvesConnected = true
+				break
+			}
+		}
+
+		if involvesConnected {
+			links = append(links, linkInfo{linkID: linkID, nSub: nSub})
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating link rows: %w", err)
+	}
+
+	// If no links found involving connected nodes, that's OK
+	if len(links) == 0 {
+		log.Printf("[INFO] rebaselineAllNodes: no links found involving %d connected nodes", len(macs))
+		return nil
+	}
+
+	// Insert capture markers for each link
+	captureTime := time.Now().UnixMilli()
+	successCount := 0
+
+	for _, link := range links {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Insert a capture marker (a baseline entry with empty amplitude/phase BLOBs)
+		_, err := h.db.Exec(`
+			INSERT INTO baselines (link_id, captured_at, n_sub, amplitude, phase, confidence)
+			VALUES (?, ?, ?, X'', X'', 0.0)
+		`, link.linkID, captureTime, link.nSub)
+
+		if err != nil {
+			log.Printf("[ERROR] Failed to insert capture marker for %s: %v", link.linkID, err)
+		} else {
+			successCount++
+		}
+	}
+
+	log.Printf("[INFO] rebaselineAllNodes: inserted capture markers for %d links (out of %d connected nodes)", successCount, len(macs))
+	return nil
 }
 
 func (h *Handler) exportConfig(w http.ResponseWriter, r *http.Request) {

@@ -1270,28 +1270,192 @@ func TestHandlerImportConfig(t *testing.T) {
 // ─── Rebaseline endpoint tests ────────────────────────────────────────────────────
 
 func TestHandlerRebaselineAllNodes(t *testing.T) {
-	reg := newTestRegistry(t)
-
-	mgr := NewManager(reg)
-
-	h := &Handler{mgr: mgr}
-
-	req := httptest.NewRequest("POST", "/api/nodes/rebaseline-all", nil)
-	w := httptest.NewRecorder()
-
-	h.rebaselineAllNodes(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("rebaselineAllNodes() status = %v, want %v", w.Code, http.StatusOK)
+	tests := []struct {
+		name                string
+		connectedMACs       []string
+		existingLinks       []string // Existing link_ids in baselines table
+		wantCount           int
+		wantLinksInBaseline int // Number of capture markers that should be inserted
+	}{
+		{
+			name:          "zero connected nodes returns count:0",
+			connectedMACs: []string{},
+			wantCount:     0,
+		},
+		{
+			name:          "one connected node with no existing baselines",
+			connectedMACs: []string{"AA:BB:CC:DD:EE:FF"},
+			wantCount:     1,
+		},
+		{
+			name:          "two connected nodes with one shared link",
+			connectedMACs: []string{"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"},
+			existingLinks: []string{"AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"},
+			wantCount:     2,
+			wantLinksInBaseline: 1,
+		},
+		{
+			name: "two connected nodes with multiple links",
+			connectedMACs: []string{"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"},
+			existingLinks: []string{
+				"AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
+				"AA:BB:CC:DD:EE:FF:22:33:44:55:66:77",
+			},
+			wantCount:       2,
+			wantLinksInBaseline: 2,
+		},
+		{
+			name:          "three connected nodes",
+			connectedMACs: []string{"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66", "22:33:44:55:66:77"},
+			wantCount:     3,
+		},
 	}
 
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
-		t.Fatalf("Failed to decode response: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up in-memory database
+			db, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatalf("Failed to open database: %v", err)
+			}
+			defer db.Close()
 
-	if resp["ok"] != true {
-		t.Errorf("Expected ok to be true, got %v", resp["ok"])
+			// Create baselines table
+			_, err = db.Exec(`
+				CREATE TABLE IF NOT EXISTS baselines (
+					id          INTEGER PRIMARY KEY AUTOINCREMENT,
+					link_id     TEXT NOT NULL,
+					captured_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+					n_sub       INTEGER NOT NULL,
+					amplitude   BLOB,
+					phase       BLOB,
+					confidence  REAL NOT NULL DEFAULT 0
+				);
+				CREATE INDEX IF NOT EXISTS idx_baselines_link ON baselines(link_id, captured_at DESC);
+			`)
+			if err != nil {
+				t.Fatalf("Failed to create table: %v", err)
+			}
+
+			// Insert existing baseline entries if specified
+			for _, linkID := range tt.existingLinks {
+				_, err = db.Exec(`
+					INSERT INTO baselines (link_id, captured_at, n_sub, amplitude, phase, confidence)
+					VALUES (?, ?, 64, X'0000000000000000', X'0000000000000000', 0.5)
+				`, linkID, time.Now().UnixMilli())
+				if err != nil {
+					t.Fatalf("Failed to insert baseline entry: %v", err)
+				}
+			}
+
+			// Create handler with database and mock node identifier
+			reg := newTestRegistry(t)
+			mgr := NewManager(reg)
+			h := &Handler{mgr: mgr, db: db}
+
+			h.SetNodeIdentifier(&mockNodeIdentifier{
+				getConnectedMACs: func() []string {
+					return tt.connectedMACs
+				},
+			})
+
+			// Make request
+			req := httptest.NewRequest("POST", "/api/nodes/rebaseline-all", nil)
+			w := httptest.NewRecorder()
+
+			h.rebaselineAllNodes(w, req)
+
+			// Check immediate response
+			if w.Code != http.StatusOK {
+				t.Errorf("rebaselineAllNodes() status = %v, want %v", w.Code, http.StatusOK)
+			}
+
+			var resp map[string]interface{}
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("Failed to decode response: %v", err)
+			}
+
+			if resp["ok"] != true {
+				t.Errorf("Expected ok to be true, got %v", resp["ok"])
+			}
+
+			if resp["count"] != float64(tt.wantCount) {
+				t.Errorf("Expected count = %d, got %v", tt.wantCount, resp["count"])
+			}
+
+			// Wait for async goroutine to complete (max 5 seconds)
+			timeout := time.After(5 * time.Second)
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
+
+			var captureMarkerCount int
+		checkLoop:
+			for {
+				select {
+				case <-timeout:
+					t.Fatal("Timeout waiting for baseline capture to complete")
+				case <-ticker.C:
+					// Check if capture markers have been inserted
+					row := db.QueryRow(`
+						SELECT COUNT(DISTINCT link_id)
+						FROM baselines
+						WHERE confidence = 0.0
+					`)
+					err := row.Scan(&captureMarkerCount)
+					if err != nil {
+						t.Fatalf("Failed to query capture markers: %v", err)
+					}
+
+					// If we have the expected number (or no links expected), we're done
+					if captureMarkerCount >= tt.wantLinksInBaseline && len(tt.existingLinks) > 0 {
+						break checkLoop
+					}
+					if tt.wantLinksInBaseline == 0 && captureMarkerCount == 0 {
+						break checkLoop
+					}
+				}
+			}
+
+			// Verify capture markers were inserted for the expected links
+			if tt.wantLinksInBaseline > 0 {
+				if captureMarkerCount != tt.wantLinksInBaseline {
+					t.Errorf("Expected %d capture markers, got %d", tt.wantLinksInBaseline, captureMarkerCount)
+				}
+
+				// Verify the capture markers have empty amplitude/phase and confidence=0
+				rows, err := db.Query(`
+					SELECT link_id, confidence, length(amplitude), length(phase)
+					FROM baselines
+					WHERE confidence = 0.0
+				`)
+				if err != nil {
+					t.Fatalf("Failed to query capture markers: %v", err)
+				}
+				defer rows.Close()
+
+				markerCount := 0
+				for rows.Next() {
+					var linkID string
+					var confidence float64
+					var ampLen, phaseLen int
+					if err := rows.Scan(&linkID, &confidence, &ampLen, &phaseLen); err != nil {
+						t.Fatalf("Failed to scan capture marker: %v", err)
+					}
+
+					if confidence != 0.0 {
+						t.Errorf("Capture marker for %s has confidence=%v, want 0.0", linkID, confidence)
+					}
+					if ampLen != 0 || phaseLen != 0 {
+						t.Errorf("Capture marker for %s has non-empty BLOBs (ampLen=%d, phaseLen=%d), want empty", linkID, ampLen, phaseLen)
+					}
+					markerCount++
+				}
+
+				if markerCount != tt.wantLinksInBaseline {
+					t.Errorf("Expected %d capture markers with empty BLOBs, got %d", tt.wantLinksInBaseline, markerCount)
+				}
+			}
+		})
 	}
 }
 
