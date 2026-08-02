@@ -29,6 +29,12 @@ bool wifi_discover_mothership(char *ip_buf, size_t buf_len, uint16_t *port);
 /**
  * Start captive portal AP mode.
  * Creates AP "spaxel-XXXX" and serves config page.
+ *
+ * Idempotent: safe to call again while already running (tears down and
+ * recreates the DNS/HTTP servers rather than failing to rebind them).
+ *
+ * @return ESP_OK if the AP, DNS server, and HTTP server all started; ESP_FAIL
+ *         if DNS or HTTP could not bind (the AP/SSID may still be visible).
  */
 esp_err_t wifi_start_captive_portal(void);
 
