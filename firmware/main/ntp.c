@@ -76,6 +76,19 @@ esp_err_t ntp_start_sync(const char *ntp_server) {
         xEventGroupClearBits(s_ntp_events, NTP_SYNC_BIT);
     }
 
+    // Stop any already-running SNTP client before reconfiguring. Calling
+    // esp_sntp_setoperatingmode() while the client is running is a hard
+    // ESP-IDF assertion failure ("Operating mode must not be set while SNTP
+    // client is running"), not a soft error -- it aborts the whole node.
+    // ntp_start_sync() is called more than once per boot: on the initial
+    // WiFi connect AND again on WIFI_LOST recovery (main.c), and also on any
+    // runtime NTP server change pushed from the mothership (handle_config_msg).
+    // Both are ordinary, expected events (a WiFi hiccup, an operator changing
+    // NTP config), not once-per-boot -- so this must be safe to call
+    // repeatedly. Mirrors the same stop-before-reconfigure already used in
+    // periodic_resync_callback() below, just applied here too.
+    esp_sntp_stop();
+
     // Configure SNTP
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, s_ntp_server);
