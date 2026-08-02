@@ -54,8 +54,14 @@ type Config struct {
 	MigrationWindowHours int    // How long after startup nodes without tokens are tolerated (default 24, 0 = disabled)
 
 	// Time
-	NTPServer string // NTP server hostname (default "pool.ntp.org")
+	NTPServer string // NTP server hostname (default "pool.ntp.org", or this host's own address when NTPLocalEnabled)
 	Timezone  string // IANA timezone name (default "UTC")
+
+	// NTPLocalEnabled starts an embedded SNTP responder (UDP 123) so nodes on
+	// an internet-isolated network still get wall-clock time. Requires
+	// CAP_NET_BIND_SERVICE (or root) to bind the privileged port; a bind
+	// failure is logged as a non-fatal warning, not a startup failure.
+	NTPLocalEnabled bool // default false
 
 	// MQTT (optional)
 	MQTTBroker   string // MQTT broker URL (optional, must be valid URL if set)
@@ -182,8 +188,31 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// SPAXEL_NTP_SERVER - string, default 'pool.ntp.org'
-	cfg.NTPServer = envOr("SPAXEL_NTP_SERVER", "pool.ntp.org")
+	// SPAXEL_NTP_LOCAL_ENABLED - bool, default false
+	ntpLocalEnabled := envOr("SPAXEL_NTP_LOCAL_ENABLED", "false")
+	if ntpLocalEnabled == "true" || ntpLocalEnabled == "1" {
+		cfg.NTPLocalEnabled = true
+	} else if ntpLocalEnabled == "false" || ntpLocalEnabled == "0" {
+		cfg.NTPLocalEnabled = false
+	} else {
+		errs = append(errs, fmt.Errorf("SPAXEL_NTP_LOCAL_ENABLED=%s invalid: must be one of true, false, 1, 0", ntpLocalEnabled))
+	}
+
+	// SPAXEL_NTP_SERVER - string, default 'pool.ntp.org', unless
+	// SPAXEL_NTP_LOCAL_ENABLED=true and this wasn't explicitly set, in which
+	// case nodes are pointed at this host's own (already-validated,
+	// node-routable) address instead.
+	if ntpServer := os.Getenv("SPAXEL_NTP_SERVER"); ntpServer != "" {
+		cfg.NTPServer = ntpServer
+	} else if cfg.NTPLocalEnabled && cfg.AdvertisedBaseURL != "" {
+		if u, err := url.Parse(cfg.AdvertisedBaseURL); err == nil && u.Hostname() != "" {
+			cfg.NTPServer = u.Hostname()
+		} else {
+			cfg.NTPServer = "pool.ntp.org"
+		}
+	} else {
+		cfg.NTPServer = "pool.ntp.org"
+	}
 
 	// SPAXEL_MQTT_BROKER - string, optional (must be valid URL if set)
 	mqttBroker := os.Getenv("SPAXEL_MQTT_BROKER")
@@ -356,6 +385,7 @@ func logConfig(cfg *Config) {
 	} else {
 		log.Printf("[CONFIG] SPAXEL_INSTALL_SECRET=(not set, will auto-generate)")
 	}
+	log.Printf("[CONFIG] SPAXEL_NTP_LOCAL_ENABLED=%t", cfg.NTPLocalEnabled)
 	log.Printf("[CONFIG] SPAXEL_NTP_SERVER=%s", cfg.NTPServer)
 	if cfg.MQTTBroker != "" {
 		log.Printf("[CONFIG] SPAXEL_MQTT_BROKER=%s", cfg.MQTTBroker)
