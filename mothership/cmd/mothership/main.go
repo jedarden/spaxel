@@ -54,6 +54,7 @@ import (
 	"github.com/spaxel/mothership/internal/localization"
 	"github.com/spaxel/mothership/internal/mqtt"
 	"github.com/spaxel/mothership/internal/notify"
+	"github.com/spaxel/mothership/internal/ntpserver"
 	"github.com/spaxel/mothership/internal/ota"
 	"github.com/spaxel/mothership/internal/prediction"
 	"github.com/spaxel/mothership/internal/provisioning"
@@ -4773,6 +4774,22 @@ func main() {
 		}
 	}
 
+	// Embedded SNTP server, for internet-isolated deployments -- see
+	// internal/ntpserver. Opt-in: needs CAP_NET_BIND_SERVICE (or root) to
+	// bind UDP 123, and a bind failure must not take down the rest of
+	// startup, so it's logged as a warning rather than checked with the
+	// startup.SubsystemStart fatal-by-default helper.
+	var ntpSrv *ntpserver.Server
+	if cfg.NTPLocalEnabled {
+		var err error
+		ntpSrv, err = ntpserver.Start("")
+		if err != nil {
+			log.Printf("[WARN] Local NTP server disabled: %v", err)
+		} else {
+			log.Printf("[INFO] Local SNTP server listening on :123 (nodes should use SPAXEL_NTP_SERVER=%s)", cfg.NTPServer)
+		}
+	}
+
 	// Phase 6: Pre-flight diagnostics API
 	// Get install secret from database for doctor checker
 	var installSecret []byte
@@ -4908,6 +4925,13 @@ func main() {
 	// mDNS shutdown
 	if mdnsServer != nil {
 		mdnsServer.Shutdown() //nolint:errcheck
+	}
+
+	// Local NTP server shutdown
+	if ntpSrv != nil {
+		if err := ntpSrv.Stop(); err != nil {
+			log.Printf("[WARN] NTP server shutdown error: %v", err)
+		}
 	}
 
 	// Persist zone occupancy for restart reconciliation

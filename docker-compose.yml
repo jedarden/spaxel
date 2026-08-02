@@ -30,6 +30,12 @@ services:
       - spaxel-data:/data           # SQLite, baselines, floor plans, CSI buffer
       - ./firmware:/firmware:ro     # Firmware binaries for OTA (read-only)
 
+    # Lets the (non-root, distroless) container bind UDP 123 for the
+    # embedded SNTP server -- only takes effect if SPAXEL_NTP_LOCAL_ENABLED
+    # is set below; harmless to leave granted otherwise.
+    cap_add:
+      - NET_BIND_SERVICE
+
     environment:
       # Timezone - required for correct diurnal baseline hours
       TZ: ${TZ:-UTC}
@@ -37,6 +43,10 @@ services:
       SPAXEL_MDNS_NAME: ${SPAXEL_MDNS_NAME:-spaxel}
       # Set to false if using bridge networking (nodes must use cached IP)
       SPAXEL_MDNS_ENABLED: ${SPAXEL_MDNS_ENABLED:-true}
+      # Serve time to nodes locally instead of pool.ntp.org -- for
+      # internet-isolated deployments. Nodes are then pointed at this host
+      # automatically unless SPAXEL_NTP_SERVER overrides it explicitly.
+      SPAXEL_NTP_LOCAL_ENABLED: ${SPAXEL_NTP_LOCAL_ENABLED:-false}
       # Optional MQTT integration (uncomment to enable)
       # SPAXEL_MQTT_BROKER: mqtt://homeassistant.local:1883
       # SPAXEL_MQTT_USERNAME: mosquitto
