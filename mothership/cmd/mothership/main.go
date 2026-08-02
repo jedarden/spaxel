@@ -2035,14 +2035,92 @@ func main() {
 		return diagnostics.Vec3{X: node.PosX, Y: node.PosY, Z: node.PosZ}, true
 	})
 
+	// computeGDOPImprovement calculates the real GDOP improvement for moving a node
+	// to a hypothetical position. Returns the improvement ratio: (currentWorst - newWorst) / currentWorst
+	// Positive values mean improvement, negative values mean degradation.
+	func computeGDOPImprovement(nodeMAC string, targetPos diagnostics.Vec3) float64 {
+		// Get current node positions
+		allNodes, err := fleetReg.GetAllNodes()
+		if err != nil || len(allNodes) < 2 {
+			return 0.0 // Need at least 2 nodes for meaningful GDOP
+		}
+
+		// Convert to NodePosition format for GDOP computation
+		currentPositions := make([]localization.NodePosition, 0, len(allNodes))
+		for _, node := range allNodes {
+			currentPositions = append(currentPositions, localization.NodePosition{
+				MAC: node.MAC,
+				X:   node.PosX,
+				Y:   node.PosY,
+				Z:   node.PosZ,
+			})
+		}
+
+		// Get localization engine
+		engine := selfImprovingLocalizer.GetEngine()
+
+		// Compute current worst-case GDOP
+		currentGDOPMap, _, _ := engine.GDOPMap(currentPositions)
+		currentWorstGDOP := findMaxGDOP(currentGDOPMap)
+
+		// If current worst GDOP is invalid, return 0
+		if currentWorstGDOP <= 0 || currentWorstGDOP >= 10 {
+			return 0.0
+		}
+
+		// Create hypothetical layout with node moved to target position
+		hypotheticalPositions := make([]localization.NodePosition, 0, len(currentPositions))
+		nodeMoved := false
+		for _, pos := range currentPositions {
+			if pos.MAC == nodeMAC {
+				hypotheticalPositions = append(hypotheticalPositions, localization.NodePosition{
+					MAC: pos.MAC,
+					X:   targetPos.X,
+					Y:   targetPos.Y,
+					Z:   targetPos.Z,
+				})
+				nodeMoved = true
+			} else {
+				hypotheticalPositions = append(hypotheticalPositions, pos)
+			}
+		}
+
+		// If node not found, no improvement
+		if !nodeMoved {
+			return 0.0
+		}
+
+		// Compute hypothetical worst-case GDOP
+		hypotheticalGDOPMap, _, _ := engine.GDOPMap(hypotheticalPositions)
+		newWorstGDOP := findMaxGDOP(hypotheticalGDOPMap)
+
+		// Calculate improvement: (currentWorst - newWorst) / currentWorst
+		improvement := (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
+
+		// Clamp to reasonable range [-1, 1] for -100% to +100% improvement
+		if improvement > 1.0 {
+			improvement = 1.0
+		} else if improvement < -1.0 {
+			improvement = -1.0
+		}
+
+		return improvement
+	}
+
+	// findMaxGDOP finds the maximum GDOP value in a flat GDOP map
+	func findMaxGDOP(gdopMap []float32) float64 {
+		maxGDOP := float32(0.0)
+		for _, gdop := range gdopMap {
+			if gdop > maxGDOP {
+				maxGDOP = gdop
+			}
+		}
+		return float64(maxGDOP)
+	}
+
 	// Wire GDOP improvement accessor
 	diagnosticEngine.SetGDOPImprovementAccessor(func(nodeMAC string, targetPos diagnostics.Vec3) float64 {
-		// Calculate current worst GDOP vs new worst GDOP with node at target position
-		currentWorstX, currentWorstZ, currentWorstGDOP := fleetHealer.GetWorstCoverageZone()
-		_ = currentWorstX
-		_ = currentWorstZ
-		// Estimate improvement - this is a simplified calculation
-		return currentWorstGDOP * 0.2 // Assume 20% improvement as placeholder
+		return computeGDOPImprovement(nodeMAC, targetPos)
 	})
 
 	// Wire repositioning computer for Rule 4
