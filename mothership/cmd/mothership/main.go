@@ -2481,6 +2481,7 @@ func main() {
 							// api.Track (tracks.go) and dashboard.blobJSON (hub.go) projections.
 							// Zero today (serializes as undefined); populated when the BLE
 							// identity sidecar writes onto the source blob.
+							PersonID:         blob.PersonID,
 							PersonName:       blob.PersonName,
 							AssignedColor:    blob.AssignedColor,
 							IdentityResolved: blob.IdentityResolved,
