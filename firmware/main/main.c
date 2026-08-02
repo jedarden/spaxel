@@ -406,15 +406,30 @@ static void state_machine_task(void *arg) {
                 discovery_fail_count = 0;
                 break;
 
-            case NODE_STATE_CAPTIVE_PORTAL:
-                // Start captive portal AP mode
-                ESP_LOGI(TAG, "Starting captive portal");
-                wifi_start_captive_portal();
+            case NODE_STATE_CAPTIVE_PORTAL: {
+                // This state is re-dispatched by the enclosing loop every ~60s
+                // since nothing here ever changes g_state.state -- captive
+                // portal mode is exited only via esp_restart() in the
+                // provisioning save handler. Without this guard that meant
+                // calling wifi_start_captive_portal() again on every
+                // re-dispatch, which failed to rebind the DNS/HTTP servers
+                // and left a bare, non-functional SSID after the first
+                // minute (bf-1b7c). The static resets on reboot along with
+                // everything else, so a fresh boot always retries startup.
+                static bool portal_started = false;
+                if (!portal_started) {
+                    ESP_LOGI(TAG, "Starting captive portal");
+                    portal_started = (wifi_start_captive_portal() == ESP_OK);
+                    if (!portal_started) {
+                        ESP_LOGE(TAG, "Captive portal failed to start, will retry in 60s");
+                    }
+                }
 
                 // Captive portal runs indefinitely until provisioned
                 // Provisioning handler will reboot the device
                 vTaskDelay(pdMS_TO_TICKS(60000));
                 break;
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(100));

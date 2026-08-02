@@ -206,7 +206,7 @@ esp_err_t wifi_start_connect(void) {
     ESP_LOGI(TAG, "Connecting to WiFi: %s (authmode: %s)", ssid,
              strlen(password) == 0 ? "open" : "WPA/WPA2");
 
-    esp_err_t err = esp_wifi_set_mode(WIFI_MODE_STA);
+    err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set WiFi mode: %s", esp_err_to_name(err));
         return err;
@@ -476,6 +476,19 @@ static httpd_uri_t captive_uris[] = {
 };
 
 esp_err_t wifi_start_captive_portal(void) {
+    // Idempotent: tear down any previous DNS/HTTP instance before recreating.
+    // Callers are expected to invoke this once per captive-portal episode, but
+    // a caller that (re-)invokes it anyway must not resurrect the bind failure
+    // this guards against — see bf-1b7c.
+    if (s_captive_server) {
+        httpd_stop(s_captive_server);
+        s_captive_server = NULL;
+    }
+    if (s_dns_pcb) {
+        udp_remove(s_dns_pcb);
+        s_dns_pcb = NULL;
+    }
+
     // Create AP
     char ap_ssid[20];
     snprintf(ap_ssid, sizeof(ap_ssid), "spaxel-%02X%02X",
@@ -509,19 +522,24 @@ esp_err_t wifi_start_captive_portal(void) {
     ESP_LOGI(TAG, "Captive portal AP started: %s", ap_ssid);
 
     // Start DNS server on UDP port 53 — redirects all queries to 192.168.4.1
+    bool dns_ok = false;
     s_dns_pcb = udp_new();
     if (s_dns_pcb) {
         if (udp_bind(s_dns_pcb, IP_ADDR_ANY, 53) == ERR_OK) {
             udp_recv(s_dns_pcb, captive_dns_recv, NULL);
             ESP_LOGI(TAG, "Captive portal DNS server started on port 53");
+            dns_ok = true;
         } else {
             udp_remove(s_dns_pcb);
             s_dns_pcb = NULL;
-            ESP_LOGW(TAG, "Failed to bind DNS server to port 53");
+            ESP_LOGE(TAG, "Failed to bind DNS server to port 53");
         }
+    } else {
+        ESP_LOGE(TAG, "Failed to allocate DNS server PCB");
     }
 
     // Start HTTP server
+    bool http_ok = false;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
 
@@ -530,6 +548,16 @@ esp_err_t wifi_start_captive_portal(void) {
             httpd_register_uri_handler(s_captive_server, &captive_uris[i]);
         }
         ESP_LOGI(TAG, "Captive portal HTTP server started on 192.168.4.1:80");
+        http_ok = true;
+    } else {
+        ESP_LOGE(TAG, "Failed to start captive portal HTTP server");
+    }
+
+    // The AP itself is up either way (it's what makes the SSID visible), but the
+    // portal is useless without both the DNS redirect and the HTTP page — report
+    // that as a real failure instead of continuing past it silently (bf-1b7c).
+    if (!dns_ok || !http_ok) {
+        return ESP_FAIL;
     }
 
     return ESP_OK;
