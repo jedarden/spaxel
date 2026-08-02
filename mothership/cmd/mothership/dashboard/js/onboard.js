@@ -403,6 +403,28 @@
             '</div>';
     }
 
+    // The browser couldn't even open the OS-level port -- distinct from (and
+    // needs a different fix than) "opened fine but the chip didn't answer the
+    // sync handshake". Seen in the wild on ESP32-S3's native USB-Serial/JTAG
+    // peripheral after an aborted esptool operation: the port stays enumerated
+    // but wedges, and neither retrying nor a BOOT/RST tap recovers it -- only
+    // a physical unplug/replug does (spaxel bf-4z6wh). BOOT/RST guidance here
+    // would just waste the user's time on a fix that cannot work.
+    function isPortWedgedError(e) {
+        var msg = ((e && e.message) || String(e || '')).toLowerCase();
+        return msg.indexOf('failed to open serial port') !== -1 ||
+            msg.indexOf('the device has been lost') !== -1;
+    }
+
+    function renderPortWedgedHelp() {
+        return '<div class="wizard-bootloader-help" style="background:#1a2a1a;border:1px solid #f44336;border-radius:6px;padding:12px;margin:12px 0;text-align:center">' +
+            '<p style="margin:0 0 8px;color:#f44336;font-weight:bold">Device port isn\'t responding</p>' +
+            '<p style="font-size:12px;color:#ccc;margin:0 0 8px">The USB connection needs a full reset — pressing BOOT/RST won\'t fix this. ' +
+            'Unplug the USB cable, wait a couple seconds, then plug it back in <strong style="color:#4fc3f7">while holding BOOT</strong>. ' +
+            'Then click Try Again.</p>' +
+            '</div>';
+    }
+
     // In reprove mode, skip firmware flash and send provisioning payload over serial.
     function renderReprovision(contentEl) {
         var cancelled = false;
@@ -745,6 +767,11 @@
                         '<p style="font-size:12px;color:#ccc;margin:0 0 8px">Firmware flashed successfully. ' +
                         'Unplug and replug the USB cable, then click Try Again to send the configuration.</p>' +
                         '</div>';
+                } else if (isPortWedgedError(e)) {
+                    // Regardless of retry count: this specific error means the OS-level
+                    // port itself won't open, so the generic "not in download mode" /
+                    // "try another cable" guidance doesn't apply and shouldn't be shown.
+                    helpHtml = renderPortWedgedHelp();
                 } else {
                     helpHtml = renderBootloaderHelp(flashRetryCount);
                 }
