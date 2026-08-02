@@ -8,31 +8,39 @@ ARG TARGETARCH
 FROM espressif/idf:v5.2 AS firmware-builder
 ARG TARGETPLATFORM
 
-# Bust Kaniko layer cache for the WHOLE firmware-builder stage. Placed here,
-# before every RUN in this stage, because the two TARGETPLATFORM-conditional
-# RUN commands below are cached by kaniko on their literal command text, not
-# the resolved shell condition -- a cache entry from a DIFFERENT TARGETPLATFORM
-# build (e.g. an arm64 run that took the "skip, write a placeholder" branch)
-# can be served back on an amd64 build, leaving /project/build in a state
-# idf.py refuses to treat as its own build directory ("Refusing to
-# automatically delete files in this directory"), which fails `idf.py
-# set-target` outright. Bump this value whenever the firmware-builder stage
-# needs a clean cache slate. (Previously declared after these RUN commands,
-# where it only busted the layers from WORKDIR onward and never covered the
-# actual poisoned ones -- see bf-4g8fh's sibling investigation, 2026-08-02.)
+# Bust Kaniko layer cache for the WHOLE firmware-builder stage. The two
+# TARGETPLATFORM-conditional RUN commands below are cached by kaniko on their
+# literal command text, not the resolved shell condition -- a cache entry
+# from a DIFFERENT TARGETPLATFORM build (e.g. an arm64 run that took the
+# "skip, write a placeholder" branch) can be served back on an amd64 build,
+# leaving /project/build in a state idf.py refuses to treat as its own build
+# directory ("Refusing to automatically delete files in this directory"),
+# which fails `idf.py set-target` outright.
+#
+# IMPORTANT: merely declaring this ARG before those RUN commands is NOT
+# enough -- kaniko only factors an ARG into a layer's cache key if that
+# layer's command text actually references it. Each RUN below echoes it for
+# exactly that reason; removing the echo silently disables the cache-bust
+# for that layer even though the ARG is in scope. Bump the value whenever
+# the firmware-builder stage needs a clean cache slate. (First attempt at
+# this fix only moved the ARG earlier without referencing it in the RUN
+# bodies, and kaniko kept serving the poisoned cached layers regardless --
+# see bf-38dbu, 2026-08-02.)
 ARG FIRMWARE_CACHE_BUST=2026-08-02
 
 # Create build directory
-RUN mkdir -p /project/build
+RUN echo "cache-bust: $FIRMWARE_CACHE_BUST" && mkdir -p /project/build
 
 # Handle amd64-only firmware build: skip on arm64, build on amd64
-RUN if [ "$TARGETPLATFORM" != "linux/amd64" ]; then \
+RUN echo "cache-bust: $FIRMWARE_CACHE_BUST" && \
+    if [ "$TARGETPLATFORM" != "linux/amd64" ]; then \
         echo "# Firmware not available on $TARGETPLATFORM (ESP-IDF is amd64-only)" > /project/build/spaxel-firmware-merged.bin && \
         echo "Firmware build skipped - placeholder created"; \
     fi
 
 # Only copy firmware source and build on amd64 (placeholder already created on arm64)
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+RUN echo "cache-bust: $FIRMWARE_CACHE_BUST" && \
+    if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         cd /project && \
         echo "Building ESP32 firmware for $TARGETPLATFORM"; \
     else \
