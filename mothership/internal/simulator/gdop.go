@@ -29,7 +29,58 @@ type GDOPComputer struct {
 	maxZone int // Maximum Fresnel zone to consider (default 3)
 }
 
-// NewGDOPComputer creates a new GDOP computer
+// NewGDOPComputer creates a new GDOP computer for coverage analysis.
+//
+// This constructor initializes a GDOPComputer instance with the provided links
+// and grid configuration. The computer can then be used to evaluate coverage
+// quality across a space using GDOP (Geometric Dilution of Precision) metrics.
+//
+// Parameters:
+//   links - Slice of Link objects representing TX→RX communication pairs.
+//           Each link contains TX and RX nodes with positions. Used to compute
+//           angular diversity and Fresnel zone coverage. Can be empty for
+//           initialization (but ComputeAll/ComputeAt will return Infinity).
+//           Must contain non-nil nodes with valid positions.
+//
+//   config - GridConfig defining the spatial grid for GDOP evaluation:
+//     - CellSize: Grid cell size in meters. Must be > 0. Defaults to 0.2 (20cm)
+//                  if <= 0. Smaller values = higher resolution but more computation.
+//     - MinX, MinY: Grid origin coordinates in meters. Can be negative.
+//                   Defines the (0, 0) corner of the evaluation grid.
+//     - Width: Grid width in meters (X dimension). Must be > 0.
+//             Extends from MinX to MinX + Width.
+//     - Depth: Grid depth in meters (Y dimension). Must be > 0.
+//             Extends from MinY to MinY + Depth.
+//
+// Returns:
+//   Initialized GDOPComputer pointer with:
+//   - links: Copy of input links slice (stored for GDOP computation)
+//   - config: GridConfig with CellSize defaulted to 0.2 if <= 0
+//   - maxZone: Maximum Fresnel zone to consider (default: 3, configurable via SetMaxZone)
+//
+// Constraints:
+//   - config.CellSize must be positive (defaults to 0.2 if <= 0)
+//   - config.Width and config.Depth must be positive (not validated here)
+//   - Links in the slice must have valid node positions (checked at computation time)
+//   - Returned pointer is heap-allocated (caller responsible for lifecycle)
+//
+// Fresnel zone behavior:
+//   - Only links where the evaluation point is within maxZone Fresnel zones are
+//     considered "covering links" and contribute to GDOP calculation
+//   - Zone 1: ΔL < λ/2, Zone 2: ΔL < λ, Zone 3: ΔL < 3λ/2, where ΔL is path length excess
+//   - Default maxZone = 3 means links within 1.5× the direct path distance are included
+//
+// Example usage:
+//
+//   links := []Link{
+//     {TX: node1, RX: node2},
+//     {TX: node1, RX: node3},
+//   }
+//   computer := NewGDOPComputer(links, GridConfig{
+//     MinX: 0, MinY: 0, Width: 10, Depth: 10, CellSize: 0.2,
+//   })
+//   results := computer.ComputeAll() // 50×50 grid evaluation
+//
 func NewGDOPComputer(links []Link, config GridConfig) *GDOPComputer {
 	if config.CellSize <= 0 {
 		config.CellSize = 0.2 // Default 20cm
@@ -49,8 +100,53 @@ func (gc *GDOPComputer) SetMaxZone(zone int) {
 	gc.maxZone = zone
 }
 
-// ComputeAll computes GDOP for the entire grid
-// Returns a slice of GDOP results indexed by cell position
+// ComputeAll computes GDOP for the entire grid defined by the GridConfig.
+//
+// This function evaluates coverage quality at every cell in the grid by computing
+// GDOP values based on the angular diversity of covering links. Returns a 2D array
+// of results indexed by grid position (row, column). Used for full-space coverage
+// analysis, heatmap generation, and optimization.
+//
+// Returns:
+//   2D slice of GDOPResult indexed by cell position:
+//   - Outer slice: rows (Y dimension, depth), indexed by iy = 0 to ny-1
+//   - Inner slice: columns (X dimension, width), indexed by ix = 0 to nx-1
+//   - Result at [iy][ix] corresponds to cell at:
+//     X = MinX + (ix + 0.5) * CellSize (cell center X)
+//     Y = MinY + (iy + 0.5) * CellSize (cell center Y)
+//     Z = 1.0 (fixed height for 2D GDOP analysis)
+//
+// Grid dimensions:
+//   - nx = ceil(Width / CellSize) = number of columns
+//   - ny = ceil(Depth / CellSize) = number of rows
+//   - Total cells = nx * ny (capped by memory limits in practice)
+//
+// GDOPResult contents (see ComputeAt for details):
+//   - GDOP: Computed value (Infinity if < 2 links or collinear)
+//   - Quality: "excellent"/"good"/"fair"/"poor"/"none"
+//   - ContributingLinks: IDs of links covering this cell
+//
+// Constraints:
+//   - CellSize must be > 0 (enforced by NewGDOPComputer, defaults to 0.2m)
+//   - Width and Depth from GridConfig must be positive
+//   - Z coordinate fixed at 1.0m for 2D analysis (height affects Fresnel zones only)
+//   - Large grids may consume significant memory (e.g., 100×100 = 10,000 cells)
+//
+// Algorithm:
+//   For each cell (ix, iy) in grid:
+//   1. Compute cell center position: x = MinX + (ix+0.5)*CellSize, y = MinY + (iy+0.5)*CellSize
+//   2. Call ComputeAt(x, y, 1.0) to evaluate coverage
+//   3. Store result in results[iy][ix]
+//
+// Example usage:
+//
+//   computer := NewGDOPComputer(links, GridConfig{
+//     MinX: 0, MinY: 0, Width: 10, Depth: 10, CellSize: 0.2,
+//   })
+//   results := computer.ComputeAll()
+//   // Returns 50×50 grid (10m / 0.2m = 50 cells per dimension)
+//   // results[25][25] = center cell at (5.0, 5.0, 1.0)
+//
 func (gc *GDOPComputer) ComputeAll() [][]GDOPResult {
 	nx := int(math.Ceil(gc.config.Width / gc.config.CellSize))
 	ny := int(math.Ceil(gc.config.Depth / gc.config.CellSize))
@@ -72,7 +168,52 @@ func (gc *GDOPComputer) ComputeAll() [][]GDOPResult {
 	return results
 }
 
-// ComputeAt computes GDOP at a specific point
+// ComputeAt computes GDOP at a specific 3D point in the space.
+//
+// This function evaluates coverage quality at a single point by collecting all links
+// that cover this point (within maxZone Fresnel zones) and computing GDOP from their
+// angular diversity. Used for real-time coverage queries and point-by-point analysis.
+//
+// Parameters:
+//   x - X coordinate in meters (floor plan position). Must be finite.
+//   y - Y coordinate in meters (floor plan position). Must be finite.
+//   z - Z coordinate in meters (height). Used for Fresnel zone calculation but
+//       projected to floor plane for 2D GDOP analysis. Must be finite.
+//
+// Returns:
+//   GDOPResult struct containing:
+//   - X, Y, Z: Input coordinates (echoed back)
+//   - GDOP: Computed GDOP value (Infinity = no coverage or degenerate geometry)
+//   - Quality: String rating ("excellent", "good", "fair", "poor", "none")
+//   - ContributingLinks: Slice of link IDs (format "TX_ID:RX_ID") that cover
+//                       this point and were used in GDOP calculation
+//
+// Quality thresholds:
+//   - "excellent": GDOP < 2.0 (high angular diversity, precise localization)
+//   - "good":      2.0 ≤ GDOP < 4.0 (acceptable localization accuracy)
+//   - "fair":      4.0 ≤ GDOP < 8.0 (degraded accuracy, coverage gaps)
+//   - "poor":      8.0 ≤ GDOP < Infinity (marginal coverage)
+//   - "none":      GDOP = Infinity (< 2 covering links or collinear)
+//
+// Constraints:
+//   - x, y, z must be finite (no NaN/Inf)
+//   - At least 2 covering links required (otherwise: GDOP = Infinity, Quality = "none")
+//   - Links must be within maxZone Fresnel zones (default: zone 3)
+//   - Links with collinear geometry result in Infinity GDOP
+//
+// Algorithm:
+//   1. Collect links where point is within maxZone Fresnel zones of TX→RX path
+//   2. If < 2 links: return Infinity GDOP with Quality="none"
+//   3. Compute GDOP via computeGDOPAngular (angular diversity on floor plane)
+//   4. Map GDOP to quality string
+//
+// Example usage:
+//
+//   computer := NewGDOPComputer(links, GridConfig{...})
+//   result := computer.ComputeAt(5.0, 5.0, 1.0) // Point at center of room, 1m height
+//   // Returns: GDOPResult{X:5, Y:5, Z:1, GDOP:1.5, Quality:"excellent",
+//   //                    ContributingLinks: ["node1:node2", "node1:node3", ...]}
+//
 func (gc *GDOPComputer) ComputeAt(x, y, z float64) GDOPResult {
 	point := Point{X: x, Y: y, Z: z}
 
@@ -109,8 +250,49 @@ func (gc *GDOPComputer) ComputeAt(x, y, z float64) GDOPResult {
 	return result
 }
 
-// computeGDOPAngular computes GDOP based on angular diversity of link directions
-// This is the 2D GDOP formula from the plan
+// computeGDOPAngular computes GDOP based on angular diversity of link directions.
+//
+// This implements the 2D GDOP formula from the Spaxel plan (docs/plan/plan.md).
+// GDOP quantifies how well a set of link geometries can localize a point based on
+// the angular diversity of links covering that point.
+//
+// Parameters:
+//   point - The 3D position (X, Y, Z) at which to compute GDOP. Only X and Y are used
+//           for 2D angular diversity analysis (Z is projected to floor plane).
+//           Must have finite, non-NaN coordinates.
+//
+//   links - Slice of Link objects covering the point. Each link contains TX and RX
+//           node positions. Must have at least 2 links for meaningful GDOP calculation.
+//           Links should already be filtered to those that cover the point (within
+//           maxZone Fresnel zones).
+//
+// Returns:
+//   GDOP value as float64:
+//   - < 2.0: Excellent coverage (high angular diversity)
+//   - 2.0-4.0: Good coverage
+//   - 4.0-8.0: Fair coverage
+//   - > 8.0: Poor coverage
+//   - Infinity: Degenerate geometry (collinear links) or insufficient links (< 2)
+//
+// Algorithm (2D Fisher Information Matrix):
+//   1. For each link, compute angle θ = atan2(RY-TY, RX-TX) in floor plane
+//   2. Build Fisher matrix F = Σ [[cos²θ, cosθ·sinθ], [cosθ·sinθ, sin²θ]]
+//   3. Compute det(F) = f00*f11 - f01² (checks for collinear links)
+//   4. If det(F) ≤ 1e-6: return Infinity (degenerate geometry)
+//   5. Compute trace(F^-1) = (f00 + f11) / det(F)
+//   6. GDOP = sqrt(trace(F^-1))
+//
+// Constraints:
+//   - Minimum 2 links required (otherwise: Infinity)
+//   - Links must not be collinear (det(F) near zero: Infinity)
+//   - All positions must be finite (no NaN/Inf coordinates)
+//   - Caller should filter links by Fresnel zone coverage before calling
+//
+// Example usage:
+//   point := Point{X: 5.0, Y: 5.0, Z: 1.0}
+//   links := []Link{link1, link2, link3} // pre-filtered by Fresnel coverage
+//   gdop := computer.computeGDOPAngular(point, links)
+//   // Returns ~1.5 for 3 well-diverse links
 func (gc *GDOPComputer) computeGDOPAngular(point Point, links []Link) float64 {
 	// Step 1: Collect link angles
 	// For each link, compute the angle of the line from TX to RX as seen from point
@@ -675,28 +857,42 @@ func extractNodePositions(nodes *NodeSet) []Point {
 // returns the relative improvement.
 //
 // Algorithm:
-// 1. Compute worst-case GDOP for current layout across entire space
-// 2. Create hypothetical layout with target node moved to new position
-// 3. Compute worst-case GDOP for hypothetical layout
-// 4. Calculate improvement: (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
+//   1. Compute worst-case GDOP for current layout across entire space
+//   2. Create hypothetical layout with target node moved to new position
+//   3. Compute worst-case GDOP for hypothetical layout
+//   4. Calculate improvement: (currentWorstGDOP - newWorstGDOP) / currentWorstGDOP
 //
 // Parameters:
-//   currentLayout - Slice of all nodes in their current positions
-//   nodeMAC       - MAC address (or ID) of the node to move
-//   targetPos     - Target position to move the node to
+//   currentLayout - Slice of all nodes in their current positions. Must contain at
+//                   least 2 nodes with valid (finite, non-NaN) positions. Nodes with
+//                   nil or disabled nodes are skipped. Must not be empty.
+//
+//   nodeMAC       - MAC address (or ID) of the node to move. Must match either the
+//                   node.ID field or the result of node.GenerateMAC(). If no match
+//                   is found, returns 0.0 (no change).
+//
+//   targetPos     - Target position to move the node to. Must have finite X, Y, Z
+//                   coordinates (no NaN/Inf). Used as-is without bounds checking.
 //
 // Returns:
 //   Relative improvement in range [-1.0, 1.0]:
 //   - Positive (0 to 1): Improvement (lower GDOP is better)
+//                     E.g., 0.3 = 30% improvement in worst-case coverage
 //   - Negative (-1 to 0): Degradation (higher GDOP is worse)
-//   - 0.0: No change, node not found, or no coverage baseline
-//   - 1.0: Maximum improvement (reduced to near-zero GDOP)
-//   - -1.0: Complete coverage loss at target position
+//                      E.g., -0.5 = 50% degradation in worst-case coverage
+//   - 0.0: No change (same GDOP), node not found, or current layout has no coverage
+//   - 1.0: Maximum improvement (worst GDOP reduced to near-zero)
+//   - -1.0: Complete coverage loss at target position (new GDOP = Infinity)
 //
-// Requirements:
-//   - Minimum 2 nodes in layout required
-//   - At least 2 links required for meaningful GDOP calculation
-//   - Node MAC/ID must exist in currentLayout
+// Constraints:
+//   - Minimum 2 nodes in currentLayout required (for meaningful GDOP)
+//   - At least 2 valid links must exist in the layout (checked by computeWorstGDOP)
+//   - Node MAC/ID must exist in currentLayout (otherwise returns 0.0)
+//   - If current layout has no coverage (GDOP = Infinity), returns 0.0
+//
+// Preconditions:
+//   - All nodes in currentLayout must have non-nil, enabled positions
+//   - targetPos must be within reasonable spatial bounds (no validation performed)
 //
 // Example usage:
 //
@@ -705,7 +901,7 @@ func extractNodePositions(nodes *NodeSet) []Point {
 //     NewNode("node2", "Node 2", NodeTypeVirtual, Point{X: 10, Y: 0, Z: 2.0}),
 //     NewNode("node3", "Node 3", NodeTypeVirtual, Point{X: 0, Y: 10, Z: 2.0}),
 //   }
-//   targetPos := Point{X: 5, Y: 5, Z: 2.0} // Move to center
+//   targetPos := Point{X: 5, Y: 5, Z: 2.0} // Move corner node to center
 //   improvement := computeGDOPImprovement(layout, "node1", targetPos)
 //   // Returns ~0.3 (30% improvement) for moving corner node to center
 //
@@ -780,26 +976,39 @@ func computeGDOPImprovement(currentLayout []*Node, nodeMAC string, targetPos Poi
 // indicating that even the worst-covered area has reasonable localization accuracy.
 //
 // Algorithm:
-// 1. Generate all links from the node set (TX→RX pairs)
-// 2. Create a grid covering the space bounded by node positions ± 1m margin
-// 3. Compute GDOP for each cell using angular diversity of covering links
-// 4. Return the maximum GDOP found (worst coverage)
+//   1. Generate all links from the node set (TX→RX pairs)
+//   2. Create a grid covering the space bounded by node positions ± 1m margin
+//   3. Compute GDOP for each cell using angular diversity of covering links
+//   4. Return the maximum GDOP found (worst coverage)
 //
 // Parameters:
-//   nodes - Slice of nodes to evaluate. Must have at least 2 nodes.
+//   nodes - Slice of nodes to evaluate. Must have at least 2 non-nil, enabled nodes
+//           with valid positions. Nodes with nil pointers or disabled nodes are
+//           silently skipped. Must not be empty or contain only nil nodes.
 //
 // Returns:
-//   Worst-case GDOP value:
+//   Worst-case GDOP value (maximum across all grid cells):
 //   - < 2.0: Excellent layout (worst area still has good coverage)
-//   - 2.0-4.0: Good layout
+//   - 2.0-4.0: Good layout (acceptable coverage everywhere)
 //   - 4.0-8.0: Fair layout (some areas with poor coverage)
 //   - > 8.0: Poor layout (significant coverage gaps)
-//   - Infinity: No coverage (insufficient nodes or links)
+//   - Infinity: No coverage (insufficient nodes, links, or all cells uncovered)
 //
-// Requirements:
-//   - Minimum 2 nodes required
-//   - At least 2 valid links required (depends on node roles)
-//   - Nodes must have valid (non-infinite) positions
+// Constraints:
+//   - Minimum 2 non-nil enabled nodes required (returns Infinity otherwise)
+//   - At least 2 valid links required (depends on node roles, returns Infinity if < 2)
+//   - All nodes must have valid (finite, non-NaN) positions
+//   - If no valid bounds found from nodes, defaults to ±5m square space
+//
+// Grid configuration:
+//   - Cell size: 0.2m (20cm) fixed
+//   - Bounds: min/max of node positions ± 1.0m margin
+//   - Cells outside node bounds still evaluated for coverage gaps
+//
+// Preconditions:
+//   - All nodes must have Position field with finite X, Y, Z values
+//   - NodeSet created internally from nodes slice (nil nodes filtered)
+//   - Links generated via GenerateAllLinks (depends on node roles)
 //
 // Example usage:
 //
