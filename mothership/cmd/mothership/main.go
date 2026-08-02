@@ -2482,6 +2482,7 @@ func main() {
 							// api.Track (tracks.go) and dashboard.blobJSON (hub.go) projections.
 							// Zero today (serializes as undefined); populated when the BLE
 							// identity sidecar writes onto the source blob.
+							PersonID:         blob.PersonID,
 							PersonName:       blob.PersonName,
 							AssignedColor:    blob.AssignedColor,
 							IdentityResolved: blob.IdentityResolved,
@@ -4416,6 +4417,10 @@ func main() {
 	statusHandler := api.NewStatusHandler(startupTotalStart, func() int { return len(ingestSrv.GetConnectedNodes()) }, version)
 	statusHandler.SetProcessorManager(pm)
 	statusHandler.SetZonesManager(zonesMgr)
+	if identityMatcher != nil {
+		// Adapter to convert ble.IdentityMatch to api.IdentityMatch
+		statusHandler.SetIdentityProvider(&bleIdentityAdapter{matcher: identityMatcher})
+	}
 	statusHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Status API registered at /api/status and /api/occupancy")
 
@@ -5752,4 +5757,29 @@ func (bt *blobTracker) track(result *fusion.Result) []sigproc.TrackedBlob {
 	}
 	bt.prev = next
 	return out
+}
+
+// bleIdentityAdapter adapts ble.IdentityMatcher to the api.IdentityProvider interface.
+// This allows the StatusHandler to resolve blob IDs to person names for the /api/occupancy endpoint.
+type bleIdentityAdapter struct {
+	matcher *ble.IdentityMatcher
+}
+
+// GetMatch returns identity information for a blob, converting from ble.IdentityMatch to api.IdentityMatch.
+func (a *bleIdentityAdapter) GetMatch(blobID int) *api.IdentityMatch {
+	if a.matcher == nil {
+		return nil
+	}
+
+	match := a.matcher.GetMatch(blobID)
+	if match == nil {
+		return nil
+	}
+
+	return &api.IdentityMatch{
+		PersonName: match.PersonName,
+		PersonID:   match.PersonID,
+		DeviceName: match.DeviceName,
+		IsBLEOnly:  match.IsBLEOnly,
+	}
 }

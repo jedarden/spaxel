@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -534,9 +535,56 @@ func (h *TestHarness) AssertDuringRun(ctx context.Context, duration time.Duratio
 	return nil
 }
 
-// SimulateNode simulates a single node connection
+// provisionNodeToken mints a real per-node HMAC token from the mothership's
+// /api/provision endpoint. It POSTs {"mac":<mac>} and returns the node_token
+// (HMAC-SHA256(installSecret, mac)). The token validates against the ingestion
+// server's ValidateToken regardless of the migration window.
+func provisionNodeToken(ctx context.Context, apiBase, mac string) (string, error) {
+	body := fmt.Sprintf(`{"mac":%q}`, mac)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase+"/api/provision", bytes.NewReader([]byte(body)))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var payload struct {
+		NodeToken string `json:"node_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	if payload.NodeToken == "" {
+		return "", fmt.Errorf("empty node_token in response")
+	}
+	return payload.NodeToken, nil
+}
+
+// SimulateNode simulates a single node connection with proper token-based auth
 func (h *TestHarness) SimulateNode(ctx context.Context, mac string, duration time.Duration) error {
-	conn, _, err := websocket.DefaultDialer.Dial(h.MothershipURL, nil)
+	// Provision a real per-node HMAC token from the mothership's /api/provision
+	// endpoint (window-independent auth, same as spaxel-sim does by default).
+	token, err := provisionNodeToken(ctx, h.APIURL, mac)
+	if err != nil {
+		return fmt.Errorf("provision token: %w", err)
+	}
+
+	// Create request headers with the X-Spaxel-Token header
+	reqHeader := http.Header{}
+	reqHeader.Set("X-Spaxel-Token", token)
+
+	conn, _, err := websocket.DefaultDialer.Dial(h.MothershipURL, reqHeader)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}

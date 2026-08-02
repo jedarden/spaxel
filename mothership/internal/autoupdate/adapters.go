@@ -155,6 +155,19 @@ func (p *nodeProviderAdapter) GetNodePosition(mac string) (x, y, z float64, err 
 	return node.PosX, node.PosY, node.PosZ, nil
 }
 
+func (p *nodeProviderAdapter) GetNodeFirmwareVersion(mac string) string {
+	if p.registry == nil {
+		return ""
+	}
+
+	node, err := p.registry.GetNode(mac)
+	if err != nil {
+		return ""
+	}
+
+	return node.FirmwareVersion
+}
+
 // NodeNotFoundError is returned when a node is not found.
 type NodeNotFoundError struct {
 	MAC string

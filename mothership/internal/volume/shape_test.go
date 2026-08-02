@@ -1577,3 +1577,229 @@ func TestStore_ErrorStatePersistsAcrossRestart(t *testing.T) {
 func float64Ptr(f float64) *float64 {
 	return &f
 }
+
+// TestStore_EvaluateEnter_PersonFilter tests that enter triggers correctly filter by person ID.
+// Per bf-3soqz: the original implementation had a no-op placeholder that discarded
+// blob.PersonID, causing person-scoped triggers to fire for ANY person (or unidentified
+// blob). This test verifies the fix mirrors the predicted_enter pattern.
+func TestStore_EvaluateEnter_PersonFilter(t *testing.T) {
+	store, err := NewStore(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close() //nolint:errcheck
+
+	tests := []struct {
+		name              string
+		personID          string // Trigger's PersonID filter
+		blobPersonID      string // Blob's PersonID
+		blobInside        bool   // Whether blob is inside the volume
+		shouldFire        bool   // Expected result
+		description       string
+	}{
+		{
+			name:         "trigger scoped to Alice fires for Alice",
+			personID:     "Alice",
+			blobPersonID: "Alice",
+			blobInside:   true,
+			shouldFire:   true,
+			description:  "Person-specific trigger should fire when matching person enters",
+		},
+		{
+			name:         "trigger scoped to Alice does NOT fire for Bob",
+			personID:     "Alice",
+			blobPersonID: "Bob",
+			blobInside:   true,
+			shouldFire:   false,
+			description:  "Person-specific trigger should ignore non-matching person",
+		},
+		{
+			name:         "trigger scoped to Alice does NOT fire for unidentified blob",
+			personID:     "Alice",
+			blobPersonID: "", // Empty PersonID means unidentified
+			blobInside:   true,
+			shouldFire:   false,
+			description:  "Person-specific trigger should ignore unidentified blobs",
+		},
+		{
+			name:         "trigger scoped to anyone fires for Alice",
+			personID:     "anyone",
+			blobPersonID: "Alice",
+			blobInside:   true,
+			shouldFire:   true,
+			description:  "Wildcard trigger should fire for any person",
+		},
+		{
+			name:         "trigger scoped to anyone fires for unidentified blob",
+			personID:     "anyone",
+			blobPersonID: "", // Empty PersonID
+			blobInside:   true,
+			shouldFire:   true,
+			description:  "Wildcard trigger should fire for unidentified blobs",
+		},
+		{
+			name:         "trigger scoped to anyone fires for Bob",
+			personID:     "anyone",
+			blobPersonID: "Bob",
+			blobInside:   true,
+			shouldFire:   true,
+			description:  "Wildcard trigger should fire for any person",
+		},
+		{
+			name:         "trigger scoped to empty string (same as anyone) fires for Alice",
+			personID:     "", // Empty string should behave like "anyone"
+			blobPersonID: "Alice",
+			blobInside:   true,
+			shouldFire:   true,
+			description:  "Empty PersonID filter should behave as wildcard",
+		},
+		{
+			name:         "trigger scoped to Alice does not fire when Bob is inside",
+			personID:     "Alice",
+			blobPersonID: "Bob",
+			blobInside:   true,
+			shouldFire:   false,
+			description:  "Person-specific trigger should not fire for non-matching person even if they're inside",
+		},
+		{
+			name:         "trigger scoped to Alice fires when Alice enters (transition)",
+			personID:     "Alice",
+			blobPersonID: "Alice",
+			blobInside:   true,
+			shouldFire:   true,
+			description:  "Person-specific trigger should fire on matching person's entry transition",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a fresh store for each test to avoid state accumulation
+			testStore, err := NewStore(":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer testStore.Close() //nolint:errcheck
+
+			// Create trigger for this test
+			trigger := &Trigger{
+				Name: "person filter test",
+				Shape: ShapeJSON{
+					Type: ShapeBox,
+					X:    float64Ptr(0),
+					Y:    float64Ptr(0),
+					Z:    float64Ptr(0),
+					W:    float64Ptr(1),
+					D:    float64Ptr(1),
+					H:    float64Ptr(1),
+				},
+				Condition: "enter",
+				ConditionParams: ConditionParams{
+					PersonID: tt.personID,
+				},
+				Enabled: true,
+			}
+
+			id, err := testStore.Create(trigger)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			now := time.Now()
+			blobs := []BlobPos{
+				{ID: 1, PersonID: tt.blobPersonID, X: 0.5, Y: 0.5, Z: 0.5},
+			}
+
+			// If blob should be inside, place it inside the volume
+			if !tt.blobInside {
+				blobs = []BlobPos{
+					{ID: 1, PersonID: tt.blobPersonID, X: 5, Y: 5, Z: 5},
+				}
+			}
+
+			// If testing entry transition, start with blob outside
+			if tt.blobInside && tt.shouldFire {
+				testStore.Evaluate([]BlobPos{{ID: 1, PersonID: tt.blobPersonID, X: 5, Y: 5, Z: 5}}, now)
+			}
+
+			fired := testStore.Evaluate(blobs, now.Add(100*time.Millisecond))
+
+			if tt.shouldFire && len(fired) != 1 {
+				t.Errorf("%s: expected trigger to fire, got %d firings\nDescription: %s", tt.name, len(fired), tt.description)
+			}
+			if !tt.shouldFire && len(fired) != 0 {
+				t.Errorf("%s: expected trigger to NOT fire, got %d firings\nDescription: %s", tt.name, len(fired), tt.description)
+			}
+			if tt.shouldFire && len(fired) == 1 && fired[0] != id {
+				t.Errorf("%s: expected trigger %s to fire, got %s", tt.name, id, fired[0])
+			}
+		})
+	}
+}
+
+// TestStore_EvaluateEnter_PersonFilter_MultipleBlobs tests person filtering with multiple blobs.
+func TestStore_EvaluateEnter_PersonFilter_MultipleBlobs(t *testing.T) {
+	store, err := NewStore(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close() //nolint:errcheck
+
+	// Trigger scoped to Alice only
+	trigger := &Trigger{
+		Name: "Alice-only trigger",
+		Shape: ShapeJSON{
+			Type: ShapeBox,
+			X:    float64Ptr(0),
+			Y:    float64Ptr(0),
+			Z:    float64Ptr(0),
+			W:    float64Ptr(2),
+			D:    float64Ptr(2),
+			H:    float64Ptr(2),
+		},
+		Condition: "enter",
+		ConditionParams: ConditionParams{
+			PersonID: "Alice",
+		},
+		Enabled: true,
+	}
+
+	id, err := store.Create(trigger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+
+	// Alice enters - should fire
+	aliceEnters := []BlobPos{{ID: 1, PersonID: "Alice", X: 0.5, Y: 0.5, Z: 0.5}}
+	fired := store.Evaluate(aliceEnters, now)
+	if len(fired) != 1 {
+		t.Errorf("Expected 1 firing (Alice enters), got %d", len(fired))
+	}
+	if fired[0] != id {
+		t.Errorf("Expected trigger %s to fire, got %s", id, fired[0])
+	}
+
+	// Bob enters - should NOT fire (trigger is scoped to Alice)
+	bobEnters := []BlobPos{{ID: 2, PersonID: "Bob", X: 0.6, Y: 0.6, Z: 0.6}}
+	fired = store.Evaluate(bobEnters, now.Add(1*time.Second))
+	if len(fired) != 0 {
+		t.Errorf("Expected 0 firings (Bob enters, trigger scoped to Alice), got %d", len(fired))
+	}
+
+	// Unidentified blob enters - should NOT fire (trigger is scoped to Alice)
+	unidentifiedEnters := []BlobPos{{ID: 3, PersonID: "", X: 0.7, Y: 0.7, Z: 0.7}}
+	fired = store.Evaluate(unidentifiedEnters, now.Add(2*time.Second))
+	if len(fired) != 0 {
+		t.Errorf("Expected 0 firings (unidentified blob enters, trigger scoped to Alice), got %d", len(fired))
+	}
+
+	// Alice enters again (from outside) - should fire again
+	aliceOutside := []BlobPos{{ID: 1, PersonID: "Alice", X: 10, Y: 10, Z: 10}}
+	store.Evaluate(aliceOutside, now.Add(3*time.Second)) // Move Alice outside
+	aliceReenters := []BlobPos{{ID: 1, PersonID: "Alice", X: 0.8, Y: 0.8, Z: 0.8}}
+	fired = store.Evaluate(aliceReenters, now.Add(4*time.Second))
+	if len(fired) != 1 {
+		t.Errorf("Expected 1 firing (Alice re-enters), got %d", len(fired))
+	}
+}
