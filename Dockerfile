@@ -8,6 +8,20 @@ ARG TARGETARCH
 FROM espressif/idf:v5.2 AS firmware-builder
 ARG TARGETPLATFORM
 
+# Bust Kaniko layer cache for the WHOLE firmware-builder stage. Placed here,
+# before every RUN in this stage, because the two TARGETPLATFORM-conditional
+# RUN commands below are cached by kaniko on their literal command text, not
+# the resolved shell condition -- a cache entry from a DIFFERENT TARGETPLATFORM
+# build (e.g. an arm64 run that took the "skip, write a placeholder" branch)
+# can be served back on an amd64 build, leaving /project/build in a state
+# idf.py refuses to treat as its own build directory ("Refusing to
+# automatically delete files in this directory"), which fails `idf.py
+# set-target` outright. Bump this value whenever the firmware-builder stage
+# needs a clean cache slate. (Previously declared after these RUN commands,
+# where it only busted the layers from WORKDIR onward and never covered the
+# actual poisoned ones -- see bf-4g8fh's sibling investigation, 2026-08-02.)
+ARG FIRMWARE_CACHE_BUST=2026-08-02
+
 # Create build directory
 RUN mkdir -p /project/build
 
@@ -24,11 +38,6 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     else \
         exit 0; \
     fi
-
-# Bust Kaniko layer cache when flash size config changes (sdkconfig.defaults).
-# Without this ARG, Kaniko can serve a cached firmware layer that was built with
-# the old 16MB config even after sdkconfig.defaults is updated to 4MB.
-ARG FIRMWARE_CACHE_BUST=2026-06-03
 
 WORKDIR /project
 COPY firmware/ ./
