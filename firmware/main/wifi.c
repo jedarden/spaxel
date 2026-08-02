@@ -97,8 +97,17 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
 
 esp_err_t wifi_init(void) {
     // Initialize TCP/IP stack
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_err_t err = esp_netif_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init netif: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_event_loop_create_default();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create event loop: %s", esp_err_to_name(err));
+        return err;
+    }
 
     // Create STA and AP netif
     s_sta_netif = esp_netif_create_default_wifi_sta();
@@ -106,17 +115,39 @@ esp_err_t wifi_init(void) {
 
     // Initialize WiFi with default config
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    err = esp_wifi_init(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init WiFi: %s", esp_err_to_name(err));
+        return err;
+    }
 
     // Register event handlers
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                                &wifi_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                                &wifi_event_handler, NULL));
+    err = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                      &wifi_event_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register WiFi event handler: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                      &wifi_event_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register IP event handler: %s", esp_err_to_name(err));
+        return err;
+    }
 
     // Initialize mDNS
-    ESP_ERROR_CHECK(mdns_init());
-    ESP_ERROR_CHECK(mdns_hostname_set("spaxel-node"));
+    err = mdns_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init mDNS: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = mdns_hostname_set("spaxel-node");
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set mDNS hostname: %s", esp_err_to_name(err));
+        return err;
+    }
     ESP_LOGI(TAG, "mDNS initialized: spaxel-node.local");
 
     return ESP_OK;
@@ -175,15 +206,33 @@ esp_err_t wifi_start_connect(void) {
     ESP_LOGI(TAG, "Connecting to WiFi: %s (authmode: %s)", ssid,
              strlen(password) == 0 ? "open" : "WPA/WPA2");
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+    esp_err_t err = esp_wifi_set_mode(WIFI_MODE_STA);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set WiFi mode: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set WiFi config: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start WiFi: %s", esp_err_to_name(err));
+        return err;
+    }
 
     // Apply exponential backoff delay
     vTaskDelay(pdMS_TO_TICKS(s_backoff_ms));
     s_backoff_ms = MIN(s_backoff_ms * 2, s_backoff_max_ms);
 
-    ESP_ERROR_CHECK(esp_wifi_connect());
+    err = esp_wifi_connect();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to connect WiFi: %s", esp_err_to_name(err));
+        return err;
+    }
 
     return ESP_OK;
 }
@@ -439,9 +488,23 @@ esp_err_t wifi_start_captive_portal(void) {
     ap_config.ap.max_connection = 4;
     ap_config.ap.authmode = WIFI_AUTH_OPEN;
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+    esp_err_t err = esp_wifi_set_mode(WIFI_MODE_AP);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set WiFi AP mode: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set WiFi AP config: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start WiFi AP: %s", esp_err_to_name(err));
+        return err;
+    }
 
     ESP_LOGI(TAG, "Captive portal AP started: %s", ap_ssid);
 
