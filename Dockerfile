@@ -17,29 +17,30 @@ ARG TARGETPLATFORM
 # directory ("Refusing to automatically delete files in this directory"),
 # which fails `idf.py set-target` outright.
 #
-# IMPORTANT: merely declaring this ARG before those RUN commands is NOT
-# enough -- kaniko only factors an ARG into a layer's cache key if that
-# layer's command text actually references it. Each RUN below echoes it for
-# exactly that reason; removing the echo silently disables the cache-bust
-# for that layer even though the ARG is in scope. Bump the value whenever
-# the firmware-builder stage needs a clean cache slate. (First attempt at
-# this fix only moved the ARG earlier without referencing it in the RUN
-# bodies, and kaniko kept serving the poisoned cached layers regardless --
-# see bf-38dbu, 2026-08-02.)
-ARG FIRMWARE_CACHE_BUST=2026-08-02
+# IMPORTANT: an ARG reference does NOT work here, even when the RUN body
+# echoes it. Verified empirically across three separate CI debug runs
+# (bf-38dbu, 2026-08-02): kaniko logs "Using caching version of cmd: RUN
+# echo \"cache-bust: $FIRMWARE_CACHE_BUST\" && ..." with the variable name
+# still UNexpanded, and reused the exact same cache digest after the ARG's
+# default value was bumped. Its cache key is computed from the Dockerfile
+# instruction's literal source text, before shell/ARG substitution -- so
+# changing what an ARG expands to never changes the key. The only thing
+# that reliably busts the key is changing the RUN line's actual characters.
+# Bump the literal marker string below (not an ARG) whenever the
+# firmware-builder stage needs a clean cache slate.
 
 # Create build directory
-RUN echo "cache-bust: $FIRMWARE_CACHE_BUST" && mkdir -p /project/build
+RUN echo "cache-bust-v2-2026-08-02" && mkdir -p /project/build
 
 # Handle amd64-only firmware build: skip on arm64, build on amd64
-RUN echo "cache-bust: $FIRMWARE_CACHE_BUST" && \
+RUN echo "cache-bust-v2-2026-08-02" && \
     if [ "$TARGETPLATFORM" != "linux/amd64" ]; then \
         echo "# Firmware not available on $TARGETPLATFORM (ESP-IDF is amd64-only)" > /project/build/spaxel-firmware-merged.bin && \
         echo "Firmware build skipped - placeholder created"; \
     fi
 
 # Only copy firmware source and build on amd64 (placeholder already created on arm64)
-RUN echo "cache-bust: $FIRMWARE_CACHE_BUST" && \
+RUN echo "cache-bust-v2-2026-08-02" && \
     if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         cd /project && \
         echo "Building ESP32 firmware for $TARGETPLATFORM"; \
