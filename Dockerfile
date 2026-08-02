@@ -1,47 +1,42 @@
 # Spaxel Mothership Dockerfile
 # Multi-stage build: ESP32 firmware (amd64 only) → Go binary → minimal runtime image
-# Build arguments for multi-platform support (set by buildx --platform automatically)
+# Build arguments for multi-platform support (auto-populated by buildx
+# --platform; kaniko, which is what actually runs this in CI, does NOT
+# auto-populate these -- see the default-value note below).
 ARG TARGETPLATFORM
 ARG TARGETARCH
 
 # Stage 1: Build ESP32-S3 firmware (amd64 only - ESP-IDF is x86_64)
 FROM espressif/idf:v5.2 AS firmware-builder
-ARG TARGETPLATFORM
-
-# Bust Kaniko layer cache for the WHOLE firmware-builder stage. The two
-# TARGETPLATFORM-conditional RUN commands below are cached by kaniko on their
-# literal command text, not the resolved shell condition -- a cache entry
-# from a DIFFERENT TARGETPLATFORM build (e.g. an arm64 run that took the
-# "skip, write a placeholder" branch) can be served back on an amd64 build,
-# leaving /project/build in a state idf.py refuses to treat as its own build
-# directory ("Refusing to automatically delete files in this directory"),
-# which fails `idf.py set-target` outright.
+# The CI kaniko invocation (see spaxel-build-workflowtemplate.yml) passes no
+# --customPlatform and no --build-arg for TARGETPLATFORM, so unlike buildx it
+# never auto-populates this ARG -- with no default it resolved to an empty
+# string. "" != "linux/amd64" is always true, so the "skip on non-amd64"
+# branch below ALWAYS ran, unconditionally writing a placeholder
+# spaxel-firmware-merged.bin into /project/build before idf.py ever touched
+# it -- 100% deterministically, on every single build regardless of layer
+# caching. idf.py set-target's implicit fullclean action then refused to
+# clean that stray non-CMake file and failed the build every time.
 #
-# IMPORTANT: an ARG reference does NOT work here, even when the RUN body
-# echoes it. Verified empirically across three separate CI debug runs
-# (bf-38dbu, 2026-08-02): kaniko logs "Using caching version of cmd: RUN
-# echo \"cache-bust: $FIRMWARE_CACHE_BUST\" && ..." with the variable name
-# still UNexpanded, and reused the exact same cache digest after the ARG's
-# default value was bumped. Its cache key is computed from the Dockerfile
-# instruction's literal source text, before shell/ARG substitution -- so
-# changing what an ARG expands to never changes the key. The only thing
-# that reliably busts the key is changing the RUN line's actual characters.
-# Bump the literal marker string below (not an ARG) whenever the
-# firmware-builder stage needs a clean cache slate.
+# Three earlier fix attempts (see git history, bf-38dbu, 2026-08-02) treated
+# this as a kaniko cache-poisoning bug and tried to force a cache miss --
+# that was a red herring. The layers really were identical on every build,
+# because the underlying command was genuinely deterministic. Defaulting the
+# ARG to linux/amd64 fixes it for kaniko while still letting buildx override
+# it per-platform for local multi-arch builds.
+ARG TARGETPLATFORM=linux/amd64
 
 # Create build directory
-RUN echo "cache-bust-v2-2026-08-02" && mkdir -p /project/build
+RUN mkdir -p /project/build
 
 # Handle amd64-only firmware build: skip on arm64, build on amd64
-RUN echo "cache-bust-v2-2026-08-02" && \
-    if [ "$TARGETPLATFORM" != "linux/amd64" ]; then \
+RUN if [ "$TARGETPLATFORM" != "linux/amd64" ]; then \
         echo "# Firmware not available on $TARGETPLATFORM (ESP-IDF is amd64-only)" > /project/build/spaxel-firmware-merged.bin && \
         echo "Firmware build skipped - placeholder created"; \
     fi
 
 # Only copy firmware source and build on amd64 (placeholder already created on arm64)
-RUN echo "cache-bust-v2-2026-08-02" && \
-    if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         cd /project && \
         echo "Building ESP32 firmware for $TARGETPLATFORM"; \
     else \
@@ -78,7 +73,10 @@ RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
         0x10000 build/spaxel-firmware.bin
 
 # Stage 2: Build the Go binary (cross-platform)
-ARG BUILDPLATFORM
+# Same empty-under-kaniko risk as TARGETPLATFORM above -- default to the
+# CI builder's actual platform so `--platform=$BUILDPLATFORM` below never
+# resolves to an empty, unparsable value.
+ARG BUILDPLATFORM=linux/amd64
 FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS builder
 
 WORKDIR /app
@@ -100,8 +98,8 @@ COPY dashboard/ ./cmd/mothership/dashboard/
 # CGO_ENABLED=0 because we use pure-Go SQLite (modernc.org/sqlite)
 # -tags=embed enables dashboard embedding via go:embed
 ARG VERSION=dev
-ARG TARGETPLATFORM
-ARG TARGETARCH
+ARG TARGETPLATFORM=linux/amd64
+ARG TARGETARCH=amd64
 RUN CGO_ENABLED=0 \
     GOOS=linux GOARCH=$TARGETARCH \
     go build \
@@ -120,7 +118,7 @@ RUN CGO_ENABLED=0 \
 # Stage 3: Minimal runtime image - distroless nonroot
 # Dashboard is embedded in the Go binary via go:embed, not copied as files
 FROM gcr.io/distroless/static-debian12:nonroot
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 
 # Copy the binary (dashboard is embedded via go:embed)
 COPY --from=builder /app/spaxel /spaxel
