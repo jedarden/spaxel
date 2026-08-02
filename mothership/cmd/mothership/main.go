@@ -2074,8 +2074,9 @@ func main() {
 		currentGDOPMap, _, _ := engine.GDOPMap(currentPositions)
 		currentWorstGDOP := findMaxGDOP(currentGDOPMap)
 
-		// If current worst GDOP is invalid, return 0
-		if currentWorstGDOP <= 0 || currentWorstGDOP >= 10 {
+		// If current worst GDOP is invalid (no valid GDOP computed), return 0
+		// Valid GDOP values are in range (0, 10], where 10 = poor but valid coverage
+		if currentWorstGDOP <= 0 {
 			return 0.0
 		}
 
@@ -2117,6 +2118,17 @@ func main() {
 
 		return improvement
 	}
+<<<<<<< HEAD
+=======
+		maxGDOP := float32(0.0)
+		for _, gdop := range gdopMap {
+			if gdop > maxGDOP {
+				maxGDOP = gdop
+			}
+		}
+		return float64(maxGDOP)
+	}
+>>>>>>> f98e347 (docs: identify and document GDOP computation functions)
 
 	// Wire GDOP improvement accessor
 	diagnosticEngine.SetGDOPImprovementAccessor(func(nodeMAC string, targetPos diagnostics.Vec3) float64 {

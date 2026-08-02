@@ -204,8 +204,47 @@ func (e *Engine) GetGrid() *Grid {
 }
 
 // GDOPMap computes a Geometric Dilution of Precision map for the given node positions.
-// Returns a flat float32 slice (row-major) of GDOP values, same dims as the localization grid.
-// GDOP < 2 = good, GDOP > 5 = poor.
+//
+// This public method generates a spatial coverage map by computing GDOP values at
+// each cell center in the localization grid. The result is used for coverage painting
+// in the dashboard and for evaluating node placement quality.
+//
+// Algorithm:
+// For each cell in the localization grid:
+// 1. Get cell center coordinates (px, pz)
+// 2. Call computeGDOP(px, pz, positions) to evaluate coverage at that point
+// 3. Store result in output array
+//
+// Parameters:
+//   positions - Slice of NodePosition structs containing node MAC addresses and
+//               their (X, Y, Z) coordinates in meters. Y is vertical height.
+//
+// Returns:
+//   gdopValues - Flat float32 slice in row-major order containing GDOP values
+//                Infinity is encoded as 10.0 for visualization compatibility
+//   cols       - Number of columns in the grid (width in cells)
+//   rows       - Number of rows in the grid (depth in cells)
+//
+// GDOP value interpretation:
+//   - GDOP < 2.0: Excellent coverage (green)
+//   - 2.0 ≤ GDOP < 4.0: Good coverage (yellow)
+//   - 4.0 ≤ GDOP < 8.0: Fair coverage (orange)
+//   - GDOP ≥ 8.0: Poor coverage (red)
+//   - GDOP = 10.0: No coverage (gray) - insufficient nodes or degenerate geometry
+//
+// Example usage:
+//
+//   engine := localization.NewEngine(10.0, 10.0, 0.0, 0.0) // 10x10m room
+//   positions := []localization.NodePosition{
+//     {MAC: "AA:BB:CC:DD:EE:F1", X: 0.0, Z: 0.0},
+//     {MAC: "AA:BB:CC:DD:EE:F2", X: 10.0, Z: 0.0},
+//     {MAC: "AA:BB:CC:DD:EE:F3", X: 0.0, Z: 10.0},
+//     {MAC: "AA:BB:CC:DD:EE:F4", X: 10.0, Z: 10.0},
+//   }
+//   gdopMap, cols, rows := engine.GDOPMap(positions)
+//   // Returns 2500 float32 values for 50x50 grid (10m / 0.2m cell size)
+//   // Center cell (25,25) should have GDOP ~1.6 (excellent)
+//
 func (e *Engine) GDOPMap(positions []NodePosition) ([]float32, int, int) {
 	e.mu.RLock()
 	cols, rows, cellSize, originX, originZ := e.grid.Dims()
@@ -224,8 +263,51 @@ func (e *Engine) GDOPMap(positions []NodePosition) ([]float32, int, int) {
 	return out, cols, rows
 }
 
-// computeGDOP computes a 2D GDOP value for a point (px, pz) given node positions.
-// Uses the standard formula: GDOP = sqrt(trace(HᵀH)⁻¹).
+// computeGDOP computes a 2D Geometric Dilution of Precision (GDOP) value for a point
+// given a set of node positions. GDOP quantifies how well the geometric arrangement
+// of nodes can localize a point at the given position.
+//
+// Algorithm:
+// GDOP = sqrt(trace((HᵀH)⁻¹))
+//
+// Where H is the observation matrix (n×2) containing direction cosines from each node
+// to the target point. For each node i at position (nx, nz) and target point (px, pz):
+//   H[i] = [(px-nx)/d, (pz-nz)/d] where d = sqrt((px-nx)² + (pz-nz)²)
+//
+// Parameters:
+//   px, pz   - Target point coordinates in meters (floor plane)
+//   nodes    - Slice of NodePosition structs containing node positions
+//
+// Returns:
+//   GDOP value in range [0, 10] where:
+//   - GDOP < 2: Excellent coverage (well-positioned nodes from multiple directions)
+//   - 2 <= GDOP < 4: Good coverage
+//   - 4 <= GDOP < 5: Fair coverage
+//   - GDOP >= 5: Poor coverage (nodes collinear or poorly positioned)
+//   - GDOP = 10: Undefined (insufficient nodes or degenerate geometry)
+//
+// Requirements:
+//   - Minimum 2 nodes required for computation
+//   - Nodes should not be collinear with the target point
+//   - Nodes at the same position as the target are excluded from computation
+//
+// Example usage:
+//
+//   nodes := []localization.NodePosition{
+//     {MAC: "AA:BB:CC:DD:EE:F1", X: 0.0, Z: 0.0},
+//     {MAC: "AA:BB:CC:DD:EE:F2", X: 10.0, Z: 0.0},
+//     {MAC: "AA:BB:CC:DD:EE:F3", X: 0.0, Z: 10.0},
+//     {MAC: "AA:BB:CC:DD:EE:F4", X: 10.0, Z: 10.0},
+//   }
+//   gdop := localization.computeGDOP(5.0, 5.0, nodes)
+//   // Returns ~1.58 for center of well-positioned 4-node layout
+//
+// Mathematical derivation:
+//   1. Construct H matrix (n×2) of direction cosines
+//   2. Compute Fisher information matrix: F = HᵀH (2×2 symmetric)
+//   3. Invert F: F⁻¹ = 1/det(F) * [[F[1,1], -F[0,1]], [-F[1,0], F[0,0]]]
+//   4. Compute GDOP = sqrt(trace(F⁻¹))
+//
 func computeGDOP(px, pz float64, nodes []NodePosition) float64 {
 	if len(nodes) < 2 {
 		return 10.0 // undefined
