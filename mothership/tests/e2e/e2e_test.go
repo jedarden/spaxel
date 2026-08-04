@@ -540,7 +540,7 @@ func (h *TestHarness) AssertDuringRun(ctx context.Context, duration time.Duratio
 // (HMAC-SHA256(installSecret, mac)). The token validates against the ingestion
 // server's ValidateToken regardless of the migration window.
 func provisionNodeToken(ctx context.Context, apiBase, mac string) (string, error) {
-	body := fmt.Sprintf(`{"mac":%q}`, mac)
+	body := fmt.Sprintf(`{"mac":%q,"wifi_ssid":"TestNet"}`, mac)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase+"/api/provision", bytes.NewReader([]byte(body)))
 	if err != nil {
 		return "", fmt.Errorf("build request: %w", err)

@@ -43,14 +43,30 @@ type provisionRequest struct {
 	Debug    bool   `json:"debug,omitempty"`
 }
 
+// NetworkSettingsProvider provides read access to the mothership's stored
+// settings. Satisfied by *api.SettingsHandler; kept as a narrow interface
+// here (mirroring internal/ota's SettingsProvider) so this package doesn't
+// import api or take a *sql.DB dependency.
+type NetworkSettingsProvider interface {
+	GetSingle(key string) (interface{}, bool)
+}
+
+// Settings keys for the fleet-wide WiFi network (ADR-005), must match
+// internal/api/network_settings.go.
+const (
+	networkSettingWifiSSID     = "network_wifi_ssid"
+	networkSettingWifiPassword = "network_wifi_password"
+)
+
 // Server handles provisioning payload generation.
 type Server struct {
-	mu            sync.RWMutex
-	secretFile    string
-	installSecret []byte // 32-byte HMAC key; persisted to secretFile
-	mdnsName      string
-	msPort        int
-	ntpServer     string
+	mu               sync.RWMutex
+	secretFile       string
+	installSecret    []byte // 32-byte HMAC key; persisted to secretFile
+	mdnsName         string
+	msPort           int
+	ntpServer        string
+	settingsProvider NetworkSettingsProvider
 }
 
 // NewServer creates a provisioning server.
@@ -122,6 +138,37 @@ func (s *Server) deriveToken(mac string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// SetSettingsProvider wires the stored network settings into the
+// provisioning server so HandleProvision can default wifi_ssid/wifi_pass
+// for requests that omit them. Must be called during startup, before
+// HandleProvision serves traffic.
+func (s *Server) SetSettingsProvider(p NetworkSettingsProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.settingsProvider = p
+}
+
+// networkSetting reads a stored string setting via the settings provider.
+// Returns "", false if no provider is wired or the key isn't a non-empty string.
+func (s *Server) networkSetting(key string) (string, bool) {
+	s.mu.RLock()
+	provider := s.settingsProvider
+	s.mu.RUnlock()
+
+	if provider == nil {
+		return "", false
+	}
+	v, ok := provider.GetSingle(key)
+	if !ok {
+		return "", false
+	}
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return "", false
+	}
+	return str, true
+}
+
 // GetInstallSecret returns the 32-byte installation secret.
 // Used by the ingestion server to create a token validator.
 func (s *Server) GetInstallSecret() []byte {
@@ -168,6 +215,28 @@ func (s *Server) HandleProvision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ADR-005: the request body may explicitly override wifi_ssid/wifi_pass
+	// for a specific node, but by default every node joins the same
+	// fleet-wide network configured once in Settings > Network.
+	wifiSSID := req.WifiSSID
+	wifiPass := req.WifiPass
+	if wifiSSID == "" {
+		if v, ok := s.networkSetting(networkSettingWifiSSID); ok {
+			wifiSSID = v
+		}
+	}
+	if wifiPass == "" {
+		if v, ok := s.networkSetting(networkSettingWifiPassword); ok {
+			wifiPass = v
+		}
+	}
+	if wifiSSID == "" {
+		http.Error(w, "no wifi_ssid provided and no fleet network configured; "+
+			"set WiFi credentials in the mothership dashboard under Settings > Network, "+
+			"or include wifi_ssid/wifi_pass in the request", http.StatusBadRequest)
+		return
+	}
+
 	nodeID := uuid.NewString()
 	var token string
 	if req.MAC != "" {
@@ -182,8 +251,8 @@ func (s *Server) HandleProvision(w http.ResponseWriter, r *http.Request) {
 
 	payload := Payload{
 		Version:   1,
-		WifiSSID:  req.WifiSSID,
-		WifiPass:  req.WifiPass,
+		WifiSSID:  wifiSSID,
+		WifiPass:  wifiPass,
 		NodeID:    nodeID,
 		NodeToken: token,
 		MsMDNS:    s.mdnsName,
