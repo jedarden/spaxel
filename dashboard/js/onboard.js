@@ -2,8 +2,13 @@
  * Spaxel Onboarding Wizard
  *
  * Interactive Web Serial-based setup wizard for provisioning ESP32-S3 nodes.
- * States: BROWSER_CHECK → CONNECT_DEVICE → FLASH_FIRMWARE → PROVISION_WIFI
+ * States: BROWSER_CHECK → CONNECT_DEVICE → PROVISION_WIFI → FLASH_FIRMWARE
  *         → DETECT_NODE → CALIBRATE → PLACEMENT → COMPLETE
+ *
+ * PROVISION_WIFI is skipped automatically when a fleet-wide network is
+ * already configured in Settings > Network (ADR-005) — every node is
+ * presumed to join that same network unless the user explicitly opts into
+ * "Advanced: use a different network for this node".
  */
 
 (function () {
@@ -48,6 +53,9 @@
         knownMACs: [],
         wifiSSID: '',
         wifiPass: '',
+        fleetNetworkConfigured: false, // ADR-005: fetched from /api/settings/network at wizard start
+        fleetNetworkSSID: '',
+        wifiStepOverride: false,       // true once the user picks "use a different network for this node"
         mothershipHost: '',
         mothershipPort: 8080,
         mothershipIP: '',
@@ -822,6 +830,21 @@
         return { cleanup: function () { cancelled = true; restoreConsole(); } };
     }
 
+    // Fetches the fleet-wide network setting (ADR-005) so the WiFi step can
+    // skip itself when one is already configured in Settings > Network.
+    function fetchFleetNetworkSettings() {
+        return fetch('/api/settings/network')
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                state.fleetNetworkConfigured = !!(data && data.configured);
+                state.fleetNetworkSSID = (data && data.wifi_ssid) || '';
+            })
+            .catch(function () {
+                state.fleetNetworkConfigured = false;
+                state.fleetNetworkSSID = '';
+            });
+    }
+
     function renderProvisionWifi(contentEl) {
         // Auto-populate ms_ip if the browser is accessing the mothership by IP directly
         if (!state.mothershipIP) {
@@ -829,6 +852,39 @@
             if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
                 state.mothershipIP = host;
             }
+        }
+
+        // ADR-005: every node is presumed to join the same fleet-wide network.
+        // Skip straight past this step when one is configured, leaving
+        // wifiSSID/wifiPass empty so provisionAndSend lets the mothership
+        // default them server-side. The user can still opt into a per-node
+        // override via the link below.
+        if (state.fleetNetworkConfigured && !state.wifiStepOverride) {
+            contentEl.innerHTML =
+                '<div class="wizard-step-content">' +
+                '<div class="wizard-center-msg">' +
+                '<div class="spinner"></div>' +
+                '<p>Using fleet network <strong>' + escapeAttr(state.fleetNetworkSSID) + '</strong> ' +
+                '(configured in Settings &gt; Network)</p>' +
+                '</div>' +
+                '<p style="text-align:center">' +
+                '<a href="#" id="wifi-step-override-link" class="wizard-muted" style="text-decoration:underline">' +
+                'Advanced: use a different network for this node</a>' +
+                '</p>' +
+                '</div>';
+            hideNav();
+
+            var advanceTimer = setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 900);
+            var overrideLink = document.getElementById('wifi-step-override-link');
+            if (overrideLink) {
+                overrideLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    clearTimeout(advanceTimer);
+                    state.wifiStepOverride = true;
+                    goToStep(state.currentStepIndex); // re-render this step with the manual form
+                });
+            }
+            return { cleanup: function () { clearTimeout(advanceTimer); } };
         }
 
         contentEl.innerHTML =
@@ -1610,6 +1666,7 @@
         document.getElementById('wizard-close-btn').addEventListener('click', closeWizard);
         document.getElementById('wizard-restart-btn').addEventListener('click', function () {
             clearState();
+            state.wifiStepOverride = false;
             if (activeCleanup) { activeCleanup.cleanup(); activeCleanup = null; }
             goToStep(0);
         });
@@ -1645,6 +1702,13 @@
         }
 
         createWizardUI();
+
+        // Fire-and-forget: by the time the user reaches provision_wifi (after
+        // browser_check's auto-advance and connect_device's user action),
+        // this has almost always resolved. Deliberately not awaited — the
+        // rest of startWizard's step-resume logic must stay synchronous for
+        // callers/tests that prime state.currentStepIndex before calling start().
+        fetchFleetNetworkSettings();
 
         // In reprove mode, always start fresh at the connect step.
         if (state.reproveMode) {
