@@ -615,7 +615,7 @@ func TestTokenValidation_HeaderTokenBridged(t *testing.T) {
 	// Mint a REAL provisioned token for this MAC via the provisioning handler —
 	// exactly the token a node receives during Web Serial onboarding.
 	provisionToken := func() string {
-		req := httptest.NewRequest(http.MethodPost, "/api/provision", strings.NewReader(fmt.Sprintf(`{"mac":%q}`, mac)))
+		req := httptest.NewRequest(http.MethodPost, "/api/provision", strings.NewReader(fmt.Sprintf(`{"mac":%q,"wifi_ssid":"TestNet"}`, mac)))
 		rec := httptest.NewRecorder()
 		provSrv.HandleProvision(rec, req)
 		if rec.Code != http.StatusOK {

@@ -765,6 +765,15 @@ func main() {
 	notificationSettingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Notification settings API registered at /api/settings/notifications")
 
+	// Network Settings REST API (ADR-005: fleet-wide WiFi configured once in
+	// the dashboard rather than per-device at flash time). Backed by the
+	// same settingsHandler instance used above so the provisioning server
+	// (wired below via SetSettingsProvider) sees writes immediately through
+	// the shared in-memory cache.
+	networkSettingsHandler := api.NewNetworkSettingsHandler(settingsHandler)
+	networkSettingsHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Network settings API registered at /api/settings/network")
+
 	// Phase 6: Notifications REST API (channels, preview, test)
 	notificationsHandler, err := api.NewNotificationsHandler(filepath.Join(cfg.DataDir, "notifications.db"))
 	if err != nil {
@@ -4711,6 +4720,7 @@ func main() {
 		msPort = 8080
 	}
 	provSrv := provisioning.NewServer(cfg.DataDir, cfg.MDNSName, msPort, cfg.NTPServer, cfg.InstallSecret)
+	provSrv.SetSettingsProvider(settingsHandler) // ADR-005: default wifi_ssid/wifi_pass from Settings > Network
 	r.Post("/api/provision", provSrv.HandleProvision)
 	ingestSrv.SetTokenValidator(provSrv.ValidateToken)
 

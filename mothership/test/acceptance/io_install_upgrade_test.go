@@ -758,7 +758,7 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 func provisionNodeToken(t *testing.T, baseURL string) string {
 	t.Helper()
 
-	body := []byte(`{"mac": "AA:BB:CC:DD:EE:FF", "comment": "IO-3 test node"}`)
+	body := []byte(`{"mac": "AA:BB:CC:DD:EE:FF", "comment": "IO-3 test node", "wifi_ssid": "TestNet"}`)
 	req, _ := http.NewRequest("POST", baseURL+"/api/provision", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
