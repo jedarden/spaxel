@@ -15,7 +15,8 @@
         loading: false,
         saving: false,
         currentSettings: null,
-        notificationSettings: null
+        notificationSettings: null,
+        networkSettings: null
     };
 
     // ============================================
@@ -29,7 +30,7 @@
         settingsState.loading = true;
         renderContent();
 
-        // Fetch both main settings and notification settings in parallel
+        // Fetch main settings, notification settings, and network settings in parallel
         return Promise.all([
             fetch('/api/settings').then(function(res) {
                 if (!res.ok) {
@@ -48,11 +49,23 @@
                 // Notification settings are optional, log warning but don't fail
                 console.warn('[SettingsPanel] Notification settings not available:', err);
                 return null;
+            }),
+            fetch('/api/settings/network').then(function(res) {
+                if (!res.ok) {
+                    console.warn('[SettingsPanel] Failed to fetch network settings: ' + res.status);
+                    return null;
+                }
+                return res.json();
+            }).catch(function(err) {
+                // Network settings are optional, log warning but don't fail
+                console.warn('[SettingsPanel] Network settings not available:', err);
+                return null;
             })
         ])
         .then(function(results) {
             settingsState.currentSettings = results[0];
             settingsState.notificationSettings = results[1];
+            settingsState.networkSettings = results[2];
             settingsState.loading = false;
             renderContent();
             return results[0];
@@ -125,6 +138,7 @@
         const settings = settingsState.currentSettings || {};
 
         content.innerHTML = `
+            ${renderNetworkSettings()}
             ${renderDetectionSettings(settings)}
             ${renderSecuritySettings(settings)}
             ${renderNotificationSettings(settings)}
@@ -211,6 +225,55 @@
                 <button class="panel-btn panel-btn-primary panel-btn-full" id="save-detection-btn"
                         ${settingsState.saving ? 'disabled' : ''}>
                     ${settingsState.saving ? 'Saving...' : 'Save Detection Settings'}
+                </button>
+            </div>
+        `;
+    }
+
+    function renderNetworkSettings() {
+        // ADR-005: fleet-wide WiFi network, configured once here instead of
+        // per-device during onboarding. The onboarding wizard skips its WiFi
+        // step whenever this is configured.
+        const networkSettings = settingsState.networkSettings || {};
+        const ssid = networkSettings.wifi_ssid || '';
+        const configured = !!networkSettings.configured;
+
+        return `
+            <div class="panel-section">
+                <div class="panel-section-header">Settings &gt; Network</div>
+                <div class="panel-form-hint" style="margin-bottom: 12px;">
+                    Every ESP32 node is presumed to join this network. Set it once here — the
+                    onboarding wizard will skip asking for WiFi credentials per device.
+                </div>
+
+                <div class="panel-form-group">
+                    <label for="network-wifi-ssid">WiFi Network Name (SSID)</label>
+                    <input type="text" id="network-wifi-ssid" class="panel-input"
+                           placeholder="MyFleetNetwork" value="${escapeHtml(ssid)}"
+                           autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+                </div>
+
+                <div class="panel-form-group">
+                    <label for="network-wifi-password">WiFi Password</label>
+                    <input type="password" id="network-wifi-password" class="panel-input"
+                           placeholder="${configured ? 'Unchanged (leave blank to keep)' : 'Password'}"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                    <div class="panel-form-hint">
+                        ${configured ? 'A password is already saved and will not be shown here. Enter a new one to replace it.' : 'Leave blank for an open network.'}
+                    </div>
+                </div>
+
+                <div class="panel-info-card">
+                    <div class="panel-info-card-title">Status</div>
+                    <div class="panel-info-card-value">${configured ? 'Configured' : 'Not configured'}</div>
+                    <div class="panel-info-card-subtitle">
+                        ${configured ? 'New nodes will join "' + escapeHtml(ssid) + '" automatically' : 'New nodes will prompt for WiFi credentials during onboarding'}
+                    </div>
+                </div>
+
+                <button class="panel-btn panel-btn-primary panel-btn-full" id="save-network-btn"
+                        ${settingsState.saving ? 'disabled' : ''}>
+                    ${settingsState.saving ? 'Saving...' : 'Save Network Settings'}
                 </button>
             </div>
         `;
@@ -579,6 +642,12 @@
             saveNotificationBtn.addEventListener('click', saveNotificationSettings);
         }
 
+        // Save network settings
+        const saveNetworkBtn = document.getElementById('save-network-btn');
+        if (saveNetworkBtn) {
+            saveNetworkBtn.addEventListener('click', saveNetworkSettings);
+        }
+
         // Test notification
         const testNotificationBtn = document.getElementById('test-notification-btn');
         if (testNotificationBtn) {
@@ -754,6 +823,52 @@
         .catch(function(err) {
             console.error('[SettingsPanel] Error saving notification settings:', err);
             SpaxelPanels.showError('Failed to save notification settings: ' + err.message);
+        });
+    }
+
+    /**
+     * Save network (fleet WiFi) settings.
+     * Password is write-only: an empty field means "leave unchanged", not
+     * "clear it" — only included in the request when the user typed one.
+     */
+    function saveNetworkSettings() {
+        const ssidInput = document.getElementById('network-wifi-ssid');
+        const passwordInput = document.getElementById('network-wifi-password');
+        const ssid = ssidInput.value.trim();
+
+        if (!ssid) {
+            SpaxelPanels.showError('Please enter a WiFi network name.');
+            return;
+        }
+
+        const payload = { wifi_ssid: ssid };
+        if (passwordInput.value !== '') {
+            payload.wifi_password = passwordInput.value;
+        }
+
+        fetch('/api/settings/network', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(function(res) {
+            if (!res.ok) {
+                return res.json().then(function(err) {
+                    throw new Error(err.error || 'Failed to save network settings');
+                });
+            }
+            return res.json();
+        })
+        .then(function(data) {
+            settingsState.networkSettings = data;
+            SpaxelPanels.showSuccess('Network settings saved successfully');
+            renderContent();
+        })
+        .catch(function(err) {
+            console.error('[SettingsPanel] Error saving network settings:', err);
+            SpaxelPanels.showError('Failed to save network settings: ' + err.message);
         });
     }
 
