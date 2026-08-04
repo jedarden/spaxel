@@ -757,7 +757,7 @@ Adding a new ESP32-S3 node to the fleet.
 **Zero-config first run (Web Serial — requires Chrome/Edge):**
 1. User connects ESP32-S3 via USB to the machine running the dashboard
 2. Dashboard's "Add Node" page uses Web Serial API to connect to the device
-3. Mothership generates a provisioning payload: WiFi SSID, WiFi password, unique node ID. **No mothership IP needed** — firmware discovers mothership via mDNS (`_spaxel._tcp.local`)
+3. Mothership generates a provisioning payload: WiFi SSID, WiFi password, unique node ID. **The WiFi network is not asked per device** — every node is presumed to join the same fleet network, so the mothership fills in `wifi_ssid`/`wifi_pass` from its own `SPAXEL_WIFI_SSID`/`SPAXEL_WIFI_PASSWORD` config (set once at deploy time; see ADR-005) rather than prompting the user to type them in for each node. The dashboard's onboarding wizard skips the WiFi step entirely when that config is present, and only shows it as an "Advanced: use a different network for this node" override otherwise. **No mothership IP needed** — firmware discovers mothership via mDNS (`_spaxel._tcp.local`)
 4. Dashboard flashes firmware + writes provisioning config to NVS via `esptool-js`
 5. Device reboots, connects to WiFi, discovers mothership via mDNS, opens WebSocket, sends `hello` registration
 6. Mothership auto-detects the home WiFi AP's BSSID and begins passive radar mode — **presence detection is working within 30 seconds with zero additional configuration**
@@ -769,7 +769,7 @@ Adding a new ESP32-S3 node to the fleet.
 **Working presence detection in under 5 minutes with zero manual network configuration.**
 
 **Subsequent re-provisioning:**
-- If a node loses WiFi, captive portal at `spaxel-XXXX` allows re-entering credentials
+- If a node loses WiFi, captive portal at `spaxel-XXXX` allows re-entering credentials. The captive portal itself still requires manual entry (the device has no route to the mothership while its setup AP is up — see ADR-005's Alternatives Considered), but the dashboard's "recover via captive portal" screen displays the stored `SPAXEL_WIFI_SSID` credentials in copy-paste-ready form before the user switches networks, so the fleet password doesn't need to be remembered or looked up separately
 - If mDNS fails (some networks block it), captive portal allows manual mothership IP entry
 - Full reflash available via Web Serial from the dashboard
 
@@ -789,6 +789,8 @@ Adding a new ESP32-S3 node to the fleet.
   "debug": false
 }
 ```
+
+**Source of `wifi_ssid`/`wifi_pass` (ADR-005):** by default these come from the mothership's own `SPAXEL_WIFI_SSID`/`SPAXEL_WIFI_PASSWORD` config, not the request body — every node is presumed to join the same fleet network, configured once rather than re-entered per device. The request body may still supply `wifi_ssid`/`wifi_pass` explicitly to override this for a specific node (e.g., a node that genuinely belongs on a different network); an explicit value in the request always wins. If neither the mothership config nor the request body supplies credentials, the endpoint returns an error rather than provisioning a node with no network to join.
 
 The `mac` parameter in the POST request body is optional. If provided, `node_token` is derived from that MAC. If absent, the mothership generates a UUID4 `node_id` and a placeholder token; the token is finalized when the node sends its first `hello` with its actual MAC (the token is recomputed and validated then, with a 120-second grace window for the node to connect after provisioning).
 
@@ -3819,6 +3821,8 @@ All environment variables are optional unless marked (required on production). U
 | `SPAXEL_MDNS_NAME` | `spaxel` | mDNS service name advertised to nodes. Must match firmware `ms_mdns` NVS key |
 | `SPAXEL_NTP_SERVER` | `pool.ntp.org` | NTP server hostname embedded in the provisioning payload. Nodes use this for clock synchronization for TX stagger slots. Set to a local NTP server (e.g., router IP) for networks without internet access |
 | `SPAXEL_MDNS_ENABLED` | `true` | Set to `false` to disable mDNS advertisement (e.g., when using Docker bridge networking instead of `network_mode: host`). Nodes must then use the cached `ms_ip` NVS key or captive portal IP entry for mothership discovery |
+| `SPAXEL_WIFI_SSID` | *(unset)* | The fleet's WiFi network name, embedded automatically in every node's provisioning payload (see ADR-005). All nodes are presumed to join the same network, so this is set once at mothership deploy time rather than re-entered per device. If unset, `POST /api/provision` falls back to requiring `wifi_ssid` in the request body (the pre-ADR-005 behavior) |
+| `SPAXEL_WIFI_PASSWORD` | *(unset)* | Passphrase for `SPAXEL_WIFI_SSID`. Same fallback rule: if unset, the caller must supply `wifi_pass` in the request body |
 
 ### Dockerfile
 
@@ -4428,3 +4432,39 @@ Two lesser defects surfaced in the same session and are recorded here for comple
 - **Risk:** The rollback path is still unproven. A deliberately-corrupt image must be shown to fail, roll back, and rejoin the fleet before any node is deployed somewhere physically awkward — otherwise the safety net that justifies remote update is itself unverified.
 - **Risk:** `esptool` over USB-Serial/JTAG proved unreliable during this session (`Write timeout` on `read-flash`, already tracked as `bf-26pa`), so physical recovery is *not* a smooth fallback even on a cabled node. This raises, not lowers, the bar for OTA correctness.
 - **Follow-up:** Tracked under the OTA-reliability umbrella bead created against this ADR.
+
+---
+
+## ADR-005: 2026-08-03 — Configure the fleet's WiFi network once at the mothership, not once per node
+
+### Context
+
+`POST /api/provision`'s `wifi_ssid`/`wifi_pass` come entirely from the dashboard's "Configure WiFi" onboarding step (*Component Design > 7. Onboarding Flow*): the user types the network name and password into a browser form, which is submitted as part of the provisioning request body and echoed straight into the payload written to the device. The mothership itself stores nothing — it is a pass-through. Every single onboarding, for every node, asks the same question and expects the same answer, because in practice a fleet is deployed against one WiFi network.
+
+This was exposed as a real problem during the first sustained bench onboarding session (2026-08-02–03), not derived speculatively. Getting one ESP32-S3 registered took a multi-hour session because the WiFi step had to be repeated — correctly, with the real network password — on every single flash/provisioning attempt, across both the Web Serial dashboard flow and the device's own captive portal (used as a fallback once the USB-Serial/JTAG provisioning-transport gap, ADR-002, and the captive-portal EADDRINUSE wedge, `bf-1b7c`, made the primary path unreliable). Each retry meant either the operator re-typing the password, or an agent needing it relayed through the operator for every attempt — real toil that has nothing to do with *what* was being debugged (a flash-timing issue, then a firmware boot issue) and everything to do with a design that treats a fleet-wide constant as per-device input.
+
+### Decision
+
+1. **Add mothership-level WiFi configuration.** `SPAXEL_WIFI_SSID` / `SPAXEL_WIFI_PASSWORD` environment variables, set once at deploy time (same pattern as `SPAXEL_NTP_SERVER`, which already flows from a mothership env var into the provisioning payload for exactly this reason).
+2. **`POST /api/provision` defaults to the stored config.** If the request body omits `wifi_ssid`/`wifi_pass`, the mothership fills them in from `SPAXEL_WIFI_SSID`/`SPAXEL_WIFI_PASSWORD`. An explicit value in the request body still overrides this — a node that genuinely belongs on a different network (a detached sensor on its own AP, a test rig) remains fully supported, it is just no longer the assumed case.
+3. **Fail loudly, not silently, when neither source has credentials.** No mothership config and no request-body override means the endpoint returns an error rather than provisioning a node with an empty or garbage SSID that will never join anything.
+4. **The dashboard onboarding wizard skips the WiFi step when the mothership reports configured credentials**, surfacing it only under an "Advanced: use a different network for this node" affordance. This removes an entire step — and the single most repeated point of friction found during the bench session — from the common path.
+5. **The captive portal keeps manual entry**, because it has no way to be anything else: while a device's own `spaxel-XXXX` setup AP is up, the host connected to it has, by construction, no route to the mothership to fetch stored credentials from. What changes is that the dashboard's own "recover via captive portal" screen displays the stored `SPAXEL_WIFI_SSID` credentials in copy-paste-ready form *before* the user switches networks, so the fleet password only has to live in one place (the mothership's config) instead of also in the operator's memory or a side channel.
+6. **No firmware or NVS schema change.** This is entirely a mothership + dashboard change in *where* `wifi_ssid`/`wifi_pass` originate before being bundled into the same provisioning payload the device has always received. `provision.c`, the NVS keys, and the Web Serial / captive-portal wire protocols are untouched.
+
+### Alternatives Considered
+
+- **Push credentials to the device directly from the mothership, bypassing the browser form entirely, for the captive-portal path too.** Rejected as infeasible, not merely undesirable: the mothership cannot reach a device's temporary setup AP (different network, and the whole point of the captive portal is that the device has no other connectivity yet), and the browser doing the provisioning cannot be on both networks simultaneously either. The realistic improvement is eliminating *retyping*, not eliminating the network switch — hence decision 5's copy-paste affordance rather than a fully automatic captive-portal path.
+- **Store WiFi credentials in the browser (localStorage) instead of the mothership.** Rejected. It solves the immediate annoyance for one operator on one browser profile but does not fix the actual bug — the fleet's network is fleet state, not client state, and per-browser storage re-breaks the moment a different machine or a fresh profile is used to onboard a node (exactly what happened this session, across multiple chromium profiles on the same bench machine).
+- **Drop the per-request override and make the mothership config the only source.** Rejected. A minority of real deployments legitimately need a node on a different network (an isolated test rig, a sensor bridging two sites), and removing the override would regress that case to force a mothership-config change just to onboard one outlier node.
+- **Treat this as a dashboard-only UX fix (pre-fill the form fields, still submit per-request) without adding mothership-level storage.** Rejected. Pre-filling from something still requires a source of truth to pre-fill *from*; without server-side storage the "source" is back to browser/client state, which is the rejected alternative above by another route.
+
+### Consequences
+
+- **Positive:** Onboarding a node no longer requires knowing or transcribing the WiFi password at all in the common case — the step disappears from the wizard entirely.
+- **Positive:** Removes the single largest source of retry friction observed during the first real bench onboarding session, independent of and in addition to the ADR-002 (transport) and `bf-1b7c` (captive-portal wedge) fixes — those made retries *reliable*, this makes most retries *unnecessary*.
+- **Positive:** Consistent with the existing `SPAXEL_NTP_SERVER` pattern — fleet-wide config lives on the mothership, not re-derived per node.
+- **Cost:** A new required-in-practice (if not required-in-code) configuration surface to document in the deployment manifest and quickstart, mirroring `SPAXEL_NTP_SERVER`/`SPAXEL_MDNS_NAME`.
+- **Cost:** The dashboard wizard needs conditional logic (skip-if-configured) and a new "Advanced" override affordance, plus the captive-portal recovery screen needs the copy-paste credentials display.
+- **Risk:** `SPAXEL_WIFI_PASSWORD` is a plaintext secret in the mothership's environment/deployment manifest, same class of concern as `SPAXEL_MQTT_PASSWORD` already in this table — should be sealed (SealedSecret), not committed in plain deployment YAML, consistent with existing secret-handling conventions for this project.
+- **Follow-up:** Tracked as `bf-5lh3j`.
