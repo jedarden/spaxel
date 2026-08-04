@@ -16,6 +16,9 @@ function resetWizardState() {
     _state.knownMACs = [];
     _state.wifiSSID = '';
     _state.wifiPass = '';
+    _state.fleetNetworkConfigured = false;
+    _state.fleetNetworkSSID = '';
+    _state.wifiStepOverride = false;
     _state.mothershipHost = '';
     _state.mothershipPort = 8080;
     _state.pollTimer = null;
@@ -841,6 +844,115 @@ describe('Wizard state transitions', () => {
 
         var nav = document.getElementById('wizard-nav');
         expect(nav.innerHTML).toBe('');
+
+        jest.useRealTimers();
+    });
+});
+
+// ============================================
+// WiFi Step Skip Logic (ADR-005)
+// ============================================
+// Every node is presumed to join the same fleet-wide network, configured
+// once in the dashboard's Settings > Network page. provision_wifi fetches
+// /api/settings/network at wizard start and, when configured, auto-advances
+// past its manual form unless the user opts into a per-node override.
+describe('WiFi step skip logic (ADR-005)', () => {
+    beforeEach(resetWizardState);
+
+    afterEach(() => {
+        SpaxelOnboard.close();
+    });
+
+    // Drives the wizard from a fresh start through browser_check (400ms
+    // auto-advance) and connect_device (async requestPort) to land on
+    // provision_wifi, matching how a real user reaches this step.
+    async function advanceToProvisionWifi() {
+        SpaxelOnboard.start();
+        await jest.advanceTimersByTimeAsync(400); // browser_check auto-advance
+
+        var nextBtn = document.getElementById('wizard-next');
+        nextBtn.click();
+        await jest.advanceTimersByTimeAsync(0); // flush requestPort()
+    }
+
+    test('skips WiFi step and auto-advances to flash_firmware when fleet network is configured', async () => {
+        jest.useFakeTimers();
+        fetch.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({ wifi_ssid: 'FleetNet', configured: true }),
+        });
+
+        await advanceToProvisionWifi();
+
+        expect(_state.currentStepIndex).toBe(2); // provision_wifi
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Using fleet network');
+        expect(content.innerHTML).toContain('FleetNet');
+        expect(content.innerHTML).toContain('use a different network for this node');
+
+        // Auto-advances past the step after a brief pause.
+        await jest.advanceTimersByTimeAsync(900);
+        expect(_state.currentStepIndex).toBe(3); // flash_firmware
+        // Left empty — the mothership defaults these server-side from the
+        // stored network setting (ADR-005).
+        expect(_state.wifiSSID).toBe('');
+        expect(_state.wifiPass).toBe('');
+
+        jest.useRealTimers();
+    });
+
+    test('shows manual WiFi form when no fleet network is configured', async () => {
+        jest.useFakeTimers();
+        // Default mock resolves to [] for every fetch — falsy `.configured`.
+
+        await advanceToProvisionWifi();
+
+        expect(_state.currentStepIndex).toBe(2);
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Configure WiFi');
+        expect(content.innerHTML).toContain('wifi-ssid');
+
+        // Must NOT auto-advance in this case.
+        await jest.advanceTimersByTimeAsync(2000);
+        expect(_state.currentStepIndex).toBe(2);
+
+        jest.useRealTimers();
+    });
+
+    test('"use a different network" link cancels the auto-advance and shows the manual form', async () => {
+        jest.useFakeTimers();
+        fetch.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({ wifi_ssid: 'FleetNet', configured: true }),
+        });
+
+        await advanceToProvisionWifi();
+
+        var overrideLink = document.getElementById('wifi-step-override-link');
+        expect(overrideLink).not.toBeNull();
+        overrideLink.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+
+        var content = document.getElementById('wizard-content');
+        expect(content.innerHTML).toContain('Configure WiFi');
+        expect(content.innerHTML).toContain('wifi-ssid');
+
+        // The cancelled auto-advance must not fire later.
+        await jest.advanceTimersByTimeAsync(2000);
+        expect(_state.currentStepIndex).toBe(2);
+
+        jest.useRealTimers();
+    });
+
+    test('does not fetch network settings on every render, only once at wizard start', async () => {
+        jest.useFakeTimers();
+        fetch.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({ wifi_ssid: 'FleetNet', configured: true }),
+        });
+
+        await advanceToProvisionWifi();
+        var callsAfterFirstRender = fetch.mock.calls.filter(function (c) { return c[0] === '/api/settings/network'; }).length;
+        expect(callsAfterFirstRender).toBe(1);
 
         jest.useRealTimers();
     });
