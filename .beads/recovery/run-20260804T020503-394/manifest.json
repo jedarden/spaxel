@@ -1,0 +1,17 @@
+{
+  "run_id": "run-20260804T020503-394",
+  "created_at": "2026-08-04T02:05:03.410521977+00:00",
+  "reason": "pre-rebuild",
+  "files": [
+    {
+      "name": "beads.db",
+      "sha256": "d363f68283067eea356d589c0a1a9db2595416a74ff093ce850d8b64e6f85467",
+      "bytes": 8544256
+    },
+    {
+      "name": "issues.jsonl",
+      "sha256": "46685e5ef8f34cf4b10ce01b709babed625af1000ac4434e4bc8a41045e7f482",
+      "bytes": 1363717
+    }
+  ]
+}
