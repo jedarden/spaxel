@@ -747,7 +747,7 @@ func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
 // with "invalid token" under the strict window.
 func provisionNodeToken(ctx context.Context, apiBase, mac string) (string, error) {
 	provisionURL := apiBase + "/api/provision"
-	body := fmt.Sprintf(`{"mac":%q}`, mac)
+	body := fmt.Sprintf(`{"mac":%q,"wifi_ssid":"SimNet"}`, mac)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provisionURL, strings.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("build request: %w", err)
