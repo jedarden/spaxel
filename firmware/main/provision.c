@@ -4,36 +4,25 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "cJSON.h"
-#include "driver/uart.h"
+#include "driver/usb_serial_jtag.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
 
 static const char *TAG = "provision";
 
-#define PROVISION_UART              UART_NUM_0
-#define PROVISION_BAUD_RATE         115200
 #define PROVISION_WINDOW_MS_FRESH   120000  // 2 min for unprovisioned boards
 #define PROVISION_WINDOW_MS_REPROV   15000  // 15 s for already-provisioned boards
-#define UART_RX_BUF_SIZE            1024
 #define MAX_LINE_LEN                768
 
 void provision_listen_window(void) {
-    uart_config_t uart_cfg = {
-        .baud_rate  = PROVISION_BAUD_RATE,
-        .data_bits  = UART_DATA_8_BITS,
-        .parity     = UART_PARITY_DISABLE,
-        .stop_bits  = UART_STOP_BITS_1,
-        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,
-    };
-
-    if (uart_param_config(PROVISION_UART, &uart_cfg) != ESP_OK) {
-        ESP_LOGW(TAG, "UART param config failed, skipping provision window");
-        return;
-    }
-    if (uart_driver_install(PROVISION_UART, UART_RX_BUF_SIZE, 0, 0, NULL, 0) != ESP_OK) {
-        ESP_LOGW(TAG, "UART driver install failed, skipping provision window");
+    // Same install pattern ESP-IDF's own esp_console_repl.c uses to combine
+    // a USB-Serial-JTAG console (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG, already
+    // active for esp_log by this point) with driver-level read/write on the
+    // same peripheral.
+    usb_serial_jtag_driver_config_t usbsj_cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    if (usb_serial_jtag_driver_install(&usbsj_cfg) != ESP_OK) {
+        ESP_LOGW(TAG, "USB-Serial-JTAG driver install failed, skipping provision window");
         return;
     }
 
@@ -49,7 +38,7 @@ void provision_listen_window(void) {
     // the window — not just at the exact moment of first boot.
     char ready_msg[64];
     snprintf(ready_msg, sizeof(ready_msg), "SPAXEL READY %s\n", mac_str);
-    uart_write_bytes(PROVISION_UART, ready_msg, strlen(ready_msg));
+    usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), portMAX_DELAY);
 
     ESP_LOGI(TAG, "Provisioning window open for %u ms (MAC: %s)", (unsigned)window_ms, mac_str);
 
@@ -61,12 +50,12 @@ void provision_listen_window(void) {
     while (xTaskGetTickCount() < deadline) {
         // Re-broadcast READY every 1 s so the host can connect at any time
         if ((xTaskGetTickCount() - last_ready) >= pdMS_TO_TICKS(1000)) {
-            uart_write_bytes(PROVISION_UART, ready_msg, strlen(ready_msg));
+            usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), portMAX_DELAY);
             last_ready = xTaskGetTickCount();
         }
 
         uint8_t ch;
-        int n = uart_read_bytes(PROVISION_UART, &ch, 1, pdMS_TO_TICKS(50));
+        int n = usb_serial_jtag_read_bytes(&ch, 1, pdMS_TO_TICKS(50));
         if (n <= 0) {
             continue;
         }
@@ -86,7 +75,7 @@ void provision_listen_window(void) {
             cJSON *root = cJSON_Parse(line);
             if (!root) {
                 const char *err_resp = "{\"ok\":false,\"error\":\"invalid_json\"}\n";
-                uart_write_bytes(PROVISION_UART, err_resp, strlen(err_resp));
+                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), portMAX_DELAY);
                 continue;
             }
 
@@ -94,7 +83,7 @@ void provision_listen_window(void) {
             if (!prov) {
                 cJSON_Delete(root);
                 const char *err_resp = "{\"ok\":false,\"error\":\"missing_provision_key\"}\n";
-                uart_write_bytes(PROVISION_UART, err_resp, strlen(err_resp));
+                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), portMAX_DELAY);
                 continue;
             }
 
@@ -104,13 +93,13 @@ void provision_listen_window(void) {
             if (err == ESP_OK) {
                 char resp[80];
                 snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
-                uart_write_bytes(PROVISION_UART, resp, strlen(resp));
+                usb_serial_jtag_write_bytes(resp, strlen(resp), portMAX_DELAY);
                 ESP_LOGI(TAG, "Provisioning complete via serial");
-                uart_driver_delete(PROVISION_UART);
+                usb_serial_jtag_driver_uninstall();
                 return;
             } else {
                 const char *err_resp = "{\"ok\":false,\"error\":\"nvs_write_failed\"}\n";
-                uart_write_bytes(PROVISION_UART, err_resp, strlen(err_resp));
+                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), portMAX_DELAY);
             }
         } else if (line_pos < MAX_LINE_LEN - 1) {
             line[line_pos++] = (char)ch;
@@ -121,7 +110,7 @@ void provision_listen_window(void) {
     }
 
     ESP_LOGI(TAG, "Provisioning window closed (no provisioning received)");
-    uart_driver_delete(PROVISION_UART);
+    usb_serial_jtag_driver_uninstall();
 }
 
 esp_err_t provision_write_nvs(cJSON *prov) {
