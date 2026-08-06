@@ -70,7 +70,8 @@ RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
         --output build/spaxel-firmware-merged.bin \
         0x0     build/bootloader/bootloader.bin \
         0x8000  build/partition_table/partition-table.bin \
-        0x10000 build/spaxel-firmware.bin
+        0x10000 build/ota_data_initial.bin \
+        0x20000 build/spaxel-firmware.bin
 
 # Stage 2: Build the Go binary (cross-platform)
 # Same empty-under-kaniko risk as TARGETPLATFORM above -- default to the

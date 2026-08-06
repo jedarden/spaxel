@@ -1100,17 +1100,56 @@
 
             addProvLog('log', 'SPAXEL READY received (MAC: ' + (mac || 'unknown') + ') — sending payload');
             setProvStatus('Sending configuration to device...');
-            addProvLog('log', 'Payload: ' + JSON.stringify(wrappedPayload).substring(0, 120) + '...');
+            var payloadJSON = JSON.stringify(wrappedPayload) + '\n';
+            addProvLog('log', 'Payload: ' + payloadJSON.substring(0, 120) + '...');
 
-            // Phase 2: send the JSON payload now that the firmware is listening.
-            await writer.write(JSON.stringify(wrappedPayload) + '\n');
-            writer.close();
-            await writableClosed;
+            // Phase 2: send the JSON payload, retrying several times. The ESP32-S3's
+            // native USB-Serial-JTAG receive path is intermittently unreliable at the
+            // USB level — confirmed via usbmon that a bulk OUT transfer can be
+            // submitted by the host and never acknowledged by the device, even
+            // though the SAME device's TX (SPAXEL READY, logs) is 100% reliable.
+            // Retrying raises the odds that at least one write lands. This is a
+            // best-effort send, not a guaranteed one — see Phase 3 below for why
+            // that's OK.
+            var WRITE_ATTEMPTS = 5;
+            var writeSucceeded = false;
+            for (var attemptN = 0; attemptN < WRITE_ATTEMPTS; attemptN++) {
+                try {
+                    await Promise.race([
+                        writer.write(payloadJSON),
+                        new Promise(function (_, reject) {
+                            setTimeout(function () { reject(new Error('write timeout')); }, 2000);
+                        })
+                    ]);
+                    writeSucceeded = true;
+                    addProvLog('log', 'Payload write attempt ' + (attemptN + 1) + '/' + WRITE_ATTEMPTS + ' completed');
+                } catch (e) {
+                    addProvLog('warn', 'Payload write attempt ' + (attemptN + 1) + '/' + WRITE_ATTEMPTS + ' failed: ' + (e.message || e));
+                }
+                if (attemptN < WRITE_ATTEMPTS - 1) {
+                    await new Promise(function (r) { setTimeout(r, 400); });
+                }
+            }
+            if (!writeSucceeded) {
+                addProvLog('warn', 'All payload write attempts failed at the USB level — proceeding anyway; ' +
+                    'WiFi connection (checked in the next step) is the real confirmation, not this serial ack.');
+            }
 
-            // Phase 3: wait for the firmware's JSON acknowledgment (up to 10 s).
-            setProvStatus('Waiting for device acknowledgment...');
+            try { writer.close(); } catch (_) {}
+            try { await writableClosed; } catch (_) {}
+
+            // Phase 3: best-effort listen for the firmware's JSON acknowledgment
+            // (short window). NOT required for success — given the RX unreliability
+            // above, the ack frequently never arrives even when a write landed and
+            // NVS was updated. A missing ack is therefore NOT treated as failure;
+            // only an explicit {"ok":false,...} is. Real confirmation of success
+            // comes from the mothership seeing the node connect over WiFi in the
+            // next step (detect_node polls /api/nodes) — the device can only do
+            // that if it actually received working WiFi credentials, so a node
+            // appearing there is strictly stronger proof than a serial ack.
+            setProvStatus('Configuration sent — waiting for device...');
             var response = null;
-            var respDeadline = Date.now() + 10000;
+            var respDeadline = Date.now() + 4000;
 
             outer2: while (Date.now() < respDeadline) {
                 var remaining = respDeadline - Date.now();
@@ -1142,15 +1181,9 @@
                 }
             }
 
-            addProvLog('log', 'Serial response: ' + (response ? JSON.stringify(response) : '(none — timeout)'));
+            addProvLog('log', 'Serial response: ' + (response ? JSON.stringify(response) : '(none — proceeding on WiFi confirmation instead)'));
 
-            if (!response) {
-                throw new UserError(
-                    'No response from device after sending configuration. ' +
-                    'The provisioning window is open for 2 minutes after first boot.'
-                );
-            }
-            if (response.ok === false) {
+            if (response && response.ok === false) {
                 var errorMsg = response.error || 'Unknown error';
                 addProvLog('error', 'Device rejected provisioning: ' + errorMsg);
                 if (errorMsg === 'missing_provision_key') throw new UserError('Firmware communication error. Please try again.');
@@ -1158,8 +1191,12 @@
                 throw new UserError('Provisioning failed: ' + errorMsg);
             }
 
-            addProvLog('log', 'Provisioning acknowledged — MAC: ' + (response.mac || mac || '(unknown)'));
-            return response.mac || mac;
+            if (response && response.ok) {
+                addProvLog('log', 'Provisioning acknowledged — MAC: ' + (response.mac || mac || '(unknown)'));
+            } else {
+                addProvLog('log', 'No serial acknowledgment (expected given known RX unreliability) — MAC: ' + (mac || '(unknown)'));
+            }
+            return (response && response.mac) || mac;
 
         } finally {
             try { reader.cancel(); } catch (_) {}
