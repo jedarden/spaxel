@@ -400,6 +400,40 @@
         buildPins(30, 18, 15) + buildPins(30, 97, 15) +
         '</svg>';
 
+    // Briefly listens on state.port for any incoming bytes without going through
+    // esptool — used to tell "device is running its app" apart from "device is
+    // sitting in the ROM bootloader" before attempting to flash. See the call
+    // site in doFlash() for why this distinction can't be made any other way.
+    // Opens and closes the port itself; safe to call before esptool-js takes it
+    // over, since it always releases the port when done (success or failure).
+    async function probeIfAppIsRunning() {
+        if (!state.port) return false;
+        var opened = false;
+        try {
+            await state.port.open({ baudRate: CONFIG.serialBaudRate });
+            opened = true;
+        } catch (e) {
+            return false; // couldn't open — let the normal flash flow surface the real error
+        }
+        try {
+            var reader = state.port.readable.getReader();
+            try {
+                var result = await Promise.race([
+                    reader.read(),
+                    new Promise(function (resolve) { setTimeout(function () { resolve({ timedOut: true }); }, 600); })
+                ]);
+                return !result.timedOut && !result.done && !!(result.value && result.value.length > 0);
+            } finally {
+                try { reader.cancel(); } catch (_) {}
+                try { reader.releaseLock(); } catch (_) {}
+            }
+        } catch (e) {
+            return false;
+        } finally {
+            if (opened) { try { await state.port.close(); } catch (_) {} }
+        }
+    }
+
     function renderBootloaderHelp(retryCount) {
         var escalated = retryCount >= 2;
         return '<div class="wizard-bootloader-help" style="background:#1a2a1a;border:1px solid #4fc3f7;border-radius:6px;padding:12px;margin:12px 0;text-align:center">' +
@@ -408,6 +442,28 @@
                 ? '<p style="font-size:12px;color:#aaa;margin:0 0 8px">Try a different USB cable (data cables only, not charge-only). If using a USB hub, connect directly to your computer.</p>'
                 : '<p style="font-size:12px;color:#ccc;margin:0 0 8px">Hold <strong style="color:#4fc3f7">BOOT</strong>, press &amp; release <strong style="color:#f44336">RST</strong>, then release <strong style="color:#4fc3f7">BOOT</strong>.</p>') +
             BOOTLOADER_SVG +
+            '</div>';
+    }
+
+    // The browser couldn't even open the OS-level port — distinct from (and
+    // needs a different fix than) "opened fine but the chip didn't answer the
+    // sync handshake". Seen in the wild on ESP32-S3's native USB-Serial/JTAG
+    // peripheral after an aborted esptool operation: the port stays enumerated
+    // but wedges, and neither retrying nor a BOOT/RST tap recovers it — only
+    // a physical unplug/replug does (bf-4z6wh). BOOT/RST guidance here would
+    // just waste the user's time on a fix that cannot work.
+    function isPortWedgedError(e) {
+        var msg = ((e && e.message) || String(e || '')).toLowerCase();
+        return msg.indexOf('failed to open serial port') !== -1 ||
+            msg.indexOf('the device has been lost') !== -1;
+    }
+
+    function renderPortWedgedHelp() {
+        return '<div class="wizard-bootloader-help" style="background:#1a2a1a;border:1px solid #f44336;border-radius:6px;padding:12px;margin:12px 0;text-align:center">' +
+            '<p style="margin:0 0 8px;color:#f44336;font-weight:bold">Device port isn\'t responding</p>' +
+            '<p style="font-size:12px;color:#ccc;margin:0 0 8px">The USB connection needs a full reset — pressing BOOT/RST won\'t fix this. ' +
+            'Unplug the USB cable, wait a couple seconds, then plug it back in <strong style="color:#4fc3f7">while holding BOOT</strong>. ' +
+            'Then click Try Again.</p>' +
             '</div>';
     }
 
@@ -649,11 +705,27 @@
 
                 // 3. Load esptool-js and connect to device
                 setStatus('Connecting to device...');
+
+                if (!state.port) { throw new Error('No serial port selected — go back to Connect step'); }
+
+                // Bootloader mode and app mode present IDENTICAL USB descriptors on
+                // this native-USB-JTAG board, so there's no way to ask the OS which
+                // one we're looking at. But the device is never silent unless it's
+                // genuinely stuck: the ROM bootloader only responds to esptool's own
+                // sync bytes and says nothing unprompted, while the app starts
+                // producing esp_log output the instant it boots. A brief passive
+                // listen here catches "still running the app" up front instead of
+                // making the user wait for esptool's sync attempt to time out first.
+                if (await probeIfAppIsRunning()) {
+                    appendLog('warn', ['Device appears to be running its firmware, not in bootloader mode — ' +
+                        'hold BOOT, press & release RST, then release BOOT.']);
+                }
+                if (cancelled) { return; }
+
                 var flashLib = await import('/js/esptool-bundle.js');
                 var ESPLoader = flashLib.ESPLoader;
                 var Transport = flashLib.Transport;
 
-                if (!state.port) { throw new Error('No serial port selected — go back to Connect step'); }
                 transport = new Transport(state.port, false);
                 var loader = new ESPLoader({
                     transport: transport,
@@ -710,65 +782,101 @@
                 // 5. Provision (progress 80% → 100%)
                 // Device reboots after flash and opens its provisioning window.
                 // Send WiFi + mothership config over serial immediately.
-                setStatus('Configuring device...');
-
-                var provLog = function (level, msg) {
-                    appendLog(level, [msg]);
-                };
-                var mac = await doProvision(provLog, setStatus, setProgress);
-
-                if (cancelled) { return; }
-                setProgress(100);
-                setStatus('✓ Device configured!', '#a5d6a7');
-                appendLog('log', ['Provisioning complete — MAC: ' + (mac || 'unknown')]);
-                restoreConsole();
-                // Snapshot existing nodes before advancing so detect step knows what's new
-                try {
-                    var nodesResp = await fetch(CONFIG.nodesEndpoint);
-                    var nodes = await nodesResp.json();
-                    state.knownMACs = (nodes || []).map(function (n) { return n.mac; });
-                } catch (_) {}
-                saveState();
-                setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1200);
+                await provisionAfterFlash();
 
             } catch (e) {
                 if (cancelled) { return; }
                 if (transport) { try { await transport.disconnect(); } catch (_) {} transport = null; }
-
-                flashRetryCount++;
-                restoreConsole();
-                appendLog('error', ['Flash failed: ' + (e.message || String(e))]);
-                setStatus('');
-                setProgress(0);
-                document.getElementById('flash-progress-bar').style.display = 'none';
-                document.getElementById('flash-log-details').open = true;
-
-                var recovery = document.getElementById('flash-recovery');
-                recovery.style.display = 'block';
-                var helpHtml;
-                if (flashSucceeded) {
-                    // Device flashed OK but provisioning failed — don't tell user about BOOT button
-                    helpHtml = '<div class="wizard-bootloader-help" style="background:#1a2a1a;border:1px solid #f44336;border-radius:6px;padding:12px;margin:12px 0;text-align:center">' +
-                        '<p style="margin:0 0 8px;color:#f44336;font-weight:bold">Provisioning failed</p>' +
-                        '<p style="font-size:12px;color:#ccc;margin:0 0 8px">Firmware flashed successfully. ' +
-                        'Unplug and replug the USB cable, then click Try Again to send the configuration.</p>' +
-                        '</div>';
-                } else {
-                    helpHtml = renderBootloaderHelp(flashRetryCount);
-                }
-                recovery.innerHTML = helpHtml +
-                    '<div style="text-align:center;margin-top:8px">' +
-                    '<button class="wizard-btn wizard-btn-primary" id="flash-retry-btn">Try Again</button>' +
-                    '</div>';
-                document.getElementById('flash-retry-btn').addEventListener('click', function () {
-                    recovery.style.display = 'none';
-                    recovery.innerHTML = '';
-                    document.getElementById('flash-progress-bar').style.display = 'block';
-                    setProgress(0);
-                    patchConsole();
-                    doFlash();
-                });
+                showFlashRecoveryUI(e, flashSucceeded);
             }
+        }
+
+        // Sends WiFi + mothership config over serial and, on success, snapshots
+        // known nodes and advances to detect_node. Split out from doFlash() so a
+        // provisioning-only retry (device already flashed) can re-run just this
+        // part — see showFlashRecoveryUI.
+        async function provisionAfterFlash() {
+            setStatus('Configuring device...');
+            var provLog = function (level, msg) {
+                appendLog(level, [msg]);
+            };
+            var mac = await doProvision(provLog, setStatus, setProgress);
+
+            if (cancelled) { return; }
+            setProgress(100);
+            setStatus('✓ Device configured!', '#a5d6a7');
+            appendLog('log', ['Provisioning complete — MAC: ' + (mac || 'unknown')]);
+            restoreConsole();
+            // Snapshot existing nodes before advancing so detect step knows what's new
+            try {
+                var nodesResp = await fetch(CONFIG.nodesEndpoint);
+                var nodes = await nodesResp.json();
+                state.knownMACs = (nodes || []).map(function (n) { return n.mac; });
+            } catch (_) {}
+            saveState();
+            setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1200);
+        }
+
+        // Retries only the provisioning handshake (no reflash) — used when the
+        // firmware is already known-good but the serial handshake failed.
+        async function retryProvisionOnly() {
+            try {
+                await provisionAfterFlash();
+            } catch (e) {
+                if (cancelled) { return; }
+                showFlashRecoveryUI(e, true);
+            }
+        }
+
+        function showFlashRecoveryUI(e, flashSucceeded) {
+            flashRetryCount++;
+            restoreConsole();
+            appendLog('error', ['Flash failed: ' + (e.message || String(e))]);
+            setStatus('');
+            setProgress(0);
+            document.getElementById('flash-progress-bar').style.display = 'none';
+            document.getElementById('flash-log-details').open = true;
+
+            var recovery = document.getElementById('flash-recovery');
+            recovery.style.display = 'block';
+            var helpHtml;
+            if (flashSucceeded) {
+                // Device flashed OK but provisioning failed — don't tell user about BOOT button
+                helpHtml = '<div class="wizard-bootloader-help" style="background:#1a2a1a;border:1px solid #f44336;border-radius:6px;padding:12px;margin:12px 0;text-align:center">' +
+                    '<p style="margin:0 0 8px;color:#f44336;font-weight:bold">Provisioning failed</p>' +
+                    '<p style="font-size:12px;color:#ccc;margin:0 0 8px">Firmware flashed successfully. ' +
+                    'Unplug and replug the USB cable, then click Try Again to send the configuration.</p>' +
+                    '</div>';
+            } else if (isPortWedgedError(e)) {
+                // Regardless of retry count: this specific error means the OS-level
+                // port itself won't open, so the generic "not in download mode" /
+                // "try another cable" guidance doesn't apply and shouldn't be shown.
+                helpHtml = renderPortWedgedHelp();
+            } else {
+                helpHtml = renderBootloaderHelp(flashRetryCount);
+            }
+            recovery.innerHTML = helpHtml +
+                '<div style="text-align:center;margin-top:8px">' +
+                '<button class="wizard-btn wizard-btn-primary" id="flash-retry-btn">Try Again</button>' +
+                '</div>';
+            document.getElementById('flash-retry-btn').addEventListener('click', function () {
+                recovery.style.display = 'none';
+                recovery.innerHTML = '';
+                document.getElementById('flash-progress-bar').style.display = 'block';
+                setProgress(0);
+                patchConsole();
+                if (flashSucceeded) {
+                    // The device is already flashed and sitting in its (already
+                    // running) app, not the ROM bootloader — a plain unplug/replug
+                    // (as instructed above) boots the app, not the bootloader.
+                    // Re-running doFlash() here would hang forever at the esptool
+                    // sync step waiting for a bootloader that isn't there. Retry
+                    // just the provisioning handshake instead.
+                    retryProvisionOnly();
+                } else {
+                    doFlash();
+                }
+            });
         }
 
         // Runs after firmware flash: fetches provisioning payload from server (or
