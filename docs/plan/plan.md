@@ -2649,8 +2649,8 @@ Import behavior:
 | `POST` | `/api/nodes/rebaseline-all` | — | `{"ok":true,"count":N}` |
 | `POST` | `/api/nodes/:mac/disable` | — | Sets role to IDLE |
 | `POST` | `/api/nodes/:mac/enable` | — | Restores prior role |
-| `POST` | `/api/nodes/:mac/enroll` | `{"secret":"<64-hex>"}` — browser-generated device secret | `{"ok":true,"state":"registered"}`. Operator-authenticated (behind the dashboard's forward-auth), **not** node-authenticated. See ADR-007 |
-| `POST` | `/api/nodes/:mac/enroll/activate` | — | `{"ok":true,"state":"active"}` — called once the device confirms it stored the secret |
+| `POST` | `/api/nodes/:mac/enroll` | `{"csr":"<PEM>"}` — CSR generated **on the device**; no private key ever transits | `{"ok":true,"certificate":"<PEM>","state":"active"}` — mothership signs with the fleet CA. Operator-authenticated (behind the dashboard's forward-auth), **not** node-authenticated. See ADR-008 |
+| `GET` | `/api/ca` | — | Fleet CA certificate (PEM), so a node can verify the mothership in turn |
 
 ### Firmware
 
@@ -4531,6 +4531,16 @@ This is the same failure shape already hit once this session: `SPAXEL_ADVERTISED
 
 ## ADR-007: 2026-08-07 — Identify nodes by a browser-generated per-device secret, enrolled at USB flashing time, proven by challenge–response
 
+> **SUPERSEDED by ADR-008 (2026-08-07), same day, before any implementation started.**
+> The symmetric design below is sound but leaves one weakness it cannot remove: the
+> mothership must store a value capable of impersonating any node, so its database
+> becomes a fleet-wide credential. An asymmetric keypair removes that class entirely.
+> ADR-008 supersedes decisions 1–4 (browser-generated secret, enrolment ordering,
+> challenge–response, operator-authenticated enrolment) and **retains** decision 5's
+> staging discipline and the `bf-27ly` prerequisite. Kept in full rather than
+> rewritten, because the reasoning about enrolment ordering is what led to the
+> better answer.
+
 ### Context
 
 A node's identity today is `node_token = HMAC-SHA256(installSecret, mac)`, minted by `POST /api/provision`, written to NVS, and presented as a static bearer credential. Four separate weaknesses, three of which no amount of additional crypto fixes:
@@ -4593,3 +4603,55 @@ Phase 1 requires the browser to **send** bytes to the device over serial, which 
 - **Limitation (phase 2):** `HMAC_UP` lets any code running on the device use the peripheral as a signing oracle. It proves *"this chip"*, not *"this chip running our firmware"*. Closing that requires Secure Boot v2, and the bootloader has only ~11 KB free — sizing must precede any promise.
 - **Risk:** Re-enrolling a device consumes another eFuse key block. The mothership must record which block index a device used, and the fleet needs a policy for a device that has exhausted them.
 - **Follow-up:** Phase 1 is `bf-32rye` (mothership), `bf-59b07` (firmware), `bf-43c2q` (dashboard) — all three required, none useful alone. Phase 2 is `bf-4np9s` (eFuse migration), phase 3 `bf-24qef` (flash encryption + Secure Boot sizing spike, go/no-go before implementation). `bf-27ly` is wired as a blocker on the firmware and dashboard beads, since neither can be built on a serial channel that cannot receive.
+
+## ADR-008: 2026-08-07 — Identify nodes with an on-device keypair and a mothership-signed certificate
+
+*Supersedes ADR-007.*
+
+### Context
+
+ADR-007 replaced a fleet-wide install key with a per-device symmetric secret, generated in the browser at flashing time and proven by challenge–response. That removes the worst property of the original scheme — one key minting credentials for every MAC — but it does not remove the *class* of the problem. The mothership must store each device's secret in order to verify it, so its database is still a value that impersonates any node. The blast radius moved from "the install key" to "the enrolment table"; it did not disappear.
+
+An asymmetric keypair removes it. The mothership stores only public keys, so compromising its database allows impersonating *the mothership*, never a node. Two further properties follow that ADR-007 could not offer:
+
+- **No secret ever crosses the USB link or the browser.** ADR-007 transports the key browser→device over serial; that is its weakest moment. With on-device key generation only the public half ever leaves the chip.
+- **The enrolment ordering problem disappears rather than being managed.** ADR-007 decision 2 exists specifically so a device can never hold a secret nobody knows. With a keypair the public half can be re-exported at any time, so a failed registration is simply retried. The careful ordering becomes unnecessary instead of merely correct.
+
+Hardware and resource facts, measured on this build rather than assumed:
+
+- **No hardware ECDSA.** `CONFIG_SOC_ECDSA_SUPPORTED` is absent on the ESP32-S3 (it exists on H2/C6/P4). Hardware-protected signing here means RSA via the DS peripheral; ECC is software via mbedTLS.
+- **mbedTLS ECC is already compiled in and largely already linked** — `CONFIG_MBEDTLS_ECP_C`, `CONFIG_MBEDTLS_ECDSA_C`, `CONFIG_MBEDTLS_ECP_DP_SECP256R1_ENABLED` are all set, and the existing TLS path already performs ECDHE and verifies an ECDSA-signed chain. X.509 parsing is present for the same reason. A CSR/certificate flow is mostly reuse.
+- **Flash has room.** The current image is 1,684,597 B against a 2,031,616 B slot — 346,912 B (17%) free. The CA bundle already cost a measured +65,968 B; identity signing is marginal on top.
+- **The DS-peripheral route needs a flash-layout migration.** `partitions.csv` runs `ota_1` to exactly `0x400000` with zero slack and there is no `esp_secure_cert` partition. Making room means shrinking both OTA slots, and **a partition table change cannot be delivered over OTA** — every deployed node would need a physical serial reflash.
+- **The standard DS provisioning flow generates the RSA key on the host** (`configure_ds.py`), which reintroduces exactly the "a private key existed somewhere else" property that makes asymmetric worth having.
+- **RAM is the binding constraint, and the biggest lever is switched off.** Static use is IRAM 97,358 B (26.9%) and D/IRAM 59,604 B (17.2%), leaving 286,252 B at link time — but runtime heap is shared with WiFi, NimBLE, CSI buffers and mbedTLS. The chip has **2 MB of PSRAM** (`Embedded PSRAM 2MB (AP_3v3)` per `esptool flash-id`) and `CONFIG_SPIRAM` is **not set**.
+- **The TLS path has never executed on this hardware.** `wss://` support shipped in 0.2.19, but the deployed configuration uses plain `ws://` on the LAN (ADR-006 decision 6), so no handshake has ever run alongside WiFi + BLE + CSI. There is no measured peak-heap figure, and mTLS would *raise* it — a client key operation and a second chain on top of server verification.
+
+### Decision
+
+1. **Each node generates an ECC P-256 keypair on-device and never exports the private half.** mbedTLS, already linked. No host-generated key, no key in transit, nothing to intercept on the serial link.
+2. **Enrolment is a CSR flow.** The device emits a CSR; the browser relays it to `POST /api/nodes/:mac/enroll` over HTTPS; the mothership signs it with a fleet CA and returns the certificate, which the device stores. The browser is a courier for public material only.
+3. **The mothership is the CA.** It is the only verifier, so revocation is a list it consults — no CRL or OCSP infrastructure. `GET /api/ca` publishes the CA certificate so nodes can verify the mothership in turn.
+4. **Enrolment stays operator-authenticated**, behind the dashboard's existing forward-auth (retained from ADR-007 decision 4). Still the deliberate inverse of `/firmware` (ADR-006), which must be node-authenticated.
+5. **A resource spike gates implementation.** Enable `CONFIG_SPIRAM` and measure actual free heap through a real TLS handshake on hardware before committing. The node already reports `free_heap_bytes` (`websocket.c:494`) and the mothership already stores it; it simply is not surfaced by any API. This is a go/no-go with a number attached, not a formality — see *Consequences* for what a no-go means.
+6. **Certificates authenticate `/firmware` too.** Once nodes hold client certificates, mTLS satisfies ADR-006's node-authentication requirement at the transport layer, and the `X-Spaxel-MAC`/`X-Spaxel-Token` header scheme becomes unnecessary. ADR-006 ships first regardless — it is deployable now and this is not.
+7. **Private-key-at-rest protection is a later, separable step.** The keypair in NVS is extractable by anyone with USB access, exactly as the symmetric secret was. The remedy is to wrap it with a key derived through the HMAC peripheral (`HMAC_UP`, eFuse-backed) — on-device generation *and* a hardware root of trust, with no `esp_secure_cert` partition and no flash-layout migration. This changes what the phase-2 eFuse work means: key **wrapping**, not the identity mechanism itself.
+
+### Alternatives Considered
+
+- **The symmetric design in ADR-007.** Rejected for the reason at the top: it cannot stop the mothership's database from being a fleet-wide credential. It remains a reasonable fallback if the resource spike says asymmetric does not fit, since it is strictly cheaper in both flash and heap.
+- **RSA client certificates via the DS peripheral.** The strongest option on paper — the private key is unreadable by software and `CONFIG_ESP_TLS_USE_DS_PERIPHERAL` is already enabled. Rejected for now on two concrete grounds: it requires an `esp_secure_cert` partition that does not exist and cannot be added over OTA, and the standard provisioning flow generates the key on the host, undercutting the property that motivates asymmetric in the first place. Revisit if on-device DS parameter generation proves practical.
+- **Hardware ECDSA.** Not available on this silicon. Noted because it would be the obvious choice on an H2/C6/P4 and may inform future hardware selection.
+- **Keep the ADR-007 symmetric secret but store it in eFuse only.** Rejected as solving the lesser half: it protects the key at rest on the device while leaving the mothership's copy just as impersonation-capable.
+
+### Consequences
+
+- **Positive:** A mothership database compromise no longer yields the ability to impersonate nodes. This is the property none of the symmetric variants can provide.
+- **Positive:** No private key exists off-device at any point — not in the browser, not on the serial link, not in a provisioning payload.
+- **Positive:** Removes ADR-007's enrolment ordering constraint entirely rather than engineering around it.
+- **Positive:** Composes with ADR-006 — client certificates authenticate firmware downloads at the transport layer, retiring a bespoke header scheme before it has to be maintained.
+- **Cost:** Certificate lifecycle the symmetric design did not have — expiry, renewal, and a revocation list. Renewal must be reachable over the existing connection, or a node whose certificate expires while offline is unrecoverable without USB.
+- **Cost:** Higher handshake heap than ADR-007's HMAC exchange, on the resource that is already the constraint.
+- **Risk / open question:** The go/no-go in decision 5 is real. If measured heap will not carry mTLS even with PSRAM enabled, the fallback is ADR-007's symmetric scheme, and this ADR is superseded in turn rather than forced through. Recording that now so a bad number is allowed to change the decision instead of being explained away.
+- **Neutral:** `CONFIG_SPIRAM` has been off since the project began. Enabling it is config-only, but it changes memory behaviour globally (allocator placement, DMA constraints) and should be validated on its own, not bundled into the identity work.
+- **Follow-up:** `bf-3lrou` (resource spike — gates all three of the below), then `bf-14cxd` (mothership CA + CSR signing), `bf-273pc` (firmware keygen + CSR + certificate), `bf-5a6t6` (dashboard CSR relay). `bf-27ly` remains a blocker on the firmware and dashboard work. `bf-4np9s` is repurposed from eFuse-as-identity to eFuse-as-key-wrapping. The superseded ADR-007 beads (`bf-32rye`, `bf-59b07`, `bf-43c2q`) were closed rather than edited, each pointing at its replacement.
