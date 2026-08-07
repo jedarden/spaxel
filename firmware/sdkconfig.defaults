@@ -78,6 +78,17 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # LED identification blink
 CONFIG_SPAXEL_LED_GPIO=8
 
+# PSRAM support — 2MB external PSRAM on ESP32-S3
+# Critical for TLS handshake heap measurement (ADR-008 decision 5)
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_USE_MEMMAP=y
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_TYPE_AUTO=y
+CONFIG_SPIRAM_SIZE_AUTO=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_CACHE_WRITETHROUGH=y
+
 # Console routing — ESP32-S3 native USB-Serial/JTAG.
 #
 # ESP-IDF's default is UART0 (GPIO43/44), which requires a USB-UART bridge chip.
