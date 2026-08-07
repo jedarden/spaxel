@@ -102,3 +102,9 @@
 {"adapter":"claude-code-glm-4.7","bead":"bf-5kuen","event":"dispatch","model":"glm-4.7","strand":"auto","ts":"2026-08-07T17:23:43.872412875+00:00","worker":"alpha"}
 {"bead":"bf-3v39","event":"claim","strand":"explore","ts":"2026-08-07T17:28:10.351390047+00:00","worker":"bravo"}
 {"adapter":"codex-gpt-5.6-sol-xhigh","bead":"bf-3v39","event":"dispatch","model":"gpt-5.6-sol","strand":"explore","ts":"2026-08-07T17:28:10.412908294+00:00","worker":"bravo"}
+{"bead":"bf-5kuen","duration_ms":600227,"event":"timeout","exit_code":124,"outcome":"timeout","strand":"auto","ts":"2026-08-07T17:33:44.104966113+00:00","worker":"alpha"}
+{"bead":"bf-5kuen","event":"claim","strand":"auto","ts":"2026-08-07T17:33:44.180888240+00:00","worker":"alpha"}
+{"adapter":"claude-code-glm-4.7","bead":"bf-5kuen","event":"dispatch","model":"glm-4.7","strand":"auto","ts":"2026-08-07T17:33:44.187488573+00:00","worker":"alpha"}
+{"bead":"bf-3v39","event":"claim","strand":"explore","ts":"2026-08-07T17:35:52.622310707+00:00","worker":"alpha"}
+{"adapter":"codex-gpt-5.6-sol-xhigh","bead":"bf-3v39","event":"dispatch","model":"gpt-5.6-sol","strand":"explore","ts":"2026-08-07T17:35:52.688347299+00:00","worker":"alpha"}
+{"bead":"bf-3v39","duration_ms":209065,"event":"complete","exit_code":0,"outcome":"success","strand":"explore","ts":"2026-08-07T17:39:21.759662120+00:00","worker":"alpha"}
