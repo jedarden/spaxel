@@ -872,6 +872,15 @@ static void ota_task(void *arg) {
         return;
     }
 
+    // Add authentication headers for ADR-006
+    // Format MAC as uppercase colon-separated (e.g., 50:78:7D:1A:3D:C8)
+    char mac_str[18];
+    mac_to_str(g_state.mac, mac_str, sizeof(mac_str));
+
+    // Set headers: MAC and node token (may be empty for unprovisioned nodes in migration window)
+    esp_http_client_set_header(http, "X-Spaxel-MAC", mac_str);
+    esp_http_client_set_header(http, "X-Spaxel-Token", g_state.node_token);
+
     esp_err_t err = esp_http_client_open(http, 0);
     if (err != ESP_OK) {
         esp_http_client_cleanup(http);
