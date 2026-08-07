@@ -2649,6 +2649,8 @@ Import behavior:
 | `POST` | `/api/nodes/rebaseline-all` | — | `{"ok":true,"count":N}` |
 | `POST` | `/api/nodes/:mac/disable` | — | Sets role to IDLE |
 | `POST` | `/api/nodes/:mac/enable` | — | Restores prior role |
+| `POST` | `/api/nodes/:mac/enroll` | `{"secret":"<64-hex>"}` — browser-generated device secret | `{"ok":true,"state":"registered"}`. Operator-authenticated (behind the dashboard's forward-auth), **not** node-authenticated. See ADR-007 |
+| `POST` | `/api/nodes/:mac/enroll/activate` | — | `{"ok":true,"state":"active"}` — called once the device confirms it stored the secret |
 
 ### Firmware
 
@@ -4526,3 +4528,68 @@ This is the same failure shape already hit once this session: `SPAXEL_ADVERTISED
 - **Risk:** Getting the migration-window grace wrong in either direction — too strict strands freshly provisioned nodes, too loose leaves the route effectively open for a week after every mothership restart. Needs explicit test coverage for both edges.
 - **Risk:** The 1.6 MB download now happens over TLS from the node's perspective when the public origin is used, which costs heap during the handshake on a device already running WiFi, BLE, CSI and mbedTLS. Measured cost of linking the CA bundle was +65,968 bytes of flash (17% of the app partition still free); the runtime heap cost under concurrent load is not yet characterised.
 - **Follow-up:** Tracked as `bf-b61zo` (firmware headers) → `bf-5kuen` (server enforcement) → `bf-3doto` (ingress exemption + base URL), wired as a blocking chain so the ordering above cannot be executed out of sequence. `bf-4ol0z` (interim `nodeSelector` pinning) is independent and should be done now regardless.
+
+## ADR-007: 2026-08-07 — Identify nodes by a browser-generated per-device secret, enrolled at USB flashing time, proven by challenge–response
+
+### Context
+
+A node's identity today is `node_token = HMAC-SHA256(installSecret, mac)`, minted by `POST /api/provision`, written to NVS, and presented as a static bearer credential. Four separate weaknesses, three of which no amount of additional crypto fixes:
+
+1. **It is extractable at rest.** Demonstrated on hardware during the 2026-08-07 bench session with a single command — `esptool read-flash 0x9000 0x6000 nvs.bin` — which yielded the full 64-hex-character token in plaintext. `CONFIG_SECURE_FLASH_ENC_ENABLED` is not set, `CONFIG_SECURE_BOOT` is not set, and `CONFIG_SECURE_ROM_DL_MODE_ENABLED=y` leaves the ROM loader available to anyone with seconds of USB access.
+2. **The blast radius is the entire fleet.** One `installSecret` mints a valid token for *any* MAC. Recovering it — from a backup, a diagnostics bundle, the mothership's data directory — is equivalent to being able to impersonate every node that will ever be provisioned.
+3. **Identity is self-asserted.** The node claims a MAC and presents a token for it. The MAC is not secret: it is in the provisioning beacon, in mDNS, and on the wire.
+4. **Nothing binds the credential to the silicon.** Copying that NVS blob to a second ESP32-S3 makes it that node, indistinguishably.
+
+The hardware already has everything needed and none of it is switched on: `CONFIG_SOC_HMAC_SUPPORTED=y` (HMAC peripheral with eFuse-backed keys), `CONFIG_SOC_DIG_SIGN_SUPPORTED=y`, `CONFIG_SECURE_BOOT_V2_RSA_SUPPORTED=y`, and `CONFIG_ESP_TLS_USE_DS_PERIPHERAL=y` already set but never provisioned.
+
+The deployment topology constrains *when* a device identity can be established. The mothership runs on a server (k8s, reached at `spaxel.ardenone.com`) and has no USB access to anything. The only moment anyone holds both a trusted local channel to the chip and a path to the mothership is **USB flashing from the operator's browser**. That browser is therefore the enrolment agent, and enrolment must fit inside the existing Web Serial "Add Node" flow.
+
+That rules out the obvious host-side approach. The dashboard bundles **esptool-js**, whose eFuse support is read-only — the bundle carries `EFUSE_BASE`, `EFUSE_PURPOSE_KEY`, `EFUSE_BLOCK`, `MAC_EFUSE_REG` and friends for *reporting* secure-boot/flash-encryption state, and **zero** burn or write verbs. `espefuse.py`, which can burn, exists only in the host IDF toolchain, which a browser does not have. Whatever writes a key into eFuse must therefore be the firmware itself.
+
+### Decision
+
+1. **The browser generates the per-device secret, not the device.** 256 bits from `crypto.getRandomValues`. This is what makes the sequence fail-safe (see below); a device-generated key cannot be, because the device would have to commit the key to hardware before anyone else has a copy.
+2. **Enrolment order is: register with the mothership first, write to the device second.**
+   1. Browser flashes firmware (esptool-js, unchanged).
+   2. Browser generates the secret.
+   3. Browser `POST /api/nodes/:mac/enroll` over HTTPS — mothership stores it as `registered`.
+   4. Browser delivers the secret to the device over Web Serial.
+   5. Device stores it and confirms.
+   6. Browser `POST /api/nodes/:mac/enroll/activate`.
+   A failure at step 4 or 5 is retryable: the mothership holds a registered-but-inactive secret and nothing is lost. The device can never hold a secret the mothership does not know, because it never invents one.
+3. **Identity is proven by challenge–response, never by transmitting the secret.** The mothership sends a nonce on connect; the node returns `HMAC-SHA256(deviceSecret, nonce)`. This replaces the static bearer token on the WebSocket handshake and removes replay entirely — a value sniffed off the LAN is useless for the next connection.
+4. **Enrolment is operator-authenticated, not node-authenticated.** `POST /api/nodes/:mac/enroll` is a browser→mothership call and sits behind the dashboard's existing forward-auth (Google SSO). This is deliberately the inverse of `/firmware` (ADR-006), which must be node-authenticated. Neither needs a new mechanism.
+5. **Staged rollout: NVS first, eFuse second.**
+   - **Phase 1** — the per-device secret lives in NVS. Fully reversible. This alone removes the fleet-wide blast radius (weakness 2) and replay (a consequence of the static bearer), which are the two weaknesses that matter without physical access.
+   - **Phase 2** — the same secret moves into an eFuse key block with purpose `HMAC_UP`, written by the firmware via `esp_efuse_write_key()` and read-protected. The wire protocol does not change; only where the key lives and who can read it. This closes weaknesses 1 and 4.
+   - **Phase 3** — flash encryption and Secure Boot v2.
+6. **`SPAXEL_MIGRATION_WINDOW_HOURS` and the existing `node_token` remain during phase 1** so an unenrolled node is not locked out mid-migration. The old token is retired only once every node in the fleet is `active`.
+
+### Why the staging is not just caution
+
+Phase 2 is irreversible per device. eFuse burns cannot be undone, the ESP32-S3 has six key blocks, and every failed attempt consumes one. On this hardware that risk is not hypothetical: the `esptool` "Write timeout" wedge (`bf-4z6wh`) was hit twice during the 2026-08-07 session, and recovery required catching the chip inside its ~15 s boot window with a retry loop rather than the physical replug the earlier handoff prescribed. Committing an unproven enrolment protocol directly to eFuse, on a rig whose recovery path is already unreliable, risks bricking boards to fix a problem that phase 1 already largely solves. Phase 1 exercises the entire flow — browser generation, registration ordering, serial delivery, challenge–response — against reversible storage. Phase 2 then becomes a storage swap, not a redesign.
+
+### Prerequisite
+
+Phase 1 requires the browser to **send** bytes to the device over serial, which is device-side RX. That path does not work on USB-Serial/JTAG-only boards today (`bf-27ly`): with the provisioning window open, a deliberately malformed line drew no `{"ok":false,"error":"invalid_json"}` reply, proving the host's bytes never reach `usb_serial_jtag_read_bytes()`. Browser-based enrolment cannot be built on a channel that cannot receive, so `bf-27ly` moves from a known defect onto the critical path and is wired as a blocker.
+
+### Alternatives Considered
+
+- **Device generates its own key from the hardware TRNG and reports it once over serial.** Rejected on ordering. The device must either report before burning (and a failure after the report leaves the mothership holding a key the device never committed) or burn before reporting (and a failure after the burn leaves the device permanently unenrollable with an eFuse block spent). Browser-generation has neither failure mode, and `crypto.getRandomValues` is a perfectly good CSPRNG.
+- **Host-side burning with `espefuse.py`.** Rejected as incompatible with the stated topology: the mothership is remote and has no USB, and the browser cannot run `espefuse.py`. It would mean a separate CLI enrolment path that the product's own onboarding flow cannot use — acceptable for the bench, not for a browser-driven "Add Node".
+- **Signed, expiring URLs / bearer tokens with short TTL.** Rejected as addressing only replay, leaving self-assertion and extraction untouched, and requiring a clock the node has repeatedly not had.
+- **mTLS with per-node certificates via the DS peripheral.** Not rejected on merit — it is the strongest option and `CONFIG_ESP_TLS_USE_DS_PERIPHERAL` is already enabled — but deferred. It needs a CA, per-device key generation, certificate lifecycle and renewal, and the same eFuse provisioning problem underneath. Revisit after phase 2, when the enrolment plumbing exists.
+- **Do nothing; rely on WPA2 and physical security.** Rejected as an end state, but honestly the status quo. It is defensible for a single home LAN and indefensible the moment a node is off-LAN (which ADR-006 explicitly enables), sold, lost, or RMA'd while still holding a fleet-wide-valid credential.
+
+### Consequences
+
+- **Positive:** A compromised node yields one device's secret, not the ability to mint credentials for the whole fleet.
+- **Positive:** Challenge–response removes replay, which matters immediately because LAN nodes speak plain `ws://` by design (ADR-006 decision 6).
+- **Positive:** Enrolment reuses the operator's existing SSO session; no new authentication mechanism on either side.
+- **Positive (phase 2):** `HMAC_UP` means the key is never readable by software again — a stolen node cannot be cloned onto other hardware.
+- **Positive (incidental):** Because Web Serial's secure-context requirement is satisfied by any HTTPS origin, Chrome can drive enrolment against the remote dashboard directly. This removes the rationale for `nixos/bench/modules/mothership.nix` running a local mothership purely to obtain the `localhost` exception.
+- **Cost:** Three coordinated changes — mothership endpoints and challenge verification, firmware storage and HMAC response, dashboard generation and serial delivery — none of which can land usefully alone.
+- **Cost:** Blocked on `bf-27ly`, a firmware transport defect with no current workaround for the browser path.
+- **Limitation (phase 2):** `HMAC_UP` lets any code running on the device use the peripheral as a signing oracle. It proves *"this chip"*, not *"this chip running our firmware"*. Closing that requires Secure Boot v2, and the bootloader has only ~11 KB free — sizing must precede any promise.
+- **Risk:** Re-enrolling a device consumes another eFuse key block. The mothership must record which block index a device used, and the fleet needs a policy for a device that has exhausted them.
+- **Follow-up:** Phase 1 is `bf-32rye` (mothership), `bf-59b07` (firmware), `bf-43c2q` (dashboard) — all three required, none useful alone. Phase 2 is `bf-4np9s` (eFuse migration), phase 3 `bf-24qef` (flash encryption + Secure Boot sizing spike, go/no-go before implementation). `bf-27ly` is wired as a blocker on the firmware and dashboard beads, since neither can be built on a serial channel that cannot receive.
