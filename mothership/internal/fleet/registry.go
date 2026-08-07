@@ -41,6 +41,7 @@ type NodeRecord struct {
 	FirmwareVersion string    `json:"firmware_version"`
 	ChipModel       string    `json:"chip_model"`
 	HealthScore     float64   `json:"health_score"` // Latest health score from ambient confidence
+	FreeHeapBytes   int64     `json:"free_heap_bytes"`   // Current free heap from last health message
 }
 
 // RoomConfig stores room geometry.
@@ -416,7 +417,7 @@ func (r *Registry) GetNodePosition(mac string) (x, y, z float64, ok bool) {
 // GetAllNodes returns all node records ordered by first_seen_at.
 func (r *Registry) GetAllNodes() ([]NodeRecord, error) {
 	rows, err := r.db.Query(`
-		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, manufacturer, first_seen_at, last_seen_at, firmware_version, chip_model, health_score
+		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, manufacturer, first_seen_at, last_seen_at, firmware_version, chip_model, health_score, free_heap_bytes
 		FROM nodes ORDER BY first_seen_at ASC`)
 	if err != nil {
 		return nil, err
@@ -520,7 +521,7 @@ func scanNode(s scanner) (*NodeRecord, error) {
 		&n.MAC, &n.Name, &n.Role, &n.PreviousRole, &offlineNS,
 		&n.PosX, &n.PosY, &n.PosZ,
 		&virtual, &n.Manufacturer, &firstNS, &lastNS,
-		&n.FirmwareVersion, &n.ChipModel, &n.HealthScore,
+		&n.FirmwareVersion, &n.ChipModel, &n.HealthScore, &n.FreeHeapBytes,
 	)
 	if err != nil {
 		return nil, err

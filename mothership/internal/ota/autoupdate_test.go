@@ -673,6 +673,7 @@ func BenchmarkGetConfig(b *testing.B) {
 
 // mockOTAManager is a test implementation of OTA Manager that tracks SendOTAVersion calls.
 type mockOTAManager struct {
+	*Manager
 	mu                sync.RWMutex
 	sendOTAVersionCalls []sendOTAVersionCall
 }
@@ -682,8 +683,10 @@ type sendOTAVersionCall struct {
 	version string
 }
 
-func newMockOTAManager() *mockOTAManager {
+func newMockOTAManager(srv *Server) *mockOTAManager {
+	baseMgr := NewManager(srv, "http://localhost:8080")
 	return &mockOTAManager{
+		Manager:            baseMgr,
 		sendOTAVersionCalls: make([]sendOTAVersionCall, 0),
 	}
 }
@@ -719,14 +722,14 @@ func TestCanaryRollbackOnQualityDegradation(t *testing.T) {
 	// 1. Canary node is selected with known previous firmware version
 	// 2. Quality baseline is established
 	// 3. Quality degrades past config.QualityThreshold
-	// 4. Rollback OTA would be triggered with the correct previous version (not the degraded new version)
+	// 4. Rollback OTA is triggered with the correct previous version (not the degraded new version)
 
 	srv := &Server{}
 	tz := time.UTC
 
-	// Create a minimal OTA manager for the auto-update manager
-	mgr := NewManager(srv, "http://localhost:8080")
-	autoMgr := NewAutoUpdateManager(srv, mgr, tz)
+	// Use mock OTA manager to track SendOTAVersion calls
+	mgr := newMockOTAManager(srv)
+	autoMgr := NewAutoUpdateManager(srv, mgr.Manager, tz)
 
 	// Set up mock providers
 	settings := newMockSettingsProvider()
@@ -743,6 +746,27 @@ func TestCanaryRollbackOnQualityDegradation(t *testing.T) {
 
 	notifier := newMockEventNotifier()
 	autoMgr.SetEventNotifier(notifier)
+
+	// Add firmware metadata for both versions (previous and new)
+	// This simulates the firmware being available in the firmware store
+	srv.firmware = map[string]*FirmwareMeta{
+		"spaxel-0.1.350.bin": {
+			Filename:   "spaxel-0.1.350.bin",
+			Version:    "0.1.350",
+			SHA256:     "abc123",
+			SizeBytes:  1024,
+			UploadedAt: time.Now(),
+		},
+		"spaxel-0.1.358.bin": {
+			Filename:   "spaxel-0.1.358.bin",
+			Version:    "0.1.358",
+			SHA256:     "def456",
+			SizeBytes:  1024,
+			UploadedAt: time.Now(),
+			IsLatest:   true,
+		},
+	}
+	srv.latestFile = "spaxel-0.1.358.bin"
 
 	// Add a canary node with specific previous firmware version
 	canaryMAC := "AA:BB:CC:DD:EE:01"
@@ -761,6 +785,14 @@ func TestCanaryRollbackOnQualityDegradation(t *testing.T) {
 	// Simulate quality degradation: quality drops from 0.85 to 0.78 (7% degradation)
 	// This is a 7% drop, which exceeds the 5% threshold
 	qualityProvider.setQuality(0.78)
+
+	// Manually call evaluateCanary to trigger the rollback
+	firmware := &FirmwareMeta{
+		Filename: "spaxel-0.1.358.bin",
+		Version:  newVersion,
+		SHA256:   "def456",
+	}
+	autoMgr.evaluateCanary(context.Background(), firmware)
 
 	// Verify the quality degradation exceeds the threshold
 	config := autoMgr.GetConfig()
@@ -793,6 +825,32 @@ func TestCanaryRollbackOnQualityDegradation(t *testing.T) {
 	// Verify baseline quality is correctly set
 	if autoMgr.GetBaselineQuality() != 0.85 {
 		t.Errorf("expected baseline quality 0.85, got %f", autoMgr.GetBaselineQuality())
+	}
+
+	// *** KEY ASSERTION: Verify that SendOTAVersion was called with the previous version ***
+	calls := mgr.getSendOTAVersionCalls()
+	if len(calls) == 0 {
+		t.Fatalf("expected SendOTAVersion to be called for rollback, but no calls were recorded")
+	}
+
+	// Verify the rollback was for the correct canary node
+	if calls[0].mac != canaryMAC {
+		t.Errorf("expected rollback for MAC %s, got %s", canaryMAC, calls[0].mac)
+	}
+
+	// Verify the rollback was to the previous version, not the new degraded version
+	if calls[0].version != previousVersion {
+		t.Errorf("expected rollback to version %s, got %s", previousVersion, calls[0].version)
+	}
+
+	// Verify only one rollback call was made
+	if len(calls) != 1 {
+		t.Errorf("expected exactly 1 rollback call, got %d", len(calls))
+	}
+
+	// Verify state transitioned to rollback
+	if autoMgr.GetState() != StateFailed {
+		t.Errorf("expected state %s after failed rollback, got %s", StateFailed, autoMgr.GetState())
 	}
 
 	t.Logf("Rollback scenario verified: canary=%s, previousVersion=%s, newVersion=%s, qualityDelta=%.4f",

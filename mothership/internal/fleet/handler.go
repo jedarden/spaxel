@@ -143,6 +143,7 @@ type FleetNode struct {
 	PacketRate     float64 `json:"packet_rate"`
 	ConfiguredRate int     `json:"configured_rate"`
 	Temperature    float64 `json:"temperature"`
+	FreeHeapBytes  int64   `json:"free_heap_bytes"`
 	OTAInProgress  bool    `json:"ota_in_progress"`
 }
 
