@@ -217,3 +217,117 @@ one git working tree. Concrete damage:
 
 **One owner per physical rig.** If a second agent needs spaxel, give it
 mothership-side work only — that is safely parallelisable; the hardware is not.
+
+---
+
+# Addendum — 2026-08-06/07 bench session
+
+Rig was found cold: AP down, mothership down, ESP32 in download mode. Everything
+below was re-established and then verified on the real board
+(`50:78:7D:1A:3D:C8`).
+
+## Root cause of "boots fine, never connects" — FIXED
+
+`provision_listen_window()` wrote its `SPAXEL READY` beacon with
+`usb_serial_jtag_write_bytes(..., portMAX_DELAY)`. That blocks **forever** once
+the peripheral's TX ring fills, which happens whenever a USB host is enumerated
+but nothing is draining the port — i.e. any board plugged into a computer for
+power, and this rig any time nobody is capturing the console.
+
+The window therefore never exited and **`wifi_init()` was never reached**. With
+correct credentials in NVS the node booted, logged the window opening, then sat
+silent forever with zero association attempts at the AP.
+
+This is nasty because it *inverts* the usual debugging reflex: attaching a
+serial reader drains the port, unblocks the write, and the node connects — so
+every attempt to observe the fault makes it disappear, and it looks like a WiFi
+problem. It plausibly accounts for reconnection signatures 1 and 3 above and for
+the "only a physical replug recovers it" folklore.
+
+Fixed by bounding every provisioning-window write (`PROVISION_TX_TIMEOUT`,
+200 ms). After the fix the node associates, takes a DHCP lease and connects to
+the mothership within seconds of boot, with **no** reader attached.
+
+## Serial provisioning still cannot RECEIVE on USB-JTAG (bf-27ly)
+
+TX works, RX does not. Proven directly: with the window open, a deliberately
+invalid line drew **no** `{"ok":false,"error":"invalid_json"}` reply, which the
+firmware sends unconditionally for unparseable input. So the host's JSON never
+reaches `usb_serial_jtag_read_bytes()` at all — this is not a payload problem.
+
+`provision.c` installs the USB-JTAG driver but never calls
+`esp_vfs_usb_serial_jtag_use_driver()`, so the ROM/VFS console path and the
+driver ISR both drain the same RX FIFO. Adding that call **is not sufficient on
+its own** — it was tried this session and stalled the beacon loop after one
+iteration, so it was reverted. Needs proper work; do not just paste it in.
+
+**Workaround that does work:** build the NVS image on the host and flash it.
+
+```bash
+# CSV keys must match spaxel.h exactly (namespace "spaxel", schema_ver=1)
+python3 $IDF_PATH/components/nvs_flash/nvs_partition_generator/nvs_partition_gen.py \
+    generate nvs.csv nvs.bin 0x6000
+scripts/flash-esp32s3.sh "$BYID" 0x9000:nvs.bin
+```
+
+Read it back with `esptool read-flash 0x9000 0x6000` to confirm — a blank NVS is
+~38 non-zero bytes in 24 KB.
+
+## esptool: `hard-reset` is a no-op, `watchdog-reset` is the escape
+
+`scripts/flash-esp32s3.sh` ends every chunk with `--after no-reset`, so the chip
+is left **in download mode** and appears dead — silent console, no WiFi.
+`--after hard-reset` prints `Hard resetting via RTS pin...` and does nothing
+(no bridge wiring RTS/EN on this board). What actually works:
+
+```bash
+esptool --chip esp32s3 --port "$BYID" --before usb-reset --after watchdog-reset chip-id
+```
+
+`Hard resetting with a watchdog...` is the message you want; the USB device
+re-enumerates immediately after, which is the confirmation.
+
+## Always use the by-id symlink
+
+The ttyACM index **moves on every reset** (ACM0 -> ACM1 -> ACM0 ...). A flash
+aimed at a hardcoded `/dev/ttyACM0` fails with `FAIL ... after 6 tries` for no
+apparent reason. Use:
+
+```
+/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_50:78:7D:1A:3D:C8-if00
+```
+
+Also: a Chromium Web Serial session from a previous agent held the port for
+3 days (`Device or resource busy`). No `lsof`/`fuser` on bench — find holders by
+scanning `/proc/*/fd`.
+
+## Bench endpoint: the pinned image no longer exists
+
+`docker-spaxel-mothership.service` is in a permanent restart loop:
+`ronaldraygun/spaxel:0.1.358` returns `pull access denied ... repository does not
+exist`. The Docker Hub API reports the repo absent and the `ronaldraygun`
+namespace exposes only `devpod-base`, so the image is gone, not just private.
+Until that is resolved, run a locally built binary (`CGO_ENABLED=0 go build`),
+which is what the verification below used.
+
+Two env vars matter on this rig: `SPAXEL_ADVERTISED_BASE_URL=http://192.168.50.1:8080`
+(nodes are handed this URL for OTA) and `SPAXEL_NTP_LOCAL_ENABLED=true`. The
+local SNTP responder binds UDP 123, so the binary needs
+`setcap cap_net_bind_service=+ep` — otherwise it logs
+`Local NTP server disabled` and nodes have no wall clock (the AP has no
+internet). Note file capabilities are lost whenever the binary is replaced.
+
+## OTA verified 2/2 on current firmware
+
+Flash and update both work end to end:
+
+```
+0.2.15 -> 0.2.16   downloading -> verifying -> rebooting -> "verified new firmware"  (~22 s)
+0.2.16 -> 0.2.17   same, clean                                                        (~22 s)
+```
+
+The **second** cycle is the meaningful one: it is the case that failed with
+`ESP_ERR_OTA_PARTITION_CONFLICT` under the old single-slot layout, so a passing
+second OTA is a functional proof that A/B alternation is intact. Reported
+versions matched the served versions (no spurious rollback verdict), and the
+only disconnects in the mothership log were the two OTA reboots — no flapping.
