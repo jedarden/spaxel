@@ -91,3 +91,14 @@
 {"bead":"bf-5kuen","duration_ms":61471,"event":"complete","exit_code":0,"outcome":"success","strand":"auto","ts":"2026-08-07T17:02:41.069822872+00:00","worker":"alpha"}
 {"bead":"bf-5kuen","event":"claim","strand":"auto","ts":"2026-08-07T17:02:41.108999240+00:00","worker":"alpha"}
 {"adapter":"claude-code-glm-4.7","bead":"bf-5kuen","event":"dispatch","model":"glm-4.7","strand":"auto","ts":"2026-08-07T17:02:41.113802071+00:00","worker":"alpha"}
+{"bead":"bf-5kuen","duration_ms":600493,"event":"timeout","exit_code":124,"outcome":"timeout","strand":"auto","ts":"2026-08-07T17:12:41.612872576+00:00","worker":"alpha"}
+{"bead":"bf-5kuen","event":"claim","strand":"auto","ts":"2026-08-07T17:12:41.675045377+00:00","worker":"alpha"}
+{"adapter":"claude-code-glm-4.7","bead":"bf-5kuen","event":"dispatch","model":"glm-4.7","strand":"auto","ts":"2026-08-07T17:12:41.679049523+00:00","worker":"alpha"}
+{"bead":"bf-5kuen","duration_ms":61827,"event":"complete","exit_code":0,"outcome":"success","strand":"auto","ts":"2026-08-07T17:13:43.512871346+00:00","worker":"alpha"}
+{"bead":"bf-5kuen","event":"claim","strand":"auto","ts":"2026-08-07T17:13:43.553519565+00:00","worker":"alpha"}
+{"adapter":"claude-code-glm-4.7","bead":"bf-5kuen","event":"dispatch","model":"glm-4.7","strand":"auto","ts":"2026-08-07T17:13:43.558271509+00:00","worker":"alpha"}
+{"bead":"bf-5kuen","duration_ms":600263,"event":"timeout","exit_code":124,"outcome":"timeout","strand":"auto","ts":"2026-08-07T17:23:43.828401441+00:00","worker":"alpha"}
+{"bead":"bf-5kuen","event":"claim","strand":"auto","ts":"2026-08-07T17:23:43.867660254+00:00","worker":"alpha"}
+{"adapter":"claude-code-glm-4.7","bead":"bf-5kuen","event":"dispatch","model":"glm-4.7","strand":"auto","ts":"2026-08-07T17:23:43.872412875+00:00","worker":"alpha"}
+{"bead":"bf-3v39","event":"claim","strand":"explore","ts":"2026-08-07T17:28:10.351390047+00:00","worker":"bravo"}
+{"adapter":"codex-gpt-5.6-sol-xhigh","bead":"bf-3v39","event":"dispatch","model":"gpt-5.6-sol","strand":"explore","ts":"2026-08-07T17:28:10.412908294+00:00","worker":"bravo"}
