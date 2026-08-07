@@ -5,6 +5,7 @@
 #include "nvs.h"
 #include "cJSON.h"
 #include "driver/usb_serial_jtag.h"
+#include "esp_vfs_dev.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
@@ -24,6 +25,18 @@ static const char *TAG = "provision";
 // fine, never connects", indistinguishable from a WiFi fault. Bounding the write
 // costs at most a dropped beacon line and lets boot proceed.
 #define PROVISION_TX_TIMEOUT        pdMS_TO_TICKS(200)
+
+// Point stdio back at the ROM/polling path BEFORE destroying the driver.
+// Uninstalling while the VFS console still refers to the driver leaves esp_log
+// writing into a torn-down driver, so the board goes permanently silent the
+// moment the provisioning window closes — every line from wifi_init() onward
+// is lost. That is the "booted into the correct slot, then no console output"
+// signature in docs/notes/esp32-ota-and-reconnection-handoff.md, and it is why
+// a WiFi/TLS fault on this board can only be diagnosed by packet capture.
+static void provision_release_console(void) {
+    esp_vfs_usb_serial_jtag_use_nonblocking();
+    usb_serial_jtag_driver_uninstall();
+}
 
 void provision_listen_window(void) {
     // Same install pattern ESP-IDF's own esp_console_repl.c uses to combine
@@ -105,7 +118,7 @@ void provision_listen_window(void) {
                 snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
                 usb_serial_jtag_write_bytes(resp, strlen(resp), PROVISION_TX_TIMEOUT);
                 ESP_LOGI(TAG, "Provisioning complete via serial");
-                usb_serial_jtag_driver_uninstall();
+                provision_release_console();
                 return;
             } else {
                 const char *err_resp = "{\"ok\":false,\"error\":\"nvs_write_failed\"}\n";
@@ -120,7 +133,7 @@ void provision_listen_window(void) {
     }
 
     ESP_LOGI(TAG, "Provisioning window closed (no provisioning received)");
-    usb_serial_jtag_driver_uninstall();
+    provision_release_console();
 }
 
 esp_err_t provision_write_nvs(cJSON *prov) {
