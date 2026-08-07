@@ -4740,6 +4740,18 @@ func main() {
 		log.Printf("[INFO] Migration window open until %s (%d h)", deadline.Format(time.RFC3339), cfg.MigrationWindowHours)
 	}
 
+	// ADR-006: Authenticate firmware downloads with the node token.
+	// The OTA server uses the same token validator and migration window as ingestion.
+	otaSrv.SetTokenValidator(provSrv.ValidateToken)
+	if cfg.MigrationWindowHours > 0 {
+		// Use the same deadline that was set for ingestSrv
+		deadline := time.Now().Add(time.Duration(cfg.MigrationWindowHours) * time.Hour)
+		otaSrv.SetMigrationDeadline(deadline)
+		log.Printf("[INFO] OTA firmware downloads authenticated (migration window open until %s)", deadline.Format(time.RFC3339))
+	} else {
+		log.Printf("[INFO] OTA firmware downloads authenticated (strict mode, no migration window)")
+	}
+
 	// Firmware manifest for esp-web-tools (onboarding wizard flashing)
 	r.Get("/api/firmware/manifest", func(w http.ResponseWriter, r *http.Request) {
 		latest := otaSrv.GetLatest()
