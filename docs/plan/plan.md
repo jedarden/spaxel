@@ -4655,3 +4655,54 @@ Hardware and resource facts, measured on this build rather than assumed:
 - **Risk / open question:** The go/no-go in decision 5 is real. If measured heap will not carry mTLS even with PSRAM enabled, the fallback is ADR-007's symmetric scheme, and this ADR is superseded in turn rather than forced through. Recording that now so a bad number is allowed to change the decision instead of being explained away.
 - **Neutral:** `CONFIG_SPIRAM` has been off since the project began. Enabling it is config-only, but it changes memory behaviour globally (allocator placement, DMA constraints) and should be validated on its own, not bundled into the identity work.
 - **Follow-up:** `bf-3lrou` (resource spike — gates all three of the below), then `bf-14cxd` (mothership CA + CSR signing), `bf-273pc` (firmware keygen + CSR + certificate), `bf-5a6t6` (dashboard CSR relay). `bf-27ly` remains a blocker on the firmware and dashboard work. `bf-4np9s` is repurposed from eFuse-as-identity to eFuse-as-key-wrapping. The superseded ADR-007 beads (`bf-32rye`, `bf-59b07`, `bf-43c2q`) were closed rather than edited, each pointing at its replacement.
+
+## ADR-009: 2026-08-07 — Converge node firmware with the mothership automatically, but only once a bad build can be reverted
+
+### Context
+
+Mothership and node firmware are built from one commit by one Dockerfile — stage 1 compiles the ESP32-S3 image, stage 2 the Go binary, and `COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/spaxel-firmware.bin` bakes the firmware into the runtime image. The mothership seeds that file into its firmware store on first run. The intent has always been that deploying mothership version X converges the fleet onto firmware X; the two are versioned in lockstep precisely so they cannot drift.
+
+In practice they drift immediately, and the 2026-08-07 session demonstrated every step of the failure. The bench node ran 0.2.18 against a 0.1.358 mothership — a combination that by design never ships — and presented as a working fleet with `Online 0`, `packet rate 0/20 Hz` and `temperature 0°C` while CSI streamed to disk at ~24 kB/s. Later the same day production walked 0.2.19 → 0.2.22 while the node stayed at 0.2.19.
+
+The machinery to prevent this already exists and is wired up. `AutoUpdateManager` implements canary deployment, quiet-window scheduling and a rollback state machine (`idle → checking → waiting_window → canary_deploy → canary_monitor → fleet_deploy | rollback → complete`), and `main.go` already connects it: `otaSrv.SetUploadCallback(autoUpdateMgr.OnFirmwareUploaded)`. It is gated behind `auto_update_enabled`, which defaults to `false`. Simply flipping that flag today would be actively harmful, for three separate reasons.
+
+**The seeded firmware is not a usable OTA payload.** Observed live on production:
+
+```json
+{"filename":"spaxel-firmware.bin","version":"spaxel-firmware","is_latest":true}
+```
+
+The Dockerfile seeds the *merged full-flash* image under a version-less filename, so the store derives the version from the filename and records the literal string `spaxel-firmware`, flagged latest. Auto-update would attempt to converge the fleet onto a non-semver "version" whose payload leads with a bootloader rather than an app image (`bf-1j1ws`).
+
+**Canary rollback is a stub.** `bf-5fr9b` records that the canary is never actually reverted. The entire safety argument for automatic fleet updates is "deploy to one node, watch it, revert if it degrades"; without a working revert, a bad build propagates fleet-wide with no path back except physical USB access — on hardware whose serial recovery is already unreliable (`bf-4z6wh`).
+
+**Every commit produces a new version, including documentation.** Each push to the repo fires the argo-events sensor, which runs `spaxel-build`, which auto-bumps `VERSION`, builds an image and rewrites the deployment pin. Writing ADR-007 and ADR-008 — pure `plan.md` edits touching no code — produced 0.2.20, 0.2.21 and 0.2.22 and redeployed production three times. With auto-update enabled, those documentation commits would have OTA-flashed physical hardware three times for zero functional change. Because a node does not re-establish its WebSocket after a mothership restart (`bf-3c282`), each of those rolls also knocked the node offline until it was manually rebooted.
+
+### Decision
+
+1. **Automatic convergence is the target state**, exactly as the lockstep build already implies: a new build updates the receiver and the fleet together, with no manual OTA step.
+2. **It is enabled last, behind three prerequisites**, wired as blocking dependencies so the order cannot be skipped:
+   1. The image seeds a **versioned, app-only** firmware artifact (`bf-1j1ws`).
+   2. Only substantive changes bump `VERSION` and trigger a build.
+   3. Canary rollback actually reverts (`bf-5fr9b`).
+3. **Documentation and non-functional commits must not produce a release.** The trigger gains a path filter. This is a correctness requirement once auto-update is on, not tidiness: without it, the fleet re-flashes on every doc edit.
+4. **Updates wait for the existing quiet window** (`quiet_window_start`/`quiet_window_end`, defaulting 02:00–05:00) rather than firing on deploy. This is a presence-sensing system; a fleet-wide reboot at 14:00 blinds the house during the hours it is most used, and an OTA cycle measured on hardware takes ~22 s per node plus reconnect. The canary may deploy immediately — that is one node, deliberately — but fleet rollout holds for the window.
+5. **The canary's verdict is trusted, and its rollback is the release valve.** `CanaryDurationMin` (10) and `QualityThreshold` (0.05) already exist; what is missing is the revert itself.
+6. **Version drift becomes an alertable condition.** Once convergence is automatic, a node whose firmware differs from the mothership's for longer than one quiet window is a fault, not a state to discover by eye. The fleet page already renders firmware version per node; it should say so plainly.
+
+### Alternatives Considered
+
+- **Enable `auto_update_enabled` now and fix the rest afterwards.** Rejected. It converts three known, individually-survivable defects into one compound failure mode: a doc commit triggers a build, the malformed seed is offered to the fleet, and nothing can roll it back. The current manual process is slower but cannot brick a fleet unattended.
+- **Push firmware on deploy, ignoring the quiet window.** Rejected for a sensing product, per decision 4. Kept available as a manual override — `POST /api/nodes/{mac}/ota` with an explicit version already exists and was used repeatedly during the bench session.
+- **Drop auto-update; require a human to click "Update All" after each deploy.** Rejected as the status quo that produced the drift being fixed. It also does not scale past the single node the fleet currently has, and the button it relies on serves whatever the store marks `is_latest` — which is exactly the malformed seed today.
+- **Stop baking firmware into the mothership image and distribute it separately** (the direction of ADR-001). Deferred, not rejected. It would decouple the two versions rather than converge them, which is the opposite of what is wanted here; if the firmware ever becomes a separately versioned CI artifact, this ADR's convergence rule must move with it.
+
+### Consequences
+
+- **Positive:** Mothership and firmware versions stay matched by construction, removing an entire class of confusing behaviour — the 0.1.358-against-0.2.18 session produced telemetry that read as a broken fleet while the sensing path was working perfectly.
+- **Positive:** Fixing the trigger stops production being redeployed by documentation commits, which independently resolves the node-offline churn caused by `bf-3c282` on every roll.
+- **Positive:** Version numbers regain meaning as change signals; 0.2.20 through 0.2.22 currently contain no functional change at all.
+- **Cost:** Three prerequisite fixes before any benefit is visible, one of which (`bf-5fr9b`) is real state-machine work rather than configuration.
+- **Risk:** Automatic fleet updates concentrate blast radius by design. The canary plus a working rollback is the entire mitigation, which is why decision 2 refuses to enable before `bf-5fr9b` lands.
+- **Risk:** The quiet window means a node can sit on older firmware for up to a day. Acceptable while versions are compatible; it becomes a problem if a release is ever protocol-breaking, so protocol changes must remain backward-compatible for at least one release.
+- **Follow-up:** `bf-1j1ws` (versioned app-only seed artifact), `bf-4jgpd` (trigger path filter) and `bf-5fr9b` (canary rollback actually reverts) are all wired as blockers on `bf-1tcxc` (enable auto-update + drift alerting), so the enable step cannot land before the safety net exists.
