@@ -2657,7 +2657,7 @@ Import behavior:
 | `GET` | `/api/firmware` | — | `[{filename, version, sha256, size_bytes, uploaded_at}]` |
 | `POST` | `/api/firmware` | Multipart form: `file=<binary>`, `version=<string>` | `{"ok":true,"sha256":"..."}` |
 | `DELETE` | `/api/firmware/:filename` | — | `{"ok":true}` |
-| `GET` | `/firmware/:filename` | — | Raw binary (served to ESP32 during OTA; no auth required — URL contains SHA256 for integrity) |
+| `GET` | `/firmware/:filename` | Headers: `X-Spaxel-MAC`, `X-Spaxel-Token` | Raw binary (served to ESP32 during OTA). `404` if the token is absent or does not validate — see ADR-006 |
 
 ### Zones, Portals, Trigger Volumes
 
@@ -4473,3 +4473,56 @@ The mothership already has exactly the infrastructure this belongs on: a generic
 - **Cost:** First-boot-only env var seeding is an easy footgun to get wrong (must not silently re-apply on every boot, must not clobber a since-changed DB value) — needs explicit test coverage for "env var set, DB already has a different value" behaving as a no-op.
 - **Risk:** The WiFi password now lives in the same SQLite DB as `install_secret` and node tokens (`SPAXEL_DATA_DIR`) rather than in a Kubernetes manifest — consistent with this app's existing trust boundary for that DB (it already holds comparably sensitive material), not a new category of exposure, but worth confirming the settings table doesn't get swept into a less-guarded export/backup path (e.g. diagnostics bundles) without redaction.
 - **Follow-up:** Tracked as `bf-5lh3j`.
+
+## ADR-006: 2026-08-07 — Authenticate firmware downloads with the existing node token, so `/firmware` can be exposed beyond the LAN
+
+### Context
+
+`GET /firmware/:filename` has no authentication of any kind. `HandleServe` (`internal/ota/server.go`) checks that the filename ends in `.bin` and is a known image, then streams the binary to anyone who asks. The *REST API Specification > Firmware* table said so explicitly and justified it — "no auth required — URL contains SHA256 for integrity". That reasoning conflates two different properties: the SHA-256 tells a node whether the bytes it received are the bytes the mothership meant to send, which is **integrity**. It says nothing about **who is allowed to ask**, and a hash published in the same response it is supposed to protect is not a credential.
+
+This went unnoticed while every deployment was LAN-only. It became load-bearing on 2026-08-07, connecting the first real ESP32-S3 to the production mothership. `spaxel.ardenone.com` is published through Cloudflare with the `ardenone-com-traefik-auth` forward-auth middleware; the IngressRoute exempts exactly `/ws/node`, `/healthz`, and `/api/provision`. `/firmware/*` is therefore behind Google SSO — verified directly: `GET https://spaxel.ardenone.com/firmware/spaxel-firmware-0.2.19.bin` returns `307` to `accounts.google.com`, while `/healthz` returns `200`. A node cannot complete an OAuth flow, so OTA over the public origin is impossible.
+
+The workaround shipped that day was to set `SPAXEL_ADVERTISED_BASE_URL` to the LAN address of the node the pod happens to run on (`http://10.20.23.203:8080`, `k3s-agent-minisforum`, reachable because the Deployment uses `hostNetwork: true`). That works and is what nodes on the local network should use, but it hardcodes a node IP that nothing pins — the Deployment's own `hostNetwork` comment already carries the same caveat. Exposing the public origin instead is the durable fix, and it cannot be done safely while the path is unauthenticated: exempting `/firmware` at the ingress today would publish every firmware image to the open internet.
+
+The mechanism to fix this already exists and is already provisioned onto every node. `provisioning.ValidateToken(mac, token)` compares against `HMAC-SHA256(installSecret, mac)` in constant time (`crypto/subtle`), the per-node token is minted by `POST /api/provision` and written to NVS as `node_token`, and the ingestion path already accepts it as the `X-Spaxel-Token` header on the WebSocket upgrade (`internal/ingestion/server.go`, bridged into `hello.Token`). Only the firmware-download route was never wired to it.
+
+### Decision
+
+1. **`HandleServe` authenticates with the existing node token.** It reads `X-Spaxel-Token` and validates it via the same `provisioning.ValidateToken` the ingestion server uses. No new secret, no new derivation, no new storage — this is wiring an existing credential to a route that was missed, not introducing a scheme.
+2. **The request must carry the MAC as `X-Spaxel-MAC`.** `ValidateToken` is `(mac, token)` because the token is derived per-MAC. The WebSocket path recovers the MAC from the `hello` body; a plain HTTP GET has no equivalent, so the node states it explicitly. This also means a leaked token is useful only for the MAC it was minted for.
+3. **An unauthenticated or invalid request gets `404`, not `401`.** The set of firmware versions a deployment holds is itself information; a `401` confirms a filename exists before rejecting it, a `404` does not distinguish "no such image" from "not for you".
+4. **Nodes inside the migration window are admitted**, mirroring `SPAXEL_MIGRATION_WINDOW_HOURS` handling on the ingestion path. A node that has just been provisioned, or one recovering against a mothership whose `install_secret` was regenerated, must still be able to take an update — otherwise the first thing a fresh deployment does is lock its own fleet out of OTA.
+5. **Only once 1–4 have shipped and every node is running firmware that sends the headers** does the ingress exempt `PathPrefix('/firmware')` and `SPAXEL_ADVERTISED_BASE_URL` move to `https://spaxel.ardenone.com`. Until then the LAN URL stays.
+6. **LAN deployments keep using the LAN base URL.** Nothing about this forces traffic through Cloudflare; routing a 1.6 MB image out to the edge and back for two devices on the same switch is worse in every respect. The public origin is for nodes that are genuinely off-LAN.
+
+### The ordering in decision 5 is not a preference — it is a one-way door
+
+Enforcing authentication before the fleet can present a token permanently strands every deployed node: a node that cannot download firmware cannot be given firmware that knows how to authenticate. The only recovery is physical reflashing over USB, which on this hardware also means contending with the `esptool` "Write timeout" wedge (`bf-4z6wh`). The required sequence is therefore:
+
+1. Ship firmware that sends `X-Spaxel-MAC` + `X-Spaxel-Token` on the OTA download. Backward compatible — the current server ignores unknown headers.
+2. OTA **every** node onto that build, over the still-unauthenticated path, and confirm it.
+3. Only then enforce validation in `HandleServe`.
+4. Only then exempt the path at the ingress and switch the advertised base URL.
+
+Steps 3 and 4 must not be merged into the same change as 1, and must not land before 2 is verified for every node in the fleet. With a single node this is a few minutes' work; the discipline matters because it stops being reversible the moment there is a fleet.
+
+This is the same failure shape already hit once this session: `SPAXEL_ADVERTISED_BASE_URL` was briefly set to `https://spaxel.ardenone.com` while the only node was running 0.2.18, which predates `wss://` support — a node cannot download the TLS-capable build over a link that already requires TLS. Caught before it stranded anything, but it is the identical trap one layer down.
+
+### Alternatives Considered
+
+- **Keep `/firmware` unauthenticated and solve only the IP fragility, by pinning the pod with a `nodeSelector`.** Not rejected — this is the correct *interim* step and is tracked separately. It makes the LAN URL durable with no security or reachability trade-off, and is strictly less work. It simply does not enable off-LAN nodes, and leaves an unauthenticated route that would become an internet-facing hole the moment anyone exempts it at the ingress for an unrelated reason. Do both: pin now, authenticate before exposing.
+- **Signed, expiring URLs (the mothership mints `/firmware/x.bin?exp=…&sig=…` and hands it to the node in the `ota` message).** Genuinely attractive: it needs no new request headers, and the node already receives the URL from the mothership rather than constructing it. Rejected for now because it introduces a second credential scheme alongside the node token that already exists and is already deployed, and because URL-borne credentials leak more readily — into proxy logs, into the `esp_http_client` error paths, and into any diagnostics bundle that captures `s_ota_url`, which is a fixed 256-byte buffer in `websocket.c` that already gets logged verbatim on OTA start. Worth revisiting if a future case needs to authorise a download without the requester holding a node token.
+- **mTLS with per-node client certificates.** Rejected as disproportionate. It would mean a certificate authority, per-node key generation and rotation, and storage for both in NVS, to protect a route that serves a firmware image which is already reproducible from a public source tree. The threat is casual/automated internet access, not a targeted adversary with the network position to matter here.
+- **IP allowlisting at the ingress.** Rejected: nodes are DHCP clients on residential networks, and the whole point of exposing the public origin is to serve nodes whose address is not known in advance.
+- **Leave OTA LAN-only forever and never exempt the path.** Reasonable today, and it is the status quo this ADR preserves until the sequence completes. Rejected as an end state because it makes "a node not on the mothership's LAN" permanently unsupported, which contradicts the deployment model the ingress and public hostname already exist to serve.
+
+### Consequences
+
+- **Positive:** Closes a route that serves binaries to anyone who can reach it, using a credential the fleet already carries. No new secret to distribute, rotate, or store.
+- **Positive:** Unblocks `SPAXEL_ADVERTISED_BASE_URL` pointing at the public origin, which removes the hardcoded `10.20.23.203` and its dependence on the pod never being rescheduled.
+- **Positive:** Token is per-MAC, so a token recovered from one device does not unlock downloads on behalf of another.
+- **Cost:** A firmware change on the OTA path, which is the one path where a bug is hardest to recover from — the headers must be added and rolled out to the whole fleet before enforcement, per the sequence above.
+- **Cost:** `HandleServe` gains a dependency on the provisioning server's validator, mirroring the wiring `main.go` already does for the ingestion server (`ingestSrv.SetTokenValidator(provSrv.ValidateToken)`).
+- **Risk:** Getting the migration-window grace wrong in either direction — too strict strands freshly provisioned nodes, too loose leaves the route effectively open for a week after every mothership restart. Needs explicit test coverage for both edges.
+- **Risk:** The 1.6 MB download now happens over TLS from the node's perspective when the public origin is used, which costs heap during the handshake on a device already running WiFi, BLE, CSI and mbedTLS. Measured cost of linking the CA bundle was +65,968 bytes of flash (17% of the app partition still free); the runtime heap cost under concurrent load is not yet characterised.
+- **Follow-up:** Tracked as `bf-b61zo` (firmware headers) → `bf-5kuen` (server enforcement) → `bf-3doto` (ingress exemption + base URL), wired as a blocking chain so the ordering above cannot be executed out of sequence. `bf-4ol0z` (interim `nodeSelector` pinning) is independent and should be done now regardless.
