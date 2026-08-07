@@ -15,6 +15,16 @@ static const char *TAG = "provision";
 #define PROVISION_WINDOW_MS_REPROV   15000  // 15 s for already-provisioned boards
 #define MAX_LINE_LEN                768
 
+// Bound on every provisioning-window write. usb_serial_jtag_write_bytes() with
+// portMAX_DELAY blocks forever once the peripheral's TX ring fills, and it fills
+// whenever a USB host is enumerated but no process is draining the port — the
+// normal state of a board plugged into a computer for power, and of this bench
+// rig any time nobody is capturing the console. The window then never exits, so
+// wifi_init() is never reached and the node never joins: it presents as "boots
+// fine, never connects", indistinguishable from a WiFi fault. Bounding the write
+// costs at most a dropped beacon line and lets boot proceed.
+#define PROVISION_TX_TIMEOUT        pdMS_TO_TICKS(200)
+
 void provision_listen_window(void) {
     // Same install pattern ESP-IDF's own esp_console_repl.c uses to combine
     // a USB-Serial-JTAG console (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG, already
@@ -38,7 +48,7 @@ void provision_listen_window(void) {
     // the window — not just at the exact moment of first boot.
     char ready_msg[64];
     snprintf(ready_msg, sizeof(ready_msg), "SPAXEL READY %s\n", mac_str);
-    usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), portMAX_DELAY);
+    usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
 
     ESP_LOGI(TAG, "Provisioning window open for %u ms (MAC: %s)", (unsigned)window_ms, mac_str);
 
@@ -50,7 +60,7 @@ void provision_listen_window(void) {
     while (xTaskGetTickCount() < deadline) {
         // Re-broadcast READY every 1 s so the host can connect at any time
         if ((xTaskGetTickCount() - last_ready) >= pdMS_TO_TICKS(1000)) {
-            usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), portMAX_DELAY);
+            usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
             last_ready = xTaskGetTickCount();
         }
 
@@ -75,7 +85,7 @@ void provision_listen_window(void) {
             cJSON *root = cJSON_Parse(line);
             if (!root) {
                 const char *err_resp = "{\"ok\":false,\"error\":\"invalid_json\"}\n";
-                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), portMAX_DELAY);
+                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
                 continue;
             }
 
@@ -83,7 +93,7 @@ void provision_listen_window(void) {
             if (!prov) {
                 cJSON_Delete(root);
                 const char *err_resp = "{\"ok\":false,\"error\":\"missing_provision_key\"}\n";
-                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), portMAX_DELAY);
+                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
                 continue;
             }
 
@@ -93,13 +103,13 @@ void provision_listen_window(void) {
             if (err == ESP_OK) {
                 char resp[80];
                 snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
-                usb_serial_jtag_write_bytes(resp, strlen(resp), portMAX_DELAY);
+                usb_serial_jtag_write_bytes(resp, strlen(resp), PROVISION_TX_TIMEOUT);
                 ESP_LOGI(TAG, "Provisioning complete via serial");
                 usb_serial_jtag_driver_uninstall();
                 return;
             } else {
                 const char *err_resp = "{\"ok\":false,\"error\":\"nvs_write_failed\"}\n";
-                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), portMAX_DELAY);
+                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
             }
         } else if (line_pos < MAX_LINE_LEN - 1) {
             line[line_pos++] = (char)ch;
