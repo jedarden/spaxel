@@ -13,6 +13,7 @@
 #include "driver/temperature_sensor.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
+#include "esp_crt_bundle.h"
 #include "mbedtls/sha256.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -196,9 +197,18 @@ bool websocket_connect(const char *host, uint16_t port) {
 
     xSemaphoreTakeRecursive(s_ws_mutex, portMAX_DELAY);
 
-    // Build WebSocket URI
+    // Build WebSocket URI.
+    //
+    // Port 443 selects TLS, matching the provisioning convention in bf-2po1
+    // ("spaxel.ardenone.com, port 443, WSS"). A plaintext ws:// cannot reach a
+    // mothership published through Cloudflare, which serves HTTPS only — and a
+    // node pushes CSI plus its bearer token, so plaintext over the public
+    // internet is not an acceptable alternative. Local/bench deployments keep
+    // using ws:// on 8080 unchanged.
+    const bool use_tls = (port == 443);
     char uri[128];
-    snprintf(uri, sizeof(uri), "ws://%s:%d%s", host, port, SPAXEL_WS_PATH);
+    snprintf(uri, sizeof(uri), "%s://%s:%d%s",
+             use_tls ? "wss" : "ws", host, port, SPAXEL_WS_PATH);
 
     ESP_LOGI(TAG, "Connecting to %s", uri);
 
@@ -221,6 +231,12 @@ bool websocket_connect(const char *host, uint16_t port) {
         .ping_interval_sec = 30,
         .task_stack = 8192,
         .buffer_size = 2048,
+        // Only referenced when use_tls; the CA bundle is already compiled in
+        // (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE, full 200-cert set) but the linker
+        // drops it until esp_crt_bundle_attach() is actually referenced, so
+        // this is what makes TLS cost anything at all (~1.4 KB — mbedTLS is
+        // already linked for the OTA SHA-256 path).
+        .crt_bundle_attach = use_tls ? esp_crt_bundle_attach : NULL,
     };
 
     // Add auth header if we have a token
@@ -841,6 +857,12 @@ static void ota_task(void *arg) {
         .url = s_ota_url,
         .timeout_ms = 30000,
         .buffer_size = 4096,
+        // The OTA URL comes from the mothership's SPAXEL_ADVERTISED_BASE_URL,
+        // which is https:// for any internet-facing deployment. Without the
+        // bundle attached esp_http_client cannot validate the chain and the
+        // download fails before a single byte is written to the OTA slot.
+        // Harmless for a plain http:// bench URL — it is simply unused.
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t http = esp_http_client_init(&http_cfg);
