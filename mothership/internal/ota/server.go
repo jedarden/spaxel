@@ -30,13 +30,19 @@ type FirmwareMeta struct {
 // FirmwareUploadCallback is called when new firmware is uploaded.
 type FirmwareUploadCallback func(filename string)
 
+// TokenValidator is a function that validates a node token.
+// Takes (mac, token) and returns true if valid.
+type TokenValidator func(mac, token string) bool
+
 // Server serves firmware binaries and tracks available versions.
 type Server struct {
-	mu             sync.RWMutex
-	firmwareDir    string
-	firmware       map[string]*FirmwareMeta
-	latestFile     string
-	uploadCallback FirmwareUploadCallback
+	mu                sync.RWMutex
+	firmwareDir       string
+	firmware          map[string]*FirmwareMeta
+	latestFile        string
+	uploadCallback    FirmwareUploadCallback
+	tokenValidator    TokenValidator
+	migrationDeadline time.Time // Zero value means strict mode (no migration window)
 }
 
 // NewServer creates a firmware server backed by firmwareDir.
@@ -51,6 +57,23 @@ func NewServer(firmwareDir string) *Server {
 	}
 	s.Scan()
 	return s
+}
+
+// SetTokenValidator sets the function used to validate node tokens in firmware downloads.
+// If set, requests must include valid X-Spaxel-MAC and X-Spaxel-Token headers,
+// except during the migration window when tokenless requests are allowed.
+func (s *Server) SetTokenValidator(fn TokenValidator) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokenValidator = fn
+}
+
+// SetMigrationDeadline sets the time after which tokenless requests are rejected.
+// Zero value means strict mode (no migration window).
+func (s *Server) SetMigrationDeadline(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.migrationDeadline = t
 }
 
 // Scan refreshes the firmware list from disk.
@@ -195,7 +218,9 @@ func (s *Server) HandleList(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleServe serves GET /firmware/<filename> — the raw binary for OTA.
-// No authentication required (local network only, IP-restricted by Docker).
+// Authenticates requests using X-Spaxel-MAC and X-Spaxel-Token headers when a token
+// validator is configured. Rejects with 404 (not 401) to avoid leaking which firmware
+// versions exist. Nodes inside the migration window may download without a token.
 func (s *Server) HandleServe(w http.ResponseWriter, r *http.Request) {
 	filename := filepath.Base(r.URL.Path)
 	if filename == "" || filename == "." || !strings.HasSuffix(filename, ".bin") {
@@ -206,6 +231,8 @@ func (s *Server) HandleServe(w http.ResponseWriter, r *http.Request) {
 	// Check known list; refresh if missing (file may have been added after start).
 	s.mu.RLock()
 	meta, ok := s.firmware[filename]
+	validator := s.tokenValidator
+	deadline := s.migrationDeadline
 	s.mu.RUnlock()
 
 	if !ok {
@@ -216,6 +243,36 @@ func (s *Server) HandleServe(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			http.NotFound(w, r)
 			return
+		}
+	}
+
+	// Authentication check (ADR-006)
+	if validator != nil {
+		mac := r.Header.Get("X-Spaxel-MAC")
+		token := r.Header.Get("X-Spaxel-Token")
+
+		// If both headers are present, validate the token
+		if mac != "" && token != "" {
+			if !validator(mac, token) {
+				// Return 404, not 401 — we don't want to leak which firmware filenames exist
+				http.NotFound(w, r)
+				return
+			}
+		} else {
+			// Tokenless request — check if inside migration window
+			if !deadline.IsZero() && time.Now().Before(deadline) {
+				// Inside migration window, allow tokenless request
+				log.Printf("[INFO] ota: tokenless request allowed (migration window open until %s)", deadline.Format(time.RFC3339))
+			} else if deadline.IsZero() {
+				// No migration window configured — strict mode, reject tokenless
+				http.NotFound(w, r)
+				return
+			} else {
+				// Migration window closed — reject tokenless request
+				log.Printf("[WARN] ota: tokenless request rejected (migration window closed at %s)", deadline.Format(time.RFC3339))
+				http.NotFound(w, r)
+				return
+			}
 		}
 	}
 

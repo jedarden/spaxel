@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestServerSetUploadCallback verifies the upload callback mechanism.
@@ -121,5 +122,214 @@ func TestFirmwareDir(t *testing.T) {
 
 	if srv.FirmwareDir() != tmpDir {
 		t.Errorf("expected firmware dir %s, got %s", tmpDir, srv.FirmwareDir())
+	}
+}
+
+// TestHandleServe_Authenticated verifies that authenticated requests succeed.
+func TestHandleServe_Authenticated(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	testContent := []byte("test firmware content")
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	// Set up token validator that accepts one specific MAC/token pair
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return mac == "AA:BB:CC:DD:EE:FF" && token == "valid-token-123"
+	})
+
+	// Create authenticated request
+	req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	req.Header.Set("X-Spaxel-MAC", "AA:BB:CC:DD:EE:FF")
+	req.Header.Set("X-Spaxel-Token", "valid-token-123")
+	w := httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	// Should succeed with 200 OK
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	// Verify content type header
+	if ct := w.Header().Get("Content-Type"); ct != "application/octet-stream" {
+		t.Errorf("expected Content-Type application/octet-stream, got %s", ct)
+	}
+
+	// Verify SHA256 header is present
+	if w.Header().Get("X-SHA256") == "" {
+		t.Error("expected X-SHA256 header")
+	}
+
+	// Verify body contains firmware content
+	if w.Body.Len() != len(testContent) {
+		t.Errorf("expected body length %d, got %d", len(testContent), w.Body.Len())
+	}
+}
+
+// TestHandleServe_InvalidToken verifies that invalid tokens get 404 (not 401).
+func TestHandleServe_InvalidToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	if err := os.WriteFile(testFile, []byte("test firmware"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	srv.SetTokenValidator(func(mac, token string) bool {
+		// Only accept the exact valid token
+		return mac == "AA:BB:CC:DD:EE:FF" && token == "valid-token-123"
+	})
+
+	testCases := []struct {
+		name     string
+		mac      string
+		token    string
+	}{
+		{"wrong token", "AA:BB:CC:DD:EE:FF", "wrong-token"},
+		{"wrong MAC", "AA:BB:CC:DD:EE:00", "valid-token-123"},
+		{"empty token", "AA:BB:CC:DD:EE:FF", ""},
+		{"empty MAC", "", "valid-token-123"},
+		{"both empty", "", ""},
+		{"garbage token", "AA:BB:CC:DD:EE:FF", "garbage!!!"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+			req.Header.Set("X-Spaxel-MAC", tc.mac)
+			req.Header.Set("X-Spaxel-Token", tc.token)
+			w := httptest.NewRecorder()
+
+			srv.HandleServe(w, req)
+
+			// Should return 404, not 401 (to avoid leaking which firmware exists)
+			if w.Code != http.StatusNotFound {
+				t.Errorf("expected status 404, got %d", w.Code)
+			}
+		})
+	}
+}
+
+// TestHandleServe_MigrationWindowInside verifies tokenless requests succeed inside the migration window.
+func TestHandleServe_MigrationWindowInside(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	testContent := []byte("test firmware")
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	// Set validator and migration window (1 hour from now)
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return false // Validator always rejects
+	})
+	srv.SetMigrationDeadline(time.Now().Add(1 * time.Hour))
+
+	// Request without authentication headers
+	req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	w := httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	// Should succeed - inside migration window
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 inside migration window, got %d", w.Code)
+	}
+}
+
+// TestHandleServe_MigrationWindowOutside verifies tokenless requests fail after the migration window closes.
+func TestHandleServe_MigrationWindowOutside(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	if err := os.WriteFile(testFile, []byte("test firmware"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	// Set validator and expired migration window (1 hour ago)
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return false
+	})
+	srv.SetMigrationDeadline(time.Now().Add(-1 * time.Hour))
+
+	// Request without authentication headers
+	req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	w := httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	// Should return 404 - migration window closed
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 after migration window, got %d", w.Code)
+	}
+}
+
+// TestHandleServe_StrictMode verifies tokenless requests fail when no migration window is set.
+func TestHandleServe_StrictMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	if err := os.WriteFile(testFile, []byte("test firmware"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	// Set validator but NO migration window (strict mode)
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return false
+	})
+	// Not calling SetMigrationDeadline means zero deadline (strict mode)
+
+	// Request without authentication headers
+	req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	w := httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	// Should return 404 - strict mode requires token
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 in strict mode, got %d", w.Code)
+	}
+}
+
+// TestHandleServe_NoValidator verifies that without a validator, all requests succeed.
+func TestHandleServe_NoValidator(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	if err := os.WriteFile(testFile, []byte("test firmware"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	// No validator set - should allow all requests
+	req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	w := httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	// Should succeed
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 without validator, got %d", w.Code)
 	}
 }
