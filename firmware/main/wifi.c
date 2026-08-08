@@ -159,6 +159,12 @@ esp_err_t wifi_start_connect(void) {
         return ESP_ERR_INVALID_STATE;
     }
 
+    // Check if restart is imminent - skip WiFi operations to prevent race
+    if (g_state.restarting) {
+        ESP_LOGW(TAG, "Restart imminent, skipping WiFi connection attempt");
+        return ESP_OK;
+    }
+
     // Get WiFi credentials from NVS
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(SPAXEL_NAMESPACE, NVS_READONLY, &nvs);
@@ -473,6 +479,8 @@ static esp_err_t captive_save_handler(httpd_req_t *req) {
         httpd_resp_send(req, resp, strlen(resp));
 
         vTaskDelay(pdMS_TO_TICKS(1000));
+        g_state.restarting = true;
+        ESP_LOGW(TAG, "Setting restarting flag before captive portal save reboot");
         esp_restart();
         return ESP_OK;
     }

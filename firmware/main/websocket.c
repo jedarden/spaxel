@@ -124,6 +124,8 @@ static void ota_validation_timeout_cb(void *arg) {
         // else forces a reset. Force one here so the safety net this
         // validation exists for actually engages. See bf-23nar.
         vTaskDelay(pdMS_TO_TICKS(500));  // let the log line above flush
+        g_state.restarting = true;
+        ESP_LOGW(TAG, "Setting restarting flag before OTA timeout restart");
         esp_restart();
     }
 }
@@ -828,6 +830,8 @@ static void handle_reboot_msg(cJSON *root) {
 
     ESP_LOGI(TAG, "Reboot requested in %lu ms", delay_ms);
     vTaskDelay(pdMS_TO_TICKS(delay_ms));
+    g_state.restarting = true;
+    ESP_LOGW(TAG, "Setting restarting flag before reboot command restart");
     esp_restart();
 }
 
@@ -1035,6 +1039,8 @@ static void ota_task(void *arg) {
     websocket_send_ota_status("rebooting", 100, NULL);
 
     vTaskDelay(pdMS_TO_TICKS(1000));
+    g_state.restarting = true;
+    ESP_LOGW(TAG, "[OTA] Setting restarting flag before esp_restart()");
     ESP_LOGI(TAG, "[OTA] Calling esp_restart() NOW");
     esp_restart();
 
