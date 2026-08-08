@@ -86,6 +86,7 @@ typedef struct {
     bool debug;
     uint8_t mac[6];
     char ntp_server[64];
+    volatile bool ota_in_progress;  // Set when OTA download is active
     EventGroupHandle_t events;
 } spaxel_state_t;
 

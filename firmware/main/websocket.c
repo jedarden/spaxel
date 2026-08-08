@@ -849,7 +849,14 @@ static void handle_identify_msg(cJSON *root) {
 }
 
 static void ota_task(void *arg) {
-    ESP_LOGI(TAG, "Starting OTA download: %s", s_ota_url);
+    ESP_LOGI(TAG, "[OTA] ===========================================");
+    ESP_LOGI(TAG, "[OTA] Starting OTA download: %s", s_ota_url);
+    ESP_LOGI(TAG, "[OTA] Current state: %s", node_state_str(g_state.state));
+
+    // Mark OTA as in progress to prevent WiFi reconnection interference
+    g_state.ota_in_progress = true;
+    ESP_LOGI(TAG, "[OTA] Set ota_in_progress=true - WiFi reconnection blocked");
+    ESP_LOGI(TAG, "[OTA] ===========================================");
 
     websocket_send_ota_status("downloading", 0, NULL);
 
@@ -867,6 +874,9 @@ static void ota_task(void *arg) {
 
     esp_http_client_handle_t http = esp_http_client_init(&http_cfg);
     if (!http) {
+        ESP_LOGE(TAG, "[OTA] FAILED to init HTTP client");
+        g_state.ota_in_progress = false;
+        ESP_LOGI(TAG, "[OTA] Cleared ota_in_progress=false due to HTTP init failure");
         websocket_send_ota_status("failed", 0, "download_failed");
         vTaskDelete(NULL);
         return;
@@ -883,7 +893,10 @@ static void ota_task(void *arg) {
 
     esp_err_t err = esp_http_client_open(http, 0);
     if (err != ESP_OK) {
+        ESP_LOGE(TAG, "[OTA] FAILED to open HTTP connection: %s", esp_err_to_name(err));
         esp_http_client_cleanup(http);
+        g_state.ota_in_progress = false;
+        ESP_LOGI(TAG, "[OTA] Cleared ota_in_progress=false due to HTTP connection failure");
         websocket_send_ota_status("failed", 0, "download_failed");
         vTaskDelete(NULL);
         return;
@@ -891,30 +904,43 @@ static void ota_task(void *arg) {
 
     int content_len = esp_http_client_fetch_headers(http);
     if (content_len <= 0) {
+        ESP_LOGE(TAG, "[OTA] FAILED to fetch headers: content_len=%d", content_len);
         esp_http_client_cleanup(http);
+        g_state.ota_in_progress = false;
+        ESP_LOGI(TAG, "[OTA] Cleared ota_in_progress=false due to header fetch failure");
         websocket_send_ota_status("failed", 0, "download_failed");
         vTaskDelete(NULL);
         return;
     }
+    ESP_LOGI(TAG, "[OTA] HTTP connection open, content length: %d bytes", content_len);
 
     // Find next OTA partition
     const esp_partition_t *update_part = esp_ota_get_next_update_partition(NULL);
     if (!update_part) {
+        ESP_LOGE(TAG, "[OTA] FAILED to get next update partition");
         esp_http_client_cleanup(http);
+        g_state.ota_in_progress = false;
+        ESP_LOGI(TAG, "[OTA] Cleared ota_in_progress=false due to partition failure");
         websocket_send_ota_status("failed", 0, "no_partition");
         vTaskDelete(NULL);
         return;
     }
+    ESP_LOGI(TAG, "[OTA] Target partition: %s", update_part->label);
 
     // Begin OTA
     esp_ota_handle_t ota_handle;
+    ESP_LOGI(TAG, "[OTA] Calling esp_ota_begin()...");
     err = esp_ota_begin(update_part, OTA_SIZE_UNKNOWN, &ota_handle);
     if (err != ESP_OK) {
+        ESP_LOGE(TAG, "[OTA] FAILED to begin OTA: %s", esp_err_to_name(err));
         esp_http_client_cleanup(http);
+        g_state.ota_in_progress = false;
+        ESP_LOGI(TAG, "[OTA] Cleared ota_in_progress=false due to OTA begin failure");
         websocket_send_ota_status("failed", 0, "write_failed");
         vTaskDelete(NULL);
         return;
     }
+    ESP_LOGI(TAG, "[OTA] OTA begin successful, handle=%p", ota_handle);
 
     // Initialize SHA-256 for verification
     mbedtls_sha256_context sha_ctx;
@@ -937,10 +963,13 @@ static void ota_task(void *arg) {
 
         err = esp_ota_write(ota_handle, buf, read);
         if (err != ESP_OK) {
+            ESP_LOGE(TAG, "[OTA] FAILED to write OTA data at offset %d: %s", total_read, esp_err_to_name(err));
             free(buf);
             if (do_sha_verify) mbedtls_sha256_free(&sha_ctx);
             esp_ota_abort(ota_handle);
             esp_http_client_cleanup(http);
+            g_state.ota_in_progress = false;
+            ESP_LOGI(TAG, "[OTA] Cleared ota_in_progress=false due to write failure");
             websocket_send_ota_status("failed", 0, "write_failed");
             vTaskDelete(NULL);
             return;
@@ -972,8 +1001,11 @@ static void ota_task(void *arg) {
 
         // Compare with expected hash (case-insensitive)
         if (strcasecmp(hash_hex, s_ota_sha256) != 0) {
-            ESP_LOGE(TAG, "SHA-256 mismatch: expected %s, got %s", s_ota_sha256, hash_hex);
+            ESP_LOGE(TAG, "[OTA] SHA-256 mismatch: expected %s, got %s", s_ota_sha256, hash_hex);
+            ESP_LOGE(TAG, "[OTA] Aborting OTA due to hash mismatch");
             esp_ota_abort(ota_handle);
+            g_state.ota_in_progress = false;
+            ESP_LOGI(TAG, "[OTA] Cleared ota_in_progress=false due to hash mismatch");
             websocket_send_ota_status("failed", 0, "sha256_mismatch");
             vTaskDelete(NULL);
             return;
@@ -996,10 +1028,14 @@ static void ota_task(void *arg) {
         return;
     }
 
-    ESP_LOGI(TAG, "OTA complete, rebooting");
+    ESP_LOGI(TAG, "[OTA] ===========================================");
+    ESP_LOGI(TAG, "[OTA] OTA complete, preparing to reboot");
+    ESP_LOGI(TAG, "[OTA] Clearing ota_in_progress=false before restart");
+    g_state.ota_in_progress = false;
     websocket_send_ota_status("rebooting", 100, NULL);
 
     vTaskDelay(pdMS_TO_TICKS(1000));
+    ESP_LOGI(TAG, "[OTA] Calling esp_restart() NOW");
     esp_restart();
 
     vTaskDelete(NULL);
