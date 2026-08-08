@@ -200,7 +200,16 @@ static void state_machine_task(void *arg) {
                 } else {
                     ESP_LOGI(TAG, "Provisioned, connecting to WiFi");
                     g_state.state = NODE_STATE_WIFI_CONNECTING;
-                    wifi_start_connect();
+                    esp_err_t err = wifi_start_connect();
+                    if (err != ESP_OK) {
+                        // Log with context to distinguish expected failures during restart
+                        if (g_state.restarting) {
+                            ESP_LOGW(TAG, "WiFi connect skipped during restart (expected): %s", esp_err_to_name(err));
+                        } else {
+                            ESP_LOGE(TAG, "WiFi connect failed on boot (unexpected): %s", esp_err_to_name(err));
+                        }
+                        // State machine will handle failure via event bits
+                    }
                 }
                 break;
 
@@ -373,7 +382,16 @@ static void state_machine_task(void *arg) {
 
                 // Try to reconnect to WiFi
                 ESP_LOGI(TAG, "Attempting WiFi reconnect");
-                wifi_start_connect();
+                esp_err_t err = wifi_start_connect();
+                if (err != ESP_OK) {
+                    // Log with context to distinguish expected failures during restart
+                    if (g_state.restarting) {
+                        ESP_LOGW(TAG, "WiFi reconnect skipped during restart (expected): %s", esp_err_to_name(err));
+                    } else {
+                        ESP_LOGE(TAG, "WiFi reconnect failed unexpectedly: %s", esp_err_to_name(err));
+                    }
+                    // Continue to wait for event bits; failure will be counted below
+                }
 
                 bits = xEventGroupWaitBits(
                     g_state.events,
@@ -508,7 +526,12 @@ void app_main(void) {
         nvs_flash_erase();
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(ret);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize NVS after recovery attempt: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "System cannot continue without NVS storage");
+        // Graceful shutdown instead of abort
+        return;
+    }
 
     // Run NVS schema migration if needed
     esp_err_t migration_err = nvs_migration_run();
@@ -537,7 +560,13 @@ void app_main(void) {
     load_nvs_config();
 
     // Initialize WiFi
-    wifi_init();
+    ret = wifi_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFi stack: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "System cannot continue without WiFi connectivity");
+        // Graceful shutdown instead of abort
+        return;
+    }
 
     // Initialize LED
     led_init();
