@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -87,7 +88,8 @@ func (s *Server) Scan() {
 	}
 
 	fresh := make(map[string]*FirmwareMeta)
-	var names []string
+	latestVersion := ""
+	latestFile := ""
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".bin") {
 			continue
@@ -95,15 +97,21 @@ func (s *Server) Scan() {
 		m := s.computeMeta(e.Name())
 		if m != nil {
 			fresh[e.Name()] = m
-			names = append(names, e.Name())
+			// Only a filename containing a semantic version can be the latest
+			// OTA release. Legacy/unversioned files remain addressable by name,
+			// but must not be advertised to every node as an available update.
+			if versionRe.FindString(e.Name()) != "" &&
+				(latestFile == "" || compareVersions(m.Version, latestVersion) > 0 ||
+					(m.Version == latestVersion && e.Name() > latestFile)) {
+				latestVersion = m.Version
+				latestFile = e.Name()
+			}
 		}
 	}
 	s.firmware = fresh
 
-	s.latestFile = ""
-	if len(names) > 0 {
-		sort.Strings(names)
-		s.latestFile = names[len(names)-1]
+	s.latestFile = latestFile
+	if latestFile != "" {
 		s.firmware[s.latestFile].IsLatest = true
 	}
 }
@@ -144,6 +152,25 @@ func parseVersion(filename string) string {
 		return v
 	}
 	return strings.TrimSuffix(filename, ".bin")
+}
+
+// compareVersions compares the numeric major, minor, and patch components of
+// two versions returned by versionRe. It avoids lexicographic mistakes such as
+// considering 1.9.0 newer than 1.10.0.
+func compareVersions(a, b string) int {
+	var aMajor, aMinor, aPatch int
+	var bMajor, bMinor, bPatch int
+	_, _ = fmt.Sscanf(a, "%d.%d.%d", &aMajor, &aMinor, &aPatch)
+	_, _ = fmt.Sscanf(b, "%d.%d.%d", &bMajor, &bMinor, &bPatch)
+	for _, pair := range [][2]int{{aMajor, bMajor}, {aMinor, bMinor}, {aPatch, bPatch}} {
+		if pair[0] < pair[1] {
+			return -1
+		}
+		if pair[0] > pair[1] {
+			return 1
+		}
+	}
+	return 0
 }
 
 // GetLatest returns metadata for the newest firmware binary, or nil if none.
