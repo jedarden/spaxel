@@ -87,6 +87,7 @@ typedef struct {
     uint8_t mac[6];
     char ntp_server[64];
     volatile bool ota_in_progress;  // Set when OTA download is active
+    bool restarting;              // Set when restart is imminent (prevents WiFi ops)
     EventGroupHandle_t events;
 } spaxel_state_t;
 

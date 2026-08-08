@@ -333,6 +333,8 @@ static void state_machine_task(void *arg) {
 
                     if (bits & SPAXEL_EVENT_REBOOT) {
                         ESP_LOGI(TAG, "Reboot requested");
+                        g_state.restarting = true;
+                        ESP_LOGW(TAG, "Setting restarting flag before event-based reboot");
                         esp_restart();
                     }
 
@@ -488,6 +490,8 @@ static void health_task(void *arg) {
             ESP_LOGE(TAG,
                      "No mothership connection for %lld ms (state=%s) — rebooting to recover",
                      (long long)lost_ms, node_state_str(g_state.state));
+            g_state.restarting = true;
+            ESP_LOGW(TAG, "Setting restarting flag before mothership-lost reboot");
             vTaskDelay(pdMS_TO_TICKS(200)); // let the log drain
             esp_restart();
         }
