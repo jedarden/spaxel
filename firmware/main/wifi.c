@@ -206,33 +206,44 @@ esp_err_t wifi_start_connect(void) {
     ESP_LOGI(TAG, "Connecting to WiFi: %s (authmode: %s)", ssid,
              strlen(password) == 0 ? "open" : "WPA/WPA2");
 
+    // Detailed logging for each ESP-IDF API call to identify abort location
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 1: esp_wifi_set_mode(WIFI_MODE_STA)");
     err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set WiFi mode: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "[wifi_start_connect] FAILED at esp_wifi_set_mode: %s", esp_err_to_name(err));
         return err;
     }
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 1 OK: WiFi mode set to STA");
 
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 2: esp_wifi_set_config()");
     err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set WiFi config: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "[wifi_start_connect] FAILED at esp_wifi_set_config: %s", esp_err_to_name(err));
         return err;
     }
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 2 OK: WiFi config set");
 
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 3: esp_wifi_start() - backoff=%d ms", s_backoff_ms);
     err = esp_wifi_start();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start WiFi: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "[wifi_start_connect] FAILED at esp_wifi_start: %s", esp_err_to_name(err));
         return err;
     }
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 3 OK: WiFi started");
 
     // Apply exponential backoff delay
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 4: Backoff delay %d ms", s_backoff_ms);
     vTaskDelay(pdMS_TO_TICKS(s_backoff_ms));
     s_backoff_ms = MIN(s_backoff_ms * 2, s_backoff_max_ms);
 
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 5: esp_wifi_connect()");
     err = esp_wifi_connect();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to connect WiFi: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "[wifi_start_connect] FAILED at esp_wifi_connect: %s", esp_err_to_name(err));
         return err;
     }
+    ESP_LOGI(TAG, "[wifi_start_connect] Step 5 OK: WiFi connect initiated");
+    ESP_LOGI(TAG, "[wifi_start_connect] Complete: awaiting connection event...");
 
     return ESP_OK;
 }

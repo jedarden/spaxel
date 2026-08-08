@@ -360,6 +360,15 @@ static void state_machine_task(void *arg) {
                 break;
 
             case NODE_STATE_WIFI_LOST:
+                // Check if OTA is in progress - if so, delay reconnection
+                // to avoid racing with the OTA download process.
+                // See ADR-004 / bf-xss9y.
+                if (g_state.ota_in_progress) {
+                    ESP_LOGW(TAG, "WiFi lost but OTA in progress - delaying reconnection");
+                    vTaskDelay(pdMS_TO_TICKS(5000));
+                    break;
+                }
+
                 // Try to reconnect to WiFi
                 ESP_LOGI(TAG, "Attempting WiFi reconnect");
                 wifi_start_connect();
