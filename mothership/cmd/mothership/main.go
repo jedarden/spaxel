@@ -4618,6 +4618,13 @@ func main() {
 	r.Get("/api/firmware", otaSrv.HandleList)
 	r.Post("/api/firmware/upload", otaSrv.HandleUpload)
 	r.Get("/firmware/{filename}", otaSrv.HandleServe)
+
+	// The merged offset-0 image is exclusively for serial first-flash. It lives
+	// below the baked seed directory so seedFirmwareDir ignores it and the OTA
+	// server can never select it as an app-partition payload.
+	serialFirmwareName := fmt.Sprintf("spaxel-firmware-%s-merged.bin", version)
+	serialFirmwarePath := filepath.Join(cfg.SeedFirmwareDir, "serial", serialFirmwareName)
+	r.Get("/firmware/serial/{filename}", serveSerialFirmware(serialFirmwareName, serialFirmwarePath))
 	r.Get("/api/firmware/progress", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(otaMgr.GetProgress())
@@ -4754,7 +4761,6 @@ func main() {
 
 	// Firmware manifest for esp-web-tools (onboarding wizard flashing)
 	r.Get("/api/firmware/manifest", func(w http.ResponseWriter, r *http.Request) {
-		latest := otaSrv.GetLatest()
 		manifest := map[string]interface{}{
 			"name":                     "Spaxel Node",
 			"version":                  version,
@@ -4762,13 +4768,13 @@ func main() {
 			"builds":                   []map[string]interface{}{},
 		}
 
-		if latest != nil {
+		if _, err := os.Stat(serialFirmwarePath); err == nil {
 			manifest["builds"] = []map[string]interface{}{
 				{
 					"chipFamily": "ESP32-S3",
 					"parts": []map[string]interface{}{
 						{
-							"path":   "/firmware/" + latest.Filename,
+							"path":   "/firmware/serial/" + serialFirmwareName,
 							"offset": 0,
 						},
 					},
@@ -5676,6 +5682,19 @@ func copyFileToPath(src, dst string) error {
 	defer func() { _ = out.Close() }()
 	_, err = io.Copy(out, in)
 	return err
+}
+
+// serveSerialFirmware serves exactly the image named by the build. Keeping the
+// path fixed prevents this public first-flash endpoint from becoming an
+// arbitrary file server rooted at the baked firmware directory.
+func serveSerialFirmware(filename, path string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if chi.URLParam(r, "filename") != filename {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, path)
+	}
 }
 
 // splitLinkID parses a directional link ID "nodeMAC<sep>peerMAC" into its two

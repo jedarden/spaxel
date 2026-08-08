@@ -44,6 +44,9 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     fi
 
 WORKDIR /project
+# firmware/CMakeLists.txt reads the repository VERSION from its parent directory
+# so the ESP-IDF app descriptor and OTA filename use the same release version.
+COPY VERSION /VERSION
 COPY firmware/ ./
 
 # Remove any stale generated sdkconfig so set-target regenerates it from
@@ -120,6 +123,7 @@ RUN CGO_ENABLED=0 \
 # Dashboard is embedded in the Go binary via go:embed, not copied as files
 FROM gcr.io/distroless/static-debian12:nonroot
 ARG TARGETARCH=amd64
+ARG VERSION=dev
 
 # Copy the binary (dashboard is embedded via go:embed)
 COPY --from=builder /app/spaxel /spaxel
@@ -128,11 +132,14 @@ COPY --from=builder /app/spaxel /spaxel
 # simulator workload; the default ENTRYPOINT still runs the mothership.
 COPY --from=builder /app/spaxel-sim /spaxel-sim
 
-# Bake ESP32 firmware into the image so the mothership can seed it on first run.
-# The mothership copies /firmware/*.bin → /data/firmware/ at startup if not present.
-# Firmware is only included on amd64 builds (ESP-IDF is x86_64-only).
-# For non-amd64 builds, the placeholder from firmware-builder stage is included.
-COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/spaxel-firmware.bin
+# OTA writes directly into an app partition, so seed only the app image at the
+# top level. The semver-bearing filename is also the OTA store's version source.
+COPY --from=firmware-builder /project/build/spaxel-firmware.bin /firmware/spaxel-firmware-${VERSION}.bin
+
+# Keep the merged offset-0 image for first-flash serial provisioning, isolated
+# in a subdirectory that seedFirmwareDir deliberately does not copy into the OTA
+# store. A merged image must never be written into an OTA app partition.
+COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/serial/spaxel-firmware-${VERSION}-merged.bin
 
 VOLUME ["/data"]
 

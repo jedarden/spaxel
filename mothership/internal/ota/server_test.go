@@ -80,6 +80,55 @@ func TestServerScan(t *testing.T) {
 	}
 }
 
+// TestServerScanLatestRequiresSemver pins the safety boundary for image-baked
+// firmware: an old unversioned seed may remain on a persistent volume after an
+// upgrade, but it must never outrank a real release or be selected for OTA.
+func TestServerScanLatestRequiresSemver(t *testing.T) {
+	tmpDir := t.TempDir()
+	files := []string{
+		"spaxel-firmware.bin",
+		"spaxel-firmware-1.9.0.bin",
+		"spaxel-firmware-1.10.0.bin",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(name), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	srv := NewServer(tmpDir)
+	latest := srv.GetLatest()
+	if latest == nil {
+		t.Fatal("expected a latest semantic-versioned firmware")
+	}
+	if latest.Filename != "spaxel-firmware-1.10.0.bin" {
+		t.Fatalf("latest filename = %q, want spaxel-firmware-1.10.0.bin", latest.Filename)
+	}
+	if latest.Version != "1.10.0" {
+		t.Fatalf("latest version = %q, want 1.10.0", latest.Version)
+	}
+
+	legacy := srv.GetByFilename("spaxel-firmware.bin")
+	if legacy == nil {
+		t.Fatal("legacy firmware should remain addressable by filename")
+	}
+	if legacy.IsLatest {
+		t.Fatal("unversioned legacy firmware must not be marked latest")
+	}
+}
+
+func TestServerScanUnversionedOnlyHasNoLatest(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "spaxel-firmware.bin"), []byte("legacy"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := NewServer(tmpDir)
+	if latest := srv.GetLatest(); latest != nil {
+		t.Fatalf("GetLatest() = %+v, want nil for an unversioned-only store", latest)
+	}
+}
+
 // TestGetByFilename verifies looking up specific firmware files.
 func TestGetByFilename(t *testing.T) {
 	tmpDir := t.TempDir()
