@@ -407,3 +407,11 @@ func TestEngineSeekInvalidSession(t *testing.T) {
 		})
 	}
 }
+
+// FuzzSeek is a placeholder fuzz test function for seek functionality.
+// This is a skeleton only - actual fuzz logic will be implemented later.
+// The function signature uses the standard Go fuzz testing pattern (f *testing.F).
+func FuzzSeek(f *testing.F) {
+	// TODO: Implement fuzz logic for replay seek functionality
+	// This skeleton ensures the file compiles and provides the correct function signature
+}
