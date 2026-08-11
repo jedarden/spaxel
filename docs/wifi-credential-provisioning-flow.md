@@ -7,7 +7,14 @@
 
 This document describes how WiFi credentials flow from the dashboard → mothership → ESP32 device, including validation requirements, error messages, and the database precedence model (per ADR-005).
 
-**Key Finding:** The `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` environment variables mentioned in ADR-005 are **NOT currently implemented** in the codebase. They exist only as design documentation; there is no code that reads these env vars or seeds the settings database from them.
+**Last Updated:** 2026-08-11
+
+**Implementation Status:** ✅ **FULLY IMPLEMENTED**
+
+The `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` environment variables are **fully implemented** per ADR-005:
+- `mothership/internal/config/config.go` reads both env vars at startup (lines 240-244)
+- `mothership/cmd/mothership/main.go` seeds the database on first boot via `seedWiFiCredentialsIfFirstBoot()` (lines 655-695, called at line 825)
+- Database becomes source of truth after first boot; env vars are ignored on subsequent boots
 
 ---
 
@@ -289,34 +296,39 @@ CREATE TABLE settings (
 - Loaded from database on startup (lines 89-122)
 
 **Precedence:**
-1. **Database settings** (`network_wifi_ssid`/`network_wifi_password`) - authoritative source
+1. **Database settings** (`network_wifi_ssid`/`network_wifi_password`) - authoritative source after first boot
 2. **Request body override** - temporary per-node override during provisioning
-3. **Environment variables** - **NOT IMPLEMENTED** (see below)
+3. **Environment variables** - first-boot seed only (see below)
 
 ---
 
-### 6. Environment Variables (Design Only, NOT Implemented)
+### 6. Environment Variables (✅ IMPLEMENTED per ADR-005)
 
-**Documentation:** `docs/plan/plan.md` (Lines 3826-3827, ADR-005)
+**Documentation:** `docs/plan/plan.md` (ADR-005, 2026-08-03)
 
-**Documented but NOT Implemented:**
+**Implementation Status:** ✅ **FULLY IMPLEMENTED** (2026-08-11)
+
+**Environment Variables:**
 ```
 SPAXEL_WIFI_SSID     - Optional first-boot seed for fleet WiFi network name
 SPAXEL_WIFI_PASSWORD - First-boot seed for passphrase
 ```
 
-**Design Intent (per ADR-005):**
-> "On first boot, if set and no `network` setting exists yet in the DB, they seed it once. After that the DB row is the source of truth; the env var is not re-read or re-applied"
+**Implementation Locations:**
+- **Config loading:** `mothership/internal/config/config.go` lines 240-244
+- **Seeding logic:** `mothership/cmd/mothership/main.go` lines 655-695 (`seedWiFiCredentialsIfFirstBoot`)
+- **Startup call:** Line 825 in main (called after settings handler initialization)
 
-**Current Implementation Status:**
-- **No code** in `mothership/cmd/mothership/main.go` or elsewhere reads `SPAXEL_WIFI_SSID` or `SPAXEL_WIFI_PASSWORD`
-- **No seeding logic** exists to copy env vars into the settings database on first boot
-- These env vars are **documented only** - they have no effect if set
+**Behavior:**
+- **First boot only:** If BOTH env vars are non-empty AND database has no `network_wifi_ssid` setting, the database is seeded with these values
+- **Both required:** If only one env var is set, seeding is skipped with a log message
+- **Ignored after first boot:** Once database has network settings, env vars are ignored (DB is source of truth per ADR-005)
+- **Logging:** Successful seeding logs "[CONFIG] Seeded network settings from SPAXEL_WIFI_* environment variables (first boot - will not run again)"
 
 **Actual Behavior:**
-- WiFi credentials **must** be entered via the dashboard Settings > Network panel
-- There is **no first-boot seeding** from environment variables
-- Changing env vars after deployment has **no effect** (because they're never read)
+- ✅ WiFi credentials CAN be seeded via env vars on first boot
+- ✅ Dashboard Settings > Network panel is the primary interface for setting/changing fleet WiFi
+- ✅ After first boot, changing env vars has no effect (DB is authoritative)
 
 ---
 
@@ -392,38 +404,40 @@ if (strlen(wifi_pass) > 0) {
 
 ## Database vs Environment Variable Precedence
 
-### Current Implementation (No Env Var Support)
+### Current Implementation (✅ Env Var Support Implemented)
 
 **Precedence:**
-1. **Database settings** (`network_wifi_ssid`/`network_wifi_password`) - **ONLY source**
+1. **Database settings** (`network_wifi_ssid`/`network_wifi_password`) - authoritative source after first boot
 2. **Request body override** - Per-node override during provisioning
-3. **Environment variables** - **NOT IMPLEMENTED**
+3. **Environment variables** - ✅ **IMPLEMENTED** - first-boot seed only
 
 **How It Works:**
-1. Dashboard Settings > Network stores credentials in SQLite `settings` table
-2. Onboarding wizard fetches from `/api/settings/network`
-3. Provisioning server reads from in-memory cache of settings table
-4. Request body can override for specific node
-5. **No environment variable reading occurs at any point**
+1. **First boot with env vars:** If `SPAXEL_WIFI_SSID` AND `SPAXEL_WIFI_PASSWORD` are both set AND database has no network settings, seed the database with env var values
+2. **Subsequent boots:** Database is authoritative; env vars are ignored even if set
+3. Dashboard Settings > Network stores/retrieves credentials from SQLite `settings` table
+4. Onboarding wizard fetches from `/api/settings/network` and skips WiFi input if already configured
+5. Provisioning server reads from in-memory cache of settings table
+6. Request body can override for specific node
 
 ### Env Var Status
 
 | Environment Variable | Documented | Implemented | Effect |
 |---------------------|-------------|------------|--------|
-| `SPAXEL_WIFI_SSID` | ✅ (ADR-005) | ❌ | None |
-| `SPAXEL_WIFI_PASSWORD` | ✅ (ADR-005) | ❌ | None |
+| `SPAXEL_WIFI_SSID` | ✅ (ADR-005) | ✅ | Seeds DB on first boot only |
+| `SPAXEL_WIFI_PASSWORD` | ✅ (ADR-005) | ✅ | Seeds DB on first boot only |
 | `SPAXEL_INSTALL_SECRET` | ✅ | ✅ | Seeds or loads install secret |
 
-**Why Env Vars Are Not Implemented:**
-- No code reads `SPAXEL_WIFI_SSID` or `SPAXEL_WIFI_PASSWORD`
-- No first-boot seeding logic exists in `main.go` or startup code
-- The documented ADR-005 behavior ("seed on first boot if no DB entry exists") is **not coded**
+**Implementation Details:**
+- **Config loading:** `mothership/internal/config/config.go` lines 240-244 reads both env vars
+- **Seeding logic:** `mothership/cmd/mothership/main.go::seedWiFiCredentialsIfFirstBoot()` (lines 655-695)
+- **Startup call:** Line 825 in main (called after settings handler initialization)
+- **Database keys:** Stores as `network_wifi_ssid` and `network_wifi_password` in settings table
 
 **Implications:**
-- **Deployment MUST include manual dashboard entry** of WiFi credentials (or manual API calls)
-- Scripted/headless deployments **cannot** pre-configure WiFi via env vars
-- Changing env vars after deployment **has no effect** (because they're never read)
-- The **only way** to set WiFi credentials is through the dashboard UI or API
+- ✅ **Scripted/headless deployments CAN pre-configure WiFi** via env vars on first boot
+- ✅ **Dashboard UI is still primary interface** for changing WiFi credentials after first boot
+- ✅ **Changing env vars after first boot has no effect** (DB is authoritative)
+- ✅ **All provisioning paths work:** env var seed, dashboard entry, per-node override
 
 ---
 

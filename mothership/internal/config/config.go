@@ -67,6 +67,10 @@ type Config struct {
 	MQTTBroker   string // MQTT broker URL (optional, must be valid URL if set)
 	MQTTUsername string // MQTT broker username (optional)
 	MQTTPassword string // MQTT broker password (optional, never logged)
+
+	// WiFi credentials (optional, first-boot seeding only per ADR-005)
+	WifiSSID     string // SPAXEL_WIFI_SSID - seeds DB on first boot only, ignored after
+	WifiPassword string // SPAXEL_WIFI_PASSWORD - seeds DB on first boot only, ignored after
 }
 
 // Load reads all environment variables, validates them, and returns a Config.
@@ -233,6 +237,12 @@ func Load() (*Config, error) {
 	// SPAXEL_MQTT_PASSWORD - string, optional (sensitive - never logged)
 	cfg.MQTTPassword = envOr("SPAXEL_MQTT_PASSWORD", "")
 
+	// SPAXEL_WIFI_SSID - string, optional (first-boot seeding only per ADR-005)
+	cfg.WifiSSID = envOr("SPAXEL_WIFI_SSID", "")
+
+	// SPAXEL_WIFI_PASSWORD - string, optional (first-boot seeding only per ADR-005)
+	cfg.WifiPassword = envOr("SPAXEL_WIFI_PASSWORD", "")
+
 	// TZ - string, default 'UTC'
 	tz := os.Getenv("TZ")
 	if tz == "" {
@@ -391,6 +401,10 @@ func logConfig(cfg *Config) {
 		log.Printf("[CONFIG] SPAXEL_MQTT_BROKER=%s", cfg.MQTTBroker)
 		log.Printf("[CONFIG] SPAXEL_MQTT_USERNAME=%s", cfg.MQTTUsername)
 		log.Printf("[CONFIG] SPAXEL_MQTT_PASSWORD=***")
+	}
+	if cfg.WifiSSID != "" {
+		log.Printf("[CONFIG] SPAXEL_WIFI_SSID=%s (will seed DB on first boot if no existing setting)", cfg.WifiSSID)
+		log.Printf("[CONFIG] SPAXEL_WIFI_PASSWORD=*** (will seed DB on first boot if no existing setting)")
 	}
 	log.Printf("[CONFIG] TZ=%s", cfg.Timezone)
 }
