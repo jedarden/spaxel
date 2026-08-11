@@ -962,60 +962,41 @@
             }
         }
 
-        // ADR-005: every node is presumed to join the same fleet-wide network.
-        // Skip straight past this step when one is configured, leaving
-        // wifiSSID/wifiPass empty so provisionAndSend lets the mothership
-        // default them server-side. The user can still opt into a per-node
-        // override via the link below.
-        if (state.fleetNetworkConfigured && !state.wifiStepOverride) {
-            contentEl.innerHTML =
-                '<div class="wizard-step-content">' +
-                '<div class="wizard-center-msg">' +
-                '<div class="spinner"></div>' +
-                '<p>Using fleet network <strong>' + escapeAttr(state.fleetNetworkSSID) + '</strong> ' +
-                '(configured in Settings &gt; Network)</p>' +
-                '</div>' +
-                '<p style="text-align:center">' +
-                '<a href="#" id="wifi-step-override-link" class="wizard-muted" style="text-decoration:underline">' +
-                'Advanced: use a different network for this node</a>' +
-                '</p>' +
-                '</div>';
-            hideNav();
-
-            var advanceTimer = setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 900);
-            var overrideLink = document.getElementById('wifi-step-override-link');
-            if (overrideLink) {
-                overrideLink.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    clearTimeout(advanceTimer);
-                    state.wifiStepOverride = true;
-                    goToStep(state.currentStepIndex); // re-render this step with the manual form
-                });
-            }
-            return { cleanup: function () { clearTimeout(advanceTimer); } };
-        }
+        // ADR-005: WiFi credentials are configured once at the mothership level
+        // (Settings > Network), not per-device. Every node joins the same fleet
+        // network. This step now only configures mothership connectivity settings.
+        var fleetMessage = state.fleetNetworkConfigured
+            ? '<div class="wizard-fleet-status" style="background:#1a2a1a;border:1px solid #4fc3f7;border-radius:6px;padding:12px;margin:12px 0">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span style="font-size:18px;color:#4fc3f7">✓</span>' +
+              '<span style="font-weight:bold;color:#4fc3f7">Fleet network configured</span>' +
+              '</div>' +
+              '<p style="margin:0;font-size:13px;color:#ccc">All nodes will join <strong>' + escapeAttr(state.fleetNetworkSSID) + '</strong></p>' +
+              '</div>'
+            : '<div class="wizard-fleet-status" style="background:#2a1a1a;border:1px solid #f44336;border-radius:6px;padding:12px;margin:12px 0">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span style="font-size:18px;color:#f44336">⚠</span>' +
+              '<span style="font-weight:bold;color:#f44336">WiFi network not configured</span>' +
+              '</div>' +
+              '<p style="margin:0;font-size:13px;color:#ccc">Configure your fleet\'s WiFi network in <strong>Settings &gt; Network</strong> before continuing.</p>' +
+              '<p style="margin:8px 0 0;font-size:12px;color:#aaa">The mothership will automatically provision the same WiFi credentials to all nodes.</p>' +
+              '</div>';
 
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
-            '<h2>Configure WiFi</h2>' +
-            '<p>Enter your WiFi credentials. These will be flashed to the device in the next step.</p>' +
-            '<form id="wifi-form" class="wizard-form">' +
-            '<div class="form-group">' +
-            '<label for="wifi-ssid">WiFi Network Name (SSID)</label>' +
-            '<input type="text" id="wifi-ssid" required placeholder="MyWiFi" value="' + escapeAttr(state.wifiSSID) + '" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">' +
-            '</div>' +
-            '<div class="form-group">' +
-            '<label for="wifi-pass">WiFi Password</label>' +
-            '<input type="password" id="wifi-pass" placeholder="Password" value="' + escapeAttr(state.wifiPass) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
-            '</div>' +
-            '<details class="wizard-details">' +
-            '<summary>Advanced: Network Troubleshooting</summary>' +
+            '<h2>Network Configuration</h2>' +
+            '<p>WiFi network details are configured fleet-wide in <strong>Settings &gt; Network</strong>. ' +
+            'All nodes automatically join the same network.</p>' +
+            fleetMessage +
+            '<details class="wizard-details" style="margin-top:16px">' +
+            '<summary>Advanced: Mothership Connection</summary>' +
             '<div class="form-group" style="margin-top:8px">' +
             '<label for="ms-host">Mothership Host <span class="wizard-muted">(leave blank to use ' + escapeAttr(window.location.hostname) + ')</span></label>' +
             '<input type="text" id="ms-host" placeholder="' + escapeAttr(window.location.hostname) + '" value="' + escapeAttr(state.mothershipHost) + '" autocomplete="off">' +
+            '<p class="wizard-muted" style="font-size:11px;margin-top:4px">The mDNS service name for discovery. Leave blank unless you have multiple Spaxel instances.</p>' +
             '</div>' +
             '<div class="form-group">' +
-            '<label for="ms-port">Port</label>' +
+            '<label for="ms-port">Mothership Port</label>' +
             '<input type="number" id="ms-port" value="' + state.mothershipPort + '" min="1" max="65535">' +
             '</div>' +
             '<div class="form-group">' +
@@ -1025,21 +1006,12 @@
             '</div>' +
             '</details>' +
             '<div id="provision-error" class="wizard-error" style="display:none"></div>' +
-            '<button type="submit" class="wizard-btn wizard-btn-primary">Next: Flash Firmware</button>' +
-            '</form>' +
+            '<button type="button" class="wizard-btn wizard-btn-primary" id="wifi-next-btn">Next: Flash Firmware</button>' +
             '</div>';
 
         hideNav();
 
-        document.getElementById('wifi-form').addEventListener('submit', function (e) {
-            e.preventDefault();
-            var ssid = document.getElementById('wifi-ssid').value.trim();
-            if (!ssid) {
-                showFormError('provision-error', 'Please enter a WiFi network name.');
-                return;
-            }
-            state.wifiSSID = ssid;
-            state.wifiPass = document.getElementById('wifi-pass').value;
+        document.getElementById('wifi-next-btn').addEventListener('click', function () {
             state.mothershipHost = document.getElementById('ms-host').value.trim();
             state.mothershipPort = parseInt(document.getElementById('ms-port').value, 10) || 8080;
             state.mothershipIP = document.getElementById('ms-ip').value.trim();
@@ -1338,14 +1310,15 @@
             '<h3>Troubleshooting</h3>' +
             '<ul class="wizard-list">' +
             '<li>Make sure your WiFi network is <strong>2.4 GHz</strong> (ESP32-S3 does not support 5 GHz)</li>' +
-            '<li>Check that the SSID and password are correct</li>' +
+            '<li>Verify the WiFi network is correctly configured in <strong>Settings &gt; Network</strong></li>' +
             '<li>Ensure the ESP32-S3 is within range of your WiFi router</li>' +
             '<li>Your router may block device-to-device communication (AP isolation) — check router settings</li>' +
             '<li>If using VLANs, ensure the ESP32-S3 and this computer are on the same VLAN</li>' +
             '</ul>' +
             '<div id="detect-captive" style="display:none" class="wizard-warn">' +
             '<p>If the node cannot connect after 10 failed attempts, it enters <strong>captive portal mode</strong>. ' +
-            'Look for a WiFi network named <strong>Spaxel-Setup</strong> and connect to it to reconfigure.</p>' +
+            'Look for a WiFi network named <strong>Spaxel-XXXX</strong> (where XXXX is the last 4 digits of its MAC) ' +
+            'and connect to it to reconfigure WiFi credentials.</p>' +
             '</div>' +
             '</div>' +
             '</div>';
