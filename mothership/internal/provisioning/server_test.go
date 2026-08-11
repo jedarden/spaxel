@@ -78,24 +78,37 @@ func TestHandleProvision_RequestBodyOverridesStoredSetting(t *testing.T) {
 	}
 }
 
-func TestHandleProvision_ErrorsWithNoCredentialsAvailable(t *testing.T) {
+func TestHandleProvision_SucceedsWithNoCredentialsAvailable(t *testing.T) {
 	s := newTestServer(t)
-	// No SetSettingsProvider call at all — mirrors a deployment where it's
-	// never wired, which must fail loudly rather than provision a dead node.
+	// No SetSettingsProvider call at all — provisioning should now succeed
+	// even with no credentials, allowing captive-portal-only onboarding.
 
-	rr, _ := doProvisionRequest(t, s, "")
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 when no wifi credentials available, got %d: %s", rr.Code, rr.Body.String())
+	rr, payload := doProvisionRequest(t, s, "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 when no wifi credentials available (credential-less provisioning), got %d: %s", rr.Code, rr.Body.String())
+	}
+	if payload.WifiSSID != "" || payload.WifiPass != "" {
+		t.Errorf("expected empty credentials in payload, got ssid=%q pass=%q", payload.WifiSSID, payload.WifiPass)
+	}
+	// Verify other fields are still populated
+	if payload.NodeID == "" {
+		t.Error("expected node_id to be generated")
+	}
+	if payload.NodeToken == "" {
+		t.Error("expected node_token to be generated")
 	}
 }
 
-func TestHandleProvision_ErrorsWhenProviderHasNoValue(t *testing.T) {
+func TestHandleProvision_SucceedsWhenProviderHasNoValue(t *testing.T) {
 	s := newTestServer(t)
 	s.SetSettingsProvider(&fakeSettingsProvider{values: map[string]interface{}{}})
 
-	rr, _ := doProvisionRequest(t, s, "")
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 when provider has no stored ssid, got %d: %s", rr.Code, rr.Body.String())
+	rr, payload := doProvisionRequest(t, s, "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 when provider has no stored ssid (credential-less provisioning), got %d: %s", rr.Code, rr.Body.String())
+	}
+	if payload.WifiSSID != "" || payload.WifiPass != "" {
+		t.Errorf("expected empty credentials in payload, got ssid=%q pass=%q", payload.WifiSSID, payload.WifiPass)
 	}
 }
 

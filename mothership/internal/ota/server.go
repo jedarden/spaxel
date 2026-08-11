@@ -44,6 +44,7 @@ type Server struct {
 	uploadCallback    FirmwareUploadCallback
 	tokenValidator    TokenValidator
 	migrationDeadline time.Time // Zero value means strict mode (no migration window)
+	lastScanTimestamp time.Time // When the firmware directory was last scanned
 }
 
 // NewServer creates a firmware server backed by firmwareDir.
@@ -114,6 +115,7 @@ func (s *Server) Scan() {
 	if latestFile != "" {
 		s.firmware[s.latestFile].IsLatest = true
 	}
+	s.lastScanTimestamp = time.Now()
 }
 
 // computeMeta computes SHA-256 and reads metadata for a firmware file.
@@ -217,6 +219,13 @@ func (s *Server) GetByVersion(version string) *FirmwareMeta {
 // FirmwareDir returns the directory where firmware binaries are stored.
 func (s *Server) FirmwareDir() string {
 	return s.firmwareDir
+}
+
+// GetLastScanTimestamp returns when the firmware directory was last scanned.
+func (s *Server) GetLastScanTimestamp() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastScanTimestamp
 }
 
 // SetUploadCallback sets the callback to be invoked when new firmware is uploaded.

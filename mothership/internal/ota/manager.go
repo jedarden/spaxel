@@ -169,19 +169,25 @@ func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta) error {
 		p = &NodeOTAProgress{MAC: mac}
 		m.progress[mac] = p
 	}
+	versionBefore := p.PreviousVersion
+	if versionBefore == "" {
+		// Try to get version from progress tracker if not set
+		versionBefore = "unknown"
+	}
 	p.State = OTAPending
 	p.ExpectedVersion = meta.Version
 	p.UpdatedAt = time.Now()
 
 	// Broadcast pending state to dashboard
 	if m.broadcaster != nil {
-		m.broadcaster.BroadcastOTAProgress(mac, "pending", 0, meta.Version, p.PreviousVersion, "")
+		m.broadcaster.BroadcastOTAProgress(mac, "pending", 0, meta.Version, versionBefore, "")
 	}
 
 	m.mu.Unlock()
 
 	sender.SendOTAToMAC(mac, url, meta.SHA256, meta.Version)
-	log.Printf("[INFO] ota: triggered update on %s → %s (sha256=%s)", mac, meta.Version, meta.SHA256)
+	log.Printf("[INFO] ota: triggered update: node=%s version_before=%s version_after=%s sha256=%s trigger_type=manual",
+		mac, versionBefore, meta.Version, meta.SHA256)
 	return nil
 }
 
@@ -291,15 +297,23 @@ func (m *Manager) OnNodeReconnected(mac, firmwareVersion string) {
 		return
 	}
 
+	// Track previous version for rollback detection
+	versionBefore := p.PreviousVersion
+	if versionBefore == "" {
+		versionBefore = "unknown"
+	}
+
 	var broadcastState string
 	if firmwareVersion == p.ExpectedVersion {
 		p.State = OTAVerified
 		broadcastState = "verified"
-		log.Printf("[INFO] ota: %s verified new firmware %s", mac, firmwareVersion)
+		log.Printf("[INFO] ota: update verified: node=%s version_before=%s version_after=%s trigger_type=%s",
+			mac, versionBefore, firmwareVersion, p.ExpectedVersion)
 	} else {
 		p.State = OTARollback
 		broadcastState = "rollback"
-		log.Printf("[WARN] ota: %s rolled back to %s (expected %s)", mac, firmwareVersion, p.ExpectedVersion)
+		log.Printf("[WARN] ota: update rollback: node=%s version_before=%s version_after=%s expected_version=%s trigger_type=rollback",
+			mac, versionBefore, firmwareVersion, p.ExpectedVersion)
 	}
 	p.UpdatedAt = time.Now()
 

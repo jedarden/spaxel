@@ -8,6 +8,28 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+// Prometheus metrics for auto-update operations
+var (
+	autoUpdateTriggerCounter = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "spaxel_autoupdate_triggers_total",
+			Help: "Total number of auto-update trigger events",
+		},
+		[]string{"trigger_type"}, // automatic, manual, canary, fleet, rollback
+	)
+
+	autoUpdateFirmwareVersion = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "spaxel_autoupdate_firmware_version",
+			Help: "Current firmware version being deployed by auto-update (encoded as semantic version)",
+		},
+		[]string{"stage"}, // selected, canary_before, canary_after, fleet_target
+	)
 )
 
 // AutoUpdateManager manages automatic OTA updates with canary deployment and quiet window scheduling.
@@ -23,15 +45,21 @@ type AutoUpdateManager struct {
 	zoneVacancyChecker ZoneVacancyChecker
 
 	// State
-	running               bool
-	cancel                context.CancelFunc
-	wg                     sync.WaitGroup
-	currentCanaryNode     string
-	canaryPreviousVersion string // Firmware version before canary update, for rollback
-	baselineQuality       float64
-	updateStartTime       time.Time
-	updateState           UpdateState
-	pendingFirmware       *FirmwareMeta
+	running                      bool
+	cancel                       context.CancelFunc
+	wg                           sync.WaitGroup
+	currentCanaryNode            string
+	canaryPreviousVersion        string // Firmware version before canary update, for rollback
+	baselineQuality              float64
+	updateStartTime              time.Time
+	updateState                  UpdateState
+	pendingFirmware            *FirmwareMeta
+
+	// Version selection tracking
+	firmwareSelectionFromCache bool           // Whether latest firmware came from cached scan
+	firmwareSnapshotTimestamp   time.Time     // When the firmware version list was last scanned
+	selectedFirmwareVersion     string        // The firmware version selected for this update cycle
+	canaryFirmwareVersionAfter  string        // Firmware version after canary update
 }
 
 // SettingsProvider provides access to system settings.
@@ -86,6 +114,20 @@ type AutoUpdateConfig struct {
 	QuietWindowEnd    string  `json:"quiet_window_end"`    // HH:MM format
 	CanaryDurationMin int     `json:"canary_duration_min"` // Canary monitoring duration
 	QualityThreshold  float64 `json:"quality_threshold"`   // Quality degradation threshold (0-1)
+}
+
+// formatDuration formats a duration into a human-readable string.
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%.1fm", d.Minutes())
+	}
+	return fmt.Sprintf("%.1fh", d.Hours())
 }
 
 // DefaultAutoUpdateConfig returns the default auto-update configuration.
@@ -255,29 +297,54 @@ func (m *AutoUpdateManager) checkForNewFirmware(ctx context.Context) {
 		return
 	}
 
-	// Get latest firmware
+	// Get latest firmware and scan timestamp
 	latest := m.server.GetLatest()
 	if latest == nil {
+		log.Printf("[DEBUG] ota: auto-update check - no firmware available")
 		return
 	}
 
-	// Check state and pending firmware with lock
+	// Track whether this was from cached scan or fresh GetLatest() call
+	scanTimestamp := m.server.GetLastScanTimestamp()
+	fromCache := !scanTimestamp.IsZero() && time.Since(scanTimestamp) < 1*time.Minute
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Store firmware selection metadata
+	m.firmwareSelectionFromCache = fromCache
+	m.firmwareSnapshotTimestamp = scanTimestamp
+	m.selectedFirmwareVersion = latest.Version
+	m.canaryFirmwareVersionAfter = latest.Version
+
+	// Log firmware selection with structured information
+	selectionReason := "fresh_scan"
+	if fromCache {
+		selectionReason = "cached_scan"
+	}
+	log.Printf("[INFO] ota: AUTO-UPDATE firmware selection: version=%s filename=%s selection_reason=%s snapshot_timestamp=%s",
+		latest.Version,
+		latest.Filename,
+		selectionReason,
+		scanTimestamp.Format(time.RFC3339))
+
 	// Check if we're already in an update cycle
 	if m.updateState != StateIdle && m.updateState != StateComplete && m.updateState != StateFailed {
+		log.Printf("[DEBUG] ota: auto-update check - already in cycle (state=%s)", m.updateState)
 		return
 	}
 
 	// Check if this is new firmware (different from current pending)
 	if m.pendingFirmware != nil && m.pendingFirmware.Filename == latest.Filename {
+		log.Printf("[DEBUG] ota: auto-update check - firmware already pending (%s)", latest.Filename)
 		return
 	}
 	m.pendingFirmware = latest
 
 	// Check if we're in quiet window
 	if !m.isInQuietWindow(config) {
+		log.Printf("[DEBUG] ota: auto-update check - not in quiet window (start=%s end=%s)",
+			config.QuietWindowStart, config.QuietWindowEnd)
 		return
 	}
 
@@ -352,9 +419,29 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	m.baselineQuality = 0
 	m.mu.Unlock()
 
-	m.publishEvent("update_started", "", fmt.Sprintf("Auto-update cycle started for firmware %s", firmware.Version), map[string]interface{}{
-		"firmware_version": firmware.Version,
-		"filename":         firmware.Filename,
+	// Increment Prometheus counter for auto-update trigger
+	autoUpdateTriggerCounter.WithLabelValues("automatic").Inc()
+
+	// Explicit log line: AUTO-UPDATE triggered (distinguish from manual OTA)
+	log.Printf("[INFO] ota: AUTO-UPDATE TRIGGERED: trigger_type=automatic firmware=%s filename=%s selection_reason=%s snapshot_timestamp=%s snapshot_age=%s",
+		firmware.Version,
+		firmware.Filename,
+		map[bool]string{true: "cached_scan", false: "fresh_scan"}[m.firmwareSelectionFromCache],
+		m.firmwareSnapshotTimestamp.Format(time.RFC3339),
+		formatDuration(time.Since(m.firmwareSnapshotTimestamp)))
+
+	log.Printf("[INFO] ota: AUTO-UPDATE cycle started: firmware_version=%s filename=%s selection_reason=%s snapshot_age=%s",
+		firmware.Version,
+		firmware.Filename,
+		map[bool]string{true: "cached_scan", false: "fresh_scan"}[m.firmwareSelectionFromCache],
+		formatDuration(time.Since(m.firmwareSnapshotTimestamp)))
+
+	m.publishEvent("update_started", "", fmt.Sprintf("AUTO-UPDATE cycle started for firmware %s", firmware.Version), map[string]interface{}{
+		"firmware_version":     firmware.Version,
+		"filename":             firmware.Filename,
+		"from_cache":           m.firmwareSelectionFromCache,
+		"snapshot_timestamp":   m.firmwareSnapshotTimestamp.Format(time.RFC3339),
+		"trigger_type":         "automatic",
 	})
 
 	// Select canary node and deploy
@@ -385,10 +472,18 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	}
 	m.mu.Unlock()
 
-	m.publishEvent("canary_deploy", canaryMAC, fmt.Sprintf("Deploying canary update to node %s", canaryMAC), map[string]interface{}{
+	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s version_before=%s version_after=%s baseline_quality=%.2f",
+		canaryMAC, m.canaryPreviousVersion, firmware.Version, m.baselineQuality)
+
+	autoUpdateTriggerCounter.WithLabelValues("canary").Inc()
+
+	m.publishEvent("canary_deploy", canaryMAC, fmt.Sprintf("AUTO-UPDATE: Deploying canary update to node %s", canaryMAC), map[string]interface{}{
 		"firmware_version":         firmware.Version,
 		"previous_firmware_version": m.canaryPreviousVersion,
 		"baseline_quality":          m.baselineQuality,
+		"version_before":            m.canaryPreviousVersion,
+		"version_after":             firmware.Version,
+		"trigger_type":              "automatic_canary",
 	})
 
 	// Trigger OTA on canary node
@@ -568,13 +663,18 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 	// Canary passed, proceed with fleet update
 	m.mu.Lock()
 	m.updateState = StateFleetDeploy
+	m.canaryFirmwareVersionAfter = firmware.Version
 	m.mu.Unlock()
 
-	m.publishEvent("canary_passed", canaryMAC, "Canary passed, proceeding with fleet update", map[string]interface{}{
-		"quality_delta": qualityDelta,
-	})
+	log.Printf("[INFO] ota: AUTO-UPDATE canary passed: node=%s version_before=%s version_after=%s quality_delta=%.2f%% threshold=%.2f%%",
+		canaryMAC, m.canaryPreviousVersion, firmware.Version, qualityDelta*100, config.QualityThreshold*100)
 
-	log.Printf("[INFO] ota: canary passed, proceeding with fleet update")
+	m.publishEvent("canary_passed", canaryMAC, "AUTO-UPDATE: Canary passed, proceeding with fleet update", map[string]interface{}{
+		"quality_delta":    qualityDelta,
+		"version_before":   m.canaryPreviousVersion,
+		"version_after":    firmware.Version,
+		"trigger_type":     "automatic_canary_success",
+	})
 
 	// Start fleet rollout
 	m.wg.Add(1)
@@ -583,19 +683,6 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 
 // fleetRollout performs a rolling update of all remaining nodes.
 func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *FirmwareMeta) {
-	defer m.wg.Done()
-	defer func() {
-		m.mu.Lock()
-		m.updateState = StateComplete
-		m.mu.Unlock()
-
-		m.publishEvent("update_complete", "", fmt.Sprintf("Auto-update complete for firmware %s", firmware.Version), map[string]interface{}{
-			"firmware_version": firmware.Version,
-		})
-
-		log.Printf("[INFO] ota: auto-update cycle complete for firmware %s", firmware.Version)
-	}()
-
 	m.mu.RLock()
 	np := m.nodeProvider
 	canaryMAC := m.currentCanaryNode
@@ -620,6 +707,25 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 		}
 	}
 
+	nodesUpdatedCount := len(remainingNodes)
+
+	defer m.wg.Done()
+	defer func() {
+		m.mu.Lock()
+		m.updateState = StateComplete
+		m.mu.Unlock()
+
+		autoUpdateTriggerCounter.WithLabelValues("fleet_complete").Inc()
+
+		log.Printf("[INFO] ota: AUTO-UPDATE fleet rollout complete: firmware_version=%s nodes_updated=%d",
+			firmware.Version, nodesUpdatedCount)
+
+		m.publishEvent("update_complete", "", fmt.Sprintf("AUTO-UPDATE complete for firmware %s", firmware.Version), map[string]interface{}{
+			"firmware_version": firmware.Version,
+			"trigger_type":     "automatic_fleet_complete",
+		})
+	}()
+
 	if len(remainingNodes) == 0 {
 		log.Printf("[INFO] ota: all nodes already updated")
 		return
@@ -638,7 +744,19 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 		default:
 		}
 
-		m.publishEvent("node_update", mac, fmt.Sprintf("Updating node %s (%d/%d)", mac, i+1, len(remainingNodes)), nil)
+		// Get current firmware version before update
+		var versionBefore string
+		if np != nil {
+			versionBefore = np.GetNodeFirmwareVersion(mac)
+		}
+
+		m.publishEvent("node_update", mac, fmt.Sprintf("Updating node %s (%d/%d)", mac, i+1, len(remainingNodes)), map[string]interface{}{
+			"version_before": versionBefore,
+			"version_after":  firmware.Version,
+		})
+
+		log.Printf("[INFO] ota: AUTO-UPDATE node update: node=%s version_before=%s version_after=%s trigger_type=automatic_fleet",
+			mac, versionBefore, firmware.Version)
 
 		if err := m.otaManager.SendOTA(mac); err != nil {
 			log.Printf("[WARN] ota: failed to update node %s: %v", mac, err)
