@@ -652,6 +652,49 @@ func (a *webhookPublisherAdapter) UpdateConfig(cfg interface{}) {
 	a.publisher.UpdateConfig(current)
 }
 
+// seedWiFiCredentialsIfFirstBoot implements ADR-005 first-boot WiFi credential seeding.
+// If envSSID and envPass are both non-empty AND the database doesn't yet have
+// network settings configured, this seeds the database with the environment
+// variable values. This is a one-time operation per installation; on subsequent
+// boots the env vars are ignored (DB is source of truth per ADR-005 decision 4).
+func seedWiFiCredentialsIfFirstBoot(settingsHandler *api.SettingsHandler, envSSID, envPass string) {
+	// Both env vars must be set to seed
+	if envSSID == "" || envPass == "" {
+		if envSSID != "" || envPass != "" {
+			log.Printf("[CONFIG] SPAXEL_WIFI_SSID and SPAXEL_WIFI_PASSWORD must both be set to seed database - only one is set, skipping seed")
+		}
+		return
+	}
+
+	// Check if network settings already exist in the database
+	const (
+		networkSettingWifiSSID     = "network_wifi_ssid"
+		networkSettingWifiPassword = "network_wifi_password"
+	)
+
+	// Use GetSingle to check if settings already exist
+	if _, hasSSID := settingsHandler.GetSingle(networkSettingWifiSSID); hasSSID {
+		log.Printf("[CONFIG] Network settings already configured in database - SPAXEL_WIFI_* env vars ignored (DB is source of truth per ADR-005)")
+		return
+	}
+
+	// Seed the database with the environment variable values
+	if err := settingsHandler.Set(networkSettingWifiSSID, envSSID); err != nil {
+		log.Printf("[ERROR] Failed to seed SPAXEL_WIFI_SSID to database: %v", err)
+		return
+	}
+
+	if err := settingsHandler.Set(networkSettingWifiPassword, envPass); err != nil {
+		log.Printf("[ERROR] Failed to seed SPAXEL_WIFI_PASSWORD to database: %v", err)
+		// Rollback: remove the SSID we just set
+		_ = settingsHandler.Set(networkSettingWifiSSID, "")
+		return
+	}
+
+	log.Printf("[CONFIG] Seeded network settings from SPAXEL_WIFI_* environment variables (first boot - will not run again)")
+}
+
+
 func main() {
 	// Load and validate configuration at startup
 	cfg, err := appconfig.Load()
@@ -773,6 +816,13 @@ func main() {
 	networkSettingsHandler := api.NewNetworkSettingsHandler(settingsHandler)
 	networkSettingsHandler.RegisterRoutes(r)
 	log.Printf("[INFO] Network settings API registered at /api/settings/network")
+
+	// ADR-005: First-boot WiFi credential seeding from environment variables.
+	// If SPAXEL_WIFI_SSID and SPAXEL_WIFI_PASSWORD are set AND the database
+	// doesn't yet have network settings configured, seed the database with the
+	// env var values. This is a one-time operation per installation; on subsequent
+	// boots the env vars are ignored (DB is source of truth).
+	seedWiFiCredentialsIfFirstBoot(settingsHandler, cfg.WifiSSID, cfg.WifiPassword)
 
 	// Phase 6: Notifications REST API (channels, preview, test)
 	notificationsHandler, err := api.NewNotificationsHandler(filepath.Join(cfg.DataDir, "notifications.db"))
