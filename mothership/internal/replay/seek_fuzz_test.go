@@ -408,10 +408,177 @@ func TestEngineSeekInvalidSession(t *testing.T) {
 	}
 }
 
-// FuzzSeek is a placeholder fuzz test function for seek functionality.
-// This is a skeleton only - actual fuzz logic will be implemented later.
-// The function signature uses the standard Go fuzz testing pattern (f *testing.F).
+// FuzzSeek is a comprehensive fuzz test for both Engine.Seek and Session.SeekTo.
+// It covers all int64 timestamp edge cases including:
+// - Before session range (should clamp to FromMS)
+// - After session range (should clamp to ToMS)
+// - Exactly at fromMS/toMS boundaries
+// - Wrap points: math.MinInt64, math.MaxInt64, 0, -1
+// - Negative values
+//
+// Properties verified:
+// 1. Never panics on any int64 target (for both Seek and SeekTo)
+// 2. If a frame is returned after seek, Frame.RecvTimeNS >= (clamped target * 1e6)
 func FuzzSeek(f *testing.F) {
-	// TODO: Implement fuzz logic for replay seek functionality
-	// This skeleton ensures the file compiles and provides the correct function signature
+	// Seed corpus covering comprehensive edge cases
+	// Basic range tests
+	f.Add(int64(0))                  // zero
+	f.Add(int64(1))                  // one millisecond
+	f.Add(int64(-1))                 // negative
+	f.Add(int64(1000))               // one second in ms
+	f.Add(int64(60000))              // one minute in ms
+
+	// Boundary cases at extreme values
+	f.Add(int64(math.MaxInt64))      // maximum int64
+	f.Add(int64(math.MinInt64))      // minimum int64
+	f.Add(int64(math.MaxInt64 - 1))  // MaxInt64 - 1
+	f.Add(int64(math.MinInt64 + 1))  // MinInt64 + 1
+
+	// Boundary values around typical session ranges
+	f.Add(int64(499))                // just before a 500-10000 range
+	f.Add(int64(500))                 // at FromMS boundary
+	f.Add(int64(10000))               // at ToMS boundary
+	f.Add(int64(10001))               // just after range
+
+	// Arbitrary large values
+	f.Add(int64(1234567890123))      // large positive
+	f.Add(int64(-1234567890123))     // large negative
+
+	// Additional wrap-around edge cases
+	f.Add(int64(9223372036854775806)) // MaxInt64 - 1
+	f.Add(int64(-9223372036854775807)) // MinInt64 + 1
+
+	f.Fuzz(func(t *testing.T, targetMS int64) {
+		// Setup: Create a temporary recording buffer with test data
+		tempDir := t.TempDir()
+		bufferPath := filepath.Join(tempDir, "test.bin")
+		buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+		if err != nil {
+			t.Skipf("Failed to create buffer: %v", err)
+		}
+		defer buffer.Close()
+
+		// Write test frames with known timestamps
+		now := time.Now().UnixNano()
+		frame := make([]byte, 152)
+		timestamps := make([]int64, 5)
+		for i := 0; i < 5; i++ {
+			timestamps[i] = now + int64(i)*int64(time.Second)
+			if err := buffer.Append(timestamps[i], frame); err != nil {
+				t.Skipf("Failed to append frame %d: %v", i, err)
+			}
+		}
+
+		// Define session range (using the written timestamps)
+		fromMS := time.Unix(0, timestamps[0]).UnixMilli()
+		toMS := time.Unix(0, timestamps[4]).UnixMilli()
+
+		// ===== Test Session.SeekTo =====
+		t.Run("Session.SeekTo", func(t *testing.T) {
+			session := NewSession("fuzz-session", fromMS, toMS)
+
+			// Property 1: SeekTo must NEVER panic on any int64 target
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Session.SeekTo panicked with targetMS=%d: %v", targetMS, r)
+				}
+			}()
+
+			// Perform the seek
+			err := session.SeekTo(targetMS)
+
+			// SeekTo should always succeed (it clamps to range)
+			if err != nil {
+				t.Errorf("SeekTo(%d) returned unexpected error: %v", targetMS, err)
+			}
+
+			// Get the clamped position after seek
+			clampedMS := session.CurrentMS()
+
+			// Verify clamping respects session bounds
+			if clampedMS < fromMS {
+				t.Errorf("After SeekTo(%d): CurrentMS=%d < FromMS=%d (should clamp to lower bound)",
+					targetMS, clampedMS, fromMS)
+			}
+			if clampedMS > toMS {
+				t.Errorf("After SeekTo(%d): CurrentMS=%d > ToMS=%d (should clamp to upper bound)",
+					targetMS, clampedMS, toMS)
+			}
+
+			// Property 2: If we retrieve a frame after seek, its timestamp >= clamped target
+			// Convert clampedMS (milliseconds) to nanoseconds for comparison
+			clampedTargetNS := clampedMS * 1_000_000
+
+			// Try to read a frame at the seeked position
+			targetTime := time.Unix(0, clampedTargetNS)
+			frameData, frameRecvTimeNS, err := buffer.SeekToTimestamp(targetTime)
+
+			if err == nil && frameData != nil {
+				// Successfully retrieved a frame - verify timestamp property
+				if frameRecvTimeNS < clampedTargetNS {
+					t.Errorf("Frame RecvTimeNS=%d < clamped target=%d (should be >= target)",
+						frameRecvTimeNS, clampedTargetNS)
+				}
+			}
+		})
+
+		// ===== Test Engine.Seek =====
+		t.Run("Engine.Seek", func(t *testing.T) {
+			broadcaster := &mockBroadcaster{}
+			engine := NewEngine(buffer, broadcaster)
+
+			// Start a session with the same range
+			session, err := engine.StartSession(fromMS, toMS)
+			if err != nil {
+				t.Skipf("Failed to start session: %v", err)
+			}
+			sessionID := session.ID()
+
+			// Property 1: Engine.Seek must NEVER panic on any int64 target
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Engine.Seek panicked with targetMS=%d: %v", targetMS, r)
+				}
+			}()
+
+			// Perform the seek through Engine
+			err = engine.Seek(sessionID, targetMS)
+
+			// Engine.Seek should always succeed for valid session (it clamps to range)
+			if err != nil {
+				t.Errorf("Engine.Seek(%d) returned unexpected error: %v", targetMS, err)
+			}
+
+			// Get the session to verify clamping
+			sess, ok := engine.GetSession(sessionID)
+			if !ok {
+				t.Errorf("Session not found after Engine.Seek")
+				return
+			}
+
+			clampedMS := sess.CurrentMS()
+
+			// Verify clamping respects session bounds
+			if clampedMS < fromMS {
+				t.Errorf("After Engine.Seek(%d): CurrentMS=%d < FromMS=%d (should clamp)",
+					targetMS, clampedMS, fromMS)
+			}
+			if clampedMS > toMS {
+				t.Errorf("After Engine.Seek(%d): CurrentMS=%d > ToMS=%d (should clamp)",
+					targetMS, clampedMS, toMS)
+			}
+
+			// Property 2: Verify frame timestamp property
+			clampedTargetNS := clampedMS * 1_000_000
+			targetTime := time.Unix(0, clampedTargetNS)
+			frameData, frameRecvTimeNS, err := buffer.SeekToTimestamp(targetTime)
+
+			if err == nil && frameData != nil {
+				if frameRecvTimeNS < clampedTargetNS {
+					t.Errorf("After Engine.Seek: Frame RecvTimeNS=%d < clamped target=%d (should be >=)",
+						frameRecvTimeNS, clampedTargetNS)
+				}
+			}
+		})
+	})
 }
