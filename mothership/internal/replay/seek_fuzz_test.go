@@ -436,17 +436,21 @@ func FuzzSeek(f *testing.F) {
 
 	// Boundary values around typical session ranges
 	f.Add(int64(499))                // just before a 500-10000 range
-	f.Add(int64(500))                 // at FromMS boundary
-	f.Add(int64(10000))               // at ToMS boundary
-	f.Add(int64(10001))               // just after range
+	f.Add(int64(500))                // at FromMS boundary
+	f.Add(int64(10000))              // at ToMS boundary
+	f.Add(int64(10001))              // just after range
 
 	// Arbitrary large values
 	f.Add(int64(1234567890123))      // large positive
 	f.Add(int64(-1234567890123))     // large negative
 
-	// Additional wrap-around edge cases
-	f.Add(int64(9223372036854775806)) // MaxInt64 - 1
-	f.Add(int64(-9223372036854775807)) // MinInt64 + 1
+	// Additional edge cases for comprehensive coverage
+	f.Add(int64(2))                  // small positive
+	f.Add(int64(-2))                 // small negative
+	f.Add(int64(9223372036854775806)) // MaxInt64 - 1 (explicit duplicate for emphasis)
+	f.Add(int64(-9223372036854775807)) // MinInt64 + 1 (explicit duplicate for emphasis)
+	f.Add(int64(999))                // another in-range value
+	f.Add(int64(1001))               // just past boundary
 
 	f.Fuzz(func(t *testing.T, targetMS int64) {
 		// Setup: Create a temporary recording buffer with test data
