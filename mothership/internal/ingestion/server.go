@@ -142,6 +142,13 @@ type Server struct {
 	// Function that takes (mac, token) and returns true if valid
 	tokenValidator func(mac, token string) bool
 
+	// NodeHealthUpdater persists health metrics from node health messages
+	// Interface type to avoid circular import with fleet package
+	NodeHealthUpdater interface {
+		UpdateNodeHealth(mac string, uptimeMS, wifiRSSIdBm, freeHeapBytes int64, temperatureC float64, ip string) error
+	}
+	nodeHealthUpdater NodeHealthUpdater
+
 	// migrationDeadline is the time after which nodes without valid tokens are rejected.
 	// Zero value means strict mode (no migration window).
 	migrationDeadline time.Time
@@ -289,6 +296,13 @@ func (s *Server) SetFleetNotifier(fn FleetNotifier) {
 func (s *Server) SetOTAManager(h OTAStatusHandler) {
 	s.mu.Lock()
 	s.otaHandler = h
+	s.mu.Unlock()
+}
+
+// SetNodeHealthUpdater sets the callback for persisting node health metrics.
+func (s *Server) SetNodeHealthUpdater(nhu NodeHealthUpdater) {
+	s.mu.Lock()
+	s.nodeHealthUpdater = nhu
 	s.mu.Unlock()
 }
 

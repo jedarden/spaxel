@@ -155,6 +155,8 @@ func (r *Registry) migrate() error {
 		// optimiser reasserts its own choice on its next cycle, so a manually set
 		// role=passive flapped back to tx_rx within 60s. See ADR-003 / bf-4kdww.
 		"ALTER TABLE nodes ADD COLUMN role_locked INTEGER NOT NULL DEFAULT 0",
+		// free_heap_bytes from node health messages - enables heap visualization.
+		"ALTER TABLE nodes ADD COLUMN free_heap_bytes INTEGER NOT NULL DEFAULT 0",
 	}
 	for _, m := range migrations {
 		_, _ = r.db.Exec(m) // Ignore errors (column may already exist)
@@ -317,6 +319,17 @@ func (r *Registry) SetNodeHealthScore(mac string, score float64) error {
 	return err
 }
 
+// UpdateNodeHealth persists health metrics from a node health message.
+// Updates uptime_ms, wifi_rssi_dbm, free_heap_bytes, temperature_c, and ip.
+func (r *Registry) UpdateNodeHealth(mac string, uptimeMS, wifiRSSIdBm, freeHeapBytes int64, temperatureC float64, ip string) error {
+	_, err := r.db.Exec(`
+		UPDATE nodes
+		SET uptime_ms=?, wifi_rssi_dbm=?, free_heap_bytes=?, temperature_c=?, ip=?, updated_at=strftime('%s', 'now') * 1000
+		WHERE mac=?
+	`, uptimeMS, wifiRSSIdBm, freeHeapBytes, temperatureC, ip, mac)
+	return err
+}
+
 // GetNodePreviousRole returns the previous role for a node.
 func (r *Registry) GetNodePreviousRole(mac string) (string, error) {
 	var role string
@@ -399,7 +412,7 @@ func (r *Registry) DeleteNode(mac string) error {
 // GetNode returns a single node record.
 func (r *Registry) GetNode(mac string) (*NodeRecord, error) {
 	row := r.db.QueryRow(`
-		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, manufacturer, first_seen_at, last_seen_at, firmware_version, chip_model, health_score
+		SELECT mac, name, role, previous_role, went_offline_at, pos_x, pos_y, pos_z, virtual, manufacturer, first_seen_at, last_seen_at, firmware_version, chip_model, health_score, free_heap_bytes
 		FROM nodes WHERE mac=?`, mac)
 	return scanNode(row)
 }
