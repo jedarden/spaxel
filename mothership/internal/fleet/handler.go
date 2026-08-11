@@ -210,6 +210,7 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 			LastSeenMS:      node.LastSeenAt.UnixMilli(),
 			ConfiguredRate:  20, // Default configured rate
 			Temperature:     0,  // Not currently tracked
+			FreeHeapBytes:  node.FreeHeapBytes,
 		}
 
 		// Check unpaired status first (highest priority visual indicator)
