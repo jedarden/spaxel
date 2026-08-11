@@ -218,6 +218,9 @@ func (s *Server) HandleProvision(w http.ResponseWriter, r *http.Request) {
 	// ADR-005: the request body may explicitly override wifi_ssid/wifi_pass
 	// for a specific node, but by default every node joins the same
 	// fleet-wide network configured once in Settings > Network.
+	// WiFi credentials are now optional - provisioning succeeds even when
+	// credentials are empty, allowing for captive-portal-only onboarding or
+	// open network configurations.
 	wifiSSID := req.WifiSSID
 	wifiPass := req.WifiPass
 	if wifiSSID == "" {
@@ -230,11 +233,11 @@ func (s *Server) HandleProvision(w http.ResponseWriter, r *http.Request) {
 			wifiPass = v
 		}
 	}
+	// Note: Empty wifi_ssid/wifi_pass is allowed. The node will need to
+	// obtain credentials via other means (captive portal, open network, or
+	// manual configuration). Log a warning to help debugging.
 	if wifiSSID == "" {
-		http.Error(w, "no wifi_ssid provided and no fleet network configured; "+
-			"set WiFi credentials in the mothership dashboard under Settings > Network, "+
-			"or include wifi_ssid/wifi_pass in the request", http.StatusBadRequest)
-		return
+		log.Printf("[WARN] provisioning: no WiFi credentials configured - node will need captive portal or manual configuration")
 	}
 
 	nodeID := uuid.NewString()
