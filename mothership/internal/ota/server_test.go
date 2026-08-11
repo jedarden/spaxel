@@ -382,3 +382,204 @@ func TestHandleServe_NoValidator(t *testing.T) {
 		t.Errorf("expected status 200 without validator, got %d", w.Code)
 	}
 }
+
+// TestHandleServe_MigrationWindowExactBoundary verifies behavior exactly at the deadline.
+// This tests both edges: if now == deadline, the window is considered closed.
+func TestHandleServe_MigrationWindowExactBoundary(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	testContent := []byte("test firmware")
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	// Set validator and migration deadline to NOW (exact boundary)
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return false // Validator always rejects
+	})
+	deadline := time.Now()
+	srv.SetMigrationDeadline(deadline)
+
+	// Request without authentication headers at exact deadline
+	req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	w := httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	// At the exact boundary, time.Now().Before(deadline) is false, so request is rejected
+	// This ensures the window is "too loose" — it closes exactly at deadline, not after
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 at exact deadline boundary, got %d", w.Code)
+	}
+}
+
+// TestHandleServe_TokenlessWithValidatorButNoWindow verifies that when a validator
+// is set but no migration window is configured (zero deadline), tokenless requests
+// are rejected. This tests the "too strict strands nodes" edge — we must NOT
+// leave the route open when authentication is required.
+func TestHandleServe_TokenlessWithValidatorButNoWindow(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	if err := os.WriteFile(testFile, []byte("test firmware"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	// Set validator but NO migration window (strict mode)
+	// This is the production state after migration window expires
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return mac == "AA:BB:CC:DD:EE:FF" && token == "valid-token-123"
+	})
+	// Explicitly set zero deadline to ensure we're in strict mode
+	srv.SetMigrationDeadline(time.Time{}) // Zero time = no migration window
+
+	// Request without authentication headers
+	req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	w := httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	// Must reject - validator is set, so auth is required
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 when validator set but no migration window, got %d", w.Code)
+	}
+
+	// Verify that a valid token DOES work in the same configuration
+	req = httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+	req.Header.Set("X-Spaxel-MAC", "AA:BB:CC:DD:EE:FF")
+	req.Header.Set("X-Spaxel-Token", "valid-token-123")
+	w = httptest.NewRecorder()
+
+	srv.HandleServe(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 with valid token in strict mode, got %d", w.Code)
+	}
+}
+
+// TestHandleServe_MissingHeadersWithValidatorSet verifies that when a validator
+// is configured, requests missing either header are treated as tokenless requests
+// and subject to migration window rules.
+func TestHandleServe_MissingHeadersWithValidatorSet(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	if err := os.WriteFile(testFile, []byte("test firmware"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return mac == "AA:BB:CC:DD:EE:FF" && token == "valid-token-123"
+	})
+
+	testCases := []struct {
+		name               string
+		mac                string
+		token              string
+		inMigrationWindow  bool
+		expectSuccess      bool
+	}{
+		// Inside migration window - tokenless or partial headers should succeed
+		{"MAC only, inside window", "AA:BB:CC:DD:EE:FF", "", true, true},
+		{"Token only, inside window", "", "valid-token-123", true, true},
+		{"Both empty, inside window", "", "", true, true},
+
+		// Outside migration window - all should fail
+		{"MAC only, outside window", "AA:BB:CC:DD:EE:FF", "", false, false},
+		{"Token only, outside window", "", "valid-token-123", false, false},
+		{"Both empty, outside window", "", "", false, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set migration window based on test case
+			if tc.inMigrationWindow {
+				srv.SetMigrationDeadline(time.Now().Add(1 * time.Hour))
+			} else {
+				srv.SetMigrationDeadline(time.Time{}) // No window = strict mode
+			}
+
+			req := httptest.NewRequest("GET", "/firmware/test-1.0.0.bin", nil)
+			if tc.mac != "" {
+				req.Header.Set("X-Spaxel-MAC", tc.mac)
+			}
+			if tc.token != "" {
+				req.Header.Set("X-Spaxel-Token", tc.token)
+			}
+			w := httptest.NewRecorder()
+
+			srv.HandleServe(w, req)
+
+			if tc.expectSuccess {
+				if w.Code != http.StatusOK {
+					t.Errorf("expected status 200, got %d", w.Code)
+				}
+			} else {
+				if w.Code != http.StatusNotFound {
+					t.Errorf("expected status 404, got %d", w.Code)
+				}
+			}
+		})
+	}
+}
+
+// TestHandleServe_NonexistentFileAlways404 verifies that requests for non-existent
+// files return 404 regardless of authentication. This prevents information leakage
+// about which firmware versions exist.
+func TestHandleServe_NonexistentFileAlways404(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := NewServer(tmpDir)
+
+	// Create a test firmware file (so we have a validator)
+	testFile := filepath.Join(tmpDir, "test-1.0.0.bin")
+	if err := os.WriteFile(testFile, []byte("test firmware"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srv.Scan()
+
+	srv.SetTokenValidator(func(mac, token string) bool {
+		return true // Accept all tokens for this test
+	})
+	srv.SetMigrationDeadline(time.Now().Add(1 * time.Hour)) // Inside migration window
+
+	testCases := []struct {
+		name  string
+		file  string
+		mac   string
+		token string
+	}{
+		{"valid auth, bad file", "nonexistent-1.0.0.bin", "AA:BB:CC:DD:EE:FF", "valid-token"},
+		{"migration window, bad file", "nonexistent-1.0.0.bin", "", ""},
+		{"path traversal attempt", "../other.bin", "AA:BB:CC:DD:EE:FF", "valid-token"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/firmware/"+tc.file, nil)
+			if tc.mac != "" {
+				req.Header.Set("X-Spaxel-MAC", tc.mac)
+			}
+			if tc.token != "" {
+				req.Header.Set("X-Spaxel-Token", tc.token)
+			}
+			w := httptest.NewRecorder()
+
+			srv.HandleServe(w, req)
+
+			// Must always return 404, never leak file existence
+			if w.Code != http.StatusNotFound {
+				t.Errorf("expected status 404 for non-existent file, got %d", w.Code)
+			}
+		})
+	}
+}
