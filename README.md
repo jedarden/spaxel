@@ -66,6 +66,26 @@ Then open `http://<server-ip>:8080`, set a dashboard PIN, and use **Add Node** (
 
 The full list is in the *Deployment* section of [`docs/plan/plan.md`](docs/plan/plan.md).
 
+### WiFi Configuration
+
+**Mothership-level fleet-wide configuration:** Spaxel uses a fleet-wide WiFi credential model — you configure the network credentials **once** on the mothership, and all nodes automatically join that network during provisioning.
+
+**Configuration methods:**
+
+1. **Dashboard UI (recommended):** Settings > Network panel — enter SSID/password once, all nodes auto-join
+2. **REST API:** `PUT /api/settings/network` with `{"wifi_ssid":"...","wifi_password":"..."}`
+3. **Per-node override:** Advanced mode in onboarding wizard for nodes on different networks
+
+**Credential precedence:**
+1. Request body override (per-node advanced mode)
+2. Database settings (`network_wifi_ssid`/`network_wifi_password` from Settings > Network)
+3. Error if neither available
+
+**Important notes:**
+- Environment variables `SPAXEL_WIFI_SSID`/`SPAXEL_WIFI_PASSWORD` are **documented but not implemented** — they have no effect if set
+- WiFi password is **write-only** — never returned by the API for security
+- See [`docs/deployment/wifi-configuration.md`](docs/deployment/wifi-configuration.md) for deployment examples and migration guide
+
 ## Building & developing
 
 ```bash
