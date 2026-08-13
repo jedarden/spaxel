@@ -204,7 +204,8 @@ static void state_machine_task(void *arg) {
                     if (err != ESP_OK) {
                         // Log with context to distinguish expected failures during restart
                         if (g_state.restarting) {
-                            ESP_LOGW(TAG, "WiFi connect skipped during restart (expected): %s", esp_err_to_name(err));
+                            ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] WiFi connect skipped during restart (expected): %s", esp_err_to_name(err));
+                            ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] This is a guard-triggered skip, NOT an error");
                         } else {
                             ESP_LOGE(TAG, "WiFi connect failed on boot (unexpected): %s", esp_err_to_name(err));
                         }
@@ -386,7 +387,8 @@ static void state_machine_task(void *arg) {
                 if (err != ESP_OK) {
                     // Log with context to distinguish expected failures during restart
                     if (g_state.restarting) {
-                        ESP_LOGW(TAG, "WiFi reconnect skipped during restart (expected): %s", esp_err_to_name(err));
+                        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] WiFi reconnect skipped during restart (expected): %s", esp_err_to_name(err));
+                        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] This is a guard-triggered skip, NOT an error");
                     } else {
                         ESP_LOGE(TAG, "WiFi reconnect failed unexpectedly: %s", esp_err_to_name(err));
                     }
