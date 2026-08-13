@@ -161,7 +161,11 @@ esp_err_t wifi_start_connect(void) {
 
     // Check if restart is imminent - skip WiFi operations to prevent race
     if (g_state.restarting) {
-        ESP_LOGW(TAG, "Restart imminent, skipping WiFi connection attempt");
+        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] Skipping WiFi connection - restart flag is set");
+        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] This is a guard-triggered skip, NOT an error");
+        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] WiFi operations will resume after next boot");
+        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] State: restarting=%d, provisioned=%d",
+                 g_state.restarting, g_state.provisioned);
         return ESP_OK;
     }
 
