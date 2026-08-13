@@ -1,32 +1,28 @@
-# NEEDLE workspace configuration
-# Workspace: /home/coding/spaxel
-
 agent:
   default: claude-code-glm-5
   timeout: 900
-
 strands:
   pluck:
     enabled: true
     exclude_labels:
-      - deferred
-      - human
-      - blocked
+    - deferred
+    - human
+    - blocked
   explore:
     enabled: true
     workspaces:
-      - /home/coding/AgentScribe
-      - /home/coding/ai-code-battle
-      - /home/coding/mta-my-way
-      - /home/coding/domain-check
+    - /home/coding/AgentScribe
+    - /home/coding/ai-code-battle
+    - /home/coding/mta-my-way
+    - /home/coding/domain-check
   weave:
     enabled: true
     max_beads_per_run: 3
     cooldown_hours: 24
     doc_patterns:
-      - "README*"
-      - "docs/**/*"
-      - "PROGRESS.md"
+    - README*
+    - docs/**/*
+    - PROGRESS.md
   unravel:
     enabled: true
     max_beads_per_run: 3
@@ -36,17 +32,15 @@ strands:
     cooldown_hours: 48
     severity_threshold: 3
     scanners:
-      - name: vet
-        command: "cd mothership && go vet ./... 2>&1"
-      - name: test
-        command: "cd mothership && go test ./... 2>&1"
-
+    - name: vet
+      command: cd mothership && go vet ./... 2>&1
+    - name: test
+      command: cd mothership && go test ./... 2>&1
 verification:
-  - /home/coding/.needle/hooks/verify-changes.sh
-
+- /home/coding/.needle/hooks/verify-changes.sh
 prompt:
   context_files:
-    - docs/plan/plan.md
+  - docs/plan/plan.md
   instructions: |
     You are working on Spaxel, a WiFi CSI-based indoor positioning system for self-hosted homes.
     A Docker container mothership (Go) manages a fleet of ESP32-S3 devices that stream CSI data.
@@ -99,4 +93,5 @@ prompt:
       {context_file_contents}
 
       Bead ID: {bead_id}
-
+bead_cli:
+  backend: bead-forge
