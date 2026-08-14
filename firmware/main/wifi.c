@@ -159,7 +159,46 @@ esp_err_t wifi_start_connect(void) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Check if restart is imminent - skip WiFi operations to prevent race
+    // RESTART-SAFE GUARD: Prevent race between WiFi operations and system restart
+    //
+    // This guard prevents a race condition where WiFi reconnection attempts
+    // interfere with imminent system restart (OTA completion, reboot command,
+    // timeout-triggered restart, etc.).
+    //
+    // WHY THIS IS NEEDED:
+    // 1. ESP-IDF WiFi APIs (esp_wifi_set_mode, esp_wifi_set_config, esp_wifi_start,
+    //    esp_wifi_connect) use ESP_ERROR_CHECK internally, which aborts the system
+    //    if called while WiFi is in an invalid state (e.g., during OTA download).
+    // 2. When g_state.restarting is set, the system is about to reboot within
+    //    milliseconds. Attempting WiFi operations at this point creates a race:
+    //    - Restart task is preparing to call esp_restart()
+    //    - WiFi task is calling esp_wifi_* APIs
+    //    - Both tasks touch WiFi hardware concurrently -> abort
+    // 3. Returning ESP_OK here is NOT an error - it's a graceful skip that allows
+    //    the restart to complete cleanly. WiFi will reconnect normally on next boot.
+    //
+    // WHERE THE RESTART FLAG IS SET (6 trigger points):
+    // - main.c:346 - REBOOT event handler (user/command-initiated)
+    // - main.c:513 - Health task reboot (3-minute timeout)
+    // - wifi.c:486 - Captive portal save reboot
+    // - websocket.c:127 - OTA timeout restart
+    // - websocket.c:833 - Reboot command from mothership
+    // - websocket.c:1042 - OTA completion restart
+    //
+    // COORDINATION WITH OTA GUARD:
+    // This restart guard works with the ota_in_progress flag (see ota-wifi-reconnection-race-summary.md)
+    // to provide complete protection:
+    // - ota_in_progress: Blocks WiFi reconnection during OTA download
+    // - restarting: Blocks ALL WiFi operations when restart is imminent
+    // Together they prevent races across the entire restart lifecycle.
+    //
+    // TESTED SCENARIOS (see firmware/test/):
+    // - OTA during WiFi reconnect: test_ota_during_wifi_reconnect.c
+    // - All esp_restart() trigger points: test_all_restart_trigger_points.c
+    // - Restart flag propagation across FreeRTOS tasks: test_restart_flag_propagation.c
+    //
+    // For design rationale, see docs/notes/ota-wifi-reconnection-race-summary.md
+    // For test procedures, see docs/tests/manual-ota-during-wifi-reconnect-test.md
     if (g_state.restarting) {
         ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] Skipping WiFi connection - restart flag is set");
         ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] This is a guard-triggered skip, NOT an error");
