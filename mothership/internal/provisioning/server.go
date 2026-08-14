@@ -221,14 +221,17 @@ func (s *Server) HandleProvision(w http.ResponseWriter, r *http.Request) {
 	// WiFi credentials are now optional - provisioning succeeds even when
 	// credentials are empty, allowing for captive-portal-only onboarding or
 	// open network configurations.
-	wifiSSID := req.WifiSSID
-	wifiPass := req.WifiPass
-	if wifiSSID == "" {
+	//
+	// Whitespace-only values are treated as empty and fall back to DB settings.
+	wifiSSID := strings.TrimSpace(req.WifiSSID)
+	wifiPass := strings.TrimSpace(req.WifiPass)
+
+	// Use DB settings if either field is empty/whitespace
+	// (conservative: don't trust partial overrides; require both to be non-empty)
+	if wifiSSID == "" || wifiPass == "" {
 		if v, ok := s.networkSetting(networkSettingWifiSSID); ok {
 			wifiSSID = v
 		}
-	}
-	if wifiPass == "" {
 		if v, ok := s.networkSetting(networkSettingWifiPassword); ok {
 			wifiPass = v
 		}
