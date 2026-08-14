@@ -71,6 +71,8 @@ type fleetNodeEntry struct {
 	UptimeSeconds   int64   `json:"uptime_seconds"`
 	LastSeenMs      int64   `json:"last_seen_ms"`
 	Unpaired        bool    `json:"unpaired,omitempty"`
+	FreeHeapBytes   int64   `json:"free_heap_bytes"`
+	Temperature     float64 `json:"temperature"`
 }
 
 func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +119,8 @@ func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
 			FirmwareVersion: n.FirmwareVersion,
 			UptimeSeconds:   uptimeSeconds,
 			LastSeenMs:      n.LastSeenAt.UnixMilli(),
+			FreeHeapBytes:   n.FreeHeapBytes,
+			Temperature:     0, // Not currently tracked in NodeRecord
 		})
 	}
 
@@ -137,10 +141,12 @@ func (h *FleetHandler) getFleetHealth(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				entries = append(entries, fleetNodeEntry{
-					MAC:      mac,
-					Online:   true,
-					Unpaired: true,
-					Role:     "rx",
+					MAC:            mac,
+					Online:         true,
+					Unpaired:       true,
+					Role:           "rx",
+					FreeHeapBytes:  0, // Unpaired nodes don't have data yet
+					Temperature:     0,
 				})
 			}
 		}
@@ -203,6 +209,8 @@ func (h *FleetHandler) getFleet(w http.ResponseWriter, r *http.Request) {
 			FirmwareVersion: n.FirmwareVersion,
 			UptimeSeconds:   uptimeSeconds,
 			LastSeenMs:      n.LastSeenAt.UnixMilli(),
+			FreeHeapBytes:   n.FreeHeapBytes,
+			Temperature:     0, // Not currently tracked in NodeRecord
 		})
 	}
 
@@ -222,10 +230,12 @@ func (h *FleetHandler) getFleet(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				entries = append(entries, fleetNodeEntry{
-					MAC:      mac,
-					Online:   true,
-					Unpaired: true,
-					Role:     "rx",
+					MAC:            mac,
+					Online:         true,
+					Unpaired:       true,
+					Role:           "rx",
+					FreeHeapBytes:  0, // Unpaired nodes don't have data yet
+					Temperature:     0,
 				})
 			}
 		}

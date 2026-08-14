@@ -886,9 +886,9 @@ describe('WiFi step skip logic (ADR-005)', () => {
 
         expect(_state.currentStepIndex).toBe(2); // provision_wifi
         var content = document.getElementById('wizard-content');
-        expect(content.innerHTML).toContain('Using fleet network');
+        expect(content.innerHTML).toContain('Fleet network configured');
         expect(content.innerHTML).toContain('FleetNet');
-        expect(content.innerHTML).toContain('use a different network for this node');
+        expect(content.innerHTML).toContain('All nodes will join');
 
         // Auto-advances past the step after a brief pause.
         await jest.advanceTimersByTimeAsync(900);
@@ -909,8 +909,8 @@ describe('WiFi step skip logic (ADR-005)', () => {
 
         expect(_state.currentStepIndex).toBe(2);
         var content = document.getElementById('wizard-content');
-        expect(content.innerHTML).toContain('Configure WiFi');
-        expect(content.innerHTML).toContain('wifi-ssid');
+        expect(content.innerHTML).toContain('Network Configuration');
+        expect(content.innerHTML).toContain('WiFi network not configured');
 
         // Must NOT auto-advance in this case.
         await jest.advanceTimersByTimeAsync(2000);
@@ -919,7 +919,7 @@ describe('WiFi step skip logic (ADR-005)', () => {
         jest.useRealTimers();
     });
 
-    test('"use a different network" link cancels the auto-advance and shows the manual form', async () => {
+    test('"use a different network" link functionality removed per ADR-005', async () => {
         jest.useFakeTimers();
         fetch.mockResolvedValue({
             ok: true,
@@ -928,17 +928,14 @@ describe('WiFi step skip logic (ADR-005)', () => {
 
         await advanceToProvisionWifi();
 
+        // Per ADR-005, the override link was removed - all nodes use the fleet network
         var overrideLink = document.getElementById('wifi-step-override-link');
-        expect(overrideLink).not.toBeNull();
-        overrideLink.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+        expect(overrideLink).toBeNull();
 
+        // The step should proceed normally without override option
         var content = document.getElementById('wizard-content');
-        expect(content.innerHTML).toContain('Configure WiFi');
-        expect(content.innerHTML).toContain('wifi-ssid');
-
-        // The cancelled auto-advance must not fire later.
-        await jest.advanceTimersByTimeAsync(2000);
-        expect(_state.currentStepIndex).toBe(2);
+        expect(content.innerHTML).toContain('Fleet network configured');
+        expect(content.innerHTML).not.toContain('use a different network');
 
         jest.useRealTimers();
     });
