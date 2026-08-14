@@ -11,7 +11,6 @@
 package acceptance
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -30,9 +29,6 @@ func AS5_WiFiRestartRace_RebootDuringWiFiReconnect(t *testing.T) {
 	if os.Getenv("SPAXEL_HARDWARE_TEST") != "1" {
 		t.Skip("Set SPAXEL_HARDWARE_TEST=1 to run hardware test")
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
 
 	mothershipURL := os.Getenv("SPAXEL_MOTHERSHIP_URL")
 	if mothershipURL == "" {
@@ -70,27 +66,22 @@ func AS5_WiFiRestartRace_RebootDuringWiFiReconnect(t *testing.T) {
 		nodeBack := false
 
 		for time.Since(start) < timeout {
-			select {
-			case <-ctx.Done():
-				t.Fatal("Test timeout")
-			default:
-				nodes := getNodesResponse(t, mothershipURL)
-				for _, n := range nodes {
-					if n["mac"] == nodeMAC {
-						if status, ok := n["status"].(string); ok && status == "online" {
-							nodeBack = true
-							elapsed := time.Since(start)
-							t.Logf("Node %s back online in %v", nodeMAC, elapsed)
+			nodes := getNodesResponse(t, mothershipURL)
+			for _, n := range nodes {
+				if n["mac"] == nodeMAC {
+					if status, ok := n["status"].(string); ok && status == "online" {
+						nodeBack = true
+						elapsed := time.Since(start)
+						t.Logf("Node %s back online in %v", nodeMAC, elapsed)
 
-							if elapsed > 30*time.Second {
-								t.Errorf("Node took %v to reconnect, want < 30s", elapsed)
-							}
-							return
+						if elapsed > 30*time.Second {
+							t.Errorf("Node took %v to reconnect, want < 30s", elapsed)
 						}
+						return
 					}
 				}
-				time.Sleep(2 * time.Second)
 			}
+			time.Sleep(2 * time.Second)
 		}
 
 		if !nodeBack {
@@ -111,9 +102,6 @@ func AS5_WiFiRestartRace_OTADuringWiFiLost(t *testing.T) {
 	if os.Getenv("SPAXEL_HARDWARE_TEST") != "1" {
 		t.Skip("Set SPAXEL_HARDWARE_TEST=1 to run hardware test")
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
 
 	mothershipURL := os.Getenv("SPAXEL_MOTHERSHIP_URL")
 	if mothershipURL == "" {
@@ -159,27 +147,22 @@ func AS5_WiFiRestartRace_OTADuringWiFiLost(t *testing.T) {
 		otaComplete := false
 
 		for time.Since(start) < timeout {
-			select {
-			case <-ctx.Done():
-				t.Fatal("Test timeout")
-			default:
-				events := getEventsByType(t, mothershipURL, "ota_complete")
-				if len(events) > 0 {
-					for _, event := range events {
-						if event["node_mac"] == nodeMAC {
-							otaComplete = true
-							elapsed := time.Since(start)
-							t.Logf("OTA completed for %s in %v", nodeMAC, elapsed)
+			events := getEventsByType(t, mothershipURL, "ota_complete")
+			if len(events) > 0 {
+				for _, event := range events {
+					if event["node_mac"] == nodeMAC {
+						otaComplete = true
+						elapsed := time.Since(start)
+						t.Logf("OTA completed for %s in %v", nodeMAC, elapsed)
 
-							if elapsed > 90*time.Second {
-								t.Errorf("OTA took %v, want < 90s", elapsed)
-							}
-							return
+						if elapsed > 90*time.Second {
+							t.Errorf("OTA took %v, want < 90s", elapsed)
 						}
+						return
 					}
 				}
-				time.Sleep(2 * time.Second)
 			}
+			time.Sleep(2 * time.Second)
 		}
 
 		if !otaComplete {
@@ -239,9 +222,6 @@ func AS5_WiFiRestartRace_NormalReconnectionStillWorks(t *testing.T) {
 		t.Skip("Set SPAXEL_HARDWARE_TEST=1 to run hardware test")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
 	mothershipURL := os.Getenv("SPAXEL_MOTHERSHIP_URL")
 	if mothershipURL == "" {
 		mothershipURL = "http://localhost:8080"
@@ -286,14 +266,3 @@ func AS5_WiFiRestartRace_NormalReconnectionStillWorks(t *testing.T) {
 	t.Log("AS-5 WiFi Restart Race: Normal reconnection still works - PASSED")
 }
 
-// Helper function to check mothership health
-func checkMothershipHealth(ctx context.Context, mothershipURL string) bool {
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(mothershipURL + "/healthz")
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == http.StatusOK
-}
