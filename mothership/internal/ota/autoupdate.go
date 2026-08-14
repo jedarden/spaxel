@@ -488,7 +488,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	}
 	m.mu.Unlock()
 
-	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s version_before=%s version_after=%s baseline_quality=%.2f",
+	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s version_before=%s version_after=%s baseline_quality=%.2f trigger_type=automatic_canary",
 		canaryMAC, m.canaryPreviousVersion, firmware.Version, m.baselineQuality)
 
 	autoUpdateTriggerCounter.WithLabelValues("canary").Inc()

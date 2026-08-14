@@ -186,7 +186,7 @@ func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta) error {
 	m.mu.Unlock()
 
 	sender.SendOTAToMAC(mac, url, meta.SHA256, meta.Version)
-	log.Printf("[INFO] ota: triggered update: node=%s version_before=%s version_after=%s sha256=%s trigger_type=manual",
+	log.Printf("[INFO] ota: OTA initiated by user: node=%s version_before=%s version_after=%s sha256=%s trigger_type=manual",
 		mac, versionBefore, meta.Version, meta.SHA256)
 	return nil
 }
