@@ -317,16 +317,21 @@ func (m *AutoUpdateManager) checkForNewFirmware(ctx context.Context) {
 	m.selectedFirmwareVersion = latest.Version
 	m.canaryFirmwareVersionAfter = latest.Version
 
-	// Log firmware selection with structured information
-	selectionReason := "fresh_scan"
+	// Build comprehensive selection reason
+	selectionReason := "latest_stable_fresh_scan"
 	if fromCache {
-		selectionReason = "cached_scan"
+		selectionReason = "latest_stable_cached_scan"
 	}
-	log.Printf("[INFO] ota: AUTO-UPDATE firmware selection: version=%s filename=%s selection_reason=%s snapshot_timestamp=%s",
+
+	// Log firmware selection with comprehensive structured information
+	log.Printf("[INFO] ota: AUTO-UPDATE firmware selection: version=%s filename=%s sha256=%s selection_reason=%s source=%s snapshot_timestamp=%s snapshot_age=%s",
 		latest.Version,
 		latest.Filename,
+		latest.SHA256,
 		selectionReason,
-		scanTimestamp.Format(time.RFC3339))
+		map[bool]string{true: "cache", false: "fresh_getLatest"}[fromCache],
+		scanTimestamp.Format(time.RFC3339),
+		formatDuration(time.Since(scanTimestamp)))
 
 	// Check if we're already in an update cycle
 	if m.updateState != StateIdle && m.updateState != StateComplete && m.updateState != StateFailed {
@@ -422,18 +427,29 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	// Increment Prometheus counter for auto-update trigger
 	autoUpdateTriggerCounter.WithLabelValues("automatic").Inc()
 
+	// Determine comprehensive selection reason
+	selectionReason := "latest_stable_from_cache"
+	if !m.firmwareSelectionFromCache {
+		selectionReason = "latest_stable_from_fresh_getLatest"
+	}
+
 	// Explicit log line: AUTO-UPDATE triggered (distinguish from manual OTA)
-	log.Printf("[INFO] ota: AUTO-UPDATE TRIGGERED: trigger_type=automatic firmware=%s filename=%s selection_reason=%s snapshot_timestamp=%s snapshot_age=%s",
+	// Shows: which version, why selected, where from, how fresh the data is
+	log.Printf("[INFO] ota: AUTO-UPDATE TRIGGERED: trigger_type=automatic version=%s filename=%s sha256=%s selection_reason=%s source=%s snapshot_timestamp=%s snapshot_age=%s",
 		firmware.Version,
 		firmware.Filename,
-		map[bool]string{true: "cached_scan", false: "fresh_scan"}[m.firmwareSelectionFromCache],
+		firmware.SHA256,
+		selectionReason,
+		map[bool]string{true: "cache", false: "fresh_getLatest"}[m.firmwareSelectionFromCache],
 		m.firmwareSnapshotTimestamp.Format(time.RFC3339),
 		formatDuration(time.Since(m.firmwareSnapshotTimestamp)))
 
-	log.Printf("[INFO] ota: AUTO-UPDATE cycle started: firmware_version=%s filename=%s selection_reason=%s snapshot_age=%s",
+	log.Printf("[INFO] ota: AUTO-UPDATE cycle started: firmware_version=%s filename=%s sha256=%s selection_reason=%s source=%s snapshot_age=%s",
 		firmware.Version,
 		firmware.Filename,
-		map[bool]string{true: "cached_scan", false: "fresh_scan"}[m.firmwareSelectionFromCache],
+		firmware.SHA256,
+		selectionReason,
+		map[bool]string{true: "cache", false: "fresh_getLatest"}[m.firmwareSelectionFromCache],
 		formatDuration(time.Since(m.firmwareSnapshotTimestamp)))
 
 	m.publishEvent("update_started", "", fmt.Sprintf("AUTO-UPDATE cycle started for firmware %s", firmware.Version), map[string]interface{}{
