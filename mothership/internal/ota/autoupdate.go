@@ -435,7 +435,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 
 	// Explicit log line: AUTO-UPDATE triggered (distinguish from manual OTA)
 	// Shows: which version, why selected, where from, how fresh the data is
-	log.Printf("[INFO] ota: AUTO-UPDATE TRIGGERED: trigger_type=automatic version=%s filename=%s sha256=%s selection_reason=%s source=%s snapshot_timestamp=%s snapshot_age=%s",
+	log.Printf("[INFO] ota: Auto-update triggered: trigger_type=auto version=%s filename=%s sha256=%s selection_reason=%s source=%s snapshot_timestamp=%s snapshot_age=%s",
 		firmware.Version,
 		firmware.Filename,
 		firmware.SHA256,
