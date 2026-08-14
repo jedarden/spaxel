@@ -17,10 +17,10 @@ import (
 var (
 	autoUpdateTriggerCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "spaxel_autoupdate_triggers_total",
+			Name: "auto_update_triggers_total",
 			Help: "Total number of auto-update trigger events",
 		},
-		[]string{"trigger_type"}, // automatic, manual, canary, fleet, rollback
+		[]string{"trigger_type", "result"}, // trigger_type: "auto", result: "success" or "failure"
 	)
 
 	autoUpdateFirmwareVersion = promauto.NewGaugeVec(
@@ -425,7 +425,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	m.mu.Unlock()
 
 	// Increment Prometheus counter for auto-update trigger
-	autoUpdateTriggerCounter.WithLabelValues("automatic").Inc()
+	autoUpdateTriggerCounter.WithLabelValues("auto", "success").Inc()
 
 	// Determine comprehensive selection reason
 	selectionReason := "latest_stable_from_cache"
@@ -491,7 +491,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s version_before=%s version_after=%s baseline_quality=%.2f trigger_type=automatic_canary",
 		canaryMAC, m.canaryPreviousVersion, firmware.Version, m.baselineQuality)
 
-	autoUpdateTriggerCounter.WithLabelValues("canary").Inc()
+	autoUpdateTriggerCounter.WithLabelValues("auto", "success").Inc()
 
 	m.publishEvent("canary_deploy", canaryMAC, fmt.Sprintf("AUTO-UPDATE: Deploying canary update to node %s", canaryMAC), map[string]interface{}{
 		"firmware_version":         firmware.Version,
@@ -731,7 +731,7 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 		m.updateState = StateComplete
 		m.mu.Unlock()
 
-		autoUpdateTriggerCounter.WithLabelValues("fleet_complete").Inc()
+		autoUpdateTriggerCounter.WithLabelValues("auto", "success").Inc()
 
 		log.Printf("[INFO] ota: AUTO-UPDATE fleet rollout complete: firmware_version=%s nodes_updated=%d",
 			firmware.Version, nodesUpdatedCount)
@@ -795,6 +795,9 @@ func (m *AutoUpdateManager) failUpdateCycle(reason string) {
 	m.mu.Lock()
 	m.updateState = StateFailed
 	m.mu.Unlock()
+
+	// Increment Prometheus counter for auto-update failure
+	autoUpdateTriggerCounter.WithLabelValues("auto", "failure").Inc()
 
 	m.publishEvent("update_failed", m.currentCanaryNode, fmt.Sprintf("Auto-update failed: %s", reason), map[string]interface{}{
 		"reason": reason,

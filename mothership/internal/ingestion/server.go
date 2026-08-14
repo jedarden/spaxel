@@ -95,6 +95,12 @@ type Recorder interface {
 type BLEHandler func(nodeMAC string, devices []BLEDevice)
 
 // Server manages WebSocket connections from ESP32 nodes
+// NodeHealthUpdater persists health metrics from node health messages.
+// Interface type to avoid circular import with fleet package.
+type NodeHealthUpdater interface {
+	UpdateNodeHealth(mac string, uptimeMS, wifiRSSIdBm, freeHeapBytes int64, temperatureC float64, ip string) error
+}
+
 type Server struct {
 	mu          sync.RWMutex
 	connections map[string]*NodeConnection // keyed by MAC
@@ -143,10 +149,6 @@ type Server struct {
 	tokenValidator func(mac, token string) bool
 
 	// NodeHealthUpdater persists health metrics from node health messages
-	// Interface type to avoid circular import with fleet package
-	NodeHealthUpdater interface {
-		UpdateNodeHealth(mac string, uptimeMS, wifiRSSIdBm, freeHeapBytes int64, temperatureC float64, ip string) error
-	}
 	nodeHealthUpdater NodeHealthUpdater
 
 	// migrationDeadline is the time after which nodes without valid tokens are rejected.
