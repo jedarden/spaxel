@@ -1,0 +1,32 @@
+				if tt.configureSSID {
+					// Configure SSID (may include password depending on test case)
+					if tt.configurePass && tt.name == "Both SSID and empty password configured" {
+						// Configure SSID with empty password (open network)
+						body = `{"wifi_ssid": "OpenNet", "wifi_password": ""}`
+					} else {
+						// Configure only SSID (omit password field entirely)
+						body = `{"wifi_ssid": "TestSSID"}`
+					}
+
+					req := httptest.NewRequest(http.MethodPut, "/api/settings/network", strings.NewReader(body))
+					req.Header.Set("Content-Type", "application/json")
+					rr := httptest.NewRecorder()
+					r.ServeHTTP(rr, req)
+
+					if rr.Code != http.StatusOK {
+						t.Fatalf("Failed to configure SSID: %d - %s", rr.Code, rr.Body.String())
+					}
+				}
+
+				if tt.configurePass && !tt.configureSSID {
+					// Configure only password (omit SSID field entirely)
+					body := `{"wifi_password": "Password123"}`
+					req := httptest.NewRequest(http.MethodPut, "/api/settings/network", strings.NewReader(body))
+					req.Header.Set("Content-Type", "application/json")
+					rr := httptest.NewRecorder()
+					r.ServeHTTP(rr, req)
+
+					if rr.Code != http.StatusOK {
+						t.Fatalf("Failed to configure password: %d - %s", rr.Code, rr.Body.String())
+					}
+				}
