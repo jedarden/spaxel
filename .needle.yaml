@@ -41,57 +41,29 @@ verification:
 prompt:
   context_files:
   - docs/plan/plan.md
-  instructions: |
-    You are working on Spaxel, a WiFi CSI-based indoor positioning system for self-hosted homes.
-    A Docker container mothership (Go) manages a fleet of ESP32-S3 devices that stream CSI data.
-
-    IMPORTANT: You must ONLY work within /home/coding/spaxel/. Do not read, write, or
-    explore files outside this directory.
-
-    Architecture:
-    - Mothership: Go backend in mothership/ (cmd/mothership/ entrypoint, internal/ packages)
-    - Firmware: ESP-IDF C in firmware/ (ESP32-S3)
-    - Dashboard: Vanilla JS + Three.js in dashboard/
-    - Persistence: SQLite (modernc.org/sqlite, pure Go)
-    - Transport: WebSocket (gorilla/websocket), mDNS (hashicorp/mdns)
-
-    Rules:
-    - Read docs/plan/plan.md for full architecture before starting any bead
-    - Check PROGRESS.md for what's already implemented
-    - Run `cd mothership && go test ./...` before closing a bead
-    - Run `cd mothership && go vet ./...` before closing a bead
-    - Follow existing code patterns in mothership/internal/
-    - Write table-driven tests alongside implementation
-    - No CGO — use pure Go libraries only (modernc.org/sqlite, not mattn/go-sqlite3)
+  instructions: "You are working on Spaxel, a WiFi CSI-based indoor positioning system\
+    \ for self-hosted homes.\nA Docker container mothership (Go) manages a fleet of\
+    \ ESP32-S3 devices that stream CSI data.\n\nIMPORTANT: You must ONLY work within\
+    \ /home/coding/spaxel/. Do not read, write, or\nexplore files outside this directory.\n\
+    \nArchitecture:\n- Mothership: Go backend in mothership/ (cmd/mothership/ entrypoint,\
+    \ internal/ packages)\n- Firmware: ESP-IDF C in firmware/ (ESP32-S3)\n- Dashboard:\
+    \ Vanilla JS + Three.js in dashboard/\n- Persistence: SQLite (modernc.org/sqlite,\
+    \ pure Go)\n- Transport: WebSocket (gorilla/websocket), mDNS (hashicorp/mdns)\n\
+    \nRules:\n- Read docs/plan/plan.md for full architecture before starting any bead\n\
+    - Check PROGRESS.md for what's already implemented\n- Run `cd mothership && go\
+    \ test ./...` before closing a bead\n- Run `cd mothership && go vet ./...` before\
+    \ closing a bead\n- Follow existing code patterns in mothership/internal/\n- Write\
+    \ table-driven tests alongside implementation\n- No CGO \u2014 use pure Go libraries\
+    \ only (modernc.org/sqlite, not mattn/go-sqlite3)\n"
   templates:
-    pluck: |
-      ## Workflow
-
-      You are a coding agent. Complete the task below, then close the bead.
-
-      Steps:
-      1. Read the task description and context below
-      2. Implement the required changes in {workspace_path}
-      3. Commit your work: `git commit -am "brief description of what was done"`
-      4. Push: `git push`
-      5. Close the bead: `br close {bead_id} --body "brief summary of what was implemented"`
-
-      If you cannot complete the task — do NOT close the bead. It will be retried automatically.
-
-      ---
-
-      ## Task: {bead_title}
-
-      {bead_body}
-
-      ## Rules
-
-      {workspace_instructions}
-
-      ## Context
-
-      {context_file_contents}
-
-      Bead ID: {bead_id}
+    pluck: "## Workflow\n\nYou are a coding agent. Complete the task below, then close\
+      \ the bead.\n\nSteps:\n1. Read the task description and context below\n2. Implement\
+      \ the required changes in {workspace_path}\n3. Commit your work: `git commit\
+      \ -am \"brief description of what was done\"`\n4. Push: `git push`\n5. Close\
+      \ the bead: `br close {bead_id} --body \"brief summary of what was implemented\"\
+      `\n\nIf you cannot complete the task \u2014 do NOT close the bead. It will be\
+      \ retried automatically.\n\n---\n\n## Task: {bead_title}\n\n{bead_body}\n\n\
+      ## Rules\n\n{workspace_instructions}\n\n## Context\n\n{context_file_contents}\n\
+      \nBead ID: {bead_id}\n"
 bead_cli:
-  backend: bead-forge
+  backend: bead-rs
