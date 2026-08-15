@@ -16,7 +16,7 @@ global.fetch = jest.fn(function() {
     return Promise.resolve({
         ok: true,
         json: function() {
-            return Promise.resolve(mockEventData);
+            return Promise.resolve(global.__sidebarTimelineMockEventData || mockEventData);
         }
     });
 });
@@ -60,16 +60,13 @@ global.IntersectionObserver = jest.fn(function(callback, options) {
 describe('SidebarTimeline', function() {
     let SidebarTimeline;
     let mockElements;
-    let mockEventData = { events: [], cursor: null, total_filtered: 0 };
 
     beforeEach(function() {
         // Reset all mocks
         jest.clearAllMocks();
 
         // Reset mock event data (update the variable used by fetch mock)
-        mockEventData.events = [];
-        mockEventData.cursor = null;
-        mockEventData.total_filtered = 0;
+        global.__sidebarTimelineMockEventData = { events: [], cursor: null, total_filtered: 0 };
 
         // Setup DOM structure
         document.body.innerHTML = `
@@ -187,7 +184,7 @@ describe('SidebarTimeline', function() {
             }
 
             // Update the shared mockEventData object with 15 test events
-            mockEventData.events = [
+            global.__sidebarTimelineMockEventData.events = [
                                 {
                                     id: 1,
                                     timestamp_ms: Date.now() - 3600000,
@@ -335,8 +332,8 @@ describe('SidebarTimeline', function() {
                                     severity: 'info'
                                 }
                             ];
-                            mockEventData.cursor = null;
-                            mockEventData.total_filtered = 15;
+                            global.__sidebarTimelineMockEventData.cursor = null;
+                            global.__sidebarTimelineMockEventData.total_filtered = 15;
         });
 
         test('all event types render correctly', function(done) {
