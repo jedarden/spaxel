@@ -537,6 +537,9 @@ static esp_err_t captive_save_handler(httpd_req_t *req) {
         const char *resp = "<html><body><h1>Saved!</h1><p>Rebooting...</p></body></html>";
         httpd_resp_send(req, resp, strlen(resp));
 
+        // RESTART TRIGGER POINT #3: Captive portal save reboot
+        // This is one of 6 places in the codebase where g_state.restarting is set
+        // See restart-safe pattern documentation in wifi.h for the full list
         vTaskDelay(pdMS_TO_TICKS(1000));
         g_state.restarting = true;
         ESP_LOGW(TAG, "Setting restarting flag before captive portal save reboot");
@@ -571,6 +574,12 @@ esp_err_t wifi_start_captive_portal(void) {
     char ap_ssid[20];
     snprintf(ap_ssid, sizeof(ap_ssid), "spaxel-%02X%02X",
              g_state.mac[4], g_state.mac[5]);
+
+    // NOTE: These WiFi API calls do NOT need a restart-safe guard because:
+    // 1. Captive portal mode is entered BEFORE any restart flag is set
+    // 2. The restart flag is set later in captive_save_handler() after provisioning succeeds
+    // 3. This function is called only once when transitioning to NODE_STATE_CAPTIVE_PORTAL
+    // See restart-safe pattern documentation in wifi.h for the general guard pattern.
 
     wifi_config_t ap_config = {0};
     strncpy((char *)ap_config.ap.ssid, ap_ssid, sizeof(ap_config.ap.ssid));

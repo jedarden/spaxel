@@ -25,6 +25,10 @@ esp_err_t csi_init(void);
  * ESP_ERR_WIFI_NOT_STARTED and is silently discarded. Call this from the
  * WIFI_EVENT_STA_START handler, not from csi_init(). Idempotent: only the
  * first call after boot takes effect. See ADR-003 / bf-5x46.
+ *
+ * NOTE: This function includes a restart-safe guard. If g_state.restarting is
+ * set, the function returns ESP_OK without attempting CSI configuration.
+ * See wifi.h for full documentation of the restart-safe pattern.
  */
 esp_err_t csi_wifi_start(void);
 
