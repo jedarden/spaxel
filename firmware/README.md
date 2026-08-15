@@ -148,10 +148,22 @@ For detailed error handling patterns and race condition prevention, see:
 - Device advertisement parsing (iBeacon, Eddystone, generic)
 - RSSI aggregation and rotation heuristics
 
-### OTA Updates (`ota.c`, `ota.h`)
-- HTTP firmware download with SHA-256 verification
-- Dual-partition scheme with rollback support
+### OTA Updates (`ws.c`, `ws.h`)
+- HTTPS-capable firmware download with SHA-256 integrity verification
+- **Secure Boot V2** signed app verification (authenticity, not just integrity)
+- **Anti-rollback protection** prevents downgrade attacks via eFuse-based security version
+- Dual-partition scheme with automatic rollback on validation failure
 - `ota_in_progress` flag prevents WiFi reconnection during download
+
+#### Security Model
+
+✅ **Signed App Verification**: Every firmware image is RSA-2048 signed. The bootloader verifies the signature before execution, rejecting any unsigned or incorrectly signed images.
+
+✅ **Anti-Rollback**: An eFuse-based security version counter prevents downgrade attacks. Once a higher version boots, the device permanently refuses lower versions.
+
+✅ **Defense in Depth**: Even if an attacker can intercept HTTP traffic or impersonate the mothership, they cannot execute arbitrary code because the bootloader will reject unsigned firmware.
+
+See `docs/notes/ota-security-hardening-2026-08-15.md` for complete security architecture.
 
 ### State Machine (`main.c`)
 - FreeRTOS task driving node lifecycle
