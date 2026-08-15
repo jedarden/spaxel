@@ -253,6 +253,58 @@ func TestMalformedCounter_ConnectionCloseIntegration(t *testing.T) {
 	}
 }
 
+func TestNTPServerPushedOnConnectAndUpdate(t *testing.T) {
+	ingestServer := NewServer()
+	ingestServer.SetNTPServer("pool.ntp.org")
+
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ingestServer.HandleNodeWS(w, r)
+	}))
+	defer httpServer.Close() //nolint:errcheck
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws/node"
+	conn, _, err := (&websocket.Dialer{}).Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close() //nolint:errcheck
+
+	hello := `{"type":"hello","mac":"AA:BB:CC:DD:EE:FF","firmware_version":"1.0.0","chip":"ESP32-S3"}`
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(hello)); err != nil {
+		t.Fatalf("Failed to send hello: %v", err)
+	}
+
+	readNTPConfig := func(want string) {
+		t.Helper()
+		for i := 0; i < 4; i++ {
+			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				t.Fatalf("Failed to read NTP config: %v", err)
+			}
+			var msg ConfigMessage
+			if err := json.Unmarshal(data, &msg); err != nil {
+				continue
+			}
+			if msg.NTPServer != nil {
+				if *msg.NTPServer != want {
+					t.Fatalf("NTP server = %q, want %q", *msg.NTPServer, want)
+				}
+				return
+			}
+		}
+		t.Fatalf("did not receive NTP server %q", want)
+	}
+
+	// The value configured before the handshake reaches an already-provisioned
+	// node when it reconnects.
+	readNTPConfig("pool.ntp.org")
+
+	// Updating the server also pushes the replacement to the live connection.
+	ingestServer.SetNTPServer("time.google.com")
+	readNTPConfig("time.google.com")
+}
+
 // readRejectMsg reads the next WebSocket message and tries to unmarshal it as
 // a RejectMessage. Returns the reject message or nil if the read fails or the
 // message is not a reject.
