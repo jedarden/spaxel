@@ -57,3 +57,49 @@ configure_file(
     @ONLY
 )
 
+# Secure Boot V2: Firmware signing configuration
+#
+# When Secure Boot V2 is enabled (CONFIG_SECURE_BOOT_V2=y), the build system
+# automatically signs bootloader and app binaries with the private key.
+# The signing key is expected at firmware/keys/firmware_signing_key.pem.
+#
+# Generate signing key if it doesn't exist:
+#   ./scripts/generate-signing-key.sh
+#
+# IMPORTANT: The private signing key MUST be kept secret. Never commit it to git.
+# The keys/ directory is already in .gitignore.
+#
+# For production deployment, store the private key in a secure location (HSM, offline storage)
+# and set the path via secure_boot_signing_key in the project configuration.
+
+if(CONFIG_SECURE_BOOT_V2)
+    message(STATUS "Secure Boot V2 enabled - firmware will be signed")
+
+    # Set signing key path (default: keys/firmware_signing_key.pem)
+    set(SECURE_BOOT_SIGNING_KEY "${CMAKE_CURRENT_SOURCE_DIR}/keys/firmware_signing_key.pem")
+
+    if(NOT EXISTS "${SECURE_BOOT_SIGNING_KEY}")
+        message(WARNING "Secure Boot V2 signing key not found: ${SECURE_BOOT_SIGNING_KEY}")
+        message(WARNING "Generate signing key: ./scripts/generate-signing-key.sh")
+        message(WARNING "Build will fail without the signing key")
+    else()
+        message(STATUS "Using signing key: ${SECURE_BOOT_SIGNING_KEY}")
+    endif()
+
+    # Configure secure boot signing key path
+    set(secure_boot_signing_key "${SECURE_BOOT_SIGNING_KEY}")
+endif()
+
+# Anti-rollback: Security version configuration
+#
+# When anti-rollback is enabled (CONFIG_APP_ANTI_ROLLBACK=y), each firmware image
+# must include a security version number. The device will refuse to boot any image
+# with a lower security version than what's burned in eFuse.
+#
+# For now, we use the firmware version as the security version. In production,
+# you may want a separate security version that increments on security fixes only.
+
+if(CONFIG_APP_ANTI_ROLLBACK)
+    message(STATUS "Anti-rollback enabled - security version: ${SPAXEL_VERSION}")
+endif()
+

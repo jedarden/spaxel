@@ -50,3 +50,11 @@ node_modules/
 
 # Python bytecode cache (managed_components pytest/conftest scripts)
 __pycache__/
+/firmware/keys/
+
+# Bead backup files (bead-rs / bead-forge recovery snapshots)
+.beads/.br_recovery/
+
+# Bead event logs (bead-rs checkpoint objects)
+.beads/events.jsonl
+.beads/traces/

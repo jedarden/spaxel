@@ -71,6 +71,29 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 CONFIG_BOOTLOADER_APP_ROLLBACK_COUNT=1
 CONFIG_APP_ROLLBACK_ENABLE=y
 
+# OTA — anti-rollback protection (prevents downgrade attacks)
+# Uses eFuse-based security version counter. Once a higher version is written,
+# the device permanently refuses to boot lower versions, even if an attacker
+# can flash the firmware. This is defense-in-depth against mothership compromise.
+CONFIG_APP_ANTI_ROLLBACK=y
+CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK_EFuse=y
+CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK_EFuse_WP_DISABLE=y
+
+# Secure Boot V2 — signed app verification
+# Verifies RSA-PSS signature of every firmware image before booting.
+# An attacker who can serve the firmware URL or intercept HTTP still cannot
+# execute arbitrary code because the bootloader will reject unsigned images.
+# Requires firmware signing key (see scripts/generate-signing-key.sh).
+CONFIG_SECURE_BOOT_V2=y
+CONFIG_SECURE_BOOT_V2_RSA_SUPPORTED=y
+CONFIG_SECURE_BOOT_V2_PREFERRED=y
+CONFIG_SECURE_BOOT_V2_RSA_MODE_2048=y
+CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME="scheme_rsa_pss"
+
+# Allow secure boot to be disabled via eFuse for development boards.
+# Production devices should burn this eFuse to permanently enable verification.
+CONFIG_SECURE_BOOT_V2_ALLOW_EFUSE_DISABLE=y
+
 # Increase partition sizes for OTA
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
