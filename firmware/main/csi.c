@@ -62,6 +62,14 @@ esp_err_t csi_wifi_start(void) {
         return ESP_OK;
     }
 
+    // RESTART-SAFE GUARD: Prevent race between CSI configuration and system restart
+    // See restart-safe pattern documentation in wifi.h for details
+    if (g_state.restarting) {
+        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] Skipping CSI enable - restart flag is set");
+        ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] This is a guard-triggered skip, NOT an error");
+        return ESP_OK;
+    }
+
     // Configure CSI
     wifi_csi_config_t csi_config = {
         .lltf_en = true,
