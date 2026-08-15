@@ -83,4 +83,16 @@ if [ "$fail" -ne 0 ]; then
     exit 1
 fi
 
-echo "All chunks verified."
+echo "All chunks verified. Booting application..."
+
+# Use watchdog-reset to boot the application and avoid USB wedge (bf-4z6wh)
+# hard-reset is a NO-OP on native USB ESP32-S3 (no bridge wiring RTS/EN)
+# watchdog-reset triggers proper reboot and USB re-enumeration
+if esptool --chip esp32s3 --port "$PORT" \
+    --before usb-reset --after watchdog-reset \
+    chip-id 2>&1 | grep -q "Chip ID:"; then
+    echo "Application booted successfully."
+else
+    echo "WARNING: Failed to boot application. Manual restart may be required." >&2
+    exit 1
+fi
