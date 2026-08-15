@@ -121,9 +121,9 @@ test.describe('Onboarding Wizard Accessibility', () => {
       }
     });
 
-    // Wait for wizard and WiFi step
+    // Wait for wizard and WiFi step (now called "Network Configuration")
     await page.waitForSelector('#wizard-overlay', { timeout: 5000 });
-    await expect(page.locator('#wizard-content')).toContainText('Configure WiFi', { timeout: 5000 });
+    await expect(page.locator('#wizard-content')).toContainText('Network Configuration', { timeout: 5000 });
 
     // Scan for accessibility violations
     await expectNoAccessibilityViolations(page, 'onboarding WiFi configuration step');
