@@ -5,7 +5,9 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -396,6 +398,33 @@ func TestHTTP_ExplainBlob_InvalidID_Returns400(t *testing.T) {
 	w := registerAndServe(h, http.MethodGet, "/api/explain/not-a-number", req)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHTTP_RefreshData_StoresCurrentTimestamp(t *testing.T) {
+	h := newHandler()
+	const gridRows = 17
+
+	before := time.Now().UnixMilli()
+	req := httptest.NewRequest(http.MethodPost, "/api/explain/refresh", strings.NewReader(`{
+		"grid_data": {"Rows": 17, "Cols": 23}
+	}`))
+	w := registerAndServe(h, http.MethodPost, "/api/explain/refresh", req)
+	after := time.Now().UnixMilli()
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	h.mu.RLock()
+	timestamp := h.fusionResult.Timestamp
+	h.mu.RUnlock()
+
+	if timestamp < before || timestamp > after {
+		t.Fatalf("expected refresh timestamp between %d and %d, got %d", before, after, timestamp)
+	}
+	if timestamp == gridRows {
+		t.Fatalf("refresh timestamp must not be derived from grid row count %d", gridRows)
 	}
 }
 
