@@ -150,6 +150,286 @@ The recovery page should expose an **Advanced Mode** toggle that reveals the man
 
 ---
 
+## Layer 3.5: USB-Serial/JTAG Wedge Recovery (Critical)
+
+### The Wedge Condition (bf-4z6wh, bf-26pa)
+
+**Symptoms:**
+- USB device remains enumerated (`303a:1001`, `/dev/ttyACM0` present)
+- No serial output, no WiFi association, no application runs
+- **Every** esptool invocation fails with `Write timeout`
+- DTR/RTS toggle via `stty hupcl` does **not** recover it
+- Only a physical USB replug restores normal operation
+
+**Triggers:**
+- `esptool read-flash` operations aborted with `A serial exception error occurred: Write timeout`
+- Any esptool operation that leaves the chip in a bad USB state
+- Can occur during both read and write operations
+
+**Root Cause:**
+The ESP32-S3's native USB-Serial/JTAG peripheral enters an unrecoverable state where:
+- The USB PHY remains enumerated and visible to the host
+- The chip-side peripheral is wedged and cannot process commands
+- esptool's timeout logic cannot detect or recover from this state
+- USB-level resets (DTR/RTS) do not reach the peripheral
+
+**Why This Matters:**
+This is **not** just a bench convenience issue. The wedge means:
+- Physical recovery is **not dependable** even on a cabled node
+- Raises the bar for OTA correctness (cannot rely on USB fallback)
+- Affects emergency recovery, manufacturing, and field service
+- Each wedge costs a physical site visit or bench intervention
+
+---
+
+### Current Recovery Procedures
+
+#### Method 1: Physical USB Replug (Only Guaranteed Recovery)
+
+```bash
+# 1. Unplug the USB cable
+# 2. Wait 2-3 seconds
+# 3. Replug the cable
+# 4. Verify device re-enumerates:
+ls /dev/ttyACM*  # Should show /dev/ttyACM0
+
+# 5. Test connection:
+esptool --chip esp32s3 --port /dev/ttyACM0 chip-id
+```
+
+**This is the only 100% reliable recovery method currently known.**
+
+#### Method 2: esptool Watchdog Reset (Preventative, Not Recovery)
+
+**Use during normal flashing to avoid wedges:**
+
+```bash
+# GOOD: Leaves chip in runnable state
+esptool --chip esp32s3 --port "$PORT" \
+  --before usb-reset --after watchdog-reset \
+  write-flash 0x20000 firmware.bin
+
+# AVOID: Leaves chip in download mode (appears dead)
+esptool --chip esp32s3 --port "$PORT" \
+  --before usb-reset --after no-reset \
+  write-flash 0x20000 firmware.bin
+```
+
+**Why `watchdog-reset` works:**
+- `--after hard-reset` is a **NO-OP** on native USB ESP32-S3 (no bridge wiring RTS/EN)
+- `--after watchdog-reset` triggers the chip's watchdog, causing a proper reboot
+- USB device re-enumerates after reset, confirming recovery
+
+**Current script status:**
+`scripts/flash-esp32s3.sh` uses `--after no-reset`, which leaves the chip in download mode after each chunk. This is safe for multi-chunk flashes but requires a final `watchdog-reset` to boot the application.
+
+#### Method 3: Boot Window Retry Loop (Emergency Workaround)
+
+**When wedge occurs and physical replug is impossible:**
+
+```bash
+# Attempt to catch the chip during its ~15s boot window
+for i in {1..30}; do
+  echo "Attempt $i..."
+  if esptool --chip esp32s3 --port /dev/ttyACM0 \
+    --before usb-reset --after no-reset \
+    chip-id 2>/dev/null; then
+    echo "Recovered! Immediately flash:"
+    esptool --chip esp32s3 --port /dev/ttyACM0 \
+      --before usb-reset --after watchdog-reset \
+      write-flash 0x20000 firmware.bin
+    exit 0
+  fi
+  sleep 1
+done
+echo "Recovery failed - physical replug required"
+```
+
+**Success rate:** ~30-50% (depends on timing and wedge severity)
+
+**Documented in:** `docs/plan/plan.md` - required sequence for eFuse enrollment phases
+
+---
+
+### Prevention Strategies
+
+#### Flag Combinations to Avoid
+
+```bash
+# AVOID: Leaves chip in download mode
+--after no-reset
+
+# AVOID: Does nothing on native USB
+--after hard-reset
+
+# AVOID: Can trigger wedge on read operations
+esptool read-flash 0x9000 0x6000  # Known wedge trigger
+```
+
+#### Recommended Practices
+
+```bash
+# DO: Use watchdog-reset for final operation
+--after watchdog-reset
+
+# DO: Use by-id symlinks (device path changes on reset)
+PORT="/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_XX:XX:XX:XX:XX:XX-if00"
+
+# DO: Split large operations into chunks (prevents Guru Meditation)
+# See scripts/flash-esp32s3.sh for 32KB chunking implementation
+
+# DO: Verify connection before expensive operations
+esptool --chip esp32s3 --port "$PORT" chip-id || exit 1
+```
+
+#### Flash Script Update Needed
+
+**Current issue:** `scripts/flash-esp32s3.sh` ends with `--after no-reset`
+
+**Recommended fix:** Add final reset after successful flash:
+
+```bash
+# After all chunks verified:
+if [ "$fail" -eq 0 ]; then
+  echo "All chunks verified. Booting application..."
+  esptool --chip esp32s3 --port "$PORT" \
+    --before usb-reset --after watchdog-reset \
+    chip-id
+fi
+```
+
+---
+
+### Future Solutions (Not Yet Implemented)
+
+#### USB Port Power Cycle
+
+**Tool:** `uhubctl` (USB hub power control)
+
+**Status:** Not available on current development system
+
+**Implementation (if available):**
+
+```bash
+# Install: sudo apt install uhubctl
+# Find hub port:
+uhubctl -l
+
+# Power cycle the port:
+uhubctl -l -p 2 -a cycle  # Power cycle port 2
+
+# Then immediately reconnect:
+esptool --chip esp32s3 --port /dev/ttyACM0 chip-id
+```
+
+**Advantages:**
+- No physical intervention required
+- Can be automated in recovery scripts
+- Works over remote serial connections
+
+**Limitations:**
+- Requires USB hub (not direct port)
+- Hub must support per-port power switching
+- Not available on all systems
+
+#### Python USB Control
+
+**Tool:** PyUSB (`usb.core`)
+
+**Status:** Not installed on current system
+
+**Implementation concept:**
+
+```python
+import usb.core
+import usb.util
+
+dev = usb.core.find(idVendor=0x303a, idProduct=0x1001)
+if dev is None:
+    raise ValueError('Device not found')
+
+# Power cycle by resetting device
+dev.reset()
+
+# Re-enumerate and reconnect
+```
+
+**Advantages:**
+- Can be integrated into recovery tools
+- More precise control than hub-level power cycle
+
+**Limitations:**
+- Requires Python USB libraries
+- May still trigger wedge if peripheral is wedged at hardware level
+
+#### Kernel USB Device Reset
+
+**Tool:** Linux USB device sysfs interface
+
+**Implementation:**
+
+```bash
+# Find USB device path:
+ls /sys/bus/usb/devices/*/idVendor | xargs grep -l 303a
+
+# Reset device:
+echo "1-1" > /sys/bus/usb/drivers/usb/unbind
+sleep 1
+echo "1-1" > /sys/bus/usb/drivers/usb/bind
+```
+
+**Status:** Untested - may or may not recover wedged peripheral
+
+---
+
+### Impact on OTA Strategy
+
+**The wedge directly affects OTA reliability planning:**
+
+1. **Cannot rely on USB fallback** - Physical recovery is not guaranteed
+2. **OTA correctness is critical** - No easy recovery from bad firmware
+3. **Safe mode requirements** - Must boot without networking for factory reset
+4. **Watchdog timeouts** - Must auto-recover from hangs without USB
+5. **Rollback enforcement** - Every update must validate within watchdog window
+
+**See also:**
+- `bf-1447x` - OTA correctness requirements
+- `bf-1xywb` - Safe mode implementation
+- `bf-2tgcx` - Watchdog configuration
+- `docs/plan/plan.md` - Risk analysis for eFuse enrollment phases
+
+---
+
+### Recovery Checklist (When Wedge Occurs)
+
+1. **Confirm wedge condition:**
+   - Device visible in `/dev/ttyACM0` or `/dev/serial/by-id/`
+   - esptool fails with `Write timeout` on **every** command
+   - No serial output when opening port
+
+2. **Attempt boot window recovery (if physical replug delayed):**
+   - Run retry loop for 30 iterations
+   - If successful, immediately flash with `--after watchdog-reset`
+   - If failed, proceed to physical replug
+
+3. **Physical replug (if on-site):**
+   - Unplug USB cable
+   - Wait 2-3 seconds
+   - Replug cable
+   - Verify re-enumeration with `ls /dev/ttyACM*`
+
+4. **Post-recovery verification:**
+   - Test connection: `esptool chip-id`
+   - If flashing, end with `--after watchdog-reset`
+   - Verify application boots (serial output, WiFi association)
+
+5. **Document incident:**
+   - Record operation that triggered wedge (usually `read-flash`)
+   - Note recovery method used
+   - Update `bf-4z6wh` if new patterns discovered
+
+---
+
 ## Layer 4: Manufacturing / Mass Recovery
 
 For recovering a batch of nodes simultaneously:
