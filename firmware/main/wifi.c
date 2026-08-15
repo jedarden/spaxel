@@ -177,6 +177,17 @@ esp_err_t wifi_start_connect(void) {
     // 3. Returning ESP_OK here is NOT an error - it's a graceful skip that allows
     //    the restart to complete cleanly. WiFi will reconnect normally on next boot.
     //
+    // WHAT HAPPENS IF THE GUARD IS BYPASSED:
+    // If this check is removed or bypassed, the following failure sequence occurs:
+    // a) WiFi task calls esp_wifi_set_mode() / esp_wifi_set_config() while restart flag is set
+    // b) ESP-IDF WiFi driver detects invalid hardware state (in use by restart teardown)
+    // c) ESP_ERROR_CHECK macro invokes esp_restart() to "panic-abort"
+    // d) This creates a nested restart scenario:
+    //    - First esp_restart() call (from legitimate restart trigger) is already in progress
+    //    - Second esp_restart() call (from ESP_ERROR_CHECK panic) aborts mid-shutdown
+    // e) Result: Uncontrolled reset, potential NVS corruption, incomplete state cleanup
+    // The guard prevents this by detecting the restart condition BEFORE any WiFi API calls.
+    //
     // WHERE THE RESTART FLAG IS SET (6 trigger points):
     // - main.c:346 - REBOOT event handler (user/command-initiated)
     // - main.c:513 - Health task reboot (3-minute timeout)
@@ -191,6 +202,11 @@ esp_err_t wifi_start_connect(void) {
     // - ota_in_progress: Blocks WiFi reconnection during OTA download
     // - restarting: Blocks ALL WiFi operations when restart is imminent
     // Together they prevent races across the entire restart lifecycle.
+    //
+    // RACE CONDITION FIX:
+    // This guard resolved the WiFi restart race condition documented in bead bf-9gfph.
+    // Prior to this fix, WiFi reconnection attempts during restart would cause
+    // spurious aborts and uncontrolled resets.
     //
     // TESTED SCENARIOS (see firmware/test/):
     // - OTA during WiFi reconnect: test_ota_during_wifi_reconnect.c
