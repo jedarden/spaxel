@@ -655,6 +655,13 @@ func (s *Store) evaluateLeave(t *Trigger, state *TriggerState, blobs []BlobPos, 
 	var fired bool
 
 	for _, blob := range blobs {
+		// Check person filter - skip this blob if PersonID doesn't match the configured filter
+		if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
+			if t.ConditionParams.PersonID != blob.PersonID {
+				continue
+			}
+		}
+
 		blobState := state.Blobs[blob.ID]
 		wasInside := blobState != nil && blobState.Inside
 
@@ -709,6 +716,13 @@ func (s *Store) evaluateDwell(t *Trigger, state *TriggerState, blobs []BlobPos, 
 	var fired bool
 
 	for _, blob := range blobs {
+		// Check person filter - skip this blob if PersonID doesn't match the configured filter
+		if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
+			if t.ConditionParams.PersonID != blob.PersonID {
+				continue
+			}
+		}
+
 		blobState := state.Blobs[blob.ID]
 
 		isInside := t.Shape.IsInside(Point3D{X: blob.X, Y: blob.Y, Z: blob.Z})
@@ -751,6 +765,12 @@ func (s *Store) evaluateVacant(t *Trigger, state *TriggerState, blobs []BlobPos,
 	if t.ConditionParams.DurationS == nil {
 		// If no duration specified, trigger immediately when vacant
 		for _, blob := range blobs {
+			// Check person filter - only consider blobs matching the filter
+			if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
+				if t.ConditionParams.PersonID != blob.PersonID {
+					continue
+				}
+			}
 			if t.Shape.IsInside(Point3D{X: blob.X, Y: blob.Y, Z: blob.Z}) {
 				return false // Someone is inside
 			}
@@ -763,6 +783,12 @@ func (s *Store) evaluateVacant(t *Trigger, state *TriggerState, blobs []BlobPos,
 	// Check if any blob is inside
 	anyInside := false
 	for _, blob := range blobs {
+		// Check person filter - only consider blobs matching the filter
+		if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
+			if t.ConditionParams.PersonID != blob.PersonID {
+				continue
+			}
+		}
 		if t.Shape.IsInside(Point3D{X: blob.X, Y: blob.Y, Z: blob.Z}) {
 			anyInside = true
 			break
@@ -798,6 +824,12 @@ func (s *Store) evaluateCount(t *Trigger, state *TriggerState, blobs []BlobPos, 
 	// Count blobs inside
 	insideCount := 0
 	for _, blob := range blobs {
+		// Check person filter - only count blobs matching the filter
+		if t.ConditionParams.PersonID != "" && t.ConditionParams.PersonID != "anyone" {
+			if t.ConditionParams.PersonID != blob.PersonID {
+				continue
+			}
+		}
 		if t.Shape.IsInside(Point3D{X: blob.X, Y: blob.Y, Z: blob.Z}) {
 			insideCount++
 		}
