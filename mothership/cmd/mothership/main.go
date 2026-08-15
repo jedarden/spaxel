@@ -25,11 +25,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hashicorp/mdns"
 	"github.com/spaxel/mothership/internal/analytics"
+	"github.com/spaxel/mothership/internal/apdetector"
 	"github.com/spaxel/mothership/internal/api"
 	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/automation"
 	"github.com/spaxel/mothership/internal/autoupdate"
-	"github.com/spaxel/mothership/internal/apdetector"
 	"github.com/spaxel/mothership/internal/ble"
 	"github.com/spaxel/mothership/internal/briefing"
 	appconfig "github.com/spaxel/mothership/internal/config"
@@ -672,9 +672,14 @@ func seedWiFiCredentialsIfFirstBoot(settingsHandler *api.SettingsHandler, envSSI
 		networkSettingWifiPassword = "network_wifi_password"
 	)
 
-	// Use GetSingle to check if settings already exist
-	if _, hasSSID := settingsHandler.GetSingle(networkSettingWifiSSID); hasSSID {
-		log.Printf("[CONFIG] Network settings already configured in database - SPAXEL_WIFI_* env vars ignored (DB is source of truth per ADR-005)")
+	// Treat either persisted credential as authoritative. In particular, do not
+	// fill in a missing key from the environment if the other key was already
+	// persisted: a partial setting may be intentional, and no boot should
+	// overwrite a value that was stored by the operator.
+	_, hasSSID := settingsHandler.GetSingle(networkSettingWifiSSID)
+	_, hasPassword := settingsHandler.GetSingle(networkSettingWifiPassword)
+	if hasSSID || hasPassword {
+		log.Printf("[CONFIG] Network settings already exist in database - SPAXEL_WIFI_* env vars ignored (DB is source of truth per ADR-005)")
 		return
 	}
 
@@ -687,13 +692,12 @@ func seedWiFiCredentialsIfFirstBoot(settingsHandler *api.SettingsHandler, envSSI
 	if err := settingsHandler.Set(networkSettingWifiPassword, envPass); err != nil {
 		log.Printf("[ERROR] Failed to seed SPAXEL_WIFI_PASSWORD to database: %v", err)
 		// Rollback: remove the SSID we just set
-		_ = settingsHandler.Set(networkSettingWifiSSID, "")
+		_ = settingsHandler.Delete(networkSettingWifiSSID)
 		return
 	}
 
 	log.Printf("[CONFIG] Seeded network settings from SPAXEL_WIFI_* environment variables (first boot - will not run again)")
 }
-
 
 func main() {
 	// Load and validate configuration at startup
