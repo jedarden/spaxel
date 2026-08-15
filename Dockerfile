@@ -1,80 +1,29 @@
 # Spaxel Mothership Dockerfile
-# Multi-stage build: ESP32 firmware (amd64 only) → Go binary → minimal runtime image
-# Build arguments for multi-platform support (auto-populated by buildx
-# --platform; kaniko, which is what actually runs this in CI, does NOT
-# auto-populate these -- see the default-value note below).
+# Multi-stage build: Go binary → minimal runtime image (ESP32 firmware fetched from CI artifact)
+# Build arguments for multi-platform support (auto-populated by buildx --platform)
 ARG TARGETPLATFORM
 ARG TARGETARCH
 
-# Stage 1: Build ESP32-S3 firmware (amd64 only - ESP-IDF is x86_64)
-FROM espressif/idf:v5.2 AS firmware-builder
-# The CI kaniko invocation (see spaxel-build-workflowtemplate.yml) passes no
-# --customPlatform and no --build-arg for TARGETPLATFORM, so unlike buildx it
-# never auto-populates this ARG -- with no default it resolved to an empty
-# string. "" != "linux/amd64" is always true, so the "skip on non-amd64"
-# branch below ALWAYS ran, unconditionally writing a placeholder
-# spaxel-firmware-merged.bin into /project/build before idf.py ever touched
-# it -- 100% deterministically, on every single build regardless of layer
-# caching. idf.py set-target's implicit fullclean action then refused to
-# clean that stray non-CMake file and failed the build every time.
-#
-# Three earlier fix attempts (see git history, bf-38dbu, 2026-08-02) treated
-# this as a kaniko cache-poisoning bug and tried to force a cache miss --
-# that was a red herring. The layers really were identical on every build,
-# because the underlying command was genuinely deterministic. Defaulting the
-# ARG to linux/amd64 fixes it for kaniko while still letting buildx override
-# it per-platform for local multi-arch builds.
-ARG TARGETPLATFORM=linux/amd64
+# Stage 1: Fetch prebuilt ESP32-S3 firmware from GitHub Releases
+# Firmware is built once in CI (amd64-only) and published as a versioned artifact.
+# This stage downloads the appropriate firmware binary for all platforms.
+FROM alpine:3.20 AS firmware-fetcher
+ARG VERSION=dev
 
-# Create build directory
-RUN mkdir -p /project/build
+# Install dependencies
+RUN apk add --no-cache curl
 
-# Handle amd64-only firmware build: skip on arm64, build on amd64
-RUN if [ "$TARGETPLATFORM" != "linux/amd64" ]; then \
-        echo "# Firmware not available on $TARGETPLATFORM (ESP-IDF is amd64-only)" > /project/build/spaxel-firmware-merged.bin && \
-        echo "Firmware build skipped - placeholder created"; \
-    fi
-
-# Only copy firmware source and build on amd64 (placeholder already created on arm64)
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-        cd /project && \
-        echo "Building ESP32 firmware for $TARGETPLATFORM"; \
-    else \
-        exit 0; \
-    fi
-
-WORKDIR /project
-# firmware/CMakeLists.txt reads the repository VERSION from its parent directory
-# so the ESP-IDF app descriptor and OTA filename use the same release version.
-COPY VERSION /VERSION
-COPY firmware/ ./
-
-# Remove any stale generated sdkconfig so set-target regenerates it from
-# sdkconfig.defaults (which specifies CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y).
-RUN rm -f sdkconfig sdkconfig.old
-
-# Firmware host-test gate: run the gcc host unit tests (nvs schema migration,
-# CSI binary-frame serialization, serial_prov JSON parser fuzz) BEFORE the
-# expensive ESP-IDF build so a logic/format-contract regression fails the image
-# build fast. Pure gcc — no IDF toolchain needed; gcc + GNU make ship in this
-# espressif/idf image. `make` propagates the suite's non-zero exit code on any
-# assertion failure, failing the build. This is the gcc harness, NOT idf.py
-# --target linux — see firmware/test/Makefile and the decision record
-# docs/notes/firmware-host-test-approach.md (firmware/main cannot be host-linked).
-RUN make -C test test
-
-# Source export.sh to activate IDF toolchain (entrypoint is not called in build stages).
-# set-target must be run explicitly before build even when CONFIG_IDF_TARGET is in sdkconfig.defaults.
-# idf.py build produces build/spaxel-firmware.bin
-SHELL ["/bin/bash", "-c"]
-RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
-    python -m esptool --chip esp32s3 merge_bin \
-        --flash_mode dio --flash_freq 80m --flash_size 4MB \
-        --output build/spaxel-firmware-merged.bin \
-        0x0     build/bootloader/bootloader.bin \
-        0x8000  build/partition_table/partition-table.bin \
-        0x10000 build/ota_data_initial.bin \
-        0x20000 build/spaxel-firmware.bin
+# Fetch firmware from GitHub Releases
+# The firmware-build CI step uploads spaxel-firmware-${VERSION}-merged.bin to releases
+WORKDIR /firmware
+RUN curl -fsSL \
+    "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware-${VERSION}-merged.bin" \
+    -o spaxel-firmware-merged.bin && \
+    curl -fsSL \
+    "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware.bin" \
+    -o spaxel-firmware.bin && \
+    echo "=== Firmware binaries downloaded ===" && \
+    ls -lh
 
 # Stage 2: Build the Go binary (cross-platform)
 # Same empty-under-kaniko risk as TARGETPLATFORM above -- default to the
@@ -134,12 +83,12 @@ COPY --from=builder /app/spaxel-sim /spaxel-sim
 
 # OTA writes directly into an app partition, so seed only the app image at the
 # top level. The semver-bearing filename is also the OTA store's version source.
-COPY --from=firmware-builder /project/build/spaxel-firmware.bin /firmware/spaxel-firmware-${VERSION}.bin
+COPY --from=firmware-fetcher /firmware/spaxel-firmware.bin /firmware/spaxel-firmware-${VERSION}.bin
 
 # Keep the merged offset-0 image for first-flash serial provisioning, isolated
 # in a subdirectory that seedFirmwareDir deliberately does not copy into the OTA
 # store. A merged image must never be written into an OTA app partition.
-COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/serial/spaxel-firmware-${VERSION}-merged.bin
+COPY --from=firmware-fetcher /firmware/spaxel-firmware-merged.bin /firmware/serial/spaxel-firmware-${VERSION}-merged.bin
 
 VOLUME ["/data"]
 
