@@ -338,7 +338,7 @@ func (h *Handler) refreshData(w http.ResponseWriter, r *http.Request) {
 
 	// Update fusion result snapshot
 	h.fusionResult = &FusionResultSnapshot{
-		Timestamp: int64(req.GridData.Rows), // placeholder
+		Timestamp: time.Now().UnixMilli(),
 		Blobs:     req.Blobs,
 		GridData:  req.GridData,
 	}
