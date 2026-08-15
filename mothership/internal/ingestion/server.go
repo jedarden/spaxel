@@ -119,6 +119,11 @@ type Server struct {
 	// Shutdown state
 	shutdown bool
 
+	// NTP server to push to nodes when they connect. This is kept here rather
+	// than in provisioning because provisioned nodes also need to receive the
+	// current value when they reconnect to the mothership.
+	ntpServer string
+
 	// Optional pipeline components (set via setters)
 	dashboardBroadcaster CSIBroadcaster
 	motionBroadcaster    MotionBroadcaster
@@ -306,6 +311,22 @@ func (s *Server) SetNodeHealthUpdater(nhu NodeHealthUpdater) {
 	s.mu.Lock()
 	s.nodeHealthUpdater = nhu
 	s.mu.Unlock()
+}
+
+// SetNTPServer sets the NTP server sent to nodes on connection and pushes the
+// new value to nodes that are already connected.
+func (s *Server) SetNTPServer(ntpServer string) {
+	s.mu.Lock()
+	s.ntpServer = ntpServer
+	macs := make([]string, 0, len(s.connections))
+	for mac := range s.connections {
+		macs = append(macs, mac)
+	}
+	s.mu.Unlock()
+
+	for _, mac := range macs {
+		s.SendNTPServerToMAC(mac, ntpServer)
+	}
 }
 
 // SetAPDetector sets the AP detector for passive radar auto-detection.
@@ -615,6 +636,16 @@ func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.sendRole(nc, "rx", "")
 		s.sendConfig(nc, RateIdle, 0, DefaultVarianceThreshold, "")
+	}
+
+	// Provisioning only embeds the NTP server for newly flashed nodes. Push the
+	// current value on every connection so already-provisioned nodes converge
+	// after the mothership configuration changes.
+	s.mu.RLock()
+	ntpServer := s.ntpServer
+	s.mu.RUnlock()
+	if ntpServer != "" {
+		s.SendNTPServerToMAC(hello.MAC, ntpServer)
 	}
 
 	// Notify OTA manager of reconnection (for rollback detection)

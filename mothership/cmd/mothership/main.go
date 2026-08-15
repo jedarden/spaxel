@@ -762,6 +762,7 @@ func main() {
 
 	// Create ingestion server
 	ingestSrv := ingestion.NewServer()
+	ingestSrv.SetNTPServer(cfg.NTPServer)
 	r.HandleFunc("/ws/node", ingestSrv.HandleNodeWS)
 	ingestSrv.SetShedder(shedder)
 
