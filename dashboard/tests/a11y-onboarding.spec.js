@@ -139,8 +139,6 @@ test.describe('Onboarding Wizard Accessibility', () => {
         state.currentStepIndex = 6; // placement
         state.nodeMAC = 'AA:BB:CC:DD:EE:FF';
         state.knownMACs = ['AA:BB:CC:DD:EE:FF'];
-        state.wifiSSID = 'TestWiFi';
-        state.wifiPass = 'testpass';
         window.SpaxelOnboard.start();
       }
     });
@@ -163,8 +161,6 @@ test.describe('Onboarding Wizard Accessibility', () => {
         state.currentStepIndex = 7; // complete
         state.nodeMAC = 'AA:BB:CC:DD:EE:FF';
         state.knownMACs = ['AA:BB:CC:DD:EE:FF'];
-        state.wifiSSID = 'TestWiFi';
-        state.wifiPass = 'testpass';
         window.SpaxelOnboard.start();
       }
     });

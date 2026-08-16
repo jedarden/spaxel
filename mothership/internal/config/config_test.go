@@ -98,6 +98,23 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadWiFiCredentials(t *testing.T) {
+	clearEnvVars()
+	t.Setenv("SPAXEL_WIFI_SSID", "FleetNetwork")
+	t.Setenv("SPAXEL_WIFI_PASSWORD", "fleet-password")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if cfg.WifiSSID != "FleetNetwork" {
+		t.Errorf("WifiSSID = %q, want FleetNetwork", cfg.WifiSSID)
+	}
+	if cfg.WifiPassword != "fleet-password" {
+		t.Errorf("WifiPassword = %q, want fleet-password", cfg.WifiPassword)
+	}
+}
+
 // TestInvalidFusionRateHz tests that invalid FUSION_RATE_HZ values are rejected.
 func TestInvalidFusionRateHz(t *testing.T) {
 	tests := []struct {
@@ -429,6 +446,8 @@ func clearEnvVars() {
 		"SPAXEL_MQTT_BROKER",
 		"SPAXEL_MQTT_USERNAME",
 		"SPAXEL_MQTT_PASSWORD",
+		"SPAXEL_WIFI_SSID",
+		"SPAXEL_WIFI_PASSWORD",
 		"TZ",
 	}
 	for _, v := range envVars {
