@@ -32,18 +32,13 @@ The `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` environment variables are **fu
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ 2. DASHBOARD (Onboarding Wizard)                                                      │
-│  Two paths to WiFi credentials:                                                      │
-│                                                                                      │
-│  Path A (Default):                                                                  │
+│  Fleet path:                                                                        │
 │  → Wizard checks /api/settings/network at start (fetchFleetNetworkSettings)         │
-│  → If configured, skips WiFi step entirely                                       │
-│  → Displays "New nodes will join 'SSID' automatically"                             │
+│  → Displays the configured SSID; no WiFi inputs are rendered                        │
+│  → POST /api/provision with mothership connection options only                      │
 │                                                                                      │
-│  Path B (Per-Node Override):                                                        │
-│  → User clicks "Advanced: use a different network for this node"                     │
-│  → WiFi form appears with SSID/password fields                                     │
-│  → User enters credentials for this specific node                                    │
-│  → POST /api/provision { wifi_ssid, wifi_pass, ... }                               │
+│  Direct API override (for automation/testing only):                                │
+│  → POST /api/provision may include wifi_ssid/wifi_pass explicitly                   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                           │
                                           ▼
@@ -52,9 +47,10 @@ The `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` environment variables are **fu
 │  → POST /api/provision endpoint (mothership/internal/provisioning/server.go)    │
 │  → Reads fleet network settings from settings provider (in-memory cache of DB)   │
 │  → Credential selection logic:                                                    │
-│     1. If request body contains wifi_ssid/wifi_pass → use those (override wins)   │
-│     2. Else if network_wifi_ssid/network_wifi_password in settings → use those    │
-│     3. Else → return 400 error "no wifi_ssid provided and no fleet network configured"│
+│     1. Use an explicit direct-API override when supplied                           │
+│     2. Otherwise use network_wifi_ssid/network_wifi_password in settings           │
+│        (seeded on first boot from SPAXEL_WIFI_SSID/PASSWORD when configured)       │
+│     3. Otherwise return an empty-credential payload and log a warning               │
 │  → Generate provisioning payload with selected credentials                           │
 │  → Derive node_token = HMAC-SHA256(install_secret, mac)                               │
 │  → Return JSON payload to dashboard                                                    │
@@ -126,30 +122,23 @@ The `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` environment variables are **fu
 
 **WiFi Step Behavior:**
 
-**Default (Path A):**
+**Fleet configuration:**
 ```javascript
 // Lines 943-954: Fetch fleet network settings
 fetchFleetNetworkSettings() → GET /api/settings/network
-// Lines 970-996: Auto-skip WiFi step
-if (state.fleetNetworkConfigured) {
-    // Skip entire WiFi provision step
-    // Show: "Fleet network already configured: 'SSID'"
-}
+// The step displays the configured SSID and contains no WiFi inputs.
 ```
 
-**Advanced Override (Path B):**
+**Direct API override (not exposed by the wizard):**
 ```javascript
-// Lines 954-962: User opts into "use a different network for this node"
-// Show WiFi SSID/password input fields
-// Submit button calls provisionAndSend()
+// An automation/test caller may include wifi_ssid/wifi_pass in POST /api/provision.
+// The onboarding wizard sends mothership connection options only.
 ```
 
 **Provisioning Request:**
 ```javascript
 // Lines 1053-1102: POST to /api/provision
 POST /api/provision {
-    wifi_ssid: <from fleet settings or override>,
-    wifi_pass: <from fleet settings or override>,
     mac: optional (for token derivation),
     ms_ip: optional (manual mothership IP),
     debug: optional
@@ -296,8 +285,8 @@ CREATE TABLE settings (
 - Loaded from database on startup (lines 89-122)
 
 **Precedence:**
-1. **Database settings** (`network_wifi_ssid`/`network_wifi_password`) - authoritative source after first boot
-2. **Request body override** - temporary per-node override during provisioning
+1. **Explicit request body override** - available to direct API callers only
+2. **Database settings** (`network_wifi_ssid`/`network_wifi_password`) - authoritative source after first boot
 3. **Environment variables** - first-boot seed only (see below)
 
 ---
@@ -415,7 +404,7 @@ if (strlen(wifi_pass) > 0) {
 1. **First boot with env vars:** If `SPAXEL_WIFI_SSID` AND `SPAXEL_WIFI_PASSWORD` are both set AND database has no network settings, seed the database with env var values
 2. **Subsequent boots:** Database is authoritative; env vars are ignored even if set
 3. Dashboard Settings > Network stores/retrieves credentials from SQLite `settings` table
-4. Onboarding wizard fetches from `/api/settings/network` and skips WiFi input if already configured
+4. Onboarding wizard fetches from `/api/settings/network` and displays the fleet network; it never renders WiFi inputs
 5. Provisioning server reads from in-memory cache of settings table
 6. Request body can override for specific node
 
@@ -437,7 +426,7 @@ if (strlen(wifi_pass) > 0) {
 - ✅ **Scripted/headless deployments CAN pre-configure WiFi** via env vars on first boot
 - ✅ **Dashboard UI is still primary interface** for changing WiFi credentials after first boot
 - ✅ **Changing env vars after first boot has no effect** (DB is authoritative)
-- ✅ **All provisioning paths work:** env var seed, dashboard entry, per-node override
+- ✅ **All provisioning paths work:** env var seed, dashboard entry, and direct API override
 
 ---
 
@@ -490,16 +479,14 @@ if (strlen(wifi_pass) > 0) {
 
 1. **Normal provisioning (fleet network configured):**
    - Dashboard Settings > Network → `PUT /api/settings/network`
-   - Onboarding wizard → `GET /api/settings/network` → auto-skip WiFi step
+   - Onboarding wizard → `GET /api/settings/network` → display fleet status with no WiFi fields
    - `POST /api/provision` → reads from settings provider
    - Payload includes credentials from database
 
-2. **Per-node override (advanced mode):**
-   - Onboarding wizard → "Advanced: use a different network for this node"
-   - User enters SSID/password in wizard form
-   - `POST /api/provision {wifi_ssid, wifi_pass, ...}`
+2. **Direct API override (automation/testing only):**
+   - Caller includes `wifi_ssid`/`wifi_pass` in `POST /api/provision`
    - Request body overrides database settings
-   - Payload includes override credentials
+   - The onboarding wizard does not expose this override
 
 3. **Captive portal recovery:**
    - Device enters AP mode (`spaxel-XXXX`)
@@ -511,13 +498,9 @@ if (strlen(wifi_pass) > 0) {
 ### Degraded Paths
 
 **No WiFi credentials configured:**
-- Onboarding wizard shows error banner
-- Provisioning API returns 400 error
-- Firmware cannot be provisioned
-- Device remains in captive portal loop
-- User must either:
-  - Configure fleet network in dashboard Settings > Network, OR
-  - Use "Advanced" mode to enter credentials per-node
+- Onboarding wizard shows an unconfigured-network banner
+- Provisioning API returns a payload without WiFi credentials and logs a warning
+- Configure the fleet network in dashboard Settings > Network or set both env vars on first boot
 
 ---
 
@@ -534,31 +517,18 @@ if (strlen(wifi_pass) > 0) {
    - All subsequent nodes will auto-join this network
 
 2. **Headless/Scripted Deployment:**
-   - **Current limitation:** Env vars `SPAXEL_WIFI_*` do not work
-   - **Workaround:** Call `PUT /api/settings/network` via API after startup:
-     ```bash
-     curl -X PUT http://mothership:8080/api/settings/network \
-       -H "Content-Type: application/json" \
-       -d '{"wifi_ssid":"MyNetwork","wifi_password":"MyPassword"}'
-     ```
+   - Set both `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` before first boot, or call `PUT /api/settings/network` after startup.
 
 3. **Per-Network Nodes:**
-   - Use onboarding wizard's "Advanced" mode
-   - Or include credentials in `POST /api/provision` body
+   - Use a separate mothership fleet, or include credentials in a direct `POST /api/provision` call.
 
 ### For Implementation
 
-1. **Implement ADR-005 env var seeding** (if desired):
-   - Add startup code in `main.go` to read `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD`
-   - Check if `network_wifi_ssid` exists in database
-   - If not, seed from env vars **once only**
-   - Requires migration or manual DB initialization
-
-2. **Add validation to firmware** (optional improvement):
+1. **Add validation to firmware** (optional improvement):
    - Enforce minimum password length on device
    - Or keep accepting any length (current behavior)
 
-3. **Add validation to provisioning API** (current gap):
+2. **Add validation to provisioning API** (current gap):
    - Currently accepts any password length
    - Consider enforcing WPA2 minimum at API layer too
    - Firmware already enforces minimum 8 chars; inconsistent with API
@@ -581,7 +551,7 @@ if (strlen(wifi_pass) > 0) {
 
 ### Mothership Main
 
-- `mothership/cmd/mothership/main.go` - Server wiring (no WiFi env var code)
+- `mothership/cmd/mothership/main.go` - Server wiring and first-boot env seeding
 
 ### Firmware
 

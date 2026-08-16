@@ -12,7 +12,7 @@ This guide helps you migrate from the old per-device WiFi configuration model (w
 | Aspect | Old Model (Per-Device) | New Model (Fleet-Wide) |
 |--------|------------------------|---------------------|
 | **Credential entry** | Enter WiFi SSID/password for EACH node during onboarding | Enter credentials ONCE on mothership (Settings > Network) |
-| **Onboarding steps** | WiFi step required for every node | WiFi step auto-skipped (credentials pre-filled) |
+| **Onboarding steps** | WiFi credentials entered for every node | Wizard displays fleet status; no per-device credential fields |
 | **WiFi password changes** | Re-provision every node individually | Update once in Settings > Network |
 | **Credential storage** | NVS on each ESP32 | SQLite database on mothership + NVS on each ESP32 |
 | **Consistency** | Manual, error-prone | Automatic, consistent |
@@ -77,7 +77,7 @@ This guide helps you migrate from the old per-device WiFi configuration model (w
 
 4. **Provision nodes**
    - Use Web Serial onboarding wizard for each ESP32-S3
-   - WiFi step is automatically skipped
+   - The wizard displays the configured fleet network and requests a payload from the mothership
    - Nodes receive fleet-wide credentials automatically
 
 **Time estimate:** 5-10 minutes
@@ -173,11 +173,13 @@ curl http://mothership:8080/api/settings/network
 
 ---
 
-## Rollback Plan
+## Rollback and Exception Handling
 
-If you need to revert to per-device configuration after migration:
+The onboarding wizard no longer supports reverting to per-device entry. If a node
+must use a different network, keep the fleet setting intact and use an explicit
+`POST /api/provision` request with `wifi_ssid` and `wifi_pass` for that node.
 
-**Step 1: Delete fleet-wide credentials**
+If you intentionally need to disable the fleet default, clear both settings:
 
 ```bash
 # Clear fleet-wide SSID
@@ -191,14 +193,21 @@ curl -X PUT http://mothership:8080/api/settings/network \
   -d '{"wifi_password":""}'
 ```
 
-**Step 2: Re-provision nodes with per-device credentials**
+After clearing the settings, the browser onboarding flow cannot provision nodes
+until the fleet settings are configured again. Direct API callers may still
+provide explicit credentials in each request.
 
-For each node, use the onboarding wizard's "Advanced" mode:
-1. Click "Advanced: use a different network for this node"
-2. Enter WiFi SSID and password
-3. Complete provisioning
+**Provision an exception explicitly (if needed)**
 
-**Result:** System behaves like the old per-device model
+Use the direct provisioning API for the affected node:
+
+```bash
+curl -X POST http://mothership:8080/api/provision \
+  -H "Content-Type: application/json" \
+  -d '{"mac":"AA:BB:CC:DD:EE:FF","wifi_ssid":"OtherNetwork","wifi_pass":"otherpass"}'
+```
+
+The browser onboarding flow continues to use the mothership's fleet setting.
 
 ---
 
@@ -211,7 +220,7 @@ Use this checklist before migrating:
   curl http://mothership:8080/api/backup > spaxel-backup-$(date +%Y%m%d).zip
   ```
 
-- [ ] **Document current WiFi credentials** (for each node if different)
+- [ ] **Document the current fleet WiFi configuration**
   - List SSID and password for each node
   - Note any nodes on different networks
 
@@ -271,7 +280,7 @@ For each node, check:
 
 Test provisioning a new node:
 - Use Web Serial onboarding wizard
-- WiFi step should auto-skip (showing "Fleet network already configured")
+- Wizard should show the configured fleet network without WiFi credential fields
 - Node should come online with correct credentials
 
 ---
@@ -280,7 +289,8 @@ Test provisioning a new node:
 
 ### Issue 1: "No WiFi credentials configured" error
 
-**Symptom:** Onboarding wizard shows error; provisioning API returns 400
+**Symptom:** Onboarding wizard shows that the fleet network is not configured;
+the provisioning payload contains empty WiFi fields
 
 **Cause:** Fleet-wide credentials not configured
 
@@ -319,15 +329,8 @@ curl -X PUT http://mothership:8080/api/settings/network \
 
 **Scenario:** Some nodes need different SSID (isolated sensors, multiple buildings)
 
-**Solution:** Use per-node override
+**Solution:** Use an explicit per-node override via the provisioning API:
 
-**Via dashboard:**
-1. Start onboarding wizard
-2. Click "Advanced: use a different network for this node"
-3. Enter credentials for that node's network
-4. Complete provisioning
-
-**Via API:**
 ```bash
 curl -X POST http://mothership:8080/api/provision \
   -H "Content-Type: application/json" \
@@ -338,15 +341,17 @@ curl -X POST http://mothership:8080/api/provision \
   }'
 ```
 
-### Issue 4: Environment variables don't work
+### Issue 4: Environment variables did not configure the fleet
 
 **Symptom:** Set `SPAXEL_WIFI_SSID`/`SPAXEL_WIFI_PASSWORD` but nodes don't use them
 
-**Explanation:** These env vars are **documented but NOT implemented** (see [`environment-variables.md`](environment-variables.md))
+**Explanation:** Both variables seed the mothership's fleet settings only on
+first boot, and only when both are set and the database has no existing network
+settings. They are not re-applied after that.
 
-**Solution:** Use dashboard or API instead:
-- Dashboard: Settings > Network
-- API: `PUT /api/settings/network`
+**Solution:** For an already-initialized mothership, use dashboard Settings >
+Network or `PUT /api/settings/network`. For a fresh deployment, set both
+environment variables before the first boot.
 
 ---
 
@@ -507,7 +512,9 @@ chmod +x verify-migration.sh
 
 ### Q: Can I mix fleet-wide and per-node credentials?
 
-**A:** Yes. Configure fleet-wide credentials as the default, then use "Advanced" mode in onboarding or explicit `POST /api/provision` calls for nodes on different networks.
+**A:** Yes. Configure fleet-wide credentials as the default, then use explicit
+`POST /api/provision` calls for nodes on different networks. The browser
+onboarding wizard does not collect per-device credentials.
 
 ### Q: What happens if I change the fleet-wide password?
 
@@ -519,11 +526,15 @@ chmod +x verify-migration.sh
 
 ### Q: Can I revert to per-device configuration?
 
-**A:** Yes. Delete the fleet-wide credentials (see Rollback Plan above) and re-provision nodes individually. The system supports both models simultaneously.
+**A:** Not through the browser wizard. Keep the fleet setting configured and
+use explicit provisioning API overrides for exceptional nodes.
 
-### Q: Will environment variables ever work for WiFi?
+### Q: How do environment variables work for WiFi?
 
-**A:** Not in the current implementation. The ADR-005 design intent was never coded. Use the dashboard Settings > Network panel or `PUT /api/settings/network` API instead.
+**A:** `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` seed the database once on
+first boot when both are set. After that, the database is authoritative; use
+the dashboard Settings > Network panel or `PUT /api/settings/network` to
+change the fleet configuration.
 
 ### Q: Is my WiFi password secure?
 

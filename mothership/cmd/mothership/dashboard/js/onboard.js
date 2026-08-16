@@ -2,8 +2,11 @@
  * Spaxel Onboarding Wizard
  *
  * Interactive Web Serial-based setup wizard for provisioning ESP32-S3 nodes.
- * States: BROWSER_CHECK → CONNECT_DEVICE → FLASH_FIRMWARE → PROVISION_WIFI
+ * States: BROWSER_CHECK → CONNECT_DEVICE → PROVISION_WIFI → FLASH_FIRMWARE
  *         → DETECT_NODE → CALIBRATE → PLACEMENT → COMPLETE
+ *
+ * WiFi credentials are owned by the mothership. The wizard only displays the
+ * configured fleet network and sends the server-generated payload to the node.
  */
 
 (function () {
@@ -46,8 +49,8 @@
         port: null,
         nodeMAC: null,
         knownMACs: [],
-        wifiSSID: '',
-        wifiPass: '',
+        fleetNetworkConfigured: false,
+        fleetNetworkSSID: '',
         mothershipHost: '',
         mothershipPort: 8080,
         mothershipIP: '',
@@ -71,8 +74,6 @@
                 currentStepIndex: state.currentStepIndex,
                 nodeMAC: state.nodeMAC,
                 knownMACs: state.knownMACs,
-                wifiSSID: state.wifiSSID,
-                wifiPass: state.wifiPass,
                 mothershipHost: state.mothershipHost,
                 mothershipPort: state.mothershipPort,
                 mothershipIP: state.mothershipIP,
@@ -83,7 +84,17 @@
     function loadState() {
         try {
             var raw = sessionStorage.getItem(CONFIG.storageKey);
-            return raw ? JSON.parse(raw) : null;
+            if (!raw) return null;
+            var saved = JSON.parse(raw);
+            // Remove credentials written by pre-ADR-005 wizard versions. They
+            // must not remain in browser storage after the migration.
+            if (saved && (Object.prototype.hasOwnProperty.call(saved, 'wifiSSID') ||
+                    Object.prototype.hasOwnProperty.call(saved, 'wifiPass'))) {
+                delete saved.wifiSSID;
+                delete saved.wifiPass;
+                sessionStorage.setItem(CONFIG.storageKey, JSON.stringify(saved));
+            }
+            return saved;
         } catch (e) { return null; }
     }
 
@@ -483,8 +494,6 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        wifi_ssid: state.wifiSSID,
-                        wifi_pass: state.wifiPass,
                         mac: state.reproveMAC || '',
                         ms_ip: state.mothershipIP || ''
                     }),
@@ -790,12 +799,10 @@
             }
         }
 
-        // Runs after firmware flash: fetches provisioning payload from server (or
-        // builds client-side fallback) and sends it over serial while the device's
-        // boot provisioning window is open.
+        // Runs after firmware flash: fetches the mothership-generated provisioning
+        // payload and sends it over serial while the device's boot provisioning
+        // window is open. The browser never handles WiFi credentials.
         async function doProvision(provLog, setStatus, setProgress) {
-            var ssid = state.wifiSSID;
-            var pass = state.wifiPass;
             var msHost = state.mothershipHost;
             var msPort = state.mothershipPort;
 
@@ -807,7 +814,7 @@
                 var fetchPromise = fetch(CONFIG.provisioningEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass, ms_ip: state.mothershipIP || '' }),
+                    body: JSON.stringify({ ms_ip: state.mothershipIP || '' }),
                 });
                 var timeoutPromise = new Promise(function (_, reject) {
                     setTimeout(function () { reject(new Error('timeout')); }, 5000);
@@ -820,21 +827,8 @@
                 if (state.mothershipIP) payload.ms_ip = state.mothershipIP;
                 provLog('log', 'Server payload: node_id=' + (payload.node_id || '(none)'));
             } catch (err) {
-                provLog('warn', 'Mothership unreachable (' + (err.message || err) + '), using client-side payload');
-                payload = {
-                    wifi_ssid: ssid,
-                    wifi_pass: pass,
-                    node_id: crypto.randomUUID ? crypto.randomUUID() :
-                        'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                            var r = Math.random() * 16 | 0;
-                            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-                        }),
-                    node_token: '',
-                    ms_mdns: msHost || window.location.hostname,
-                    ms_port: msPort,
-                    ms_ip: state.mothershipIP || '',
-                    debug: false,
-                };
+                provLog('error', 'Mothership unavailable (' + (err.message || err) + '); WiFi credentials remain on the mothership');
+                throw new UserError('Could not contact the mothership for the fleet WiFi configuration. Check the connection and try again.');
             }
             setProgress(85);
 
@@ -849,6 +843,21 @@
         return { cleanup: function () { cancelled = true; restoreConsole(); } };
     }
 
+    // Fetches the fleet-wide network setting so the wizard can show the
+    // operator which mothership-level network will be used.
+    function fetchFleetNetworkSettings() {
+        return fetch('/api/settings/network')
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                state.fleetNetworkConfigured = !!(data && data.configured);
+                state.fleetNetworkSSID = (data && data.wifi_ssid) || '';
+            })
+            .catch(function () {
+                state.fleetNetworkConfigured = false;
+                state.fleetNetworkSSID = '';
+            });
+    }
+
     function renderProvisionWifi(contentEl) {
         // Auto-populate ms_ip if the browser is accessing the mothership by IP directly
         if (!state.mothershipIP) {
@@ -858,27 +867,37 @@
             }
         }
 
+        var fleetMessage = state.fleetNetworkConfigured
+            ? '<div class="wizard-fleet-status" style="background:#1a2a1a;border:1px solid #4fc3f7;border-radius:6px;padding:12px;margin:12px 0">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span style="font-size:18px;color:#4fc3f7">✓</span>' +
+              '<span style="font-weight:bold;color:#4fc3f7">Fleet network configured</span>' +
+              '</div>' +
+              '<p style="margin:0;font-size:13px;color:#ccc">All nodes will join <strong>' + escapeAttr(state.fleetNetworkSSID) + '</strong></p>' +
+              '</div>'
+            : '<div class="wizard-fleet-status" style="background:#2a1a1a;border:1px solid #f44336;border-radius:6px;padding:12px;margin:12px 0">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span style="font-size:18px;color:#f44336">⚠</span>' +
+              '<span style="font-weight:bold;color:#f44336">WiFi network not configured</span>' +
+              '</div>' +
+              '<p style="margin:0;font-size:13px;color:#ccc">Configure your fleet\'s WiFi network in <strong>Settings &gt; Network</strong>, or set <code>SPAXEL_WIFI_SSID</code> and <code>SPAXEL_WIFI_PASSWORD</code> before first boot.</p>' +
+              '<p style="margin:8px 0 0;font-size:12px;color:#aaa">The mothership will automatically provision the same WiFi credentials to all nodes.</p>' +
+              '</div>';
+
         contentEl.innerHTML =
             '<div class="wizard-step-content">' +
-            '<h2>Configure WiFi</h2>' +
-            '<p>Enter your WiFi credentials. These will be flashed to the device in the next step.</p>' +
-            '<form id="wifi-form" class="wizard-form">' +
-            '<div class="form-group">' +
-            '<label for="wifi-ssid">WiFi Network Name (SSID)</label>' +
-            '<input type="text" id="wifi-ssid" required placeholder="MyWiFi" value="' + escapeAttr(state.wifiSSID) + '" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">' +
-            '</div>' +
-            '<div class="form-group">' +
-            '<label for="wifi-pass">WiFi Password</label>' +
-            '<input type="password" id="wifi-pass" placeholder="Password" value="' + escapeAttr(state.wifiPass) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
-            '</div>' +
-            '<details class="wizard-details">' +
-            '<summary>Advanced: Network Troubleshooting</summary>' +
+            '<h2>Network Configuration</h2>' +
+            '<p>WiFi network details are configured fleet-wide in <strong>Settings &gt; Network</strong>. All nodes automatically join the same network.</p>' +
+            fleetMessage +
+            '<details class="wizard-details" style="margin-top:16px">' +
+            '<summary>Advanced: Mothership Connection</summary>' +
             '<div class="form-group" style="margin-top:8px">' +
             '<label for="ms-host">Mothership Host <span class="wizard-muted">(leave blank to use ' + escapeAttr(window.location.hostname) + ')</span></label>' +
             '<input type="text" id="ms-host" placeholder="' + escapeAttr(window.location.hostname) + '" value="' + escapeAttr(state.mothershipHost) + '" autocomplete="off">' +
+            '<p class="wizard-muted" style="font-size:11px;margin-top:4px">The mDNS service name for discovery. Leave blank unless you have multiple Spaxel instances.</p>' +
             '</div>' +
             '<div class="form-group">' +
-            '<label for="ms-port">Port</label>' +
+            '<label for="ms-port">Mothership Port</label>' +
             '<input type="number" id="ms-port" value="' + state.mothershipPort + '" min="1" max="65535">' +
             '</div>' +
             '<div class="form-group">' +
@@ -888,21 +907,12 @@
             '</div>' +
             '</details>' +
             '<div id="provision-error" class="wizard-error" style="display:none"></div>' +
-            '<button type="submit" class="wizard-btn wizard-btn-primary">Next: Flash Firmware</button>' +
-            '</form>' +
+            '<button type="button" class="wizard-btn wizard-btn-primary" id="wifi-next-btn">Next: Flash Firmware</button>' +
             '</div>';
 
         hideNav();
 
-        document.getElementById('wifi-form').addEventListener('submit', function (e) {
-            e.preventDefault();
-            var ssid = document.getElementById('wifi-ssid').value.trim();
-            if (!ssid) {
-                showFormError('provision-error', 'Please enter a WiFi network name.');
-                return;
-            }
-            state.wifiSSID = ssid;
-            state.wifiPass = document.getElementById('wifi-pass').value;
+        document.getElementById('wifi-next-btn').addEventListener('click', function () {
             state.mothershipHost = document.getElementById('ms-host').value.trim();
             state.mothershipPort = parseInt(document.getElementById('ms-port').value, 10) || 8080;
             state.mothershipIP = document.getElementById('ms-ip').value.trim();
@@ -913,7 +923,7 @@
         return { cleanup: function () { } };
     }
 
-    function provisionAndSend(ssid, pass, msHost, msPort, addProvLog, setProvStatus) {
+    function provisionAndSend(msHost, msPort, addProvLog, setProvStatus) {
         addProvLog = addProvLog || function () {};
         setProvStatus = setProvStatus || function () {};
 
@@ -921,47 +931,30 @@
         setProvStatus('Contacting mothership...');
 
         // Try server-side provisioning first (generates proper node_id and token)
-        return fetch(CONFIG.provisioningEndpoint, {
+        var payloadRequest = fetch(CONFIG.provisioningEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wifi_ssid: ssid, wifi_pass: pass, ms_ip: state.mothershipIP || '' }),
+            body: JSON.stringify({ ms_ip: state.mothershipIP || '' }),
         })
             .then(function (r) {
                 addProvLog('log', 'Mothership response: HTTP ' + r.status);
                 if (!r.ok) throw new Error('provisioning server error: HTTP ' + r.status);
                 return r.json();
             })
-            .then(function (payload) {
-                // Apply user overrides for mothership address
-                if (msHost) payload.ms_mdns = msHost;
-                if (msPort) payload.ms_port = msPort;
-                if (state.mothershipIP) payload.ms_ip = state.mothershipIP;
-                addProvLog('log', 'Payload ready — node_id=' + (payload.node_id || '(none)') + ' ms_mdns=' + (payload.ms_mdns || '(none)'));
-                setProvStatus('Sending configuration to device...');
-                return sendPayloadOverSerial(payload, addProvLog, setProvStatus);
-            })
             .catch(function (err) {
-                addProvLog('warn', 'Mothership unreachable (' + (err.message || err) + '), falling back to client-side payload');
-                setProvStatus('Sending configuration to device (offline mode)...');
-                // Fallback: assemble payload client-side
-                var payload = {
-                    version: 1,
-                    wifi_ssid: ssid,
-                    wifi_pass: pass,
-                    node_id: crypto.randomUUID ? crypto.randomUUID() :
-                        'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                            var r = Math.random() * 16 | 0;
-                            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-                        }),
-                    node_token: '',
-                    ms_mdns: msHost || window.location.hostname,
-                    ms_port: msPort,
-                    ms_ip: state.mothershipIP || '',
-                    debug: false,
-                };
-                addProvLog('log', 'Fallback payload — node_id=' + payload.node_id);
-                return sendPayloadOverSerial(payload, addProvLog, setProvStatus);
+                addProvLog('error', 'Mothership unavailable (' + (err.message || err) + '); WiFi credentials remain on the mothership');
+                throw new UserError('Could not contact the mothership for the fleet WiFi configuration. Check the connection and try again.');
             });
+
+        return payloadRequest.then(function (payload) {
+            // Apply user overrides for mothership address
+            if (msHost) payload.ms_mdns = msHost;
+            if (msPort) payload.ms_port = msPort;
+            if (state.mothershipIP) payload.ms_ip = state.mothershipIP;
+            addProvLog('log', 'Payload ready — node_id=' + (payload.node_id || '(none)') + ' ms_mdns=' + (payload.ms_mdns || '(none)'));
+            setProvStatus('Sending configuration to device...');
+            return sendPayloadOverSerial(payload, addProvLog, setProvStatus);
+        });
     }
 
     async function sendPayloadOverSerial(payload, addProvLog, setProvStatus) {
@@ -1673,6 +1666,10 @@
 
         createWizardUI();
 
+        // Read-only status check: credentials themselves never leave the
+        // mothership or enter browser storage.
+        fetchFleetNetworkSettings();
+
         // In reprove mode, always start fresh at the connect step.
         if (state.reproveMode) {
             clearState();
@@ -1686,8 +1683,6 @@
             state.currentStepIndex = saved.currentStepIndex;
             state.nodeMAC = saved.nodeMAC || null;
             state.knownMACs = saved.knownMACs || [];
-            state.wifiSSID = saved.wifiSSID || '';
-            state.wifiPass = saved.wifiPass || '';
             state.mothershipHost = saved.mothershipHost || '';
             state.mothershipPort = saved.mothershipPort || 8080;
             state.mothershipIP = saved.mothershipIP || '';

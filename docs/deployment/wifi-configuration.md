@@ -10,8 +10,7 @@ Spaxel uses a **mothership-level WiFi configuration model** — you configure th
 ### Key Concepts
 
 - **Fleet-wide credentials:** Stored once in the mothership's database (Settings > Network panel)
-- **Per-node override:** Optional advanced mode for nodes on different networks
-- **Database-backed:** Credentials persist in SQLite, not environment variables (for runtime changes)
+- **Database-backed:** Credentials persist in SQLite; environment variables seed an empty database on first boot
 - **Zero-touch onboarding:** Nodes automatically receive credentials during provisioning
 
 ---
@@ -33,7 +32,7 @@ Spaxel uses a **mothership-level WiFi configuration model** — you configure th
    - **WiFi Password:** Your WPA2 password (min 8 characters; leave empty for open networks)
 6. Click **Save**
 
-**Result:** All subsequent nodes provisioned via the onboarding wizard will automatically join this network. The WiFi step is skipped entirely unless you choose "Advanced" mode.
+**Result:** All subsequent nodes provisioned via the onboarding wizard will automatically join this network. The wizard displays the fleet status and never asks for per-device credentials.
 
 ### Method 2: REST API
 
@@ -78,16 +77,19 @@ Response:
 
 ### Method 3: Docker Compose (Environment Variable)
 
-**Status:** ⚠️ **NOT IMPLEMENTED** - Design-only, no code support
+**Best for:** Headless deployments and reproducible first-boot setup
 
-The environment variables `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` are documented in ADR-005 but **not currently implemented** in the codebase. Setting these variables has no effect.
+Set both variables on the mothership:
 
-**Why it's not implemented:**
-- No code in `mothership/cmd/mothership/main.go` reads these variables
-- No first-boot seeding logic exists to copy env vars to the database
-- See `docs/wifi-credential-provisioning-flow.md` section 6 for details
+```yaml
+environment:
+  SPAXEL_WIFI_SSID: "MyNetwork"
+  SPAXEL_WIFI_PASSWORD: "MyPassword"
+```
 
-**Workaround:** Use Method 2 (API) to configure credentials after container startup.
+On first boot, when no fleet network setting exists, the mothership seeds the
+database from these values. Settings > Network remains authoritative afterward;
+changing the environment on a later restart does not overwrite stored values.
 
 ---
 
@@ -106,9 +108,9 @@ services:
     volumes:
       - spaxel-data:/data
     environment:
-      - TZ=America/New_York
-      # Note: SPAXEL_WIFI_SSID/PASSWORD do NOT work
-      # Configure via dashboard or API after startup
+      TZ: America/New_York
+      SPAXEL_WIFI_SSID: "MyNetwork"
+      SPAXEL_WIFI_PASSWORD: "MyPassword"
     restart: unless-stopped
 ```
 
@@ -117,7 +119,7 @@ services:
 1. Start container: `docker compose up -d`
 2. Open dashboard: `http://<server-ip>:8080`
 3. Setup PIN: Follow first-run wizard
-4. Configure WiFi: Settings > Network → enter credentials
+4. Configure WiFi: first boot seeds the fleet setting from the environment; Settings > Network can update it later
 5. Add nodes: All nodes auto-join the configured network
 
 ### Example 2: Multi-Network Deployment
@@ -278,13 +280,13 @@ curl -X PUT http://localhost:8080/api/settings/network \
    # Batch-provision nodes (all auto-join CorpNetwork)
    for node in node01 node02 node03 ...; do
      # Use Web Serial onboarding wizard for each node
-     # WiFi step auto-skips, credentials pre-filled
+     # Wizard displays the fleet network; no per-node WiFi fields are shown
    done
    ```
 
 2. **Segment by building/floor:**
-   - Each floor on different VLAN? Use per-node override
-   - Each building has different AP? Override credentials during provisioning
+   - Each floor on a different VLAN? Use a separate mothership deployment
+   - Each building has a different AP? Configure that mothership's fleet network
 
 3. **Automate with Ansible:**
    ```yaml
@@ -327,7 +329,7 @@ curl -X PUT http://localhost:8080/api/settings/network \
 **What you do now:**
 
 1. **One-time setup:** Configure WiFi credentials once in mothership Settings > Network
-2. **Provision nodes:** Use onboarding wizard — WiFi step auto-skips
+2. **Provision nodes:** Use onboarding wizard — it reads the fleet network from the mothership
 3. **WiFi change:** Update credentials once in Settings > Network, done
 
 **Benefits:**
@@ -358,7 +360,7 @@ Existing nodes continue working with their NVS-stored credentials. The next time
 If you want all nodes to use the fleet-wide credentials immediately:
 
 1. Re-provision each node via Web Serial onboarding
-2. WiFi step auto-skips (fleet credentials pre-filled)
+2. The wizard shows the configured fleet network; no WiFi fields are entered per node
 3. Node receives updated credentials
 
 Or simply re-provision nodes naturally as needed (firmware updates, maintenance).
@@ -369,17 +371,21 @@ Or simply re-provision nodes naturally as needed (firmware updates, maintenance)
 
 When provisioning a node, credentials are selected in this order:
 
-1. **Request body override** (highest priority)
-   - Explicit `wifi_ssid`/`wifi_pass` in `POST /api/provision`
-   - Use case: Node on different network than fleet default
-
-2. **Database settings** (fleet-wide default)
+1. **Database settings** (fleet-wide default)
    - `network_wifi_ssid` / `network_wifi_password` from Settings > Network
    - Use case: Normal node provisioning
 
-3. **Error** (if neither available)
-   - HTTP 400: "no wifi_ssid provided and no fleet network configured"
-   - Node cannot be provisioned
+2. **First-boot environment seed**
+   - `SPAXEL_WIFI_SSID` / `SPAXEL_WIFI_PASSWORD`
+   - Applies only when no database settings exist
+
+3. **Explicit API override** (direct API callers only)
+   - `wifi_ssid` / `wifi_pass` in `POST /api/provision`
+   - The onboarding wizard does not expose or send this override
+
+4. **Empty credentials** (if neither available)
+   - The mothership returns a payload without WiFi credentials and logs a warning
+   - Configure the fleet network before provisioning production nodes
 
 ---
 

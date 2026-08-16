@@ -14,11 +14,8 @@ function resetWizardState() {
     _state.port = null;
     _state.nodeMAC = null;
     _state.knownMACs = [];
-    _state.wifiSSID = '';
-    _state.wifiPass = '';
     _state.fleetNetworkConfigured = false;
     _state.fleetNetworkSSID = '';
-    _state.wifiStepOverride = false;
     _state.mothershipHost = '';
     _state.mothershipPort = 8080;
     _state.pollTimer = null;
@@ -132,7 +129,6 @@ describe('State persistence', () => {
     test('saves and loads state from sessionStorage', () => {
         _state.currentStepIndex = 3;
         _state.nodeMAC = 'AA:BB:CC:DD:EE:FF';
-        _state.wifiSSID = 'TestWiFi';
         _state.mothershipPort = 9090;
 
         // Trigger save (via goToStep or directly)
@@ -140,8 +136,6 @@ describe('State persistence', () => {
             currentStepIndex: _state.currentStepIndex,
             nodeMAC: _state.nodeMAC,
             knownMACs: _state.knownMACs,
-            wifiSSID: _state.wifiSSID,
-            wifiPass: _state.wifiPass,
             mothershipHost: _state.mothershipHost,
             mothershipPort: _state.mothershipPort,
         }));
@@ -152,7 +146,6 @@ describe('State persistence', () => {
 
         expect(loaded.currentStepIndex).toBe(3);
         expect(loaded.nodeMAC).toBe('AA:BB:CC:DD:EE:FF');
-        expect(loaded.wifiSSID).toBe('TestWiFi');
         expect(loaded.mothershipPort).toBe(9090);
     });
 
@@ -201,7 +194,7 @@ describe('Serial port handling', () => {
 describe('Provisioning payload', () => {
     beforeEach(resetWizardState);
 
-    test('POST /api/provision with WiFi credentials', async () => {
+    test('POST /api/provision without per-device WiFi credentials', async () => {
         fetch.mockResolvedValueOnce({
             ok: true,
             json: jest.fn().mockResolvedValue({
@@ -219,13 +212,13 @@ describe('Provisioning payload', () => {
         var resp = await fetch('/api/provision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wifi_ssid: 'TestWiFi', wifi_pass: 'secret123' }),
+            body: JSON.stringify({ ms_ip: '' }),
         });
 
         expect(fetch).toHaveBeenCalledWith('/api/provision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wifi_ssid: 'TestWiFi', wifi_pass: 'secret123' }),
+            body: JSON.stringify({ ms_ip: '' }),
         });
 
         var payload = await resp.json();
@@ -233,15 +226,6 @@ describe('Provisioning payload', () => {
         expect(payload.node_id).toBe('uuid-123');
     });
 
-    test('falls back to client-side payload when provisioning server fails', async () => {
-        fetch.mockRejectedValueOnce(new Error('server unavailable'));
-        fetch.mockRejectedValueOnce(new Error('server unavailable')); // for the nodes fetch fallback
-
-        // The wizard's provisionAndSend falls back to client-side assembly.
-        // We verify the fallback UUID generation works.
-        var uuid = crypto.randomUUID();
-        expect(uuid).toBe('test-uuid-1234');
-    });
 });
 
 // ============================================
@@ -484,8 +468,6 @@ describe('Wizard lifecycle', () => {
             currentStepIndex: 4,
             nodeMAC: 'AA:BB:CC:DD:EE:FF',
             knownMACs: ['11:22:33:44:55:66'],
-            wifiSSID: 'TestWiFi',
-            wifiPass: 'secret',
             mothershipHost: '',
             mothershipPort: 8080,
         }));
@@ -495,7 +477,8 @@ describe('Wizard lifecycle', () => {
         // State should be restored
         expect(_state.currentStepIndex).toBe(4);
         expect(_state.nodeMAC).toBe('AA:BB:CC:DD:EE:FF');
-        expect(_state.wifiSSID).toBe('TestWiFi');
+        expect(_state.wifiSSID).toBeUndefined();
+        expect(JSON.parse(sessionStorage.getItem(_CONFIG.storageKey)).wifiPass).toBeUndefined();
 
         SpaxelOnboard.close();
     });
@@ -708,11 +691,9 @@ describe('Wizard state transitions', () => {
         customElements.get = jest.fn(() => null);
 
         sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
-            currentStepIndex: 2,
+            currentStepIndex: 3,
             nodeMAC: null,
             knownMACs: [],
-            wifiSSID: '',
-            wifiPass: '',
             mothershipHost: '',
             mothershipPort: 8080,
         }));
@@ -728,15 +709,13 @@ describe('Wizard state transitions', () => {
         jest.useRealTimers();
     });
 
-    test('provision_wifi step renders form with WiFi fields', () => {
+    test('provision_wifi step does not render per-device WiFi fields', () => {
         jest.useFakeTimers();
 
         sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
-            currentStepIndex: 3,
+            currentStepIndex: 2,
             nodeMAC: null,
             knownMACs: [],
-            wifiSSID: 'MyWiFi',
-            wifiPass: 'password123',
             mothershipHost: '',
             mothershipPort: 8080,
         }));
@@ -744,37 +723,28 @@ describe('Wizard state transitions', () => {
         SpaxelOnboard.start();
 
         var content = document.getElementById('wizard-content');
-        expect(content.innerHTML).toContain('Configure WiFi');
-        expect(content.innerHTML).toContain('wifi-ssid');
-        expect(content.innerHTML).toContain('wifi-pass');
-        expect(content.innerHTML).toContain('MyWiFi');
+        expect(content.innerHTML).toContain('Network Configuration');
+        expect(content.innerHTML).not.toContain('wifi-ssid');
+        expect(content.innerHTML).not.toContain('wifi-pass');
+        expect(content.innerHTML).toContain('Settings &gt; Network');
 
         jest.useRealTimers();
     });
 
-    test('provision_wifi shows error for empty SSID', () => {
+    test('provision_wifi has no per-device SSID validation', () => {
         sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
-            currentStepIndex: 3,
+            currentStepIndex: 2,
             nodeMAC: null,
             knownMACs: [],
-            wifiSSID: '',
-            wifiPass: '',
             mothershipHost: '',
             mothershipPort: 8080,
         }));
 
         SpaxelOnboard.start();
 
-        // Submit form with empty SSID — validation is synchronous
-        var form = document.getElementById('wifi-form');
-        var ssidInput = document.getElementById('wifi-ssid');
-        ssidInput.value = '';
-
-        form.dispatchEvent(new Event('submit'));
-
-        var errEl = document.getElementById('provision-error');
-        expect(errEl.style.display).toBe('block');
-        expect(errEl.textContent).toContain('WiFi network name');
+        expect(document.getElementById('wifi-form')).toBeNull();
+        expect(document.getElementById('wifi-ssid')).toBeNull();
+        expect(document.getElementById('wifi-pass')).toBeNull();
     });
 
     test('placement step renders placement guidance', () => {
@@ -850,13 +820,12 @@ describe('Wizard state transitions', () => {
 });
 
 // ============================================
-// WiFi Step Skip Logic (ADR-005)
+// Mothership-Level WiFi Configuration (ADR-005)
 // ============================================
 // Every node is presumed to join the same fleet-wide network, configured
-// once in the dashboard's Settings > Network page. provision_wifi fetches
-// /api/settings/network at wizard start and, when configured, auto-advances
-// past its manual form unless the user opts into a per-node override.
-describe('WiFi step skip logic (ADR-005)', () => {
+// once in the dashboard's Settings > Network page. The wizard displays that
+// status but never collects or persists per-device credentials.
+describe('Mothership-level WiFi configuration (ADR-005)', () => {
     beforeEach(resetWizardState);
 
     afterEach(() => {
@@ -875,7 +844,7 @@ describe('WiFi step skip logic (ADR-005)', () => {
         await jest.advanceTimersByTimeAsync(0); // flush requestPort()
     }
 
-    test('skips WiFi step and auto-advances to flash_firmware when fleet network is configured', async () => {
+    test('keeps the network step informational when fleet network is configured', async () => {
         jest.useFakeTimers();
         fetch.mockResolvedValue({
             ok: true,
@@ -890,18 +859,16 @@ describe('WiFi step skip logic (ADR-005)', () => {
         expect(content.innerHTML).toContain('FleetNet');
         expect(content.innerHTML).toContain('All nodes will join');
 
-        // Auto-advances past the step after a brief pause.
+        // The step stays visible so the operator can review the fleet status.
         await jest.advanceTimersByTimeAsync(900);
-        expect(_state.currentStepIndex).toBe(3); // flash_firmware
-        // Left empty — the mothership defaults these server-side from the
-        // stored network setting (ADR-005).
-        expect(_state.wifiSSID).toBe('');
-        expect(_state.wifiPass).toBe('');
+        expect(_state.currentStepIndex).toBe(2); // provision_wifi
+        expect(content.innerHTML).not.toContain('wifi-ssid');
+        expect(content.innerHTML).not.toContain('wifi-pass');
 
         jest.useRealTimers();
     });
 
-    test('shows manual WiFi form when no fleet network is configured', async () => {
+    test('shows mothership configuration guidance when no fleet network is configured', async () => {
         jest.useFakeTimers();
         // Default mock resolves to [] for every fetch — falsy `.configured`.
 
@@ -919,7 +886,7 @@ describe('WiFi step skip logic (ADR-005)', () => {
         jest.useRealTimers();
     });
 
-    test('"use a different network" link functionality removed per ADR-005', async () => {
+    test('does not offer a per-device network override', async () => {
         jest.useFakeTimers();
         fetch.mockResolvedValue({
             ok: true,
@@ -928,11 +895,11 @@ describe('WiFi step skip logic (ADR-005)', () => {
 
         await advanceToProvisionWifi();
 
-        // Per ADR-005, the override link was removed - all nodes use the fleet network
+        // All nodes use the fleet network configured by the mothership.
         var overrideLink = document.getElementById('wifi-step-override-link');
         expect(overrideLink).toBeNull();
 
-        // The step should proceed normally without override option
+        // The step should proceed normally without an override option
         var content = document.getElementById('wizard-content');
         expect(content.innerHTML).toContain('Fleet network configured');
         expect(content.innerHTML).not.toContain('use a different network');
@@ -963,6 +930,7 @@ describe('Provisioning payload assembly and serial send', () => {
     afterEach(() => { __clearLastEncodedData(); });
 
     test('provisionAndSend calls POST /api/provision with correct body', async () => {
+        __setLastDecodedChunk('SPAXEL READY AA:BB:CC:DD:EE:FF\n{"ok":true,"mac":"AA:BB:CC:DD:EE:FF"}\n');
         fetch.mockResolvedValueOnce({
             ok: true,
             json: jest.fn().mockResolvedValue({
@@ -977,12 +945,12 @@ describe('Provisioning payload assembly and serial send', () => {
             }),
         });
 
-        await _provisionAndSend('TestWiFi', 'secret123', '', 8080);
+        await _provisionAndSend('', 8080);
 
         expect(fetch).toHaveBeenCalledWith('/api/provision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wifi_ssid: 'TestWiFi', wifi_pass: 'secret123' }),
+            body: JSON.stringify({ ms_ip: '' }),
         });
 
         // Port should have been opened
@@ -995,6 +963,7 @@ describe('Provisioning payload assembly and serial send', () => {
     });
 
     test('provisionAndSend applies mothership host override', async () => {
+        __setLastDecodedChunk('SPAXEL READY AA:BB:CC:DD:EE:FF\n{"ok":true,"mac":"AA:BB:CC:DD:EE:FF"}\n');
         fetch.mockResolvedValueOnce({
             ok: true,
             json: jest.fn().mockResolvedValue({
@@ -1009,25 +978,21 @@ describe('Provisioning payload assembly and serial send', () => {
             }),
         });
 
-        await _provisionAndSend('TestWiFi', 'pass', '192.168.1.100', 9090);
+        await _provisionAndSend('192.168.1.100', 9090);
 
         var sent = __getLastEncodedData();
         expect(sent).toContain('"ms_mdns":"192.168.1.100"');
         expect(sent).toContain('"ms_port":9090');
     });
 
-    test('provisionAndSend falls back to client-side payload when server fails', async () => {
+    test('provisionAndSend fails when the mothership is unavailable', async () => {
         fetch.mockRejectedValueOnce(new Error('server unavailable'));
 
-        await _provisionAndSend('TestWiFi', 'pass', '', 8080);
+        await expect(_provisionAndSend('', 8080)).rejects.toEqual(
+            expect.objectContaining({ name: 'UserError' })
+        );
 
-        // Port should still be opened with client-side payload
-        expect(__mockPort.open).toHaveBeenCalledWith({ baudRate: 115200 });
-
-        // Writer should have been called with client-side assembled payload
-        var sent = __getLastEncodedData();
-        expect(sent).toContain('"wifi_ssid":"TestWiFi"');
-        expect(sent).toContain('"node_id":"test-uuid-1234"');
+        expect(__mockPort.open).not.toHaveBeenCalled();
     });
 
     test('provisionAndSend throws UserError when no port is available', async () => {
@@ -1045,10 +1010,10 @@ describe('Provisioning payload assembly and serial send', () => {
             }),
         });
 
-        // No authorized ports — use mockResolvedValue (not Once) so fallback path also fails
+        // No authorized ports — the server payload path should fail at serial access.
         navigator.serial.getPorts.mockResolvedValue([]);
 
-        await expect(_provisionAndSend('W', 'p', '', 8080)).rejects.toEqual(
+        await expect(_provisionAndSend('', 8080)).rejects.toEqual(
             expect.objectContaining({ name: 'UserError' })
         );
     });
@@ -1169,7 +1134,7 @@ describe('Session storage restore at each step', () => {
             SpaxelOnboard.start();
 
             expect(_state.currentStepIndex).toBe(stepIndex);
-            expect(_state.wifiSSID).toBe('TestWiFi');
+            expect(_state.wifiSSID).toBeUndefined();
             expect(_state.mothershipHost).toBe('custom-host');
             expect(_state.mothershipPort).toBe(9090);
 
@@ -1250,7 +1215,7 @@ describe('Re-provision mode', () => {
             wifiSSID: 'OldWiFi',
         }));
         SpaxelOnboard.reprove('AA:BB:CC:DD:EE:FF');
-        expect(_state.wifiSSID).toBe('');
+        expect(_state.wifiSSID).toBeUndefined();
         expect(_state.currentStepIndex).toBe(1);
     });
 
@@ -1323,9 +1288,6 @@ describe('Re-provision mode', () => {
     test('flash_firmware step renders re-provision UI in reprove mode', () => {
         _state.reproveMode = true;
         _state.reproveMAC = 'AA:BB:CC:DD:EE:FF';
-        _state.wifiSSID = 'TestWiFi';
-        _state.wifiPass = 'secret';
-
         // Mock fetch for provision endpoint
         fetch.mockResolvedValue({
             ok: true,

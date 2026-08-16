@@ -74,15 +74,15 @@ The full list is in the *Deployment* section of [`docs/plan/plan.md`](docs/plan/
 
 1. **Dashboard UI (recommended):** Settings > Network panel — enter SSID/password once, all nodes auto-join
 2. **REST API:** `PUT /api/settings/network` with `{"wifi_ssid":"...","wifi_password":"..."}`
-3. **Per-node override:** Advanced mode in onboarding wizard for nodes on different networks
+3. **Headless first boot:** set `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` on the mothership; they seed the fleet setting once
 
 **Credential precedence:**
-1. Request body override (per-node advanced mode)
-2. Database settings (`network_wifi_ssid`/`network_wifi_password` from Settings > Network)
-3. Error if neither available
+1. Database settings (`network_wifi_ssid`/`network_wifi_password` from Settings > Network)
+2. First-boot environment seed (`SPAXEL_WIFI_SSID`/`SPAXEL_WIFI_PASSWORD`)
+3. An explicit request-body override is retained only for direct API callers that intentionally provision a different network; the onboarding wizard never asks for or sends per-device credentials
 
 **Important notes:**
-- Environment variables `SPAXEL_WIFI_SSID`/`SPAXEL_WIFI_PASSWORD` are **documented but not implemented** — they have no effect if set
+- Environment variables seed an empty mothership database only; after the first boot, the stored Settings > Network value is authoritative
 - WiFi password is **write-only** — never returned by the API for security
 - See [`docs/deployment/wifi-configuration.md`](docs/deployment/wifi-configuration.md) for deployment examples and migration guide
 

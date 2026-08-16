@@ -5,13 +5,17 @@
 
 ## Overview
 
-Spaxel mothership configuration is primarily done through the dashboard Settings panels or REST API. Environment variables exist for specific operational settings (timezones, binding addresses, MQTT, etc.) but **NOT for WiFi credentials**.
+Spaxel mothership configuration is primarily done through the dashboard Settings panels or REST API. Environment variables also support headless deployments, including first-boot seeding of the fleet WiFi configuration.
 
-### Critical Finding: WiFi Environment Variables Are NOT Implemented
+### WiFi Environment Variables
 
-The environment variables `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` are documented in ADR-005 of the plan but **have no code implementation**. Setting these variables does nothing.
+`SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` are read at startup. When the
+database has no network setting yet, both values seed the mothership's
+`network_wifi_ssid` and `network_wifi_password` settings. The database remains
+authoritative on later boots, so changing the environment does not silently
+overwrite a value changed in Settings > Network.
 
-**For WiFi configuration, use:**
+For interactive changes, use:
 - Dashboard UI: Settings > Network panel
 - REST API: `PUT /api/settings/network`
 
@@ -37,19 +41,16 @@ See [`wifi-configuration.md`](wifi-configuration.md) for complete WiFi configura
 | `SPAXEL_MDNS_NAME` | `spaxel` | mDNS service name advertised | ✅ Implemented |
 | `SPAXEL_NTP_SERVER` | `pool.ntp.org` | NTP server for node clock synchronization (embedded in provisioning payload) | ✅ Implemented |
 
-### WiFi Configuration (NOT IMPLEMENTED)
+### WiFi Configuration
 
 | Variable | Default | Purpose | Implementation Status |
 |----------|---------|---------|------------------------|
-| `SPAXEL_WIFI_SSID` | *(unset)* | Fleet WiFi SSID (design intent: first-boot seed) | ❌ **NOT IMPLEMENTED** |
-| `SPAXEL_WIFI_PASSWORD` | *(unset)* | Fleet WiFi password (design intent: first-boot seed) | ❌ **NOT IMPLEMENTED** |
+| `SPAXEL_WIFI_SSID` | *(unset)* | First-boot seed for the fleet WiFi SSID | ✅ Implemented |
+| `SPAXEL_WIFI_PASSWORD` | *(unset)* | First-boot seed for the fleet WiFi password | ✅ Implemented |
 
-**Why these are not implemented:**
-- No code in `mothership/internal/config/config.go` reads these variables
-- No first-boot seeding logic exists in `mothership/cmd/mothership/main.go`
-- They are documented in ADR-005 as a design intent but never coded
-
-**Working alternative:** Use the dashboard Settings > Network panel or `PUT /api/settings/network` API.
+Both variables must be set together for seeding. The onboarding wizard never
+collects per-device WiFi credentials; it asks the mothership for the generated
+payload instead.
 
 ### MQTT Integration (Optional)
 
@@ -122,7 +123,7 @@ See [`wifi-configuration.md`](wifi-configuration.md) for complete WiFi configura
 
 ---
 
-## WiFi Configuration: Why Environment Variables Don't Work
+## WiFi Configuration: First-Boot Environment Seeding
 
 ### Design Intent (ADR-005)
 
@@ -132,21 +133,21 @@ The plan document (`docs/plan/plan.md` ADR-005) describes the intended behavior:
 
 ### Current Reality
 
-**No first-boot seeding code exists.** The intended behavior was never implemented:
+The first-boot seeding path is implemented:
 
-1. **No env var reading:** Code doesn't call `os.Getenv("SPAXEL_WIFI_SSID")` or `os.Getenv("SPAXEL_WIFI_PASSWORD")`
-2. **No seeding logic:** No startup code checks if `network_wifi_ssid` exists in database and seeds from env vars
-3. **No migration path:** No mechanism to copy env vars to database on first boot
+1. `mothership/internal/config/config.go` reads both variables at startup.
+2. `mothership/cmd/mothership/main.go` seeds both database settings when neither exists.
+3. Existing settings are preserved, so later restarts do not overwrite operator changes.
 
 ### Why This Matters
 
-- **Scripted deployments:** Cannot pre-configure WiFi via environment variables in compose files
-- **Infrastructure as code:** Cannot commit WiFi credentials to Git (security risk anyway)
+- **Scripted deployments:** Can pre-configure WiFi via environment variables in compose files
+- **Infrastructure as code:** Can inject credentials through deployment secrets (do not commit them to Git)
 - **First-run automation:** Cannot auto-configure without dashboard interaction or API calls
 
 ### Working Alternatives
 
-**For automated deployments, use the API instead:**
+**For automated deployments, environment seeding or the API can be used:**
 
 ```bash
 # After container starts, configure WiFi via API
@@ -213,8 +214,10 @@ services:
       # Logging
       - SPAXEL_LOG_LEVEL=info
       
-      # NOTE: WiFi credentials are NOT configured via env vars
-      # Use dashboard Settings > Network or PUT /api/settings/network
+      # Optional first-boot seed for the mothership fleet WiFi settings
+      - SPAXEL_WIFI_SSID=MyNetwork
+      - SPAXEL_WIFI_PASSWORD=MyPassword
+      # Alternatively, configure the network in dashboard Settings > Network
     restart: unless-stopped
 
 volumes:
@@ -278,7 +281,7 @@ curl -X PUT http://<server-ip>:8080/api/settings/network \
 
 ## Quick Reference: Configuring WiFi (The Short Version)
 
-**Environment variables don't work for WiFi.** Use one of these methods instead:
+**For WiFi configuration, use one of these methods:**
 
 **Dashboard UI:**
 1. Open `http://<server-ip>:8080`
