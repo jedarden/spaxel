@@ -114,6 +114,31 @@ Firmware is built with ESP-IDF 5.2.x — see the *Firmware Build System* section
 - [`dashboard/README.md`](dashboard/README.md) — dashboard test setup (Jest, axe-core + Playwright)
 - [`PROGRESS.md`](PROGRESS.md) — phase-by-phase implementation status
 
+### Error Handling Best Practices
+
+The Spaxel firmware uses explicit error checking patterns to ensure reliable operation and prevent abort loops. Key principles:
+
+**Never use `ESP_ERROR_CHECK` in application code** — It aborts the system on any error, creating restart loops for transient failures. Use explicit error checking instead:
+
+```c
+esp_err_t err = some_function();
+if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Operation failed: %s", esp_err_to_name(err));
+    return err;  // Let caller decide what to do
+}
+```
+
+**Restart-safe guard pattern** — Check restart flags before WiFi operations to prevent race conditions:
+
+```c
+if (g_state.restarting) {
+    ESP_LOGW(TAG, "[RESTART-SAFE-GUARD] Skipping operation - restart imminent");
+    return ESP_OK;  // Graceful skip, NOT an error
+}
+```
+
+See [`docs/notes/adr-010-error-handling-patterns.md`](docs/notes/adr-010-error-handling-patterns.md) for the complete architecture decision record and [`docs/notes/error-handling-patterns.md`](docs/notes/error-handling-patterns.md) for detailed implementation guidance. The restart-safe pattern is documented inline in [`firmware/main/wifi.h`](firmware/main/wifi.h).
+
 ---
 
 *Spaxel is self-hosted, CSI-only, and cloud-free by design.*
