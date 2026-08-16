@@ -216,14 +216,11 @@ static int test_entry_cmp(const void *a, const void *b)
  *      longjmp from a failed assertion and falls straight through to the next
  *      iteration (no else body), so a failure in test N never blocks N+1..end.
  *
- * Still missing here — and deliberately sibling scope (child 3, bf-1na) — is
- * everything that turns a passed/failed run into output and an exit code:
- * PASS/FAIL labels, a pass/fail tally, the run summary line, and the non-zero
- * exit on failure. For this intermediate state main() returns 0 unconditionally:
- * it compiles and runs every test, and an assertion that fires now longjmps
- * cleanly back to the setjmp above (the target bf-3id declared) instead of off
- * into nowhere — but that failure is not yet surfaced or counted; the g_failure_count
- * test_record_failure() bumps is not yet read here.
+ * A failed assertion still allows the remaining tests to run, but the
+ * run-wide g_failure_count is checked after the loop so make receives a
+ * non-zero status for the suite. This is the CI contract: a failure may be
+ * isolated to its test body for reporting, but it cannot be mistaken for a
+ * passing run by the caller.
  */
 int main(void)
 {
@@ -344,5 +341,5 @@ int main(void)
         }
     }
 
-    return 0;
+    return g_failure_count > 0 ? 1 : 0;
 }
