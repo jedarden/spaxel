@@ -44,6 +44,9 @@ mothership/sim
 
 # Node dependencies (regenerated via npm ci)
 node_modules/
+# Docker stages the canonical dashboard here before the tagged embedded build.
+# Keep the generated staging tree out of the source checkout.
+/mothership/cmd/mothership/dashboard/
 /mothership/mothership
 /mothership/test_goroutine
 /mothership/test_syntax
