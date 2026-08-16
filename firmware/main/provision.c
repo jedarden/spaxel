@@ -1,10 +1,10 @@
 #include "provision.h"
+#include "transport.h"
 #include "spaxel.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "cJSON.h"
-#include "driver/usb_serial_jtag.h"
 #include "esp_vfs_dev.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -26,26 +26,30 @@ static const char *TAG = "provision";
 // costs at most a dropped beacon line and lets boot proceed.
 #define PROVISION_TX_TIMEOUT        pdMS_TO_TICKS(200)
 
-// Point stdio back at the ROM/polling path BEFORE destroying the driver.
-// Uninstalling while the VFS console still refers to the driver leaves esp_log
-// writing into a torn-down driver, so the board goes permanently silent the
-// moment the provisioning window closes — every line from wifi_init() onward
-// is lost. That is the "booted into the correct slot, then no console output"
-// signature in docs/notes/esp32-ota-and-reconnection-handoff.md, and it is why
-// a WiFi/TLS fault on this board can only be diagnosed by packet capture.
-static void provision_release_console(void) {
-    esp_vfs_usb_serial_jtag_use_nonblocking();
-    usb_serial_jtag_driver_uninstall();
+// Release the transport and restore console to non-blocking mode.
+// For USB-Serial-JTAG, this points stdio back at ROM/polling BEFORE destroying
+// the driver — uninstalling while the VFS console still refers to the driver
+// leaves esp_log writing into a torn-down driver, so the board goes permanently
+// silent the moment the provisioning window closes. That is the "booted into
+// the correct slot, then no console output" signature in
+// docs/notes/esp32-ota-and-reconnection-handoff.md.
+static void provision_release_transport(transport_t *tp) {
+    if (tp && strcmp(tp->name, "usb-serial-jtag") == 0) {
+        esp_vfs_usb_serial_jtag_use_nonblocking();
+    }
+    transport_deinit(tp);
 }
 
 void provision_listen_window(void) {
-    // Same install pattern ESP-IDF's own esp_console_repl.c uses to combine
-    // a USB-Serial-JTAG console (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG, already
-    // active for esp_log by this point) with driver-level read/write on the
-    // same peripheral.
-    usb_serial_jtag_driver_config_t usbsj_cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-    if (usb_serial_jtag_driver_install(&usbsj_cfg) != ESP_OK) {
-        ESP_LOGW(TAG, "USB-Serial-JTAG driver install failed, skipping provision window");
+    // Get the transport to use for provisioning.
+    // Currently uses USB-Serial-JTAG only (single-transport mode).
+    transport_t *tp = transport_usb_serial_jtag();
+
+    // Initialize the transport (installs the driver, configures pins, etc.).
+    esp_err_t err = transport_init(tp);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Transport %s init failed (0x%x), skipping provision window",
+                 tp->name, err);
         return;
     }
 
@@ -61,9 +65,10 @@ void provision_listen_window(void) {
     // the window — not just at the exact moment of first boot.
     char ready_msg[64];
     snprintf(ready_msg, sizeof(ready_msg), "SPAXEL READY %s\n", mac_str);
-    usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
+    transport_write(tp, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
 
-    ESP_LOGI(TAG, "Provisioning window open for %u ms (MAC: %s)", (unsigned)window_ms, mac_str);
+    ESP_LOGI(TAG, "Provisioning window open for %u ms on %s (MAC: %s)",
+             (unsigned)window_ms, tp->name, mac_str);
 
     TickType_t deadline   = xTaskGetTickCount() + pdMS_TO_TICKS(window_ms);
     TickType_t last_ready = xTaskGetTickCount();
@@ -73,12 +78,12 @@ void provision_listen_window(void) {
     while (xTaskGetTickCount() < deadline) {
         // Re-broadcast READY every 1 s so the host can connect at any time
         if ((xTaskGetTickCount() - last_ready) >= pdMS_TO_TICKS(1000)) {
-            usb_serial_jtag_write_bytes(ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
+            transport_write(tp, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
             last_ready = xTaskGetTickCount();
         }
 
         uint8_t ch;
-        int n = usb_serial_jtag_read_bytes(&ch, 1, pdMS_TO_TICKS(50));
+        int n = transport_read(tp, &ch, 1, pdMS_TO_TICKS(50));
         if (n <= 0) {
             continue;
         }
@@ -98,7 +103,7 @@ void provision_listen_window(void) {
             cJSON *root = cJSON_Parse(line);
             if (!root) {
                 const char *err_resp = "{\"ok\":false,\"error\":\"invalid_json\"}\n";
-                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                transport_write(tp, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
                 continue;
             }
 
@@ -106,7 +111,7 @@ void provision_listen_window(void) {
             if (!prov) {
                 cJSON_Delete(root);
                 const char *err_resp = "{\"ok\":false,\"error\":\"missing_provision_key\"}\n";
-                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                transport_write(tp, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
                 continue;
             }
 
@@ -116,13 +121,13 @@ void provision_listen_window(void) {
             if (err == ESP_OK) {
                 char resp[80];
                 snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
-                usb_serial_jtag_write_bytes(resp, strlen(resp), PROVISION_TX_TIMEOUT);
-                ESP_LOGI(TAG, "Provisioning complete via serial");
-                provision_release_console();
+                transport_write(tp, (const uint8_t *)resp, strlen(resp), PROVISION_TX_TIMEOUT);
+                ESP_LOGI(TAG, "Provisioning complete via %s", tp->name);
+                provision_release_transport(tp);
                 return;
             } else {
                 const char *err_resp = "{\"ok\":false,\"error\":\"nvs_write_failed\"}\n";
-                usb_serial_jtag_write_bytes(err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                transport_write(tp, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
             }
         } else if (line_pos < MAX_LINE_LEN - 1) {
             line[line_pos++] = (char)ch;
@@ -133,7 +138,7 @@ void provision_listen_window(void) {
     }
 
     ESP_LOGI(TAG, "Provisioning window closed (no provisioning received)");
-    provision_release_console();
+    provision_release_transport(tp);
 }
 
 esp_err_t provision_write_nvs(cJSON *prov) {
