@@ -20,13 +20,14 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION")
     string(STRIP "${PROJECT_VERSION}" PROJECT_VERSION)
 else()
     execute_process(
-        COMMAND git describe --tags --dirty 2>/dev/null
+        COMMAND git describe --tags --dirty
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        RESULT_VARIABLE GIT_RESULT
         OUTPUT_VARIABLE GIT_VERSION
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    if(GIT_VERSION)
+    if(GIT_RESULT EQUAL 0 AND GIT_VERSION)
         set(PROJECT_VERSION "${GIT_VERSION}")
     else()
         set(PROJECT_VERSION "0.1.0")
