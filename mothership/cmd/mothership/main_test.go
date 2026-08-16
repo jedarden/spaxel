@@ -2,10 +2,15 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
 	"github.com/spaxel/mothership/internal/api"
+	appconfig "github.com/spaxel/mothership/internal/config"
+	"github.com/spaxel/mothership/internal/provisioning"
 	_ "modernc.org/sqlite"
 )
 
@@ -135,6 +140,50 @@ func TestSeedWiFiCredentialsIfFirstBoot(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestWiFiCredentialsFromEnvironmentReachProvisioning(t *testing.T) {
+	const (
+		envSSID        = "EnvProvisioningNetwork"
+		envPassword    = "env-provisioning-pass"
+		mDNSName       = "spaxel"
+		mothershipPort = 8080
+		ntpServer      = "pool.ntp.org"
+	)
+
+	t.Setenv("SPAXEL_WIFI_SSID", envSSID)
+	t.Setenv("SPAXEL_WIFI_PASSWORD", envPassword)
+
+	cfg, err := appconfig.Load()
+	if err != nil {
+		t.Fatalf("load config from environment: %v", err)
+	}
+	if cfg.WifiSSID != envSSID || cfg.WifiPassword != envPassword {
+		t.Fatalf("config WiFi credentials = (%q, %q), want (%q, %q)",
+			cfg.WifiSSID, cfg.WifiPassword, envSSID, envPassword)
+	}
+
+	settings := newSeedSettingsHandler(t)
+	seedWiFiCredentialsIfFirstBoot(settings, cfg.WifiSSID, cfg.WifiPassword)
+
+	prov := provisioning.NewServer(t.TempDir(), mDNSName, mothershipPort, ntpServer, "")
+	prov.SetSettingsProvider(settings)
+	req := httptest.NewRequest(http.MethodPost, "/api/provision", nil)
+	rec := httptest.NewRecorder()
+	prov.HandleProvision(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("provisioning status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload provisioning.Payload
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode provisioning payload: %v", err)
+	}
+	if payload.WifiSSID != envSSID || payload.WifiPass != envPassword {
+		t.Fatalf("provisioning WiFi credentials = (%q, %q), want (%q, %q)",
+			payload.WifiSSID, payload.WifiPass, envSSID, envPassword)
 	}
 }
 
