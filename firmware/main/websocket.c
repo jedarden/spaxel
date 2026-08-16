@@ -944,7 +944,8 @@ static void ota_task(void *arg) {
         vTaskDelete(NULL);
         return;
     }
-    ESP_LOGI(TAG, "[OTA] OTA begin successful, handle=%p", ota_handle);
+    ESP_LOGI(TAG, "[OTA] OTA begin successful, handle=%lu",
+             (unsigned long)ota_handle);
 
     // Initialize SHA-256 for verification
     mbedtls_sha256_context sha_ctx;

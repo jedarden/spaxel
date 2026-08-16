@@ -24,8 +24,6 @@ spaxel_state_t g_state = {0};
 // Forward declarations
 static void state_machine_task(void *arg);
 static esp_err_t load_nvs_config(void);
-static esp_err_t save_nvs_role(node_role_t role);
-static esp_err_t save_nvs_rate(uint8_t rate);
 
 const char* node_state_str(node_state_t state) {
     switch (state) {
@@ -151,34 +149,6 @@ static esp_err_t load_nvs_config(void) {
     return ESP_OK;
 }
 
-static esp_err_t save_nvs_role(node_role_t role) {
-    nvs_handle_t nvs;
-    esp_err_t err = nvs_open(SPAXEL_NAMESPACE, NVS_READWRITE, &nvs);
-    if (err != ESP_OK) return err;
-
-    err = nvs_set_u8(nvs, NVS_KEY_ROLE, (uint8_t)role);
-    if (err == ESP_OK) {
-        nvs_commit(nvs);
-        g_state.role = role;
-    }
-    nvs_close(nvs);
-    return err;
-}
-
-static esp_err_t save_nvs_rate(uint8_t rate) {
-    nvs_handle_t nvs;
-    esp_err_t err = nvs_open(SPAXEL_NAMESPACE, NVS_READWRITE, &nvs);
-    if (err != ESP_OK) return err;
-
-    err = nvs_set_u8(nvs, NVS_KEY_PKT_RATE, rate);
-    if (err == ESP_OK) {
-        nvs_commit(nvs);
-        g_state.packet_rate = rate;
-    }
-    nvs_close(nvs);
-    return err;
-}
-
 static void state_machine_task(void *arg) {
     // Tracks whether CSI has been armed for the current CONNECTED session, so
     // entering CONNECTED arms it exactly once rather than on every loop pass.
@@ -186,7 +156,6 @@ static void state_machine_task(void *arg) {
 
     int wifi_fail_count = 0;
     int discovery_fail_count = 0;
-    TickType_t last_state_change = xTaskGetTickCount();
 
     while (1) {
         ESP_LOGD(TAG, "State machine: %s", node_state_str(g_state.state));

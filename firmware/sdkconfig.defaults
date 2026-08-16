@@ -88,7 +88,7 @@ CONFIG_SECURE_BOOT_V2=y
 CONFIG_SECURE_BOOT_V2_RSA_SUPPORTED=y
 CONFIG_SECURE_BOOT_V2_PREFERRED=y
 CONFIG_SECURE_BOOT_V2_RSA_MODE_2048=y
-CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME="scheme_rsa_pss"
+CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
 
 # Allow secure boot to be disabled via eFuse for development boards.
 # Production devices should burn this eFuse to permanently enable verification.

@@ -9,9 +9,14 @@ idf_component_register(
          "csi.c"
          "ble.c"
          "provision.c"
+         "transport.c"
          "nvs_migration.c"
          "ntp.c"
          "led.c"
     INCLUDE_DIRS "." "${GENERATED_HEADERS_DIR}"
     REQUIRES esp_wifi esp_netif nvs_flash esp_http_client esp_timer bt driver log esp_http_server mbedtls app_update json freertos
 )
+
+# Keep the firmware warning-clean. This turns the CI warning baseline into a
+# compile gate so new warnings cannot accumulate unnoticed.
+target_compile_options(${COMPONENT_LIB} PRIVATE -Werror)
