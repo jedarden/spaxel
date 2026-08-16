@@ -1,12 +1,12 @@
 //go:build io6_gate
 
 // io6_gate_conclusion_test.go locks in the data-driven conclusion of
-// CaptureIO6Diagnostics (bf-48juo). Zero blobs must be attributed to the
-// bf-4q5w fusion wiring gap ONLY when node geometry reached the DB distinctly
-// (>=1 node, not all collapsed to the (0,0,1) schema default); an empty
-// /api/nodes or all-at-origin admission must instead be attributed to an
-// auth/provision failure and must NOT mention bf-4q5w. bf-5k1z found the old
-// unconditional conclusion misattributing an auth failure to the wiring gap.
+// CaptureIO6Diagnostics (bf-48juo). Zero blobs may enter bf-4q5w fusion triage
+// ONLY when node geometry reached the DB distinctly (>=1 node, not all
+// collapsed to the (0,0,1) schema default); an empty /api/nodes or all-at-origin
+// admission must instead be attributed to an auth/provision failure and must
+// not be misattributed to fusion. bf-5k1z found the old unconditional
+// conclusion doing exactly that.
 //
 // The harness is driven against an httptest server returning controlled
 // /api/nodes + /api/status payloads, so this needs no real mothership or
@@ -66,7 +66,7 @@ func TestCaptureIO6Diagnostics_ConclusionIsDataDriven(t *testing.T) {
 			wantWiring: false,
 		},
 		{
-			name: "distinct corner geometry -> bf-4q5w wiring gap",
+			name: "distinct corner geometry -> fusion triage",
 			nodes: []NodeRecord{
 				{MAC: "AA:00:00:00:00:01", Role: "tx_rx", PosX: 0.5, PosY: 0.5, PosZ: 2.0},
 				{MAC: "AA:00:00:00:00:02", Role: "tx_rx", PosX: 5.5, PosY: 0.5, PosZ: 2.0},
@@ -77,9 +77,9 @@ func TestCaptureIO6Diagnostics_ConclusionIsDataDriven(t *testing.T) {
 			wantWiring: true,
 		},
 		{
-			// atOrigin(1) < len(4) still counts as distinct geometry -> wiring gap,
+			// atOrigin(1) < len(4) still counts as distinct geometry -> fusion triage,
 			// not auth failure (one straggler at the schema default is tolerated).
-			name:       "mostly distinct, one node at origin -> still bf-4q5w wiring gap",
+			name:       "mostly distinct, one node at origin -> still fusion triage",
 			wantWiring: true,
 			nodes: []NodeRecord{
 				{MAC: "AA:00:00:00:00:01", Role: "tx_rx", PosX: 0.5, PosY: 0.5, PosZ: 2.0},
@@ -107,7 +107,7 @@ func TestCaptureIO6Diagnostics_ConclusionIsDataDriven(t *testing.T) {
 			// future regression that re-conflates them.
 			const (
 				authPhrase   = "auth/provision failure"
-				wiringPhrase = "SetNodePosition is never wired"
+				wiringPhrase = "fusion accumulation grid"
 			)
 			hasAuth := strings.Contains(got, authPhrase)
 			hasWiring := strings.Contains(got, wiringPhrase)

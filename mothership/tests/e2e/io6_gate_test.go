@@ -2,20 +2,16 @@
 
 // io6_gate_test.go holds the IO-6 release hard-gate scenario
 // (TestIO6HardGate_WalkerProducesTrackedBlob). It is gated behind the
-// "io6_gate" build tag because the assertion is intentionally strict and
-// therefore RED until the upstream fusion Engine.SetNodePosition wiring
-// (bf-4q5w) lands — running it un-tagged would break the default
-// `go test ./...` suite that NEEDLE runs on every bead close (the reason
-// bf-5312 failed 3x). The gate only controls *when* the strict assertion
-// runs; it is NOT weakened by being gated.
+// "io6_gate" build tag because it runs a 30-second release scenario and is
+// intentionally opt-in for the default `go test ./...` suite. The tag only
+// controls when the strict assertion runs; it does not weaken the assertion.
 //
 // RUNBOOK — run the gated scenario explicitly:
 //
 //	cd mothership && go test -tags io6_gate -run TestIO6HardGate ./tests/e2e/...
 //
-// It is expected to FAIL/RED until bf-4q5w; child 2 of the split verifies that
-// RED state. The assertion still t.Fatalf's on zero tracked blobs, skips
-// nothing on zero blobs, and downgrades nothing to a log.
+// A failure is a release-gate failure: the assertion still t.Fatalf's on zero
+// tracked blobs, skips nothing on zero blobs, and downgrades nothing to a log.
 package e2e
 
 import (
@@ -31,8 +27,8 @@ import (
 
 // GetNodeRecords retrieves the raw node records (including persisted positions)
 // from /api/nodes. Unlike GetNodes (which drops PosX/PosY/PosZ), this preserves
-// the announced positions — used by the IO-6 hard-gate diagnostics to prove the
-// simulator announced real corner geometry even when the fusion engine ignored it.
+// the announced positions so a RED gate can prove whether real geometry reached
+// the mothership before fusion triage begins.
 func (h *TestHarness) GetNodeRecords(ctx context.Context) ([]NodeRecord, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.APIURL+"/api/nodes", nil)
 	if err != nil {
@@ -83,14 +79,13 @@ func (h *TestHarness) GetStatus(ctx context.Context) (*StatusResponse, error) {
 // CaptureIO6Diagnostics assembles the diagnostic evidence the IO-6 hard-gate
 // triage flow uses when the gate is RED (zero blobs).
 //
-// The conclusion it emits is DATA-DRIVEN (bf-48juo), so the RED state stays
-// actionable instead of misattributing the wrong root cause:
+// The evidence it emits is DATA-DRIVEN (bf-48juo), so the RED state stays
+// actionable without guessing at the root cause:
 //
 //   - distinct geometry admitted (>=1 node with positions away from the
-//     (0,0,1) schema default) AND zero blobs -> the bf-4q5w finding: CSI +
-//     node geometry reach the mothership, but no engine feeds the live blob
-//     loop (internal/signal/processor.go SetTrackedBlobs has zero non-test
-//     callers; fusion Engine.SetNodePosition is never wired).
+//     (0,0,1) schema default) AND zero blobs -> investigate the fusion
+//     accumulation grid and Engine.SetNodePosition path, preserving the
+//     strict assertion and feeding evidence back to bf-4q5w.
 //   - no node admitted (empty /api/nodes, or all nodes collapsed to the
 //     (0,0,1) schema default) -> auth/provision failure, NOT bf-4q5w. The
 //     fusion engine never saw node geometry because no node was admitted in
@@ -101,7 +96,7 @@ func (h *TestHarness) GetStatus(ctx context.Context) (*StatusResponse, error) {
 // The raw data lines (status, per-node positions, atOrigin tally) are emitted
 // unchanged either way. peakBlobs/detectionCount are the run-window maxima
 // observed by the caller. The returned string is logged on failure rather than
-// weakening the assertion.
+// weakening the assertion; detailed fusion traces belong under .beads/traces/.
 func (h *TestHarness) CaptureIO6Diagnostics(ctx context.Context, peakBlobs, detectionCount int) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "IO-6 hard-gate diagnostics (do NOT weaken the assertion):\n")
@@ -129,8 +124,8 @@ func (h *TestHarness) CaptureIO6Diagnostics(ctx context.Context, peakBlobs, dete
 				n.MAC, n.Role, n.PosX, n.PosY, n.PosZ)
 		}
 		// Diagnostic summary: are the announced positions actually distinct, or did
-		// they collapse to the (0,0,1) schema default? Distinct positions + zero
-		// blobs is the signature of the bf-4q5w wiring gap.
+		// they collapse to the (0,0,1) schema default? Distinct positions plus zero
+		// blobs identifies the fusion path as the next triage boundary.
 		for _, n := range records {
 			if n.PosX == 0 && n.PosY == 0 {
 				atOrigin++
@@ -142,18 +137,21 @@ func (h *TestHarness) CaptureIO6Diagnostics(ctx context.Context, peakBlobs, dete
 		fmt.Fprintf(&sb, "  /api/nodes: fetch failed: %v\n", err)
 	}
 
-	// DATA-DRIVEN CONCLUSION (bf-48juo). Only attribute zero blobs to the fusion
-	// wiring gap when the node geometry genuinely reached the DB distinctly
-	// (>=1 node admitted, not all collapsed to the schema origin). An empty
-	// /api/nodes or all nodes at origin means no node was admitted in the first
-	// place (auth/provision failure) and must NOT be misattributed to bf-4q5w —
-	// the bf-5k1z trace showed the old unconditional conclusion doing exactly that.
+	// DATA-DRIVEN TRIAGE (bf-48juo). Only send a zero-blob result toward fusion
+	// triage when node geometry genuinely reached the DB distinctly (>=1 node
+	// admitted, not all collapsed to the schema origin). An empty /api/nodes or
+	// all nodes at origin means no node was admitted in the first place and must
+	// NOT be misattributed to bf-4q5w.
 	switch {
+	case peakBlobs >= 1:
+		sb.WriteString("  conclusion: /api/blobs observed tracked output, but the dashboard WebSocket\n" +
+			"  feed was empty at assertion time; fusion and node-position wiring produced output.\n" +
+			"  Triage the dashboard broadcast path and inspect .beads/traces/; keep the assertion strict.\n")
 	case recordCount >= 1 && atOrigin < recordCount:
-		sb.WriteString("  conclusion: CSI + node geometry reach the mothership, but the fusion engine's\n" +
-			"  SetNodePosition is never wired (bf-4q5w), so the Fresnel accumulation grid has no\n" +
-			"  meaningful peaks and no tracked blob is produced. This is a wiring gap, not a\n" +
-			"  tolerated quiet-room condition — keep the IO-6 assertion strict.")
+		sb.WriteString("  conclusion: CSI + distinct node geometry reach the mothership, but no tracked\n" +
+			"  blob was observed. Inspect the fusion accumulation grid, Engine.SetNodePosition\n" +
+			"  wiring, and traces under .beads/traces/, then feed the finding back to bf-4q5w;\n" +
+			"  this is not a tolerated quiet-room condition — keep the IO-6 assertion strict.")
 	case !recordsFetched:
 		sb.WriteString("  conclusion: could not fetch /api/nodes, so node-admission state is unknown —\n" +
 			"  do NOT attribute to bf-4q5w from this evidence alone; re-run the gate and, if it\n" +
@@ -178,16 +176,11 @@ func (h *TestHarness) CaptureIO6Diagnostics(ctx context.Context, peakBlobs, dete
 // (bf-16c1) cover the broader capstone; this is the single-purpose gate with
 // diagnostic-evidence capture (CaptureIO6Diagnostics) for the triage flow.
 //
-// STRICT TRIAGE GATE: this assertion is deliberately strict and is expected to
-// be RED until the upstream fusion Engine.SetNodePosition wiring (bf-4q5w)
-// lands. As of this writing no engine feeds the live blob loop
-// (internal/signal/processor.go SetTrackedBlobs has zero non-test callers and
-// documents this), so zero blobs is the current observed state. DO NOT weaken
-// this assertion — e.g. by re-accepting an empty feed, skipping on zero blobs,
-// or downgrading to a log — to make the test green. If it is still RED after
-// bf-4q5w lands, capture the diagnostics dumped by CaptureIO6Diagnostics (node
-// positions vs. blob/grid state) and feed them back to bf-4q5w rather than
-// weakening — see the task's CRITICAL TRIAGE GATE.
+// STRICT TRIAGE GATE: this assertion must remain hard even if a future fusion
+// change makes the run RED. Never re-accept an empty feed, skip on zero blobs,
+// or downgrade the failure to a log. If it regresses, capture the diagnostics
+// from CaptureIO6Diagnostics, add fusion/grid traces under .beads/traces/, and
+// feed that finding back to bf-4q5w rather than weakening the gate.
 func TestIO6HardGate_WalkerProducesTrackedBlob(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e test in short mode")
@@ -222,12 +215,24 @@ func TestIO6HardGate_WalkerProducesTrackedBlob(t *testing.T) {
 		blobCounts, wsErr = h.WatchDashboardWS(ctx, simDuration)
 	}()
 
+	// /api/blobs is a live concurrent view: a tracked blob can disappear on a
+	// later fusion tick after the simulator stops. Keep the run-window peak
+	// separately instead of sampling the endpoint only after the grace period.
+	var apiPeak int
+	var apiErr error
+	var apiWG sync.WaitGroup
+	apiWG.Add(1)
+	go func() {
+		defer apiWG.Done()
+		apiPeak, apiErr = h.WatchBlobCount(ctx, simDuration)
+	}()
+
 	// AssertDuringRun (hardened by bf-2330) hard-fails if the whole run window
 	// produces neither a blob nor a detection event. It also returns the
 	// observed maxima implicitly via the live polls below.
 	if err := h.AssertDuringRun(ctx, simDuration, 4); err != nil {
 		// Capture diagnostics before failing so the RED state is actionable and
-		// can be filed straight to bf-4q5w. Do NOT weaken — surface the wiring gap.
+		// can be filed straight to bf-4q5w. Do NOT weaken the gate.
 		peakBlobs, detections := io6RunMaxima(ctx, h)
 		t.Fatalf("IO-6 hard-gate failed during run: %v\n%s", err,
 			h.CaptureIO6Diagnostics(ctx, peakBlobs, detections))
@@ -237,6 +242,10 @@ func TestIO6HardGate_WalkerProducesTrackedBlob(t *testing.T) {
 	if wsErr != nil {
 		t.Fatalf("Failed to watch dashboard WS: %v", wsErr)
 	}
+	apiWG.Wait()
+	if apiErr != nil {
+		t.Fatalf("Failed to watch /api/blobs: %v", apiErr)
+	}
 
 	// Grace period for any in-flight blobs/detection events to land.
 	time.Sleep(2 * time.Second)
@@ -245,22 +254,49 @@ func TestIO6HardGate_WalkerProducesTrackedBlob(t *testing.T) {
 	// the dashboard WS feed (what the UI sees) and the concurrent /api/blobs
 	// count (what the live 10 Hz loop exposes). An empty feed AND a zero count
 	// means the fusion+tracking loop localized no walker from the 4-node /
-	// 2-walker CSI stream — a detection regression (bf-4q5w wiring gap), not a
+	// 2-walker CSI stream — a detection regression at the fusion boundary, not a
 	// tolerated quiet-room condition. The bf-2330 helper gates nil/empty/zero.
-	peakBlobs, detections := io6RunMaxima(ctx, h)
+	_, detections := io6RunMaxima(ctx, h)
 	if assertErr := AssertBlobObserved(blobCounts); assertErr != nil {
 		t.Fatalf("IO-6 hard-gate (dashboard WS feed) failed: expected >=1 tracked "+
 			"blob from a 4-node/2-walker run, but none was observed [%v]\n%s",
-			assertErr, h.CaptureIO6Diagnostics(ctx, peakBlobs, detections))
+			assertErr, h.CaptureIO6Diagnostics(ctx, apiPeak, detections))
 	}
-	if peakBlobs < 1 {
+	if apiPeak < 1 {
 		t.Fatalf("IO-6 hard-gate (/api/blobs concurrent count) failed: expected >=1 "+
 			"tracked blob from a 4-node/2-walker run, but peak concurrent count was %d\n%s",
-			peakBlobs, h.CaptureIO6Diagnostics(ctx, peakBlobs, detections))
+			apiPeak, h.CaptureIO6Diagnostics(ctx, apiPeak, detections))
 	}
 
 	t.Logf("✓ IO-6 hard-gate PASSED: walker produced a tracked blob (dashboard WS peak >=1, /api/blobs peak=%d, %d detection events)",
-		peakBlobs, detections)
+		apiPeak, detections)
+}
+
+// WatchBlobCount records the peak concurrent tracked-blob count exposed by
+// /api/blobs during a run. The endpoint is intentionally sampled throughout
+// the run because tracked blobs are transient and may be gone by the time the
+// simulator process exits.
+func (h *TestHarness) WatchBlobCount(ctx context.Context, duration time.Duration) (int, error) {
+	deadline := time.Now().Add(duration)
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	peak := 0
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return peak, ctx.Err()
+		case <-ticker.C:
+			count, err := h.GetBlobCount(ctx)
+			if err != nil {
+				continue
+			}
+			if count > peak {
+				peak = count
+			}
+		}
+	}
+	return peak, nil
 }
 
 // io6RunMaxima returns the current concurrent blob count (/api/blobs) and the

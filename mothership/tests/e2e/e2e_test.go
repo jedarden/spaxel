@@ -405,43 +405,54 @@ func (h *TestHarness) WatchDashboardWS(ctx context.Context, duration time.Durati
 	defer conn.Close() //nolint:errcheck
 
 	blobCounts := make([]int, 0)
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	readDone := make(chan struct{})
+	defer close(readDone)
+	messages := make(chan []byte)
+	readErr := make(chan error, 1)
+	go func() {
+		for {
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				select {
+				case readErr <- err:
+				default:
+				}
+				return
+			}
+			select {
+			case messages <- message:
+			case <-readDone:
+				return
+			}
+		}
+	}()
 
-	startTime := time.Now()
-
-	for time.Since(startTime) < duration {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	for {
 		select {
 		case <-ctx.Done():
 			return blobCounts, ctx.Err()
-		case <-ticker.C:
-			// Read message with timeout
-			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				if isTimeoutErr(err) || err.Error() == "EOF" {
-					continue
-				}
-				return blobCounts, fmt.Errorf("read error: %w", err)
+		case <-timer.C:
+			return blobCounts, nil
+		case err := <-readErr:
+			if err == nil || err.Error() == "EOF" {
+				return blobCounts, nil
 			}
-
-			// Parse message
-			var data map[string]interface{}
+			return blobCounts, fmt.Errorf("read error: %w", err)
+		case message := <-messages:
+			// The hub can emit a snapshot, loc_update, and 10 Hz deltas while a
+			// run is active. Read each frame as it arrives so a high-rate stream
+			// cannot hide the non-empty frame behind a one-frame-per-second sample.
+			var data struct {
+				Blobs []json.RawMessage `json:"blobs"`
+			}
 			if err := json.Unmarshal(message, &data); err != nil {
 				continue
 			}
-
-			// Check for blobs in snapshot or delta messages
-			blobCount := 0
-			if blobs, ok := data["blobs"].([]interface{}); ok {
-				blobCount = len(blobs)
-			}
-
-			blobCounts = append(blobCounts, blobCount)
+			blobCounts = append(blobCounts, len(data.Blobs))
 		}
 	}
-
-	return blobCounts, nil
 }
 
 // AssertDuringRun polls assertions during the simulation run
@@ -453,8 +464,8 @@ func (h *TestHarness) AssertDuringRun(ctx context.Context, duration time.Duratio
 	nodesSeenOnline := false
 	// Track blob/detection production across the WHOLE run window so we can
 	// hard-fail (below) if the fusion pipeline produced no output at all.
-	maxBlobs := 0              // peak concurrent tracked blobs seen via /api/blobs
-	detectionEventCount := 0  // peak detection-event count seen via /api/events
+	maxBlobs := 0            // peak concurrent tracked blobs seen via /api/blobs
+	detectionEventCount := 0 // peak detection-event count seen via /api/events
 
 	for time.Since(startTime) < duration {
 		select {
