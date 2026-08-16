@@ -187,20 +187,78 @@ See `firmware/test/` directory for test programs that validate:
 
 ## Build Commands
 
-```bash
-# Configure (one-time)
-cd firmware
-idf.py set-target esp32s3
+The shipped ESP32-S3 configuration uses the chip's native USB-Serial/JTAG
+peripheral as the primary console. On a native-USB-only board this is normally
+the `/dev/ttyACM0` device. UART0 is on GPIO43/44 and is only visible through a
+USB-UART bridge (normally `/dev/ttyUSB0`). The secondary-console option is not a
+fallback for this: the primary console must match the port connected to the
+host.
 
-# Build
+### Default native-USB build
+
+For a clean build, remove only the generated ESP-IDF configuration and build
+output, then let `sdkconfig.defaults` select USB-Serial/JTAG. No `menuconfig`
+edits are required:
+
+```bash
+cd firmware
+rm -f sdkconfig sdkconfig.old
+rm -rf build
+idf.py set-target esp32s3
 idf.py build
 
-# Flash
-idf.py -p /dev/ttyUSB0 flash
+# Confirm the generated selection before flashing
+./scripts/verify-console-config.sh sdkconfig usb
 
-# Monitor serial output
+# Flash and monitor on the native USB CDC device
+idf.py -p /dev/ttyACM0 flash
+idf.py -p /dev/ttyACM0 monitor
+```
+
+The generated `sdkconfig` should contain `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`,
+`# CONFIG_ESP_CONSOLE_UART_DEFAULT is not set`,
+`CONFIG_ESP_CONSOLE_UART_NUM=-1`, and
+`CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y`. The boot log should continue past the
+bootloader into `app_main` on `/dev/ttyACM0`.
+
+### UART0 override for bridge-equipped boards
+
+For a board with a CP210x, CH340, FTDI, or another USB-UART bridge wired to
+GPIO43/44, layer `sdkconfig.uart-console` over the normal defaults. Start from
+a clean generated configuration so the defaults are actually re-applied:
+
+```bash
+cd firmware
+rm -f sdkconfig sdkconfig.old
+rm -rf build
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.uart-console" set-target esp32s3
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.uart-console" build
+
+# Confirm that the layered defaults selected UART0 before flashing
+./scripts/verify-console-config.sh sdkconfig uart
+
+# The UART bridge is normally ttyUSB0, not the native CDC device.
+idf.py -p /dev/ttyUSB0 flash
 idf.py -p /dev/ttyUSB0 monitor
 ```
+
+Verify the override before flashing: `sdkconfig` should show
+`CONFIG_ESP_CONSOLE_UART_DEFAULT=y`,
+`# CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG is not set`, and
+`CONFIG_ESP_CONSOLE_UART_NUM=0`. Do not edit the shared defaults or copy a
+generated `sdkconfig` between board types.
+
+### Console panic check
+
+Both console variants explicitly use `CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y`,
+so an application panic prints the panic reason and backtrace before rebooting
+on the selected primary console. After the first clean flash, deliberately
+perform one controlled panic check on the bench: add a temporary
+`esp_system_abort("console panic probe")` immediately after the first
+`app_main` log line, rebuild and flash, and leave the matching `idf.py monitor`
+running. Confirm that the capture contains `Guru Meditation Error` (or the
+equivalent panic reason), `Backtrace:`, and decoded PC entries. Remove the probe
+and rebuild the normal image immediately afterward; never ship the probe.
 
 ## NVS Layout
 
