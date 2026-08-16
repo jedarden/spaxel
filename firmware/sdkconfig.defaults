@@ -127,4 +127,10 @@ CONFIG_SPIRAM_CACHE_WRITETHROUGH=y
 #
 # Bridge-equipped boards can override with sdkconfig.uart-console.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_UART_DEFAULT=n
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# Keep panic diagnostics on the selected console before rebooting. Do not use a
+# silent reboot here: a backtrace is only useful if it reaches the port the
+# operator is actually monitoring.
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
