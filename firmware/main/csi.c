@@ -297,8 +297,6 @@ static void csi_tx_task(void *arg) {
     // TX task sends null data packets that other nodes can receive CSI from
     // Using ESP-NOW or custom packets
 
-    uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-
     while (s_tx_running) {
         uint32_t interval_ms = 1000 / g_state.packet_rate;
 

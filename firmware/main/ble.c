@@ -56,7 +56,8 @@ esp_err_t ble_init(void) {
     }
 
     // Initialize Bluedroid stack
-    ret = esp_bluedroid_init();
+    esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
+    ret = esp_bluedroid_init_with_cfg(&bluedroid_cfg);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init Bluedroid: %s", esp_err_to_name(ret));
         return ret;
