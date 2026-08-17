@@ -4920,19 +4920,29 @@ func main() {
 	// mDNS advertisement
 	var mdnsServer *mdns.Server
 	if cfg.MDNSEnabled {
+		mdnsIface, mdnsIP, bindingErr := resolveMDNSBinding(cfg.AdvertisedBaseURL)
+		if bindingErr != nil {
+			log.Printf("[WARN] Could not bind mDNS to the node-reachable address %q: %v; using the system multicast interface and host name addresses", cfg.AdvertisedBaseURL, bindingErr)
+		} else {
+			log.Printf("[INFO] mDNS binding to interface %s at %s", mdnsIface.Name, mdnsIP)
+		}
+		var mdnsIPs []net.IP
+		if mdnsIP != nil {
+			mdnsIPs = []net.IP{mdnsIP}
+		}
 		service, err := mdns.NewMDNSService(
 			cfg.MDNSName,
 			"_spaxel._tcp",
 			"local.",
 			"",
 			8080,
-			nil,
+			mdnsIPs,
 			[]string{"version=1", "ws=/ws/node", "dashboard=/ws/dashboard"},
 		)
 		if err != nil {
 			log.Printf("[ERROR] Failed to create mDNS service: %v", err)
 		} else {
-			mdnsServer, err = mdns.NewServer(&mdns.Config{Zone: service})
+			mdnsServer, err = mdns.NewServer(&mdns.Config{Zone: service, Iface: mdnsIface})
 			if err != nil {
 				log.Printf("[ERROR] Failed to start mDNS server: %v", err)
 			} else {
