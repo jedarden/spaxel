@@ -176,7 +176,9 @@ See `docs/notes/ota-security-hardening-2026-08-15.md` for complete security arch
 ```bash
 make -C firmware/test test
 ```
-Tests NVS migration, binary frame serialization, and provisioning JSON parser without hardware.
+Tests NVS migration, binary frame serialization, provisioning JSON parser, and
+the committed console defaults (default USB-Serial/JTAG profile, UART0 override
+layering — see `test_console_config.c`) without hardware.
 
 ### Hardware Tests (requires ESP32-S3)
 See `firmware/test/` directory for test programs that validate:
