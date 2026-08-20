@@ -251,6 +251,25 @@ func (r *Registry) GetNodeRole(mac string) (string, error) {
 	return role, err
 }
 
+// GetLockedNodes returns all MACs with role_locked=1
+func (r *Registry) GetLockedNodes() (map[string]bool, error) {
+	rows, err := r.db.Query(`SELECT mac FROM nodes WHERE role_locked=1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	locked := make(map[string]bool)
+	for rows.Next() {
+		var mac string
+		if err := rows.Scan(&mac); err != nil {
+			return nil, err
+		}
+		locked[mac] = true
+	}
+	return locked, rows.Err()
+}
+
 // PassiveBSSIDFor returns the stored passive BSSID for a node, or "" for any
 // non-passive role.
 //

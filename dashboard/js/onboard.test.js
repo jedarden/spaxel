@@ -1145,8 +1145,8 @@ describe('Session storage restore at each step', () => {
     }
 
     testRestoreAtStep(1, 'connect_device');
-    testRestoreAtStep(2, 'flash_firmware');
-    testRestoreAtStep(3, 'provision_wifi');
+    testRestoreAtStep(2, 'provision_wifi');
+    testRestoreAtStep(3, 'flash_firmware');
     testRestoreAtStep(4, 'detect_node');
     testRestoreAtStep(6, 'placement');
     testRestoreAtStep(7, 'complete');
