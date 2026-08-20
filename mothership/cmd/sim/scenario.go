@@ -8,8 +8,6 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -188,6 +186,9 @@ func (s *OTAScenarioState) SendOTAStatus(ctx context.Context) error {
 
 	s.Node.mu.Lock()
 	defer s.Node.mu.Unlock()
+	if s.Node.Conn == nil {
+		return fmt.Errorf("node %d disconnected", s.Node.ID)
+	}
 	return s.Node.Conn.WriteMessage(websocket.TextMessage, msgBytes)
 }
 
@@ -264,9 +265,11 @@ func (s *OTAScenarioState) SimulateOTAReboot(ctx context.Context, params OTAScen
 
 	// Send goodbye
 	s.Node.mu.Lock()
-	s.Node.Conn.WriteMessage(websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "rebooting"))
-	s.Node.Conn.Close()
+	if s.Node.Conn != nil {
+		s.Node.Conn.WriteMessage(websocket.CloseMessage, //nolint:errcheck
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "rebooting"))
+		s.Node.Conn.Close() //nolint:errcheck
+	}
 	s.Node.mu.Unlock()
 
 	// Simulate reboot delay
@@ -291,84 +294,18 @@ func (s *OTAScenarioState) SimulateOTAReboot(ctx context.Context, params OTAScen
 	return nil
 }
 
-// reconnectNode reconnects a node to mothership after reboot
-func reconnectNode(ctx context.Context, node *VirtualNode, allNodes []*VirtualNode) error {
-	// Resolve a per-node token: --token <t> override, else mint a REAL token for
-	// this node's announced MAC via /api/provision (same window-independent path
-	// as connectNodes). The validator recomputes HMAC(installSecret, hello.MAC),
-	// so the reconnecting node must present its own MAC-keyed token — not a
-	// shared placeholder token, which would be rejected as "invalid token".
-	var token string
-	if *flagToken != "" {
-		token = *flagToken
-	} else {
-		mac := macToString(node.MAC)
-		var err error
-		token, err = provisionNodeToken(ctx, getHTTPBaseURL(*flagMothership), mac)
-		if err != nil {
-			return fmt.Errorf("provision token for node %d (%s): %w", node.ID, mac, err)
-		}
-	}
-
-	wsURL, err := url.Parse(*flagMothership)
+// reconnectNode reconnects a node to mothership after a simulated OTA
+// reboot, announcing the post-update firmware version in its hello. The
+// handshake itself (per-node token, dial, hello, role) is shared with the
+// initial connect path — see connectNode.
+func reconnectNode(ctx context.Context, node *VirtualNode) error {
+	conn, role, err := connectNode(ctx, node, "sim-1.1.0")
 	if err != nil {
 		return err
 	}
 
-	if wsURL.Scheme == "http" {
-		wsURL.Scheme = "ws"
-	} else if wsURL.Scheme == "https" {
-		wsURL.Scheme = "wss"
-	}
-
-	headers := http.Header{}
-	headers.Set("X-Spaxel-Token", token)
-
-	conn, resp, err := websocket.DefaultDialer.DialContext(ctx, wsURL.String(), headers)
-	if err != nil {
-		if resp != nil {
-			return fmt.Errorf("dial failed: %w (status %d)", err, resp.StatusCode)
-		}
-		return fmt.Errorf("dial failed: %w", err)
-	}
-
-	node.Conn = conn
-
-	// Send hello with new version
-	hello := map[string]interface{}{
-		"type":             "hello",
-		"mac":              macToString(node.MAC),
-		"firmware_version": "sim-1.1.0",
-		"capabilities":     []string{"csi", "tx", "rx"},
-		"chip":             "ESP32-S3",
-		"flash_mb":         16,
-		"uptime_ms":        1000,
-		"wifi_rssi":        -45,
-		"ip":               fmt.Sprintf("127.0.0.%d", node.ID+2),
-	}
-
-	helloBytes, _ := json.Marshal(hello)
-	node.mu.Lock()
-	err = conn.WriteMessage(websocket.TextMessage, helloBytes)
-	node.mu.Unlock()
-
-	if err != nil {
-		conn.Close()
-		return err
-	}
-
-	// Wait for role assignment
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	_, message, err := conn.ReadMessage()
-	if err != nil {
-		conn.Close()
-		return err
-	}
-
-	var roleMsg map[string]interface{}
-	json.Unmarshal(message, &roleMsg)
-
-	log.Printf("[SIM] Node %d reconnected, role: %v", node.ID, roleMsg["role"])
+	node.installConn(conn)
+	log.Printf("[SIM] Node %d reconnected, role: %v", node.ID, role)
 
 	return nil
 }

@@ -1,14 +1,22 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // TestGenerateCSIFrameHeader tests that generated frames have correct binary header format.
@@ -1005,5 +1013,249 @@ func TestPathLossModel(t *testing.T) {
 
 	if farAmp >= closeAmp {
 		t.Errorf("Far walker amplitude %v >= close walker amplitude %v", farAmp, closeAmp)
+	}
+}
+
+// TestNodeWSURL tests mothership endpoint normalization: http(s) becomes
+// ws(s) and a bare endpoint gains the /ws path, while an endpoint that
+// already names the node WebSocket passes through untouched.
+func TestNodeWSURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		mothership string
+		want       string
+		wantErr    bool
+	}{
+		{"full node endpoint unchanged", "ws://host:8080/ws/node", "ws://host:8080/ws/node", false},
+		{"bare ws endpoint gains /ws", "ws://host:8080", "ws://host:8080/ws", false},
+		{"trailing slash endpoint gains ws", "ws://host:8080/", "ws://host:8080/ws", false},
+		{"http scheme becomes ws", "http://host:8080", "ws://host:8080/ws", false},
+		{"https scheme becomes wss", "https://host", "wss://host/ws", false},
+		{"http with full path unchanged", "http://host:8080/ws/node", "ws://host:8080/ws/node", false},
+		{"wss with full path unchanged", "wss://host/ws/node", "wss://host/ws/node", false},
+		{"unparseable", "://", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := nodeWSURL(tt.mothership)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("nodeWSURL(%q) expected error, got %q", tt.mothership, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("nodeWSURL(%q) unexpected error: %v", tt.mothership, err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("nodeWSURL(%q) = %q, want %q", tt.mothership, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGetHTTPBaseURL tests that ws(s) node endpoints map back to the http(s)
+// API base used for provisioning.
+func TestGetHTTPBaseURL(t *testing.T) {
+	tests := []struct {
+		name string
+		ws   string
+		want string
+	}{
+		{"ws node endpoint", "ws://host:8080/ws/node", "http://host:8080"},
+		{"wss node endpoint", "wss://host/ws/node", "https://host"},
+		{"bare ws endpoint", "ws://host:8080", "http://host:8080"},
+		{"bare wss endpoint", "wss://host", "https://host"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getHTTPBaseURL(tt.ws); got != tt.want {
+				t.Errorf("getHTTPBaseURL(%q) = %q, want %q", tt.ws, got, tt.want)
+			}
+		})
+	}
+}
+
+// fakeMothership is a minimal stand-in for the real mothership: it serves
+// /api/provision with a fixed token and /ws/node with a WebSocket upgrade
+// that reads hello and answers with a configurable first message.
+type fakeMothership struct {
+	server *httptest.Server
+
+	mu            sync.Mutex
+	tokenHeader   string
+	hello         map[string]interface{}
+	connections   int
+	firstMsg      string // sent to the client right after its hello
+	closeFirstMsg bool   // drop the FIRST connection after firstMsg, hold later ones
+}
+
+func newFakeMothership(t *testing.T, firstMsg string, closeFirst bool) *fakeMothership {
+	t.Helper()
+	f := &fakeMothership{firstMsg: firstMsg, closeFirstMsg: closeFirst}
+	upgrader := websocket.Upgrader{}
+	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/provision":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"node_token":"fake-token-0123456789"}`)
+		case "/ws/node":
+			f.mu.Lock()
+			f.connections++
+			first := f.connections == 1
+			f.mu.Unlock()
+
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close() //nolint:errcheck
+
+			f.mu.Lock()
+			f.tokenHeader = r.Header.Get("X-Spaxel-Token")
+			f.mu.Unlock()
+
+			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			_, hello, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+
+			f.mu.Lock()
+			f.hello = map[string]interface{}{}
+			json.Unmarshal(hello, &f.hello) //nolint:errcheck
+			f.mu.Unlock()
+
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(f.firstMsg)); err != nil {
+				return
+			}
+			if f.closeFirstMsg && first {
+				conn.Close() //nolint:errcheck
+				return
+			}
+			// Hold the connection open until the test tears the server down.
+			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			conn.ReadMessage() //nolint:errcheck
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(f.server.Close)
+	return f
+}
+
+// withSimFlags overrides the sim's global endpoint/token flags for the
+// duration of a test and restores them afterwards.
+func withSimFlags(t *testing.T, mothership string) {
+	t.Helper()
+	oldMothership, oldToken := *flagMothership, *flagToken
+	*flagMothership = mothership
+	*flagToken = ""
+	t.Cleanup(func() {
+		*flagMothership = oldMothership
+		*flagToken = oldToken
+	})
+}
+
+// TestConnectNodeHandshake verifies the full onboarding handshake against a
+// fake mothership: a real token is provisioned per MAC, presented in the
+// X-Spaxel-Token header, the hello announces the node's position and
+// firmware version, and the assigned role is returned.
+func TestConnectNodeHandshake(t *testing.T) {
+	fake := newFakeMothership(t, `{"type":"role","role":"tx_rx"}`, false)
+	withSimFlags(t, fake.server.URL+"/ws/node")
+
+	node := &VirtualNode{
+		ID:       3,
+		MAC:      generateMAC(3),
+		Position: Point{X: 1.5, Y: 2.5, Z: 2.0},
+	}
+
+	conn, role, err := connectNode(context.Background(), node, simFirmwareVersion)
+	if err != nil {
+		t.Fatalf("connectNode failed: %v", err)
+	}
+	defer conn.Close() //nolint:errcheck
+
+	if role != "tx_rx" {
+		t.Errorf("role = %q, want %q", role, "tx_rx")
+	}
+	if fake.tokenHeader != "fake-token-0123456789" {
+		t.Errorf("X-Spaxel-Token = %q, want the token minted by /api/provision", fake.tokenHeader)
+	}
+
+	wantMAC := macToString(generateMAC(3))
+	if fake.hello["mac"] != wantMAC {
+		t.Errorf("hello mac = %v, want %v", fake.hello["mac"], wantMAC)
+	}
+	if fake.hello["firmware_version"] != simFirmwareVersion {
+		t.Errorf("hello firmware_version = %v, want %v", fake.hello["firmware_version"], simFirmwareVersion)
+	}
+	if fake.hello["pos_x"] != 1.5 || fake.hello["pos_y"] != 2.5 || fake.hello["pos_z"] != 2.0 {
+		t.Errorf("hello position = (%v,%v,%v), want (1.5,2.5,2.0)",
+			fake.hello["pos_x"], fake.hello["pos_y"], fake.hello["pos_z"])
+	}
+}
+
+// TestConnectNodeRejected verifies a reject reply to hello surfaces as an
+// error naming the reason instead of a half-open connection.
+func TestConnectNodeRejected(t *testing.T) {
+	fake := newFakeMothership(t, `{"type":"reject","reason":"invalid token"}`, false)
+	withSimFlags(t, fake.server.URL+"/ws/node")
+
+	node := &VirtualNode{ID: 0, MAC: generateMAC(0), Position: Point{X: 0, Y: 0, Z: 2}}
+
+	conn, _, err := connectNode(context.Background(), node, simFirmwareVersion)
+	if err == nil {
+		conn.Close() //nolint:errcheck
+		t.Fatal("connectNode expected error on reject, got nil")
+	}
+	if !strings.Contains(err.Error(), "rejected") || !strings.Contains(err.Error(), "invalid token") {
+		t.Errorf("error = %v, want it to mention rejection and reason", err)
+	}
+}
+
+// TestManageNodeReconnectsAfterServerClose exercises the recovery path this
+// whole change exists for: the server drops the connection right after the
+// handshake, and manageNode must redial and complete a second handshake
+// instead of leaving the node dead for the rest of the run.
+func TestManageNodeReconnectsAfterServerClose(t *testing.T) {
+	fake := newFakeMothership(t, `{"type":"role","role":"tx_rx"}`, true)
+	withSimFlags(t, fake.server.URL+"/ws/node")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	nodes := createVirtualNodes(1, &Space{Width: 5, Depth: 5, Height: 2.5}, rand.New(rand.NewSource(1)))
+	if err := connectNodes(ctx, nodes); err != nil {
+		t.Fatalf("initial connectNodes failed: %v", err)
+	}
+	go manageNode(ctx, nodes[0])
+
+	// Every server-side connection is closed immediately after the handshake,
+	// so a working manageNode keeps redialing: wait for the second handshake.
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		fake.mu.Lock()
+		conns := fake.connections
+		fake.mu.Unlock()
+		if conns >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("sim did not reconnect after server-side close (connections seen: %d)", conns)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// The node must have a live published connection again, not a retired one.
+	nodes[0].mu.Lock()
+	hasConn := nodes[0].Conn != nil
+	nodes[0].mu.Unlock()
+	if !hasConn {
+		t.Error("node has no live connection after reconnect")
 	}
 }
