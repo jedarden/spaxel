@@ -40,6 +40,16 @@ const (
 	defaultSeed       = 0         // random seed (0 = use current time)
 	defaultSpace      = "5x5x2.5" // room dimensions
 	defaultNoiseSigma = 0.005
+
+	// simFirmwareVersion is what hello announces for virtual nodes.
+	simFirmwareVersion = "sim-1.0.0"
+
+	// Reconnect backoff bounds. A reconnect redials and re-provisions a
+	// fresh per-node token, so the delay only paces retries while the
+	// mothership is unreachable (e.g. mid-restart under its Recreate
+	// strategy). Reset to the minimum after every successful handshake.
+	reconnectMinDelay = 1 * time.Second
+	reconnectMaxDelay = 60 * time.Second
 )
 
 var (
@@ -136,6 +146,32 @@ type VirtualNode struct {
 	Role     string // "tx", "rx", or "tx_rx"
 	Conn     *websocket.Conn
 	mu       sync.Mutex
+
+	// lost closes when the current connection's readLoop exits — the one
+	// reliably observable signal that the connection is dead. Written only
+	// by connectNodes (before the node's manageNode starts) and then by
+	// that manageNode alone, so it needs no lock.
+	lost <-chan struct{}
+}
+
+// installConn atomically publishes a live connection to the node.
+func (n *VirtualNode) installConn(conn *websocket.Conn) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.Conn = conn
+}
+
+// retireConn marks the node's connection dead: it is closed (unblocking any
+// readLoop parked on it) and cleared so the send paths stop streaming to a
+// dead socket. Idempotent and safe from any goroutine that observes a failed
+// read or write.
+func (n *VirtualNode) retireConn() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.Conn != nil {
+		n.Conn.Close() //nolint:errcheck
+		n.Conn = nil
+	}
 }
 
 // WalkerType defines how a walker moves
@@ -323,6 +359,14 @@ func main() {
 		log.Fatalf("[SIM] Failed to connect nodes: %v", err)
 	}
 	defer closeAllNodes(nodes)
+
+	// Keep each node connected for the rest of the run: recover from
+	// mothership restarts and dropped connections instead of streaming into
+	// dead sockets forever (the ADR-004 failure class, seen live on the
+	// ardenone-cluster demo deployment).
+	for _, node := range nodes {
+		go manageNode(ctx, node)
+	}
 
 	// Main simulation loop
 	simulationComplete := make(chan struct{})
@@ -597,139 +641,214 @@ func loadPathsFromFile(filename string) ([][]Point, error) {
 
 // connectNodes connects all virtual nodes to the mothership.
 // Each node gets its own persistent connection with background goroutines
-// for ping, health, and message reading.
+// for ping, health, and message reading. A failure connecting any node is
+// fatal to the process — main exits and the caller (k8s restart, CI retry)
+// re-runs — but once every node is up, manageNode keeps each one connected
+// for the rest of the run.
 func connectNodes(ctx context.Context, nodes []*VirtualNode) error {
-	// Resolve per-node auth tokens before dialing. The ingestion validator
-	// recomputes HMAC-SHA256(installSecret, hello.MAC) and compares it against the
-	// X-Spaxel-Token header, so a token is only valid for the exact MAC it was
-	// minted for. --token <t> applies one explicit token to every node (manual
-	// override); the default mints a REAL per-node token from /api/provision keyed
-	// on each node's actual announced MAC. This makes every node authenticate on
-	// the strength of its real token regardless of the migration window, so the
-	// sim connects under the strict window (SPAXEL_MIGRATION_WINDOW_HOURS=0) and
-	// eliminates '[WARN] Node ... rejected: invalid token'.
-	apiBase := getHTTPBaseURL(*flagMothership)
-	tokens := make(map[int]string, len(nodes))
 	for _, node := range nodes {
-		if *flagToken != "" {
-			tokens[node.ID] = *flagToken
-			continue
-		}
-		mac := macToString(node.MAC)
-		tok, err := provisionNodeToken(ctx, apiBase, mac)
+		conn, role, err := connectNode(ctx, node, simFirmwareVersion)
 		if err != nil {
-			return fmt.Errorf("failed to provision token for node %d (%s): %w "+
-				"(start the mothership first, or pass --token)", node.ID, mac, err)
-		}
-		tokens[node.ID] = tok
-		log.Printf("[SIM] Node %d (%s): provisioned real token (first 16): %s...", node.ID, mac, tok[:min(16, len(tok))])
-	}
-
-	// Parse mothership URL
-	wsURL, err := url.Parse(*flagMothership)
-	if err != nil {
-		return fmt.Errorf("invalid mothership URL: %w", err)
-	}
-
-	// Convert http(s) to ws(s)
-	if wsURL.Scheme == "http" {
-		wsURL.Scheme = "ws"
-	} else if wsURL.Scheme == "https" {
-		wsURL.Scheme = "wss"
-	}
-
-	errChan := make(chan error, len(nodes))
-
-	for _, node := range nodes {
-		// Add node WS path if needed
-		nodeURL := wsURL.String()
-		if !strings.Contains(nodeURL, "/ws/") && !strings.HasSuffix(nodeURL, "/ws") {
-			if strings.HasSuffix(nodeURL, "/") {
-				nodeURL = nodeURL + "ws"
-			} else {
-				nodeURL = nodeURL + "/ws"
-			}
+			return err
 		}
 
-		headers := http.Header{}
-		headers.Set("X-Spaxel-Token", tokens[node.ID])
+		node.installConn(conn)
+		node.Role = role
+		log.Printf("[SIM] Node %d connected, role: %v", node.ID, role)
 
-		log.Printf("[SIM] Node %d connecting to %s", node.ID, nodeURL)
-
-		conn, resp, err := websocket.DefaultDialer.DialContext(ctx, nodeURL, headers)
-		if err != nil {
-			if resp != nil {
-				body, _ := io.ReadAll(resp.Body)
-				return fmt.Errorf("node %d dial failed: %w (status %d: %s)", node.ID, err, resp.StatusCode, string(body))
-			}
-			return fmt.Errorf("node %d dial failed: %w", node.ID, err)
-		}
-
-		node.Conn = conn
-		log.Printf("[SIM] Node %d connected", node.ID)
-
-		// Send hello message. Announce the node's computed position
-		// (createVirtualNodes perimeter geometry) so the mothership persists it
-		// in the fleet/DB row instead of leaving it at the schema default (bf-24xp).
-		hello := map[string]interface{}{
-			"type":             "hello",
-			"mac":              macToString(node.MAC),
-			"firmware_version": "sim-1.0.0",
-			"capabilities":     []string{"csi", "tx", "rx"},
-			"chip":             "ESP32-S3",
-			"flash_mb":         16,
-			"uptime_ms":        1000,
-			"wifi_rssi":        -45,
-			"ip":               fmt.Sprintf("127.0.0.%d", node.ID+2),
-			"pos_x":            node.Position.X,
-			"pos_y":            node.Position.Y,
-			"pos_z":            node.Position.Z,
-		}
-
-		helloBytes, err := json.Marshal(hello)
-		if err != nil {
-			conn.Close() //nolint:errcheck
-			return fmt.Errorf("node %d marshal hello: %w", node.ID, err)
-		}
-
-		node.mu.Lock()
-		err = conn.WriteMessage(websocket.TextMessage, helloBytes)
-		node.mu.Unlock()
-
-		if err != nil {
-			conn.Close() //nolint:errcheck
-			return fmt.Errorf("node %d send hello: %w", node.ID, err)
-		}
-
-		// Wait for role assignment
-		conn.SetReadDeadline(time.Now().Add(10 * time.Second)) //nolint:errcheck
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			conn.Close() //nolint:errcheck
-			return fmt.Errorf("node %d read role: %w", node.ID, err)
-		}
-
-		var roleMsg map[string]interface{}
-		if err := json.Unmarshal(message, &roleMsg); err != nil {
-			conn.Close() //nolint:errcheck
-			return fmt.Errorf("node %d parse role: %w", node.ID, err)
-		}
-
-		if roleMsg["type"] == "reject" {
-			conn.Close() //nolint:errcheck
-			return fmt.Errorf("node %d rejected: %v", node.ID, roleMsg["reason"])
-		}
-
-		log.Printf("[SIM] Node %d received role: %v", node.ID, roleMsg["role"])
-
-		// Start background goroutines for this connection
-		startTime := time.Now()
-		go node.pingLoop(ctx)
-		go node.healthLoop(ctx, startTime)
-		go node.readLoop(ctx, errChan)
+		node.lost = startNodeLoops(ctx, node, conn)
 	}
 
 	return nil
+}
+
+// connectNode performs the full node onboarding handshake against the
+// mothership: resolve the auth token, dial the node WebSocket with it, send
+// hello announcing the node's position, and wait for the role assignment.
+// The returned connection is live but has no loops attached to it yet —
+// callers pair it with startNodeLoops.
+//
+// Tokens are per-node because the ingestion validator recomputes
+// HMAC-SHA256(installSecret, hello.MAC) and compares it against the
+// X-Spaxel-Token header, so a token is only valid for the exact MAC it was
+// minted for. --token <t> applies one explicit token to every node (manual
+// override); the default mints a REAL per-node token from /api/provision
+// keyed on each node's actual announced MAC. This makes every node
+// authenticate on the strength of its real token regardless of the migration
+// window, so the sim connects under the strict window
+// (SPAXEL_MIGRATION_WINDOW_HOURS=0) and eliminates
+// '[WARN] Node ... rejected: invalid token'.
+func connectNode(ctx context.Context, node *VirtualNode, firmwareVersion string) (*websocket.Conn, string, error) {
+	var token string
+	if *flagToken != "" {
+		token = *flagToken
+	} else {
+		mac := macToString(node.MAC)
+		var err error
+		token, err = provisionNodeToken(ctx, getHTTPBaseURL(*flagMothership), mac)
+		if err != nil {
+			return nil, "", fmt.Errorf("provision token for node %d (%s): %w "+
+				"(start the mothership first, or pass --token)", node.ID, mac, err)
+		}
+		log.Printf("[SIM] Node %d (%s): provisioned real token (first 16): %s...", node.ID, mac, token[:min(16, len(token))])
+	}
+
+	nodeURL, err := nodeWSURL(*flagMothership)
+	if err != nil {
+		return nil, "", fmt.Errorf("node %d invalid mothership URL: %w", node.ID, err)
+	}
+
+	headers := http.Header{}
+	headers.Set("X-Spaxel-Token", token)
+
+	log.Printf("[SIM] Node %d connecting to %s", node.ID, nodeURL)
+
+	conn, resp, err := websocket.DefaultDialer.DialContext(ctx, nodeURL, headers)
+	if err != nil {
+		if resp != nil {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, "", fmt.Errorf("node %d dial failed: %w (status %d: %s)", node.ID, err, resp.StatusCode, string(body))
+		}
+		return nil, "", fmt.Errorf("node %d dial failed: %w", node.ID, err)
+	}
+
+	// Send hello message. Announce the node's computed position
+	// (createVirtualNodes perimeter geometry) so the mothership persists it
+	// in the fleet/DB row instead of leaving it at the schema default (bf-24xp).
+	hello := map[string]interface{}{
+		"type":             "hello",
+		"mac":              macToString(node.MAC),
+		"firmware_version": firmwareVersion,
+		"capabilities":     []string{"csi", "tx", "rx"},
+		"chip":             "ESP32-S3",
+		"flash_mb":         16,
+		"uptime_ms":        1000,
+		"wifi_rssi":        -45,
+		"ip":               fmt.Sprintf("127.0.0.%d", node.ID+2),
+		"pos_x":            node.Position.X,
+		"pos_y":            node.Position.Y,
+		"pos_z":            node.Position.Z,
+	}
+
+	helloBytes, err := json.Marshal(hello)
+	if err != nil {
+		conn.Close() //nolint:errcheck
+		return nil, "", fmt.Errorf("node %d marshal hello: %w", node.ID, err)
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, helloBytes); err != nil {
+		conn.Close() //nolint:errcheck
+		return nil, "", fmt.Errorf("node %d send hello: %w", node.ID, err)
+	}
+
+	// Wait for role assignment
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second)) //nolint:errcheck
+	_, message, err := conn.ReadMessage()
+	if err != nil {
+		conn.Close() //nolint:errcheck
+		return nil, "", fmt.Errorf("node %d read role: %w", node.ID, err)
+	}
+
+	var roleMsg map[string]interface{}
+	if err := json.Unmarshal(message, &roleMsg); err != nil {
+		conn.Close() //nolint:errcheck
+		return nil, "", fmt.Errorf("node %d parse role: %w", node.ID, err)
+	}
+
+	if roleMsg["type"] == "reject" {
+		conn.Close() //nolint:errcheck
+		return nil, "", fmt.Errorf("node %d rejected: %v", node.ID, roleMsg["reason"])
+	}
+
+	return conn, fmt.Sprintf("%v", roleMsg["role"]), nil
+}
+
+// nodeWSURL normalizes the -mothership value into a dialable ws(s) node
+// endpoint: http(s) schemes become ws(s), and a bare endpoint gains the /ws
+// path. An endpoint that already carries /ws (e.g. …/ws/node) passes through
+// untouched.
+func nodeWSURL(mothership string) (string, error) {
+	u, err := url.Parse(mothership)
+	if err != nil {
+		return "", err
+	}
+
+	if u.Scheme == "http" {
+		u.Scheme = "ws"
+	} else if u.Scheme == "https" {
+		u.Scheme = "wss"
+	}
+
+	if !strings.Contains(u.Path, "/ws/") && !strings.HasSuffix(u.Path, "/ws") && !strings.HasSuffix(u.Path, "/ws/") {
+		if strings.HasSuffix(u.Path, "/") {
+			u.Path += "ws"
+		} else {
+			u.Path += "/ws"
+		}
+	}
+
+	return u.String(), nil
+}
+
+// startNodeLoops attaches the per-connection goroutines to a freshly dialed
+// connection: ping, health, and the downstream reader. Each loop captures
+// the connection it was started for, so a later reconnect (new connection,
+// new loops) can never be touched by the previous generation's loops. The
+// returned channel closes when readLoop exits.
+func startNodeLoops(ctx context.Context, node *VirtualNode, conn *websocket.Conn) <-chan struct{} {
+	lost := make(chan struct{})
+	startTime := time.Now()
+	go node.pingLoop(ctx, conn)
+	go node.healthLoop(ctx, conn, startTime)
+	go node.readLoop(ctx, conn, lost)
+	return lost
+}
+
+// manageNode keeps a single node connected for the lifetime of ctx. When the
+// connection drops — mothership restart (its Deployment is Recreate), a
+// server-side close, a network failure — it re-runs the full handshake
+// (re-provisioning the MAC-keyed token) with exponential backoff capped at
+// reconnectMaxDelay, resetting after every successful handshake.
+//
+// Without this, the sim kept writing CSI to dead sockets forever (one
+// "send CSI failed" per tick) while the mothership reported nodes_online=0 —
+// the always-on demo deployment looked Running but fed nothing.
+func manageNode(ctx context.Context, node *VirtualNode) {
+	delay := reconnectMinDelay
+	lost := node.lost
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-lost:
+		}
+
+		node.retireConn()
+		log.Printf("[SIM] Node %d disconnected; reconnecting in %s", node.ID, delay)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+
+		conn, role, err := connectNode(ctx, node, simFirmwareVersion)
+		if err != nil {
+			log.Printf("[SIM] Node %d reconnect failed: %v", node.ID, err)
+			delay *= 2
+			if delay > reconnectMaxDelay {
+				delay = reconnectMaxDelay
+			}
+			continue
+		}
+
+		delay = reconnectMinDelay
+		node.installConn(conn)
+		node.Role = role
+		log.Printf("[SIM] Node %d reconnected, role: %v", node.ID, role)
+		lost = startNodeLoops(ctx, node, conn)
+	}
 }
 
 // provisionNodeToken mints a REAL per-node HMAC token from the mothership's
@@ -781,13 +900,13 @@ func provisionNodeToken(ctx context.Context, apiBase, mac string) (string, error
 // closeAllNodes closes all node WebSocket connections
 func closeAllNodes(nodes []*VirtualNode) {
 	for _, node := range nodes {
+		node.mu.Lock()
 		if node.Conn != nil {
-			node.mu.Lock()
 			node.Conn.WriteMessage(websocket.CloseMessage, //nolint:errcheck
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "sim shutdown"))
 			node.Conn.Close() //nolint:errcheck
-			node.mu.Unlock()
 		}
+		node.mu.Unlock()
 	}
 }
 
@@ -797,8 +916,8 @@ func macToString(mac [6]byte) string {
 		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
 }
 
-// pingLoop sends WebSocket pings
-func (n *VirtualNode) pingLoop(ctx context.Context) {
+// pingLoop sends WebSocket pings on the connection it was started for.
+func (n *VirtualNode) pingLoop(ctx context.Context, conn *websocket.Conn) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -808,19 +927,21 @@ func (n *VirtualNode) pingLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			n.mu.Lock()
-			err := n.Conn.WriteMessage(websocket.PingMessage, nil)
+			err := conn.WriteMessage(websocket.PingMessage, nil)
 			n.mu.Unlock()
 
 			if err != nil {
 				log.Printf("[SIM] Node %d ping failed: %v", n.ID, err)
+				n.retireConn()
 				return
 			}
 		}
 	}
 }
 
-// healthLoop sends periodic health messages
-func (n *VirtualNode) healthLoop(ctx context.Context, startTime time.Time) {
+// healthLoop sends periodic health messages on the connection it was
+// started for, reporting uptime since that connection was established.
+func (n *VirtualNode) healthLoop(ctx context.Context, conn *websocket.Conn, startTime time.Time) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -847,32 +968,31 @@ func (n *VirtualNode) healthLoop(ctx context.Context, startTime time.Time) {
 			}
 
 			n.mu.Lock()
-			err = n.Conn.WriteMessage(websocket.TextMessage, healthBytes)
+			err = conn.WriteMessage(websocket.TextMessage, healthBytes)
 			n.mu.Unlock()
 
 			if err != nil {
 				log.Printf("[SIM] Node %d send health failed: %v", n.ID, err)
+				n.retireConn()
 				return
 			}
 		}
 	}
 }
 
-// readLoop reads downstream messages from the WebSocket
-func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
+// readLoop reads downstream messages from the WebSocket and closes lost when
+// it exits. gorilla semantics make any read error terminal for the
+// connection (and the 60s read deadline bounds a silently dead peer), so
+// readLoop exiting is the authoritative connection-death signal manageNode
+// reconnects on.
+func (n *VirtualNode) readLoop(ctx context.Context, conn *websocket.Conn, lost chan<- struct{}) {
+	defer close(lost)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-		}
-
-		n.mu.Lock()
-		conn := n.Conn
-		n.mu.Unlock()
-
-		if conn == nil {
-			return
 		}
 
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second)) //nolint:errcheck
@@ -885,9 +1005,9 @@ func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
 			}
 			if websocket.IsCloseError(err) {
 				log.Printf("[SIM] Node %d connection closed", n.ID)
-				return
+			} else {
+				log.Printf("[SIM] Node %d read error: %v", n.ID, err)
 			}
-			log.Printf("[SIM] Node %d read error: %v", n.ID, err)
 			return
 		}
 
@@ -907,7 +1027,7 @@ func (n *VirtualNode) readLoop(ctx context.Context, errChan chan<- error) {
 		case "config":
 			log.Printf("[SIM] Node %d config update: %v", n.ID, msg)
 		case "reject":
-			errChan <- fmt.Errorf("node %d rejected: %v", n.ID, msg["reason"])
+			log.Printf("[SIM] Node %d rejected: %v", n.ID, msg["reason"])
 			return
 		case "shutdown":
 			log.Printf("[SIM] Node %d received shutdown", n.ID)
@@ -981,11 +1101,24 @@ func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker,
 					frame := generateCSIFrame(txNode, rxNode, walkers, walls, frameNum, rng)
 
 					txNode.mu.Lock()
-					err := txNode.Conn.WriteMessage(websocket.BinaryMessage, frame)
+					conn := txNode.Conn
+					var err error
+					if conn != nil {
+						err = conn.WriteMessage(websocket.BinaryMessage, frame)
+					}
 					txNode.mu.Unlock()
 
+					if conn == nil {
+						// Node is disconnected; manageNode is redialing it.
+						continue
+					}
 					if err != nil {
+						// First failed write retires the connection: close
+						// it and clear it so this loop stops streaming
+						// (and logging) into a dead socket while manageNode
+						// reconnects.
 						log.Printf("[SIM] Node %d send CSI failed: %v", txNode.ID, err)
+						txNode.retireConn()
 						continue
 					}
 
@@ -1193,11 +1326,20 @@ func sendBLEMessages(nodes []*VirtualNode, walkers []*Walker) {
 		}
 
 		node.mu.Lock()
-		err = node.Conn.WriteMessage(websocket.TextMessage, bleBytes)
+		conn := node.Conn
+		if conn != nil {
+			err = conn.WriteMessage(websocket.TextMessage, bleBytes)
+		} else {
+			err = nil
+		}
 		node.mu.Unlock()
 
+		if conn == nil {
+			continue
+		}
 		if err != nil {
 			log.Printf("[SIM] Node %d send BLE failed: %v", node.ID, err)
+			node.retireConn()
 		}
 	}
 }
