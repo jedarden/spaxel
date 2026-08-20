@@ -248,14 +248,41 @@ func (shm *SelfHealManager) OnNodeDisconnected(mac string) {
 	// Get node info for remaining online nodes
 	remainingNodes := shm.getOnlineNodeInfo(onlineList)
 
-	// Run optimisation with remaining nodes
-	result := shm.optimiser.Optimise(remainingNodes, "node_disconnected:"+mac)
+	// Get locked nodes to exclude from optimisation
+	lockedNodes, err := shm.registry.GetLockedNodes()
+	if err != nil {
+		log.Printf("[WARN] fleet: get locked nodes: %v", err)
+		lockedNodes = make(map[string]bool)
+	}
+
+	// Filter out locked nodes from optimisation
+	unlockedNodes := make([]NodeInfo, 0, len(remainingNodes))
+	for _, node := range remainingNodes {
+		if !lockedNodes[node.MAC] {
+			unlockedNodes = append(unlockedNodes, node)
+		}
+	}
+
+	// Run optimisation only on unlocked nodes
+	result := shm.optimiser.Optimise(unlockedNodes, "node_disconnected:"+mac)
 
 	shm.mu.Lock()
-	// Update role assignments
+	// Update role assignments only for unlocked nodes
 	for _, assignment := range result.Assignments {
-		shm.currentRoles[assignment.MAC] = assignment.Role
+		if !lockedNodes[assignment.MAC] {
+			shm.currentRoles[assignment.MAC] = assignment.Role
+		}
 	}
+
+	// Ensure locked nodes retain their locked roles in currentRoles
+	for mac := range lockedNodes {
+		if _, online := shm.online[mac]; online {
+			if role, err := shm.registry.GetNodeRole(mac); err == nil {
+				shm.currentRoles[mac] = role
+			}
+		}
+	}
+
 	coverageAfter := result.CoverageScore
 	gdopAfter := result.MeanGDOP
 	shm.lastCoverageScore = coverageAfter
@@ -392,17 +419,42 @@ func (shm *SelfHealManager) optimiseAndApply(triggerReason string, connectedNode
 	cols, rows := shm.lastGDOPCols, shm.lastGDOPRows
 	shm.mu.Unlock()
 
+	// Get locked nodes to exclude from optimisation
+	lockedNodes, err := shm.registry.GetLockedNodes()
+	if err != nil {
+		log.Printf("[WARN] fleet: get locked nodes: %v", err)
+		lockedNodes = make(map[string]bool)
+	}
+
 	// Get node info for all online nodes
 	nodes := shm.getOnlineNodeInfo(onlineList)
 
-	// Run optimisation
-	result := shm.optimiser.Optimise(nodes, triggerReason)
+	// Filter out locked nodes from optimisation
+	unlockedNodes := make([]NodeInfo, 0, len(nodes))
+	for _, node := range nodes {
+		if !lockedNodes[node.MAC] {
+			unlockedNodes = append(unlockedNodes, node)
+		}
+	}
+
+	// Run optimisation only on unlocked nodes
+	result := shm.optimiser.Optimise(unlockedNodes, triggerReason)
 
 	shm.mu.Lock()
-	// Update role assignments
+	// Update role assignments only for unlocked nodes
 	for _, assignment := range result.Assignments {
-		shm.currentRoles[assignment.MAC] = assignment.Role
+		if !lockedNodes[assignment.MAC] {
+			shm.currentRoles[assignment.MAC] = assignment.Role
+		}
 	}
+
+	// Ensure locked nodes retain their locked roles in currentRoles
+	for mac := range lockedNodes {
+		if role, err := shm.registry.GetNodeRole(mac); err == nil {
+			shm.currentRoles[mac] = role
+		}
+	}
+
 	coverageAfter := result.CoverageScore
 	gdopAfter := result.MeanGDOP
 	shm.lastCoverageScore = coverageAfter
@@ -473,13 +525,42 @@ func (shm *SelfHealManager) ManualOptimise() *OptimiseResult {
 	}
 	shm.mu.RUnlock()
 
+	// Get locked nodes to exclude from optimisation
+	lockedNodes, err := shm.registry.GetLockedNodes()
+	if err != nil {
+		log.Printf("[WARN] fleet: get locked nodes: %v", err)
+		lockedNodes = make(map[string]bool)
+	}
+
 	nodes := shm.getOnlineNodeInfo(onlineList)
-	result := shm.optimiser.Optimise(nodes, "manual_trigger")
+
+	// Filter out locked nodes from optimisation
+	unlockedNodes := make([]NodeInfo, 0, len(nodes))
+	for _, node := range nodes {
+		if !lockedNodes[node.MAC] {
+			unlockedNodes = append(unlockedNodes, node)
+		}
+	}
+
+	result := shm.optimiser.Optimise(unlockedNodes, "manual_trigger")
 
 	shm.mu.Lock()
+	// Update role assignments only for unlocked nodes
 	for _, assignment := range result.Assignments {
-		shm.currentRoles[assignment.MAC] = assignment.Role
+		if !lockedNodes[assignment.MAC] {
+			shm.currentRoles[assignment.MAC] = assignment.Role
+		}
 	}
+
+	// Ensure locked nodes retain their locked roles in currentRoles
+	for mac := range lockedNodes {
+		if _, online := shm.online[mac]; online {
+			if role, err := shm.registry.GetNodeRole(mac); err == nil {
+				shm.currentRoles[mac] = role
+			}
+		}
+	}
+
 	shm.lastCoverageScore = result.CoverageScore
 	shm.lastMeanGDOP = result.MeanGDOP
 	if len(result.GDOPAfter) > 0 {
