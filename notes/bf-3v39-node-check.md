@@ -1,19 +1,23 @@
 # Node Connection and CSI Streaming Verification
 
-**Date:** 2026-08-16
-**Bead:** spaxel-9c1a4858 (split-child of bf-3v39)
+**Bead:** spaxel-9c1a4858 (split-child 1 of bf-3v39, presence-detection verification)
 **Mothership:** https://spaxel.ardenone.com
+**Checks:** 2026-08-16 (initial) and 2026-08-20 04:35 UTC (re-verification, this revision)
 
-## Findings
+## Verdict
 
-### Live Mothership Status
+**The first ESP32 node is NOT connected, and no CSI frames are arriving.**
+`/healthz` reports `nodes_online: 0` with reason `"no nodes connected"` on a mothership
+that has been up continuously for ~4.8 days — no node has connected at any point in the
+process's lifetime. This is the closable "documented absence" outcome; the operator
+runbook is below.
 
-Verified via `/healthz` endpoint (public, no authentication required):
+## Live evidence (2026-08-20 04:35 UTC)
 
 ```json
 {
   "status": "ok",
-  "uptime_s": 100057,
+  "uptime_s": 414408,
   "version": "0.2.24",
   "nodes_online": 0,
   "db": "ok",
@@ -22,156 +26,173 @@ Verified via `/healthz` endpoint (public, no authentication required):
 }
 ```
 
-**Key Finding: No ESP32 nodes are currently connected to the mothership.**
+- `uptime_s` 414,408 ⇒ process started ≈ **2026-08-15 09:33 UTC**.
+- The 2026-08-16 check saw the *same* process (`uptime_s` 100,057; the delta,
+  314,351 s ≈ 3.64 d, matches the wall-clock gap between checks). So the mothership has
+  run with **zero node connections continuously since at least 2026-08-15 09:33 UTC**.
+- `nodes_online` is the ingestion server's live WebSocket-connection count
+  (`mothership/internal/health/health.go`), and the `"no nodes connected"` reason only
+  fires after 5 min of uptime with zero nodes. Connection state is authoritative in this
+  architecture — no connection ⇒ no hello ⇒ **no CSI frames can have arrived**, on any
+  link, at any rate. There is no "connected but silent" state that this check would miss.
 
-### API Access Investigation
+## API access investigation (agent-viable read path)
 
-The spaxel.ardenone.com API is OAuth-gated through Google SSO (auth.ardenone.com). Available endpoints:
+### Edge behavior (Cloudflare → Traefik forward-auth, `ardenone-com-traefik-auth`)
 
-- **Public (no auth):**
-  - `/healthz` - System status (confirmed working)
-  - `/api/provision` - Node provisioning/tokens
-  - `/api/auth/status` - Auth configuration
-  - `/api/auth/setup` - Initial PIN setup
-  - `/api/auth/login` - PIN authentication
+| Endpoint | Result |
+|---|---|
+| `GET /healthz` | **200** — exempt at the ingress; the one agent-viable read |
+| `GET /api/nodes` | 307 → `accounts.google.com` OAuth |
+| `GET /api/status` | 307 → OAuth |
+| `GET /api/fleet` | 307 → OAuth |
+| `GET /api/auth/status` | 307 → OAuth (the *app* exempts this path; the edge does not) |
+| `GET /api/provision` | 404 from the app (POST-only route) — reaches the app, exempt at the edge |
+| `GET /ws/node` (HTTP/1.1 + upgrade headers) | **101 Switching Protocols** — reaches the app |
 
-- **Authenticated (requires Google OAuth or PIN session):**
-  - `/api/nodes` - List all nodes
-  - `/api/fleet` - Extended node data with packet rates
-  - `/api/nodes/{mac}` - Individual node details
+### Application-level auth (`mothership/internal/auth/handler.go`)
 
-The `/api/fleet` endpoint would show CSI streaming rates (`packet_rate` field per node), but it requires authentication.
+**There is no device/service token route.** Verified against the source:
 
-### CSI Frame Tracking
+- Registered routes: `GET /api/auth/status`, `GET /api/auth/install-secret`,
+  `POST /api/auth/setup|login|logout|change-pin` (`handler.go:180-197`).
+- `RequireAuth`/`Middleware` accept **only** the `spaxel_session` PIN cookie
+  (`ValidateSession`, `handler.go:541`). `ValidateNodeToken` (the per-node
+  HMAC-SHA256 token) is used exclusively on the `/ws/node` ingestion path, never for
+  REST reads.
+- App-exempt paths (`IsPublicPath`, `handler.go:700`): `/healthz`, `/api/auth/*`,
+  `/api/provision`, `/ws/node`, `/firmware/*`, static assets. Note the app also waves
+  everything through while no PIN is configured (onboarding mode) — but the ingress
+  forward-auth still gates `/api/*` at the edge, so this does not create an agent path.
 
-From code analysis (`mothership/internal/recorder/manager.go`):
-- CSI frames are tracked per-link via the recorder manager
-- Frame rates would be visible through authenticated fleet endpoints
-- System uses 1-hour segmented recording windows
+**Conclusion:** `/healthz` is the only endpoint an agent can read. For `/api/nodes` and
+`/api/fleet` the operator must run the curls (block below) — that is the intended
+fallback named in the bead, and it is the *only* fallback; no token route exists to find.
 
-## Root Cause
+### Node-facing path is healthy (verified end to end)
 
-**No ESP32 nodes are provisioned or connected.** The mothership is running cleanly (database OK, ~27.8 hours uptime) but has zero connected nodes.
+`/ws/node` with a proper HTTP/1.1 WebSocket upgrade completes **101 Switching
+Protocols** through Cloudflare + Traefik to the mothership. Post-upgrade the server
+expects a `hello` with token (header `X-Spaxel-Token` bridged into the hello body,
+`ingestion/server.go:561-575`; migration-window grace for unpaired nodes). So a
+provisioned node *can* reach this mothership today; nothing is connecting.
 
-This is expected for a fresh deployment or lab setup - nodes must be:
-1. Physically provisioned via Web Serial ( `/api/provision` )
-2. Connected to the same WiFi network as the mothership
-3. Powered on with valid NVS configuration
+Gotcha for anyone re-testing with curl: over HTTP/2 (curl's default here) the upgrade
+headers are meaningless and the app answers `400 Bad Request`. Force `--http1.1`.
+Real firmware uses HTTP/1.1 and is unaffected.
 
-## Troubleshooting Runbook
+## Why the node is absent — what is and isn't explained
 
-To get the first ESP32 node connected and streaming CSI:
+- The deployed mothership is **0.2.24** (cut 2026-08-07 17:43). The ADR-003 fix set is
+  **already in that lineage** (verified via `git merge-base --is-ancestor`):
+  - apdetector constructed/wired at startup — `3e683cc` (2026-07-31) ✓ in 0.2.24
+  - `passive_bssid` carried through all role-assignment call sites — `f8807a9`
+    (2026-07-31) ✓ in 0.2.24
+  - firmware WS-reconnect fix — `dbd27a9` (2026-08-01) ✓ in 0.2.24's firmware build
+  - CSI init-ordering and arm-on-CONNECTED fixes (spaxel-09b78cef, spaxel-bfe6ed1c)
+    are closed in-repo
+  So the known pre-08-07 defects do not explain the current zero-node state; the
+  mothership simply has no node connecting to it.
+- Provisioning is operator-side by construction: bf-2po1 handed over serial-provisioning
+  instructions targeting `spaxel.ardenone.com` (port 443, WSS). This dev box (Hetzner,
+  no USB) cannot perform it.
+- The bench node last known connected to production was on 2026-08-07 (ADR-006 session,
+  firmware 0.2.19). It has not been connected since at least the 2026-08-16 check. The
+  mothership restarted ~2026-08-15 09:33 UTC; a node on *pre-reconnect-fix* firmware
+  would have been stranded by that restart until power-cycled (bf-3c282 behavior), but
+  0.2.19 already contains `dbd27a9`, so power-cycling/re-provisioning should recover it.
 
-### Step 1: Verify Mothership Network Configuration
+## Operator curls (read-only; paste output back onto the bead)
+
+Run from any browser-authenticated context, or after signing in via Google SSO:
 
 ```bash
-# Check if network WiFi credentials are configured (fleet-wide default per ADR-005)
-# This would be visible through the Settings > Network page (requires OAuth)
-# Nodes can be provisioned with custom WiFi credentials even if fleet-wide creds aren't set
+curl -s https://spaxel.ardenone.com/healthz | jq .
+curl -s https://spaxel.ardenone.com/api/nodes | jq .
+curl -s https://spaxel.ardenone.com/api/fleet | jq .
+curl -s https://spaxel.ardenone.com/api/links | jq .        # per-link CSI evidence
+curl -s https://spaxel.ardenone.com/api/diagnostics | jq .  # per-node CSI stats
 ```
 
-The `/api/provision` endpoint generates node-specific provisioning payloads with:
-- WiFi SSID/password (can be node-specific or fleet-wide)
-- Node token (HMAC-SHA256 derived from install_secret + MAC)
-- Mothership connection details (mDNS host/IP, port)
+Success looks like: `/api/nodes` shows the ESP32 with `status: "online"`;
+`/api/links` is non-empty (frames arriving); `/api/fleet` shows a measured
+`packet_rate` > 0.
 
-### Step 2: Provision First Node
+## Troubleshooting runbook — first node → CONNECTED → CSI
 
-Access https://spaxel.ardenone.com (requires Google OAuth via auth.ardenone.com), then:
+Ordered; stop at the first failure and fix before continuing.
 
-1. Navigate to Settings → Nodes → "Add Node" (or use Fleet page if available)
-2. Connect ESP32 via Web Serial
-3. Provisioning payload is written to NVS including:
-   - `wifi_ssid`, `wifi_pass`
-   - `node_token` (for authentication)
-   - `ms_mdns` (mothership mDNS hostname)
-   - `ms_port` (default: 9000)
-   - `ntp_server` (for time sync)
-4. ESP32 reboots and connects to WiFi
+### Step 1 — Physical and power
 
-### Step 3: Verify Node Connection
+- Is the board powered (USB-C)? Any LED activity?
+- Open a serial console (115200 baud). On USB-Serial/JTAG-only boards the console must
+  be routed to USB-JTAG to see anything (ADR-002; boards that default to UART0 boot
+  silently over USB — spaxel-5049d982 tracks the default).
+- No serial output at all ⇒ console routing, not a WiFi problem.
 
-After provisioning, the node should:
-1. Connect to WiFi
-2. Resolve mothership via mDNS or direct IP
-3. Send hello message with MAC + node_token
-4. Ingestion server validates token
-5. Node appears in `/api/fleet` with status "online"
+### Step 2 — WiFi association
 
-Check via `/healthz`:
-```json
-{
-  "nodes_online": 1,
-  "reason": ""  // Empty when nodes are present
-}
-```
+Serial log should show WiFi connect with exponential backoff. Ten consecutive failures
+⇒ captive portal `spaxel-XXXX` at 192.168.4.1. Fleet credentials live in the dashboard
+(**Settings → Network**, ADR-005); the portal still requires manual entry — the
+dashboard's "recover via captive portal" screen shows them copy-paste ready.
 
-### Step 4: Verify CSI Streaming
+### Step 3 — Mothership discovery and WebSocket
 
-Once connected, CSI streaming requires:
+Serial log shows mDNS resolution (`_spaxel._tcp.local`) with fallback to the cached
+mothership IP. Watch for the hello/role exchange. The `/ws/node` path through the public
+origin is verified working (101 above), so failures here are node-side (token, TLS,
+DNS) — the node needs firmware ≥ 0.2.19 for `wss://`.
+Success signal: `/healthz` `nodes_online` flips to 1.
 
-1. **Node role configuration** - Node must be in active role:
-   - `tx` - Transmitter beaconing
-   - `rx` - Receiver collecting CSI
-   - `tx_rx` - Both transmitting and receiving
-   - `passive` - Passive monitoring on specific BSSID **(requires passive_bssid field)**
+### Step 4 — Role and `passive_bss` (the classic zero-CSI trap)
 
-2. **For passive mode** (for home AP monitoring):
-   ```bash
-   # Must set passive_bssid to home WiFi AP's BSSID
-   curl -X POST https://spaxel.ardenone.com/api/nodes/{mac}/role \
-     -H "Content-Type: application/json" \
-     -d '{"role": "passive", "passive_bssid": "AA:BB:CC:DD:EE:FF"}'
-   ```
+A connected node can still produce zero CSI if it sits in `passive` role with a bad
+BSSID filter:
 
-   **Critical:** Without `passive_bssid`, passive mode filters CSI on `00:00:00:00:00:00` and drops all frames. See bf-6auk5 context.
+- **`passive_bss` NVS key (namespace `spaxel`, 6-byte blob) must hold the home AP's
+  BSSID.** All-zeros/empty ⇒ the firmware filters `peer_mac == 00:00:00:00:00:00`,
+  which matches no frame, and silently discards 100% of captured CSI
+  (ADR-003 gap 3; `firmware/main/csi.c`).
+- The mothership persists the BSSID in the `nodes` registry (`passive_bssid` column)
+  and delivers it with every role assignment (`f8807a9`). Check it on the dashboard
+  Fleet page or `GET /api/nodes` — the stored value must equal the router's BSSID.
+- Serial log should show `csi: Setting role` on CONNECTED (arm-on-CONNECTED fix).
+- Manual override: `POST /api/nodes/{mac}/role {"role":"passive","passive_bssid":"AA:BB:CC:DD:EE:FF"}`
+  (empty `passive_bssid` with `role=passive` is rejected with HTTP 400 by design).
 
-3. **Verify CSI rate** via `/api/fleet`:
-   ```json
-   {
-     "nodes": [{
-       "mac": "...",
-       "status": "online",
-       "packet_rate": 19.8,  // CSI frames/sec
-       "configured_rate": 20,
-       "health_score": 0.95
-     }]
-   }
-   ```
+### Step 5 — Confirm CSI frames are actually arriving
 
-### Step 5: Common Issues
+- `GET /api/links` non-empty; `GET /api/diagnostics` shows per-node stats;
+  `GET /api/fleet` shows measured `packet_rate` > 0.
+- **Do not trust `csi_rate_hz` in health data on old firmware** — it used to restate
+  the *configured* rate (a node emitting zero CSI forever "reported 20 Hz";
+  spaxel-443c273c, since fixed — measure, don't ask the config).
+- Ambient/passive rates are bounded by AP traffic (~10 Hz beacon-only); a quiet AP is a
+  known open question (ADR-003 risk) — low-but-nonzero is expected, zero is not.
 
-**Node not appearing in fleet:**
-- Check ESP32 serial output for WiFi connection status
-- Verify mothership mDNS resolvable from node's network
-- Check node_token matches (derived from install_secret + MAC)
-- Review `/healthz` for database errors
+### Step 6 — Mothership restart behavior
 
-**Node shows "unpaired":**
-- Node connected but token validation failed
-- Re-provision node with correct MAC address
-- Check install_secret consistency between provisioning and ingestion
+A node on pre-reconnect-fix firmware strands on every mothership restart until
+power-cycled (bf-3c282, fixed by `dbd27a9`, in builds ≥ the 0.2.24 lineage). The
+production mothership restarted ~2026-08-15 09:33 UTC — if the node was connected
+before that and never came back, a power cycle plus Step 3 is the recovery.
 
-**Node online but no CSI (packet_rate = 0):**
-- Verify node role is not `idle` or `virtual`
-- For passive mode, confirm `passive_bssid` is set to home AP BSSID
-- Check WiFi channel - CSI requires node and AP on same channel
-- Verify node is actually receiving frames from target AP
+## What closes the umbrella (spaxel-f234cf09 / ADR-003)
 
-**CSI rate low (< 5 fps):**
-- Normal for idle environments with minimal WiFi traffic
-- Active TX beacons from another node increase CSI rate
-- Check WiFi interference or channel congestion
-- Verify node health_score > 0.8
+> Done when: one node, with no peer node, produces CSI frames that reach the mothership
+> and form a link against the auto-detected router virtual node.
 
-## Next Steps
+The sibling beads (baseline capture spaxel-082135bc, walk test spaxel-b075c0f3, final
+record spaxel-2ce98275) remain blocked until a node is actually provisioned and
+connected — an operator action, not a code change.
 
-To complete bf-3v39 (presence detection verification), the operator needs to:
+## Repo gate status at close time (2026-08-20)
 
-1. Access https://spaxel.ardenone.com via Google OAuth
-2. Provision at least one ESP32 node with WiFi credentials
-3. Configure node role for CSI collection (passive with home AP BSSID)
-4. Verify node appears in fleet with non-zero packet_rate
-5. Re-verify this bead once CSI streaming is confirmed
-
-The mothership software is functioning correctly - this is purely a deployment/provisioning task.
+Docs-only change (this file). `go vet ./...` clean. `go test ./...` has failures, all
+outside this bead's scope: the `recording` and `ingestion` failures correspond to a
+concurrent worker's uncommitted in-flight edits in this shared checkout
+(`internal/recording/buffer.go` mid-refactor, `internal/ingestion/server_test.go`), and
+`internal/api` `TestNetworkSettingsHandler_PutAllowsEmptyPasswordForOpenNetwork` fails
+on files unmodified in the working tree (pre-existing on main). None are caused by or
+related to this bead's change.
