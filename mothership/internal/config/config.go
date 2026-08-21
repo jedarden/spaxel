@@ -54,6 +54,8 @@ type Config struct {
 	// Security
 	InstallSecret        string // Installation secret (64-char hex, optional if set must be 32+ bytes)
 	MigrationWindowHours int    // How long after startup nodes without tokens are tolerated (default 24, 0 = disabled)
+	DemoMode             bool   // Demo mode: read-only dashboard, mutating endpoints blocked, no PIN required (default false)
+	MaxDashboardClients   int    // Maximum concurrent dashboard WebSocket clients (default 10, applies in both normal and demo mode)
 
 	// Time
 	NTPServer string // NTP server hostname (default "pool.ntp.org", or this host's own address when NTPLocalEnabled)
@@ -272,6 +274,31 @@ func Load() (*Config, error) {
 	// SPAXEL_WIFI_PASSWORD - string, optional (first-boot seeding only per ADR-005)
 	cfg.WifiPassword = envOr("SPAXEL_WIFI_PASSWORD", "")
 
+	// SPAXEL_DEMO_MODE - bool, default false
+	demoModeStr := envOr("SPAXEL_DEMO_MODE", "false")
+	if demoModeStr == "true" || demoModeStr == "1" {
+		cfg.DemoMode = true
+	} else if demoModeStr == "false" || demoModeStr == "0" {
+		cfg.DemoMode = false
+	} else {
+		errs = append(errs, fmt.Errorf("SPAXEL_DEMO_MODE=%s invalid: must be one of true, false, 1, 0", demoModeStr))
+	}
+
+	// SPAXEL_MAX_DASHBOARD_CLIENTS - int, default 10, range [1,100]
+	maxClientsStr := os.Getenv("SPAXEL_MAX_DASHBOARD_CLIENTS")
+	if maxClientsStr == "" {
+		cfg.MaxDashboardClients = 10
+	} else {
+		val, err := strconv.Atoi(maxClientsStr)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("SPAXEL_MAX_DASHBOARD_CLIENTS=%s invalid: must be an integer", maxClientsStr))
+		} else if val < 1 || val > 100 {
+			errs = append(errs, fmt.Errorf("SPAXEL_MAX_DASHBOARD_CLIENTS=%d invalid: must be in range [1,100]", val))
+		} else {
+			cfg.MaxDashboardClients = val
+		}
+	}
+
 	// TZ - string, default 'UTC'
 	tz := os.Getenv("TZ")
 	if tz == "" {
@@ -436,6 +463,10 @@ func logConfig(cfg *Config) {
 		log.Printf("[CONFIG] SPAXEL_WIFI_PASSWORD=*** (will seed DB on first boot if no existing setting)")
 	}
 	log.Printf("[CONFIG] TZ=%s", cfg.Timezone)
+	if cfg.DemoMode {
+		log.Printf("[CONFIG] SPAXEL_DEMO_MODE=true (read-only dashboard, mutating endpoints blocked)")
+	}
+	log.Printf("[CONFIG] SPAXEL_MAX_DASHBOARD_CLIENTS=%d", cfg.MaxDashboardClients)
 }
 
 // joinErrors combines multiple errors into a single error.

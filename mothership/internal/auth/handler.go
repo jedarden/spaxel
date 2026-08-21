@@ -24,12 +24,14 @@ type Handler struct {
 	db           *sql.DB
 	secretKey    []byte // for session token signing
 	mothershipID string // cached mothership ID
+	demoMode     bool   // demo mode: read-only dashboard, no PIN required
 }
 
 // Config holds handler configuration.
 type Config struct {
 	DB        *sql.DB
 	SecretKey []byte
+	DemoMode  bool
 }
 
 // NewHandler creates a new auth handler.
@@ -50,6 +52,7 @@ func NewHandler(cfg Config) (*Handler, error) {
 	h := &Handler{
 		db:        cfg.DB,
 		secretKey: secretKey,
+		demoMode:  cfg.DemoMode,
 	}
 
 	// Initialize auth schema and install secret
@@ -722,6 +725,36 @@ func IsPublicPath(path string) bool {
 	return false
 }
 
+// DemoModeMiddleware returns middleware that blocks mutating REST endpoints in demo mode.
+// This must be applied AFTER the auth middleware to allow read operations to pass through.
+func DemoModeMiddleware(demoMode bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// If not in demo mode, pass through
+			if !demoMode {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// In demo mode, reject mutating methods
+			if r.Method == http.MethodPost || r.Method == http.MethodPut ||
+			   r.Method == http.MethodPatch || r.Method == http.MethodDelete {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "demo mode active",
+					"message": "Mutating operations are not permitted in demo mode",
+				}) //nolint:errcheck // HTTP response
+				log.Printf("[INFO] Demo mode: rejected %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+				return
+			}
+
+			// Allow all GET/OPTIONS/HEAD requests
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // IsPINConfigured returns true if a PIN has been set.
 func (h *Handler) IsPINConfigured() bool {
 	var pinBcrypt sql.NullString
@@ -756,6 +789,7 @@ const loginPage = `<!DOCTYPE html>
 // Middleware returns chi-compatible middleware that enforces auth on all routes.
 // Static assets (JS/CSS) pass through so the login page can render.
 // During onboarding (no PIN configured), all requests pass through.
+// In demo mode, all dashboard requests pass through without PIN (read-only mode).
 func (h *Handler) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -767,6 +801,13 @@ func (h *Handler) Middleware(next http.Handler) http.Handler {
 
 		// Static assets always pass through (needed by login page)
 		if isStaticAsset(path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// In demo mode, allow all dashboard API/WS requests without authentication
+		// (Mutating endpoints will be blocked separately by demo mode middleware)
+		if h.demoMode {
 			next.ServeHTTP(w, r)
 			return
 		}
