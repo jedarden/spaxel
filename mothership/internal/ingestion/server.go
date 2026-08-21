@@ -145,6 +145,9 @@ type Server struct {
 		RecordFrameArrival(txMAC, linkID string, recvTime time.Time)
 	}
 
+	// FrameTracker for measuring ambient traffic frame rates (ADR-003)
+	frameTracker *FrameTracker
+
 	// Load shedding
 	shedder    *loadshed.Shedder
 	frameGauge chan struct{} // bounded gauge for tracking in-flight frames
@@ -216,6 +219,7 @@ func NewServer() *Server {
 		linkDeltaRMS:    make(map[string]float64),
 		malformedCounts: make(map[string]*malformedCounter),
 		frameGauge:      make(chan struct{}, frameGaugeSize),
+		frameTracker:    NewFrameTracker(), // ADR-003: track frame rates
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -381,6 +385,13 @@ func (s *Server) SetShedder(sh *loadshed.Shedder) {
 	if sh != nil {
 		sh.SetIngestChannelFull(s.isChannelOverHalfFull)
 	}
+}
+
+// GetFrameTracker returns the frame tracker for ADR-003 measurements
+func (s *Server) GetFrameTracker() *FrameTracker {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.frameTracker
 }
 
 // isChannelOverHalfFull reports whether the frame gauge channel is more than
@@ -761,6 +772,11 @@ func (s *Server) handleBinaryFrame(nc *NodeConnection, data []byte) {
 	s.mu.Unlock()
 
 	ring.Push(frame, recvTime)
+
+	// ADR-003: Track frame rate for ambient traffic measurement
+	if s.frameTracker != nil {
+		s.frameTracker.RecordFrame(linkID)
+	}
 
 	if broadcaster != nil {
 		broadcaster.BroadcastCSI(frame.MACString(), frame.PeerMACString(), data)

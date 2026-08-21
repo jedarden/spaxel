@@ -3321,6 +3321,13 @@ func main() {
 		})
 	}
 
+	// ADR-003: Frame statistics API for ambient traffic measurement
+	frameStatsHandler := api.NewFrameStatsHandler(func() *ingestion.FrameTracker {
+		return ingestSrv.GetFrameTracker()
+	})
+	frameStatsHandler.RegisterRoutes(r)
+	log.Printf("[INFO] Frame statistics API registered at /api/framestats/*")
+
 	// Phase 6: Automation REST API
 	if automationEngine != nil {
 		r.Get("/api/automations", func(w http.ResponseWriter, r *http.Request) {
