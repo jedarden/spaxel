@@ -48,6 +48,14 @@ set(SPAXEL_VERSION "${PROJECT_VERSION}")
 # esp_app_get_description()->version returns and what OTA/rollback logic reads.
 set(PROJECT_VER "${SPAXEL_VERSION}")
 
+# Console board profile. Native USB-Serial/JTAG is the shipped ESP32-S3
+# default; bridge-equipped boards select sdkconfig.uart-console explicitly.
+# Keep this selection before project.cmake so ESP-IDF sees it while generating
+# sdkconfig. A command-line -D SDKCONFIG_DEFAULTS=... remains authoritative.
+if(NOT DEFINED SDKCONFIG_DEFAULTS)
+    set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.usbjtag")
+endif()
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(spaxel-firmware VERSION "${SPAXEL_VERSION}")
 
@@ -103,4 +111,3 @@ endif()
 if(CONFIG_APP_ANTI_ROLLBACK)
     message(STATUS "Anti-rollback enabled - security version: ${SPAXEL_VERSION}")
 endif()
-

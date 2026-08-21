@@ -1,7 +1,7 @@
 # Board variant: console on UART0 (GPIO43/44).
 #
 # For ESP32-S3 boards WITH a USB-UART bridge chip (CP210x, CH340, FTDI), or bare
-# modules wired to a USB-TTL adapter. Layer it over the defaults:
+# modules wired to a USB-TTL adapter. Select it instead of sdkconfig.usbjtag:
 #
 #   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.uart-console" build
 #
@@ -9,5 +9,8 @@
 # silent on a UART0 console and therefore undiagnosable. See ADR-002.
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n
-CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+# Keep the native USB VFS compiled for Spaxel's dual-transport provisioning
+# listener. This does not make USB the application console; UART0 remains the
+# primary console and receives application logs and panic output.
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
 CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
