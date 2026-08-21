@@ -131,6 +131,10 @@
                         '<div class="troubleshoot-step-num">3</div>' +
                         '<div class="troubleshoot-step-text">If the LED blinks rapidly after 5 minutes: the node has lost its WiFi configuration. Connect to <strong>spaxel-' + escapeAttr(last4) + '</strong> WiFi network to reconfigure.</div>' +
                     '</div>' +
+                '</details>' +
+                '<div id="credentials-container-' + escapeAttr(mac) + '"></div>' +
+                '<details class="troubleshoot-more" style="margin-top: 12px;">' +
+                    '<summary>Advanced options</summary>' +
                     '<div class="troubleshoot-step">' +
                         '<div class="troubleshoot-step-num">4</div>' +
                         '<div class="troubleshoot-step-text">If the LED is off: check the power supply and USB cable</div>' +
@@ -155,10 +159,128 @@
             });
         }
 
+        // Render credentials section for captive portal recovery
+        var credsContainer = card.querySelector('#credentials-container-' + escapeAttr(mac));
+        if (credsContainer) {
+            credsContainer.appendChild(renderCredentialsSection(mac));
+        }
+
         if (state.nodePanelSection) {
             state.nodePanelSection.appendChild(card);
         }
         return card;
+    }
+
+    // ============================================
+    // Factory Reset Instructions Modal
+    // ============================================
+    // ============================================
+    // Captive Portal Recovery — WiFi Credentials
+    // ============================================
+    function fetchWiFiCredentials() {
+        return fetch('/api/settings/network/recovery')
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('Failed to fetch WiFi credentials');
+                return resp.json();
+            })
+            .catch(function(err) {
+                console.error('[ERROR] Failed to load WiFi credentials:', err);
+                return null;
+            });
+    }
+
+    function renderCredentialsSection(mac) {
+        var last4 = mac.slice(-5).replace(':', '');
+        var section = document.createElement('div');
+        section.className = 'troubleshoot-credentials-section';
+        section.id = 'credentials-' + escapeAttr(mac);
+
+        section.innerHTML =
+            '<div class="troubleshoot-credentials-header">' +
+                '<strong>Captive Portal Recovery</strong> — Copy these credentials before switching networks' +
+            '</div>' +
+            '<div class="troubleshoot-credentials-loading" id="creds-loading-' + escapeAttr(mac) + '">' +
+                '<span class="troubleshoot-spinner"></span> Loading WiFi credentials&hellip;' +
+            '</div>' +
+            '<div class="troubleshoot-credentials-content" id="creds-content-' + escapeAttr(mac) + '" style="display:none;">' +
+                '<div class="troubleshoot-credentials-row">' +
+                    '<div class="troubleshoot-credentials-label">Network Name (SSID):</div>' +
+                    '<div class="troubleshoot-credentials-value">' +
+                        '<code id="cred-ssid-' + escapeAttr(mac) + '">&mdash;</code>' +
+                        '<button class="troubleshoot-copy-btn" data-clipboard-target="#cred-ssid-' + escapeAttr(mac) + '" title="Copy SSID">' +
+                            '<span class="troubleshoot-copy-icon">&#x1F4CB;</span>' +
+                        '</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="troubleshoot-credentials-row">' +
+                    '<div class="troubleshoot-credentials-label">Password:</div>' +
+                    '<div class="troubleshoot-credentials-value">' +
+                        '<code id="cred-pass-' + escapeAttr(mac) + '">&mdash;</code>' +
+                        '<button class="troubleshoot-copy-btn" data-clipboard-target="#cred-pass-' + escapeAttr(mac) + '" title="Copy Password">' +
+                            '<span class="troubleshoot-copy-icon">&#x1F4CB;</span>' +
+                        '</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="troubleshoot-credentials-note" id="creds-note-' + escapeAttr(mac) + '"></div>' +
+            '</div>';
+
+        // Fetch and populate credentials
+        fetchWiFiCredentials().then(function(data) {
+            var loadingEl = section.querySelector('#creds-loading-' + escapeAttr(mac));
+            var contentEl = section.querySelector('#creds-content-' + escapeAttr(mac));
+            var ssidEl = section.querySelector('#cred-ssid-' + escapeAttr(mac));
+            var passEl = section.querySelector('#cred-pass-' + escapeAttr(mac));
+            var noteEl = section.querySelector('#creds-note-' + escapeAttr(mac));
+
+            if (loadingEl) loadingEl.style.display = 'none';
+
+            if (!data || !data.configured) {
+                if (contentEl) {
+                    contentEl.style.display = 'block';
+                    contentEl.innerHTML =
+                        '<div class="troubleshoot-credentials-error">' +
+                            '<strong>WiFi credentials not configured</strong><br>' +
+                            'Go to <a href="/setup">Setup</a> to configure your fleet WiFi network first.' +
+                        '</div>';
+                }
+                return;
+            }
+
+            if (ssidEl) ssidEl.textContent = data.wifi_ssid || '(not set)';
+            if (passEl) passEl.textContent = data.wifi_password || '(not set)';
+            if (noteEl) {
+                noteEl.innerHTML =
+                    'After copying these credentials, connect to <strong>spaxel-' + escapeAttr(last4) + '</strong> ' +
+                    'and paste them into the captive portal form.';
+            }
+
+            if (contentEl) contentEl.style.display = 'block';
+
+            // Setup copy buttons
+            var copyBtns = section.querySelectorAll('.troubleshoot-copy-btn');
+            copyBtns.forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    var targetSelector = btn.getAttribute('data-clipboard-target');
+                    var targetEl = section.querySelector(targetSelector);
+                    if (targetEl) {
+                        var text = targetEl.textContent;
+                        navigator.clipboard.writeText(text).then(function() {
+                            var originalHTML = btn.innerHTML;
+                            btn.innerHTML = '<span class="troubleshoot-copy-icon">&#x2714;</span>';
+                            btn.classList.add('troubleshoot-copy-btn--copied');
+                            setTimeout(function() {
+                                btn.innerHTML = originalHTML;
+                                btn.classList.remove('troubleshoot-copy-btn--copied');
+                            }, 2000);
+                        }).catch(function(err) {
+                            console.error('[ERROR] Failed to copy:', err);
+                        });
+                    }
+                });
+            });
+        });
+
+        return section;
     }
 
     // ============================================
