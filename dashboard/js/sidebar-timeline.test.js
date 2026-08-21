@@ -446,7 +446,6 @@ describe('SidebarTimeline', function() {
 
                     done();
                 }, 300);
-            }, 10000);
         });
     });
 
@@ -1208,3 +1207,4 @@ describe('SidebarTimeline', function() {
             });
         });
     });
+});
