@@ -739,6 +739,9 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	// Apply demo mode middleware to block mutating REST endpoints
+	r.Use(auth.DemoModeMiddleware(cfg.DemoMode))
+
 	// Phases 1–4: Database initialization (data dir, SQLite, migrations, secrets)
 	// Each phase is logged with timing by db.OpenDB via the startup package.
 	// The startup context is passed so all phases share the same 30s deadline.
@@ -787,7 +790,7 @@ func main() {
 	r.Get("/healthz", healthChecker.Handler(version))
 
 	// Phase 6: Auth REST API (PIN-based dashboard authentication)
-	authHandler, err := auth.NewHandler(auth.Config{DB: mainDB})
+	authHandler, err := auth.NewHandler(auth.Config{DB: mainDB, DemoMode: cfg.DemoMode})
 	if err != nil {
 		log.Printf("[WARN] Failed to create auth handler: %v", err)
 	} else {
@@ -1798,7 +1801,7 @@ func main() {
 	log.Printf("[INFO] TX slot collision detection enabled (threshold: 5%% over 60s window)")
 
 	// Dashboard hub and server
-	dashboardHub = dashboard.NewHub()
+	dashboardHub = dashboard.NewHub(cfg.MaxDashboardClients)
 	dashboardSrv := dashboard.NewServer(dashboardHub)
 
 	dashboardHub.SetIngestionState(ingestSrv)

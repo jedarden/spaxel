@@ -10,7 +10,7 @@ import (
 )
 
 func TestHub_RegisterUnregister(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 	defer func() {
 		// Hub has no shutdown method in Phase 1, just let it run
@@ -49,7 +49,7 @@ func drainSnapshot(t *testing.T, ch chan []byte) {
 }
 
 func TestHub_Broadcast(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	client := &Client{
@@ -77,7 +77,7 @@ func TestHub_Broadcast(t *testing.T) {
 }
 
 func TestHub_BroadcastCSI(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	client := &Client{
@@ -104,7 +104,7 @@ func TestHub_BroadcastCSI(t *testing.T) {
 }
 
 func TestHub_NodeEvents(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	client := &Client{
@@ -136,7 +136,7 @@ func TestHub_NodeEvents(t *testing.T) {
 }
 
 func TestHub_LinkEvents(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	client := &Client{
@@ -177,7 +177,7 @@ func (m *MockIngestionState) GetAllMotionStates() []ingestion.MotionStateItem {
 }
 
 func TestHub_SnapshotOnConnect(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	// Set mock ingestion state so the snapshot has content
@@ -234,7 +234,7 @@ func TestHub_SnapshotOnConnect(t *testing.T) {
 }
 
 func TestHub_SnapshotBeforeDelta(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	mock := &MockIngestionState{
@@ -334,7 +334,7 @@ func TestHub_BroadcastAlert(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			hub := NewHub()
+			hub := NewHub(0)
 			go hub.Run()
 
 			client := &Client{
@@ -440,7 +440,7 @@ func TestHub_BroadcastEvent(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			hub := NewHub()
+			hub := NewHub(0)
 			go hub.Run()
 
 			client := &Client{
@@ -532,7 +532,7 @@ func TestHub_BroadcastBLEScan(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			hub := NewHub()
+			hub := NewHub(0)
 			go hub.Run()
 
 			client := &Client{
@@ -650,7 +650,7 @@ func TestHub_BroadcastEventFromDB(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			hub := NewHub()
+			hub := NewHub(0)
 			go hub.Run()
 
 			client := &Client{
@@ -772,7 +772,7 @@ func TestHub_BroadcastSystemHealth(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			hub := NewHub()
+			hub := NewHub(0)
 			go hub.Run()
 
 			client := &Client{
@@ -826,7 +826,7 @@ func TestHub_BroadcastSystemHealth(t *testing.T) {
 }
 
 func TestHub_DeltaOmitsTypeField(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	mock := &MockIngestionState{
@@ -909,7 +909,7 @@ func TestHub_BroadcastTriggerState(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			hub := NewHub()
+			hub := NewHub(0)
 			go hub.Run()
 
 			client := &Client{
@@ -973,7 +973,7 @@ func TestHub_BroadcastTriggerState(t *testing.T) {
 // TestHub_RequestExplain_ConsumeExplainRequests verifies that RequestExplain
 // enqueues a blob ID and ConsumeExplainRequests drains the queue.
 func TestHub_RequestExplain_ConsumeExplainRequests(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 
 	// Initially nothing pending.
 	if ids := hub.ConsumeExplainRequests(); len(ids) != 0 {
@@ -996,7 +996,7 @@ func TestHub_RequestExplain_ConsumeExplainRequests(t *testing.T) {
 // TestHub_RequestExplain_Deduplicate verifies that duplicate requests for the same
 // blob ID are deduplicated (the ID appears only once per consume cycle).
 func TestHub_RequestExplain_Deduplicate(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 
 	hub.RequestExplain(7)
 	hub.RequestExplain(7)
@@ -1014,7 +1014,7 @@ func TestHub_RequestExplain_Deduplicate(t *testing.T) {
 // TestHub_BroadcastExplainSnapshot verifies that BroadcastExplainSnapshot sends a
 // correctly structured "blob_explain" message to all connected clients.
 func TestHub_BroadcastExplainSnapshot(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	go hub.Run()
 
 	client := &Client{
@@ -1064,7 +1064,7 @@ func TestHub_BroadcastExplainSnapshot(t *testing.T) {
 // TestServer_HandleRequestExplain verifies that a "request_explain" WebSocket
 // command enqueues the blob ID in the hub for the next fusion tick.
 func TestServer_HandleRequestExplain(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	server := NewServer(hub)
 
 	cmd := []byte(`{"type":"request_explain","blob_id":99}`)
@@ -1079,7 +1079,7 @@ func TestServer_HandleRequestExplain(t *testing.T) {
 // TestServer_HandleRequestExplain_MissingBlobID verifies graceful handling of a
 // "request_explain" command with a missing or invalid blob_id field.
 func TestServer_HandleRequestExplain_MissingBlobID(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(0)
 	server := NewServer(hub)
 
 	// Missing blob_id — should be silently ignored.

@@ -21,6 +21,7 @@ type Hub struct {
 	broadcast  chan []byte
 	register   chan *Client
 	unregister chan *Client
+	maxClients int // Maximum concurrent clients (enforced when > 0)
 
 	// Reference to ingestion server for state queries
 	ingestionState IngestionState
@@ -206,12 +207,13 @@ type Client struct {
 }
 
 // NewHub creates a new dashboard hub
-func NewHub() *Hub {
+func NewHub(maxClients int) *Hub {
 	return &Hub{
 		clients:               make(map[*Client]struct{}),
 		broadcast:             make(chan []byte, 256),
 		register:              make(chan *Client),
 		unregister:            make(chan *Client),
+		maxClients:            maxClients, // 0 means no limit
 		pendingExplainBlobIDs: make(map[int]bool),
 	}
 }
@@ -344,6 +346,18 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
+			// Check max client limit before registering
+			if h.maxClients > 0 {
+				h.mu.RLock()
+				currentCount := len(h.clients)
+				h.mu.RUnlock()
+				if currentCount >= h.maxClients {
+					log.Printf("[WARN] Dashboard WebSocket rejected: max clients (%d) reached", h.maxClients)
+					close(client.send) // Close the send channel to reject the connection
+					continue
+				}
+			}
+
 			// Build and send snapshot BEFORE adding the client to the
 			// broadcast map so that no delta messages race ahead of the
 			// initial state.
