@@ -6,7 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"image"
-	_ "image/png"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1783,5 +1784,121 @@ func TestCheckMorningDigestSendsWhenQueued(t *testing.T) {
 
 	if !digestSent {
 		t.Error("Morning digest should have been sent when there are queued notifications")
+	}
+}
+
+// TestGenerateFloorPlanThumbnailWithFloorPlan verifies that when a floor plan image
+// is set, the thumbnail background differs from the flat #1a1a2e fill.
+func TestGenerateFloorPlanThumbnailWithFloorPlan(t *testing.T) {
+	dbPath := t.TempDir() + "/test_floorplan_thumb.db"
+	service, err := NewService(dbPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close() //nolint:errcheck
+
+	// Create a simple test floor plan image (a red square)
+	testFloorPlan := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			testFloorPlan.Set(x, y, color.RGBA{255, 0, 0, 255}) // Red
+		}
+	}
+
+	// Encode to PNG
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, testFloorPlan); err != nil {
+		t.Fatalf("Failed to encode test floor plan: %v", err)
+	}
+
+	// Set floor plan in service
+	service.SetFloorPlan(buf.Bytes())
+
+	// Generate thumbnail
+	width, height := 400, 300
+	blobs := []struct {
+		X, Y, Z  float64
+		Identity string
+		IsFall   bool
+	}{
+		{X: 3.0, Y: 1.0, Z: 2.0, Identity: "Alice", IsFall: false},
+	}
+
+	thumb, err := service.GenerateFloorPlanThumbnail(width, height, blobs)
+	if err != nil {
+		t.Fatalf("GenerateFloorPlanThumbnail() error = %v", err)
+	}
+
+	// Decode the thumbnail to verify background pixels
+	thumbImg, err := png.Decode(bytes.NewReader(thumb))
+	if err != nil {
+		t.Fatalf("Failed to decode thumbnail: %v", err)
+	}
+
+	// Check that the background is NOT the default dark gray (#1a1a2e = 26,26,46)
+	// Sample a pixel in the center area (where floor plan should be drawn)
+	centerX, centerY := width/2, height/2
+	r, g, b, _ := thumbImg.At(centerX, centerY).RGBA()
+
+	// Default dark gray is RGB(26,26,46) - any deviation means floor plan was drawn
+	bgColor := color.RGBA{26, 26, 46, 255}
+	br, bg, bb, _ := bgColor.RGBA()
+	if r == br && g == bg && b == bb {
+		t.Error("Background color is still default dark gray; floor plan was not drawn")
+	}
+
+	// Verify the thumbnail is not empty
+	if len(thumb) == 0 {
+		t.Error("Thumbnail is empty")
+	}
+}
+
+// TestGenerateFloorPlanThumbnailWithoutFloorPlan verifies that when no floor plan
+// is set, behavior is unchanged (flat fill background).
+func TestGenerateFloorPlanThumbnailWithoutFloorPlan(t *testing.T) {
+	dbPath := t.TempDir() + "/test_no_floorplan_thumb.db"
+	service, err := NewService(dbPath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer service.Close() //nolint:errcheck
+
+	// Don't set any floor plan - should use default flat fill
+
+	// Generate thumbnail
+	width, height := 400, 300
+	blobs := []struct {
+		X, Y, Z  float64
+		Identity string
+		IsFall   bool
+	}{
+		{X: 3.0, Y: 1.0, Z: 2.0, Identity: "Alice", IsFall: false},
+	}
+
+	thumb, err := service.GenerateFloorPlanThumbnail(width, height, blobs)
+	if err != nil {
+		t.Fatalf("GenerateFloorPlanThumbnail() error = %v", err)
+	}
+
+	// Decode the thumbnail to verify background is the default dark gray
+	thumbImg, err := png.Decode(bytes.NewReader(thumb))
+	if err != nil {
+		t.Fatalf("Failed to decode thumbnail: %v", err)
+	}
+
+	// Check that the background IS the default dark gray (#1a1a2e = 26,26,46)
+	// Sample a pixel in the center area
+	centerX, centerY := width/2, height/2
+	r, g, b, _ := thumbImg.At(centerX, centerY).RGBA()
+
+	bgColor := color.RGBA{26, 26, 46, 255}
+	br, bg, bb, _ := bgColor.RGBA()
+	if r != br || g != bg || b != bb {
+		t.Errorf("Background color without floor plan should be default dark gray, got RGB(%d,%d,%d)", r>>8, g>>8, b>>8)
+	}
+
+	// Verify the thumbnail is not empty
+	if len(thumb) == 0 {
+		t.Error("Thumbnail is empty")
 	}
 }

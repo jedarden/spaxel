@@ -634,8 +634,51 @@ func (s *Service) GenerateFloorPlanThumbnail(width, height int, blobs []struct {
 	scaleZ := float64(height) / roomD
 
 	// Draw floor plan if available
-	// TODO: decode and draw floor plan image background
-	_ = floorPlan // Used when TODO is implemented
+	if len(floorPlan) > 0 {
+		// Decode PNG bytes to image
+		floorImg, err := png.Decode(bytes.NewReader(floorPlan))
+		if err != nil {
+			log.Printf("[WARN] Failed to decode floor plan image: %v", err)
+		} else {
+			// Calculate scale to fit floor plan image within canvas while maintaining aspect ratio
+			floorW := float64(floorImg.Bounds().Dx())
+			floorH := float64(floorImg.Bounds().Dy())
+
+			// Scale to fit within canvas with 10px margin
+			margin := 10.0
+			maxW := float64(width) - 2*margin
+			maxH := float64(height) - 2*margin
+
+			scaleFitted := maxW/floorW
+			if maxH/floorH < scaleFitted {
+				scaleFitted = maxH/floorH
+			}
+			if scaleFitted > 1 {
+				scaleFitted = 1 // Don't upscale if image is larger than canvas
+			}
+
+			scaledW := int(floorW * scaleFitted)
+			scaledH := int(floorH * scaleFitted)
+
+			// Create scaled image
+			scaledImg := image.NewRGBA(image.Rect(0, 0, scaledW, scaledH))
+			// Use simple nearest-neighbor scaling for performance
+			for y := 0; y < scaledH; y++ {
+				srcY := int(float64(y) / scaleFitted)
+				for x := 0; x < scaledW; x++ {
+					srcX := int(float64(x) / scaleFitted)
+					scaledImg.Set(x, y, floorImg.At(srcX, srcY))
+				}
+			}
+
+			// Center the floor plan image on the canvas
+			offsetX := (width - scaledW) / 2
+			offsetY := (height - scaledH) / 2
+
+			// Draw floor plan image
+			draw.Draw(img, image.Rect(offsetX, offsetY, offsetX+scaledW, offsetY+scaledH), scaledImg, image.Point{}, draw.Over)
+		}
+	}
 
 	// Draw blobs
 	for _, blob := range blobs {
