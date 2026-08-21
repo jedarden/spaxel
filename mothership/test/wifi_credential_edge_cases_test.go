@@ -187,8 +187,8 @@ func TestWiFiCredentialEdgeCase_DashboardWizard_PartialConfiguration(t *testing.
 			name:         "Both SSID and empty password configured",
 			configureSSID: true,
 			configurePass: true, // Empty password (open network)
-			expectConfig:  true,  // Empty password is valid for open networks
-			description:   "Empty password (open network) should show configured",
+			expectConfig:  false, // Empty password is not "configured" - provisioning needs both SSID and password
+			description:   "Empty password (open network) is not 'configured' for provisioning - SSID alone isn't enough to treat as complete",
 		},
 	}
 

@@ -126,12 +126,14 @@ func (h *NetworkSettingsHandler) response() networkSettingsResponse {
 	ssid, _ := h.settings.GetSingle(networkSettingWifiSSID)
 	ssidStr, _ := ssid.(string)
 
-	_, hasPass := h.settings.GetSingle(networkSettingWifiPassword)
+	pass, hasPass := h.settings.GetSingle(networkSettingWifiPassword)
+	passStr, _ := pass.(string)
 
-	// Configured when SSID is set and password exists (even if empty for open networks)
-	// Empty password is valid for open networks; missing password field shows unconfigured
+	// Configured when SSID is set and a non-empty password exists.
+	// Empty password is valid for open networks but does not count as "configured"
+	// because SSID alone isn't enough for the provisioning defaulting logic.
 	return networkSettingsResponse{
 		WifiSSID:   ssidStr,
-		Configured: ssidStr != "" && hasPass,
+		Configured: ssidStr != "" && hasPass && passStr != "",
 	}
 }
