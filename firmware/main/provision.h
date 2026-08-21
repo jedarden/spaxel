@@ -8,7 +8,7 @@
 // Prints "SPAXEL READY <MAC>\n" and reads {"provision": {...}}\n over the
 // native USB-Serial-JTAG peripheral (the same one the console/esp_log uses —
 // this board has no USB-UART bridge chip, so UART0's GPIO43/44 pins go
-// nowhere; see the sdkconfig.defaults console-routing comment for the
+// nowhere; see the sdkconfig.usbjtag console-routing comment for the
 // identical failure mode this previously hit for esp_log output).
 // Responds with {"ok": true, "mac": "..."}\n on success.
 // Safe to call even if no host is connected — times out cleanly.

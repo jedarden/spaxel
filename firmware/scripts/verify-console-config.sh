@@ -27,11 +27,13 @@ case "$PROFILE" in
     usb)
         require_line 'CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y'
         require_line '# CONFIG_ESP_CONSOLE_UART_DEFAULT is not set'
+        require_line 'CONFIG_ESP_CONSOLE_SECONDARY_NONE=y'
         require_line 'CONFIG_ESP_CONSOLE_UART_NUM=-1'
         ;;
     uart)
         require_line 'CONFIG_ESP_CONSOLE_UART_DEFAULT=y'
         require_line '# CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG is not set'
+        require_line 'CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y'
         require_line 'CONFIG_ESP_CONSOLE_UART_NUM=0'
         ;;
     *)

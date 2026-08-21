@@ -177,8 +177,8 @@ See `docs/notes/ota-security-hardening-2026-08-15.md` for complete security arch
 make -C firmware/test test
 ```
 Tests NVS migration, binary frame serialization, provisioning JSON parser, and
-the committed console defaults (default USB-Serial/JTAG profile, UART0 override
-layering — see `test_console_config.c`) without hardware.
+the committed console profiles (default USB-Serial/JTAG selection, UART0
+override reachability — see `test_console_config.c`) without hardware.
 
 ### Hardware Tests (requires ESP32-S3)
 See `firmware/test/` directory for test programs that validate:
@@ -199,8 +199,9 @@ host.
 ### Default native-USB build
 
 For a clean build, remove only the generated ESP-IDF configuration and build
-output, then let `sdkconfig.defaults` select USB-Serial/JTAG. No `menuconfig`
-edits are required:
+output. `CMakeLists.txt` layers the board-specific `sdkconfig.usbjtag` profile
+over the shared `sdkconfig.defaults`; no `menuconfig` edits or build flags are
+required:
 
 ```bash
 cd firmware
@@ -226,8 +227,9 @@ bootloader into `app_main` on `/dev/ttyACM0`.
 ### UART0 override for bridge-equipped boards
 
 For a board with a CP210x, CH340, FTDI, or another USB-UART bridge wired to
-GPIO43/44, layer `sdkconfig.uart-console` over the normal defaults. Start from
-a clean generated configuration so the defaults are actually re-applied:
+GPIO43/44, explicitly select `sdkconfig.uart-console` instead of the default
+`sdkconfig.usbjtag` profile. Start from a clean generated configuration so the
+profile is actually re-applied:
 
 ```bash
 cd firmware
@@ -246,9 +248,15 @@ idf.py -p /dev/ttyUSB0 monitor
 
 Verify the override before flashing: `sdkconfig` should show
 `CONFIG_ESP_CONSOLE_UART_DEFAULT=y`,
-`# CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG is not set`, and
-`CONFIG_ESP_CONSOLE_UART_NUM=0`. Do not edit the shared defaults or copy a
+`# CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG is not set`,
+`CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y`, and
+`CONFIG_ESP_CONSOLE_UART_NUM=0`. The `-D SDKCONFIG_DEFAULTS=...` value bypasses
+the CMake default profile selection. Do not edit the shared defaults or copy a
 generated `sdkconfig` between board types.
+
+The native USB secondary transport stays enabled in this profile because the
+provisioning listener serves both UART0 and native USB. It is not the primary
+application console: application logs and panic output remain routed to UART0.
 
 ### Console panic check
 

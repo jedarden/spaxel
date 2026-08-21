@@ -1,0 +1,12 @@
+# Board variant: console on the ESP32-S3 native USB-Serial/JTAG peripheral.
+#
+# CMakeLists.txt layers this file over sdkconfig.defaults for the shipped build.
+# ESP-IDF's own default is UART0 (GPIO43/44), which requires a USB-UART bridge;
+# native-USB-only boards are otherwise silent after the early boot fragments.
+# See ADR-002 and firmware/README.md for the UART0 board override.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_UART_DEFAULT=n
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# Print the panic reason and backtrace on the selected console before rebooting.
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y

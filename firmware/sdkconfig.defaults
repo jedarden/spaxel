@@ -111,26 +111,3 @@ CONFIG_SPIRAM_TYPE_AUTO=y
 CONFIG_SPIRAM_SIZE_AUTO=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_CACHE_WRITETHROUGH=y
-
-# Console routing — ESP32-S3 native USB-Serial/JTAG.
-#
-# ESP-IDF's default is UART0 (GPIO43/44), which requires a USB-UART bridge chip.
-# This board — and every bare ESP32-S3 module — exposes only the native USB
-# peripheral (USB ID 303a:1001, no bridge in lsusb), so a UART0 console means the
-# device boots in COMPLETE SILENCE over its only host connection.
-#
-# This is not theoretical: building clean from these defaults on 2026-07-31
-# reproduced exactly that — the ROM banner arrived and then nothing, no
-# second-stage bootloader output and no application logs, leaving no way to
-# diagnose a node that would not boot. ADR-002 records the same measurement and
-# calls an unobservable default build a release-blocking defect.
-#
-# Bridge-equipped boards can override with sdkconfig.uart-console.
-CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
-CONFIG_ESP_CONSOLE_UART_DEFAULT=n
-CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
-
-# Keep panic diagnostics on the selected console before rebooting. Do not use a
-# silent reboot here: a backtrace is only useful if it reaches the port the
-# operator is actually monitoring.
-CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
