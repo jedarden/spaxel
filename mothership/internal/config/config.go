@@ -47,7 +47,9 @@ type Config struct {
 	FusionRateHz int // Fusion loop rate in Hz, range [1,20] (default 10)
 
 	// Replay buffer
-	ReplayMaxMB int // Maximum replay buffer size in MB, range [10,10000] (default 360)
+	ReplayMaxMB         int   // Maximum replay buffer size in MB, range [10,10000] (default 360)
+	ReplayCompression   bool  // Enable zstd compression for CSI replay buffer (default true)
+	ReplayChunkSizeMB   int   // Target chunk size for compression in MB, range [1,100] (default 64)
 
 	// Security
 	InstallSecret        string // Installation secret (64-char hex, optional if set must be 32+ bytes)
@@ -162,6 +164,33 @@ func Load() (*Config, error) {
 			errs = append(errs, fmt.Errorf("SPAXEL_REPLAY_MAX_MB=%d invalid: must be in range [10,10000]", val))
 		} else {
 			cfg.ReplayMaxMB = val
+		}
+	}
+
+	// SPAXEL_REPLAY_COMPRESSION - bool, default true
+	if compStr := os.Getenv("SPAXEL_REPLAY_COMPRESSION"); compStr == "" {
+		cfg.ReplayCompression = true
+	} else {
+		val, err := strconv.ParseBool(compStr)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("SPAXEL_REPLAY_COMPRESSION=%s invalid: must be true or false", compStr))
+		} else {
+			cfg.ReplayCompression = val
+		}
+	}
+
+	// SPAXEL_REPLAY_CHUNK_MB - int, default 64, range [1,100]
+	chunkStr := os.Getenv("SPAXEL_REPLAY_CHUNK_MB")
+	if chunkStr == "" {
+		cfg.ReplayChunkSizeMB = 64
+	} else {
+		val, err := strconv.Atoi(chunkStr)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("SPAXEL_REPLAY_CHUNK_MB=%s invalid: must be an integer", chunkStr))
+		} else if val < 1 || val > 100 {
+			errs = append(errs, fmt.Errorf("SPAXEL_REPLAY_CHUNK_MB=%d invalid: must be in range [1,100]", val))
+		} else {
+			cfg.ReplayChunkSizeMB = val
 		}
 	}
 

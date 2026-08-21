@@ -881,7 +881,7 @@ func main() {
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		log.Printf("[WARN] Failed to create data dir %s: %v", cfg.DataDir, err)
 	} else {
-		buf, err := recording.NewBuffer(filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB, 0)
+		buf, err := recording.NewBuffer(filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB, 0, cfg.ReplayCompression, cfg.ReplayChunkSizeMB*1024*1024)
 		if err != nil {
 			log.Printf("[WARN] Failed to open recording buffer: %v (CSI recording disabled)", err)
 		} else {
@@ -890,8 +890,13 @@ func main() {
 			replayStore = adapter
 			ingestSrv.SetReplayStore(adapter)
 			defer closeQuietly(buf)
-			log.Printf("[INFO] CSI recording buffer at %s (%d MB max, retention=%v)",
-				filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB, buf.Retention())
+			log.Printf("[INFO] CSI recording buffer at %s (%d MB max, configured retention=%v, compression=%v)",
+				filepath.Join(cfg.DataDir, "csi_replay.bin"), cfg.ReplayMaxMB, buf.Retention(), cfg.ReplayCompression)
+			if cfg.ReplayCompression {
+				effectiveRet := buf.EffectiveRetention()
+				log.Printf("[INFO] CSI recording effective retention≈%v (compression extends capacity)",
+					effectiveRet.Round(time.Hour/24)*time.Hour/24+effectiveRet.Round(time.Hour))
+			}
 		}
 	}
 
