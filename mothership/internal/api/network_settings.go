@@ -39,6 +39,15 @@ type networkSettingsResponse struct {
 	Configured bool   `json:"configured"` // true once both SSID and password have been set
 }
 
+// networkSettingsWithPasswordResponse is returned by GET /api/settings/network/recovery.
+// This endpoint includes the WiFi password for captive portal recovery.
+// The password is only shown to authenticated dashboard users (session cookie required).
+type networkSettingsWithPasswordResponse struct {
+	WifiSSID     string `json:"wifi_ssid"`
+	WifiPassword string `json:"wifi_password"`
+	Configured   bool   `json:"configured"`
+}
+
 // networkSettingsRequest is the body for PUT /api/settings/network.
 // Pointer fields distinguish "omitted" from "set to empty string" for partial updates.
 type networkSettingsRequest struct {
@@ -76,6 +85,7 @@ type networkSettingsRequest struct {
 func (h *NetworkSettingsHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/settings/network", h.handleGet)
 	r.Put("/api/settings/network", h.handleUpdate)
+	r.Get("/api/settings/network/recovery", h.handleGetRecovery)
 }
 
 func (h *NetworkSettingsHandler) handleGet(w http.ResponseWriter, r *http.Request) {
@@ -135,5 +145,26 @@ func (h *NetworkSettingsHandler) response() networkSettingsResponse {
 	return networkSettingsResponse{
 		WifiSSID:   ssidStr,
 		Configured: ssidStr != "" && hasPass && passStr != "",
+	}
+}
+
+func (h *NetworkSettingsHandler) handleGetRecovery(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.responseWithPassword())
+}
+
+func (h *NetworkSettingsHandler) responseWithPassword() networkSettingsWithPasswordResponse {
+	ssid, _ := h.settings.GetSingle(networkSettingWifiSSID)
+	ssidStr, _ := ssid.(string)
+
+	pass, hasPass := h.settings.GetSingle(networkSettingWifiPassword)
+	passStr, _ := pass.(string)
+
+	// Configured when SSID is set and a non-empty password exists.
+	// Empty password is valid for open networks but does not count as "configured"
+	// because SSID alone isn't enough for the provisioning defaulting logic.
+	return networkSettingsWithPasswordResponse{
+		WifiSSID:     ssidStr,
+		WifiPassword: passStr,
+		Configured:   ssidStr != "" && hasPass && passStr != "",
 	}
 }

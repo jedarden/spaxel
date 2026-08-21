@@ -351,3 +351,142 @@
     justify-content: center;
     flex-wrap: wrap;
 }
+
+/* ============================================
+   Captive Portal Recovery Credentials
+   ============================================ */
+
+.troubleshoot-credentials-section {
+    background: var(--bg-card);
+    border: 1px solid var(--blue-border);
+    border-radius: var(--radius-control);
+    padding: var(--space-3);
+    margin-top: var(--space-2);
+    animation: troubleshoot-fade-in 0.3s ease-out;
+}
+
+.troubleshoot-credentials-header {
+    color: var(--blue);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+}
+
+.troubleshoot-credentials-loading {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.troubleshoot-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: troubleshoot-spin 0.8s linear infinite;
+}
+
+@keyframes troubleshoot-spin {
+    to { transform: rotate(360deg); }
+}
+
+.troubleshoot-credentials-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.troubleshoot-credentials-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.troubleshoot-credentials-label {
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    font-weight: 500;
+}
+
+.troubleshoot-credentials-value {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.troubleshoot-credentials-value code {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--slate-12);
+    flex: 1;
+    word-break: break-all;
+}
+
+.troubleshoot-copy-btn {
+    background: var(--blue-bg);
+    border: 1px solid var(--blue-border);
+    color: var(--blue);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-xs);
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.troubleshoot-copy-btn:hover {
+    background: var(--blue-border);
+}
+
+.troubleshoot-copy-btn--copied {
+    background: var(--ok-bg);
+    border-color: var(--ok);
+    color: var(--ok);
+}
+
+.troubleshoot-copy-icon {
+    font-size: var(--text-sm);
+}
+
+.troubleshoot-credentials-note {
+    margin-top: var(--space-1);
+    padding: var(--space-2);
+    background: var(--info-bg);
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    line-height: var(--lh-body);
+}
+
+.troubleshoot-credentials-note strong {
+    color: var(--slate-12);
+}
+
+.troubleshoot-credentials-error {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2);
+    color: var(--warn);
+    font-size: var(--text-xs);
+}
+
+.troubleshoot-credentials-error a {
+    color: var(--blue);
+    text-decoration: none;
+}
+
+.troubleshoot-credentials-error a:hover {
+    text-decoration: underline;
+}
