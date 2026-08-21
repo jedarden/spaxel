@@ -95,6 +95,12 @@ describe('Step definitions', () => {
 // ============================================
 describe('Browser check step', () => {
     beforeEach(resetWizardState);
+    afterEach(() => {
+        // Clean up any timers or WebSocket connections
+        if (_state.pollTimer) { clearInterval(_state.pollTimer); _state.pollTimer = null; }
+        if (_state.calibrateTimer) { clearTimeout(_state.calibrateTimer); _state.calibrateTimer = null; }
+        if (_state.ws) { _state.ws.close(); _state.ws = null; }
+    });
 
     test('detects Web Serial API is available', () => {
         // navigator.serial is mocked in setup
@@ -125,6 +131,11 @@ describe('Browser check step', () => {
 // ============================================
 describe('State persistence', () => {
     beforeEach(resetWizardState);
+    afterEach(() => {
+        if (_state.pollTimer) { clearInterval(_state.pollTimer); _state.pollTimer = null; }
+        if (_state.calibrateTimer) { clearTimeout(_state.calibrateTimer); _state.calibrateTimer = null; }
+        if (_state.ws) { _state.ws.close(); _state.ws = null; }
+    });
 
     test('saves and loads state from sessionStorage', () => {
         _state.currentStepIndex = 3;
@@ -165,6 +176,11 @@ describe('State persistence', () => {
 // ============================================
 describe('Serial port handling', () => {
     beforeEach(resetWizardState);
+    afterEach(() => {
+        if (_state.pollTimer) { clearInterval(_state.pollTimer); _state.pollTimer = null; }
+        if (_state.calibrateTimer) { clearTimeout(_state.calibrateTimer); _state.calibrateTimer = null; }
+        if (_state.ws) { _state.ws.close(); _state.ws = null; }
+    });
 
     test('requestPort calls navigator.serial.requestPort', async () => {
         var port = await navigator.serial.requestPort();
@@ -193,6 +209,11 @@ describe('Serial port handling', () => {
 // ============================================
 describe('Provisioning payload', () => {
     beforeEach(resetWizardState);
+    afterEach(() => {
+        if (_state.pollTimer) { clearInterval(_state.pollTimer); _state.pollTimer = null; }
+        if (_state.calibrateTimer) { clearTimeout(_state.calibrateTimer); _state.calibrateTimer = null; }
+        if (_state.ws) { _state.ws.close(); _state.ws = null; }
+    });
 
     test('POST /api/provision without per-device WiFi credentials', async () => {
         fetch.mockResolvedValueOnce({
@@ -233,6 +254,11 @@ describe('Provisioning payload', () => {
 // ============================================
 describe('Node detection', () => {
     beforeEach(resetWizardState);
+    afterEach(() => {
+        if (_state.pollTimer) { clearInterval(_state.pollTimer); _state.pollTimer = null; }
+        if (_state.calibrateTimer) { clearTimeout(_state.calibrateTimer); _state.calibrateTimer = null; }
+        if (_state.ws) { _state.ws.close(); _state.ws = null; }
+    });
 
     test('polls /api/nodes and detects new node', async () => {
         // Simulate initial state: no known nodes
@@ -331,6 +357,11 @@ describe('Node detection', () => {
 // CSI Frame Parsing
 // ============================================
 describe('CSI frame parser', () => {
+    afterEach(() => {
+        if (_state.pollTimer) { clearInterval(_state.pollTimer); _state.pollTimer = null; }
+        if (_state.calibrateTimer) { clearTimeout(_state.calibrateTimer); _state.calibrateTimer = null; }
+        if (_state.ws) { _state.ws.close(); _state.ws = null; }
+    });
     test('parses a valid CSI frame', () => {
         // Build a minimal CSI frame: 24-byte header + 4 subcarriers * 2 bytes = 32 bytes
         var buffer = new ArrayBuffer(32);
@@ -463,6 +494,7 @@ describe('Wizard lifecycle', () => {
     });
 
     test('resume from saved state', () => {
+        jest.useFakeTimers();
         // Simulate saved state at step 4 (detect_node)
         sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
             currentStepIndex: 4,
@@ -472,6 +504,9 @@ describe('Wizard lifecycle', () => {
             mothershipPort: 8080,
         }));
 
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
+
         SpaxelOnboard.start();
 
         // State should be restored
@@ -480,10 +515,13 @@ describe('Wizard lifecycle', () => {
         expect(_state.wifiSSID).toBeUndefined();
         expect(JSON.parse(sessionStorage.getItem(_CONFIG.storageKey)).wifiPass).toBeUndefined();
 
+        jest.useRealTimers();
         SpaxelOnboard.close();
     });
 
     test('duplicate wizard instances are prevented', () => {
+        jest.useFakeTimers();
+
         SpaxelOnboard.start();
         var firstOverlay = document.getElementById('wizard-overlay');
         expect(firstOverlay).not.toBeNull();
@@ -492,6 +530,7 @@ describe('Wizard lifecycle', () => {
         var secondOverlay = document.getElementById('wizard-overlay');
         expect(secondOverlay).not.toBeNull();
 
+        jest.useRealTimers();
         SpaxelOnboard.close();
         expect(document.getElementById('wizard-overlay')).toBeNull();
     });
@@ -502,6 +541,9 @@ describe('Wizard lifecycle', () => {
 // ============================================
 describe('Step indicator rendering', () => {
     beforeEach(resetWizardState);
+    afterEach(() => {
+        SpaxelOnboard.close();
+    });
 
     test('renders correct number of step dots', () => {
         SpaxelOnboard.start();
@@ -698,6 +740,9 @@ describe('Wizard state transitions', () => {
             mothershipPort: 8080,
         }));
 
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
+
         SpaxelOnboard.start();
 
         var content = document.getElementById('wizard-content');
@@ -707,6 +752,7 @@ describe('Wizard state transitions', () => {
         expect(nav.innerHTML).toContain('Skip Flashing');
 
         jest.useRealTimers();
+        SpaxelOnboard.close();
     });
 
     test('provision_wifi step does not render per-device WiFi fields', () => {
@@ -760,6 +806,9 @@ describe('Wizard state transitions', () => {
             mothershipPort: 8080,
         }));
 
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
+
         SpaxelOnboard.start();
 
         var content = document.getElementById('wizard-content');
@@ -783,6 +832,9 @@ describe('Wizard state transitions', () => {
             mothershipHost: '',
             mothershipPort: 8080,
         }));
+
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
 
         SpaxelOnboard.start();
 
@@ -809,6 +861,9 @@ describe('Wizard state transitions', () => {
             mothershipHost: '',
             mothershipPort: 8080,
         }));
+
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
 
         SpaxelOnboard.start();
 
@@ -1043,6 +1098,9 @@ describe('Node detection wizard transition', () => {
             mothershipPort: 8080,
         }));
 
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
+
         SpaxelOnboard.start();
 
         // Verify we're on detect_node step
@@ -1082,6 +1140,9 @@ describe('Node detection wizard transition', () => {
             mothershipHost: '',
             mothershipPort: 8080,
         }));
+
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
 
         SpaxelOnboard.start();
 
@@ -1131,6 +1192,12 @@ describe('Session storage restore at each step', () => {
                 mothershipPort: 9090,
             }));
 
+            // For steps at flash_firmware (3) or beyond, mock the serial port
+            // to prevent the wizard from dropping back to connect_device
+            if (stepIndex >= 3) {
+                _state.port = { mock: true };
+            }
+
             SpaxelOnboard.start();
 
             expect(_state.currentStepIndex).toBe(stepIndex);
@@ -1163,6 +1230,9 @@ describe('Session storage restore at each step', () => {
             mothershipHost: '',
             mothershipPort: 8080,
         }));
+
+        // Mock the serial port to prevent fallback to connect_device
+        _state.port = { mock: true };
 
         SpaxelOnboard.start();
 
