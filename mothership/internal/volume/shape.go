@@ -1252,3 +1252,49 @@ func (s *Store) GetWebhookLog(triggerID string, limit int) []WebhookLogEntry {
 
 	return entries
 }
+
+// ZoneGeometry represents the geometric bounds of a zone for overlap testing.
+type ZoneGeometry struct {
+	ID      string  // Zone ID
+	Name    string  // Zone name
+	MinX    float64 // Zone minimum X (meters)
+	MinY    float64 // Zone minimum Y (meters)
+	MinZ    float64 // Zone minimum Z (meters)
+	MaxX    float64 // Zone maximum X (meters)
+	MaxY    float64 // Zone maximum Y (meters)
+	MaxZ    float64 // Zone maximum Z (meters)
+	Enabled bool    // Whether zone is enabled
+}
+
+// GetZoneByName looks up a zone by name and returns its geometry.
+// Returns the zone's ID, name, and bounding box (MinX, MinY, MinZ, MaxX, MaxY, MaxZ).
+// Returns an error if the zone is not found or disabled.
+func (s *Store) GetZoneByName(zoneName string) (*ZoneGeometry, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var geom ZoneGeometry
+	var enabled int
+
+	err := s.db.QueryRow(`
+		SELECT id, name, min_x, min_y, min_z, max_x, max_y, max_z, enabled
+		FROM zones
+		WHERE name = ?
+	`, zoneName).Scan(
+		&geom.ID, &geom.Name, &geom.MinX, &geom.MinY, &geom.MinZ,
+		&geom.MaxX, &geom.MaxY, &geom.MaxZ, &enabled,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("zone not found: %s", zoneName)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query zone: %w", err)
+	}
+
+	geom.Enabled = enabled != 0
+	if !geom.Enabled {
+		return nil, fmt.Errorf("zone is disabled: %s", zoneName)
+	}
+
+	return &geom, nil
+}
