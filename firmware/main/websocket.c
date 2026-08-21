@@ -40,6 +40,11 @@ static esp_websocket_client_handle_t s_ws = NULL;
 static SemaphoreHandle_t s_ws_mutex = NULL;
 static volatile bool s_connected = false;
 
+// Connection debounce timestamp to suppress spurious disconnect events
+// during reconnection. See ADR-004 / bead spaxel-61de1fce.
+static int64_t s_last_connect_time_us = 0;
+#define SPAXEL_CONNECT_DEBOUNCE_MS 200  // 200ms debounce after connect
+
 // OTA state
 static char s_ota_url[256] = {0};
 static char s_ota_sha256[65] = {0};
@@ -331,9 +336,23 @@ static void ws_event_handler(void *args, esp_event_base_t base,
         case WEBSOCKET_EVENT_CONNECTED:
             ESP_LOGI(TAG, "WebSocket connected");
             s_connected = true;
+            s_last_connect_time_us = esp_timer_get_time();
             break;
 
         case WEBSOCKET_EVENT_DISCONNECTED:
+            // Debounce: ignore disconnects within 200ms of a successful connection.
+            // This prevents spurious disconnect events during reconnection when the
+            // WebSocket client is stabilizing the connection. Without this, a mothership
+            // restart can cause 1-2 transient disconnects before the connection settles.
+            // See ADR-004 / bead spaxel-61de1fce.
+            int64_t now_us = esp_timer_get_time();
+            if (s_last_connect_time_us > 0 &&
+                (now_us - s_last_connect_time_us) < (SPAXEL_CONNECT_DEBOUNCE_MS * 1000)) {
+                ESP_LOGD(TAG, "WebSocket disconnect ignored (debounce window: %lld ms since connect)",
+                         (now_us - s_last_connect_time_us) / 1000);
+                // Don't set s_connected or trigger state machine; this is a transient event
+                break;
+            }
             ESP_LOGW(TAG, "WebSocket disconnected");
             s_connected = false;
             xEventGroupSetBits(g_state.events, SPAXEL_EVENT_WS_DISCONNECTED);
