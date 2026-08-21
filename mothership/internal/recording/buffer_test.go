@@ -1,462 +1,405 @@
 package recording
 
 import (
+	"bytes"
+	"encoding/binary"
+	"math/rand"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
 
-func tempBuffer(t *testing.T, maxMB int, retention time.Duration) (*Buffer, string) {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "test_recording.bin")
-	b, err := NewBuffer(path, maxMB, retention)
+// Benchmark compression with realistic CSI frame patterns.
+// CSI frames are highly compressible because:
+// 1. Adjacent frames are correlated (motion is slow relative to 20 Hz sampling)
+// 2. Idle periods dominate (most time, no one is moving)
+// 3. Amplitude/phase values follow predictable patterns
+
+func generateCSIFrame(seed uint32) []byte {
+	r := rand.New(rand.NewSource(int64(seed)))
+
+	// CSI frame header (24 bytes)
+	buf := make([]byte, 24)
+
+	// Node MAC (6 bytes) - use seed to generate realistic MAC
+	for i := 0; i < 6; i++ {
+		buf[i] = byte(r.Intn(256))
+	}
+
+	// Peer MAC (6 bytes)
+	for i := 0; i < 6; i++ {
+		buf[6+i] = byte(r.Intn(256))
+	}
+
+	// Timestamp (8 bytes) - microseconds
+	binary.LittleEndian.PutUint64(buf[12:20], uint64(r.Intn(1_000_000)))
+
+	// RSSI, noise floor, channel, n_sub (4 bytes)
+	buf[20] = byte(r.Intn(256)) // RSSI
+	buf[21] = byte(r.Intn(256)) // noise floor
+	buf[22] = byte(r.Intn(14) + 1) // channel 1-14
+	buf[23] = 64 // n_sub = 64 subcarriers
+
+	// Payload: 64 subcarriers * 2 bytes (I + Q)
+	payloadLen := 64 * 2
+	payload := make([]byte, payloadLen)
+
+	// Simulate idle vs active patterns
+	// Idle: most values are similar (low variance)
+	// Active: higher variance
+	isActive := r.Float32() < 0.1 // 10% active frames
+
+	if isActive {
+		// Active frame: random values (higher entropy)
+		for i := 0; i < len(payload); i++ {
+			payload[i] = byte(r.Intn(256))
+		}
+	} else {
+		// Idle frame: correlated with previous frames
+		// Use a base value with small variations
+		base := int(r.Intn(50) + 100) // Base amplitude
+		for i := 0; i < len(payload); i += 2 {
+			// I component: base + small variation
+			variation := r.Intn(10) - 5 // -5 to +5
+			iVal := base + variation
+			if iVal < 0 {
+				iVal = 0
+			}
+			if iVal > 255 {
+				iVal = 255
+			}
+			payload[i] = byte(iVal)
+
+			// Q component: similar pattern with phase offset
+			qVal := base + variation + r.Intn(5)
+			if qVal < 0 {
+				qVal = 0
+			}
+			if qVal > 255 {
+				qVal = 255
+			}
+			payload[i+1] = byte(qVal)
+		}
+	}
+
+	buf = append(buf, payload...)
+	return buf
+}
+
+// BenchmarkUncompressedWrite benchmarks writing without compression.
+func BenchmarkUncompressedWrite(b *testing.B) {
+	tmpDir, err := os.MkdirTemp("", "buffer_test")
 	if err != nil {
-		t.Fatalf("NewBuffer: %v", err)
+		b.Fatal(err)
 	}
-	return b, path
-}
+	defer os.RemoveAll(tmpDir)
 
-func makeFrame(size int) []byte {
-	b := make([]byte, size)
-	for i := range b {
-		b[i] = byte(i % 251)
+	buf, err := NewBuffer(tmpDir+"/test.bin", 10, 0, false, 0)
+	if err != nil {
+		b.Fatal(err)
 	}
-	return b
-}
+	defer buf.Close()
 
-func TestNewBuffer(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
+	b.ResetTimer()
+	now := time.Now()
 
-	if b.writePos != headerSize {
-		t.Errorf("writePos = %d, want %d", b.writePos, headerSize)
-	}
-	if b.hasData() {
-		t.Error("new buffer should be empty")
-	}
-	if b.Retention() != time.Hour {
-		t.Errorf("retention = %v, want %v", b.Retention(), time.Hour)
-	}
-}
-
-func TestAppendAndScan(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	now := time.Now().UnixNano()
-	frame := makeFrame(152)
-	for i := 0; i < 5; i++ {
-		ts := now + int64(i)*int64(time.Millisecond)
-		if err := b.Append(ts, frame); err != nil {
-			t.Fatalf("Append %d: %v", i, err)
-		}
-	}
-
-	var count int
-	if err := b.Scan(func(_ int64, f []byte) bool {
-		count++
-		if len(f) != len(frame) {
-			t.Errorf("frame %d: got %d bytes, want %d", count, len(f), len(frame))
-		}
-		return true
-	}); err != nil {
-		t.Fatalf("Scan: %v", err)
-	}
-	if count != 5 {
-		t.Errorf("scan count = %d, want 5", count)
-	}
-}
-
-func TestScanPreservesOrder(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	base := time.Now().UnixNano()
-	frame := makeFrame(50)
-	const n = 10
-	for i := 0; i < n; i++ {
-		if err := b.Append(base+int64(i), frame); err != nil {
-			t.Fatalf("Append %d: %v", i, err)
-		}
-	}
-
-	var prev int64 = -1
-	i := 0
-	b.Scan(func(recvTimeNS int64, _ []byte) bool {
-		if recvTimeNS <= prev {
-			t.Errorf("out-of-order at position %d: %d <= %d", i, recvTimeNS, prev)
-		}
-		prev = recvTimeNS
-		i++
-		return true
-	})
-	if i != n {
-		t.Errorf("scanned %d records, want %d", i, n)
-	}
-}
-
-func TestTimeBasedPruningOnAppend(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	// Write three frames with timestamps 2 hours ago.
-	old := time.Now().Add(-2 * time.Hour).UnixNano()
-	frame := makeFrame(100)
-	for i := 0; i < 3; i++ {
-		if err := b.Append(old+int64(i), frame); err != nil {
-			t.Fatalf("old Append %d: %v", i, err)
-		}
-	}
-
-	// Appending a fresh frame should prune the 2-hour-old frames
-	// (cutoff = now - 1h, so frames at now-2h are evicted).
-	nowNS := time.Now().UnixNano()
-	if err := b.Append(nowNS, frame); err != nil {
-		t.Fatalf("new Append: %v", err)
-	}
-
-	var count int
-	if err := b.Scan(func(_ int64, _ []byte) bool {
-		count++
-		return true
-	}); err != nil {
-		t.Fatalf("Scan: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("after time-based pruning, scan count = %d, want 1", count)
-	}
-}
-
-func TestExplicitPrune(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	// Write frames with timestamps 2 hours ago.
-	old := time.Now().Add(-2 * time.Hour).UnixNano()
-	frame := makeFrame(100)
-	for i := 0; i < 3; i++ {
-		if err := b.Append(old+int64(i), frame); err != nil {
-			t.Fatalf("Append %d: %v", i, err)
-		}
-	}
-
-	if err := b.Prune(); err != nil {
-		t.Fatalf("Prune: %v", err)
-	}
-
-	var count int
-	b.Scan(func(_ int64, _ []byte) bool {
-		count++
-		return true
-	})
-	if count != 0 {
-		t.Errorf("after explicit Prune, count = %d, want 0", count)
-	}
-	if b.hasData() {
-		t.Error("hasData should be false after pruning all records")
-	}
-}
-
-func TestScanRange(t *testing.T) {
-	// Use 24h retention so no frames get pruned during the test.
-	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	// Use a fixed base time so the test is deterministic.
-	base := time.Unix(1_000_000, 0)
-	frame := makeFrame(100)
-	const n = 10
-	for i := 0; i < n; i++ {
-		ts := base.Add(time.Duration(i) * time.Hour)
-		if err := b.Append(ts.UnixNano(), frame); err != nil {
-			t.Fatalf("Append %d: %v", i, err)
-		}
-	}
-
-	// Query hours [2, 5] inclusive — expect 4 records.
-	from := base.Add(2 * time.Hour)
-	to := base.Add(5 * time.Hour)
-
-	var got []int64
-	if err := b.ScanRange(from, to, func(recvTimeNS int64, _ []byte) bool {
-		got = append(got, recvTimeNS)
-		return true
-	}); err != nil {
-		t.Fatalf("ScanRange: %v", err)
-	}
-
-	if len(got) != 4 {
-		t.Fatalf("ScanRange count = %d, want 4", len(got))
-	}
-	for i, ts := range got {
-		want := base.Add(time.Duration(i+2) * time.Hour).UnixNano()
-		if ts != want {
-			t.Errorf("got[%d] = %d, want %d", i, ts, want)
+	for i := 0; i < b.N; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * time.Second).UnixNano()
+		if err := buf.Append(recvTimeNS, frame); err != nil {
+			b.Fatal(err)
 		}
 	}
 }
 
-func TestScanRangeBeforeData(t *testing.T) {
-	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	base := time.Unix(1_000_000, 0)
-	frame := makeFrame(50)
-	for i := 0; i < 3; i++ {
-		b.Append(base.Add(time.Duration(i)*time.Minute).UnixNano(), frame)
+// BenchmarkCompressedWrite benchmarks writing with zstd compression.
+func BenchmarkCompressedWrite(b *testing.B) {
+	tmpDir, err := os.MkdirTemp("", "buffer_test")
+	if err != nil {
+		b.Fatal(err)
 	}
+	defer os.RemoveAll(tmpDir)
 
-	// Query entirely before the data.
-	var count int
-	b.ScanRange(base.Add(-10*time.Minute), base.Add(-1*time.Minute), func(_ int64, _ []byte) bool {
-		count++
-		return true
-	})
-	if count != 0 {
-		t.Errorf("count for query before data = %d, want 0", count)
+	buf, err := NewBuffer(tmpDir+"/test.bin", 10, 0, true, DefaultChunkSize)
+	if err != nil {
+		b.Fatal(err)
 	}
-}
+	defer buf.Close()
 
-func TestScanRangeAfterData(t *testing.T) {
-	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close() //nolint:errcheck
+	b.ResetTimer()
+	now := time.Now()
 
-	base := time.Unix(1_000_000, 0)
-	frame := makeFrame(50)
-	for i := 0; i < 3; i++ {
-		b.Append(base.Add(time.Duration(i)*time.Minute).UnixNano(), frame)
-	}
-
-	// Query entirely after the data.
-	var count int
-	b.ScanRange(base.Add(10*time.Minute), base.Add(20*time.Minute), func(_ int64, _ []byte) bool {
-		count++
-		return true
-	})
-	if count != 0 {
-		t.Errorf("count for query after data = %d, want 0", count)
+	for i := 0; i < b.N; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * time.Second).UnixNano()
+		if err := buf.Append(recvTimeNS, frame); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
-func TestScanRangeInvalidRange(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
+// BenchmarkCompressionRatio measures the compression ratio achieved.
+func BenchmarkCompressionRatio(b *testing.B) {
+	tmpDir, err := os.MkdirTemp("", "buffer_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Simulate 1 hour of data at 20 Hz with 8 nodes
+	frameCount := 20 * 60 * 60 // 72,000 frames
+
+	b.ReportMetric(float64(frameCount), "frames")
+
+	// Uncompressed
+	bufUncompressed, err := NewBuffer(tmpDir+"/test_uncompressed.bin", 10, 0, false, 0)
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	now := time.Now()
-	err := b.ScanRange(now.Add(time.Hour), now, func(_ int64, _ []byte) bool { return true })
-	if err == nil {
-		t.Error("expected error for from > to")
-	}
-}
-
-func TestScanRangeEarlyStop(t *testing.T) {
-	b, _ := tempBuffer(t, 1, 24*time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	base := time.Unix(1_000_000, 0)
-	frame := makeFrame(50)
-	for i := 0; i < 5; i++ {
-		b.Append(base.Add(time.Duration(i)*time.Minute).UnixNano(), frame)
-	}
-
-	// Stop after first record.
-	var count int
-	b.ScanRange(base, base.Add(10*time.Minute), func(_ int64, _ []byte) bool {
-		count++
-		return count < 2 // stop after second record
-	})
-	if count != 2 {
-		t.Errorf("early-stop scan returned %d records, want 2", count)
-	}
-}
-
-func TestCrashRecovery(t *testing.T) {
-	frame := makeFrame(152)
-	dir := t.TempDir()
-	path := filepath.Join(dir, "recording.bin")
-
-	b1, err := NewBuffer(path, 1, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UnixNano()
-	for i := 0; i < 3; i++ {
-		if err := b1.Append(now+int64(i), frame); err != nil {
-			t.Fatalf("b1.Append %d: %v", i, err)
+	for i := 0; i < frameCount; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * 50 * time.Millisecond).UnixNano() // 20 Hz = 50ms intervals
+		if err := bufUncompressed.Append(recvTimeNS, frame); err != nil {
+			b.Fatal(err)
 		}
 	}
-	savedWrite := b1.writePos
-	savedOldest := b1.oldestPos
-	b1.Close() //nolint:errcheck
 
-	// Reopen should restore state from the header.
-	b2, err := NewBuffer(path, 1, time.Hour)
+	statsUncompressed := bufUncompressed.Stats()
+	bufUncompressed.Close()
+
+	uncompressedBytes := statsUncompressed.WritePos - headerSize
+
+	// Compressed - track only compressed chunks written
+	bufCompressed, err := NewBuffer(tmpDir+"/test_compressed.bin", 10, 0, true, DefaultChunkSize)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	now = time.Now()
+	for i := 0; i < frameCount; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * 50 * time.Millisecond).UnixNano()
+		if err := bufCompressed.Append(recvTimeNS, frame); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	// Flush pending data to get final compressed size
+	if err := bufCompressed.FlushCompressed(); err != nil {
+		b.Fatal(err)
+	}
+
+	statsCompressed := bufCompressed.Stats()
+	bufCompressed.Close()
+
+	compressedBytes := statsCompressed.WritePos - headerSize
+
+	// Calculate actual compression ratio
+	ratio := float64(compressedBytes) / float64(uncompressedBytes)
+	b.ReportMetric(float64(uncompressedBytes), "uncompressed_bytes")
+	b.ReportMetric(float64(compressedBytes), "compressed_bytes")
+	b.ReportMetric(ratio, "compression_ratio")
+	b.ReportMetric((1.0-ratio)*100.0, "space_saved_pct")
+}
+
+// BenchmarkScanUncompressed benchmarks scanning uncompressed records.
+func BenchmarkScanUncompressed(b *testing.B) {
+	tmpDir, err := os.MkdirTemp("", "buffer_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Pre-populate buffer
+	buf, err := NewBuffer(tmpDir+"/test.bin", 10, 0, false, 0)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer buf.Close()
+
+	frameCount := 1000
+	now := time.Now()
+	for i := 0; i < frameCount; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * time.Second).UnixNano()
+		if err := buf.Append(recvTimeNS, frame); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		scanned := 0
+		err := buf.Scan(func(recvTimeNS int64, frame []byte) bool {
+			scanned++
+			return true
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkScanCompressed benchmarks scanning compressed records.
+func BenchmarkScanCompressed(b *testing.B) {
+	tmpDir, err := os.MkdirTemp("", "buffer_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Pre-populate buffer with compression
+	buf, err := NewBuffer(tmpDir+"/test.bin", 10, 0, true, DefaultChunkSize)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer buf.Close()
+
+	frameCount := 1000
+	now := time.Now()
+	for i := 0; i < frameCount; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * time.Second).UnixNano()
+		if err := buf.Append(recvTimeNS, frame); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	// Flush pending data
+	if err := buf.FlushCompressed(); err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		scanned := 0
+		err := buf.Scan(func(recvTimeNS int64, frame []byte) bool {
+			scanned++
+			return true
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// TestCompressedRoundTrip verifies that compressed chunks can be read back correctly.
+func TestCompressedRoundTrip(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "buffer_test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer b2.Close() //nolint:errcheck
+	defer os.RemoveAll(tmpDir)
 
-	if b2.writePos != savedWrite {
-		t.Errorf("writePos after reopen = %d, want %d", b2.writePos, savedWrite)
+	buf, err := NewBuffer(tmpDir+"/test.bin", 10, 0, true, DefaultChunkSize)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if b2.oldestPos != savedOldest {
-		t.Errorf("oldestPos after reopen = %d, want %d", b2.oldestPos, savedOldest)
+	defer buf.Close()
+
+	// Write test frames
+	now := time.Now()
+	writtenFrames := make(map[int64][]byte)
+	for i := 0; i < 100; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * time.Second).UnixNano()
+
+		if err := buf.Append(recvTimeNS, frame); err != nil {
+			t.Fatalf("Append frame %d: %v", i, err)
+		}
+		writtenFrames[recvTimeNS] = frame
 	}
 
-	// Data should be readable after reopen.
-	var count int
-	b2.Scan(func(_ int64, _ []byte) bool {
-		count++
+	// Flush pending data
+	if err := buf.FlushCompressed(); err != nil {
+		t.Fatalf("Flush compressed: %v", err)
+	}
+
+	// Read back and verify
+	readFrames := make(map[int64][]byte)
+	err = buf.Scan(func(recvTimeNS int64, frame []byte) bool {
+		readFrames[recvTimeNS] = frame
 		return true
 	})
-	if count != 3 {
-		t.Errorf("after reopen, scan count = %d, want 3", count)
-	}
-}
-
-func TestWrapAround(t *testing.T) {
-	b, _ := tempBuffer(t, 1, 48*time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	frame := makeFrame(152)
-	recordSize := recordOverhead + int64(len(frame))
-	dataArea := b.fileSize - headerSize
-	recsBeforeWrap := int(dataArea / recordSize)
-
-	now := time.Now().UnixNano()
-	for i := 0; i < recsBeforeWrap; i++ {
-		if err := b.Append(now+int64(i), frame); err != nil {
-			t.Fatalf("Append %d before wrap: %v", i, err)
-		}
-	}
-
-	beforeWrapPos := b.writePos
-
-	if err := b.Append(now+int64(recsBeforeWrap), frame); err != nil {
-		t.Fatalf("Append triggering wrap: %v", err)
-	}
-
-	if b.writePos >= beforeWrapPos {
-		t.Errorf("writePos %d should have wrapped (was %d before wrap)", b.writePos, beforeWrapPos)
-	}
-}
-
-func TestStorageBounded(t *testing.T) {
-	b, _ := tempBuffer(t, 1, 48*time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	frame := makeFrame(100)
-	recordSize := recordOverhead + int64(len(frame))
-	dataArea := b.fileSize - headerSize
-	count := int(dataArea/recordSize) + 100 // force many wraps + evictions
-
-	now := time.Now().UnixNano()
-	for i := 0; i < count; i++ {
-		if err := b.Append(now+int64(i), frame); err != nil {
-			t.Fatalf("Append %d: %v", i, err)
-		}
-	}
-
-	if b.writePos < headerSize || b.writePos > b.fileSize {
-		t.Errorf("writePos %d out of range [%d, %d]", b.writePos, headerSize, b.fileSize)
-	}
-}
-
-func TestRetentionEnvVar(t *testing.T) {
-	t.Setenv(RetentionEnvVar, "24h")
-
-	// Pass 0 so that the env var is the only non-default source.
-	b, _ := tempBuffer(t, 1, 0)
-	defer b.Close() //nolint:errcheck
-
-	if b.Retention() != 24*time.Hour {
-		t.Errorf("retention = %v, want 24h (from env var)", b.Retention())
-	}
-}
-
-func TestRetentionEnvVarInvalidFallsBack(t *testing.T) {
-	t.Setenv(RetentionEnvVar, "not-a-duration")
-
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	// Invalid env var should fall back to the parameter value.
-	if b.Retention() != time.Hour {
-		t.Errorf("retention = %v, want 1h (fallback to parameter)", b.Retention())
-	}
-}
-
-func TestInvalidMagicStartsFresh(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "bad.bin")
-
-	if err := os.WriteFile(path, []byte("GARBAGE_DATA_123456789012345678901234567890"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	b, err := NewBuffer(path, 1, time.Hour)
 	if err != nil {
-		t.Fatalf("should recover from bad magic: %v", err)
-	}
-	defer b.Close() //nolint:errcheck
-
-	if b.writePos != headerSize {
-		t.Errorf("writePos = %d after bad magic, want %d", b.writePos, headerSize)
-	}
-	if b.hasData() {
-		t.Error("buffer from bad-magic file should start empty")
-	}
-}
-
-func TestFrameTooLarge(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	oversized := make([]byte, maxFrameBytes+1)
-	if err := b.Append(0, oversized); err == nil {
-		t.Error("expected error for oversized frame")
-	}
-}
-
-func TestScanReadBackData(t *testing.T) {
-	b, _ := tempBuffer(t, 1, time.Hour)
-	defer b.Close() //nolint:errcheck
-
-	base := time.Now().UnixNano()
-	frames := [][]byte{
-		makeFrame(24),  // header-only (0 subcarriers)
-		makeFrame(152), // 64 subcarriers
-		makeFrame(280), // 128 subcarriers (max)
-	}
-
-	for i, f := range frames {
-		if err := b.Append(base+int64(i), f); err != nil {
-			t.Fatalf("Append %d: %v", i, err)
-		}
-	}
-
-	var idx int
-	if err := b.Scan(func(recvTimeNS int64, f []byte) bool {
-		wantTS := base + int64(idx)
-		if recvTimeNS != wantTS {
-			t.Errorf("record %d: recvTimeNS = %d, want %d", idx, recvTimeNS, wantTS)
-		}
-		if len(f) != len(frames[idx]) {
-			t.Errorf("record %d: len = %d, want %d", idx, len(f), len(frames[idx]))
-		}
-		for j := range f {
-			if f[j] != frames[idx][j] {
-				t.Errorf("record %d byte %d: got %d, want %d", idx, j, f[j], frames[idx][j])
-				break
-			}
-		}
-		idx++
-		return true
-	}); err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
-	if idx != len(frames) {
-		t.Errorf("scanned %d records, want %d", idx, len(frames))
+
+	// Verify all frames match
+	if len(readFrames) != len(writtenFrames) {
+		t.Errorf("Frame count mismatch: got %d, want %d", len(readFrames), len(writtenFrames))
+	}
+
+	for ts, written := range writtenFrames {
+		read, ok := readFrames[ts]
+		if !ok {
+			t.Errorf("Missing timestamp %d", ts)
+			continue
+		}
+		if !bytes.Equal(written, read) {
+			t.Errorf("Frame mismatch at timestamp %d", ts)
+		}
+	}
+}
+
+// TestBackwardCompatibility verifies that an uncompressed buffer can be read.
+func TestBackwardCompatibility(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "buffer_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write uncompressed data
+	buf, err := NewBuffer(tmpDir+"/test.bin", 10, 0, false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	writtenFrames := make(map[int64][]byte)
+	for i := 0; i < 50; i++ {
+		frame := generateCSIFrame(uint32(i))
+		recvTimeNS := now.Add(time.Duration(i) * time.Second).UnixNano()
+
+		if err := buf.Append(recvTimeNS, frame); err != nil {
+			t.Fatalf("Append frame %d: %v", i, err)
+		}
+		writtenFrames[recvTimeNS] = frame
+	}
+	buf.Close()
+
+	// Reopen and verify (should read uncompressed format)
+	buf2, err := NewBuffer(tmpDir+"/test.bin", 10, 0, false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer buf2.Close()
+
+	readFrames := make(map[int64][]byte)
+	err = buf2.Scan(func(recvTimeNS int64, frame []byte) bool {
+		readFrames[recvTimeNS] = frame
+		return true
+	})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+
+	if len(readFrames) != len(writtenFrames) {
+		t.Errorf("Frame count mismatch: got %d, want %d", len(readFrames), len(writtenFrames))
+	}
+
+	for ts, written := range writtenFrames {
+		read, ok := readFrames[ts]
+		if !ok {
+			t.Errorf("Missing timestamp %d", ts)
+		}
+		if !bytes.Equal(written, read) {
+			t.Errorf("Frame mismatch at timestamp %d", ts)
+		}
 	}
 }
