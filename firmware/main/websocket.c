@@ -178,6 +178,7 @@ static void handle_config_msg(cJSON *root);
 static void handle_ota_msg(cJSON *root);
 static void handle_reboot_msg(cJSON *root);
 static void handle_identify_msg(cJSON *root);
+static void handle_shutdown_msg(cJSON *root);
 static void ota_task(void *arg);
 
 esp_err_t websocket_init(void) {
