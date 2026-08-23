@@ -8,6 +8,14 @@ require('./onboard.js');
 const { SpaxelOnboard } = global;
 const { _CONFIG, _STEPS, _parseCSIFrame, _state, _UserError, _isUserError, _provisionAndSend } = SpaxelOnboard;
 
+// Load test profiler
+const profiler = require('./testProfiler');
+const path = require('path');
+
+// Global profiling state
+let beforeSnapshot = null;
+let profilingOutputPath = null;
+
 // Reset state between tests
 function resetWizardState() {
     _state.currentStepIndex = -1;
@@ -55,6 +63,61 @@ function resetWizardState() {
         };
     });
 }
+
+// ============================================
+// Profiling Hooks
+// ============================================
+beforeAll(async () => {
+    // Set up profiling output path
+    profilingOutputPath = path.join(__dirname, '../test-profiling-results.json');
+
+    // Instrument global objects for leak tracking
+    profiler.instrumentTimers();
+    profiler.instrumentWebSockets();
+
+    // Force GC before starting to get clean baseline
+    profiler.forceGC();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Capture initial state
+    beforeSnapshot = profiler.captureSnapshot('before-all-tests');
+    console.log('[PROFILER] Test suite started - baseline captured');
+});
+
+afterAll(async () => {
+    // Force GC to collect garbage
+    profiler.forceGC();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Capture final state
+    const afterSnapshot = profiler.captureSnapshot('after-all-tests');
+    console.log('[PROFILER] Test suite completed - final state captured');
+
+    // Write profiling data
+    if (beforeSnapshot && afterSnapshot) {
+        profiler.writeProfilingData(beforeSnapshot, afterSnapshot, profilingOutputPath);
+        console.log('[PROFILER] Profiling data written to:', profilingOutputPath);
+
+        // Log analysis summary
+        const analysis = profiler.analyzeLeaks(beforeSnapshot, afterSnapshot);
+        console.log('[PROFILER] Analysis:', analysis.summary);
+        if (analysis.issuesFound) {
+            console.warn('[PROFILER] Issues detected:');
+            analysis.issues.forEach(issue => {
+                console.warn(`  [${issue.severity}] ${issue.type}: ${issue.message}`);
+            });
+        }
+    }
+
+    // Close the JSON array in the output file
+    const fs = require('fs');
+    if (fs.existsSync(profilingOutputPath)) {
+        const content = fs.readFileSync(profilingOutputPath, 'utf8');
+        if (!content.endsWith(']')) {
+            fs.appendFileSync(profilingOutputPath, ']');
+        }
+    }
+});
 
 // ============================================
 // Configuration and Step Definitions
