@@ -45,6 +45,11 @@ static volatile bool s_connected = false;
 static int64_t s_last_connect_time_us = 0;
 #define SPAXEL_CONNECT_DEBOUNCE_MS 200  // 200ms debounce after connect
 
+// Mothership shutdown reconnect delay to prevent immediate reconnection
+// attempts during restart. See bead spaxel-61de1fce.
+static int64_t s_shutdown_received_us = 0;
+static int s_reconnect_delay_ms = 0;
+
 // OTA state
 static char s_ota_url[256] = {0};
 static char s_ota_sha256[65] = {0};
@@ -353,6 +358,25 @@ static void ws_event_handler(void *args, esp_event_base_t base,
                 // Don't set s_connected or trigger state machine; this is a transient event
                 break;
             }
+
+            // Check if we're in the reconnect delay period after a graceful shutdown
+            if (s_shutdown_received_us > 0) {
+                int64_t elapsed_ms = (now_us - s_shutdown_received_us) / 1000;
+                if (elapsed_ms < s_reconnect_delay_ms) {
+                    int64_t remaining_ms = s_reconnect_delay_ms - elapsed_ms;
+                    ESP_LOGI(TAG, "[RECONNECT-DELAY] Shutdown received, waiting %lld ms before reconnect",
+                             remaining_ms);
+                    // Don't trigger state machine reconnection yet - sleep and return
+                    // The state machine will retry naturally after this delay
+                    break;
+                } else {
+                    // Reconnect delay has expired, clear the flag
+                    ESP_LOGI(TAG, "[RECONNECT-DELAY] Reconnect delay expired, proceeding with reconnection");
+                    s_shutdown_received_us = 0;
+                    s_reconnect_delay_ms = 0;
+                }
+            }
+
             ESP_LOGW(TAG, "WebSocket disconnected");
             s_connected = false;
             xEventGroupSetBits(g_state.events, SPAXEL_EVENT_WS_DISCONNECTED);
@@ -730,6 +754,8 @@ void websocket_handle_message(const char *json, size_t len) {
         // Defer to the state machine, same as a normal WEBSOCKET_EVENT_DISCONNECTED.
         s_connected = false;
         xEventGroupSetBits(g_state.events, SPAXEL_EVENT_WS_DISCONNECTED);
+    } else if (strcmp(type->valuestring, "shutdown") == 0) {
+        handle_shutdown_msg(root);
     }
     // Unknown types are silently ignored (forward-compatible)
 
@@ -868,6 +894,28 @@ static void handle_identify_msg(cJSON *root) {
     esp_err_t err = led_blink_identify(duration_ms);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start LED blink: %s", esp_err_to_name(err));
+    }
+}
+
+static void handle_shutdown_msg(cJSON *root) {
+    cJSON *reconnect_delay = cJSON_GetObjectItem(root, "reconnect_in_ms");
+
+    if (reconnect_delay && cJSON_IsNumber(reconnect_delay)) {
+        s_reconnect_delay_ms = reconnect_delay->valueint;
+        s_shutdown_received_us = esp_timer_get_time();
+
+        ESP_LOGI(TAG, "Mothership shutting down; reconnect in %d ms",
+                 s_reconnect_delay_ms);
+        ESP_LOGI(TAG, "[RECONNECT-DELAY] Will wait until %lld us before reconnecting",
+                 s_shutdown_received_us + (s_reconnect_delay_ms * 1000));
+    } else {
+        // No reconnect delay specified - use default 30 seconds
+        s_reconnect_delay_ms = 30000;
+        s_shutdown_received_us = esp_timer_get_time();
+
+        ESP_LOGW(TAG, "Mothership shutdown without reconnect delay; using default 30s");
+        ESP_LOGI(TAG, "[RECONNECT-DELAY] Will wait until %lld us before reconnecting",
+                 s_shutdown_received_us + (s_reconnect_delay_ms * 1000));
     }
 }
 
