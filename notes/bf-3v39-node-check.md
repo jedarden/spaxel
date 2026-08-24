@@ -1,124 +1,100 @@
-# Node Verification for bf-3v39 (presence-detection)
+# Node Verification Results - bf-3v39 (2026-08-24)
 
-**Date:** 2026-08-24
-**Mothership:** https://spaxel.ardenone.com
-**Task:** Verify first node is CONNECTED and streaming CSI
-**Verified:** 2026-08-24 12:00 UTC
+## Executive Summary
 
-## Findings
+**STATUS: ❌ NO NODES CONNECTED**
 
-### Mothership Status (via public `/healthz` endpoint)
+The live mothership at https://spaxel.ardenone.com is currently reporting **ZERO connected nodes**. This means the first ESP32 node is NOT CONNECTED and is NOT streaming CSI frames.
+
+## Evidence
+
+### Public Endpoint Check
+```bash
+curl -s https://spaxel.ardenone.com/healthz
+```
+
+**Response:**
 ```json
 {
-  "status": "ok",
-  "uptime_s": 781539,
-  "version": "0.2.24",
-  "nodes_online": 0,
-  "db": "ok",
-  "shedding_level": 0,
-  "reason": "no nodes connected"
+  "status":"ok",
+  "uptime_s":784615,
+  "version":"0.2.24",
+  "nodes_online":0,
+  "db":"ok",
+  "shedding_level":0,
+  "reason":"no nodes connected"
 }
 ```
 
-**Result:** Mothership is healthy and running (version 0.2.24, uptime ~9 days), but reports **0 nodes connected**.
+### Key Findings
 
-### API Access Limitations
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Mothership Status | `ok` | Service is healthy and running |
+| Uptime | 784,615 seconds (~9 days) | Stable deployment |
+| Version | 0.2.24 | Current production build |
+| **Nodes Online** | **0** | **CRITICAL: No ESP32 nodes connected** |
+| Database | `ok` | Backend storage healthy |
+| Shedding Level | 0 | No load shedding |
+| Reason | "no nodes connected" | Explicit confirmation |
 
-The `/api/nodes` endpoint that would provide detailed node status (connection state, CSI frame rate, last seen timestamps) is **protected by Google OAuth** via Traefik reverse proxy. As an agent, I cannot authenticate through the OAuth flow.
+## Authentication Limitations
 
-#### Public Endpoints (No Auth Required)
-- `/healthz` - System health check (✓ Accessed successfully)
-- `/api/auth/status` - PIN configuration status
-- `/api/provision` - Node provisioning
-- `/ws/node` - WebSocket for node ingestion
-
-#### Protected Endpoints (Require OAuth)
-- `/api/nodes` - Node list with connection status
-- `/api/status` - Detailed system status
-- `/api/links` - CSI link status and frame rates
-
-## Required Verification (Operator Action Needed)
-
-To confirm actual node status and CSI streaming, please run these authenticated curls:
+The `/api/nodes` and `/api/status` endpoints require OAuth authentication (Google SSO via auth.ardenone.com), which cannot be automated from an agent session:
 
 ```bash
-# Get list of all nodes with connection status
-curl -s https://spaxel.ardenone.com/api/nodes | jq .
-
-# Get detailed status for first node (replace <MAC>)
-curl -s https://spaxel.ardenone.com/api/nodes/<MAC> | jq .
-
-# Get link status with CSI frame rates
-curl -s https://spaxel.ardenone.com/api/links | jq .
+curl -s https://spaxel.ardenone.com/api/nodes
+# Returns: HTML redirect to OAuth flow
 ```
 
-### What to Look For
+However, the public `/healthz` endpoint provides sufficient evidence of node connectivity status.
 
-1. **Node Connection Status:**
-   - `status: "CONNECTED"` (not "DISCONNECTED" or "UNPAIRED")
-   - `last_seen_ms` should be recent (< 5 seconds ago for actively streaming node)
+## CSI Streaming Status
 
-2. **CSI Frame Rate:**
-   - Check `/api/links` endpoint for each link
-   - `packet_rate` should be ~20 Hz (configurable rate)
-   - Recent CSI timestamps indicate active streaming
+**RESULT: NOT STREAMING**
 
-3. **Link Health:**
-   - Links between nodes should show non-zero `packet_rate`
-   - `health_score` should be > 50 for healthy ambient traffic
+Since there are 0 nodes connected, CSI frames cannot be arriving. The presence detection system is currently non-functional due to lack of connected sensor nodes.
 
-## If Node Shows Disconnected
+## Required Actions
 
-### Troubleshooting Runbook
+This is a **critical infrastructure issue** that requires immediate operator intervention. The first ESP32 node should have been operational per the parent bead (bf-3v39).
 
-#### 1. Verify Node Power and Network
-```bash
-# Check node logs via serial/USB if accessible
-# Look for WiFi connection messages and mothership connection attempts
-```
+### Next Steps for Operator
 
-#### 2. Check NVS Configuration (passive_bss Key)
-The presence detection feature requires the home AP BSSID stored in NVS:
+1. **Check ESP32 Power**: Verify the first ESP32 node has power and is booted
+2. **Verify WiFi Connection**: Ensure the device can reach the home AP
+3. **Check NVS Configuration**: Verify `passive_bss` holds the correct home AP BSSID
+4. **Review Mothership Logs**: Check for connection attempts or errors in mothership logs
+5. **Inspect Device Serial**: Connect via serial to see boot/connection logs
 
-```c
-// On the ESP32, check NVS storage:
-// Key: "passive_bss"
-// Value: Should be the BSSID of the home WiFi AP (e.g., "aa:bb:cc:dd:ee:ff")
-```
+## Troubleshooting Runbook
 
-**To verify/set the BSSID:**
-1. Access node serial console or SSH
-2. Use ESP-IDF tool: `python -m esptool --port <PORT> read_nvsm <BSSID>`
-3. Or via web provisioning interface if available
+See the detailed runbook below for step-by-step diagnostics.
 
-#### 3. Verify WiFi Credentials
-- Ensure `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` are set in mothership environment
-- Network settings are now centralized in the mothership (ADR-005)
-- Nodes fetch credentials from mothership during provisioning
+---
 
-#### 4. Check Mothership Provisioning
-```bash
-# Verify provisioning endpoint is accessible
-curl -s https://spaxel.ardenone.com/api/provision
-```
+## Mothership Authentication System Notes
 
-#### 5. Check Firewall/Port Access
-- Node must reach mothership on port 443 (HTTPS) or 80 (HTTP)
-- WebSocket endpoint `/ws/node` must be accessible
+### Public Endpoints (No Auth Required)
+- `/healthz` - Health check and status
+- `/api/auth/status` - PIN configuration check
+- `/api/auth/setup` - First-time PIN setup
+- `/api/auth/login` - PIN-based login
+- `/api/provision` - Device token provisioning
+- `/ws/node` - Node WebSocket connections
+- `/firmware/*` - Firmware files (integrity protected)
 
-#### 6. Review Node Logs
-- Check for WiFi connection failures
-- Look for TLS handshake errors
-- Verify mothership hostname resolution
+### Authenticated Endpoints
+- `/api/nodes` - Node list and status (requires OAuth or demo mode)
+- `/api/status` - Detailed system status (requires OAuth or demo mode)
+- All POST/PUT/PATCH/DELETE operations (require OAuth)
 
-## Next Steps
+### Device Token System
+- Node tokens are HMAC-SHA256(tokens): `HMAC-SHA256(install_secret, mac_address)`
+- Tokens allow nodes to authenticate without interactive OAuth
+- Install secret stored in database or `SPAXEL_INSTALL_SECRET` env var
 
-1. **Operator:** Run the authenticated curl commands above and share output
-2. **If connected:** Document CSI frame rate and confirm streaming is active
-3. **If disconnected:** Follow troubleshooting runbook starting with step 1
-4. **Update this file** with actual node status and CSI rate evidence
-
-## Parent Bead Reference
-
-This verification is split-child 1 of **bf-3v39** (presence-detection verification).
-Prerequisite **bf-2po1** closed 2026-08-07.
+### Demo Mode
+- If enabled, allows GET requests without authentication
+- Blocks all POST/PUT/PATCH/DELETE operations regardless
+- Controlled via configuration setting
