@@ -1,45 +1,17 @@
-# Node Verification: spaxel-9c1a4858
+# Node Verification for bf-3v39 (presence-detection)
 
-**Task:** Verify first node is CONNECTED and streaming CSI on live mothership at https://spaxel.ardenone.com
+**Date:** 2026-08-24
+**Mothership:** https://spaxel.ardenone.com
+**Task:** Verify first node is CONNECTED and streaming CSI
+**Verified:** 2026-08-24 12:00 UTC
 
-**Date:** 2026-08-21
+## Findings
 
-## Background
-
-Split-child of bf-3v39 (presence-detection verification). Prerequisite bf-2po1 closed 2026-08-07.
-
-The live mothership at https://spaxel.ardenone.com is OAuth-gated (Google SSO via auth.ardenone.com). Direct agent access is blocked by the forward-auth middleware.
-
-## Target Verification
-
-We need to confirm:
-1. **Node status:** First ESP32 node shows CONNECTED (not OFFLINE or STALE)
-2. **CSI streaming:** Frames are arriving with recent timestamps at expected rate (~20 Hz for active mode, ~10 Hz beacon rate for passive mode)
-3. **Passive radar:** If in passive mode, confirm the node is filtering for the correct AP BSSID
-
-## API Access Paths
-
-From `mothership/internal/auth/handler.go`:
-- **Public paths** (no auth required):
-  - `/healthz` - System health check
-  - `/api/auth/status` - PIN configuration status
-  - `/api/provision` - Provisioning endpoint
-  - `/ws/node` - Node WebSocket (uses HMAC token, not OAuth)
-  
-- **Authenticated paths** (requires Google SSO session):
-  - `/api/nodes` - Node registry and status
-  - `/api/status` - System status
-  - `/api/links` - Active CSI links (if any)
-
-## Health Check Results (✓ OBTAINED)
-
-**Executed:** `curl -s https://spaxel.ardenone.com/healthz`
-
-**Response:**
+### Mothership Status (via public `/healthz` endpoint)
 ```json
 {
   "status": "ok",
-  "uptime_s": 515546,
+  "uptime_s": 781539,
   "version": "0.2.24",
   "nodes_online": 0,
   "db": "ok",
@@ -48,170 +20,105 @@ From `mothership/internal/auth/handler.go`:
 }
 ```
 
-**Findings:**
-- ✅ Mothership is healthy and running (uptime: ~5.97 days)
-- ✅ Database is OK
-- ✅ No load shedding (level 0)
-- ✅ Version 0.2.24 deployed
-- ❌ **ZERO nodes connected** (`nodes_online: 0`)
-- ❌ **No CSI streaming possible** (no nodes = no CSI)
+**Result:** Mothership is healthy and running (version 0.2.24, uptime ~9 days), but reports **0 nodes connected**.
 
-## Conclusion: NODE NOT CONNECTED
+### API Access Limitations
 
-The first ESP32 node is **NOT CONNECTED** to the live mothership. This is a documented, closable outcome per the task acceptance criteria.
+The `/api/nodes` endpoint that would provide detailed node status (connection state, CSI frame rate, last seen timestamps) is **protected by Google OAuth** via Traefik reverse proxy. As an agent, I cannot authenticate through the OAuth flow.
 
-**What's missing:**
-1. No node has registered with the mothership (nodes_online: 0)
-2. Cannot verify CSI streaming because there are no nodes
-3. Cannot verify passive BSSID configuration because there are no nodes
+#### Public Endpoints (No Auth Required)
+- `/healthz` - System health check (✓ Accessed successfully)
+- `/api/auth/status` - PIN configuration status
+- `/api/provision` - Node provisioning
+- `/ws/node` - WebSocket for node ingestion
 
-**Next:** Operator needs to troubleshoot why the ESP32 node is not connecting to `https://spaxel.ardenone.com`. See troubleshooting runbook below.
+#### Protected Endpoints (Require OAuth)
+- `/api/nodes` - Node list with connection status
+- `/api/status` - Detailed system status
+- `/api/links` - CSI link status and frame rates
 
-## Required: Operator-Run curl Commands
+## Required Verification (Operator Action Needed)
 
-Please run these commands and paste the output:
+To confirm actual node status and CSI streaming, please run these authenticated curls:
 
-### 1. System Health Check (public endpoint)
 ```bash
-curl -s https://spaxel.ardenone.com/healthz
+# Get list of all nodes with connection status
+curl -s https://spaxel.ardenone.com/api/nodes | jq .
+
+# Get detailed status for first node (replace <MAC>)
+curl -s https://spaxel.ardenone.com/api/nodes/<MAC> | jq .
+
+# Get link status with CSI frame rates
+curl -s https://spaxel.ardenone.com/api/links | jq .
 ```
 
-### 2. Node Status (requires authenticated session)
+### What to Look For
+
+1. **Node Connection Status:**
+   - `status: "CONNECTED"` (not "DISCONNECTED" or "UNPAIRED")
+   - `last_seen_ms` should be recent (< 5 seconds ago for actively streaming node)
+
+2. **CSI Frame Rate:**
+   - Check `/api/links` endpoint for each link
+   - `packet_rate` should be ~20 Hz (configurable rate)
+   - Recent CSI timestamps indicate active streaming
+
+3. **Link Health:**
+   - Links between nodes should show non-zero `packet_rate`
+   - `health_score` should be > 50 for healthy ambient traffic
+
+## If Node Shows Disconnected
+
+### Troubleshooting Runbook
+
+#### 1. Verify Node Power and Network
 ```bash
-# After opening https://spaxel.ardenone.com in browser and authenticating with Google SSO:
-curl -s https://spaxel.ardenone.com/api/nodes \
-  -H "Cookie: spaxel_session=<YOUR_SESSION_COOKIE>"
+# Check node logs via serial/USB if accessible
+# Look for WiFi connection messages and mothership connection attempts
 ```
 
-### 3. System Status (requires authenticated session)
+#### 2. Check NVS Configuration (passive_bss Key)
+The presence detection feature requires the home AP BSSID stored in NVS:
+
+```c
+// On the ESP32, check NVS storage:
+// Key: "passive_bss"
+// Value: Should be the BSSID of the home WiFi AP (e.g., "aa:bb:cc:dd:ee:ff")
+```
+
+**To verify/set the BSSID:**
+1. Access node serial console or SSH
+2. Use ESP-IDF tool: `python -m esptool --port <PORT> read_nvsm <BSSID>`
+3. Or via web provisioning interface if available
+
+#### 3. Verify WiFi Credentials
+- Ensure `SPAXEL_WIFI_SSID` and `SPAXEL_WIFI_PASSWORD` are set in mothership environment
+- Network settings are now centralized in the mothership (ADR-005)
+- Nodes fetch credentials from mothership during provisioning
+
+#### 4. Check Mothership Provisioning
 ```bash
-curl -s https://spaxel.ardenone.com/api/status \
-  -H "Cookie: spaxel_session=<YOUR_SESSION_COOKIE>"
+# Verify provisioning endpoint is accessible
+curl -s https://spaxel.ardenone.com/api/provision
 ```
 
-### 4. Active Links (CSI streaming verification)
-```bash
-curl -s https://spaxel.ardenone.com/api/links \
-  -H "Cookie: spaxel_session=<YOUR_SESSION_COOKIE>"
-```
+#### 5. Check Firewall/Port Access
+- Node must reach mothership on port 443 (HTTPS) or 80 (HTTP)
+- WebSocket endpoint `/ws/node` must be accessible
 
-## How to Get Session Cookie
-
-1. Open https://spaxel.ardenone.com in browser
-2. Authenticate with Google SSO
-3. Open browser DevTools (F12) → Application/Storage → Cookies
-4. Find `spaxel_session` cookie value
-5. Copy the value (64-character hex string)
-
-## Expected Evidence
-
-### Connected Node (Expected output from /api/nodes):
-```json
-[
-  {
-    "mac": "AA:BB:CC:DD:EE:FF",
-    "name": "...",
-    "role": "rx" or "tx_rx" or "passive",
-    "status": "online",           // ← Critical: not "offline" or "stale"
-    "last_seen_ms": 1692634567890, // ← Recent timestamp (within last 60 seconds)
-    "wifi_rssi_dbm": -45,
-    "uptime_ms": 3600000,
-    "csi_rate_hz": 20 or 10       // ← Shows configured rate
-  }
-]
-```
-
-### CSI Streaming (Expected output from /api/links):
-```json
-[
-  {
-    "tx_mac": "...",
-    "rx_mac": "...",
-    "last_frame_ms": 1692634567890,  // ← Recent timestamp (within last second)
-    "frame_count": 12345,
-    "delta_rms": 0.08,                    // ← Shows recent motion detection
-    "snr": 25.3,
-    "pdr": 0.98
-  }
-]
-```
-
-## Passive Radar Specific Checks
-
-If the node is in passive mode (using router as TX):
-1. Check `/api/nodes` for `role: "passive"`
-2. Verify node has `passive_bssid` set in database
-3. CSI rate should be ~10 Hz (typical beacon interval)
-4. Last frame timestamps should be within last 2 seconds
-
-## Troubleshooting Runbook (if node NOT streaming)
-
-### Issue 1: Node shows OFFLINE
-**Symptoms:** `status: "offline"`, `last_seen_ms` is old (>60 seconds ago)
-
-**Checks:**
-- Is the ESP32 powered? Check USB/Power connection
-- Does the node have WiFi connectivity? Check captive portal AP `spaxel-XXXX`
-- Can mothership reach the node? Check `SPAXEL_MDNS_ENABLED` and network routing
-
-**Recovery:**
-1. Check node's serial console or Web Serial for error messages
-2. Verify NVS `wifi_ssid` and `wifi_pass` are correct
-3. Re-provision via captive portal or Web Serial
-
-### Issue 2: Node shows STALE
-**Symptoms:** `status: "stale"`, connected but not sending health/CSI
-
-**Checks:**
-- Is WebSocket connection alive? Check for disconnect logs
-- Is firmware crashed? Look for panic messages or restart loop
-- Is mothership reachable from node? Check network path
-
-**Recovery:**
-1. Restart node via power cycle
-2. Check mothership logs for ingestion errors
-3. Verify node token validation (should be auto-generated)
-
-### Issue 3: Node ONLINE but NO CSI frames
-**Symptoms:** Node status shows online, but `/api/links` is empty or has stale frames
-
-**Checks:**
-- **CRITICAL:** Is CSI armed? (Known bug bf-5x46 — CSI may not arm on boot if role matches persisted role)
-- Is node in correct role? (`tx`, `rx`, `tx_rx`, or `passive`)
-- For passive mode: Is `passive_bssid` NVS key set to router's BSSID?
-- Are packets being captured? Check firmware CSI callback logs
-
-**Recovery:**
-1. Force role change to re-arm CSI: `PATCH /api/nodes/{mac}` with new role
-2. For passive mode, verify NVS `passive_bss` contains correct router BSSID
-3. Reboot node to re-initialize CSI hardware
-
-### Issue 4: Passive BSSID not set
-**Symptoms:** Node in passive role but no frames arriving
-
-**Root Cause:** According to plan, NVS key `passive_bss` should be auto-detected during provisioning but may be empty.
-
-**Check:**
-```bash
-# From mothership database (if accessible):
-SELECT passive_bssid FROM nodes WHERE mac = 'AA:BB:CC:DD:EE:FF';
-```
-
-**Recovery:**
-1. Manual AP BSSID entry via captive portal
-2. Re-provision node with correct BSSID
-3. Verify AP is actually transmitting beacons on expected channel
+#### 6. Review Node Logs
+- Check for WiFi connection failures
+- Look for TLS handshake errors
+- Verify mothership hostname resolution
 
 ## Next Steps
 
-WAITING for operator to provide:
-1. `/healthz` output (public)
-2. `/api/nodes` output (authenticated)
-3. `/api/status` output (authenticated)
-4. `/api/links` output (authenticated)
+1. **Operator:** Run the authenticated curl commands above and share output
+2. **If connected:** Document CSI frame rate and confirm streaming is active
+3. **If disconnected:** Follow troubleshooting runbook starting with step 1
+4. **Update this file** with actual node status and CSI rate evidence
 
-Once data received, I will:
-- Confirm node is CONNECTED and streaming
-- Document CSI rate and timestamp freshness
-- Identify any gaps and create troubleshooting runbook if needed
-- Comment on bead spaxel-9c1a4858 with findings
+## Parent Bead Reference
+
+This verification is split-child 1 of **bf-3v39** (presence-detection verification).
+Prerequisite **bf-2po1** closed 2026-08-07.
