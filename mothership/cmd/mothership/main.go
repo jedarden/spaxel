@@ -1312,6 +1312,9 @@ func main() {
 			// Seed the 3D fusion engine's node registry (bf-3f6q). Without
 			// positioned nodes, Fuse skips every link and emits no blobs.
 			fusionEngine.SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ)
+			// Log verification that SetNodePosition was called for this node
+			log.Printf("[STARTUP] Loaded node %s into fusion engine at position (%.2f, %.2f, %.2f)",
+				node.MAC, node.PosX, node.PosY, node.PosZ)
 		}
 	}
 
