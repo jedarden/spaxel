@@ -266,6 +266,24 @@ func (s *Store) init() error {
 		return fmt.Errorf("create trigger_state table: %w", err)
 	}
 
+	// Create zones table for zone geometry lookup
+	_, err = s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS zones (
+			id      INTEGER PRIMARY KEY AUTOINCREMENT,
+			name    TEXT NOT NULL UNIQUE,
+			min_x   REAL NOT NULL DEFAULT 0,
+			min_y   REAL NOT NULL DEFAULT 0,
+			min_z   REAL NOT NULL DEFAULT 0,
+			max_x   REAL NOT NULL DEFAULT 0,
+			max_y   REAL NOT NULL DEFAULT 0,
+			max_z   REAL NOT NULL DEFAULT 0,
+			enabled INTEGER NOT NULL DEFAULT 1
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("create zones table: %w", err)
+	}
+
 	// Create webhook_log audit table
 	_, err = s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS webhook_log (
