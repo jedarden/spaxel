@@ -34,22 +34,30 @@ static const char *TAG = "provision";
 // the correct slot, then no console output" signature in
 // docs/notes/esp32-ota-and-reconnection-handoff.md.
 static void provision_release_transport(transport_t *tp) {
-    if (tp && strcmp(tp->name, "usb-serial-jtag") == 0) {
+    if (!tp) {
+        return;
+    }
+    if (strcmp(tp->name, "usb-serial-jtag") == 0) {
         esp_vfs_usb_serial_jtag_use_nonblocking();
     }
     transport_deinit(tp);
 }
 
 void provision_listen_window(void) {
-    // Get the transport to use for provisioning.
-    // Currently uses USB-Serial-JTAG only (single-transport mode).
-    transport_t *tp = transport_usb_serial_jtag();
+    // Get both transports for concurrent dual-transport listening.
+    transport_t *tp_usb = transport_usb_serial_jtag();
+    transport_t *tp_uart = transport_uart0();
 
-    // Initialize the transport (installs the driver, configures pins, etc.).
-    esp_err_t err = transport_init(tp);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Transport %s init failed (0x%x), skipping provision window",
-                 tp->name, err);
+    // Initialize both transports (installs drivers, configures pins, etc.).
+    esp_err_t err_usb = transport_init(tp_usb);
+    esp_err_t err_uart = transport_init(tp_uart);
+
+    bool usb_available = (err_usb == ESP_OK);
+    bool uart_available = (err_uart == ESP_OK);
+
+    if (!usb_available && !uart_available) {
+        ESP_LOGW(TAG, "Both transports failed (USB: 0x%x, UART: 0x%x), skipping provision window",
+                 err_usb, err_uart);
         return;
     }
 
@@ -61,84 +69,164 @@ void provision_listen_window(void) {
         : PROVISION_WINDOW_MS_FRESH;
 
     // Signal that firmware is ready for provisioning (includes MAC for display).
-    // Broadcast every 1 s so the host can open the port at any time during
-    // the window — not just at the exact moment of first boot.
+    // Broadcast every 1 s on ALL available transports so the host can open
+    // the port at any time during the window.
     char ready_msg[64];
     snprintf(ready_msg, sizeof(ready_msg), "SPAXEL READY %s\n", mac_str);
-    transport_write(tp, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
 
-    ESP_LOGI(TAG, "Provisioning window open for %u ms on %s (MAC: %s)",
-             (unsigned)window_ms, tp->name, mac_str);
+    if (usb_available) {
+        transport_write(tp_usb, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
+    }
+    if (uart_available) {
+        transport_write(tp_uart, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
+    }
+
+    ESP_LOGI(TAG, "Provisioning window open for %u ms on %s%s%s (MAC: %s)",
+             (unsigned)window_ms,
+             usb_available ? tp_usb->name : "",
+             (usb_available && uart_available) ? " + " : "",
+             uart_available ? tp_uart->name : "",
+             mac_str);
 
     TickType_t deadline   = xTaskGetTickCount() + pdMS_TO_TICKS(window_ms);
     TickType_t last_ready = xTaskGetTickCount();
-    char line[MAX_LINE_LEN];
-    int line_pos = 0;
+
+    // Maintain separate read buffers for each transport to avoid interleaving.
+    char line_usb[MAX_LINE_LEN];
+    char line_uart[MAX_LINE_LEN];
+    int line_pos_usb = 0;
+    int line_pos_uart = 0;
 
     while (xTaskGetTickCount() < deadline) {
-        // Re-broadcast READY every 1 s so the host can connect at any time
+        // Re-broadcast READY every 1 s on all available transports
         if ((xTaskGetTickCount() - last_ready) >= pdMS_TO_TICKS(1000)) {
-            transport_write(tp, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
+            if (usb_available) {
+                transport_write(tp_usb, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
+            }
+            if (uart_available) {
+                transport_write(tp_uart, (const uint8_t *)ready_msg, strlen(ready_msg), PROVISION_TX_TIMEOUT);
+            }
             last_ready = xTaskGetTickCount();
         }
 
+        // Poll both transports with a short timeout to allow responsive switching.
+        // Use 25 ms per transport (50 ms total) for 1 Hz responsiveness while
+        // keeping CPU usage low.
         uint8_t ch;
-        int n = transport_read(tp, &ch, 1, pdMS_TO_TICKS(50));
-        if (n <= 0) {
-            continue;
+        int n;
+
+        // Try USB-Serial/JTAG first
+        if (usb_available) {
+            n = transport_read(tp_usb, &ch, 1, pdMS_TO_TICKS(25));
+            if (n > 0) {
+                // Character received on USB transport
+                if (ch == '\r') {
+                    // ignore CR
+                } else if (ch == '\n') {
+                    line_usb[line_pos_usb] = '\0';
+                    line_pos_usb = 0;
+
+                    if (strlen(line_usb) > 0) {
+                        // Process the JSON payload
+                        cJSON *root = cJSON_Parse(line_usb);
+                        if (!root) {
+                            const char *err_resp = "{\"ok\":false,\"error\":\"invalid_json\"}\n";
+                            transport_write(tp_usb, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                            continue;
+                        }
+
+                        cJSON *prov = cJSON_GetObjectItem(root, "provision");
+                        if (!prov) {
+                            cJSON_Delete(root);
+                            const char *err_resp = "{\"ok\":false,\"error\":\"missing_provision_key\"}\n";
+                            transport_write(tp_usb, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                            continue;
+                        }
+
+                        esp_err_t err = provision_write_nvs(prov);
+                        cJSON_Delete(root);
+
+                        if (err == ESP_OK) {
+                            char resp[80];
+                            snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
+                            transport_write(tp_usb, (const uint8_t *)resp, strlen(resp), PROVISION_TX_TIMEOUT);
+                            ESP_LOGI(TAG, "Provisioning complete via %s", tp_usb->name);
+                            provision_release_transport(tp_usb);
+                            provision_release_transport(tp_uart);
+                            return;
+                        } else {
+                            const char *err_resp = "{\"ok\":false,\"error\":\"nvs_write_failed\"}\n";
+                            transport_write(tp_usb, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                        }
+                    }
+                } else if (line_pos_usb < MAX_LINE_LEN - 1) {
+                    line_usb[line_pos_usb++] = (char)ch;
+                } else {
+                    // Line too long — flush buffer
+                    line_pos_usb = 0;
+                }
+                // Continue to next iteration to maintain fair polling
+                continue;
+            }
         }
 
-        if (ch == '\r') {
-            continue; // ignore CR
-        }
+        // Try UART0
+        if (uart_available) {
+            n = transport_read(tp_uart, &ch, 1, pdMS_TO_TICKS(25));
+            if (n > 0) {
+                // Character received on UART transport
+                if (ch == '\r') {
+                    // ignore CR
+                } else if (ch == '\n') {
+                    line_uart[line_pos_uart] = '\0';
+                    line_pos_uart = 0;
 
-        if (ch == '\n') {
-            line[line_pos] = '\0';
-            line_pos = 0;
+                    if (strlen(line_uart) > 0) {
+                        // Process the JSON payload
+                        cJSON *root = cJSON_Parse(line_uart);
+                        if (!root) {
+                            const char *err_resp = "{\"ok\":false,\"error\":\"invalid_json\"}\n";
+                            transport_write(tp_uart, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                            continue;
+                        }
 
-            if (strlen(line) == 0) {
-                continue;
+                        cJSON *prov = cJSON_GetObjectItem(root, "provision");
+                        if (!prov) {
+                            cJSON_Delete(root);
+                            const char *err_resp = "{\"ok\":false,\"error\":\"missing_provision_key\"}\n";
+                            transport_write(tp_uart, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                            continue;
+                        }
+
+                        esp_err_t err = provision_write_nvs(prov);
+                        cJSON_Delete(root);
+
+                        if (err == ESP_OK) {
+                            char resp[80];
+                            snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
+                            transport_write(tp_uart, (const uint8_t *)resp, strlen(resp), PROVISION_TX_TIMEOUT);
+                            ESP_LOGI(TAG, "Provisioning complete via %s", tp_uart->name);
+                            provision_release_transport(tp_usb);
+                            provision_release_transport(tp_uart);
+                            return;
+                        } else {
+                            const char *err_resp = "{\"ok\":false,\"error\":\"nvs_write_failed\"}\n";
+                            transport_write(tp_uart, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                        }
+                    }
+                } else if (line_pos_uart < MAX_LINE_LEN - 1) {
+                    line_uart[line_pos_uart++] = (char)ch;
+                } else {
+                    // Line too long — flush buffer
+                    line_pos_uart = 0;
+                }
             }
-
-            cJSON *root = cJSON_Parse(line);
-            if (!root) {
-                const char *err_resp = "{\"ok\":false,\"error\":\"invalid_json\"}\n";
-                transport_write(tp, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
-                continue;
-            }
-
-            cJSON *prov = cJSON_GetObjectItem(root, "provision");
-            if (!prov) {
-                cJSON_Delete(root);
-                const char *err_resp = "{\"ok\":false,\"error\":\"missing_provision_key\"}\n";
-                transport_write(tp, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
-                continue;
-            }
-
-            esp_err_t err = provision_write_nvs(prov);
-            cJSON_Delete(root);
-
-            if (err == ESP_OK) {
-                char resp[80];
-                snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
-                transport_write(tp, (const uint8_t *)resp, strlen(resp), PROVISION_TX_TIMEOUT);
-                ESP_LOGI(TAG, "Provisioning complete via %s", tp->name);
-                provision_release_transport(tp);
-                return;
-            } else {
-                const char *err_resp = "{\"ok\":false,\"error\":\"nvs_write_failed\"}\n";
-                transport_write(tp, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
-            }
-        } else if (line_pos < MAX_LINE_LEN - 1) {
-            line[line_pos++] = (char)ch;
-        } else {
-            // Line too long — flush buffer
-            line_pos = 0;
         }
     }
 
     ESP_LOGI(TAG, "Provisioning window closed (no provisioning received)");
-    provision_release_transport(tp);
+    provision_release_transport(tp_usb);
+    provision_release_transport(tp_uart);
 }
 
 esp_err_t provision_write_nvs(cJSON *prov) {
