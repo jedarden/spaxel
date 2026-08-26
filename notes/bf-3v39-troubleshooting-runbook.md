@@ -36,44 +36,51 @@ minicom -D /dev/ttyUSB0 -b 115200
 
 ## Step 2: Verify NVS Configuration
 
-The ESP32 must have the correct home AP BSSID in NVS key `passive_bss`.
+The ESP32 must have the correct home AP BSSID in the `spaxel` NVS namespace,
+key `passive_bss`. It is a 6-byte blob, not a string. The similarly named
+`passive_bssid` is the JSON field used in a runtime `role` message; it is not
+the persisted NVS key.
 
-### Check Current Configuration via Serial
-Send the following command via serial console:
-```
-nvs列表
-```
--or-
-```
-nvs_dump
+### Check Current Configuration
+
+1. Connect the node's USB-Serial/JTAG console at 115200 baud and capture the
+   boot log.
+2. If a raw flash dump is needed, read the NVS partition using the actual board
+   port and the offsets in `firmware/partitions.csv`:
+
+   ```bash
+   esptool.py --port /dev/ttyACM0 read_flash 0x9000 0x6000 nvs.bin
+   ```
+
+3. Decode `nvs.bin` with an ESP-IDF version-matched NVS inspection tool. In
+   namespace `spaxel`, expect `passive_bss` to contain six bytes formatted as
+   the home AP BSSID, for example `AA:BB:CC:DD:EE:FF`.
+
+The shipped firmware does not provide a supported `nvs_dump` or `nvs_set`
+serial shell command. Do not substitute the old `passive_bssid` spelling when
+inspecting the NVS key.
+
+### Correct a Missing or Incorrect BSSID
+
+For immediate runtime recovery, use the authenticated dashboard role control
+with the JSON field `passive_bssid`:
+
+```json
+{"role":"passive","passive_bssid":"AA:BB:CC:DD:EE:FF"}
 ```
 
-**Expected Output:**
-```
-passive_bss: "AA:BB:CC:DD:EE:FF"  # Your home AP's BSSID
-```
+Then reboot only after confirming the serial log shows the expected passive
+BSSID and CSI activity. The current firmware's provisioning writer does not
+write `passive_bss`, and the runtime role handler updates the in-memory BSSID;
+therefore verify persistence after a reboot and treat a missing key as a
+firmware/provisioning follow-up rather than assuming the runtime command was
+durable.
 
-### If Missing or Incorrect
-
-**Option A: Use Serial Console to Set**
-```
-nvs_set passive_bssid "AA:BB:CC:DD:EE:FF"
-nvs_commit
-restart
-```
-
-**Option B: Use Web Provisioning (if available)**
-1. Connect to ESP32's setup AP (usually "spaxel-setup-XXXXXX")
-2. Navigate to http://192.168.4.1
-3. Configure WiFi credentials and BSSID
-4. Save and restart
-
-**Option C: Reflash with Correct Config**
-```bash
-# In firmware directory
-make erase_flash
-make flash_with_correct_bssid
-```
+If the BSSID is wrong, obtain the value from the router's 2.4 GHz radio (not a
+client MAC), apply the runtime role update, and repeat the persistence check.
+Avoid erasing NVS unless the operator has a replacement provisioning payload:
+that partition also contains WiFi credentials, node identity, token, and
+mothership settings.
 
 ## Step 3: Verify WiFi Connection
 
@@ -289,5 +296,5 @@ If issues persist after this runbook:
 
 ---
 
-**Last Updated:** 2026-08-24
+**Last Updated:** 2026-08-26 UTC
 **Bead Reference:** bf-3v39, spaxel-9c1a4858
