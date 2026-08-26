@@ -44,6 +44,12 @@ static void provision_release_transport(transport_t *tp) {
 }
 
 void provision_listen_window(void) {
+    // Flag to track provisioning completion - prevents double-provisioning if both
+    // transports receive payloads concurrently. Set immediately after successful
+    // NVS write; checked before processing any payload.
+    static bool provisioning_completed = false;
+    provisioning_completed = false;  // Reset for each window
+
     // Get both transports for concurrent dual-transport listening.
     transport_t *tp_usb = transport_usb_serial_jtag();
     transport_t *tp_uart = transport_uart0();
@@ -127,6 +133,14 @@ void provision_listen_window(void) {
                     line_pos_usb = 0;
 
                     if (strlen(line_usb) > 0) {
+                        // Check if provisioning already completed on the other transport
+                        if (provisioning_completed) {
+                            const char *err_resp = "{\"ok\":false,\"error\":\"already_provisioned\"}\n";
+                            transport_write(tp_usb, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                            ESP_LOGW(TAG, "Ignoring duplicate provisioning payload on %s (already completed)", tp_usb->name);
+                            continue;
+                        }
+
                         // Process the JSON payload
                         cJSON *root = cJSON_Parse(line_usb);
                         if (!root) {
@@ -147,6 +161,7 @@ void provision_listen_window(void) {
                         cJSON_Delete(root);
 
                         if (err == ESP_OK) {
+                            provisioning_completed = true;  // Set flag immediately after successful NVS write
                             char resp[80];
                             snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
                             transport_write(tp_usb, (const uint8_t *)resp, strlen(resp), PROVISION_TX_TIMEOUT);
@@ -182,6 +197,14 @@ void provision_listen_window(void) {
                     line_pos_uart = 0;
 
                     if (strlen(line_uart) > 0) {
+                        // Check if provisioning already completed on the other transport
+                        if (provisioning_completed) {
+                            const char *err_resp = "{\"ok\":false,\"error\":\"already_provisioned\"}\n";
+                            transport_write(tp_uart, (const uint8_t *)err_resp, strlen(err_resp), PROVISION_TX_TIMEOUT);
+                            ESP_LOGW(TAG, "Ignoring duplicate provisioning payload on %s (already completed)", tp_uart->name);
+                            continue;
+                        }
+
                         // Process the JSON payload
                         cJSON *root = cJSON_Parse(line_uart);
                         if (!root) {
@@ -202,6 +225,7 @@ void provision_listen_window(void) {
                         cJSON_Delete(root);
 
                         if (err == ESP_OK) {
+                            provisioning_completed = true;  // Set flag immediately after successful NVS write
                             char resp[80];
                             snprintf(resp, sizeof(resp), "{\"ok\":true,\"mac\":\"%s\"}\n", mac_str);
                             transport_write(tp_uart, (const uint8_t *)resp, strlen(resp), PROVISION_TX_TIMEOUT);
