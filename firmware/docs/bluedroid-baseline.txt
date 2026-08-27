@@ -1,0 +1,51 @@
+Bluedroid Flash and RAM Baseline Measurement
+=============================================
+
+Date: 2026-08-27
+Build: ESP-IDF v5.2, Target ESP32-S3
+Configuration: CONFIG_BT_BLUEDROID_ENABLED=y
+
+TOTAL BLUEDROID USAGE
+---------------------
+Flash: 416,856 bytes (407 KB)
+RAM: 26,760 bytes (26 KB)
+
+COMPONENT BREAKDOWN
+-------------------
+
+1. libbt.a (Main Bluedroid Stack)
+   Flash: 344,809 bytes
+     - .text: 320,015 bytes
+     - .rodata: 24,085 bytes
+     - .rodata_noload: 0 bytes
+     - .appdesc: 709 bytes (padding)
+   RAM: 14,342 bytes
+     - DRAM: 99 bytes
+     - .data: 13,633 bytes
+     - .bss: 610 bytes
+     - IRAM0 .text: 0 bytes
+
+2. libbtdm_app.a (Bluetooth Data Model Application)
+   Flash: 72,047 bytes
+     - .text: 47,877 bytes
+     - .rodata: 12,406 bytes
+   RAM: 12,418 bytes
+     - DRAM: 387 bytes
+     - .data: 654 bytes
+     - .bss: 11,377 bytes
+     - IRAM0 .text: 0 bytes
+
+TOTAL FIRMWARE IMAGE CONTEXT
+-----------------------------
+Total Flash: 1,598,403 bytes (1.52 MB)
+Total Image: 1,718,673 bytes (1.64 MB)
+
+Bluedroid represents: 26.1% of flash, 18.6% of RAM
+
+NOTES
+-----
+- Baseline measured before NimBLE migration evaluation
+- Configuration: BLE-only (CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y)
+- Flash usage is significant; NimBLE may offer reduction
+- RAM usage is moderate; NimBLE may offer improvement
+- Next step: Measure NimBLE baseline for comparison
