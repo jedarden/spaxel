@@ -125,9 +125,6 @@ func (d *DiagnosticHelper) periodicDump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	// Initial dump
-	d.dumpGoroutines("initial")
-
 	for {
 		select {
 		case <-d.stopChan:
