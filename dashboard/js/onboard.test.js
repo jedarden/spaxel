@@ -529,6 +529,10 @@ describe('CSI frame parser', () => {
 describe('Wizard lifecycle', () => {
     beforeEach(resetWizardState);
 
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
     test('SpaxelOnboard is defined on window', () => {
         expect(SpaxelOnboard).toBeDefined();
         expect(typeof SpaxelOnboard.start).toBe('function');
