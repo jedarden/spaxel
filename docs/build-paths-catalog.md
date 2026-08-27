@@ -1,376 +1,399 @@
 # Spaxel Build Paths Catalog
 
+**Purpose:** This document identifies all file paths in the spaxel repository that contain substantive code requiring rebuilds and deployments. Changes to these paths should trigger the appropriate build pipeline and deployment processes.
+
 **Last updated:** 2026-08-27
 
-This document identifies all file paths in the spaxel repository that contain substantive code requiring spaxel rebuilds and deployments. Changes to these paths should trigger appropriate build pipelines and deployment cycles.
+---
 
 ## Overview
 
-Spaxel is a multi-component system with separate build artifacts:
-- **ESP32-S3 firmware** (C, ESP-IDF)
-- **Mothership** (Go backend binary)
-- **Dashboard** (static HTML/JS/CSS, embedded via `go:embed`)
-- **CSI Simulator** (Go CLI tool)
-- **Acceptance tests** (Go test modules)
+Spaxel is a WiFi CSI-based indoor positioning system with three main components:
+1. **Firmware** - ESP32-S3 C code (ESP-IDF framework)
+2. **Mothership** - Go backend server
+3. **Dashboard** - Web UI (embedded into Go binary)
+
+This catalog categorizes paths by component and deployment impact.
 
 ---
 
-## 1. Firmware (`firmware/`)
+## 1. Firmware Code (ESP32-S3)
 
-**Build system:** ESP-IDF v5.2.x CMake
+### Core Application Code
+**Path:** `firmware/main/`
+**Impact:** Changes require ESP32-S3 firmware rebuild and OTA deployment to all nodes
 
-**Paths requiring firmware rebuild:**
+**Critical files:**
+- `firmware/main/main.c` - Application entry point, startup sequencing
+- `firmware/main/csi.c` / `csi.h` - CSI capture and processing
+- `firmware/main/wifi.c` / `wifi.h` - WiFi connection, mDNS, captive portal
+- `firmware/main/websocket.c` / `websocket.h` - WebSocket client, JSON/binary framing
+- `firmware/main/ble.c` / `ble.h` - BLE scanning and advertisement parsing
+- `firmware/main/provision.c` / `provision.h` - Serial provisioning protocol
+- `firmware/main/nvs_migration.c` / `nvs_migration.h` - NVS schema migration
+- `firmware/main/transport.c` / `transport.h` - Binary CSI frame serialization
+- `firmware/main/ntp.c` / `ntp.h` - NTP synchronization
+- `firmware/main/led.c` / `led.h` - LED control (identify, OTA progress)
+- `firmware/main/spaxel.h` - Shared firmware headers
 
-```
-firmware/
-├── main/                      # Main firmware source (ESP32-S3)
-│   ├── main.c                # Entry point, startup sequencing
-│   ├── wifi.c/h              # WiFi station, mDNS, captive portal
-│   ├── csi.c/h               # CSI capture, processing, frame serialization
-│   ├── ws.c/h                # WebSocket client (esp_websocket_client)
-│   ├── ble.c/h               # BLE passive scan, advertisement parsing
-│   ├── ota.c/h               # OTA download, SHA-256 verification
-│   ├── nvs.c/h               # NVS helpers, provisioning storage
-│   ├── nvs_migration.c/h     # NVS schema migration
-│   ├── serial_prov.c/h       # Serial provisioning listener
-│   ├── provision.c/h         # Provisioning JSON parser
-│   ├── sntp.c/h              # NTP time sync
-│   ├── led.c/h               # LED control (identify blink, OTA progress)
-│   ├── transport.c/h          # Transport layer abstractions
-│   └── CMakeLists.txt        # Component build config
-├── test/                      # Host-based tests (gcc harness)
-│   ├── test_*.c              # Unit tests (CSI framing, NVS migration, etc.)
-│   ├── test_runner.c/h       # Test harness
-│   └── Makefile              # Test build recipe
-├── CMakeLists.txt            # Top-level project config
-├── partitions.csv            # Flash partition layout (factory/ota_0/ota_1/nvs/otadata)
-├── sdkconfig.defaults        # ESP-IDF configuration defaults
-└── build/                    # ESP-IDF build output (generated)
-```
+**Build trigger:** Any change to these files requires:
+1. ESP-IDF rebuild (`idf.py build`)
+2. Firmware binary upload to GitHub Releases
+3. Mothership Docker image rebuild (to embed new firmware)
+4. OTA rollout to fleet
 
-**Trigger conditions:**
-- Any change to `firmware/main/*.c` or `firmware/main/*.h` requires firmware rebuild
-- Changes to `partitions.csv` or `sdkconfig.defaults` require full clean rebuild
-- Test code changes (`firmware/test/*.c`) do not affect production firmware
+### Firmware Build Configuration
+**Path:** `firmware/CMakeLists.txt`, `firmware/sdkconfig.defaults`
+**Impact:** Changes affect ESP32-S3 firmware build configuration
 
-**Build artifact:** `spaxel-firmware-merged.bin` (merged bootloader + partition table + app)
+**Critical settings:**
+- `CONFIG_ESP32S3_SPIRAM_SUPPORT=y`
+- `CONFIG_ESP_WIFI_PROMISCUOUS_FILTER=y`
+- `CONFIG_ESP_WIFI_CSI_ENABLED=y`
+- `CONFIG_BT_ENABLED=y`
+- `CONFIG_BT_BLE_ENABLED=y`
+- `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`
 
----
+**Build trigger:** Changes require firmware rebuild and redeployment
 
-## 2. Mothership (`mothership/`)
+### Firmware Tests
+**Path:** `firmware/test/`
+**Impact:** Changes to test code do NOT trigger production builds
 
-**Build system:** Go 1.25+ modules
+**Files:** (host-based gcc harness tests)
+- `firmware/test/test_*.c` - Unit tests (provisioning, CSI frame format, NVS migration)
+- `firmware/test/test_runner.h` - Test runner
 
-**Paths requiring mothership rebuild:**
-
-```
-mothership/
-├── cmd/
-│   └── mothership/
-│       ├── main.go           # Application entrypoint, startup sequencing
-│       └── dashboard/        # Dashboard static files (go:embed source)
-│           ├── index.html
-│           ├── *.html        # All dashboard pages
-│           ├── css/
-│           ├── js/
-│           ├── static/
-│           └── ...
-├── internal/                 # All internal packages (30+ modules)
-│   ├── ingestion/            # WebSocket server, binary frame parsing
-│   ├── pipeline/             # Signal processing pipeline
-│   │   ├── phase/           # Phase sanitization
-│   │   ├── nbvi/            # NBVI subcarrier selection
-│   │   ├── feature/         # deltaRMS, breathing band
-│   │   └── baseline/        # EMA baseline, diurnal slots
-│   ├── localizer/            # Fusion & localization
-│   │   ├── fresnel/         # Fresnel zone weighted localization
-│   │   ├── ukf/             # Biomechanical Kalman filter
-│   │   ├── gdop/            # Geometric dilution of precision
-│   │   └── fusion/          # Full localization loop (10 Hz)
-│   ├── fleet/                # Node registry, role assignment, TX stagger
-│   ├── ble/                  # BLE centroid, rotation heuristics, identity
-│   ├── portal/               # Room transition detection, zone occupancy
-│   ├── anomaly/              # Pattern learning, anomaly scoring
-│   ├── prediction/           # Presence prediction models
-│   ├── sleep/                # Sleep quality monitoring
-│   ├── flow/                 # Crowd flow accumulation
-│   ├── notify/               # Notification renderer (fogleman/gg)
-│   ├── mqtt/                 # MQTT client, HA auto-discovery
-│   ├── auth/                 # HMAC token derivation, session management
-│   ├── oui/                  # OUI lookup table
-│   ├── db/                   # SQLite migrations, schema management
-│   ├── config/               # Environment variable parsing
-│   ├── ota/                  # OTA update manager
-│   ├── apdetector/           # AP BSSID auto-detection for passive radar
-│   ├── provisioning/         # Node provisioning payload generation
-│   ├── replay/               # CSI replay buffer reader/writer
-│   ├── volume/               # 3D trigger volumes (spatial automation)
-│   ├── webhook/              # Webhook delivery
-│   ├── automation/           # Automation trigger evaluation
-│   ├── doctor/               # System health diagnostics
-│   ├── falldetect/           # Fall detection
-│   ├── floorplan/            # Floor plan management
-│   ├── guidedtroubleshoot/  # Contextual help system
-│   ├── health/               # Health check endpoint
-│   ├── loadshed/             # Pipeline overload management
-│   ├── ntpserver/            # NTP server for testing
-│   ├── recorder/             # CSI recording management
-│   ├── rendering/            # Dashboard 3D scene rendering
-│   ├── simulator/           # CSI simulator integration
-│   ├── startup/              # Startup sequencing
-│   ├── tracker/              # Blob tracking
-│   └── tracking/             # Multi-blob tracking
-├── go.mod                    # Go module definition
-├── go.sum                    # Go module checksums
-└── test/acceptance/          # In-module acceptance tests
-```
-
-**Trigger conditions:**
-- Any `.go` file change requires `mothership` binary rebuild
-- Dashboard static file changes require rebuild (embedded via `//go:embed`)
-- `go.mod`/`go.sum` changes require dependency re-resolution
-
-**Build artifact:** `spaxel` (static Linux binary, Go `net/http` stdlib + embedded dashboard)
+**Note:** These tests run during CI image build but do not affect runtime firmware
 
 ---
 
-## 3. CSI Simulator (`cmd/sim/`)
+## 2. Mothership (Go Backend)
 
-**Build system:** Go 1.25+ (separate module from mothership)
+### Core Application Code
+**Path:** `mothership/`
+**Impact:** Changes require Go binary rebuild and Docker image deployment
 
-**Paths requiring simulator rebuild:**
+**Entry point:**
+- `mothership/cmd/mothership/main.go` - Application startup, subsystem wiring
 
-```
-cmd/sim/
-├── main.go                   # Simulator CLI entry point
-├── csi.go                   # Synthetic CSI frame generation
-├── walker.go                # Random walk simulation
-├── ble.go                   # Simulated BLE advertisements
-├── websocket.go             # WebSocket client (virtual node)
-├── go.mod                    # Go module definition
-├── go.sum                    # Go module checksums
-└── Makefile                  # Build recipe
-```
+**Internal packages (all paths under `mothership/internal/`):**
 
-**Trigger conditions:**
-- Any `.go` file change requires `spaxel-sim` binary rebuild
-- Used for development/testing, not production deployments
+**Signal Processing & Localization:**
+- `mothership/internal/pipeline/` - CSI signal processing pipeline
+  - `phase/` - Phase sanitization (unwrap, OLS, STO/CFO removal)
+  - `nbvi/` - NBVI subcarrier selection
+  - `feature/` - deltaRMS, phase variance, breathing band
+  - `baseline/` - EMA baseline, diurnal slots, snapshots
+- `mothership/internal/localizer/` - Spatial localization
+  - `fresnel/` - Fresnel zone weighted accumulation
+  - `ukf/` - Biomechanical Unscented Kalman Filter
+  - `gdop/` - Geometric Dilution of Precision
+  - `fusion/` - Full 10Hz localization loop
 
-**Build artifact:** `spaxel-sim` (standalone CLI tool)
+**Fleet Management:**
+- `mothership/internal/fleet/` - Node registry, role assignment, stagger scheduling
+- `mothership/internal/ota/` - OTA updates, rolling deployment, rollback detection
 
----
+**Ingestion & Transport:**
+- `mothership/internal/ingestion/` - WebSocket server, binary frame parsing
+- `mothership/internal/recording/` - CSI replay buffer (append-only file)
 
-## 4. Dashboard (`dashboard/`)
+**Data Persistence:**
+- `mothership/internal/db/` - SQLite schema, migrations, queries
 
-**Build system:** None (static files, embedded via `//go:embed`)
+**API & Dashboard:**
+- `mothership/internal/api/` - REST API handlers
+- `mothership/internal/dashboard/` - WebSocket dashboard feed, snapshot/incremental updates
 
-**Paths requiring mothership rebuild (dashboard updated):**
+**Automation & Triggers:**
+- `mothership/internal/automation/` - Spatial automation builder
+- `mothership/internal/volume/` - Trigger volume point-in-tests
+- `mothership/internal/webhook/` - Webhook execution
 
-```
-dashboard/
-├── index.html               # Main 3D live view
-├── live.html                # Live view page
-├── simple.html              # Simple mode (card-based UI)
-├── ambient.html             # Ambient display mode
-├── setup.html               # Setup/calibration interface
-├── fleet.html               # Fleet status panel
-├── integrations.html        # Integration settings
-├── simulator.html           # Simulator UI
-├── test-*.html             # Test pages
-├── css/                     # Stylesheets
-│   └── *.css
-├── js/                      # JavaScript modules
-│   ├── *.js
-│   └── *.ts
-├── static/                  # Static assets
-│   ├── icons/
-│   ├── css/
-│   └── js/
-├── package.json             # npm dependencies (dev only, for testing)
-├── jest.config.js            # Jest test config
-├── playwright.config.js      # Playwright E2E config
-└── sw.js                    # Service worker
-```
+**Person Detection & Identity:**
+- `mothership/internal/ble/` - BLE scanning, centroid, rotation heuristics, identity matching
+- `mothership/internal/tracker/` - Blob tracking, ID assignment
 
-**Trigger conditions:**
-- Any file change requires mothership rebuild (dashboard is embedded)
-- Frontend has no separate build step — static files are served directly
-- `package.json` changes do NOT affect production (dev dependencies only)
+**Advanced Features:**
+- `mothership/internal/anomaly/` - Anomaly detection pattern learning
+- `mothership/internal/prediction/` - Presence prediction models
+- `mothership/internal/sleep/` - Sleep quality monitoring
+- `mothership/internal/falldetect/` - Fall detection alert chain
+- `mothership/internal/flow/` - Crowd flow accumulation
+- `mothership/internal/replay/` - Time-travel replay engine
+- `mothership/internal/simulator/` - CSI simulator integration
 
-**Deployment:** Embedded in mothership binary at `mothership/cmd/mothership/dashboard/`
+**Infrastructure:**
+- `mothership/internal/auth/` - HMAC token derivation, PIN bcrypt, sessions
+- `mothership/internal/config/` - Environment variable parsing
+- `mothership/internal/mqtt/` - MQTT client, HA auto-discovery
+- `mothership/internal/notify/` - Notification renderer (PNG thumbnails)
+- `mothership/internal/doctor/` - System health diagnostics
+- `mothership/internal/provisioning/` - Provisioning payload generation
+- `mothership/internal/oui/` - OUI lookup table (generated from IEEE registry)
+- `mothership/internal/startup/` - Startup sequencing
+- `mothership/internal/shutdown/` - Graceful shutdown
+- `mothership/internal/health/` - Health checks
+- `mothership/internal/loadshed/` - Load shedding under high CPU
+- `mothership/internal/events/` - Unified event timeline
+- `mothership/internal/timeline/` - Timeline management
+- `mothership/internal/zones/` - Zone management
+- `mothership/internal/apdetector/` - AP auto-detection for passive radar
+- `mothership/internal/ntpserver/` - NTP server for nodes
+- `mothership/internal/briefing/` - Morning briefing generation
+- `mothership/internal/guidedtroubleshoot/` - Contextual help system
+- `mothership/internal/explainability/` - Detection explanation UI data
+- `mothership/internal/diagnostics/` - Per-link diagnostics
+- `mothership/internal/diskpace/` - Disk space monitoring
+- `mothership/internal/eventbus/` - Event bus
+- `mothership/internal/help/` - Help system
+- `mothership/internal/learning/` - Learning models
+- `mothership/internal/portal/` - Portal crossing detection
+- `mothership/internal/tracking/` - Person tracking
+- `mothership/internal/volume/` - Spatial volumes
+- `mothership/internal/webhook/` - Webhook client
 
----
+**Go module definition:**
+- `mothership/go.mod` - Go module dependencies
+- `mothership/go.sum` - Dependency checksums
 
-## 5. Acceptance Tests (`test/acceptance/`)
-
-**Build system:** Go 1.25+ (separate module)
-
-**Paths requiring test module rebuild:**
-
-```
-test/acceptance/
-├── *.go                     # Acceptance/integration tests
-├── go.mod                    # Go module definition
-├── go.sum                    # Go module checksums
-└── run_with_diagnostics.sh  # Test runner script
-```
-
-**Trigger conditions:**
-- Any `.go` file change requires test module rebuild
-- Tests run against running mothership container (in-container or via Docker network)
-
----
-
-## 6. Build Configuration Files
-
-**Paths requiring Docker image rebuild:**
-
-```
-/
-├── Dockerfile               # Multi-stage build (firmware + Go + distroless runtime)
-├── docker-compose.yml        # Deployment manifest
-├── VERSION                  # Single source of truth for release version
-├── go.work                  # Go workspace stitching (mothership + cmd/sim + test/acceptance)
-└── go.work.sum              # Go workspace checksum
-```
-
-**Trigger conditions:**
-- `Dockerfile` changes require new Docker image build
-- `docker-compose.yml` changes require deployment re-application
-- `VERSION` changes trigger CI auto-bump and new image tag
-- `go.work`/`go.work.sum` changes affect Go module resolution
+**Build trigger:** Any change to Go source files requires:
+1. Go binary rebuild (`go build`)
+2. Docker image rebuild
+3. Container deployment
 
 ---
 
-## 7. E2E Test Harness (`tests/e2e/`)
+## 3. Dashboard (Web UI)
 
-**Shell-based integration tests**
+### Dashboard Files
+**Path:** `dashboard/`
+**Impact:** Changes require Go binary rebuild (dashboard embedded via `go:embed`)
 
-```
-tests/e2e/
-└── run.sh                   # E2E test harness script
-```
+**Core files:**
+- `dashboard/index.html` - Main dashboard entry point
+- `dashboard/live.html` - Live 3D view
+- `dashboard/simple.html` - Simple mode (card-based)
+- `dashboard/ambient.html` - Ambient mode (wall-mounted display)
+- `dashboard/setup.html` - Setup/calibration view
+- `dashboard/fleet.html` - Fleet status table
+- `dashboard/integrations.html` - Integrations configuration
+- `dashboard/simulator.html` - Pre-deployment simulator
+- `dashboard/test-transformcontrols.html` - TransformControls test page
 
-**Trigger conditions:**
-- Changes to test harness do NOT affect production builds
-- Used for validation during CI, not for deployment
+**JavaScript application code:**
+- `dashboard/js/` - All application JavaScript files
+  - `blob-identity.js` - BLE-to-blob identity matching
+  - `linkhealth.js` - Link health visualization
+  - `placement.js` - Node placement UI
+  - (and all other `.js` files in `dashboard/js/`)
 
----
+**Service worker:**
+- `dashboard/sw.js` - Service worker for offline support
 
-## 8. Documentation & Notes (No Build Impact)
+**Build configuration:**
+- `dashboard/package.json` - NPM dependencies for dev tools
 
-**Paths that do NOT trigger builds:**
+**Tests:**
+- `dashboard/tests/` - Accessibility tests (axe-core)
+- `dashboard/jest.config.js` - Jest config
+- `dashboard/playwright.config.js` - Playwright config
 
-```
-docs/
-├── plan/
-│   └── plan.md              # Implementation plan (this file)
-├── notes/                   # Design notes, research
-├── research/                # Third-party research
-└── tests/                   # Test documentation
+**Note:** Dashboard is embedded into the Go binary at build time via `go:embed` directive in `cmd/mothership/main.go`. Changes to any dashboard file require a mothership binary rebuild.
 
-notes/                        # Additional operational notes
-README.md                     # Project README
-PROGRESS.md                   # Implementation progress tracking
-*.md                         # All markdown documentation
-scripts/                     # Utility scripts (not build-critical)
-```
-
----
-
-## Path Filter Implementation
-
-This catalog feeds directly into CI/CD path filtering. The following patterns should trigger builds:
-
-**Trigger firmware build:**
-- `firmware/main/**/*.{c,h}`
-- `firmware/CMakeLists.txt`
-- `firmware/partitions.csv`
-- `firmware/sdkconfig.defaults`
-
-**Trigger mothership build:**
-- `mothership/**/*.go`
-- `mothership/go.mod`
-- `mothership/go.sum`
-- `dashboard/**/*` (embedded in mothership)
-- `cmd/mothership/**/*`
-
-**Trigger Docker image build:**
-- `Dockerfile`
-- `docker-compose.yml`
-- `VERSION`
-
-**Trigger simulator build:**
-- `cmd/sim/**/*.go`
-- `cmd/sim/go.mod`
-- `cmd/sim/go.sum`
-
-**Do NOT trigger builds (documentation only):**
-- `docs/**/*.md`
-- `notes/**/*.md`
-- `*.md`
-- `scripts/**/*`
-- `tests/e2e/**/*`
+**Build trigger:** Any change to dashboard files requires:
+1. Go binary rebuild (to re-embed dashboard)
+2. Docker image rebuild
+3. Container deployment
 
 ---
 
-## Deployment Strategy
+## 4. Simulator & Test Tools
 
-Per ADR-009, automatic convergence is the target state. Deploying mothership version X should converge the fleet onto firmware X. The following sequence ensures consistency:
+### CSI Simulator
+**Path:** `cmd/sim/`
+**Impact:** Changes require simulator binary rebuild
 
-1. **Code changes** in any path above trigger appropriate build
-2. **VERSION** bump (automatic via CI for substantive commits)
-3. **Firmware build** produces versioned artifact: `spaxel-firmware-<VERSION>.bin`
-4. **Mothership build** produces binary: `spaxel` (with embedded dashboard and firmware seed)
-5. **Docker image** published as: `ghcr.io/spaxel/spaxel:<VERSION>`
-6. **Deployment** updates mothership, which seeds firmware and triggers OTA convergence
+**Files:**
+- `cmd/sim/main.go` - Simulator entry point
+- `cmd/sim/go.mod` - Go module definition
+
+**Build trigger:** Changes require simulator rebuild (included in Docker image)
+
+### Acceptance Tests
+**Path:** `test/acceptance/`, `mothership/test/acceptance/`
+**Impact:** Changes do NOT trigger production builds (test-only code)
+
+**Note:** These tests use `spaxel-sim` to validate end-to-end behavior
 
 ---
 
-## Usage in Path Filters
+## 5. Docker & Deployment Configuration
 
-CI/CD systems can use this catalog to configure path-based triggers:
+### Container Build
+**Path:** `Dockerfile`
+**Impact:** Changes require full Docker rebuild and redeployment
 
-```yaml
-# Example GitHub Actions / Argo Workflows path filter
-trigger_firmware:
-  paths:
-    - 'firmware/main/**/*.{c,h}'
-    - 'firmware/CMakeLists.txt'
-    - 'firmware/partitions.csv'
-    - 'firmware/sdkconfig.defaults'
+**What it controls:**
+- Multi-stage build process (firmware fetcher, Go builder, runtime)
+- Build arguments (VERSION, TARGETPLATFORM, TARGETARCH)
+- Binary compilation flags (CGO_ENABLED=0, go build tags)
+- Volume mounts (/data)
+- Exposed ports (8080)
+- Entry point (/spaxel)
 
-trigger_mothership:
-  paths:
-    - 'mothership/**/*.go'
-    - 'mothership/go.mod'
-    - 'mothership/go.sum'
-    - 'dashboard/**/*'
-    - 'cmd/mothership/**/*'
+**Build trigger:** Changes require:
+1. Docker image rebuild (`docker buildx build`)
+2. Container registry push
+3. Kubernetes deployment update
 
-trigger_image:
-  paths:
-    - 'Dockerfile'
-    - 'docker-compose.yml'
-    - 'VERSION'
+### Container Orchestration
+**Path:** `docker-compose.yml`
+**Impact:** Changes require Docker Compose redeployment
 
-trigger_simulator:
-  paths:
-    - 'cmd/sim/**/*.go'
-    - 'cmd/sim/go.mod'
-    - 'cmd/sim/go.sum'
+**What it controls:**
+- Service configuration (image, ports, volumes, environment)
+- Network mode (host networking for mDNS)
+- Resource limits (memory, CPU)
+- Health checks
+- Restart policy
+- Traefik labels for ingress
 
-documentation_only:
-  paths:
-    - 'docs/**/*.md'
-    - 'notes/**/*.md'
-    - '*.md'
-    - 'README.md'
-    - 'PROGRESS.md'
+**Build trigger:** Changes require `docker compose up -d` or equivalent deployment update
+
+---
+
+## 6. Build System & Versioning
+
+### Go Workspace
+**Path:** `go.work`, `go.work.sum`
+**Impact:** Changes affect Go module resolution
+
+**Purpose:** Defines multi-module workspace (mothership, cmd/sim, test/acceptance)
+
+### Version File
+**Path:** `VERSION`
+**Impact:** Changes trigger versioned builds
+
+**Purpose:** Single source of truth for release version (e.g., "0.2.94")
+
+**Build trigger:** Version bump should trigger:
+1. Firmware build with new version
+2. Go binary build with version ldflag
+3. Docker image build with version tag
+4. GitHub Release creation
+
+---
+
+## 7. Scripts & Tools (Non-Build-Triggering)
+
+### Operational Scripts
+**Path:** `scripts/`
+**Impact:** Changes do NOT trigger builds (runtime utilities)
+
+**Examples:**
+- `scripts/provision_esp32.py` - ESP32 provisioning helper
+- `scripts/measure_csi_rate.py` - CSI rate measurement
+
+### Developer Scripts
+**Path:** Root-level `.sh` files
+**Impact:** Changes do NOT trigger builds (development tools)
+
+**Examples:**
+- `blob_observation.sh` - Blob observation helper
+- `window_test.sh` - Window testing script
+
+---
+
+## 8. Documentation (Non-Build-Triggering)
+
+### Documentation Paths
+**Paths:** `docs/`, `notes/`, various `*.md` files
+**Impact:** Changes do NOT trigger builds
+
+**Exceptions:** None - documentation changes never require rebuilds
+
+---
+
+## Build Trigger Summary
+
+| Component | Path | Rebuild Required | Deployment Required |
+|-----------|------|------------------|---------------------|
+| **Firmware** | `firmware/main/*.c`, `firmware/main/*.h` | Yes (ESP-IDF) | Yes (OTA) |
+| **Firmware Config** | `firmware/CMakeLists.txt`, `firmware/sdkconfig.defaults` | Yes (ESP-IDF) | Yes (OTA) |
+| **Mothership** | `mothership/**/*.go` | Yes (Go build) | Yes (Docker) |
+| **Dashboard** | `dashboard/**/*` (all HTML, JS, etc.) | Yes (Go build for embed) | Yes (Docker) |
+| **Simulator** | `cmd/sim/**/*.go` | Yes (Go build) | Yes (Docker) |
+| **Dockerfile** | `Dockerfile` | Yes (Docker build) | Yes (Docker) |
+| **Compose** | `docker-compose.yml` | No | Yes (Compose) |
+| **Version** | `VERSION` | Yes (all builds) | Yes (all deployments) |
+| **Go Workspace** | `go.work`, `go.work.sum` | Yes (Go build) | Yes (Docker) |
+| **Tests** | `firmware/test/`, `test/acceptance/`, `mothership/test/` | No | No |
+| **Scripts** | `scripts/**/*`, `*.sh` | No | No |
+| **Docs** | `docs/**/*`, `*.md` | No | No |
+
+---
+
+## Implementation Notes
+
+### CI/CD Integration
+
+This catalog feeds directly into CI path filters. For the `spaxel-build` WorkflowTemplate:
+
+1. **Firmware builds** should trigger on changes to:
+   - `firmware/main/**`
+   - `firmware/CMakeLists.txt`
+   - `firmware/sdkconfig.defaults`
+
+2. **Go/mothership builds** should trigger on changes to:
+   - `mothership/**`
+   - `cmd/sim/**`
+   - `dashboard/**`
+   - `go.work`
+   - `VERSION`
+   - `Dockerfile`
+
+3. **Documentation-only commits** should skip all build steps (ADR-009 decision 3)
+
+### Path Filter Example
+
+For a git-commit-based trigger:
+```bash
+# Firmware build trigger
+git diff --name-only HEAD~1 HEAD | grep -qE '^firmware/(main/|CMakeLists.txt|sdkconfig.defaults)'
+
+# Go build trigger
+git diff --name-only HEAD~1 HEAD | grep -qE '^(mothership|cmd/sim|dashboard|go\.work|VERSION|Dockerfile)/'
+
+# Skip builds for docs-only commits
+git diff --name-only HEAD~1 HEAD | grep -qvE '^(\.md|docs/|notes/|README)'
 ```
 
+### Deployment Impact Levels
+
+**Critical Impact (requires OTA rollout):**
+- Any firmware change
+- Changes protocol between mothership and nodes
+
+**High Impact (requires container redeployment):**
+- Mothership Go code changes
+- Dashboard changes
+- Dockerfile changes
+
+**Medium Impact (requires orchestration update):**
+- docker-compose.yml changes
+
+**Low Impact (no deployment):**
+- Test code changes
+- Documentation updates
+- Script changes
+
 ---
 
-**Related ADRs:**
-- ADR-001: Decouple ESP32 firmware build from mothership image
-- ADR-009: Automatic convergence of mothership and node firmware versions
+## Related Documentation
+
+- `docs/plan/plan.md` - Full system architecture
+- `ADR-001` - Decoupling firmware build from mothership image
+- `ADR-009` - Automatic convergence enforcement
+- `PROGRESS.md` - Implementation status
