@@ -1054,10 +1054,11 @@ func (s *Server) GetConnectedNodes() []string {
 
 // NodeInfo represents a connected node's state for dashboard
 type NodeInfo struct {
-	MAC             string `json:"mac"`
-	FirmwareVersion string `json:"firmware_version,omitempty"`
-	Chip            string `json:"chip,omitempty"`
-	Unpaired        bool   `json:"unpaired,omitempty"`
+	MAC            string  `json:"mac"`
+	FirmwareVersion string  `json:"firmware_version,omitempty"`
+	Chip           string  `json:"chip,omitempty"`
+	Unpaired       bool    `json:"unpaired,omitempty"`
+	FreeHeapBytes  int64   `json:"free_heap_bytes,omitempty"`
 }
 
 // GetConnectedNodesInfo returns detailed info about connected nodes
@@ -1071,6 +1072,9 @@ func (s *Server) GetConnectedNodesInfo() []NodeInfo {
 		if nc.Hello != nil {
 			info.FirmwareVersion = nc.Hello.FirmwareVersion
 			info.Chip = nc.Hello.Chip
+		}
+		if nc.LastHealth != nil {
+			info.FreeHeapBytes = nc.LastHealth.FreeHeapBytes
 		}
 		nodes = append(nodes, info)
 	}
