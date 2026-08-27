@@ -1,21 +1,21 @@
 [{
   "meta": {
     "testFile": "onboard.test.js",
-    "timestamp": "2026-08-24T07:37:37.496Z",
+    "timestamp": "2026-08-27T11:57:52.582Z",
     "duration": null
   },
   "snapshots": {
     "beforeTest": {
       "id": 1,
-      "timestamp": "2026-08-24T07:37:34.042Z",
+      "timestamp": "2026-08-27T11:57:49.127Z",
       "label": "before-all-tests",
       "heap": {
-        "heapUsed": 56,
-        "heapTotal": 85,
-        "external": 3,
-        "rss": 147,
-        "heapUsedBytes": 58401008,
-        "heapTotalBytes": 89513984
+        "heapUsed": 63,
+        "heapTotal": 91,
+        "external": 4,
+        "rss": 152,
+        "heapUsedBytes": 65792264,
+        "heapTotalBytes": 95100928
       },
       "timers": {
         "intervals": 0,
@@ -27,28 +27,28 @@
         "instances": []
       },
       "process": {
-        "pid": 3810427,
+        "pid": 1316713,
         "uptime": 1,
         "memoryUsage": {
-          "rss": 153759744,
-          "heapTotal": 89513984,
-          "heapUsed": 58404928,
-          "external": 3658851,
-          "arrayBuffers": 1323180
+          "rss": 159354880,
+          "heapTotal": 95100928,
+          "heapUsed": 65796184,
+          "external": 3548115,
+          "arrayBuffers": 1206510
         }
       }
     },
     "afterTest": {
       "id": 2,
-      "timestamp": "2026-08-24T07:37:37.493Z",
+      "timestamp": "2026-08-27T11:57:52.579Z",
       "label": "after-all-tests",
       "heap": {
-        "heapUsed": 67,
-        "heapTotal": 95,
+        "heapUsed": 76,
+        "heapTotal": 107,
         "external": 3,
-        "rss": 156,
-        "heapUsedBytes": 70052784,
-        "heapTotalBytes": 99307520
+        "rss": 169,
+        "heapUsedBytes": 79613584,
+        "heapTotalBytes": 112582656
       },
       "timers": {
         "intervals": 0,
@@ -60,22 +60,22 @@
         "instances": []
       },
       "process": {
-        "pid": 3810427,
-        "uptime": 4,
+        "pid": 1316713,
+        "uptime": 5,
         "memoryUsage": {
-          "rss": 163713024,
-          "heapTotal": 99307520,
-          "heapUsed": 70053560,
-          "external": 3542024,
-          "arrayBuffers": 1206353
+          "rss": 177139712,
+          "heapTotal": 112582656,
+          "heapUsed": 79614360,
+          "external": 3548115,
+          "arrayBuffers": 1206510
         }
       }
     }
   },
   "deltas": {
     "heap": {
-      "usedDelta": 11651776,
-      "usedDeltaMB": 11
+      "usedDelta": 13821320,
+      "usedDeltaMB": 13
     },
     "timers": {
       "timeoutDelta": 27,
@@ -92,9 +92,9 @@
       {
         "severity": "high",
         "type": "heap-growth",
-        "message": "Heap grew by 11.11 MB during test run",
-        "before": 56,
-        "after": 67
+        "message": "Heap grew by 13.18 MB during test run",
+        "before": 63,
+        "after": 76
       },
       {
         "severity": "medium",
