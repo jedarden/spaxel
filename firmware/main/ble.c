@@ -2,9 +2,10 @@
 #include "spaxel.h"
 #include "websocket.h"
 #include "esp_log.h"
-#include "esp_bt.h"
-#include "esp_bt_main.h"
-#include "esp_gap_ble_api.h"
+#include "esp_nimble_hci.h"
+#include "nimble/nimble_port.h"
+#include "host/ble_hs.h"
+#include "host/ble_gap.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -22,14 +23,35 @@ static TaskHandle_t s_ble_task = NULL;
 static volatile bool s_scanning = false;
 
 // Forward declarations
-static void gap_event_handler(esp_gap_ble_cb_event_t event,
-                               esp_ble_gap_cb_param_t *param);
 static void ble_scan_task(void *arg);
-static int find_device_by_addr(uint8_t *addr);
-static void update_or_add_device(esp_ble_gap_cb_param_t *param);
+static int find_device_by_addr(const uint8_t *addr);
+static void update_or_add_device(const struct ble_gap_disc_desc *desc);
+
+// NimBLE GAP event handling
+static int ble_gap_event(struct ble_gap_event *event, void *arg) {
+    switch (event->type) {
+        case BLE_GAP_EVENT_DISC:
+            // New device discovered or scan response received
+            update_or_add_device(&event->disc);
+            break;
+
+        case BLE_GAP_EVENT_DISC_COMPLETE:
+            ESP_LOGI(TAG, "BLE scan complete");
+            s_scanning = false;
+            break;
+
+        case BLE_GAP_EVENT_ADV_COMPLETE:
+            // No-op for scanning
+            break;
+
+        default:
+            break;
+    }
+    return 0;
+}
 
 esp_err_t ble_init(void) {
-    ESP_LOGI(TAG, "Initializing BLE");
+    ESP_LOGI(TAG, "Initializing BLE with NimBLE");
 
     // Create mutex for device cache
     s_devices_mutex = xSemaphoreCreateMutex();
@@ -38,134 +60,41 @@ esp_err_t ble_init(void) {
         return ESP_ERR_NO_MEM;
     }
 
-    // Initialize BT controller
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    // Initialize the NimBLE host
+    ble_hs_cfg.sync_cb = NULL;  // No sync callback needed for scan-only
+    ble_hs_cfg.gatts_register_cb = NULL;
+    ble_hs_cfg.store_status_cb = NULL;
+    ble_hs_cfg.reset_cb = NULL;
 
-    // Allocate BT controller memory from PSRAM if available
-    esp_err_t ret = esp_bt_controller_init(&bt_cfg);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to init BT controller: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // Enable BT controller in BLE only mode
-    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to enable BT controller: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // Initialize Bluedroid stack
-    esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
-    ret = esp_bluedroid_init_with_cfg(&bluedroid_cfg);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to init Bluedroid: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = esp_bluedroid_enable();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to enable Bluedroid: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // Register GAP callback
-    ret = esp_ble_gap_register_callback(gap_event_handler);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register GAP callback: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // Configure scan parameters
-    static esp_ble_scan_params_t scan_params = {
-        .scan_type = BLE_SCAN_TYPE_PASSIVE,
-        .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
-        .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
-        .scan_interval = 0x50,  // 50 ms
-        .scan_window = 0x30,    // 30 ms
-        .scan_duplicate = BLE_SCAN_DUPLICATE_ENABLE,
-    };
-
-    ret = esp_ble_gap_set_scan_params(&scan_params);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set scan params: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // Start BLE reporting task on Core 0
+    // Start BLE scanning task
     xTaskCreatePinnedToCore(ble_scan_task, "ble_scan", 4096, NULL, 5, &s_ble_task, 0);
 
-    ESP_LOGI(TAG, "BLE initialized");
+    ESP_LOGI(TAG, "BLE initialized with NimBLE");
     return ESP_OK;
 }
 
-static void gap_event_handler(esp_gap_ble_cb_event_t event,
-                               esp_ble_gap_cb_param_t *param) {
-    switch (event) {
-        case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
-            ESP_LOGD(TAG, "Scan params set complete");
-            break;
-
-        case ESP_GAP_BLE_SCAN_START_COMPLETE_EVT:
-            if (param->scan_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-                ESP_LOGE(TAG, "Scan start failed");
-            } else {
-                ESP_LOGI(TAG, "BLE scan started");
-                s_scanning = true;
-            }
-            break;
-
-        case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
-            if (param->scan_stop_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-                ESP_LOGE(TAG, "Scan stop failed");
-            } else {
-                ESP_LOGI(TAG, "BLE scan stopped");
-                s_scanning = false;
-            }
-            break;
-
-        case ESP_GAP_BLE_SCAN_RESULT_EVT:
-            if (param->scan_rst.search_evt == ESP_GAP_SEARCH_INQ_RES_EVT) {
-                update_or_add_device(param);
-            }
-            break;
-
-        default:
-            break;
-    }
-}
-
-static int find_device_by_addr(uint8_t *addr) {
-    for (int i = 0; i < s_device_count; i++) {
-        if (memcmp(s_devices[i].addr, addr, 6) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-static void update_or_add_device(esp_ble_gap_cb_param_t *param) {
+static void update_or_add_device(const struct ble_gap_disc_desc *desc) {
     xSemaphoreTake(s_devices_mutex, portMAX_DELAY);
 
-    int idx = find_device_by_addr(param->scan_rst.bda);
+    int idx = find_device_by_addr(desc->addr.val);
 
     if (idx >= 0) {
         // Update existing device
-        s_devices[idx].rssi = param->scan_rst.rssi;
-        s_devices[idx].addr_type = param->scan_rst.ble_addr_type;
+        s_devices[idx].rssi = desc->rssi;
+        s_devices[idx].addr_type = desc->addr.type;
     } else if (s_device_count < MAX_BLE_DEVICES) {
         // Add new device
         idx = s_device_count++;
-        memcpy(s_devices[idx].addr, param->scan_rst.bda, 6);
-        s_devices[idx].addr_type = param->scan_rst.ble_addr_type;
-        s_devices[idx].rssi = param->scan_rst.rssi;
+        memcpy(s_devices[idx].addr, desc->addr.val, 6);
+        s_devices[idx].addr_type = desc->addr.type;
+        s_devices[idx].rssi = desc->rssi;
         s_devices[idx].name[0] = '\0';
         s_devices[idx].mfr_id = 0;
         s_devices[idx].mfr_data_len = 0;
 
-        // Parse advertising data for name and manufacturer data
-        uint8_t *adv_data = param->scan_rst.ble_adv;
-        uint8_t adv_len = param->scan_rst.adv_data_len;
+        // Parse advertising data
+        const uint8_t *adv_data = desc->data;
+        uint8_t adv_len = desc->length_data;
 
         int i = 0;
         while (i < adv_len) {
@@ -196,7 +125,60 @@ static void update_or_add_device(esp_ble_gap_cb_param_t *param) {
     xSemaphoreGive(s_devices_mutex);
 }
 
+static int find_device_by_addr(const uint8_t *addr) {
+    for (int i = 0; i < s_device_count; i++) {
+        if (memcmp(s_devices[i].addr, addr, 6) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+esp_err_t ble_start_scan(void) {
+    if (s_scanning) {
+        return ESP_OK;
+    }
+
+    // Set scan parameters
+    struct ble_gap_disc_params scan_params = {
+        .itvl = 0x50,        // 50 ms
+        .window = 0x30,     // 30 ms
+        .filter_duplicates = 1,
+    };
+
+    // Start scanning (0 = own_addr_type public, 0 = duration_ms = infinite)
+    int rc = ble_gap_disc(0, 0, &scan_params, ble_gap_event, NULL);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Failed to start scan: %d", rc);
+        return ESP_FAIL;
+    }
+
+    s_scanning = true;
+    ESP_LOGI(TAG, "BLE scan started");
+    return ESP_OK;
+}
+
+esp_err_t ble_stop_scan(void) {
+    if (!s_scanning) {
+        return ESP_OK;
+    }
+
+    int rc = ble_gap_disc_cancel();
+    if (rc != 0 && rc != BLE_HS_EALREADY) {
+        ESP_LOGE(TAG, "Failed to stop scan: %d", rc);
+        return ESP_FAIL;
+    }
+
+    s_scanning = false;
+    ESP_LOGI(TAG, "BLE scan stopped");
+    return ESP_OK;
+}
+
 static void ble_scan_task(void *arg) {
+    // Wait for NimBLE host to start
+    // Small delay to ensure BLE host is ready
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
     // Start scanning
     ble_start_scan();
 
@@ -212,34 +194,6 @@ static void ble_scan_task(void *arg) {
             }
         }
     }
-}
-
-esp_err_t ble_start_scan(void) {
-    if (s_scanning) {
-        return ESP_OK;
-    }
-
-    esp_err_t ret = esp_ble_gap_start_scanning(0);  // 0 = continuous
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start scan: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    return ESP_OK;
-}
-
-esp_err_t ble_stop_scan(void) {
-    if (!s_scanning) {
-        return ESP_OK;
-    }
-
-    esp_err_t ret = esp_ble_gap_stop_scanning();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to stop scan: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    return ESP_OK;
 }
 
 char *ble_get_devices_json(void) {
