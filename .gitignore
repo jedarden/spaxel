@@ -62,3 +62,6 @@ __pycache__/
 .beads/events.jsonl
 .beads/traces/
 testdata/*.bin
+*.bin
+*.db-shm
+*.db-wal
