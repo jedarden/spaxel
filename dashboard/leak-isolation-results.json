@@ -1,0 +1,212 @@
+[
+  {
+    "testName": "fake-timers-with-cleanup",
+    "before": {
+      "id": 2,
+      "timestamp": "2026-08-27T12:11:13.711Z",
+      "label": "fake-timers-with-cleanup-before",
+      "heap": {
+        "heapUsed": 42,
+        "heapTotal": 81,
+        "external": 3,
+        "rss": 142,
+        "heapUsedBytes": 43826120,
+        "heapTotalBytes": 85266432
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 2,
+        "total": 2
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1372308,
+        "uptime": 6,
+        "memoryUsage": {
+          "rss": 149291008,
+          "heapTotal": 85266432,
+          "heapUsed": 43826896,
+          "external": 3509389,
+          "arrayBuffers": 1168822
+        }
+      }
+    },
+    "after": {
+      "id": 3,
+      "timestamp": "2026-08-27T12:11:17.749Z",
+      "label": "fake-timers-with-cleanup-after",
+      "heap": {
+        "heapUsed": 42,
+        "heapTotal": 81,
+        "external": 3,
+        "rss": 143,
+        "heapUsedBytes": 43642720,
+        "heapTotalBytes": 85266432
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 3,
+        "total": 3
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1372308,
+        "uptime": 6,
+        "memoryUsage": {
+          "rss": 149454848,
+          "heapTotal": 85266432,
+          "heapUsed": 43643496,
+          "external": 3509354,
+          "arrayBuffers": 1168822
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "wizard-lifecycle-with-aftereach",
+    "before": {
+      "id": 5,
+      "timestamp": "2026-08-27T12:11:18.158Z",
+      "label": "wizard-lifecycle-with-aftereach-before",
+      "heap": {
+        "heapUsed": 43,
+        "heapTotal": 51,
+        "external": 3,
+        "rss": 143,
+        "heapUsedBytes": 44579648,
+        "heapTotalBytes": 53284864
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 3,
+        "total": 3
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1372308,
+        "uptime": 11,
+        "memoryUsage": {
+          "rss": 149782528,
+          "heapTotal": 53284864,
+          "heapUsed": 44580424,
+          "external": 3509354,
+          "arrayBuffers": 1168822
+        }
+      }
+    },
+    "after": {
+      "id": 6,
+      "timestamp": "2026-08-27T12:11:22.795Z",
+      "label": "wizard-lifecycle-with-aftereach-after",
+      "heap": {
+        "heapUsed": 43,
+        "heapTotal": 54,
+        "external": 3,
+        "rss": 115,
+        "heapUsedBytes": 44661824,
+        "heapTotalBytes": 56692736
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 4,
+        "total": 4
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1372308,
+        "uptime": 11,
+        "memoryUsage": {
+          "rss": 120860672,
+          "heapTotal": 56692736,
+          "heapUsed": 44662696,
+          "external": 3509354,
+          "arrayBuffers": 1168822
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "settimeout-beforeall-hook",
+    "before": {
+      "id": 7,
+      "timestamp": "2026-08-27T12:11:22.804Z",
+      "label": "settimeout-beforeall-hook-before",
+      "heap": {
+        "heapUsed": 42,
+        "heapTotal": 54,
+        "external": 3,
+        "rss": 115,
+        "heapUsedBytes": 44393728,
+        "heapTotalBytes": 56692736
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 4,
+        "total": 4
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1372308,
+        "uptime": 11,
+        "memoryUsage": {
+          "rss": 120860672,
+          "heapTotal": 56692736,
+          "heapUsed": 44394520,
+          "external": 3509354,
+          "arrayBuffers": 1168822
+        }
+      }
+    },
+    "after": {
+      "id": 8,
+      "timestamp": "2026-08-27T12:11:22.813Z",
+      "label": "settimeout-beforeall-hook-after",
+      "heap": {
+        "heapUsed": 42,
+        "heapTotal": 54,
+        "external": 3,
+        "rss": 115,
+        "heapUsedBytes": 44259632,
+        "heapTotalBytes": 56692736
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 6,
+        "total": 6
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1372308,
+        "uptime": 11,
+        "memoryUsage": {
+          "rss": 120860672,
+          "heapTotal": 56692736,
+          "heapUsed": 44260424,
+          "external": 3509354,
+          "arrayBuffers": 1168822
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  }
+]
