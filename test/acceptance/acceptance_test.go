@@ -60,6 +60,7 @@ type TestHarness struct {
 	stderrBuf     *bytes.Buffer
 	webhookCalled bool
 	webhookMu     sync.Mutex
+	diagnostics   *DiagnosticHelper
 }
 
 // NewTestHarness creates a new test harness.
@@ -69,29 +70,52 @@ func NewTestHarness(t *testing.T) *TestHarness {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
-	return &TestHarness{
+	h := &TestHarness{
 		MothershipURL: defaultMothershipURL,
 		APIURL:        defaultMothershipURL,
 		DataDir:       dataDir,
 		t:             t,
 		stderrBuf:     &bytes.Buffer{},
 	}
+
+	// Initialize diagnostics
+	h.diagnostics = NewDiagnosticHelper(t)
+
+	return h
 }
 
 // Start starts the mothership process.
 func (h *TestHarness) Start(ctx context.Context) error {
+	if h.diagnostics != nil {
+		h.diagnostics.Start()
+		defer h.diagnostics.EnterPhase("mothership-start")
+	}
+
 	// Build mothership if needed
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("build-mothership")
+	}
 	mothershipBin := "/tmp/spaxel-mothership-acceptance"
 	if _, err := os.Stat(mothershipBin); os.IsNotExist(err) {
 		goCmd := findGoCmd()
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Building mothership binary")
+		}
 		buildCmd := exec.CommandContext(ctx, goCmd, "build", "-o", mothershipBin, "./mothership/cmd/mothership")
 		buildCmd.Dir = repoRoot()
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to build mothership: %w: %s", err, string(output))
 		}
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Mothership built successfully")
+		}
 	}
 
 	// Start mothership
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("launch-mothership")
+		h.diagnostics.LogEvent("Launching mothership with DataDir: %s", h.DataDir)
+	}
 	h.MothershipCmd = exec.CommandContext(ctx, mothershipBin)
 	h.MothershipCmd.Env = append(os.Environ(),
 		"SPAXEL_BIND_ADDR=127.0.0.1:8080",
@@ -103,14 +127,30 @@ func (h *TestHarness) Start(ctx context.Context) error {
 	h.MothershipCmd.Stderr = io.MultiWriter(os.Stderr, h.stderrBuf)
 
 	if err := h.MothershipCmd.Start(); err != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Failed to start mothership: %v", err)
+		}
 		return fmt.Errorf("failed to start mothership: %w", err)
 	}
 
+	if h.diagnostics != nil {
+		h.diagnostics.LogEvent("Mothership started (PID: %d)", h.MothershipCmd.Process.Pid)
+	}
 	h.t.Logf("Mothership started (PID: %d, DataDir: %s)", h.MothershipCmd.Process.Pid, h.DataDir)
 
 	// Wait for health check
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("health-check")
+		h.diagnostics.LogIO("GET", "/healthz (waiting for healthy)")
+	}
 	if err := h.WaitForHealth(ctx); err != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Health check failed: %v", err)
+		}
 		return fmt.Errorf("health check failed: %w", err)
+	}
+	if h.diagnostics != nil {
+		h.diagnostics.LogEvent("Health check passed")
 	}
 
 	return nil
@@ -118,52 +158,102 @@ func (h *TestHarness) Start(ctx context.Context) error {
 
 // Stop stops all processes.
 func (h *TestHarness) Stop() {
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("teardown")
+	}
+
 	if h.MothershipCmd != nil && h.MothershipCmd.Process != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Stopping mothership (PID: %d)", h.MothershipCmd.Process.Pid)
+		}
 		h.MothershipCmd.Process.Signal(os.Interrupt)
 		h.MothershipCmd.Wait()
 	}
 	if h.SimulatorCmd != nil && h.SimulatorCmd.Process != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Killing simulator")
+		}
 		h.SimulatorCmd.Process.Kill()
 		h.SimulatorCmd.Wait()
 	}
 	if h.WebhookServer != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Shutting down webhook server")
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		h.WebhookServer.Shutdown(ctx)
 	}
 	// Clean up data directory
 	if h.DataDir != "" {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Cleaning up data directory: %s", h.DataDir)
+		}
 		os.RemoveAll(h.DataDir)
+	}
+
+	if h.diagnostics != nil {
+		h.diagnostics.MemoryStats()
+		diagnosticsPath := h.diagnostics.GetDiagnosticsPath()
+		if diagnosticsPath != "" {
+			h.t.Logf("Full diagnostics written to: %s", diagnosticsPath)
+		}
+		h.diagnostics.Stop()
 	}
 }
 
 // WaitForHealth waits for the /healthz endpoint to return ok.
 func (h *TestHarness) WaitForHealth(ctx context.Context) error {
+	if h.diagnostics != nil {
+		h.diagnostics.LogIO("GET", "/healthz starting poll loop")
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, healthTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
+	attempts := 0
 	for {
 		select {
 		case <-ctx.Done():
+			if h.diagnostics != nil {
+				h.diagnostics.LogEvent("Health check timed out after %d attempts", attempts)
+			}
 			return ctx.Err()
 		case <-ticker.C:
+			attempts++
+			if h.diagnostics != nil && attempts%10 == 0 {
+				h.diagnostics.LogEvent("Health check: %d attempts so far", attempts)
+			}
+
+			if h.diagnostics != nil {
+				h.diagnostics.LogIO("GET", fmt.Sprintf("/healthz attempt %d", attempts))
+			}
 			req, _ := http.NewRequestWithContext(ctx, "GET", h.APIURL+"/healthz", nil)
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
+				if h.diagnostics != nil {
+					h.diagnostics.LogIO("GET", "/healthz failed: "+err.Error())
+				}
 				continue
 			}
 
 			var health map[string]interface{}
 			if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
 				resp.Body.Close()
+				if h.diagnostics != nil {
+					h.diagnostics.LogIO("GET", "/healthz response decode failed: "+err.Error())
+				}
 				continue
 			}
 			resp.Body.Close()
 
 			if health["status"] == "ok" {
+				if h.diagnostics != nil {
+					h.diagnostics.LogEvent("Health check passed after %d attempts", attempts)
+				}
 				h.t.Logf("Mothership healthy")
 				return nil
 			}
@@ -219,14 +309,28 @@ func (h *TestHarness) WebhookCalled() bool {
 
 // RunSimulator starts the spaxel-sim simulator.
 func (h *TestHarness) RunSimulator(ctx context.Context, args []string) error {
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("simulator-start")
+		h.diagnostics.LogEvent("Building/starting simulator with args: %v", args)
+	}
+
 	// Build simulator if needed
 	simBin := "/tmp/spaxel-sim-acceptance"
 	if _, err := os.Stat(simBin); os.IsNotExist(err) {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Building simulator binary")
+		}
 		goCmd := findGoCmd()
 		buildCmd := exec.CommandContext(ctx, goCmd, "build", "-o", simBin, "./mothership/cmd/sim")
 		buildCmd.Dir = repoRoot()
 		if output, err := buildCmd.CombinedOutput(); err != nil {
+			if h.diagnostics != nil {
+				h.diagnostics.LogEvent("Failed to build simulator: %v", err)
+			}
 			return fmt.Errorf("failed to build simulator: %w: %s", err, string(output))
+		}
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Simulator built successfully")
 		}
 	}
 
@@ -234,32 +338,53 @@ func (h *TestHarness) RunSimulator(ctx context.Context, args []string) error {
 	defaultArgs := []string{"--mothership", defaultMothershipWS}
 	allArgs := append(defaultArgs, args...)
 
+	if h.diagnostics != nil {
+		h.diagnostics.LogIO("websocket", fmt.Sprintf("Connecting to %s", defaultMothershipWS))
+	}
 	h.SimulatorCmd = exec.CommandContext(ctx, simBin, allArgs...)
 	h.SimulatorCmd.Stdout = io.MultiWriter(os.Stderr, h.stderrBuf)
 	h.SimulatorCmd.Stderr = io.MultiWriter(os.Stderr, h.stderrBuf)
 
 	if err := h.SimulatorCmd.Start(); err != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("Failed to start simulator: %v", err)
+		}
 		return fmt.Errorf("failed to start simulator: %w", err)
 	}
 
+	if h.diagnostics != nil {
+		h.diagnostics.LogEvent("Simulator started with args: %v", allArgs)
+	}
 	h.t.Logf("Simulator started with args: %v", allArgs)
 	return nil
 }
 
 // GetNodes fetches the list of nodes from /api/nodes.
 func (h *TestHarness) GetNodes(ctx context.Context) ([]map[string]interface{}, error) {
+	if h.diagnostics != nil {
+		h.diagnostics.LogIO("GET", "/api/nodes")
+	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", h.APIURL+"/api/nodes", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogIO("GET", "/api/nodes error: "+err.Error())
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var nodes []map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogIO("GET", "/api/nodes decode error: "+err.Error())
+		}
 		return nil, err
 	}
 
+	if h.diagnostics != nil {
+		h.diagnostics.LogIO("GET", fmt.Sprintf("/api/nodes returned %d nodes", len(nodes)))
+	}
 	return nodes, nil
 }
 
@@ -313,20 +438,34 @@ func (h *TestHarness) GetBlobs(ctx context.Context) ([]map[string]interface{}, e
 
 // SetPIN sets the dashboard PIN via /api/auth/setup.
 func (h *TestHarness) SetPIN(ctx context.Context, pin string) error {
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("pin-setup")
+		h.diagnostics.LogIO("POST", "/api/auth/setup")
+	}
+
 	body := []byte(fmt.Sprintf(`{"pin":"%s"}`, pin))
 	req, _ := http.NewRequestWithContext(ctx, "POST", h.APIURL+"/api/auth/setup", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if h.diagnostics != nil {
+			h.diagnostics.LogIO("POST", "/api/auth/setup error: "+err.Error())
+		}
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if h.diagnostics != nil {
+			h.diagnostics.LogEvent("PIN setup returned status %d", resp.StatusCode)
+		}
 		return fmt.Errorf("PIN setup returned status %d", resp.StatusCode)
 	}
 
+	if h.diagnostics != nil {
+		h.diagnostics.LogEvent("PIN setup completed successfully")
+	}
 	return nil
 }
 
@@ -444,25 +583,45 @@ func (h *TestHarness) SeekReplaySession(ctx context.Context, sessionID string, t
 
 // WaitForNode waits for a node to appear in /api/nodes.
 func (h *TestHarness) WaitForNode(ctx context.Context, mac string) (map[string]interface{}, error) {
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("wait-for-node")
+		h.diagnostics.LogEvent("Waiting for node to come online (MAC: %s)", mac)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, nodeOnlineTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	attempts := 0
 	for {
 		select {
 		case <-ctx.Done():
+			if h.diagnostics != nil {
+				h.diagnostics.LogEvent("WaitForNode timed out after %d attempts", attempts)
+			}
 			return nil, ctx.Err()
 		case <-ticker.C:
+			attempts++
+			if h.diagnostics != nil && attempts%10 == 0 {
+				h.diagnostics.LogEvent("WaitForNode: %d attempts so far", attempts)
+			}
+
 			nodes, err := h.GetNodes(ctx)
 			if err != nil {
+				if h.diagnostics != nil {
+					h.diagnostics.LogIO("GET", "/api/nodes failed: "+err.Error())
+				}
 				continue
 			}
 
 			for _, node := range nodes {
 				if mac == "" || node["mac"] == mac {
 					if status, ok := node["status"].(string); ok && status == "online" {
+						if h.diagnostics != nil {
+							h.diagnostics.LogEvent("Node online after %d attempts: MAC=%s", attempts, node["mac"])
+						}
 						return node, nil
 					}
 				}
@@ -473,23 +632,43 @@ func (h *TestHarness) WaitForNode(ctx context.Context, mac string) (map[string]i
 
 // WaitForEvent waits for a specific event type to appear.
 func (h *TestHarness) WaitForEvent(ctx context.Context, eventType string, timeout time.Duration) (map[string]interface{}, error) {
+	if h.diagnostics != nil {
+		h.diagnostics.EnterPhase("wait-for-event")
+		h.diagnostics.LogEvent("Waiting for event type: %s (timeout: %v)", eventType, timeout)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	attempts := 0
 	for {
 		select {
 		case <-ctx.Done():
+			if h.diagnostics != nil {
+				h.diagnostics.LogEvent("WaitForEvent timed out after %d attempts", attempts)
+			}
 			return nil, ctx.Err()
 		case <-ticker.C:
+			attempts++
+			if h.diagnostics != nil && attempts%10 == 0 {
+				h.diagnostics.LogEvent("WaitForEvent: %d attempts so far", attempts)
+			}
+
 			events, err := h.GetEvents(ctx, eventType, 1)
 			if err != nil {
+				if h.diagnostics != nil {
+					h.diagnostics.LogIO("GET", "/api/events error: "+err.Error())
+				}
 				continue
 			}
 
 			if len(events) > 0 {
+				if h.diagnostics != nil {
+					h.diagnostics.LogEvent("Event found after %d attempts: type=%s", attempts, eventType)
+				}
 				return events[0], nil
 			}
 		}
