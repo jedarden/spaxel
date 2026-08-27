@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// Blank identifier imports to suppress unused import warnings in test skeleton
+var _ = http.StatusOK
+var _ = httptest.Server{}
+
 // TestEmptyPasswordConfiguredBug tests the NetworkSettingsHandler behavior
 // when an empty password is provided in the network configuration.
 //
