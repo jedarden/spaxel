@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	fileMagic      = "SPAXLREP"
+	// Recording buffer format constants (active implementation)
+	fileMagic      = "SPAXLREC"
 	headerSize     = int64(32)
 	recordOverhead = int64(10)
 	maxFrameBytes  = int64(280)
