@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	// Replay store format constants
-	fileMagic    = "SPAXLREP"
+	// Replay buffer format constants (active implementation)
+	fileMagic    = "SPAXLREC"
 	headerSize   = 32
 	recordOverhead = 10 // recvTimeNS(8) + frameLen(2)
 

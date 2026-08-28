@@ -4,6 +4,8 @@
 
 Spaxel stores raw CSI (Channel State Information) frames in an **append-only circular buffer** on disk at `/data/csi_replay.bin`. This binary format is optimized for high write rates (~30 Hz × 20 links = 600 frames/second) and enables time-travel replay for debugging and algorithm tuning.
 
+**Note:** This document describes the **active Recording Buffer format** (`SPAXLREC`). For a comparison with the legacy Recording Store format (`SPAXLREP`), see [csi-recording-format.md](csi-recording-format.md).
+
 **File path:** `/data/csi_replay.bin` (configurable via `SPAXEL_REPLAY_MAX_MB` env var)
 
 **Default retention:** 360 MB (~48 hours at 20 Hz with 8 nodes)
