@@ -1,9 +1,6 @@
 package test
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
@@ -15,4 +12,5 @@ func TestNetworkSettingsHandler_EmptyPassword(t *testing.T) {
 	// 1. Empty password strings are properly handled
 	// 2. Password validation logic works correctly
 	// 3. Response codes and error messages are appropriate
+	t.Skip("Test implementation moved to verify_empty_password_bug_comprehensive_test.go")
 }
