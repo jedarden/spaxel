@@ -20,39 +20,39 @@ import (
 // when password is empty.
 func TestEmptyPasswordBug_Comprehensive(t *testing.T) {
 	tests := []struct {
-		name            string
-		ssid            string
-		password        string
+		name             string
+		ssid             string
+		password         string
 		expectConfigured bool
 		description      string
 		skipPutPassword  bool
 	}{
 		{
-			name:            "SSID_with_empty_password",
-			ssid:            "OpenNetwork",
-			password:        "",
+			name:             "SSID_with_empty_password",
+			ssid:             "OpenNetwork",
+			password:         "",
 			expectConfigured: false,
 			description:      "Open network should not be configured",
 		},
 		{
-			name:            "SSID_with_real_password",
-			ssid:            "SecureNetwork",
-			password:        "mypassword123",
+			name:             "SSID_with_real_password",
+			ssid:             "SecureNetwork",
+			password:         "mypassword123",
 			expectConfigured: true,
 			description:      "Network with password should be configured",
 		},
 		{
-			name:            "SSID_only_password_never_set",
-			ssid:            "SSIDOnlyNet",
-			password:        "", // Will not be set
-			skipPutPassword: true,
+			name:             "SSID_only_password_never_set",
+			ssid:             "SSIDOnlyNet",
+			password:         "", // Will not be set
+			skipPutPassword:  true,
 			expectConfigured: false,
 			description:      "SSID without password key should not be configured",
 		},
 		{
-			name:            "Empty_SSID_with_password",
-			ssid:            "",
-			password:        "anypassword",
+			name:             "Empty_SSID_with_password",
+			ssid:             "",
+			password:         "anypassword",
 			expectConfigured: false,
 			description:      "Empty SSID should never be configured",
 		},
