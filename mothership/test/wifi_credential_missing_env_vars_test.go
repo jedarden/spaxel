@@ -1,11 +1,41 @@
 // Package test provides tests for WiFi credential handling when environment variables are missing.
-// This test file verifies appropriate error handling when WiFi credentials are missing
-// from environment variables, per task requirements:
 //
-// Test creates a scenario with no WIFI_SSID/WIFI_PASSWORD env vars set
-// Test verifies the system returns a clear error message indicating missing credentials
-// Test confirms no crash or panic occurs
-// Test is added to the WiFi credentials test suite
+// WiFi Test Structure Documentation:
+// See /home/coding/spaxel/mothership/test/WIFI_TEST_STRUCTURE_NOTES.md for comprehensive
+// documentation on test structure, environment variable setup, and validation patterns.
+//
+// Where to Add New WiFi Tests:
+// 1. Create new file: /home/coding/spaxel/mothership/test/wifi_credential_<purpose>_test.go
+// 2. Use naming pattern: TestWiFiCredential_<Scenario> for test functions
+// 3. Follow existing patterns in this file for:
+//    - Environment variable setup with t.Setenv()
+//    - Temporary directory creation with t.TempDir()
+//    - SQLite database initialization
+//    - SettingsHandler and Provisioning server creation
+//    - Panic recovery with defer/recover()
+//    - JSON payload decoding and assertions
+//
+// Current Test Coverage:
+// - This file: Missing environment variables handling
+// - wifi_credential_env_test.go: Environment variable provisioning flows
+// - wifi_credential_e2e_test.go: End-to-end acceptance criteria
+// - wifi_credential_flow_test.go: Various provisioning flows and fallbacks
+//
+// ADR-005 Design Context:
+// WiFi credentials are OPTIONAL per ADR-005:
+// - Empty credentials are allowed (enables captive portal onboarding)
+// - Environment variables seed database on first boot only
+// - Database settings are authoritative after first boot
+// - Request body overrides both env vars and database settings
+//
+// Validation Implementation:
+// - Config loading: mothership/internal/config/config.go:76-77, 274-278
+// - First-boot seeding: mothership/cmd/mothership/main.go:656-701 (seedWiFiCredentialsIfFirstBoot)
+//
+// Error Handling Pattern:
+// Tests verify NO PANIC occurs with missing credentials (defer/recover pattern)
+// Empty wifi_ssid and wifi_pass fields are expected when no credentials configured
+// Essential provisioning fields (node_id, node_token) are still generated
 package test
 
 import (
