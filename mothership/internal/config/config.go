@@ -75,6 +75,9 @@ type Config struct {
 	// WiFi credentials (optional, first-boot seeding only per ADR-005)
 	WifiSSID     string // SPAXEL_WIFI_SSID - seeds DB on first boot only, ignored after
 	WifiPassword string // SPAXEL_WIFI_PASSWORD - seeds DB on first boot only, ignored after
+
+	// GitHub API access (for Kaniko releases and other GitHub operations)
+	GitHubToken string // SPAXEL_GITHUB_TOKEN - GitHub personal access token (optional, recommended for authenticated requests)
 }
 
 // Load reads all environment variables, validates them, and returns a Config.
@@ -274,6 +277,9 @@ func Load() (*Config, error) {
 	// SPAXEL_WIFI_PASSWORD - string, optional (first-boot seeding only per ADR-005)
 	cfg.WifiPassword = envOr("SPAXEL_WIFI_PASSWORD", "")
 
+	// SPAXEL_GITHUB_TOKEN - string, optional (GitHub API access for Kaniko releases, recommended for authenticated requests)
+	cfg.GitHubToken = envOr("SPAXEL_GITHUB_TOKEN", "")
+
 	// SPAXEL_DEMO_MODE - bool, default false
 	demoModeStr := envOr("SPAXEL_DEMO_MODE", "false")
 	if demoModeStr == "true" || demoModeStr == "1" {
@@ -462,6 +468,11 @@ func logConfig(cfg *Config) {
 		log.Printf("[CONFIG] SPAXEL_WIFI_SSID=%s (will seed DB on first boot if no existing setting)", cfg.WifiSSID)
 		log.Printf("[CONFIG] SPAXEL_WIFI_PASSWORD=*** (will seed DB on first boot if no existing setting)")
 	}
+		if cfg.GitHubToken != "" {
+			log.Printf("[CONFIG] SPAXEL_GITHUB_TOKEN=%s... (configured for GitHub API access)", cfg.GitHubToken[:8])
+		} else {
+			log.Printf("[CONFIG] SPAXEL_GITHUB_TOKEN=(not set, unauthenticated GitHub API requests will be rate-limited)")
+		}
 	log.Printf("[CONFIG] TZ=%s", cfg.Timezone)
 	if cfg.DemoMode {
 		log.Printf("[CONFIG] SPAXEL_DEMO_MODE=true (read-only dashboard, mutating endpoints blocked)")
