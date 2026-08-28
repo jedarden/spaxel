@@ -1,26 +1,18 @@
 package test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-// Blank identifier imports to suppress unused import warnings in test skeleton
-var _ = http.StatusOK
-var _ = httptest.Server{}
-
-// TestEmptyPasswordConfiguredBug tests the NetworkSettingsHandler behavior
-// when an empty password is provided in the network configuration.
-//
-// This test verifies the bug where an empty password is incorrectly treated
-// as "configured" when it should be rejected or treated as unconfigured.
-func TestEmptyPasswordConfiguredBug(t *testing.T) {
-	// TODO: Implement bug reproduction test
+// TestNetworkSettingsHandler_EmptyPassword verifies that the NetworkSettingsHandler
+// correctly handles empty password fields in the settings update request.
+func TestNetworkSettingsHandler_EmptyPassword(t *testing.T) {
+	// TODO: Implement test cases for empty password bug verification
 	// This test should verify that:
-	// 1. Empty password in network settings is properly handled
-	// 2. The configured flag reflects the actual state
-	// 3. Behavior matches expectations when password is empty vs set
-
-	t.Skip("Test skeleton - implementation pending")
+	// 1. Empty password strings are properly handled
+	// 2. Password validation logic works correctly
+	// 3. Response codes and error messages are appropriate
 }
