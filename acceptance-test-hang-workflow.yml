@@ -1,0 +1,189 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: acceptance-test-hang-41a82e3
+  namespace: argo-workflows
+  labels:
+    app: spaxel-acceptance-test
+    purpose: debug-hang-reproduction
+spec:
+  # Preserve pod logs after completion for debugging
+  podGC: OnWorkflowCompletion
+
+  # Backstop against a run that hangs before pod start
+  # Based on acceptance-tests activeDeadlineSeconds (600s) + headroom
+  activeDeadlineSeconds: 900
+
+  entrypoint: acceptance-test
+
+  serviceAccountName: argo-workflow
+
+  arguments:
+    parameters:
+      - name: git-repo
+        value: jedarden/spaxel
+      - name: branch
+        value: main
+      - name: target-commit
+        value: 41a82e3
+
+  volumes:
+    - name: docker-sock
+      emptyDir: {}
+
+  templates:
+    - name: acceptance-test
+      script:
+        image: golang:1.25-bookworm
+        command: [sh]
+        source: |
+          set -e
+          echo "=== Acceptance Test Hang Reproduction ==="
+          echo "Target commit: {{workflow.parameters.target-commit}}"
+          echo "Branch: {{workflow.parameters.branch}}"
+          echo "Purpose: Isolate and reproduce acceptance-test hang with full log capture"
+          echo ""
+
+          echo "=== Cloning repository at specific commit ==="
+          git clone --depth 1 --branch {{workflow.parameters.branch}} \
+            "https://git.ardenone.com/{{workflow.parameters.git-repo}}.git" \
+            /tmp/spaxel-src
+          cd /tmp/spaxel-src
+
+          echo "=== Checking out target commit ==="
+          git checkout {{workflow.parameters.target-commit}}
+          echo "✓ Checked out $(git log -1 --oneline)"
+          echo ""
+
+          echo "=== Building spaxel-sim ==="
+          cd mothership
+          go build -v -o /tmp/spaxel-sim ./cmd/sim
+          echo "✓ Simulator built"
+
+          echo ""
+          echo "=== Building mothership ==="
+          go build -v -o /tmp/spaxel-mothership ./cmd/mothership
+          echo "✓ Mothership built"
+
+          echo ""
+          echo "=== Running Acceptance Tests (isolated) ==="
+
+          # Create temp data directory for clean state
+          TEST_DATA=$(mktemp -d)
+          export SPAXEL_BIND_ADDR="127.0.0.1:8080"
+          export SPAXEL_DATA_DIR="$TEST_DATA"
+          export SPAXEL_LOG_LEVEL=debug
+          export SPAXEL_INTEGRATION_TEST=1
+
+          echo "Test data directory: $TEST_DATA"
+          echo "Log level: debug"
+          echo ""
+
+          # Start mothership in background with full logging
+          echo "Starting mothership with debug logging..."
+          /tmp/spaxel-mothership > /tmp/mothership.log 2>&1 &
+          MOTHERSHIP_PID=$!
+          echo "✓ Mothership started (PID: $MOTHERSHIP_PID)"
+
+          # Stream mothership logs for visibility
+          echo ""
+          echo "=== Mothership log stream (for debugging hang) ==="
+          tail -f /tmp/mothership.log &
+          TAIL_PID=$!
+
+          # Wait for health check with timeout
+          echo ""
+          echo "Waiting for mothership to be healthy..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/healthz >/dev/null 2>&1; then
+              echo "✓ Mothership healthy after ${i}s"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "ERROR: Mothership not healthy after 60s"
+              echo "=== Last 100 lines of mothership log ==="
+              tail -100 /tmp/mothership.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # Setup auth if needed
+          echo ""
+          echo "Checking auth setup..."
+          HTTP_CODE=$(curl -so /dev/null -w "%{http_code}" http://localhost:8080/api/auth/status 2>/dev/null || echo "000")
+          if [ "$HTTP_CODE" = "200" ]; then
+            PIN_CONFIGURED=$(curl -sf http://localhost:8080/api/auth/status 2>/dev/null | jq -r '.pin_configured // false')
+            if [ "$PIN_CONFIGURED" = "false" ]; then
+              curl -sf -X POST -H "Content-Type: application/json" \
+                -d '{"pin":"0000"}' http://localhost:8080/api/auth/setup >/dev/null
+              echo "✓ Test PIN configured"
+            fi
+          fi
+
+          # Add simulator to PATH for tests
+          export PATH="/tmp:$PATH"
+
+          echo ""
+          echo "=== Running acceptance test scenarios ==="
+
+          # Test scenario that may hang
+          echo ""
+          echo "=== Running IO-4: Multi-node fleet bringup ==="
+          echo "This test has been observed to hang - reproducing with full logging..."
+
+          # Set timeout for the test itself (not the overall workflow)
+          timeout 300 go test -v -timeout 5m ./test/acceptance/... \
+            -run "TestIO4_MultiNodeFleetBringup" || {
+            echo "=== IO-4 FAILED or HUNG ==="
+            echo "Capturing diagnostic information..."
+
+            # Get goroutines if still running
+            echo "=== Checking if mothership is still running ==="
+            if ps -p $MOTHERSHIP_PID > /dev/null 2>&1; then
+              echo "✓ Mothership still running (PID: $MOTHERSHIP_PID)"
+              echo "=== Final mothership log (last 200 lines) ==="
+              tail -200 /tmp/mothership.log
+            else
+              echo "✗ Mothership process exited"
+              echo "=== Exit code: $? ==="
+              echo "=== Final mothership log ==="
+              cat /tmp/mothership.log
+            fi
+
+            # Kill tail if still running
+            kill $TAIL_PID 2>/dev/null || true
+
+            exit 1
+          }
+          echo "✓ IO-4 PASSED"
+
+          # Cleanup
+          kill $TAIL_PID 2>/dev/null || true
+          kill $MOTHERSHIP_PID 2>/dev/null || true
+          wait $MOTHERSHIP_PID 2>/dev/null || true
+          rm -rf "$TEST_DATA"
+
+          echo ""
+          echo "=== Acceptance test completed successfully ==="
+          echo "Full logs preserved in workflow pod for analysis"
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        env:
+          - name: GIT_CONFIG_COUNT
+            value: "1"
+          - name: GIT_CONFIG_KEY_0
+            value: credential.helper
+          - name: GIT_CONFIG_VALUE_0
+            value: '!f() { test "$1" = get && echo "username=x-token" && echo "password=$FORGEJO_TOKEN"; }; f'
+          - name: FORGEJO_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: forgejo-webhook-token
+                key: token
+        activeDeadlineSeconds: 600
