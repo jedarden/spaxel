@@ -52,6 +52,7 @@ import (
 	"github.com/spaxel/mothership/internal/learning"
 	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
+	githubclient "github.com/spaxel/mothership/internal/github"
 	"github.com/spaxel/mothership/internal/mqtt"
 	"github.com/spaxel/mothership/internal/notify"
 	"github.com/spaxel/mothership/internal/ntpserver"
@@ -1021,6 +1022,28 @@ func main() {
 	// Phase 5: Fall detector
 	fallDetector := falldetect.NewDetector()
 	log.Printf("[INFO] Fall detector initialized")
+
+	// Phase 5: GitHub API client for Kaniko releases
+	var ghClient *githubclient.Client
+	if err := startup.SubsystemStart(startupCtx, "GitHub API client", func(ctx context.Context) error {
+		ghClient = githubclient.NewClient(cfg.GitHubToken)
+
+		// Ping GitHub API to verify accessibility
+		if pingErr := ghClient.Ping(ctx); pingErr != nil {
+			log.Printf("[WARN] GitHub API ping failed: %v (unauthenticated requests will be rate-limited)", pingErr)
+		} else {
+			if cfg.GitHubToken != "" {
+				log.Printf("[INFO] GitHub API client initialized (authenticated, rate limit: 5000 req/hour)")
+			} else {
+				log.Printf("[INFO] GitHub API client initialized (unauthenticated, rate limit: 60 req/hour)")
+			}
+		}
+		return nil
+	}); err != nil {
+		log.Printf("[WARN] Failed to initialize GitHub API client: %v", err)
+	} else {
+		log.Printf("[INFO] GitHub API client ready for Kaniko releases")
+	}
 
 	// Declare dashboard hub and notify service early so closures can reference them.
 	// They are assigned later in this function.
