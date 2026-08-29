@@ -713,6 +713,15 @@ func main() {
 	}
 
 	log.Printf("[INFO] Spaxel mothership v%s starting", version)
+
+	// Display and log the current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Printf("[WARN] Failed to get current working directory: %v", err)
+	} else {
+		log.Printf("[INFO] Current working directory: %s", cwd)
+	}
+
 	log.Printf("[DEBUG] Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
 
 	// Wrap all startup in a 30-second timeout context
