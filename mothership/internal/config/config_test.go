@@ -454,3 +454,88 @@ func clearEnvVars() {
 		os.Unsetenv(v)
 	}
 }
+
+// TestEnvExists tests that EnvExists correctly detects environment variables.
+func TestEnvExists(t *testing.T) {
+	// Clean up any test env vars
+	defer os.Unsetenv("TEST_ENV_VAR")
+	defer os.Unsetenv("IDF_PATH")
+
+	tests := []struct {
+		name        string
+		setupFunc   func()
+		expectedVal string
+		expectedOK  bool
+	}{
+		{
+			name: "variable exists with value",
+			setupFunc: func() {
+				os.Setenv("TEST_ENV_VAR", "/some/path")
+			},
+			expectedVal: "/some/path",
+			expectedOK:  true,
+		},
+		{
+			name: "variable exists but empty",
+			setupFunc: func() {
+				os.Setenv("TEST_ENV_VAR", "")
+			},
+			expectedVal: "",
+			expectedOK:  true,
+		},
+		{
+			name: "variable does not exist",
+			setupFunc: func() {
+				// Already unset by deferred Unsetenv, but be explicit
+				os.Unsetenv("TEST_ENV_VAR")
+			},
+			expectedVal: "",
+			expectedOK:  false,
+		},
+		{
+			name: "IDF_PATH exists",
+			setupFunc: func() {
+				os.Setenv("IDF_PATH", "/esp/esp-idf")
+			},
+			expectedVal: "/esp/esp-idf",
+			expectedOK:  true,
+		},
+		{
+			name: "IDF_PATH does not exist",
+			setupFunc: func() {
+				os.Unsetenv("IDF_PATH")
+			},
+			expectedVal: "",
+			expectedOK:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupFunc()
+
+			// Test EnvExists
+			exists := EnvExists("TEST_ENV_VAR")
+			if exists != tt.expectedOK {
+				t.Errorf("EnvExists() = %v, want %v", exists, tt.expectedOK)
+			}
+
+			// Also test that os.LookupEnv matches
+			val, ok := os.LookupEnv("TEST_ENV_VAR")
+			if ok != tt.expectedOK {
+				t.Errorf("os.LookupEnv() ok = %v, want %v", ok, tt.expectedOK)
+			}
+			if val != tt.expectedVal {
+				t.Errorf("os.LookupEnv() val = %q, want %q", val, tt.expectedVal)
+			}
+
+			// Special case for IDF_PATH tests
+			if tt.name == "IDF_PATH exists" || tt.name == "IDF_PATH does not exist" {
+				idfExists := EnvExists("IDF_PATH")
+				if idfExists != tt.expectedOK {
+					t.Errorf("EnvExists(IDF_PATH) = %v, want %v", idfExists, tt.expectedOK)
+				}
+			}
+		})
+	}
+}
