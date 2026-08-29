@@ -336,6 +336,15 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+// EnvExists checks if an environment variable is defined in the current environment.
+// Returns true if the variable exists (even if set to an empty string), false otherwise.
+// This is more precise than checking os.Getenv() != "", which cannot distinguish
+// between "not set" and "set to empty string".
+func EnvExists(key string) bool {
+	_, exists := os.LookupEnv(key)
+	return exists
+}
+
 // isWildcardHost reports whether host is a wildcard bind address (0.0.0.0, ::)
 // or empty. Such an address is valid to bind to but is never reachable as a
 // destination, so it must never appear in a URL handed to a node.
