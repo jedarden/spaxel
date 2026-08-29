@@ -35,7 +35,7 @@
  * separate, non-identity concern tracked elsewhere.
  */
 
-import type { Blob } from './spaxel.d.ts';
+import type { Blob } from './spaxel';
 
 // ---------------------------------------------------------------------------
 // Type-level assertions: the identity fields are declared on `Blob` with the
