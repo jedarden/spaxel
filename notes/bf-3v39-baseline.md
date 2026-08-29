@@ -5,13 +5,13 @@
 **Bead:** spaxel-65c76469 (split-child 2 of bf-3v39)
 **Status:** ❌ BLOCKED - No nodes connected
 
-## Current State (2026-08-29 09:06 UTC)
+## Current State (2026-08-29 09:13 UTC)
 
 ### Mothership Health
 ```json
 {
   "status": "ok",
-  "uptime_s": 1222969,
+  "uptime_s": 1223685,
   "version": "0.2.24",
   "nodes_online": 0,
   "db": "ok",
@@ -229,6 +229,19 @@ This task is **split-child 2 of bf-3v39** with explicit dependencies:
 
 ---
 
-**Last Updated:** 2026-08-29 09:06 UTC
+**Last Updated:** 2026-08-29 09:13 UTC
 **Mothership:** https://spaxel.ardenone.com
 **Status:** BLOCKED - Awaiting node connectivity (Child 1)
+
+## Blocker Confirmation (2026-08-29 09:13 UTC)
+
+✅ Mothership operational (14.2 days uptime)
+❌ **Zero nodes connected** - blocker confirmed active
+❌ No links = no CSI data = no baseline capture possible
+
+**Action Required:** This bead remains open for automatic retry when nodes come online. Once child 1 (spaxel-082135bc) confirms node connectivity, this task can proceed with:
+1. Physical operator confirmation: room is EMPTY
+2. POST to /api/baseline/capture to start 60s capture
+3. Poll /api/baseline to verify baseline recording per link/subcarrier
+4. Wait for EMA stabilization (tau=30s) and confirm deltaRMS ~0.02
+5. Document baseline ID, timestamp, coverage, and deltaRMS evidence
