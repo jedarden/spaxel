@@ -114,4 +114,224 @@
     ],
     "summary": "2 potential leak(s) found"
   }
+}],
+{
+  "meta": {
+    "testFile": "onboard.test.js",
+    "timestamp": "2026-08-29T09:55:59.647Z",
+    "duration": null
+  },
+  "snapshots": {
+    "beforeTest": {
+      "id": 1,
+      "timestamp": "2026-08-29T09:55:56.228Z",
+      "label": "before-all-tests",
+      "heap": {
+        "heapUsed": 103,
+        "heapTotal": 196,
+        "external": 4,
+        "rss": 209,
+        "heapUsedBytes": 108293160,
+        "heapTotalBytes": 205811712
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 2,
+        "total": 2
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 4010571,
+        "uptime": 1,
+        "memoryUsage": {
+          "rss": 219541504,
+          "heapTotal": 205811712,
+          "heapUsed": 108300608,
+          "external": 4339778,
+          "arrayBuffers": 1571910
+        }
+      }
+    },
+    "afterTest": {
+      "id": 2,
+      "timestamp": "2026-08-29T09:55:59.645Z",
+      "label": "after-all-tests",
+      "heap": {
+        "heapUsed": 101,
+        "heapTotal": 204,
+        "external": 4,
+        "rss": 244,
+        "heapUsedBytes": 105993840,
+        "heapTotalBytes": 213663744
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 29,
+        "total": 29
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 4010571,
+        "uptime": 5,
+        "memoryUsage": {
+          "rss": 255987712,
+          "heapTotal": 213663744,
+          "heapUsed": 105994616,
+          "external": 4156334,
+          "arrayBuffers": 1388415
+        }
+      }
+    }
+  },
+  "deltas": {
+    "heap": {
+      "usedDelta": -2299320,
+      "usedDeltaMB": -2
+    },
+    "timers": {
+      "timeoutDelta": 27,
+      "intervalDelta": 0,
+      "totalDelta": 27
+    },
+    "websockets": {
+      "countDelta": 0
+    }
+  },
+  "analysis": {
+    "issuesFound": true,
+    "issues": [
+      {
+        "severity": "medium",
+        "type": "timer-leak",
+        "message": "27 timers created but not cleared",
+        "before": {
+          "intervals": 0,
+          "timeouts": 2,
+          "total": 2
+        },
+        "after": {
+          "intervals": 0,
+          "timeouts": 29,
+          "total": 29
+        }
+      }
+    ],
+    "summary": "1 potential leak(s) found"
+  }
+}],
+{
+  "meta": {
+    "testFile": "onboard.test.js",
+    "timestamp": "2026-08-29T09:56:37.716Z",
+    "duration": null
+  },
+  "snapshots": {
+    "beforeTest": {
+      "id": 1,
+      "timestamp": "2026-08-29T09:56:34.314Z",
+      "label": "before-all-tests",
+      "heap": {
+        "heapUsed": 60,
+        "heapTotal": 105,
+        "external": 4,
+        "rss": 143,
+        "heapUsedBytes": 62644368,
+        "heapTotalBytes": 110047232
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 2,
+        "total": 2
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 4011935,
+        "uptime": 1,
+        "memoryUsage": {
+          "rss": 149499904,
+          "heapTotal": 110047232,
+          "heapUsed": 62653344,
+          "external": 4031942,
+          "arrayBuffers": 1322798
+        }
+      }
+    },
+    "afterTest": {
+      "id": 2,
+      "timestamp": "2026-08-29T09:56:37.714Z",
+      "label": "after-all-tests",
+      "heap": {
+        "heapUsed": 57,
+        "heapTotal": 119,
+        "external": 4,
+        "rss": 183,
+        "heapUsedBytes": 59672520,
+        "heapTotalBytes": 125063168
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 29,
+        "total": 29
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 4011935,
+        "uptime": 4,
+        "memoryUsage": {
+          "rss": 191373312,
+          "heapTotal": 125063168,
+          "heapUsed": 59673296,
+          "external": 4031935,
+          "arrayBuffers": 1322791
+        }
+      }
+    }
+  },
+  "deltas": {
+    "heap": {
+      "usedDelta": -2971848,
+      "usedDeltaMB": -3
+    },
+    "timers": {
+      "timeoutDelta": 27,
+      "intervalDelta": 0,
+      "totalDelta": 27
+    },
+    "websockets": {
+      "countDelta": 0
+    }
+  },
+  "analysis": {
+    "issuesFound": true,
+    "issues": [
+      {
+        "severity": "medium",
+        "type": "timer-leak",
+        "message": "27 timers created but not cleared",
+        "before": {
+          "intervals": 0,
+          "timeouts": 2,
+          "total": 2
+        },
+        "after": {
+          "intervals": 0,
+          "timeouts": 29,
+          "total": 29
+        }
+      }
+    ],
+    "summary": "1 potential leak(s) found"
+  }
 }]
