@@ -1,279 +1,202 @@
-# Empty-Room Baseline Capture for bf-3v39 (presence-detection)
+# Empty-Room Baseline Capture - BF-3V39
 
-**Date:** 2026-08-29
-**Mothership:** https://spaxel.ardenone.com
-**Bead:** spaxel-65c76469 (split-child 2 of bf-3v39)
-**Status:** ❌ BLOCKED - No nodes connected
+## Task Context
+- **Bead ID**: spaxel-65c76469 (split-child 2 of bf-3v39)
+- **Parent Task**: BF-3V39 (baseline capture blockers verification)
+- **Dependency**: Node connectivity verification (child 1) must be complete
 
-## Current State (2026-08-29 09:13 UTC)
+## Physical Precondition ⚠️
+**ROOM MUST BE CONFIRMED EMPTY BEFORE CAPTURE**
+- No people in the room
+- No movement during the 60-second capture window
+- Clear line-of-sight between all spaxel nodes
 
-### Mothership Health
-```json
-{
-  "status": "ok",
-  "uptime_s": 1223685,
-  "version": "0.2.24",
-  "nodes_online": 0,
-  "db": "ok",
-  "shedding_level": 0,
-  "reason": "no nodes connected"
-}
+## Technical Requirements
+- Mothership URL: https://spaxel.ardenone.com
+- API Endpoint: POST /api/baseline/capture
+- Authentication: Google OAuth required
+- Capture Duration: 60 seconds
+- EMA Stabilization: tau=30s
+- Expected deltaRMS: ~0.02 (empty-room noise floor)
+
+## API Authentication Issue
+**Status**: BLOCKED - Google OAuth Required
+
+The mothership API is protected by Google OAuth authentication. Direct API calls require:
+- Google OAuth token
+- Session cookie authentication
+
+```
+$ curl -X POST https://spaxel.ardenone.com/api/baseline/capture
+# Returns: Redirect to Google OAuth
 ```
 
-**Analysis:**
-- ✅ Mothership running normally (14.1 days uptime)
-- ✅ Database operational
-- ❌ **Zero nodes connected** - blocker remains active
-- ❌ No links = no CSI data = no baseline possible
+## Alternative Approaches
 
-### Blocker Summary
+### Option 1: Manual Dashboard Execution
+1. Access https://spaxel.ardenonce.com/dashboard
+2. Authenticate via Google OAuth
+3. Use dashboard baseline capture feature
+4. Monitor stabilization via dashboard metrics
 
-**Cannot proceed:** No nodes connected to mothership
-**Blocking dependency:** Child 1 (spaxel-082135bc - node connectivity verification)
-**Last node seen:** 2026-08-07 11:50:18 EDT (22 days ago)
+### Option 2: Direct Database Access (if available)
+- Access baselines.db directly
+- Trigger baseline reset via ProcessorManager
+- Monitor EMA convergence
 
-## Task Requirements (for when nodes are online)
+### Option 3: Local Development Override
+- Run mothership locally with demo mode
+- Test baseline capture locally
+- Verify deltaRMS behavior
 
-### PHYSICAL PRECONDITION ⚠️
+## Execution Steps (when unblocked)
 
-**The room must be completely EMPTY during the entire 60-second capture window:**
-- **NO PEOPLE** in the detection zone
-- **NO MOVING OBJECTS** (fans, swinging decorations, etc.)
-- **QUIET ENVIRONMENT** - stationary ambient conditions only
+### Step 1: Room Preparation
+- [ ] Operator confirms room is EMPTY
+- [ ] All personnel leave the room
+- [ ] Doors closed, no movement
 
-**Operator must confirm:** Room is empty and will remain empty for the full 60-second capture.
-
-### Step 1: Start Baseline Capture
-
+### Step 2: Baseline Capture
 ```bash
-# Start 60-second quiet-room capture for all active links
-curl -s -X POST https://spaxel.ardenone.com/api/baseline/capture \
+# POST to start capture (requires auth)
+curl -X POST https://spaxel.ardenone.com/api/baseline/capture \
   -H "Content-Type: application/json" \
-  -d '{"links": []}' | jq .
+  -d '{"links": []}' # Empty = all links
 ```
 
-**Expected Response:**
+Expected Response:
 ```json
 {
   "ok": true,
-  "links_captured": <N>,
-  "links": ["link-A-B", "link-A-C", ...],
-  "message": "Baseline capture started. Keep the room clear for 60 seconds for best results."
+  "links_captured": N,
+  "links": ["link1", "link2", ...],
+  "message": "Baseline capture started. Keep the room clear for 60 seconds."
 }
 ```
 
-**If `links_captured: 0`:**
-- No links are active - nodes may not be connected
-- Return to parent bead Step 1 (node connectivity verification)
-
-### Step 2: Wait 60 Seconds + EMA Stabilization
-
-- **Capture duration:** 60 seconds
-- **EMA stabilization (tau=30s):** 30-60 seconds additional
-- **Total wait:** ~90-120 seconds from capture start
-
-### Step 3: Verify Baseline Recording
-
+### Step 3: Monitor Baseline Recording
 ```bash
-curl -s https://spaxel.ardenone.com/api/baseline | jq .
+# Poll baseline status
+curl -X GET https://spaxel.ardenone.com/api/baseline
 ```
 
-**Expected Output:**
+Expected Response:
 ```json
 [
   {
-    "link_id": "AA:BB:CC:DD:EE:FF-11:22:33:44:55:66",
-    "snapshot_time_ms": 1724498751000,
+    "link_id": "node_mac:peer_mac",
+    "snapshot_time_ms": 1234567890,
     "confidence": 0.95,
     "n_sub": 64
-  },
-  ...
+  }
 ]
 ```
 
-**What to check:**
-- Each link should have a baseline entry
-- `confidence` > 0.8 (high-quality quiet-room capture)
-- `n_sub` matches ESP32 CSI config (typically 64)
-- `snapshot_time_ms` is recent (within last 2 minutes)
+### Step 4: EMA Stabilization Verification
+- Wait for tau=30s EMA stabilization period
+- Monitor deltaRMS convergence to ~0.02
+- Verify each link/subcarrier settles
 
-### Step 4: Verify EMA Stabilization (deltaRMS)
+### Step 5: Document Results
+- Record baseline ID
+- Capture timestamp
+- Document link/subcarrier coverage
+- Record final deltaRMS values
+- Save evidence to this file
 
-**Expected deltaRMS:** ~0.02 (empty-room noise floor with WiFi ambient noise only)
+## Expected Outcomes
 
-**How to check:**
-1. Monitor dashboard at https://spaxel.ardenone.com
-2. Look at "Link Status" or "CSI Metrics" panel
-3. Find deltaRMS metric for each link
-4. Confirm values ~0.02 ± 0.01
+### Success Criteria
+- Baseline ID generated and recorded
+- All active links show baseline entries
+- EMA stabilization completes within expected time
+- deltaRMS settles to ~0.02 ± 0.01
+- Coverage verified per link/subcarrier
 
-## Acceptance Criteria
+### Failure Modes
+- **Authentication failure**: Cannot access API without OAuth token
+- **No nodes online**: No links to capture baseline
+- **Room not empty**: deltaRMS remains elevated (>0.05)
+- **Insufficient stabilization**: EMA doesn't converge within expected time
 
-The task is complete when ALL of the following are documented:
+## Investigation Results
 
-1. ✅ **Baseline ID:** Each link has a baseline recorded (`link_id` from Step 3)
-2. ✅ **Timestamp:** Capture time is recent (within last 2-3 minutes)
-3. ✅ **Coverage:** All active links have baselines (`links_captured` > 0)
-4. ✅ **Confidence:** Each baseline has `confidence > 0.8`
-5. ✅ **deltaRMS:** Observed deltaRMS ~0.02 (empty-room noise floor)
+### Environment Assessment (2026-08-29)
 
-## Required Actions to Unblock
+**Remote Mothership Status**: ✅ Online
+- URL: https://spaxel.ardenone.com
+- Health: OK (uptime: 14+ days, version: 0.2.24)
+- Nodes Online: 0
+- Authentication: Google OAuth Required
 
-### Immediate: Restore Node Connectivity
+**Local Environment**: 
+- Local databases found: `./data/baselines.db`, `./data/spaxel.db`
+- No local mothership instance running
+- Baseline database: Empty (no existing baselines)
 
-**Physical verification required:**
-
-1. **Check physical node status:**
-   - Is ESP32-S3 powered on?
-   - Is it connected to the correct WiFi network?
-   - Can it reach https://spaxel.ardenone.com?
-
-2. **Verify mothership logs:**
-   ```bash
-   kubectl -n spaxel logs deployment/mothership --tail=100 | grep -E "hello|node|WS|CSI"
-   ```
-   Look for:
-   - Node `hello` messages with MAC addresses
-   - WebSocket connection attempts
-   - CSI frame reception
-
-3. **Re-provision if needed:**
-   - Use Web Serial from dashboard to re-provision
-   - Verify WiFi credentials in NVS
-   - Confirm mDNS can reach mothership
-   - Check for firmware update (0.2.19 → 0.2.24)
-
-4. **Verify node appears in system:**
-   ```bash
-   curl -s https://spaxel.ardenone.com/api/nodes | jq .
-   ```
-   Should show at least one node with `status: "online"`
-
-### Then Proceed with Baseline Capture
-
-Once nodes are connected and links are active:
-
-#### Physical Precondition
-- ✅ **Operator confirms: ROOM IS EMPTY**
-- ✅ No people in detection zone
-- ✅ No moving objects (fans, etc.)
-- ✅ Quiet environment
-
-#### Capture Process
+**API Authentication Test**:
 ```bash
-# 1. Start 60s capture
-curl -s -X POST https://spaxel.ardenone.com/api/baseline/capture \
-  -H "Content-Type: application/json" \
-  -d '{}' | jq .
-```
-Expected: `"links_captured": <N>` where N > 0
-
-```bash
-# 2. Wait 60s + EMA stabilization (tau=30s)
-# Total: ~90-120 seconds
+$ curl -X GET https://spaxel.ardenone.com/api/baseline
+# Response: Redirect to Google OAuth
 ```
 
-```bash
-# 3. Verify baseline recorded
-curl -s https://spaxel.ardenone.com/api/baseline | jq .
-```
-Expected: Array of baseline entries with:
-- `link_id` per link
-- `confidence > 0.8`
-- `n_sub: 64`
-- `snapshot_time_ms` recent
+## Current Status
+- **Date**: 2026-08-29
+- **Status**: BLOCKED - Two Prerequisites Required
+- **Blockers**:
+  1. **Physical**: Room must be confirmed EMPTY by operator
+  2. **Technical**: Google OAuth authentication required for API access
 
-```bash
-# 4. Verify deltaRMS ~0.02 (empty-room noise floor)
-# Check dashboard or metrics API
-```
-Expected: deltaRMS ~0.02 ± 0.01
+## Investigation Summary
 
-## Dependency Chain
+The baseline capture task is blocked by two independent requirements:
 
-This task is **split-child 2 of bf-3v39** with explicit dependencies:
+### Blocker 1: Physical Precondition (Operator Action Required)
+The task explicitly states: *"room must be confirmed EMPTY before capture — get explicit operator confirmation first."*
 
-1. **Child 1:** spaxel-082135bc - "Node connectivity verification"
-   - **Status:** Open, BLOCKED (node offline since Aug 7)
+This requires:
+- Visual confirmation that no people are in the room
+- Agreement to keep the room clear for 60 seconds during capture
+- Verification that all spaxel nodes are online and communicating
 
-2. **Child 2:** spaxel-65c76469 - **THIS TASK** (empty-room baseline capture via API)
-   - **Status:** InProgress, BLOCKED (depends on child 1)
+### Blocker 2: API Authentication (Technical Constraint)
+The mothership API is protected by Google OAuth authentication:
+- All API endpoints redirect to Google OAuth flow
+- No programmatic authentication method available from agent context
+- Would require operator to authenticate in browser and provide session token
 
-3. **Child 3:** spaxel-b075c0f3 - "Run walk-through presence test and record deltaRMS spike"
-   - **Status:** Open (blocked by child 1)
+**Attempted Workarounds**:
+- ❌ Direct API calls (blocked by OAuth)
+- ❌ Local mothership access (no instance running)
+- ❌ Database direct access (insufficient without live CSI data)
+- ✅ Alternative: Dashboard manual execution by operator
 
-4. **Child 4:** spaxel-2ce98275 - "Verify presence blob in dashboard and document final verification record"
-   - **Status:** Open (blocked by child 3)
+## Recommended Resolution Path
 
-## Troubleshooting
+**Option A: Operator Executes via Dashboard (Recommended)**
+1. Operator navigates to https://spaxel.ardenone.com/dashboard
+2. Authenticates via Google OAuth
+3. Confirms room is EMPTY
+4. Uses dashboard baseline capture feature
+5. Monitors stabilization in real-time
+6. Documents results back to this bead
 
-### No links captured (`links_captured: 0`)
-- Nodes are not connected - return to parent bead Step 1
-- Verify `/healthz` shows `nodes_online > 0`
-- Check node power and WiFi connection
+**Option B: Provide OAuth Credentials (If Available)**
+- If operator can provide OAuth token/session cookie
+- Agent can execute API calls programmatically
+- Still requires physical precondition confirmation
 
-### Low confidence (< 0.8)
-- Room may not have been truly empty during capture
-- Re-run capture with stricter empty-room conditions
-- Check for interference (microwaves, other WiFi networks)
+**Option C: Schedule for Later Execution**
+- Document current investigation results
+- Close bead as "blocked on prerequisites"
+- Reopen when operator is available for execution
 
-### High deltaRMS (> 0.05)
-- Room may have had movement during capture
-- Check for environmental noise (fans, HVAC, moving objects)
-- Verify nodes are mounted securely (no vibration)
-
-### Baseline not appearing in list
-- Wait 60 seconds after capture starts
-- Check mothership logs: `kubectl -n spaxel logs deployment/mothership`
-- Verify database is writable: check SQLite file permissions
+## Next Steps
+1. **Immediate**: Get operator confirmation that room is empty
+2. **Resolve Authentication**: Obtain OAuth token OR use alternative approach
+3. **Execute Capture**: Follow execution steps above
+4. **Document Results**: Record all evidence and measurements
 
 ---
 
-**Last Updated:** 2026-08-29 09:13 UTC
-**Mothership:** https://spaxel.ardenone.com
-**Status:** BLOCKED - Awaiting node connectivity (Child 1)
-
-## Blocker Confirmation (2026-08-29 13:24 UTC)
-
-✅ Mothership operational (14.2 days uptime)
-❌ **Zero nodes connected** - blocker confirmed active
-❌ No links = no CSI data = no baseline capture possible
-❌ **Additional Blocker Discovered:** API authentication required - all endpoints return Google OAuth redirect
-
-## Blocker Verification Attempt (2026-08-29 13:24 UTC)
-
-Attempted to access API endpoints to verify current status:
-
-```bash
-# Health check attempt
-$ curl -s https://spaxel.ardenone.com/healthz
-# Result: 404 Not Found
-
-# API health check
-$ curl -s https://spaxel.ardenone.com/api/healthz
-# Result: Google OAuth redirect
-
-# Baseline API
-$ curl -s https://spaxel.ardenone.com/api/baseline
-# Result: Google OAuth redirect
-```
-
-**Root Causes:**
-
-1. **No nodes connected** (primary blocker)
-   - Last node seen: 2026-08-07 11:50:18 EDT (22 days ago)
-   - Cannot capture baseline without active links
-
-2. **API Authentication** (secondary blocker)
-   - Traefik layer requires Google OAuth
-   - Programmatic access blocked
-   - Dashboard UI may work around this
-
-**Action Required:** This bead remains blocked by dependency on child 1 (node connectivity verification). Additional blocker: API endpoints require OAuth authentication, preventing programmatic access.
-
-**Workaround Options:**
-1. Use dashboard UI at https://spaxel.ardenone.com for baseline capture
-2. Direct database access (if available)
-3. Wait for child 1 completion + API access solution
-
-See `notes/bf-3v39-baseline-blocker-verification.md` for detailed analysis.
+**Last Updated**: 2026-08-29 by agent (claude-code-glm-4.7-glm-mta:spaxel-65c76469)
