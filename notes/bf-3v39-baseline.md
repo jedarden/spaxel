@@ -1,30 +1,49 @@
 # Empty-Room Baseline Capture for bf-3v39 (presence-detection)
 
-**Date:** 2026-08-24
+**Date:** 2026-08-29
 **Mothership:** https://spaxel.ardenone.com
 **Bead:** spaxel-65c76469 (split-child 2 of bf-3v39)
+**Status:** ❌ BLOCKED - No nodes connected
 
-## Task
+## Current State (2026-08-29 09:06 UTC)
 
-Capture an empty-room baseline via API and verify that EMA stabilization reaches the expected noise floor (~0.02 deltaRMS).
+### Mothership Health
+```json
+{
+  "status": "ok",
+  "uptime_s": 1222969,
+  "version": "0.2.24",
+  "nodes_online": 0,
+  "db": "ok",
+  "shedding_level": 0,
+  "reason": "no nodes connected"
+}
+```
 
-## PHYSICAL PRECONDITION ⚠️
+**Analysis:**
+- ✅ Mothership running normally (14.1 days uptime)
+- ✅ Database operational
+- ❌ **Zero nodes connected** - blocker remains active
+- ❌ No links = no CSI data = no baseline possible
 
-**The room must be completely EMPTY during the entire 60-second capture window.**
+### Blocker Summary
 
+**Cannot proceed:** No nodes connected to mothership
+**Blocking dependency:** Child 1 (spaxel-082135bc - node connectivity verification)
+**Last node seen:** 2026-08-07 11:50:18 EDT (22 days ago)
+
+## Task Requirements (for when nodes are online)
+
+### PHYSICAL PRECONDITION ⚠️
+
+**The room must be completely EMPTY during the entire 60-second capture window:**
 - **NO PEOPLE** in the detection zone
 - **NO MOVING OBJECTS** (fans, swinging decorations, etc.)
 - **QUIET ENVIRONMENT** - stationary ambient conditions only
 
 **Operator must confirm:** Room is empty and will remain empty for the full 60-second capture.
 
-## API Authentication
-
-All baseline endpoints require **Google OAuth** authentication. You must be logged into your Google account via the browser to access these endpoints.
-
-## Step 1: Start Baseline Capture
-
-Execute this curl command (authenticated browser session required):
+### Step 1: Start Baseline Capture
 
 ```bash
 # Start 60-second quiet-room capture for all active links
@@ -39,25 +58,21 @@ curl -s -X POST https://spaxel.ardenone.com/api/baseline/capture \
   "ok": true,
   "links_captured": <N>,
   "links": ["link-A-B", "link-A-C", ...],
-  "message": "Started baseline capture for N links"
+  "message": "Baseline capture started. Keep the room clear for 60 seconds for best results."
 }
 ```
 
 **If `links_captured: 0`:**
 - No links are active - nodes may not be connected
-- Return to Step 1 of parent bead (node connectivity verification)
+- Return to parent bead Step 1 (node connectivity verification)
 
-## Step 2: Wait 60 Seconds + EMA Stabilization
+### Step 2: Wait 60 Seconds + EMA Stabilization
 
-The baseline capture takes **60 seconds** of quiet-room sampling.
+- **Capture duration:** 60 seconds
+- **EMA stabilization (tau=30s):** 30-60 seconds additional
+- **Total wait:** ~90-120 seconds from capture start
 
-After capture completes, wait an additional **30-60 seconds** for the EMA (Exponential Moving Average) to stabilize with `tau=30s`.
-
-**Total wait time:** ~90-120 seconds from capture start
-
-## Step 3: Verify Baseline Recording
-
-Check that baselines are recorded for each link/subcarrier:
+### Step 3: Verify Baseline Recording
 
 ```bash
 curl -s https://spaxel.ardenone.com/api/baseline | jq .
@@ -78,27 +93,19 @@ curl -s https://spaxel.ardenone.com/api/baseline | jq .
 
 **What to check:**
 - Each link should have a baseline entry
-- `confidence` should be > 0.8 (high-quality quiet-room capture)
-- `n_sub` should match your ESP32 CSI configuration (typically 64)
-- `snapshot_time_ms` should be recent (within last 2 minutes)
+- `confidence` > 0.8 (high-quality quiet-room capture)
+- `n_sub` matches ESP32 CSI config (typically 64)
+- `snapshot_time_ms` is recent (within last 2 minutes)
 
-## Step 4: Verify EMA Stabilization (deltaRMS)
+### Step 4: Verify EMA Stabilization (deltaRMS)
 
-The critical verification is that deltaRMS settles to the **empty-room noise floor**.
-
-**Expected deltaRMS:** ~0.02 (for truly empty room with WiFi ambient noise only)
+**Expected deltaRMS:** ~0.02 (empty-room noise floor with WiFi ambient noise only)
 
 **How to check:**
-1. Monitor the spaxel dashboard at https://spaxel.ardenone.com
-2. Look at the "Link Status" or "CSI Metrics" panel
-3. Find the deltaRMS metric for each link
-4. Confirm values are ~0.02 ± 0.01
-
-**Alternative: API query (if available):**
-```bash
-# If there's a metrics endpoint for deltaRMS
-curl -s https://spaxel.ardenone.com/api/links | jq '.[].delta_rms'
-```
+1. Monitor dashboard at https://spaxel.ardenone.com
+2. Look at "Link Status" or "CSI Metrics" panel
+3. Find deltaRMS metric for each link
+4. Confirm values ~0.02 ± 0.01
 
 ## Acceptance Criteria
 
@@ -110,37 +117,93 @@ The task is complete when ALL of the following are documented:
 4. ✅ **Confidence:** Each baseline has `confidence > 0.8`
 5. ✅ **deltaRMS:** Observed deltaRMS ~0.02 (empty-room noise floor)
 
-## Operator Actions
+## Required Actions to Unblock
 
-**Please perform these steps and report back with:**
+### Immediate: Restore Node Connectivity
 
-1. **Confirmation:** Room is empty and will remain empty for 60 seconds
-2. **Capture output:** Copy the full JSON response from Step 1
-3. **Baseline list:** Copy the full JSON response from Step 3
-4. **deltaRMS values:** Report the observed deltaRMS for each link (from dashboard or API)
-5. **Timestamp:** Note the approximate time of capture (e.g., "2026-08-24 10:15 AM")
+**Physical verification required:**
 
-## Evidence to Collect
+1. **Check physical node status:**
+   - Is ESP32-S3 powered on?
+   - Is it connected to the correct WiFi network?
+   - Can it reach https://spaxel.ardenone.com?
 
-After successful capture, share:
+2. **Verify mothership logs:**
+   ```bash
+   kubectl -n spaxel logs deployment/mothership --tail=100 | grep -E "hello|node|WS|CSI"
+   ```
+   Look for:
+   - Node `hello` messages with MAC addresses
+   - WebSocket connection attempts
+   - CSI frame reception
+
+3. **Re-provision if needed:**
+   - Use Web Serial from dashboard to re-provision
+   - Verify WiFi credentials in NVS
+   - Confirm mDNS can reach mothership
+   - Check for firmware update (0.2.19 → 0.2.24)
+
+4. **Verify node appears in system:**
+   ```bash
+   curl -s https://spaxel.ardenone.com/api/nodes | jq .
+   ```
+   Should show at least one node with `status: "online"`
+
+### Then Proceed with Baseline Capture
+
+Once nodes are connected and links are active:
+
+#### Physical Precondition
+- ✅ **Operator confirms: ROOM IS EMPTY**
+- ✅ No people in detection zone
+- ✅ No moving objects (fans, etc.)
+- ✅ Quiet environment
+
+#### Capture Process
+```bash
+# 1. Start 60s capture
+curl -s -X POST https://spaxel.ardenone.com/api/baseline/capture \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq .
+```
+Expected: `"links_captured": <N>` where N > 0
 
 ```bash
-# Capture response
-{
-  "ok": true,
-  "links_captured": 2,
-  "links": ["link1", "link2"]
-}
-
-# Baseline list
-[
-  {"link_id": "...", "confidence": 0.92, "n_sub": 64, "snapshot_time_ms": ...}
-]
-
-# deltaRMS observations
-link1: 0.019
-link2: 0.021
+# 2. Wait 60s + EMA stabilization (tau=30s)
+# Total: ~90-120 seconds
 ```
+
+```bash
+# 3. Verify baseline recorded
+curl -s https://spaxel.ardenone.com/api/baseline | jq .
+```
+Expected: Array of baseline entries with:
+- `link_id` per link
+- `confidence > 0.8`
+- `n_sub: 64`
+- `snapshot_time_ms` recent
+
+```bash
+# 4. Verify deltaRMS ~0.02 (empty-room noise floor)
+# Check dashboard or metrics API
+```
+Expected: deltaRMS ~0.02 ± 0.01
+
+## Dependency Chain
+
+This task is **split-child 2 of bf-3v39** with explicit dependencies:
+
+1. **Child 1:** spaxel-082135bc - "Node connectivity verification"
+   - **Status:** Open, BLOCKED (node offline since Aug 7)
+
+2. **Child 2:** spaxel-65c76469 - **THIS TASK** (empty-room baseline capture via API)
+   - **Status:** InProgress, BLOCKED (depends on child 1)
+
+3. **Child 3:** spaxel-b075c0f3 - "Run walk-through presence test and record deltaRMS spike"
+   - **Status:** Open (blocked by child 1)
+
+4. **Child 4:** spaxel-2ce98275 - "Verify presence blob in dashboard and document final verification record"
+   - **Status:** Open (blocked by child 3)
 
 ## Troubleshooting
 
@@ -164,7 +227,8 @@ link2: 0.021
 - Check mothership logs: `kubectl -n spaxel logs deployment/mothership`
 - Verify database is writable: check SQLite file permissions
 
-## Parent Bead Reference
+---
 
-This verification is split-child 2 of **bf-3v39** (presence-detection verification).
-Depends on successful node connectivity verification from child 1.
+**Last Updated:** 2026-08-29 09:06 UTC
+**Mothership:** https://spaxel.ardenone.com
+**Status:** BLOCKED - Awaiting node connectivity (Child 1)
