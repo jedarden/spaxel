@@ -2,8 +2,10 @@
 """
 CSI Frame Rate Measurement Script for Ambient Traffic Analysis
 
-Connects to the Spaxel mothership WebSocket endpoint, collects CSI frame statistics,
-and categorizes frames as beacon (from AP) vs data (from other nodes).
+Reads CSI frames from the mothership's replay store file and categorizes them
+to measure frame rates, beacon vs data traffic, and packet statistics.
+
+This is part of ADR-003 / bead spaxel-76601bae.
 
 Usage:
     python scripts/measure_csi_rate.py [OPTIONS]
@@ -12,15 +14,15 @@ Options:
     --duration SECONDS    Measurement duration in seconds (default: 300 = 5 minutes)
     --output FILE         Output file path (default: stdout)
     --format FORMAT       Output format: json or csv (default: json)
+    --replay-file PATH   Path to CSI replay file (default: /data/spaxel/csi_replay.bin)
     --ap-bssid MAC        AP BSSID to classify beacon frames (auto-detected if not set)
-    --url URL             WebSocket URL (default: ws://localhost:8080/ws/node)
     --help                Show this help message
 
 Output (JSON):
     {
-        "start_time": "2024-03-15T14:32:05Z",
-        "end_time": "2024-03-15T14:37:05Z",
-        "duration_s": 300,
+        "start_time": "2024-03-15T14:32:05.123Z",
+        "end_time": "2024-03-15T14:37:05.456Z",
+        "duration_s": 300.333,
         "total_frames": 15234,
         "frames_per_second": 50.78,
         "beacon_frames": 12045,
@@ -28,61 +30,72 @@ Output (JSON):
         "data_frames": 3189,
         "data_rate_hz": 10.63,
         "ap_bssid": "AA:BB:CC:DD:EE:FF",
+        "unique_links": 5,
         "links": {
             "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55": {
                 "peer_mac": "00:11:22:33:44:55",
+                "node_mac": "AA:BB:CC:DD:EE:FF",
                 "frame_count": 15234,
                 "avg_rssi_dbm": -45.2,
-                "avg_channel": 6
+                "avg_channel": 6,
+                "min_rssi_dbm": -52,
+                "max_rssi_dbm": -38
             }
         },
         "frame_timestamps": [1710505925.123, 1710505925.145, ...]
     }
 
 Output (CSV):
-    timestamp,frame_type,peer_mac,rssi_dbm,channel,link_id
-    2024-03-15T14:32:05.123Z,beacon,AA:BB:CC:DD:EE:FF,-45,6,AA:BB:CC:DD:EE:FF:00:11:22:33:44:55
+    timestamp_iso,node_mac,peer_mac,rssi_dbm,channel,n_sub,frame_type,link_id
+    2024-03-15T14:32:05.123Z,AA:BB:CC:DD:EE:FF,00:11:22:33:44:55,-45,6,64,beacon,AA:BB:CC:DD:EE:FF:00:11:22:33:44:55
     ...
-
-This is part of ADR-003 / bead spaxel-76601bae.
 """
 
 import argparse
-import asyncio
+import struct
 import json
 import sys
 import csv
 from datetime import datetime, timezone
 from collections import defaultdict
-from typing import Dict, List, Optional
-
-try:
-    import websockets
-    from websockets.exceptions import ConnectionClosed
-except ImportError:
-    print("Error: websockets package required. Install with: pip install websockets", file=sys.stderr)
-    sys.exit(1)
+from typing import Dict, List, Optional, Tuple
+import os
 
 
-class CSIMeasurer:
-    """Collects and categorizes CSI frame statistics from WebSocket stream."""
+class CSIReplayReader:
+    """Reads CSI replay file and extracts frame statistics."""
 
-    def __init__(self, ap_bssid: Optional[str] = None):
-        self.ap_bssid = ap_bssid  # AP BSSID to classify beacon frames
-        self.start_time: Optional[datetime] = None
-        self.end_time: Optional[datetime] = None
+    # CSI Replay file format
+    FILE_MAGIC = b"SPAXLREP"
+    HEADER_SIZE = 32  # magic(8) + writePos(8) + oldestPos(8) + wrapPos(8)
+    RECORD_OVERHEAD = 10  # recvTimeNS(8) + frameLen(2)
+
+    # CSI frame header
+    FRAME_HEADER_SIZE = 24
+    MAX_FRAME_SIZE = 280  # 24 + 128*2
+
+    def __init__(self, replay_file: str, ap_bssid: Optional[str] = None):
+        self.replay_file = replay_file
+        self.ap_bssid = ap_bssid
+
+        # File positions
+        self.write_pos = 0
+        self.oldest_pos = 0
+        self.wrap_pos = 0
 
         # Statistics
         self.total_frames = 0
         self.beacon_frames = 0
         self.data_frames = 0
         self.frame_timestamps: List[float] = []
+        self.frame_records: List[Dict] = []
 
         # Per-link statistics
         self.link_stats: Dict[str, Dict] = defaultdict(lambda: {
             "frame_count": 0,
-            "rssi_sum": 0.0,
+            "rssi_values": [],
             "channels": defaultdict(int),
+            "node_mac": "",
             "peer_mac": ""
         })
 
@@ -90,87 +103,147 @@ class CSIMeasurer:
         self.peer_macs: set = set()
         self.ap_candidates: Dict[str, int] = defaultdict(int)  # peer_mac -> frame count
 
-    async def measure(self, url: str, duration: int, output_file: Optional[str] = None,
-                    output_format: str = "json") -> None:
-        """Run the measurement for specified duration."""
-        print(f"Starting CSI measurement for {duration} seconds...", file=sys.stderr)
-        print(f"Connecting to: {url}", file=sys.stderr)
+        # Time range
+        self.first_timestamp_ns: Optional[int] = None
+        self.last_timestamp_ns: Optional[int] = None
+
+    def read_file(self, duration_s: int) -> bool:
+        """Read and parse the replay file for specified duration."""
+        if not os.path.exists(self.replay_file):
+            print(f"Error: Replay file not found: {self.replay_file}", file=sys.stderr)
+            return False
+
+        file_size = os.path.getsize(self.replay_file)
+        if file_size < self.HEADER_SIZE:
+            print(f"Error: File too small to be valid ({file_size} bytes)", file=sys.stderr)
+            return False
 
         try:
-            async with websockets.connect(url) as websocket:
-                self.start_time = datetime.now(timezone.utc)
-                print(f"Connected at {self.start_time.isoformat()}", file=sys.stderr)
+            with open(self.replay_file, 'rb') as f:
+                # Read and validate header
+                if not self._read_header(f):
+                    return False
 
-                # Collection loop
-                await self._collect_frames(websocket, duration)
-
-                self.end_time = datetime.now(timezone.utc)
+                # Read frames
+                self._read_frames(f, duration_s)
 
                 # Auto-detect AP BSSID if not set
                 if self.ap_bssid is None and self.ap_candidates:
-                    # AP is likely the peer MAC with the most frames (beacon source)
                     self.ap_bssid = max(self.ap_candidates.items(), key=lambda x: x[1])[0]
                     print(f"Auto-detected AP BSSID: {self.ap_bssid}", file=sys.stderr)
 
-                # Generate output
-                results = self._generate_results()
-                self._write_results(results, output_file, output_format)
+                return True
 
-                print(f"Measurement complete. Total frames: {self.total_frames}", file=sys.stderr)
-                print(f"  Beacon frames: {self.beacon_frames} ({self.beacon_frames/duration:.2f} Hz)", file=sys.stderr)
-                print(f"  Data frames: {self.data_frames} ({self.data_frames/duration:.2f} Hz)", file=sys.stderr)
+        except IOError as e:
+            print(f"Error reading file: {e}", file=sys.stderr)
+            return False
+        except struct.error as e:
+            print(f"Error parsing file format: {e}", file=sys.stderr)
+            return False
 
-        except ConnectionClosed as e:
-            print(f"Connection closed: {e}", file=sys.stderr)
-            sys.exit(1)
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
+    def _read_header(self, f) -> bool:
+        """Read and validate replay file header."""
+        header_data = f.read(self.HEADER_SIZE)
+        if len(header_data) < self.HEADER_SIZE:
+            print("Error: Could not read complete header", file=sys.stderr)
+            return False
 
-    async def _collect_frames(self, websocket, duration: int) -> None:
-        """Collect CSI frames for the specified duration."""
-        start_timestamp = asyncio.get_event_loop().time()
+        # Parse magic
+        magic = header_data[0:8]
+        if magic != self.FILE_MAGIC:
+            print(f"Error: Invalid magic: {magic!r}", file=sys.stderr)
+            return False
+
+        # Parse positions (little-endian uint64)
+        self.write_pos = struct.unpack('<Q', header_data[8:16])[0]
+        self.oldest_pos = struct.unpack('<Q', header_data[16:24])[0]
+        self.wrap_pos = struct.unpack('<Q', header_data[24:32])[0]
+
+        print(f"Replay file: write_pos={self.write_pos}, oldest_pos={self.oldest_pos}, wrap_pos={self.wrap_pos}", file=sys.stderr)
+        return True
+
+    def _read_frames(self, f, duration_s: int) -> None:
+        """Read CSI frames for specified duration."""
+        start_pos = self.oldest_pos if self.oldest_pos > 0 else self.HEADER_SIZE
+        end_pos = self.write_pos if self.write_pos > start_pos else f.seek(0, 2)  # EOF
+
+        # Seek to first frame
+        f.seek(start_pos)
+
+        start_time = None
+        end_time = None
+        target_duration_ns = duration_s * 1_000_000_000
 
         while True:
-            # Check timeout
-            elapsed = asyncio.get_event_loop().time() - start_timestamp
-            if elapsed >= duration:
+            # Check if we've read enough
+            pos = f.tell()
+
+            # Handle wrap-around
+            if pos >= self.write_pos and self.wrap_pos > 0:
+                f.seek(self.HEADER_SIZE)
+                pos = self.HEADER_SIZE
+
+            # Check if we've wrapped back to write position
+            if pos >= self.write_pos and self.wrap_pos == 0:
                 break
 
-            # Set receive timeout with small slack
-            remaining = duration - elapsed
-            try:
-                data = await asyncio.wait_for(
-                    websocket.recv(),
-                    timeout=min(1.0, remaining + 0.1)
-                )
-            except asyncio.TimeoutError:
+            # Read record header
+            record_header = f.read(10)
+            if len(record_header) < 10:
+                break  # End of file or incomplete record
+
+            recv_time_ns = struct.unpack('<q', record_header[0:8])[0]
+            frame_len = struct.unpack('<H', record_header[8:10])[0]
+
+            # Track time range
+            if self.first_timestamp_ns is None:
+                self.first_timestamp_ns = recv_time_ns
+                start_time = recv_time_ns
+
+            if self.last_timestamp_ns is None or recv_time_ns > self.last_timestamp_ns:
+                self.last_timestamp_ns = recv_time_ns
+                end_time = recv_time_ns
+
+            # Check duration
+            elapsed = end_time - start_time
+            if elapsed >= target_duration_ns:
+                break
+
+            # Read frame data
+            if frame_len > self.MAX_FRAME_SIZE or frame_len < self.FRAME_HEADER_SIZE:
+                # Skip invalid frame
+                f.seek(pos + 10 + frame_len)
                 continue
 
-            # Process frame
-            if isinstance(data, bytes):
-                self._process_frame(data)
-            # Ignore JSON messages (hello, health, ble, etc.)
+            frame_data = f.read(frame_len)
+            if len(frame_data) < frame_len:
+                break  # Incomplete frame
 
-    def _process_frame(self, data: bytes) -> None:
+            # Process frame
+            self._process_frame(frame_data, recv_time_ns)
+
+            # Move to next record
+            pos = f.tell()
+
+    def _process_frame(self, frame_data: bytes, recv_time_ns: int) -> None:
         """Parse and categorize a CSI binary frame."""
-        if len(data) < 24:
+        if len(frame_data) < self.FRAME_HEADER_SIZE:
             return  # Too short to be valid
 
-        # Parse header (24 bytes)
-        node_mac = data[0:6]
-        peer_mac = data[6:12]
-        timestamp_us = int.from_bytes(data[12:20], 'little')
-        rssi = int.from_bytes(data[20:21], 'signed', byteorder='little')
-        channel = data[22]
-        n_sub = data[23]
+        # Parse CSI frame header (24 bytes)
+        node_mac = frame_data[0:6]
+        peer_mac = frame_data[6:12]
+        # timestamp_us = frame_data[12:20]  # Node boot time (not needed for rate analysis)
+        rssi_signed = struct.unpack('<b', frame_data[20:21])[0]  # signed byte
+        channel = frame_data[22]
+        n_sub = frame_data[23]
 
         # Validate
-        if channel == 0 or channel > 14:
+        if channel < 1 or channel > 14:
             return  # Invalid channel
 
-        expected_len = 24 + n_sub * 2
-        if len(data) != expected_len:
+        expected_len = self.FRAME_HEADER_SIZE + n_sub * 2
+        if len(frame_data) != expected_len:
             return  # Payload mismatch
 
         # Format MACs
@@ -178,55 +251,95 @@ class CSIMeasurer:
         peer_mac_str = self._format_mac(peer_mac)
         link_id = f"{node_mac_str}:{peer_mac_str}"
 
-        # Timestamp in seconds (node boot time, approximate)
-        # Use current time for wall-clock timestamp
-        wall_time = datetime.now(timezone.utc).timestamp()
+        # Convert timestamp to seconds (for output)
+        timestamp_s = recv_time_ns / 1_000_000_000
 
         # Update statistics
         self.total_frames += 1
-        self.frame_timestamps.append(wall_time)
+        self.frame_timestamps.append(timestamp_s)
         self.peer_macs.add(peer_mac_str)
         self.ap_candidates[peer_mac_str] += 1
 
         # Categorize as beacon or data
+        # Beacon frames come from the AP (peer_mac == ap_bssid)
         is_beacon = (self.ap_bssid and peer_mac_str == self.ap_bssid)
 
         if is_beacon:
             self.beacon_frames += 1
+            frame_type = "beacon"
         else:
             self.data_frames += 1
+            frame_type = "data"
 
         # Update link stats
         self.link_stats[link_id]["frame_count"] += 1
-        self.link_stats[link_id]["rssi_sum"] += rssi
+        self.link_stats[link_id]["rssi_values"].append(rssi_signed)
         self.link_stats[link_id]["channels"][channel] += 1
+        self.link_stats[link_id]["node_mac"] = node_mac_str
         self.link_stats[link_id]["peer_mac"] = peer_mac_str
+
+        # Store frame record for CSV output
+        self.frame_records.append({
+            "timestamp_ns": recv_time_ns,
+            "timestamp_s": timestamp_s,
+            "node_mac": node_mac_str,
+            "peer_mac": peer_mac_str,
+            "rssi_dbm": rssi_signed,
+            "channel": channel,
+            "n_sub": n_sub,
+            "frame_type": frame_type,
+            "link_id": link_id
+        })
 
     def _format_mac(self, mac_bytes: bytes) -> str:
         """Format 6-byte MAC as uppercase colon-separated hex."""
         return ":".join(f"{b:02X}" for b in mac_bytes)
 
-    def _generate_results(self) -> Dict:
+    def generate_results(self) -> Dict:
         """Generate the results dictionary."""
-        duration_s = (self.end_time - self.start_time).total_seconds()
+        if self.total_frames == 0:
+            return {
+                "error": "No CSI frames found in replay file",
+                "replay_file": self.replay_file
+            }
 
-        # Calculate per-link averages
+        # Calculate duration
+        duration_ns = self.last_timestamp_ns - self.first_timestamp_ns
+        duration_s = duration_ns / 1_000_000_000 if duration_ns > 0 else 0
+
+        # Calculate per-link statistics
         links = {}
         for link_id, stats in self.link_stats.items():
-            avg_rssi = stats["rssi_sum"] / stats["frame_count"] if stats["frame_count"] > 0 else 0
+            if stats["frame_count"] == 0:
+                continue
+
+            rssi_values = stats["rssi_values"]
+            avg_rssi = sum(rssi_values) / len(rssi_values) if rssi_values else 0
+            min_rssi = min(rssi_values) if rssi_values else 0
+            max_rssi = max(rssi_values) if rssi_values else 0
             most_common_channel = max(stats["channels"].items(), key=lambda x: x[1])[0] if stats["channels"] else 0
 
             links[link_id] = {
+                "node_mac": stats["node_mac"],
                 "peer_mac": stats["peer_mac"],
                 "frame_count": stats["frame_count"],
                 "avg_rssi_dbm": round(avg_rssi, 2),
+                "min_rssi_dbm": min_rssi,
+                "max_rssi_dbm": max_rssi,
                 "avg_channel": most_common_channel
             }
 
+        # Convert timestamps to ISO format for JSON
+        timestamp_isos = [datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                         for ts in self.frame_timestamps[:1000]]  # Limit to 1000 for JSON size
+
+        start_time_iso = datetime.fromtimestamp(self.first_timestamp_ns / 1_000_000_000, tz=timezone.utc).isoformat() if self.first_timestamp_ns else None
+        end_time_iso = datetime.fromtimestamp(self.last_timestamp_ns / 1_000_000_000, tz=timezone.utc).isoformat() if self.last_timestamp_ns else None
+
         return {
-            "start_time": self.start_time.isoformat(),
-            "end_time": self.end_time.isoformat(),
-            "duration_s": duration_s,
+            "start_time": start_time_iso,
+            "end_time": end_time_iso,
+            "duration_s": round(duration_s, 3),
             "total_frames": self.total_frames,
             "frames_per_second": round(self.total_frames / duration_s, 2) if duration_s > 0 else 0,
             "beacon_frames": self.beacon_frames,
@@ -234,18 +347,12 @@ class CSIMeasurer:
             "data_frames": self.data_frames,
             "data_rate_hz": round(self.data_frames / duration_s, 2) if duration_s > 0 else 0,
             "ap_bssid": self.ap_bssid or "auto-detected-from-missing",
+            "unique_links": len(self.link_stats),
             "links": links,
-            "frame_timestamps": self.frame_timestamps  # Wall-clock times
+            "frame_timestamps": timestamp_isos
         }
 
-    def _write_results(self, results: Dict, output_file: Optional[str], format: str) -> None:
-        """Write results to file or stdout."""
-        if format == "csv":
-            self._write_csv(results, output_file)
-        else:
-            self._write_json(results, output_file)
-
-    def _write_json(self, results: Dict, output_file: Optional[str]) -> None:
+    def write_json(self, results: Dict, output_file: Optional[str]) -> None:
         """Write results as JSON."""
         output = json.dumps(results, indent=2)
         if output_file:
@@ -255,45 +362,33 @@ class CSIMeasurer:
         else:
             print(output)
 
-    def _write_csv(self, results: Dict, output_file: Optional[str]) -> None:
-        """Write results as CSV (one row per timestamp)."""
-        # Reconstruct per-frame data from timestamps and stats
-        # This is an approximation since we didn't store per-frame detail
-
-        writer = None
+    def write_csv(self, results: Dict, output_file: Optional[str]) -> None:
+        """Write results as CSV (one row per frame)."""
         output_f = open(output_file, 'w') if output_file else sys.stdout
 
         try:
             writer = csv.writer(output_f)
-            writer.writerow(["timestamp", "frame_type", "peer_mac", "rssi_dbm", "channel", "link_id"])
+            writer.writerow([
+                "timestamp_iso", "node_mac", "peer_mac", "rssi_dbm",
+                "channel", "n_sub", "frame_type", "link_id"
+            ])
 
-            # Distribute frame types proportionally across timestamps
-            beacon_ratio = results["beacon_frames"] / results["total_frames"] if results["total_frames"] > 0 else 0
-
-            # Use link stats to write representative rows
-            for link_id, link_stats in results["links"].items():
-                peer_mac = link_stats["peer_mac"]
-                avg_rssi = link_stats["avg_rssi_dbm"]
-                avg_channel = link_stats["avg_channel"]
-                frame_count = link_stats["frame_count"]
-
-                # Determine if this is a beacon link
-                is_beacon = (results["ap_bssid"] and peer_mac == results["ap_bssid"])
-                frame_type = "beacon" if is_beacon else "data"
-
-                # Write one row per frame (approximate - distribute timestamps)
-                frames_for_link = min(frame_count, len(results["frame_timestamps"]))
-                for i in range(frames_for_link):
-                    ts = results["frame_timestamps"][i] if i < len(results["frame_timestamps"]) else ""
-                    if ts:
-                        ts_dt = datetime.fromtimestamp(ts, timezone.utc).isoformat()
-                    else:
-                        ts_dt = ""
-
-                    writer.writerow([ts_dt, frame_type, peer_mac, avg_rssi, avg_channel, link_id])
+            # Write all frame records
+            for record in self.frame_records:
+                timestamp_iso = datetime.fromtimestamp(record["timestamp_s"], tz=timezone.utc).isoformat()
+                writer.writerow([
+                    timestamp_iso,
+                    record["node_mac"],
+                    record["peer_mac"],
+                    record["rssi_dbm"],
+                    record["channel"],
+                    record["n_sub"],
+                    record["frame_type"],
+                    record["link_id"]
+                ])
 
             if output_file:
-                print(f"CSV written to {output_file}", file=sys.stderr)
+                print(f"CSV written to {output_file} ({len(self.frame_records)} frames)", file=sys.stderr)
 
         finally:
             if output_file and output_f != sys.stdout:
@@ -302,7 +397,7 @@ class CSIMeasurer:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Measure CSI frame rate and categorize frames (beacon vs data)",
+        description="Measure CSI frame rate from replay store file",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
@@ -323,30 +418,41 @@ def main():
         help="Output format (default: json)"
     )
     parser.add_argument(
+        "--replay-file",
+        type=str,
+        default="/data/spaxel/csi_replay.bin",
+        help="Path to CSI replay file (default: /data/spaxel/csi_replay.bin)"
+    )
+    parser.add_argument(
         "--ap-bssid",
         type=str,
         help="AP BSSID to classify beacon frames (format: AA:BB:CC:DD:EE:FF). Auto-detected if not set."
     )
-    parser.add_argument(
-        "--url",
-        type=str,
-        default="ws://localhost:8080/ws/node",
-        help="WebSocket URL to connect to (default: ws://localhost:8080/ws/node)"
-    )
 
     args = parser.parse_args()
 
-    measurer = CSIMeasurer(ap_bssid=args.ap_bssid)
+    reader = CSIReplayReader(args.replay_file, ap_bssid=args.ap_bssid)
 
-    try:
-        asyncio.run(measurer.measure(
-            url=args.url,
-            duration=args.duration,
-            output_file=args.output,
-            output_format=args.format
-        ))
-    except KeyboardInterrupt:
-        print("\nMeasurement interrupted by user", file=sys.stderr)
+    print(f"Reading CSI replay file: {args.replay_file}", file=sys.stderr)
+    print(f"Duration: {args.duration} seconds", file=sys.stderr)
+
+    if reader.read_file(args.duration):
+        # Generate and write results
+        results = reader.generate_results()
+
+        if args.format == "csv":
+            reader.write_csv(results, args.output)
+        else:
+            reader.write_json(results, args.output)
+
+        print(f"\nSummary:", file=sys.stderr)
+        print(f"  Total frames: {results.get('total_frames', 0)}", file=sys.stderr)
+        print(f"  Frames/sec: {results.get('frames_per_second', 0)}", file=sys.stderr)
+        print(f"  Beacon frames: {results.get('beacon_frames', 0)} ({results.get('beacon_rate_hz', 0)} Hz)", file=sys.stderr)
+        print(f"  Data frames: {results.get('data_frames', 0)} ({results.get('data_rate_hz', 0)} Hz)", file=sys.stderr)
+        print(f"  Unique links: {results.get('unique_links', 0)}", file=sys.stderr)
+    else:
+        print("Failed to read CSI replay file", file=sys.stderr)
         sys.exit(1)
 
 
