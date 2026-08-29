@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
-	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -16,96 +15,44 @@ func TestZoneBounds(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	// Open the database and initialize zones table
+	// Create a Store instance (which initializes the zones table with the correct schema)
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	// Get the underlying database to insert test zones directly
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
 	defer db.Close()
 
-	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		t.Fatalf("Failed to enable foreign keys: %v", err)
-	}
-
-	// Create zones table
+	// Insert test zones using the correct schema (INTEGER AUTOINCREMENT id)
 	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS zones (
-			id             TEXT PRIMARY KEY,
-			name           TEXT    NOT NULL,
-			color          TEXT,
-			min_x          REAL NOT NULL,
-			min_y          REAL NOT NULL,
-			min_z          REAL NOT NULL,
-			max_x          REAL NOT NULL,
-			max_y          REAL NOT NULL,
-			max_z          REAL NOT NULL,
-			enabled        INTEGER NOT NULL DEFAULT 1,
-			zone_type      TEXT    NOT NULL DEFAULT 'normal',
-			is_children_zone INTEGER NOT NULL DEFAULT 0,
-			created_at      INTEGER
-		);
-	`)
+		INSERT INTO zones (name, min_x, min_y, min_z, max_x, max_y, max_z, enabled)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, "Kitchen", 0.0, 0.0, 0.0, 4.0, 3.0, 2.5, 1)
 	if err != nil {
-		t.Fatalf("Failed to create zones table: %v", err)
+		t.Fatalf("Failed to insert Kitchen zone: %v", err)
 	}
 
-	// Insert test zones
-	now := time.Now().UnixNano()
-	testZones := []struct {
-		id          string
-		name        string
-		color       string
-		minX, minY, minZ float64
-		maxX, maxY, maxZ float64
-		enabled     bool
-	}{
-		{
-			id:     "zone_kitchen",
-			name:   "Kitchen",
-			color:  "#ff5722",
-			minX:   0.0, minY: 0.0, minZ: 0.0,
-			maxX:   4.0, maxY: 3.0, maxZ: 2.5,
-			enabled: true,
-		},
-		{
-			id:     "zone_bedroom",
-			name:   "Bedroom",
-			color:  "#4fc3f7",
-			minX:   5.0, minY: 0.0, minZ: 0.0,
-			maxX:   9.0, maxY: 4.0, maxZ: 2.5,
-			enabled: true,
-		},
-		{
-			id:     "zone_hallway",
-			name:   "Hallway",
-			color:  "#4caf50",
-			minX:   4.0, minY: 3.0, minZ: 0.0,
-			maxX:   5.0, maxY: 8.0, maxZ: 2.5,
-			enabled: false, // Disabled zone
-		},
-	}
-
-	for _, z := range testZones {
-		enabled := 0
-		if z.enabled {
-			enabled = 1
-		}
-		_, err := db.Exec(`
-			INSERT INTO zones (id, name, color, min_x, min_y, min_z, max_x, max_y, max_z, enabled, zone_type, is_children_zone, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, z.id, z.name, z.color, z.minX, z.minY, z.minZ, z.maxX, z.maxY, z.maxZ, enabled, "normal", 0, now)
-		if err != nil {
-			t.Fatalf("Failed to insert test zone: %v", err)
-		}
-	}
-
-	// Create a Store instance
-	store, err := NewStore(dbPath)
+	_, err = db.Exec(`
+		INSERT INTO zones (name, min_x, min_y, min_z, max_x, max_y, max_z, enabled)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, "Bedroom", 5.0, 0.0, 0.0, 9.0, 4.0, 2.5, 1)
 	if err != nil {
-		t.Fatalf("Failed to create store: %v", err)
+		t.Fatalf("Failed to insert Bedroom zone: %v", err)
 	}
-	defer store.Close()
+
+	_, err = db.Exec(`
+		INSERT INTO zones (name, min_x, min_y, min_z, max_x, max_y, max_z, enabled)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, "Hallway", 4.0, 3.0, 0.0, 5.0, 8.0, 2.5, 0)
+	if err != nil {
+		t.Fatalf("Failed to insert Hallway zone: %v", err)
+	}
 
 	// Test 1: Get an existing enabled zone
 	t.Run("existing enabled zone", func(t *testing.T) {
@@ -115,9 +62,6 @@ func TestZoneBounds(t *testing.T) {
 		}
 		if geom == nil {
 			t.Fatal("Expected geometry, got nil")
-		}
-		if geom.ID != "zone_kitchen" {
-			t.Errorf("Expected ID 'zone_kitchen', got '%s'", geom.ID)
 		}
 		if geom.Name != "Kitchen" {
 			t.Errorf("Expected name 'Kitchen', got '%s'", geom.Name)
@@ -141,9 +85,6 @@ func TestZoneBounds(t *testing.T) {
 		}
 		if geom == nil {
 			t.Fatal("Expected geometry, got nil")
-		}
-		if geom.ID != "zone_bedroom" {
-			t.Errorf("Expected ID 'zone_bedroom', got '%s'", geom.ID)
 		}
 		if geom.Name != "Bedroom" {
 			t.Errorf("Expected name 'Bedroom', got '%s'", geom.Name)
