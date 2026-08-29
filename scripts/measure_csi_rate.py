@@ -1,460 +1,431 @@
 #!/usr/bin/env python3
 """
-CSI Frame Rate Measurement Script for Ambient Traffic Analysis
+CSI Frame Rate Measurement Script for Spaxel
 
-Reads CSI frames from the mothership's replay store file and categorizes them
-to measure frame rates, beacon vs data traffic, and packet statistics.
-
-This is part of ADR-003 / bead spaxel-76601bae.
+This script reads CSI frames from the mothership's replay store and produces
+statistics about frame arrival rates, categorizing frames as beacon vs data.
 
 Usage:
     python scripts/measure_csi_rate.py [OPTIONS]
 
 Options:
     --duration SECONDS    Measurement duration in seconds (default: 300 = 5 minutes)
-    --output FILE         Output file path (default: stdout)
+    --output PATH         Output file path (default: stdout)
     --format FORMAT       Output format: json or csv (default: json)
-    --replay-file PATH   Path to CSI replay file (default: /data/spaxel/csi_replay.bin)
-    --ap-bssid MAC        AP BSSID to classify beacon frames (auto-detected if not set)
-    --help                Show this help message
+    --replay-path PATH    Path to CSI replay store (default: /data/csi_replay.bin)
+    --ap-bssid MAC        AP BSSID for beacon detection (format: AA:BB:CC:DD:EE:FF)
+                          If not provided, beacons are detected automatically
 
 Output (JSON):
     {
-        "start_time": "2024-03-15T14:32:05.123Z",
-        "end_time": "2024-03-15T14:37:05.456Z",
-        "duration_s": 300.333,
-        "total_frames": 15234,
-        "frames_per_second": 50.78,
-        "beacon_frames": 12045,
-        "beacon_rate_hz": 40.15,
-        "data_frames": 3189,
-        "data_rate_hz": 10.63,
-        "ap_bssid": "AA:BB:CC:DD:EE:FF",
-        "unique_links": 5,
+        "measurement_start_ms": 1234567890,
+        "measurement_end_ms": 1234567890,
+        "duration_seconds": 300,
+        "total_frames": 12345,
+        "frames_per_second": 41.15,
+        "beacon_frames": 8234,
+        "beacon_rate_hz": 27.45,
+        "data_frames": 4111,
+        "data_rate_hz": 13.70,
         "links": {
-            "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55": {
-                "peer_mac": "00:11:22:33:44:55",
-                "node_mac": "AA:BB:CC:DD:EE:FF",
-                "frame_count": 15234,
-                "avg_rssi_dbm": -45.2,
-                "avg_channel": 6,
-                "min_rssi_dbm": -52,
-                "max_rssi_dbm": -38
+            "AA:BB:CC:DD:EE:FF": {
+                "frames": 2345,
+                "rate_hz": 7.82,
+                "type": "beacon"
             }
-        },
-        "frame_timestamps": [1710505925.123, 1710505925.145, ...]
+        }
     }
-
-Output (CSV):
-    timestamp_iso,node_mac,peer_mac,rssi_dbm,channel,n_sub,frame_type,link_id
-    2024-03-15T14:32:05.123Z,AA:BB:CC:DD:EE:FF,00:11:22:33:44:55,-45,6,64,beacon,AA:BB:CC:DD:EE:FF:00:11:22:33:44:55
-    ...
 """
 
 import argparse
 import struct
 import json
-import sys
 import csv
-from datetime import datetime, timezone
-from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+import sys
 import os
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+
+
+# Constants from the CSI replay store format
+FILE_MAGIC = b"SPAXLREC"
+HEADER_SIZE = 32
+RECORD_OVERHEAD = 10  # recvTimeNS(8) + frameLen(2)
+CSI_HEADER_SIZE = 24
 
 
 class CSIReplayReader:
-    """Reads CSI replay file and extracts frame statistics."""
+    """Read CSI frames from the mothership's replay store."""
 
-    # CSI Replay file format
-    FILE_MAGIC = b"SPAXLREP"
-    HEADER_SIZE = 32  # magic(8) + writePos(8) + oldestPos(8) + wrapPos(8)
-    RECORD_OVERHEAD = 10  # recvTimeNS(8) + frameLen(2)
-
-    # CSI frame header
-    FRAME_HEADER_SIZE = 24
-    MAX_FRAME_SIZE = 280  # 24 + 128*2
-
-    def __init__(self, replay_file: str, ap_bssid: Optional[str] = None):
-        self.replay_file = replay_file
-        self.ap_bssid = ap_bssid
-
-        # File positions
+    def __init__(self, replay_path: str):
+        self.replay_path = Path(replay_path)
+        self.file = None
+        self.file_size = 0
         self.write_pos = 0
         self.oldest_pos = 0
-        self.wrap_pos = 0
 
-        # Statistics
-        self.total_frames = 0
-        self.beacon_frames = 0
-        self.data_frames = 0
-        self.frame_timestamps: List[float] = []
-        self.frame_records: List[Dict] = []
+    def __enter__(self):
+        self.file = open(self.replay_path, 'rb')
+        self._read_header()
+        return self
 
-        # Per-link statistics
-        self.link_stats: Dict[str, Dict] = defaultdict(lambda: {
-            "frame_count": 0,
-            "rssi_values": [],
-            "channels": defaultdict(int),
-            "node_mac": "",
-            "peer_mac": ""
-        })
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.file:
+            self.file.close()
 
-        # Track peer MACs for auto-detection
-        self.peer_macs: set = set()
-        self.ap_candidates: Dict[str, int] = defaultdict(int)  # peer_mac -> frame count
+    def _read_header(self):
+        """Read and validate the replay store header."""
+        header_data = self.file.read(HEADER_SIZE)
+        if len(header_data) < HEADER_SIZE:
+            raise ValueError(f"File too small to contain header: {len(header_data)} bytes")
 
-        # Time range
-        self.first_timestamp_ns: Optional[int] = None
-        self.last_timestamp_ns: Optional[int] = None
+        magic = header_data[:8]
+        if magic != FILE_MAGIC:
+            raise ValueError(f"Invalid file magic: {magic}")
 
-    def read_file(self, duration_s: int) -> bool:
-        """Read and parse the replay file for specified duration."""
-        if not os.path.exists(self.replay_file):
-            print(f"Error: Replay file not found: {self.replay_file}", file=sys.stderr)
-            return False
-
-        file_size = os.path.getsize(self.replay_file)
-        if file_size < self.HEADER_SIZE:
-            print(f"Error: File too small to be valid ({file_size} bytes)", file=sys.stderr)
-            return False
-
-        try:
-            with open(self.replay_file, 'rb') as f:
-                # Read and validate header
-                if not self._read_header(f):
-                    return False
-
-                # Read frames
-                self._read_frames(f, duration_s)
-
-                # Auto-detect AP BSSID if not set
-                if self.ap_bssid is None and self.ap_candidates:
-                    self.ap_bssid = max(self.ap_candidates.items(), key=lambda x: x[1])[0]
-                    print(f"Auto-detected AP BSSID: {self.ap_bssid}", file=sys.stderr)
-
-                return True
-
-        except IOError as e:
-            print(f"Error reading file: {e}", file=sys.stderr)
-            return False
-        except struct.error as e:
-            print(f"Error parsing file format: {e}", file=sys.stderr)
-            return False
-
-    def _read_header(self, f) -> bool:
-        """Read and validate replay file header."""
-        header_data = f.read(self.HEADER_SIZE)
-        if len(header_data) < self.HEADER_SIZE:
-            print("Error: Could not read complete header", file=sys.stderr)
-            return False
-
-        # Parse magic
-        magic = header_data[0:8]
-        if magic != self.FILE_MAGIC:
-            print(f"Error: Invalid magic: {magic!r}", file=sys.stderr)
-            return False
-
-        # Parse positions (little-endian uint64)
         self.write_pos = struct.unpack('<Q', header_data[8:16])[0]
         self.oldest_pos = struct.unpack('<Q', header_data[16:24])[0]
-        self.wrap_pos = struct.unpack('<Q', header_data[24:32])[0]
 
-        print(f"Replay file: write_pos={self.write_pos}, oldest_pos={self.oldest_pos}, wrap_pos={self.wrap_pos}", file=sys.stderr)
-        return True
+        self.file_size = os.fstat(self.file.fileno()).st_size
 
-    def _read_frames(self, f, duration_s: int) -> None:
-        """Read CSI frames for specified duration."""
-        start_pos = self.oldest_pos if self.oldest_pos > 0 else self.HEADER_SIZE
-        end_pos = self.write_pos if self.write_pos > start_pos else f.seek(0, 2)  # EOF
+        # Check if file has data
+        if self.oldest_pos == 0:
+            raise ValueError("Replay store is empty (no data recorded)")
 
-        # Seek to first frame
-        f.seek(start_pos)
+    def scan_frames(self, duration_seconds: Optional[float] = None):
+        """
+        Scan CSI frames from the replay store.
 
+        Yields tuples of (recv_time_ms, frame_bytes) for each frame.
+        Stops after duration_seconds if provided.
+        """
+        if self.oldest_pos == 0:
+            return
+
+        current_pos = self.oldest_pos
         start_time = None
-        end_time = None
-        target_duration_ns = duration_s * 1_000_000_000
+        end_time_ns = None
 
-        while True:
-            # Check if we've read enough
-            pos = f.tell()
+        if duration_seconds:
+            end_time_ns = time.time_ns() + int(duration_seconds * 1e9)
 
-            # Handle wrap-around
-            if pos >= self.write_pos and self.wrap_pos > 0:
-                f.seek(self.HEADER_SIZE)
-                pos = self.HEADER_SIZE
-
-            # Check if we've wrapped back to write position
-            if pos >= self.write_pos and self.wrap_pos == 0:
-                break
+        while current_pos < self.write_pos:
+            # Seek to current record position
+            self.file.seek(current_pos)
 
             # Read record header
-            record_header = f.read(10)
-            if len(record_header) < 10:
-                break  # End of file or incomplete record
+            record_header = self.file.read(RECORD_OVERHEAD)
+            if len(record_header) < RECORD_OVERHEAD:
+                # Reached end or incomplete record
+                break
 
-            recv_time_ns = struct.unpack('<q', record_header[0:8])[0]
+            recv_time_ns = struct.unpack('<q', record_header[:8])[0]
             frame_len = struct.unpack('<H', record_header[8:10])[0]
 
-            # Track time range
-            if self.first_timestamp_ns is None:
-                self.first_timestamp_ns = recv_time_ns
+            # Check if we've exceeded duration
+            if start_time is None:
                 start_time = recv_time_ns
-
-            if self.last_timestamp_ns is None or recv_time_ns > self.last_timestamp_ns:
-                self.last_timestamp_ns = recv_time_ns
-                end_time = recv_time_ns
-
-            # Check duration
-            elapsed = end_time - start_time
-            if elapsed >= target_duration_ns:
+            if end_time_ns and recv_time_ns > end_time_ns:
                 break
 
             # Read frame data
-            if frame_len > self.MAX_FRAME_SIZE or frame_len < self.FRAME_HEADER_SIZE:
-                # Skip invalid frame
-                f.seek(pos + 10 + frame_len)
-                continue
-
-            frame_data = f.read(frame_len)
+            frame_data = self.file.read(frame_len)
             if len(frame_data) < frame_len:
-                break  # Incomplete frame
+                # Incomplete frame
+                break
 
-            # Process frame
-            self._process_frame(frame_data, recv_time_ns)
+            recv_time_ms = recv_time_ns // 1_000_000
+            yield (recv_time_ms, frame_data)
 
             # Move to next record
-            pos = f.tell()
+            current_pos += RECORD_OVERHEAD + frame_len
 
-    def _process_frame(self, frame_data: bytes, recv_time_ns: int) -> None:
-        """Parse and categorize a CSI binary frame."""
-        if len(frame_data) < self.FRAME_HEADER_SIZE:
-            return  # Too short to be valid
+            # Handle wrap-around
+            if current_pos >= self.file_size:
+                current_pos = HEADER_SIZE
 
-        # Parse CSI frame header (24 bytes)
-        node_mac = frame_data[0:6]
-        peer_mac = frame_data[6:12]
-        # timestamp_us = frame_data[12:20]  # Node boot time (not needed for rate analysis)
-        rssi_signed = struct.unpack('<b', frame_data[20:21])[0]  # signed byte
-        channel = frame_data[22]
-        n_sub = frame_data[23]
 
-        # Validate
-        if channel < 1 or channel > 14:
-            return  # Invalid channel
+class CSIFrameParser:
+    """Parse CSI binary frames."""
 
-        expected_len = self.FRAME_HEADER_SIZE + n_sub * 2
-        if len(frame_data) != expected_len:
-            return  # Payload mismatch
+    @staticmethod
+    def parse_frame(frame_data: bytes) -> Dict:
+        """Parse a CSI frame and return its fields as a dictionary."""
+        if len(frame_data) < CSI_HEADER_SIZE:
+            return None
 
-        # Format MACs
-        node_mac_str = self._format_mac(node_mac)
-        peer_mac_str = self._format_mac(peer_mac)
-        link_id = f"{node_mac_str}:{peer_mac_str}"
+        frame = {}
 
-        # Convert timestamp to seconds (for output)
-        timestamp_s = recv_time_ns / 1_000_000_000
+        # Parse header
+        frame['node_mac'] = ':'.join(f'{b:02X}' for b in frame_data[0:6])
+        frame['peer_mac'] = ':'.join(f'{b:02X}' for b in frame_data[6:12])
+        frame['timestamp_us'] = struct.unpack('<Q', frame_data[12:20])[0]
+        frame['rssi'] = struct.unpack('<b', frame_data[20:21])[0]
+        frame['noise_floor'] = struct.unpack('<b', frame_data[21:22])[0]
+        frame['channel'] = struct.unpack('<B', frame_data[22:23])[0]
+        frame['n_sub'] = struct.unpack('<B', frame_data[23:24])[0]
 
-        # Update statistics
-        self.total_frames += 1
-        self.frame_timestamps.append(timestamp_s)
-        self.peer_macs.add(peer_mac_str)
-        self.ap_candidates[peer_mac_str] += 1
+        return frame
 
-        # Categorize as beacon or data
-        # Beacon frames come from the AP (peer_mac == ap_bssid)
-        is_beacon = (self.ap_bssid and peer_mac_str == self.ap_bssid)
 
-        if is_beacon:
-            self.beacon_frames += 1
-            frame_type = "beacon"
-        else:
-            self.data_frames += 1
-            frame_type = "data"
+class CSIFrameAnalyzer:
+    """Analyze CSI frames and produce statistics."""
 
-        # Update link stats
-        self.link_stats[link_id]["frame_count"] += 1
-        self.link_stats[link_id]["rssi_values"].append(rssi_signed)
-        self.link_stats[link_id]["channels"][channel] += 1
-        self.link_stats[link_id]["node_mac"] = node_mac_str
-        self.link_stats[link_id]["peer_mac"] = peer_mac_str
+    def __init__(self, ap_bssid: Optional[str] = None):
+        self.ap_bssid = ap_bssid
+        self.frames = []
+        self.links: Dict[str, Dict] = {}
 
-        # Store frame record for CSV output
-        self.frame_records.append({
-            "timestamp_ns": recv_time_ns,
-            "timestamp_s": timestamp_s,
-            "node_mac": node_mac_str,
-            "peer_mac": peer_mac_str,
-            "rssi_dbm": rssi_signed,
-            "channel": channel,
-            "n_sub": n_sub,
-            "frame_type": frame_type,
-            "link_id": link_id
+    def add_frame(self, timestamp_ms: int, frame: Dict):
+        """Add a frame to the analysis."""
+        self.frames.append({
+            'timestamp_ms': timestamp_ms,
+            'node_mac': frame['node_mac'],
+            'peer_mac': frame['peer_mac'],
+            'rssi': frame['rssi'],
+            'channel': frame['channel'],
+            'n_sub': frame['n_sub']
         })
 
-    def _format_mac(self, mac_bytes: bytes) -> str:
-        """Format 6-byte MAC as uppercase colon-separated hex."""
-        return ":".join(f"{b:02X}" for b in mac_bytes)
+        # Track per-link statistics
+        link_id = f"{frame['node_mac']}:{frame['peer_mac']}"
+        if link_id not in self.links:
+            self.links[link_id] = {
+                'frames': 0,
+                'rssi_sum': 0,
+                'type': 'unknown'
+            }
 
-    def generate_results(self) -> Dict:
-        """Generate the results dictionary."""
-        if self.total_frames == 0:
+        self.links[link_id]['frames'] += 1
+        self.links[link_id]['rssi_sum'] += frame['rssi']
+
+    def categorize_frames(self):
+        """Categorize frames as beacon or data."""
+        if not self.frames:
+            return
+
+        # Detect AP BSSID if not provided
+        if self.ap_bssid is None:
+            # Auto-detect: AP is the most common peer MAC
+            from collections import Counter
+            peer_counts = Counter(f['peer_mac'] for f in self.frames)
+            if peer_counts:
+                self.ap_bssid = peer_counts.most_common(1)[0][0]
+
+        # Categorize frames
+        for link_id, link_stats in self.links.items():
+            _, peer_mac = link_id.split(':', 1)
+            if peer_mac == self.ap_bssid:
+                link_stats['type'] = 'beacon'
+            else:
+                link_stats['type'] = 'data'
+
+    def calculate_statistics(self) -> Dict:
+        """Calculate final statistics."""
+        if not self.frames:
             return {
-                "error": "No CSI frames found in replay file",
-                "replay_file": self.replay_file
+                'total_frames': 0,
+                'frames_per_second': 0.0,
+                'beacon_frames': 0,
+                'beacon_rate_hz': 0.0,
+                'data_frames': 0,
+                'data_rate_hz': 0.0,
+                'links': {}
             }
 
-        # Calculate duration
-        duration_ns = self.last_timestamp_ns - self.first_timestamp_ns
-        duration_s = duration_ns / 1_000_000_000 if duration_ns > 0 else 0
+        timestamps = [f['timestamp_ms'] for f in self.frames]
+        start_ms = min(timestamps)
+        end_ms = max(timestamps)
+        duration_sec = (end_ms - start_ms) / 1000.0
 
-        # Calculate per-link statistics
-        links = {}
-        for link_id, stats in self.link_stats.items():
-            if stats["frame_count"] == 0:
-                continue
+        total_frames = len(self.frames)
+        frames_per_second = total_frames / duration_sec if duration_sec > 0 else 0.0
 
-            rssi_values = stats["rssi_values"]
-            avg_rssi = sum(rssi_values) / len(rssi_values) if rssi_values else 0
-            min_rssi = min(rssi_values) if rssi_values else 0
-            max_rssi = max(rssi_values) if rssi_values else 0
-            most_common_channel = max(stats["channels"].items(), key=lambda x: x[1])[0] if stats["channels"] else 0
+        # Count beacon and data frames
+        beacon_frames = sum(1 for l in self.links.values() if l['type'] == 'beacon')
+        data_frames = sum(1 for l in self.links.values() if l['type'] == 'data')
 
-            links[link_id] = {
-                "node_mac": stats["node_mac"],
-                "peer_mac": stats["peer_mac"],
-                "frame_count": stats["frame_count"],
-                "avg_rssi_dbm": round(avg_rssi, 2),
-                "min_rssi_dbm": min_rssi,
-                "max_rssi_dbm": max_rssi,
-                "avg_channel": most_common_channel
+        # Recalculate based on actual frame counts per link
+        beacon_count = sum(l['frames'] for l in self.links.values() if l['type'] == 'beacon')
+        data_count = sum(l['frames'] for l in self.links.values() if l['type'] == 'data')
+
+        beacon_rate = beacon_count / duration_sec if duration_sec > 0 else 0.0
+        data_rate = data_count / duration_sec if duration_sec > 0 else 0.0
+
+        # Build per-link statistics
+        links_output = {}
+        for link_id, link_stats in self.links.items():
+            node_mac, peer_mac = link_id.split(':', 1)
+            links_output[link_id] = {
+                'node_mac': node_mac,
+                'peer_mac': peer_mac,
+                'frames': link_stats['frames'],
+                'rate_hz': link_stats['frames'] / duration_sec if duration_sec > 0 else 0.0,
+                'avg_rssi': link_stats['rssi_sum'] / link_stats['frames'] if link_stats['frames'] > 0 else 0,
+                'type': link_stats['type']
             }
-
-        # Convert timestamps to ISO format for JSON
-        timestamp_isos = [datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
-                         for ts in self.frame_timestamps[:1000]]  # Limit to 1000 for JSON size
-
-        start_time_iso = datetime.fromtimestamp(self.first_timestamp_ns / 1_000_000_000, tz=timezone.utc).isoformat() if self.first_timestamp_ns else None
-        end_time_iso = datetime.fromtimestamp(self.last_timestamp_ns / 1_000_000_000, tz=timezone.utc).isoformat() if self.last_timestamp_ns else None
 
         return {
-            "start_time": start_time_iso,
-            "end_time": end_time_iso,
-            "duration_s": round(duration_s, 3),
-            "total_frames": self.total_frames,
-            "frames_per_second": round(self.total_frames / duration_s, 2) if duration_s > 0 else 0,
-            "beacon_frames": self.beacon_frames,
-            "beacon_rate_hz": round(self.beacon_frames / duration_s, 2) if duration_s > 0 else 0,
-            "data_frames": self.data_frames,
-            "data_rate_hz": round(self.data_frames / duration_s, 2) if duration_s > 0 else 0,
-            "ap_bssid": self.ap_bssid or "auto-detected-from-missing",
-            "unique_links": len(self.link_stats),
-            "links": links,
-            "frame_timestamps": timestamp_isos
+            'measurement_start_ms': start_ms,
+            'measurement_end_ms': end_ms,
+            'duration_seconds': duration_sec,
+            'total_frames': total_frames,
+            'frames_per_second': round(frames_per_second, 2),
+            'beacon_frames': beacon_count,
+            'beacon_rate_hz': round(beacon_rate, 2),
+            'data_frames': data_count,
+            'data_rate_hz': round(data_rate, 2),
+            'ap_bssid': self.ap_bssid,
+            'links': links_output
         }
 
-    def write_json(self, results: Dict, output_file: Optional[str]) -> None:
-        """Write results as JSON."""
-        output = json.dumps(results, indent=2)
-        if output_file:
-            with open(output_file, 'w') as f:
-                f.write(output)
-            print(f"Results written to {output_file}", file=sys.stderr)
-        else:
-            print(output)
 
-    def write_csv(self, results: Dict, output_file: Optional[str]) -> None:
-        """Write results as CSV (one row per frame)."""
-        output_f = open(output_file, 'w') if output_file else sys.stdout
+def format_timestamp(ms: int) -> str:
+    """Format millisecond timestamp as ISO8601 string."""
+    return datetime.fromtimestamp(ms / 1000.0).isoformat() + 'Z'
 
-        try:
-            writer = csv.writer(output_f)
-            writer.writerow([
-                "timestamp_iso", "node_mac", "peer_mac", "rssi_dbm",
-                "channel", "n_sub", "frame_type", "link_id"
-            ])
 
-            # Write all frame records
-            for record in self.frame_records:
-                timestamp_iso = datetime.fromtimestamp(record["timestamp_s"], tz=timezone.utc).isoformat()
-                writer.writerow([
-                    timestamp_iso,
-                    record["node_mac"],
-                    record["peer_mac"],
-                    record["rssi_dbm"],
-                    record["channel"],
-                    record["n_sub"],
-                    record["frame_type"],
-                    record["link_id"]
-                ])
+def output_json(stats: Dict, file=None):
+    """Output statistics as JSON."""
+    # Add human-readable timestamps
+    stats['measurement_start_iso'] = format_timestamp(stats['measurement_start_ms'])
+    stats['measurement_end_iso'] = format_timestamp(stats['measurement_end_ms'])
 
-            if output_file:
-                print(f"CSV written to {output_file} ({len(self.frame_records)} frames)", file=sys.stderr)
+    json.dump(stats, file, indent=2)
+    file.write('\n')
 
-        finally:
-            if output_file and output_f != sys.stdout:
-                output_f.close()
+
+def output_csv(stats: Dict, file=None):
+    """Output statistics as CSV."""
+    writer = csv.writer(file)
+
+    # Write summary
+    writer.writerow(['Metric', 'Value'])
+    writer.writerow(['Measurement Start', stats['measurement_start_iso']])
+    writer.writerow(['Measurement End', stats['measurement_end_iso']])
+    writer.writerow(['Duration (seconds)', round(stats['duration_seconds'], 2)])
+    writer.writerow(['Total Frames', stats['total_frames']])
+    writer.writerow(['Frames Per Second', stats['frames_per_second']])
+    writer.writerow(['Beacon Frames', stats['beacon_frames']])
+    writer.writerow(['Beacon Rate (Hz)', stats['beacon_rate_hz']])
+    writer.writerow(['Data Frames', stats['data_frames']])
+    writer.writerow(['Data Rate (Hz)', stats['data_rate_hz']])
+    writer.writerow(['AP BSSID', stats.get('ap_bssid', 'N/A')])
+    writer.writerow([])
+
+    # Write per-link statistics
+    writer.writerow(['Link', 'Node MAC', 'Peer MAC', 'Frames', 'Rate (Hz)', 'Avg RSSI (dBm)', 'Type'])
+    for link_id, link_stats in stats['links'].items():
+        writer.writerow([
+            link_id,
+            link_stats['node_mac'],
+            link_stats['peer_mac'],
+            link_stats['frames'],
+            round(link_stats['rate_hz'], 2),
+            round(link_stats['avg_rssi'], 1),
+            link_stats['type']
+        ])
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Measure CSI frame rate from replay store file",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description='Measure CSI frame rates from Spaxel replay store',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
     )
+
     parser.add_argument(
-        "--duration",
-        type=int,
-        default=300,
-        help="Measurement duration in seconds (default: 300 = 5 minutes)"
+        '--duration',
+        type=float,
+        default=300.0,
+        help='Measurement duration in seconds (default: 300 = 5 minutes)'
     )
+
     parser.add_argument(
-        "--output",
+        '--output',
         type=str,
-        help="Output file path (default: stdout)"
+        default='-',
+        help='Output file path (default: stdout)'
     )
+
     parser.add_argument(
-        "--format",
-        choices=["json", "csv"],
-        default="json",
-        help="Output format (default: json)"
+        '--format',
+        choices=['json', 'csv'],
+        default='json',
+        help='Output format (default: json)'
     )
+
     parser.add_argument(
-        "--replay-file",
+        '--replay-path',
         type=str,
-        default="/data/spaxel/csi_replay.bin",
-        help="Path to CSI replay file (default: /data/spaxel/csi_replay.bin)"
+        default='/data/csi_replay.bin',
+        help='Path to CSI replay store (default: /data/csi_replay.bin)'
     )
+
     parser.add_argument(
-        "--ap-bssid",
+        '--ap-bssid',
         type=str,
-        help="AP BSSID to classify beacon frames (format: AA:BB:CC:DD:EE:FF). Auto-detected if not set."
+        default=None,
+        help='AP BSSID for beacon detection (format: AA:BB:CC:DD:EE:FF). Auto-detected if not provided.'
     )
 
     args = parser.parse_args()
 
-    reader = CSIReplayReader(args.replay_file, ap_bssid=args.ap_bssid)
-
-    print(f"Reading CSI replay file: {args.replay_file}", file=sys.stderr)
-    print(f"Duration: {args.duration} seconds", file=sys.stderr)
-
-    if reader.read_file(args.duration):
-        # Generate and write results
-        results = reader.generate_results()
-
-        if args.format == "csv":
-            reader.write_csv(results, args.output)
-        else:
-            reader.write_json(results, args.output)
-
-        print(f"\nSummary:", file=sys.stderr)
-        print(f"  Total frames: {results.get('total_frames', 0)}", file=sys.stderr)
-        print(f"  Frames/sec: {results.get('frames_per_second', 0)}", file=sys.stderr)
-        print(f"  Beacon frames: {results.get('beacon_frames', 0)} ({results.get('beacon_rate_hz', 0)} Hz)", file=sys.stderr)
-        print(f"  Data frames: {results.get('data_frames', 0)} ({results.get('data_rate_hz', 0)} Hz)", file=sys.stderr)
-        print(f"  Unique links: {results.get('unique_links', 0)}", file=sys.stderr)
-    else:
-        print("Failed to read CSI replay file", file=sys.stderr)
+    # Check if replay store exists
+    if not os.path.exists(args.replay_path):
+        print(f"Error: Replay store not found: {args.replay_path}", file=sys.stderr)
+        print("The mothership may not have recorded any CSI data yet.", file=sys.stderr)
         sys.exit(1)
 
+    # Initialize analyzer
+    analyzer = CSIFrameAnalyzer(ap_bssid=args.ap_bssid)
 
-if __name__ == "__main__":
+    print(f"Starting CSI measurement from {args.replay_path}...", file=sys.stderr)
+    print(f"Duration: {args.duration} seconds", file=sys.stderr)
+
+    # Read and analyze frames
+    try:
+        with CSIReplayReader(args.replay_path) as reader:
+            frame_count = 0
+            for timestamp_ms, frame_data in reader.scan_frames(duration_seconds=args.duration):
+                frame = CSIFrameParser.parse_frame(frame_data)
+                if frame:
+                    analyzer.add_frame(timestamp_ms, frame)
+                    frame_count += 1
+
+                    # Progress indicator
+                    if frame_count % 1000 == 0:
+                        print(f"Processed {frame_count} frames...", file=sys.stderr)
+
+        print(f"Total frames processed: {frame_count}", file=sys.stderr)
+
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Categorize and calculate statistics
+    analyzer.categorize_frames()
+    stats = analyzer.calculate_statistics()
+
+    # Output results
+    if args.output == '-':
+        output_file = sys.stdout
+    else:
+        output_file = open(args.output, 'w')
+
+    try:
+        if args.format == 'json':
+            output_json(stats, output_file)
+        else:
+            output_csv(stats, output_file)
+    finally:
+        if args.output != '-':
+            output_file.close()
+
+    print(f"\nMeasurement complete. Results written to {args.output if args.output != '-' else 'stdout'}", file=sys.stderr)
+
+
+if __name__ == '__main__':
     main()
