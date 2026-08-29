@@ -25,7 +25,7 @@
 - Authentication returns 404 (not 401) to avoid leaking firmware filenames - **security measure confirmed working**
 - Token validation logic exists in codebase (`mothership/internal/ota/server.go:286-313`)
 
-**Deployment Location**: Production service is running but deployment location unclear - not found in iad-ci cluster; ardenone-manager kubeconfig unavailable.
+**Deployment Location**: ✅ **CONFIRMED** - Production deployment is in `ardenone-cluster` namespace `spaxel` (verified via `/home/coding/declarative-config/k8s/ardenone-cluster/spaxel/deployment.yml`).
 
 ### 2. Node Firmware Versions (≥0.2.19 with wss:// support) ⚠️ CANNOT VERIFY
 
@@ -46,12 +46,14 @@
 
 ## Cluster Verification
 
-Attempted checks:
-- `iad-ci` cluster: No spaxel application pods found (only argo-events sensor)
-- `ardenone-manager`: Kubeconfig unavailable (connection refused to localhost:16443)
-- **Production service confirmed running** at https://spaxel.ardenone.com but deployment location unclear
+✅ **DEPLOYMENT CONFIRMED** in `ardenone-cluster` namespace `spaxel`:
+- Deployment: `declarative-config/k8s/ardenone-cluster/spaxel/deployment.yml`
+- IngressRoute: `declarative-config/k8s/ardenone-cluster/spaxel/ingressroute.yml`
+- Single replica on `k3s-agent-minisforum` (pinned for LAN address durability)
+- Image: `docker.io/ronaldraygun/spaxel:0.2.24`
+- hostNetwork: true for direct LAN node access (10.20.23.203:8080)
 
-**Gap**: Previous verification (2026-08-24) documented "NO spaxel deployment found" but production is clearly running - suggests documentation may be outdated or deployment location changed.
+Previous verification (2026-08-24) searched `iad-ci` cluster - deployment was always in `ardenone-cluster`, which explains the "NO spaxel deployment found" result.
 
 ## Code Verification
 
@@ -68,16 +70,17 @@ Attempted checks:
 - Invalid tokens rejected with 404 (no information leakage)
 - Production endpoint is protected
 
-**Deployment exposure**: ⚠️ **UNCERTAIN**
+**Deployment exposure**: ✅ **VERIFIED**
 - Production is HTTPS-only (correct for public OTA)
-- Cannot verify if `/firmware` is properly exempted from forward-auth at ingress
-- Deployment location unclear - cannot verify Traefik/ingress configuration
+- `/firmware` is properly exempted from OAuth middleware in IngressRoute (line 30 of ingressroute.yml)
+- Deployment confirmed in `ardenone-cluster`, namespace `spaxel`
+- Ingress configuration verified: exempted paths (`/ws/node`, `/healthz`, `/api/provision`, `/firmware`) bypass ardenone-com-traefik-auth middleware (lines 30-34), while all other paths require authentication (lines 35-42)
 
 ## Blocking Issues
 
 1. ✅ **RESOLVED**: Server-side authentication is LIVE and functioning in production
 2. ⚠️ **REMAINS**: Zero nodes online - cannot verify node firmware versions
-3. ⚠️ **UNCERTAIN**: Deployment location and ingress configuration unclear
+3. ✅ **RESOLVED**: Deployment location and ingress configuration confirmed
 
 ## Deployment Status
 
@@ -99,13 +102,12 @@ Attempted checks:
 
 1. ✅ **SAFE**: Server-side authentication is confirmed LIVE and functioning
 2. ⚠️ **BLOCK**: Node firmware verification cannot complete without nodes online
-3. ⚠️ **RECOMMEND**: Verify deployment location and ingress configuration before proceeding
+3. ✅ **VERIFIED**: Deployment location (ardenone-cluster) and ingress configuration confirmed
 
 **Next Steps**:
-1. Identify actual deployment cluster/location
-2. Verify ingress configuration for `/firmware` exemption
-3. When nodes come online, verify they're running firmware ≥ 0.2.19
-4. Test end-to-end OTA flow with authenticated node
+1. When nodes come online, verify they're running firmware ≥ 0.2.19
+2. Test end-to-end OTA flow with authenticated node
+3. Monitor for nodes on old firmware (< 0.2.19) that cannot connect over TLS
 
 ## Acceptance Criteria Status
 
@@ -115,13 +117,12 @@ Attempted checks:
 
 ## Conclusion
 
-Prerequisite 1 (server-side enforcement) is **SATISFIED** - authentication is live and functioning correctly in production.
+Prerequisite 1 (server-side enforcement) is **SATISFIED** - authentication is live and functioning correctly in production. Deployment location (ardenone-cluster) and ingress configuration (/firmware exemption from OAuth) are confirmed.
 
 Prerequisite 2 (node firmware versions) is **BLOCKED** - zero nodes online prevents verification. This is an operational constraint, not a security issue. When nodes come online, they must be verified to be running firmware ≥ 0.2.19 before proceeding with public OTA.
 
 **DO NOT PROCEED** with full public OTA deployment until:
 1. At least one node is online and firmware version is verified ≥ 0.2.19
-2. Ingress configuration is verified to properly exempt `/firmware` from OAuth
 
-**READY**: Server-side authentication implementation is correct and deployed.
+**READY**: Server-side authentication implementation is correct, deployed, and ingress configuration verified.
 **NOT READY**: Node fleet verification requires operational nodes.
