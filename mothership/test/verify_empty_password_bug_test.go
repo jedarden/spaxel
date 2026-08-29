@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -75,10 +76,9 @@ func TestNetworkSettingsHandler_EmptyPassword(t *testing.T) {
 	// Test 2: BUG DEMONSTRATION - Update with SSID and empty password
 	// This should result in configured=false, but the bug causes configured=true
 	t.Run("EmptyPasswordBug", func(t *testing.T) {
-		// First, set only SSID (no password)
-		ssid := "TestNetwork"
+		// Set SSID and empty password
 		updateBody := map[string]string{
-			"wifi_ssid":     ssid,
+			"wifi_ssid":     "TestNetwork",
 			"wifi_password": "",
 		}
 		bodyBytes, _ := json.Marshal(updateBody)
@@ -102,15 +102,11 @@ func TestNetworkSettingsHandler_EmptyPassword(t *testing.T) {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		// BUG: The current implementation returns configured=true when password key exists
-		// even if the password value is empty. This test FAILS because:
-		// - We set wifi_ssid to "TestNetwork"
-		// - We set wifi_password to "" (empty string)
-		// - The hasPass variable is true (key exists)
-		// - But passStr is "" (empty value)
-		// - Configured should be false but returns true due to the hasPass logic
-
-		// This assertion demonstrates the bug - it will FAIL
+		// BUG DEMONSTRATION:
+		// The current implementation uses: `Configured: ssidStr != "" && hasPass && passStr != ""`
+		// When we set wifi_password to "", the hasPass variable is true (key exists)
+		// but passStr is "" (empty value). This should result in configured=false
+		// However, the test will FAIL because configured is incorrectly returned as true
 		if result["configured"] != false {
 			t.Errorf("BUG DEMONSTRATED: Expected configured=false for empty password, got %v", result["configured"])
 			t.Logf("Bug details: wifi_ssid=%v, configured=%v", result["wifi_ssid"], result["configured"])
@@ -125,8 +121,7 @@ func TestNetworkSettingsHandler_EmptyPassword(t *testing.T) {
 		}
 		bodyBytes, _ := json.Marshal(updateBody)
 
-		req, _ := http.NewRequest("PUT", server.URL+"/api/settings/network",
-			strings.NewReader(string(bodyBytes))
+		req, _ := http.NewRequest("PUT", server.URL+"/api/settings/network", strings.NewReader(string(bodyBytes)))
 		req.Header.Set("Content-Type", "application/json")
 
 		client := &http.Client{}
