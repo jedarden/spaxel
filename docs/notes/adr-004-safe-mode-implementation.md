@@ -87,16 +87,24 @@ ESPHome 2026.4.0 shipped a regression where the Task Watchdog reset devices **be
 Spaxel has the same shape:
 - 60-second role-message validation window
 - 60-second safe mode boot-good window
-- Watchdog about to be enabled
+- Watchdog enabled with generous timeout
 
-**Requirement:** Watchdog timeout MUST be greater than validation window + boot-good window combined.
-
-**Recommended configuration:**
+**Configuration (implemented in sdkconfig.defaults):**
 ```
 # Task watchdog timeout (CONFIG_ESP_TASK_WDT_TIMEOUT_S)
 # Must be > 120s to cover both validation phases
-CONFIG_ESP_TASK_WDT_TIMEOUT_S=150  # 2.5 minutes minimum
-CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU=n
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=150  # 2.5 minutes
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
+CONFIG_ESP_TASK_WDT_PANIC=y
+```
+
+**Validation timeline:**
+```
+0s:     Boot starts, OTA validation timer armed
+60s:    OTA validation completes → boot-good timer starts
+120s:   Boot-good timer fires → boot marked good, counter reset
+150s:   Earliest safe watchdog reset point (well after validation)
 ```
 
 **Validation timeline:**
