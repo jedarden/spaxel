@@ -5,6 +5,7 @@
 #include "wifi.h"
 #include "ntp.h"
 #include "led.h"
+#include "safe_mode.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
@@ -109,6 +110,21 @@ static void confirm_ota_valid(void) {
             ESP_LOGW(TAG, "OTA validation: failed to mark valid: %s", esp_err_to_name(err));
         }
     }
+
+    // Start the boot-good timer for safe mode
+    // The boot only counts as good after the system stays up for the validation window
+    if (!safe_mode_is_active()) {
+        esp_err_t safe_err = safe_mode_start_boot_good_timer();
+        if (safe_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to start boot good timer: %s", esp_err_to_name(safe_err));
+        }
+    } else {
+        // In safe mode, start the exit timer so we can reboot to normal mode
+        esp_err_t safe_err = safe_mode_start_exit_timer();
+        if (safe_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to start safe mode exit timer: %s", esp_err_to_name(safe_err));
+        }
+    }
 }
 
 static void ota_check_cb(void *arg) {
@@ -125,6 +141,15 @@ static void ota_validation_timeout_cb(void *arg) {
         if (s_ota_check_timer) {
             esp_timer_stop(s_ota_check_timer);
         }
+
+        // Mark boot as failed for safe mode tracking
+        if (!safe_mode_is_active()) {
+            esp_err_t safe_err = safe_mode_mark_boot_failed();
+            if (safe_err != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to mark boot failed: %s", esp_err_to_name(safe_err));
+            }
+        }
+
         // esp_ota_mark_app_valid_cancel_rollback() was never called, so the
         // partition is still ESP_OTA_IMG_PENDING_VERIFY -- but the bootloader
         // only acts on that at boot time. A build that fails validation
@@ -179,6 +204,7 @@ static void handle_ota_msg(cJSON *root);
 static void handle_reboot_msg(cJSON *root);
 static void handle_identify_msg(cJSON *root);
 static void handle_shutdown_msg(cJSON *root);
+static void handle_safe_mode_msg(cJSON *root);
 static void ota_task(void *arg);
 
 esp_err_t websocket_init(void) {
@@ -757,6 +783,8 @@ void websocket_handle_message(const char *json, size_t len) {
         xEventGroupSetBits(g_state.events, SPAXEL_EVENT_WS_DISCONNECTED);
     } else if (strcmp(type->valuestring, "shutdown") == 0) {
         handle_shutdown_msg(root);
+    } else if (strcmp(type->valuestring, "safe_mode") == 0) {
+        handle_safe_mode_msg(root);
     }
     // Unknown types are silently ignored (forward-compatible)
 
@@ -917,6 +945,55 @@ static void handle_shutdown_msg(cJSON *root) {
         ESP_LOGW(TAG, "Mothership shutdown without reconnect delay; using default 30s");
         ESP_LOGI(TAG, "[RECONNECT-DELAY] Will wait until %lld us before reconnecting",
                  s_shutdown_received_us + (s_reconnect_delay_ms * 1000));
+    }
+}
+
+static void handle_safe_mode_msg(cJSON *root) {
+    cJSON *action = cJSON_GetObjectItem(root, "action");
+
+    if (!action || !cJSON_IsString(action)) {
+        ESP_LOGW(TAG, "Safe mode message missing action field");
+        return;
+    }
+
+    const char *action_str = action->valuestring;
+
+    if (strcmp(action_str, "enter") == 0) {
+        esp_err_t err = safe_mode_enter();
+        if (err == ESP_OK) {
+            ESP_LOGW(TAG, "Safe mode entered - will activate on next reboot");
+            // Send confirmation back to mothership
+            // (You can implement websocket_send_safe_mode_status() if needed)
+        } else {
+            ESP_LOGE(TAG, "Failed to enter safe mode: %s", esp_err_to_name(err));
+        }
+    } else if (strcmp(action_str, "exit") == 0) {
+        esp_err_t err = safe_mode_exit();
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Safe mode exited - normal boot on next restart");
+        } else {
+            ESP_LOGE(TAG, "Failed to exit safe mode: %s", esp_err_to_name(err));
+        }
+    } else if (strcmp(action_str, "status") == 0) {
+        // Report current safe mode status
+        bool active = safe_mode_is_active();
+        uint32_t boot_count = safe_mode_get_boot_count();
+
+        ESP_LOGI(TAG, "Safe mode status: active=%d, boot_count=%u",
+                 active, boot_count);
+
+        // Send status back to mothership
+        // (You can implement websocket_send_safe_mode_status() if needed)
+    } else if (strcmp(action_str, "reset_counter") == 0) {
+        // Mothership-requested counter reset (for manual intervention)
+        esp_err_t err = safe_mode_mark_boot_good();
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Boot counter reset per mothership request");
+        } else {
+            ESP_LOGE(TAG, "Failed to reset boot counter: %s", esp_err_to_name(err));
+        }
+    } else {
+        ESP_LOGW(TAG, "Unknown safe mode action: %s", action_str);
     }
 }
 

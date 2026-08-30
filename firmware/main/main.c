@@ -7,6 +7,7 @@
 #include "nvs_migration.h"
 #include "ntp.h"
 #include "led.h"
+#include "safe_mode.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -511,6 +512,13 @@ void app_main(void) {
         // Continue anyway - NVS should be in a consistent state
     }
 
+    // Initialize safe mode subsystem - must be before MAC get so safe mode logs show first
+    esp_err_t safe_mode_err = safe_mode_init();
+    if (safe_mode_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize safe mode: %s", esp_err_to_name(safe_mode_err));
+        // Continue anyway - safe mode is optional safety enhancement
+    }
+
     // Get MAC address
     esp_read_mac(g_state.mac, ESP_MAC_WIFI_STA);
     char mac_str[18];
@@ -542,11 +550,15 @@ void app_main(void) {
     // Initialize LED
     led_init();
 
-    // Initialize CSI
-    csi_init();
-
-    // Initialize BLE
-    ble_init();
+    // Initialize CSI and BLE only if not in safe mode
+    // Safe mode disables everything except network + OTA + serial logging
+    if (!safe_mode_is_active()) {
+        ESP_LOGI(TAG, "Initializing CSI and BLE");
+        csi_init();
+        ble_init();
+    } else {
+        ESP_LOGW(TAG, "Safe mode: CSI and BLE disabled - network + OTA only");
+    }
 
     // Initialize WebSocket
     websocket_init();
