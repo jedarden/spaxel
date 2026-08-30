@@ -207,8 +207,8 @@ If safe mode causes issues:
 ✅ `safe_mode.c` and `safe_mode.h` implemented
 ✅ Boot sequence integration (CSI/BLE conditional init)
 ✅ OTA validation integration (boot-good timer, fail marking)
-⏳ Watchdog configuration documentation (this file)
-⏳ Testing and verification
+✅ Watchdog configuration documentation (CONFIG_ESP_TASK_WDT_TIMEOUT_S=150)
+⏳ Testing and verification (unit and integration tests)
 
 ## References
 
