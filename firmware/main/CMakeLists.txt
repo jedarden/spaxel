@@ -14,8 +14,9 @@ idf_component_register(
          "ntp.c"
          "led.c"
          "safe_mode.c"
+         "watchdog.c"
     INCLUDE_DIRS "." "${GENERATED_HEADERS_DIR}"
-    REQUIRES esp_wifi esp_netif nvs_flash esp_http_client esp_timer bt driver log esp_http_server mbedtls app_update json freertos
+    REQUIRES esp_wifi esp_netif nvs_flash esp_http_client esp_timer bt driver log esp_http_server mbedtls app_update json freertos task_wdt
 )
 
 # Keep the firmware warning-clean. This turns the CI warning baseline into a

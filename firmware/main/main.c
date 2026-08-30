@@ -8,6 +8,7 @@
 #include "ntp.h"
 #include "led.h"
 #include "safe_mode.h"
+#include "watchdog.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -517,6 +518,16 @@ void app_main(void) {
     if (safe_mode_err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize safe mode: %s", esp_err_to_name(safe_mode_err));
         // Continue anyway - safe mode is optional safety enhancement
+    }
+
+    // Initialize task watchdog
+    // CRITICAL: Watchdog timeout (90s) must be longer than boot validation window (60s)
+    // to avoid ESPHome regression where watchdog fired before validation completed.
+    // See: esphome/esphome#15767, ADR-004 / bf-2tgcx
+    esp_err_t wdt_err = watchdog_init();
+    if (wdt_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize watchdog: %s", esp_err_to_name(wdt_err));
+        // Continue anyway - watchdog is safety enhancement, not mandatory
     }
 
     // Get MAC address
