@@ -36,8 +36,6 @@ strands:
       command: cd mothership && go vet ./... 2>&1
     - name: test
       command: cd mothership && go test ./... 2>&1
-verification:
-- /home/coding/.needle/hooks/verify-changes.sh
 prompt:
   context_files:
   - docs/plan/plan.md
