@@ -66,6 +66,9 @@ typedef enum {
 #define NVS_KEY_AP_MODE "ap_mode"
 #define NVS_KEY_DEBUG "debug"
 #define NVS_KEY_NTP_SERVER "ntp_server"
+// Safe mode boot counter (ESPHome-style)
+#define NVS_KEY_BOOT_COUNTER "boot_cnt"
+#define NVS_KEY_SAFE_MODE "safe_mode"
 
 // Current NVS schema version
 #define NVS_SCHEMA_VERSION 1
