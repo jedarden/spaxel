@@ -19,8 +19,8 @@ check_assigned_but_open() {
     local output
     output=$(bead list --status open --json 2>/dev/null) || return 0
 
-    # Check if output contains "No issues found"
-    if [[ "$output" == *"No issues found"* ]]; then
+    # Check if output contains "No issues found" or is empty
+    if [[ -z "$output" || "$output" == *"No issues found"* ]]; then
         log "No open beads found"
         return 0
     fi
@@ -29,11 +29,11 @@ check_assigned_but_open() {
     while IFS= read -r line; do
         if [[ -n "$line" ]]; then
             local assignee
-            assignee=$(echo "$line" | jq -r '.assignee // ""')
+            assignee=$(echo "$line" | jq -r '.assignee // ""' 2>/dev/null)
 
             if [[ -n "$assignee" && "$assignee" != "null" ]]; then
                 local bead_id
-                bead_id=$(echo "$line" | jq -r '.id')
+                bead_id=$(echo "$line" | jq -r '.id' 2>/dev/null)
                 log "  - $bead_id (assignee: $assignee)"
                 count=$((count + 1))
 
@@ -63,8 +63,8 @@ check_orphaned_in_progress() {
     local output
     output=$(bead list --status in_progress --json 2>/dev/null) || return 0
 
-    # Check if output contains "No issues found"
-    if [[ "$output" == *"No issues found"* ]]; then
+    # Check if output is empty or just empty JSON array
+    if [[ -z "$output" || "$output" == "[]" ]]; then
         log "No in-progress beads found"
         return 0
     fi
@@ -73,11 +73,11 @@ check_orphaned_in_progress() {
     while IFS= read -r line; do
         if [[ -n "$line" ]]; then
             local assignee
-            assignee=$(echo "$line" | jq -r '.assignee // ""')
+            assignee=$(echo "$line" | jq -r '.assignee // ""' 2>/dev/null)
 
             if [[ -z "$assignee" || "$assignee" == "null" ]]; then
                 local bead_id
-                bead_id=$(echo "$line" | jq -r '.id')
+                bead_id=$(echo "$line" | jq -r '.id' 2>/dev/null)
                 log "  - $bead_id"
                 count=$((count + 1))
 
@@ -107,8 +107,8 @@ check_stale_dependencies() {
     local output
     output=$(bead list --status open --json 2>/dev/null) || return 0
 
-    # Check if output contains "No issues found"
-    if [[ "$output" == *"No issues found"* ]]; then
+    # Check if output is empty or just empty JSON array
+    if [[ -z "$output" || "$output" == "[]" ]]; then
         log "No open beads found"
         return 0
     fi
@@ -117,14 +117,14 @@ check_stale_dependencies() {
     while IFS= read -r line; do
         if [[ -n "$line" ]]; then
             local bead_id
-            bead_id=$(echo "$line" | jq -r '.id')
+            bead_id=$(echo "$line" | jq -r '.id' 2>/dev/null)
 
             local has_deps
-            has_deps=$(echo "$line" | jq -r '.dependencies != null and (.dependencies | length > 0)')
+            has_deps=$(echo "$line" | jq -r '.dependencies != null and (.dependencies | length > 0)' 2>/dev/null)
 
             if [[ "$has_deps" == "true" ]]; then
                 local deps
-                deps=$(echo "$line" | jq -r '.dependencies[].blocker')
+                deps=$(echo "$line" | jq -r '.dependencies[].blocker' 2>/dev/null)
 
                 if [[ -n "$deps" ]]; then
                     local all_closed=true
