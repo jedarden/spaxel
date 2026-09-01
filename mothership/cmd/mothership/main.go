@@ -36,6 +36,8 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/db"
 	"github.com/spaxel/mothership/internal/diagnostics"
+	"github.com/spaxel/mothership/internal/logging"
+	"github.com/spaxel/mothership/internal/diagnostics"
 	"github.com/spaxel/mothership/internal/diskspace"
 	"github.com/spaxel/mothership/internal/doctor"
 	"github.com/spaxel/mothership/internal/eventbus"
@@ -712,17 +714,48 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Printf("[INFO] Spaxel mothership v%s starting", version)
+	// Initialize the structured logging system
+	logger, err := logging.New(logging.Config{
+		Level:         logging.ParseLevel(cfg.LogLevel),
+		FilePath:      cfg.LogFilePath,
+		EnableStdout:  cfg.LogStdout,
+		Prefix:        "spaxel",
+		MaxSize:       100 * 1024 * 1024, // 100MB default max size
+	})
+	if err != nil {
+		// Fall back to standard logging if structured logging fails
+		log.Printf("[WARN] Failed to initialize structured logging: %v, using standard log package", err)
+		logger = nil
+	} else {
+		defer func() {
+			if logger != nil {
+				logger.Close()
+			}
+		}()
+		logger.Info("Spaxel mothership v%s starting", version)
+	}
 
 	// Display and log the current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
-		log.Printf("[WARN] Failed to get current working directory: %v", err)
+		if logger != nil {
+			logger.Warn("Failed to get current working directory: %v", err)
+		} else {
+			log.Printf("[WARN] Failed to get current working directory: %v", err)
+		}
 	} else {
-		log.Printf("[INFO] Current working directory: %s", cwd)
+		if logger != nil {
+			logger.Info("Current working directory: %s", cwd)
+		} else {
+			log.Printf("[INFO] Current working directory: %s", cwd)
+		}
 	}
 
-	log.Printf("[DEBUG] Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
+	if logger != nil {
+		logger.Debug("Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
+	} else {
+		log.Printf("[DEBUG] Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
+	}
 
 	// Wrap all startup in a 30-second timeout context
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), startup.TotalTimeout)
