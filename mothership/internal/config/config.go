@@ -41,7 +41,9 @@ type Config struct {
 	MDNSEnabled bool   // Enable mDNS advertisement (default true)
 
 	// Logging
-	LogLevel string // Log level: debug|info|warn|error (default "info")
+	LogLevel    string // Log level: debug|info|warn|error (default "info")
+	LogFilePath string // Path to log file (optional, if set enables file logging)
+	LogStdout   bool   // Enable logging to stdout (default true)
 
 	// Processing
 	FusionRateHz int // Fusion loop rate in Hz, range [1,20] (default 10)
@@ -140,6 +142,19 @@ func Load() (*Config, error) {
 	cfg.LogLevel = envOr("SPAXEL_LOG_LEVEL", "info")
 	if !isValidLogLevel(cfg.LogLevel) {
 		errs = append(errs, fmt.Errorf("SPAXEL_LOG_LEVEL=%s invalid: must be one of debug, info, warn, error", cfg.LogLevel))
+	}
+
+	// SPAXEL_LOG_FILE_PATH - string, optional (enables file logging if set)
+	cfg.LogFilePath = os.Getenv("SPAXEL_LOG_FILE_PATH")
+
+	// SPAXEL_LOG_STDOUT - bool, default true
+	logStdout := envOr("SPAXEL_LOG_STDOUT", "true")
+	if logStdout == "true" || logStdout == "1" {
+		cfg.LogStdout = true
+	} else if logStdout == "false" || logStdout == "0" {
+		cfg.LogStdout = false
+	} else {
+		errs = append(errs, fmt.Errorf("SPAXEL_LOG_STDOUT=%s invalid: must be one of true, false, 1, 0", logStdout))
 	}
 
 	// SPAXEL_FUSION_RATE_HZ - int, default 10, range [1,20]
@@ -459,6 +474,10 @@ func logConfig(cfg *Config) {
 	log.Printf("[CONFIG] SPAXEL_MDNS_ENABLED=%t", cfg.MDNSEnabled)
 	log.Printf("[CONFIG] SPAXEL_MDNS_NAME=%s", cfg.MDNSName)
 	log.Printf("[CONFIG] SPAXEL_LOG_LEVEL=%s", cfg.LogLevel)
+	if cfg.LogFilePath != "" {
+		log.Printf("[CONFIG] SPAXEL_LOG_FILE_PATH=%s", cfg.LogFilePath)
+	}
+	log.Printf("[CONFIG] SPAXEL_LOG_STDOUT=%t", cfg.LogStdout)
 	log.Printf("[CONFIG] SPAXEL_FUSION_RATE_HZ=%d", cfg.FusionRateHz)
 	log.Printf("[CONFIG] SPAXEL_REPLAY_MAX_MB=%d", cfg.ReplayMaxMB)
 	if cfg.InstallSecret != "" {
@@ -515,4 +534,19 @@ func (c *Config) TimezoneLocation() *time.Location {
 		return time.UTC
 	}
 	return loc
+}
+
+// LoggingConfig returns the configuration for the logging package.
+func (c *Config) LoggingConfig() interface{} {
+	// Import here to avoid circular dependency
+	// This returns a struct that matches logging.Config
+	return struct {
+		Level        string
+		FilePath     string
+		EnableStdout bool
+	}{
+		Level:        c.LogLevel,
+		FilePath:     c.LogFilePath,
+		EnableStdout: c.LogStdout,
+	}
 }
