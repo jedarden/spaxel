@@ -521,6 +521,10 @@ esp_err_t websocket_send_hello(void) {
     cJSON_AddNumberToObject(root, "flash_mb", (int)(flash_size / (1024 * 1024)));
     cJSON_AddNumberToObject(root, "uptime_ms", esp_timer_get_time() / 1000);
 
+    // Safe mode status (ESPHome-style boot failure recovery)
+    cJSON_AddBoolToObject(root, "safe_mode_active", safe_mode_is_active());
+    cJSON_AddNumberToObject(root, "boot_count", safe_mode_get_boot_count());
+
     // AP BSSID and channel (for passive radar auto-detection)
     uint8_t ap_bssid[6];
     if (wifi_get_ap_bssid(ap_bssid)) {
@@ -603,6 +607,10 @@ esp_err_t websocket_send_health(void) {
 
     // NTP sync status
     cJSON_AddBoolToObject(root, "ntp_synced", ntp_is_synced());
+
+    // Safe mode status (ESPHome-style boot failure recovery)
+    cJSON_AddBoolToObject(root, "safe_mode_active", safe_mode_is_active());
+    cJSON_AddNumberToObject(root, "boot_count", safe_mode_get_boot_count());
 
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

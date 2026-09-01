@@ -20,6 +20,8 @@ type HelloMessage struct {
 	APBSSID         string   `json:"ap_bssid,omitempty"`
 	APChannel       int      `json:"ap_channel,omitempty"`
 	Token           string   `json:"token,omitempty"`
+	SafeModeActive   bool     `json:"safe_mode_active,omitempty"` // ESPHome-style safe mode
+	BootCount       uint32   `json:"boot_count,omitempty"`      // Consecutive boot failures
 
 	// PosX/PosY/PosZ carry the node's announced 3D world position, in meters.
 	// Pointers (not plain float64) so an *absent* position is distinguishable
@@ -35,17 +37,19 @@ type HelloMessage struct {
 
 // HealthMessage is sent every 10 seconds
 type HealthMessage struct {
-	Type          string  `json:"type"`
-	MAC           string  `json:"mac"`
-	TimestampMS   int64   `json:"timestamp_ms"`
-	FreeHeapBytes int64   `json:"free_heap_bytes"`
-	WifiRSSIdBm   int     `json:"wifi_rssi_dbm"`
-	UptimeMS      int64   `json:"uptime_ms"`
-	TemperatureC  float64 `json:"temperature_c,omitempty"`
-	CSIRateHz     int     `json:"csi_rate_hz"`
-	WifiChannel   int     `json:"wifi_channel"`
-	IP            string  `json:"ip,omitempty"`
-	NTPSynced     bool    `json:"ntp_synced"`
+	Type            string  `json:"type"`
+	MAC             string  `json:"mac"`
+	TimestampMS      int64   `json:"timestamp_ms"`
+	FreeHeapBytes   int64   `json:"free_heap_bytes"`
+	WifiRSSIdBm     int     `json:"wifi_rssi_dbm"`
+	UptimeMS        int64   `json:"uptime_ms"`
+	TemperatureC   float64 `json:"temperature_c,omitempty"`
+	CSIRateHz       int     `json:"csi_rate_hz"`
+	WifiChannel     int     `json:"wifi_channel"`
+	IP              string  `json:"ip,omitempty"`
+	NTPSynced       bool    `json:"ntp_synced"`
+	SafeModeActive  bool    `json:"safe_mode_active,omitempty"` // ESPHome-style safe mode
+	BootCount       uint32  `json:"boot_count,omitempty"`      // Consecutive boot failures
 }
 
 // BLEDevice represents a discovered BLE device
