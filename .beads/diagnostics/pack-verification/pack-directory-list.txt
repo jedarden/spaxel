@@ -1,0 +1,13 @@
+total 361380
+drwxrwxr-x  2 coding users      4096 Sep  2 02:04 .
+drwxrwxr-x 79 coding users      4096 Sep  2 06:00 ..
+-rw-r--r--  1 coding users    638296 Sep  2 02:04 multi-pack-index
+-r--r--r--  1 coding users     55168 Sep  2 02:04 pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.idx
+-r--r--r--  1 coding users   6145745 Sep  2 02:04 pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack
+-r--r--r--  1 coding users      7780 Sep  2 02:04 pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.rev
+-r--r--r--  1 coding users    397216 Jun 27 08:04 pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.idx
+-r--r--r--  1 coding users 212470544 Aug 28 00:10 pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack
+-r--r--r--  1 coding users     56644 Jun 27 08:04 pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.rev
+-r--r--r--  1 coding users    187860 Aug 27 21:08 pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.idx
+-r--r--r--  1 coding users 150043947 Aug 29 10:14 pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack
+-r--r--r--  1 coding users     26736 Aug 27 21:08 pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.rev

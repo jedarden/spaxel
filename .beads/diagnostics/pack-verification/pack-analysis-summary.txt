@@ -1,0 +1,154 @@
+=== Analyzing pack: pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack ===
+00c680050b5e74bcda0f821d73c0a0f3d7b9db56 commit 241 164 12
+0090516eafc774ef89bbfc9419cee394a7ea9c1b blob   41 50 176
+0022d880ee8180e7ee8996bae099d7d49bb10c8c commit 543 354 226
+01183687df5f1846811a33844f69c52179ad411e tree   157 155 580
+482677f8daf6c61d4f62def908c8f8d4168b6139 tree   2958 2274 735
+53df7b02e00032f5a33c8b32b0003b1a22c3b839 tree   93 108 3009 1 482677f8daf6c61d4f62def908c8f8d4168b6139
+764447fb3006916e57bca0e4daeb6e5dd3b13c97 tree   205 219 3117 2 53df7b02e00032f5a33c8b32b0003b1a22c3b839
+90488afceae11eaba69771e88d0f471b2e2aef26 tree   103 115 3336 3 764447fb3006916e57bca0e4daeb6e5dd3b13c97
+e9eef946252eb116fba82d22f9ed714aa27a5f7e tree   68 82 3451 4 90488afceae11eaba69771e88d0f471b2e2aef26
+f3a30503f043fe9c83f9bd0c011e772aa13af363 tree   94 108 3533 5 e9eef946252eb116fba82d22f9ed714aa27a5f7e
+019acd80932800fa237133b4c60eb3868f2eddca tree   38 52 3641 6 f3a30503f043fe9c83f9bd0c011e772aa13af363
+0179e3b7ace5b47f34754fd5975a2ec847332f6b tree   1261 1007 3693
+a8572d767622ea29c8fe00f4a38616b999ce11ec tree   329 318 4700
+079cebabc543a330d236cbe74c7381f3a668975a tree   98 113 5018 1 a8572d767622ea29c8fe00f4a38616b999ce11ec
+05822e7dac5d3ba02e59761f4e966fe9506633d9 tree   58 72 5131 2 079cebabc543a330d236cbe74c7381f3a668975a
+019364b9891d151bf6b1af227e30ecec13e0bc97 tree   33 45 5203 3 05822e7dac5d3ba02e59761f4e966fe9506633d9
+01162a9bf45172f613d91a9d765a34ecd1460e80 blob   41 49 5248
+aa384bada814fc20db9d8faae560462d270d64b8 tree   2896 2228 5297
+b5ebae75298aea7c39bd7bf6309218baf7c5e39d tree   33 48 7525 1 aa384bada814fc20db9d8faae560462d270d64b8
+df962ae2c68cf02a56d74c9f6d003b41b44aae78 tree   32 44 7573 2 b5ebae75298aea7c39bd7bf6309218baf7c5e39d
+non delta: 1101 objects
+chain length = 1: 183 objects
+chain length = 2: 192 objects
+chain length = 3: 152 objects
+chain length = 4: 84 objects
+chain length = 5: 66 objects
+chain length = 6: 44 objects
+chain length = 7: 29 objects
+chain length = 8: 21 objects
+chain length = 9: 16 objects
+chain length = 10: 10 objects
+chain length = 11: 7 objects
+chain length = 12: 6 objects
+chain length = 13: 8 objects
+chain length = 14: 5 objects
+chain length = 15: 2 objects
+chain length = 16: 2 objects
+chain length = 17: 2 objects
+chain length = 18: 1 object
+chain length = 19: 1 object
+
+=== Analyzing pack: pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack ===
+92bdf8caf538a1a80ae42be72a542a2c9324d738 commit 326 230 12
+2483d366423d40d7df1aa5aec2df64e0a7b2d882 commit 672 423 242
+9606210e19c05b10e27e06b30780bdcec1ff0383 commit 241 165 665
+cc65ae690f27e0008bb44c1d77632c12b985d59a commit 550 381 830
+f8ebf8f51f6f0beecc3e0a2b38c1bcdd3ea2cdbf commit 241 162 1211
+1175a330ed79c1d8cfa7ce2474a2bdc2049144ba commit 741 463 1373
+301a5884cebdd4e09e4e85483e4149126c251791 commit 1038 642 1836
+9ac200b719edb379ae76242cf0dffa39b550bfbe commit 704 433 2478
+9277217865699e48e690ad13a38e002179a38256 commit 516 350 2911
+b687eafcbebf7c071472f88aaf3e90a05a3e8e0d commit 251 171 3261
+1900128980989c231bedcd9189d95981aac9adfa commit 347 246 3432
+8150cb6cf4996e2e53cb154044e103d7e59f53ad commit 251 175 3678
+4b8e6f793fee6970f41eaacd8435f374f468136a commit 666 441 3853
+fe311a6b5f806fe1f232212f6a6ea0f1a55bd2a6 commit 251 174 4294
+79f83369d31f76d503001a1189156d207a5bb03c commit 342 237 4468
+d5b7635133b7413bcca2a3c6a90496adcd6b3c79 commit 469 304 4705
+bcd58a71d44fcde9d4d7d21e5ae68b2683510580 commit 529 350 5009
+e1e3892cb847727121908f48dcccc1a33ba8ba63 commit 251 173 5359
+3ca6e8fcd3c35b36741eda283c1899e125b8e248 commit 560 363 5532
+0e1c12ec27f128a75ff774502c56287fb1923d9d commit 611 373 5895
+non delta: 8289 objects
+chain length = 1: 1894 objects
+chain length = 2: 1111 objects
+chain length = 3: 616 objects
+chain length = 4: 472 objects
+chain length = 5: 324 objects
+chain length = 6: 256 objects
+chain length = 7: 189 objects
+chain length = 8: 178 objects
+chain length = 9: 139 objects
+chain length = 10: 123 objects
+chain length = 11: 101 objects
+chain length = 12: 87 objects
+chain length = 13: 74 objects
+chain length = 14: 47 objects
+chain length = 15: 48 objects
+chain length = 16: 34 objects
+chain length = 17: 39 objects
+chain length = 18: 26 objects
+chain length = 19: 20 objects
+chain length = 20: 17 objects
+chain length = 21: 16 objects
+chain length = 22: 11 objects
+chain length = 23: 9 objects
+chain length = 24: 9 objects
+chain length = 25: 6 objects
+chain length = 26: 4 objects
+chain length = 27: 4 objects
+chain length = 28: 3 objects
+chain length = 29: 2 objects
+
+=== Analyzing pack: pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack ===
+6a0fad03e428ac7518926bf01fdc96e55e592c2b commit 241 162 12
+2f0ef9047f13250926835dddbfc1fa3b88e60e1f commit 495 316 174
+d1fbed56dcf94efb831c3b8d49968b9cdb7f2188 commit 241 161 490
+8231141eef82c44b936c564a88f85a296b1f121d commit 529 339 651
+b6d87db81f999df1ce9dc0f5d8d64a6aacce0bde commit 651 422 990
+9d11f5344c8b16259919b72b91de5e1a7ef14c46 commit 909 545 1412
+a075d0e7bcb2fae2d029e939f87b5f850d1eedc5 commit 241 162 1957
+4a7c248669d52ef12e474b9fe648d0359d54235b commit 1168 602 2119
+b1edf1c8e2d9ebfc93a48534d9b57c27101411fc commit 806 439 2721
+fc8eb88b37c0932ae2ea55439ae06ccb29f6276c commit 802 481 3160
+1d60624ca601ade8c17b41ac1ff6c75769631c76 commit 281 198 3641
+7e6e8ebfbfd4acd80eca6d0e043d1379d6fdfc91 commit 240 160 3839
+241144d514e9c489eab437fef01b954eeefa13b2 commit 542 356 3999
+08ae53d50f02520c0a8e3a758c519599eeb352e4 commit 605 358 4355
+ba7f4a3d9a78687ec13cb50c2d8d56688d7e6578 commit 240 159 4713
+f70ecfb848d49462b321d3684a169d82de679772 commit 527 342 4872
+7e3b1f00e9a3cd7c89ed32874382f06016f7f640 commit 710 440 5214
+7d7e116b2247ad6ee4a42ca58214bec9f144a465 commit 538 361 5654
+1fe0754f85150f2d8c4e4f6429c3b37ffb8feed7 commit 583 370 6015
+4e96d6a4d2d1151e4f6f10b6a85f86df36b7c810 commit 456 303 6385
+non delta: 2456 objects
+chain length = 1: 919 objects
+chain length = 2: 671 objects
+chain length = 3: 495 objects
+chain length = 4: 365 objects
+chain length = 5: 265 objects
+chain length = 6: 221 objects
+chain length = 7: 183 objects
+chain length = 8: 136 objects
+chain length = 9: 105 objects
+chain length = 10: 101 objects
+chain length = 11: 96 objects
+chain length = 12: 66 objects
+chain length = 13: 68 objects
+chain length = 14: 46 objects
+chain length = 15: 39 objects
+chain length = 16: 40 objects
+chain length = 17: 43 objects
+chain length = 18: 31 objects
+chain length = 19: 37 objects
+chain length = 20: 32 objects
+chain length = 21: 57 objects
+chain length = 22: 41 objects
+chain length = 23: 29 objects
+chain length = 24: 15 objects
+chain length = 25: 21 objects
+chain length = 26: 10 objects
+chain length = 27: 18 objects
+chain length = 28: 13 objects
+chain length = 29: 9 objects
+chain length = 30: 11 objects
+chain length = 31: 8 objects
+chain length = 32: 5 objects
+chain length = 33: 7 objects
+chain length = 34: 4 objects
+chain length = 35: 3 objects
+chain length = 36: 4 objects
+chain length = 37: 1 object
+

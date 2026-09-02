@@ -1,0 +1,58 @@
+=== PACK VERIFICATION STAGING FILE ===
+Generated: 2026-09-02 10:07:11 UTC
+Repository: /home/coding/spaxel
+Bead ID: spaxel-bda3f5f6
+
+=== FILES COLLECTED ===
+total 3892
+drwxr-xr-x 2 coding users    4096 Sep  2 06:07 .
+drwxr-xr-x 3 coding users    4096 Sep  2 05:43 ..
+-rw-r--r-- 1 coding users     122 Sep  2 05:44 count-objects.log
+-rw-r--r-- 1 coding users     122 Sep  2 06:04 count-objects-verbose.txt
+-rw-r--r-- 1 coding users      41 Sep  2 06:05 dangling-by-type.txt
+-rw-r--r-- 1 coding users       4 Sep  2 06:05 dangling-count.txt
+-rw-r--r-- 1 coding users    7373 Sep  2 05:44 dangling-objects.log
+-rw-r--r-- 1 coding users    7373 Sep  2 05:43 git-fsck-full.log
+-rw-r--r-- 1 coding users   12161 Sep  2 06:01 git-fsck-full.txt
+-rw-r--r-- 1 coding users       0 Sep  2 05:44 multi-pack-index-verify.log
+-rw-r--r-- 1 coding users       0 Sep  2 06:03 multi-pack-index-verify.txt
+-rw-r--r-- 1 coding users     257 Sep  2 06:03 multi-pack-index-verify-verbose.txt
+-rw-r--r-- 1 coding users    6927 Sep  2 06:04 pack-analysis-summary.txt
+-rw-r--r-- 1 coding users    1088 Sep  2 06:02 pack-directory-list.txt
+-rw-r--r-- 1 coding users 1951644 Sep  2 05:43 pack-verify.log
+-rw-r--r-- 1 coding users     156 Sep  2 06:07 staging-index.txt
+-rw-r--r-- 1 coding users    1380 Sep  2 06:06 verification-summary.txt
+-rw-r--r-- 1 coding users 1951644 Sep  2 06:02 verify-pack-output.txt
+
+=== CORRUPTION INDICATORS ===
+Repository corruption: NONE
+Missing objects: 0
+Corrupt packs: 0
+
+=== DANGLING OBJECTS ANALYSIS ===
+Total dangling objects: 215
+Breakdown by type:
+  - Commits: 168 (78.1%)
+  - Trees: 40 (18.6%)
+  - Blobs: 7 (3.3%)
+
+=== PACK INDEX VALIDATION ===
+Total pack files: 3
+Total in-pack objects: 22,751
+Multi-pack-index: Present (624K)
+Index integrity: VALID
+
+=== MULTI-PACK-INDEX STATUS ===
+Multi-pack-index exists and is valid
+Verification: PASSED (no errors reported)
+
+=== RAW DATA FILES ===
+1. git-fsck-full.txt - Full fsck output with dangling objects
+2. verify-pack-output.txt - Complete pack verification output
+3. pack-analysis-summary.txt - Per-pack statistics
+4. dangling-count.txt - Total dangling count
+5. dangling-by-type.txt - Dangling objects categorized by type
+6. pack-directory-list.txt - Pack file listings
+7. multi-pack-index-verify.txt - MPI verification results
+8. count-objects-verbose.txt - Repository object statistics
+9. verification-summary.txt - Comprehensive summary

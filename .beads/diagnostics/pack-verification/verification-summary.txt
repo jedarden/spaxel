@@ -1,0 +1,44 @@
+=== PACK VERIFICATION DATA SUMMARY ===
+
+Timestamp: 2026-09-02 10:06:29 UTC
+Repository: /home/coding/spaxel
+Git HEAD: 3405d08eccd77d6af2194157c564f75a22622608
+
+=== PACK FILES ===
+-r--r--r-- 1 coding users 5.9M Sep  2 02:04 .git/objects/pack/pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack
+-r--r--r-- 1 coding users 203M Aug 28 00:10 .git/objects/pack/pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack
+-r--r--r-- 1 coding users 144M Aug 29 10:14 .git/objects/pack/pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack
+
+=== INDEX FILES ===
+-r--r--r-- 1 coding users  54K Sep  2 02:04 .git/objects/pack/pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.idx
+-r--r--r-- 1 coding users 388K Jun 27 08:04 .git/objects/pack/pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.idx
+-r--r--r-- 1 coding users 184K Aug 27 21:08 .git/objects/pack/pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.idx
+
+=== MULTI-PACK-INDEX ===
+-rw-r--r-- 1 coding users 624K Sep  2 02:04 .git/objects/pack/multi-pack-index
+
+=== OBJECT STATISTICS ===
+count: 85
+size: 8.60 MiB
+in-pack: 22751
+packs: 3
+size-pack: 352.19 MiB
+prune-packable: 0
+garbage: 0
+size-garbage: 0 bytes
+
+=== DANGLING OBJECTS SUMMARY ===
+Total dangling: 215
+By type:
+      7 blob
+    168 commit
+     40 tree
+
+=== REFS STATISTICS ===
+=== REFS STATISTICS ===
+Branches: 4
+Tags: 0
+HEAD: 3405d08e
+
+=== CORRUPTION CHECK ===
+No corruption detected in fsck output

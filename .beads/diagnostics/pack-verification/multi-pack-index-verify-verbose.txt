@@ -1,0 +1,7 @@
+error: unknown option `verbose'
+usage: git multi-pack-index [<options>] verify
+
+    --[no-]object-dir <directory>
+                          object directory containing set of packfile and pack-index pairs
+    --[no-]progress       force progress reporting
+
