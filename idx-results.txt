@@ -1,0 +1,198 @@
+=== PACK INDEX VALIDATION RESULTS ===
+Generated:       2026-09-02 11:54:06 UTC
+Repository:      /home/coding/spaxel
+Bead ID:         spaxel-d0ac8cf3
+Git version:     git version 2.54.0
+Pack directory:  .git/objects/pack
+
+=== INVENTORY ===
+.idx files:            3
+.pack files:           3
+.rev files:            3
+multi-pack-index:      present (623.3 K)
+.idx without .pack:    none
+.pack without .idx:    none
+
+--- pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.idx ---
+paired pack:       pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack (5.9 M)
+idx size:          53.9 K (55,168 bytes)
+index version:     2 (magic \377tOc present)
+object count (fanout[255]): 1,932
+fanout monotonic:  True
+small offsets:     1,932
+large offsets:     0
+oid table sorted:  True
+offsets within pack bounds: True
+min/max pack offset: 12 / 6,145,310
+idx checksum (SHA-1 of index): 777ac821033c2543f394098b1b6ff376f7ebb1d7
+idx checksum valid:  True
+embedded pack checksum: 4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5
+structure:         VALID
+pack trailer checksum:   4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5
+pack trailer == idx embedded: True
+pack filename == pack checksum: True
+.rev present:      yes (magic b'RIDX', expected b'RIDX')
+git verify-pack -v: exit 0 (2.0s)
+  verdict:         /home/coding/spaxel/.git/objects/pack/pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack: ok
+  non delta: 1101 objects
+  chain length = 1: 183 objects
+  chain length = 2: 192 objects
+  chain length = 3: 152 objects
+  chain length = 4: 84 objects
+  chain length = 5: 66 objects
+  chain length = 6: 44 objects
+  chain length = 7: 29 objects
+  chain length = 8: 21 objects
+  chain length = 9: 16 objects
+  chain length = 10: 10 objects
+  chain length = 11: 7 objects
+  chain length = 12: 6 objects
+  chain length = 13: 8 objects
+  chain length = 14: 5 objects
+  chain length = 15: 2 objects
+  chain length = 16: 2 objects
+  chain length = 17: 2 objects
+  chain length = 18: 1 object
+  chain length = 19: 1 object
+  histogram objects: 1,932 (== idx fanout count: True)
+integrity:         PASS
+
+--- pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.idx ---
+paired pack:       pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack (202.6 M)
+idx size:          387.9 K (397,216 bytes)
+index version:     2 (magic \377tOc present)
+object count (fanout[255]): 14,148
+fanout monotonic:  True
+small offsets:     14,148
+large offsets:     0
+oid table sorted:  True
+offsets within pack bounds: True
+min/max pack offset: 12 / 212,470,449
+idx checksum (SHA-1 of index): d2b444a8bdb35019e8b084cedcde5278366ca2e1
+idx checksum valid:  True
+embedded pack checksum: 6e51fdce68e45c809f87beac1a4df59aac8d05c4
+structure:         VALID
+pack trailer checksum:   6e51fdce68e45c809f87beac1a4df59aac8d05c4
+pack trailer == idx embedded: True
+pack filename == pack checksum: True
+.rev present:      yes (magic b'RIDX', expected b'RIDX')
+git verify-pack -v: exit 0 (3.0s)
+  verdict:         /home/coding/spaxel/.git/objects/pack/pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack: ok
+  non delta: 8289 objects
+  chain length = 1: 1894 objects
+  chain length = 2: 1111 objects
+  chain length = 3: 616 objects
+  chain length = 4: 472 objects
+  chain length = 5: 324 objects
+  chain length = 6: 256 objects
+  chain length = 7: 189 objects
+  chain length = 8: 178 objects
+  chain length = 9: 139 objects
+  chain length = 10: 123 objects
+  chain length = 11: 101 objects
+  chain length = 12: 87 objects
+  chain length = 13: 74 objects
+  chain length = 14: 47 objects
+  chain length = 15: 48 objects
+  chain length = 16: 34 objects
+  chain length = 17: 39 objects
+  chain length = 18: 26 objects
+  chain length = 19: 20 objects
+  chain length = 20: 17 objects
+  chain length = 21: 16 objects
+  chain length = 22: 11 objects
+  chain length = 23: 9 objects
+  chain length = 24: 9 objects
+  chain length = 25: 6 objects
+  chain length = 26: 4 objects
+  chain length = 27: 4 objects
+  chain length = 28: 3 objects
+  chain length = 29: 2 objects
+  histogram objects: 14,148 (== idx fanout count: True)
+integrity:         PASS
+
+--- pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.idx ---
+paired pack:       pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack (143.1 M)
+idx size:          183.5 K (187,860 bytes)
+index version:     2 (magic \377tOc present)
+object count (fanout[255]): 6,671
+fanout monotonic:  True
+small offsets:     6,671
+large offsets:     0
+oid table sorted:  True
+offsets within pack bounds: True
+min/max pack offset: 12 / 150,042,872
+idx checksum (SHA-1 of index): 05beca097487bb272f92df539af1d49d51dd469f
+idx checksum valid:  True
+embedded pack checksum: fd6e34f45329c516ca38978b6494c2ffb035fc2c
+structure:         VALID
+pack trailer checksum:   fd6e34f45329c516ca38978b6494c2ffb035fc2c
+pack trailer == idx embedded: True
+pack filename == pack checksum: True
+.rev present:      yes (magic b'RIDX', expected b'RIDX')
+git verify-pack -v: exit 0 (4.5s)
+  verdict:         /home/coding/spaxel/.git/objects/pack/pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack: ok
+  non delta: 2456 objects
+  chain length = 1: 919 objects
+  chain length = 2: 671 objects
+  chain length = 3: 495 objects
+  chain length = 4: 365 objects
+  chain length = 5: 265 objects
+  chain length = 6: 221 objects
+  chain length = 7: 183 objects
+  chain length = 8: 136 objects
+  chain length = 9: 105 objects
+  chain length = 10: 101 objects
+  chain length = 11: 96 objects
+  chain length = 12: 66 objects
+  chain length = 13: 68 objects
+  chain length = 14: 46 objects
+  chain length = 15: 39 objects
+  chain length = 16: 40 objects
+  chain length = 17: 43 objects
+  chain length = 18: 31 objects
+  chain length = 19: 37 objects
+  chain length = 20: 32 objects
+  chain length = 21: 57 objects
+  chain length = 22: 41 objects
+  chain length = 23: 29 objects
+  chain length = 24: 15 objects
+  chain length = 25: 21 objects
+  chain length = 26: 10 objects
+  chain length = 27: 18 objects
+  chain length = 28: 13 objects
+  chain length = 29: 9 objects
+  chain length = 30: 11 objects
+  chain length = 31: 8 objects
+  chain length = 32: 5 objects
+  chain length = 33: 7 objects
+  chain length = 34: 4 objects
+  chain length = 35: 3 objects
+  chain length = 36: 4 objects
+  chain length = 37: 1 object
+  histogram objects: 6,671 (== idx fanout count: True)
+integrity:         PASS
+
+=== CROSS-CHECKS ===
+git count-objects -v:
+  count: 118
+  in-pack: 22751
+  packs: 3
+  size-pack: 360645
+  prune-packable: 0
+  garbage: 0
+idx fanout total (22,751) == count-objects in-pack (22,751): True
+idx file count (3) == count-objects packs (3): True
+
+multi-pack-index verify: exit 0
+
+git fsck --no-dangling: exit 0
+
+=== SUMMARY ===
+pack index files validated: 3
+total objects across indices: 22,751
+index versions found: [2]
+  pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.idx: objects=1,932 structure=OK checksum=OK integrity=OK
+  pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.idx: objects=14,148 structure=OK checksum=OK integrity=OK
+  pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.idx: objects=6,671 structure=OK checksum=OK integrity=OK
+overall index validation: ALL VALID — NO CORRUPTION DETECTED
