@@ -4,19 +4,13 @@
 
 ## Verification Scope
 
-This document records the verification of access controls, permissions, and security boundaries across the Spaxel system. It serves as a central record of what has been verified, what remains outstanding, and the rationale for each security decision.
+This document summarizes the verification of permissions and access controls within the Spaxel system. The verification covers:
 
-### Verification Areas
+- Mothership-to-node authentication and authorization
+- WebSocket endpoint security
+- Firmware download access controls
+- Dashboard and API access permissions
+- Data storage and access permissions
+- Fleet management authorization
 
-- [ ] Mothership system permissions
-- [ ] Dashboard access controls
-- [ ] API endpoint authentication
-- [ ] Node-to-mothership authentication
-- [ ] Database access controls
-- [ ] File system permissions
-- [ ] Network security boundaries
-- [ ] Third-party integrations (MQTT, webhooks)
-
----
-
-*Last updated: 2026-09-02*
+This is a living document that will be updated as additional verification activities are completed.
