@@ -4,40 +4,19 @@
 
 ## Verification Scope
 
-This document tracks permission verification for the Spaxel WiFi CSI-based indoor positioning system. It records:
+This document records the verification of access controls, permissions, and security boundaries across the Spaxel system. It serves as a central record of what has been verified, what remains outstanding, and the rationale for each security decision.
 
-- System-level permissions granted and verified
-- Resource access rights confirmed through testing
-- Security boundaries validated
-- OAuth/approval scopes and their current status
+### Verification Areas
 
-### Verification Categories
-
-#### Mothership (Go Backend)
-- Database access permissions
-- Network binding and socket permissions
-- File system access (data directory, firmware storage)
-- Process ownership and user rights
-
-#### Firmware (ESP32-S3)
-- WiFi peripheral access
-- CSI capture permissions
-- BLE scanning capabilities
-- Flash/NVS read/write rights
-- OTA update permissions
-
-#### Dashboard (Web UI)
-- WebSocket connection permissions
-- API access control
-- Session management
-- Cross-origin resource sharing (CORS)
-
-#### Infrastructure
-- Docker container privileges
-- Kubernetes RBAC policies
-- mDNS advertisement rights
-- TLS certificate handling
+- [ ] Mothership system permissions
+- [ ] Dashboard access controls
+- [ ] API endpoint authentication
+- [ ] Node-to-mothership authentication
+- [ ] Database access controls
+- [ ] File system permissions
+- [ ] Network security boundaries
+- [ ] Third-party integrations (MQTT, webhooks)
 
 ---
 
-*Last verified: 2026-09-02*
+*Last updated: 2026-09-02*
