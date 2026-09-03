@@ -344,7 +344,7 @@ func startMothershipWithDataDir(t *testing.T, dataDir string) *exec.Cmd {
 
 	mothershipPath := os.Getenv("SPAXEL_MOTHERSHIP_PATH")
 	if mothershipPath == "" {
-		mothershipPath = filepath.Join("..", "..", "build", "spaxel-mothership")
+		mothershipPath = filepath.Join("..", "..", "build", "spaxel")
 	}
 
 	// Create config directory
@@ -362,6 +362,10 @@ func startMothershipWithDataDir(t *testing.T, dataDir string) *exec.Cmd {
 	env := append(os.Environ(),
 		fmt.Sprintf("SPAXEL_DATA_DIR=%s", dataDir),
 		fmt.Sprintf("SPAXEL_PORT=%s", port),
+		// The binary binds via SPAXEL_BIND_ADDR (config.go); SPAXEL_PORT alone
+		// is not read, leaving the mothership on 8080 while the IO scenarios
+		// poll 18080.
+		fmt.Sprintf("SPAXEL_BIND_ADDR=0.0.0.0:%s", port),
 	)
 
 	cmd := exec.Command(mothershipPath)
