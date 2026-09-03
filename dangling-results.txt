@@ -1,0 +1,134 @@
+# Dangling Objects — Fresh Capture (authoritative current list, supersedes all prior captures)
+# Captured:    2026-09-03T00:57:11Z (UTC)
+# Repository:  /home/coding/spaxel
+# Branch:      main
+# HEAD:        1b5deb9479b272124c0eac1cb2c1713547ef59b0
+# Git version: 2.54.0
+# Command:     git fsck --full
+# Exit status: 0
+# stderr:      empty
+# Non-dangling errors: none — 0 lines matching missing/broken-link/corrupt/error/invalid/unreadable vocabulary on either stream; no missing or broken-link corruption found
+# Dangling lines: 0 (every line below is verbatim fsck stdout, in fsck emission order)
+# Type totals:
+#   commit: 0
+#   tree:   0
+#   blob:   0
+#   tag:    0
+#   other:  0
+#
+# WHY THIS LIST IS EMPTY (and why prior counts disagreed)
+#   A git gc repacked the object store at 2026-09-02 17:59:38 (local, EDT): one pack,
+#   1 pack file(s), 20276 packed objects, 12 loose, 0 garbage.
+#   That gc pruned the entire previously-unreachable set, so git fsck --full now
+#   emits no dangling lines at all (stdout and stderr both empty, exit 0).
+#   Prior captures counted objects that no longer exist:
+#     - 127 in fsck-results.txt @ 3197e52e
+#     - 215 in the f6e45673 parse
+#     - 217 in dangling-results.txt @ 672adf41 (captured 2026-09-02T15:24:07Z)
+#   HEAD 672adf41 itself no longer resolves in the current object database
+#   ("git merge-base --is-ancestor" → "Not a valid commit name"): it was on the
+#   pre-cutover history line and was gc-pruned with the rest. Sampled OIDs from
+#   that 217-line capture (commits eaf749d2, 9cf9d1fa; blob 3ffa7d15;
+#   tree cbfd8fa3) are all absent per "git cat-file -e".
+#   This file therefore records the authoritative current state: zero dangling
+#   objects, zero corruption.
+#
+# ---- Per-type breakdown of this capture ----
+#   Sections of the fresh dangling list by object type. Counts were counted
+#   from this file's verbatim fsck body below, not carried over from any
+#   prior capture.
+#
+#   dangling commits (0):
+#     (none)
+#
+#   dangling trees (0):
+#     (none)
+#
+#   dangling blobs (0):
+#     (none)
+#
+#   dangling tags (0):    (none)
+#   other types   (0):    (none)
+#
+#   Grand total: 0
+#   Sum check:   0 + 0 + 0 = 0 — per-type counts sum to the grand total.
+#
+# ---- Reconciliation against the prior captures ----
+#
+#   Capture                                        total  commit  tree  blob  recount?
+#   fsck-results.txt @ 3197e52e (2026-09-02)         127      82    38     7  yes
+#   f6e45673 verify-pack parse (2026-09-02)          215     168    40     7  no
+#   dangling-results.txt @ 672adf41 (15:24:07Z)      217     169    41     7  yes
+#   This capture (2026-09-03T00:57:11Z)                0       0     0     0  yes (live)
+#
+#   - The 127-line capture survives as the fsck-results.txt content committed
+#     at 81bfecbb (2026-09-02T02:59:20-04:00); recounted from that blob:
+#     82 commit / 38 tree / 7 blob. The @ 3197e52e copy itself is gc-pruned
+#     and no longer resolves.
+#   - The 215 (168c/40t/7b) figure for the f6e45673 verify-pack parse is
+#     cited from the parent analysis; f6e45673 no longer resolves, so it
+#     could not be independently recounted.
+#   - The fsck-results.txt now on disk is a later regeneration (19:39:23Z,
+#     218 = 170c/41t/7b), not the 127-line capture the parent analysis read —
+#     even the reference files were themselves capture-time state.
+#
+#   Why the counts differ: the dangling set is capture-time state, not
+#   corruption. Dangling objects are valid-but-unreachable, and the
+#   unreachable pool shifts every time commits land and repacks run, so each
+#   capture froze a different moment of a moving set (127 -> 215 -> 217
+#   across the day). The 2026-09-02 17:59:38 EDT gc then repacked the object
+#   store and pruned the entire unreachable set, leaving 0. Every capture —
+#   including the empty one above — reported exit 0 and no missing/
+#   broken-link/corrupt findings, so the disagreement between counts is about
+#   when each was taken, never about object-store damage.
+#
+# ---- BEGIN verbatim fsck stdout (dangling lines) ----
+# ---- END verbatim fsck stdout ----
+#
+# ---- Object sizes (single batched git cat-file --batch-check) ----
+#
+# Batch lookup command — ONE cat-file process for every dangling oid, not
+# one process per object (recorded verbatim for reproducibility):
+#
+#   git fsck --full 2>/dev/null | awk '/^dangling /{print $NF}' \
+#     | git cat-file --batch-check --buffer
+#
+# Sized input — the union of two oid lists:
+#   1. The verbatim capture above (2026-09-03T00:57:11Z): 0 oids. The
+#      capture is empty, so over this file's own list every per-type sum
+#      and the total are 0 bytes.
+#   2. Live re-enumeration at 2026-09-03T01:44:07Z (same pipeline, exit 0,
+#      stderr empty): 1 oid — 25c99c93ff59cb253bcd52109deb4e459c200855,
+#      the "WIP on main" stash commit created 2026-09-02T21:12:53-0400
+#      (01:12:53Z). Included so the table below sizes the current dangling
+#      set rather than nothing at all.
+#
+# Verbatim batch-check output (single invocation; line format
+# "<oid> <type> <size-in-bytes>"):
+#   25c99c93ff59cb253bcd52109deb4e459c200855 commit 372
+#
+# Lookup failures: none. A failed lookup would have printed
+# "<oid> missing" in the batch-check output; 0 such lines appeared, so
+# every dangling oid carries a real size — no zero-by-default entries
+# were needed.
+#
+# Size sums over the table above (bytes):
+#   commit:  372  (1 object)
+#   tree:      0  (0 objects)
+#   blob:      0  (0 objects)
+#   tag:       0  (0 objects)
+#   other:     0  (0 objects)
+#   TOTAL:   372  (1 object)
+#
+# Sums over this file's committed capture list alone: 0 objects of every
+# type, TOTAL 0 bytes — that capture predates the 17:59:38 EDT gc that
+# emptied the unreachable pool, and the only dangling object at size-
+# lookup time was created after it.
+#
+# Notes:
+#   - Non-dangling fsck stdout lines: 0; stderr lines: 0.
+#   - fsck reachability checks ran against the full object database (--full),
+#     including the 20276 objects in the single pack written at 2026-09-02 17:59:38.
+#   - The empty body is the genuine capture, not a failed run: exit status
+#     0 with empty stderr is git fsck's output for a fully reachable,
+#     undamaged object store.
