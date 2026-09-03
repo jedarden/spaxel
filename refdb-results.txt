@@ -1,0 +1,172 @@
+Spaxel Ref Database Verification Report
+========================================
+
+Captured:        2026-09-03T07:43:17Z
+Bead:            spaxel-8b92cb55 (Collect ref database verification results)
+Relates to:      refs-results.txt (spaxel-8b55504f, captured 2026-09-02T20:04:30Z)
+                 — same subsystem, later state. Supersedes it as the current
+                 ref-DB baseline; every check below was re-run live at the
+                 capture time above.
+Scope note:      This checkout is the only worktree (git worktree list shows
+                 exactly /home/coding/spaxel), so .git/refs + .git/packed-refs
+                 cover the entire ref database of this clone.
+
+VERIFICATION SUMMARY
+--------------------
+Loose refs on disk:          2 regular + 1 symbolic (3 files)
+Packed-refs entries:         5 (+ 1 header line)
+Total distinct refnames:     6
+Unique target SHAs:          5 (origin/HEAD is symbolic -> origin/main;
+                             both resolve to 4983d2de)
+Broken refs:                 0
+Missing/corrupt targets:     0
+Malformed refnames:          0 (all 6 pass git check-ref-format)
+packed-refs format errors:   0 (header, sort order, SHA hex, duplicates all OK)
+fsck --connectivity-only:    rc=0 — no connectivity or ref errors
+Dangling objects (FYI):      21 (unrelated to ref DB; see Observations #5)
+
+REFS DIRECTORY STRUCTURE
+------------------------
+Directories under .git/refs/ (find -type d):
+  .git/refs
+  .git/refs/bisect                    (empty)
+  .git/refs/heads
+  .git/refs/heads/backup              (empty)
+  .git/refs/remotes
+  .git/refs/remotes/origin
+  .git/refs/remotes/origin/handoff    (empty)
+  .git/refs/spaxel-slice              (empty)
+  .git/refs/tags                      (empty)
+  .git/refs/trace-cleanup             (empty)
+
+Loose ref files under .git/refs/ (find -type f) with contents:
+  .git/refs/heads/main                 -> 063662116f2ea53a86d71bcebce894de22670fa3
+  .git/refs/remotes/origin/HEAD        -> ref: refs/remotes/origin/main   [symbolic]
+  .git/refs/remotes/origin/main        -> 4983d2de633e2672f0df041a7d9f05040f85b2eb
+
+File modes: loose refs 0644, .git/packed-refs 0600. Both sane.
+Every regular loose ref file contains exactly one 40-hex SHA; the one symbolic
+ref contains a valid "ref: <refname>" pointer whose target exists.
+
+HEAD: ref: refs/heads/main (git symbolic-ref HEAD) — points at an existing,
+checked-out branch in the only worktree.
+
+PACKED-REFS FORMAT VALIDATION
+-----------------------------
+File: .git/packed-refs, 392 bytes, mtime 2026-09-02 21:59:37Z (17:59:37 EDT).
+
+Header line:
+  "# pack-refs with: peeled fully-peeled sorted "   [valid v1 header]
+
+Entries (5), in stored order:
+  674100107d07d91c1bb1b46ffd2b73db01e0222d refs/heads/backup/local-lineage-pre-reconcile
+  e1e1f999c880cee9f65d354ea6349bdbac20917f refs/heads/main
+  63a8a24b0c449bf7e029c5b51b402eda53f1e750 refs/remotes/origin/handoff/golf-esp32-ota
+  b3ab62f2af437ce1badd6b0cbd46252be1c7f706 refs/remotes/origin/main
+  2f169887e5ff5c181901813ea525dc604df5e0f5 refs/stash
+
+Mechanical checks (all pass):
+  - header present and well-formed .............. OK
+  - every entry matches ^[0-9a-f]{40} <refname>$ . OK
+  - refnames sorted ascending, no duplicates ..... OK
+  - peel lines (^[...]): 0 present, 0 expected ... OK (no annotated tags among
+    the packed refs; all 5 targets are commits)
+  - no stray/blank lines ......................... OK
+
+FULL REF INVENTORY (git for-each-ref)
+-------------------------------------
+  refs/heads/backup/local-lineage-pre-reconcile -> 674100107d07d91c [commit]  (packed only)
+  refs/heads/main                               -> 063662116f2ea53a [commit]  (loose, shadows packed)
+  refs/remotes/origin/HEAD                      -> 4983d2de633e2672 [commit]  (loose symbolic)
+  refs/remotes/origin/handoff/golf-esp32-ota    -> 63a8a24b0c449bf7 [commit]  (packed only)
+  refs/remotes/origin/main                      -> 4983d2de633e2672 [commit]  (loose, shadows packed)
+  refs/stash                                    -> 2f169887e5ff5c18 [commit]  (packed only)
+
+Shadowing (loose + packed same name): refs/heads/main, refs/remotes/origin/main.
+Normal git semantics — loose refs win resolution. The packed copies are stale
+residue (e1e1f999 for main, b3ab62f2 for origin/main); both stale values still
+exist as objects (verified), so nothing breaks.
+
+REF TARGET RESOLUTION (each ref -> rev-parse + cat-file)
+--------------------------------------------------------
+  refs/heads/backup/local-lineage-pre-reconcile -> 674100107d07 [commit: exists, 588 B]
+  refs/heads/main                               -> 063662116f2e [commit: exists, 876 B]
+  refs/remotes/origin/HEAD                      -> 4983d2de633e [commit: exists, 241 B]  (via symbolic)
+  refs/remotes/origin/handoff/golf-esp32-ota    -> 63a8a24b0c44 [commit: exists, 1385 B]
+  refs/remotes/origin/main                      -> 4983d2de633e [commit: exists, 241 B]
+  refs/stash                                    -> 2f169887e5ff [commit: exists, 328 B]
+
+All 5 unique SHAs also confirmed via `git cat-file --batch-check` — each is a
+present, well-formed commit object. 6/6 refs resolve, 0 broken.
+
+INCONSISTENCIES FOUND
+---------------------
+None. No broken refs, no dangling refnames, no malformed packed-refs entries,
+no unresolvable targets, no ref-name/structure anomalies.
+
+OBSERVATIONS (documented; none are ref-DB defects)
+--------------------------------------------------
+1. Six empty directories under .git/refs/ (bisect, heads/backup,
+   remotes/origin/handoff, spaxel-slice, tags, trace-cleanup) — residue of
+   refs that were deleted or moved into packed-refs. Harmless; git recreates
+   and prunes these lazily. The two nonstandard namespace names (spaxel-slice,
+   trace-cleanup) are artifacts of this repo's own tooling, not corruption.
+
+2. packed-refs was rewritten at 2026-09-02T21:59:37Z — i.e. AFTER the prior
+   capture (refs-results.txt, 2026-09-02T20:04:30Z, which saw 6 loose refs and
+   a 1-entry packed-refs). A git gc / pack-refs run at that time packed the
+   four previously-loose refs (backup, main, handoff/golf-esp32-ota, stash)
+   and refreshed the packed origin/main entry. That run explains the entire
+   loose/packed split observed now.
+
+3. The prior capture recorded packed origin/main -> 92bdf8caf538 (superseded
+   even then). That object NO LONGER EXISTS — pruned by the 21:59:37Z gc
+   (git cat-file -t: "could not get object info"). Not a broken ref: the
+   21:59:37Z pack-refs rewrote the packed entry to the then-current b3ab62f2
+   BEFORE the prune, so no live or packed ref names the pruned object. The
+   ordering (repack -> prune) was correct; had it been reversed, the ref DB
+   would now hold a broken packed ref.
+
+4. refs/heads/main advanced during the session: f3873fde (this dispatch's
+   session-start snapshot) -> 06366211 (capture time), via a concurrent
+   worker commit. f3873fde is a verified ancestor of main — clean
+   fast-forward, no divergence, no reflog discontinuity (.git/logs/HEAD runs
+   ... -> f3873fde -> 06366211).
+
+5. 21 dangling objects exist as of this capture (fsck --connectivity-only),
+   vs 0 in the 2026-09-02T23:04Z dangling-results.txt capture — fresh
+   unreachable residue from concurrent worker activity since then. Dangling
+   objects are intact and unreachable-by-definition; this is
+   dangling-results.txt's domain, listed here only for cross-reference. It is
+   not a reference-database inconsistency.
+
+COMPARISON TO PRIOR CAPTURE (refs-results.txt, 2026-09-02T20:04:30Z)
+--------------------------------------------------------------------
+  loose refs:        6 -> 3 (4 packed by the 21:59:37Z gc)
+  packed entries:    1 -> 5
+  refs/heads/main:   95a64aca -> 06366211 (advanced through f3873fde et al.)
+  refs/remotes/origin/main: b3ab62f2 -> 4983d2de (advanced; still shared with
+                             origin/HEAD, which stays symbolic)
+  refs/stash:        219c9935 -> 2f169887 (stash updated)
+  backup/local-lineage-pre-reconcile: 9ee9c5f9 -> 67410010 (advanced)
+  broken refs:       0 -> 0
+All deltas are ordinary repository activity (commits, a gc/pack-refs), not
+corruption.
+
+METHOD
+------
+All commands read-only; nothing under .git/ was written or mutated by this
+verification (no pack-refs, no gc, no ref updates): find over .git/refs,
+cat of .git/packed-refs and loose ref files, git for-each-ref / show-ref /
+symbolic-ref / check-ref-format / rev-parse --verify / cat-file
+(-t, --batch-check) / merge-base --is-ancestor / worktree list / fsck
+(--connectivity-only --no-progress). git version 2.54.0.
+
+CONCLUSION
+----------
+The reference database is healthy. All 6 refs are well-named, resolve to
+existing commit objects, and agree with HEAD and the single worktree. The
+packed-refs file is structurally valid, and its stale entries are normal
+shadowed residue whose values still exist. No ref database inconsistencies
+were found; the only anomalies are cosmetic empty namespace directories and
+expected gc-driven loose/packed churn, both documented above.
