@@ -121,9 +121,11 @@
 #   TOTAL:   372  (1 object)
 #
 # Sums over this file's committed capture list alone: 0 objects of every
-# type, TOTAL 0 bytes — that capture predates the 17:59:38 EDT gc that
-# emptied the unreachable pool, and the only dangling object at size-
-# lookup time was created after it.
+# type, TOTAL 0 bytes — that capture POSTDATES the 2026-09-02 17:59:38 EDT
+# gc that emptied the unreachable pool (which is why it found none; see the
+# WHY THIS LIST IS EMPTY section above), and the only dangling object at
+# size-lookup time was created after it (01:12:53Z, 15 minutes after the
+# 00:57:11Z capture).
 #
 # Notes:
 #   - Non-dangling fsck stdout lines: 0; stderr lines: 0.
