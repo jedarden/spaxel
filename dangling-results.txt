@@ -226,3 +226,130 @@
 #   - The empty body is the genuine capture, not a failed run: exit status
 #     0 with empty stderr is git fsck's output for a fully reachable,
 #     undamaged object store.
+#
+# ==== FINAL CONSOLIDATED SUMMARY (spaxel-5b98e686; closes umbrella spaxel-1861826e) ====
+#
+# This section consolidates the list, type categories, sizes, and ages from
+# the four sections above into one view, and records a fresh `git fsck
+# --full` re-run that confirms the analysis still matches current repo
+# state. Drift since the first child's capture (spaxel-af4d54a6) is
+# quantified at the end of this section.
+#
+# ---- Fresh fsck re-run (2026-09-03T02:59:05Z) ----
+#
+#   Command:     git fsck --full
+#   Exit status: 0
+#   stderr:      0 lines (empty)
+#   stdout:      9 dangling lines, 0 non-dangling lines. Verbatim, in fsck
+#                emission order:
+#
+#     dangling tree 043acb7816ad83eadb01cf7becf09e39321f08c3
+#     dangling commit e063c89fcaa159393aefdeaa99b5c97932059c87
+#     dangling commit 8370860c5831ddf64eb01c623db08d7d8197341a
+#     dangling commit 25933bb56ded1a04d16b24bd17531e89029704f0
+#     dangling commit 25c99c93ff59cb253bcd52109deb4e459c200855
+#     dangling commit 01dbab4f92fc45afc4186ec704195dc15356f9ea
+#     dangling commit 65df0f1c18bc17c0a7762110fb227173960ea7b5
+#     dangling tree 3ef4bfa898e99eaab7f6c5caa16fbbefe394e01c
+#     dangling commit 90faffd5dc2bd1ce5731a60f5adcac0a7ab75394
+#
+#   Corruption vocabulary check: 0 lines on either stream matching
+#   missing/broken-link/corrupt/error/invalid/unreadable — zero corruption
+#   findings, consistent with every capture recorded in this file.
+#
+# ---- Consolidated final state (list + types + sizes + ages in one view) ----
+#
+#   Type      count   bytes
+#   commit        7    4240
+#   tree          2    6870
+#   blob          0       0
+#   tag           0       0
+#   TOTAL         9   11110
+#
+#   Per-object sizes — ONE batched `git cat-file --batch-check --buffer`
+#   over all 9 oids (verbatim; 0 "<oid> missing" lines, so every size is
+#   real, none zero-by-default):
+#
+#     043acb7816ad83eadb01cf7becf09e39321f08c3 tree   3435
+#     e063c89fcaa159393aefdeaa99b5c97932059c87 commit 1186
+#     8370860c5831ddf64eb01c623db08d7d8197341a commit  362
+#     25933bb56ded1a04d16b24bd17531e89029704f0 commit  344
+#     25c99c93ff59cb253bcd52109deb4e459c200855 commit  372
+#     01dbab4f92fc45afc4186ec704195dc15356f9ea commit  389
+#     65df0f1c18bc17c0a7762110fb227173960ea7b5 commit  401
+#     3ef4bfa898e99eaab7f6c5caa16fbbefe394e01c tree   3435
+#     90faffd5dc2bd1ce5731a60f5adcac0a7ab75394 commit 1186
+#
+#   Sum check: 7 commits = 4240 B; 2 trees = 6870 B; grand total 11110 B
+#   over 9 objects.
+#
+#   What the objects are:
+#   - 5 of the 7 dangling commits are dropped two-parent "WIP on main"
+#     stash commits (25c99c93, 8370860c, 25933bb5, 65df0f1c, 01dbab4f —
+#     "git stash list" is empty and each carries an "index on main"
+#     second parent, so the stashes were dropped, which is exactly why
+#     they dangle).
+#   - The remaining 2 (e063c89f, 90faffd5) are the superseded variants of
+#     the spaxel-71e6211b categorization deliverable already identified in
+#     the ages section above.
+#   - Both trees are full-repository-root index snapshots from merge
+#     windows (3435 B each; see the per-tree notes in the ages section and
+#     the 3ef4bfa8 note below).
+#
+#   Ages (commits: real committer dates read from the objects; trees: no
+#   intrinsic timestamp):
+#   - The 5 previously-dated commits keep the ages recorded above:
+#     25c99c93 01:12:53Z, e063c89f and 90faffd5 01:26:49Z, 8370860c
+#     02:08:10Z (all 2026-09-03 UTC). The 3 new ones, read from the
+#     objects themselves (offset conversion to UTC as in the ages
+#     section):
+#       25933bb5 | 2026-09-02T22:29:33-04:00 (= 2026-09-03T02:29:33Z)
+#       65df0f1c | 2026-09-02T22:45:51-04:00 (= 2026-09-03T02:45:51Z)
+#       01dbab4f | 2026-09-02T22:47:10-04:00 (= 2026-09-03T02:47:10Z)
+#   - OLDEST dangling commit: 25c99c93 @ 2026-09-03T01:12:53Z (unchanged
+#     from the ages section).
+#   - NEWEST dangling commit: 01dbab4f @ 2026-09-03T02:47:10Z (was
+#     8370860c @ 02:08:10Z).
+#   - SPAN: 1h34m17s (01:12:53Z -> 02:47:10Z), up from 55m17s — the whole
+#     set is still same-evening residue of publish/stash/merge activity,
+#     nothing from the pre-gc pool.
+#   - Tree 3ef4bfa8 (3435 B): age n/a, no intrinsic timestamp. Same
+#     negative derivations as 043acb78: not the root tree of any commit
+#     reachable from refs or reflogs ("git log --all --reflog
+#     --format='%H|%cI|%T'" — 0 matches), and absent from the object
+#     closure of all 7 dangling commits ("git rev-list --objects" per
+#     commit — 0 hits). Provenance evidence only, NOT a date: it differs
+#     from 043acb78 in exactly two entries — VERSION = blob f90fbdad =
+#     "0.2.130" (043acb78 carries 0.2.129) and dangling-results.txt =
+#     blob c0284b3d — so it is an index snapshot from a later merge
+#     window the same evening.
+#
+# ---- Drift since the first child's capture (spaxel-af4d54a6, 00:57:11Z) ----
+#
+#   Capture timeline across this file's own sections:
+#
+#     child-1 capture (spaxel-af4d54a6)  00:57:11Z   0 dangling  (post-gc)
+#     size section live re-enumeration   01:44:07Z   1 dangling  (25c99c93)
+#     ages section live re-enumeration   02:19:38Z   5 dangling  (4c + 1t)
+#     this re-run (child-5)              02:59:05Z   9 dangling  (7c + 2t)
+#
+#   - Drift vs child-1: 0 -> 9, i.e. +9 objects over 2h01m54s. The empty
+#     capture was genuine and correct at its instant: every one of the 9
+#     current objects was created AFTER it (the oldest, 25c99c93, at
+#     01:12:53Z — 15m42s later; see the ages section's note that it
+#     postdates the capture), so nothing child-1 saw is gone and the
+#     drift is entirely new accumulation, not a correction of child-1.
+#   - Drift vs the ages section (02:19:38Z): +4 — commits 25933bb5,
+#     65df0f1c, 01dbab4f and tree 3ef4bfa8 surfaced; 0 of the prior 5
+#     disappeared (all five reappear in this run's stdout).
+#   - Mechanism, consistent with the reconciliation section above: the
+#     dangling set is capture-time state. Ongoing publish/stash/merge
+#     work keeps leaving dropped stash commits and index snapshots
+#     behind, and nothing has run gc since the 2026-09-02 21:59:38Z
+#     repack to prune the pool again.
+#   - Trajectory statement: zero corruption at every capture in this
+#     file; the dangling count is expected to keep moving until the next
+#     gc, at which point the pool empties again as it did before
+#     child-1's capture.
+#
+# ==== END FINAL CONSOLIDATED SUMMARY ====
