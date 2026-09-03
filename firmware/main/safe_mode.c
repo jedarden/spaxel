@@ -31,7 +31,7 @@ static esp_err_t nvs_get_u32_default(const char *key, uint32_t default_val, uint
     return err;
 }
 
-static esp_err_t nvs_set_u32(const char *key, uint32_t val) {
+static esp_err_t nvs_set_u32_commit(const char *key, uint32_t val) {
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(SPAXEL_NAMESPACE, NVS_READWRITE, &nvs);
     if (err != ESP_OK) {
@@ -45,7 +45,7 @@ static esp_err_t nvs_set_u32(const char *key, uint32_t val) {
     return err;
 }
 
-static esp_err_t nvs_set_u8(const char *key, uint8_t val) {
+static esp_err_t nvs_set_u8_commit(const char *key, uint8_t val) {
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(SPAXEL_NAMESPACE, NVS_READWRITE, &nvs);
     if (err != ESP_OK) {
@@ -136,7 +136,7 @@ esp_err_t safe_mode_mark_boot_good(void) {
 
     ESP_LOGI(TAG, "Marking boot as good - resetting boot count from %" PRIu32 " to 0", s_boot_count);
     s_boot_count = 0;
-    esp_err_t err = nvs_set_u32(NVS_KEY_BOOT_COUNTER, 0);
+    esp_err_t err = nvs_set_u32_commit(NVS_KEY_BOOT_COUNTER, 0);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to reset boot counter: %s", esp_err_to_name(err));
         return err;
@@ -156,7 +156,7 @@ esp_err_t safe_mode_mark_boot_failed(void) {
     ESP_LOGW(TAG, "Boot failure - incrementing count to %" PRIu32 " (threshold: %d)",
              s_boot_count, SAFE_MODE_BOOT_COUNT_THRESHOLD);
 
-    esp_err_t err = nvs_set_u32(NVS_KEY_BOOT_COUNTER, s_boot_count);
+    esp_err_t err = nvs_set_u32_commit(NVS_KEY_BOOT_COUNTER, s_boot_count);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to save boot counter: %s", esp_err_to_name(err));
         return err;
@@ -175,7 +175,7 @@ esp_err_t safe_mode_enter(void) {
     ESP_LOGW(TAG, "Entering safe mode - only network + OTA will be available");
     s_safe_mode_active = true;
 
-    esp_err_t err = nvs_set_u8(NVS_KEY_SAFE_MODE, SAFE_MODE_ENABLED);
+    esp_err_t err = nvs_set_u8_commit(NVS_KEY_SAFE_MODE, SAFE_MODE_ENABLED);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set safe mode flag: %s", esp_err_to_name(err));
         return err;
@@ -188,7 +188,7 @@ esp_err_t safe_mode_exit(void) {
     ESP_LOGI(TAG, "Exiting safe mode - normal operation will resume on next boot");
     s_safe_mode_active = false;
 
-    esp_err_t err = nvs_set_u8(NVS_KEY_SAFE_MODE, SAFE_MODE_DISABLED);
+    esp_err_t err = nvs_set_u8_commit(NVS_KEY_SAFE_MODE, SAFE_MODE_DISABLED);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to clear safe mode flag: %s", esp_err_to_name(err));
         return err;
@@ -196,7 +196,7 @@ esp_err_t safe_mode_exit(void) {
 
     // Also reset boot count since we're exiting safe mode
     s_boot_count = 0;
-    err = nvs_set_u32(NVS_KEY_BOOT_COUNTER, 0);
+    err = nvs_set_u32_commit(NVS_KEY_BOOT_COUNTER, 0);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to reset boot counter: %s", esp_err_to_name(err));
         return err;
