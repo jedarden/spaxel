@@ -127,6 +127,98 @@
 # size-lookup time was created after it (01:12:53Z, 15 minutes after the
 # 00:57:11Z capture).
 #
+# ---- Object ages (committer dates for commits; derivation attempt for the tree) ----
+#
+# Live re-enumeration at 2026-09-03T02:19:38Z ("git fsck --full", exit 0,
+# stderr empty) — the dangling set moved again since the size section's
+# 01:44:07Z enumeration. Verbatim fsck stdout, in fsck emission order
+# (5 lines):
+#
+#   dangling tree 043acb7816ad83eadb01cf7becf09e39321f08c3
+#   dangling commit e063c89fcaa159393aefdeaa99b5c97932059c87
+#   dangling commit 8370860c5831ddf64eb01c623db08d7d8197341a
+#   dangling commit 25c99c93ff59cb253bcd52109deb4e459c200855
+#   dangling commit 90faffd5dc2bd1ce5731a60f5adcac0a7ab75394
+#
+#   Type totals: 4 commit + 1 tree + 0 blob + 0 tag = 5 (sum check ok).
+#   Between the size section and this capture, the interrupted
+#   origin/main merge completed locally as 91d8a889 (committed
+#   02:14:35Z). None of the five objects above is part of that merge;
+#   25c99c93 is the same stash commit both prior sections sized (372
+#   bytes, unchanged), and the other four surfaced after 01:44:07Z.
+#
+# ---- Committer dates: real dates read from the commit objects ----
+#
+# ONE process for all four dangling commits (recorded verbatim for
+# reproducibility; no per-commit process fan-out):
+#
+#   git show -s --format='%H | %cI | %s' \
+#     e063c89fcaa159393aefdeaa99b5c97932059c87 8370860c5831ddf64eb01c623db08d7d8197341a \
+#     25c99c93ff59cb253bcd52109deb4e459c200855 90faffd5dc2bd1ce5731a60f5adcac0a7ab75394
+#
+# Verbatim output (committer date RFC3339, read from each object itself —
+# no commit date below is derived or estimated):
+#
+#   e063c89fcaa159393aefdeaa99b5c97932059c87 | 2026-09-02T21:26:49-04:00 | bead: spaxel-71e6211b — categorize fresh dangling list by type + reconcile prior captures
+#   8370860c5831ddf64eb01c623db08d7d8197341a | 2026-09-02T22:08:10-04:00 | WIP on main: d7d8db99 bead: spaxel-ee13e63b — fix capture-vs-gc timeline wording in dangling-results.txt
+#   25c99c93ff59cb253bcd52109deb4e459c200855 | 2026-09-02T21:12:53-04:00 | WIP on main: 76ef7860 bead: close spaxel-af4d54a6 — deliverable already committed at 4196c71a; auto-split declined
+#   90faffd5dc2bd1ce5731a60f5adcac0a7ab75394 | 2026-09-02T21:26:49-04:00 | bead: spaxel-71e6211b — categorize fresh dangling list by type + reconcile prior captures
+#
+# What the four commits are (identification, from their own headers):
+#   - 25c99c93 and 8370860c are two-parent ("WIP on main: <tip subject>")
+#     stash-shaped commits; parents 76ef7860+094cda88 and
+#     d7d8db99+e8f35b01 respectively. "git stash list" and the stash
+#     reflog are both empty, so both are DROPPED stash commits — which is
+#     exactly why they dangle.
+#   - e063c89f (parent 1bb32759, the origin/main tip) and 90faffd5
+#     (parent 0e076577) carry an identical subject and an identical
+#     committer timestamp; they are superseded variants of the
+#     spaxel-71e6211b categorization deliverable that landed as 321a2e9a
+#     (Forgejo lineage) and f756c6b9 (local lineage). The two variants
+#     differ from each other only in VERSION and dangling-results.txt.
+#     Both carry committer dates (01:26:49Z) that predate the size
+#     section's 01:44:07Z enumeration, which did not list them — so at
+#     enumeration time they were still reachable from some ref that has
+#     since gone away. Stated as inference from the timestamps; the
+#     intervening ref is not recoverable.
+#
+# ---- Dangling tree: derivation attempted, no age derivable ----
+#
+# Tree 043acb7816ad83eadb01cf7becf09e39321f08c3 (3435 bytes) is a full
+# repository root tree and has no intrinsic timestamp. Derivation
+# attempts, both negative:
+#   - Not the root tree of any commit reachable from refs or reflogs:
+#     "git log --all --reflog --format='%H|%cI|%T'" — 0 matches.
+#   - Not referenced anywhere in the object closure of any of the four
+#     dangling commits above: "git rev-list --objects <commit>" per
+#     commit, searched for the tree oid — 0 hits in each.
+#   Age recorded as: n/a (no intrinsic timestamp)
+#
+#   Provenance evidence only, NOT a date: the tree's VERSION entry is
+#   blob f548ee6e26fdfceb8ad6c0c3b32f00408fa0a8a4 = "0.2.129", the exact
+#   blob the interrupted origin/main merge staged, and its
+#   dangling-results.txt entry is blob 29f3f52b, a variant 6 lines longer
+#   than the local conflict stage — so the tree is a snapshot of the
+#   index during that merge window (the merge commit itself is dated
+#   02:14:35Z, but no timestamp is derived from that for the tree; none
+#   can be).
+#
+# ---- Oldest and newest dangling-commit ages (summary) ----
+#
+# From the four verbatim committer dates above (UTC equivalents computed
+# by offset conversion from the printed -04:00 forms, not re-read):
+#
+#   OLDEST: 25c99c93ff59cb253bcd52109deb4e459c200855
+#           2026-09-02T21:12:53-04:00 (= 2026-09-03T01:12:53Z)
+#           dropped "WIP on main" stash commit
+#   NEWEST: 8370860c5831ddf64eb01c623db08d7d8197341a
+#           2026-09-02T22:08:10-04:00 (= 2026-09-03T02:08:10Z)
+#           dropped "WIP on main" stash commit
+#   SPAN:   55m17s between the oldest and newest dangling commit; all
+#           four commits fall inside that same span, so the entire
+#           current dangling set is fresh residue of the day's
+#           publish/stash/merge activity, not of the pruned pre-gc pool.
+#
 # Notes:
 #   - Non-dangling fsck stdout lines: 0; stderr lines: 0.
 #   - fsck reachability checks ran against the full object database (--full),
