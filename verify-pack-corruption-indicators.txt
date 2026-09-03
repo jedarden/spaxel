@@ -1,0 +1,55 @@
+=== VERIFY-PACK PARSE: CORRUPTION INDICATORS ===
+Generated:   2026-09-02 12:39:42Z
+Repository:  /home/coding/spaxel
+Bead ID:     spaxel-6ba4e5cb
+Raw source:  .beads/diagnostics/pack-verification/verify-pack-output.txt (22,842 lines, collected by spaxel-bda3f5f6)
+fsck source: .beads/diagnostics/pack-verification/git-fsck-full.txt
+Parse method: line-grammar parser applied to every line of the raw file;
+  object lines validated against: <40-hex-oid> <commit|tree|blob|tag> <size> <packed-size> <offset> [<depth> <base-oid>]
+
+=== 1. CORRUPTED PACKS ===
+packs in raw file:            3
+terminators reading 'ok':     3 of 3
+packs NOT ok:                 none
+  pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack   ok   objects=  1932  deltas=   831  max-chain=19
+  pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack   ok   objects= 14148  deltas=  5859  max-chain=29
+  pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack   ok   objects=  6671  deltas=  4215  max-chain=37
+
+=== 2. MISSING OBJECTS / DANGLING REFERENCES ===
+delta-base refs unresolvable in any of the 3 packs: 0
+fsck 'missing'/'broken link' error lines:                   0
+fsck dangling (unreferenced but PRESENT - not corruption):  215
+    commit    168
+    tree       40
+    blob        7
+
+=== 3. CHECKSUM FAILURES ===
+verify-pack validates the pack SHA-1 trailer and every object SHA-1;
+each pack terminated ': ok', so failures = 0
+corruption-vocabulary lines in raw output (word-boundary match): 0
+
+=== 4. PARSE CONSISTENCY CHECKS ===
+total object lines parsed:        22751
+unique OIDs across all packs:     22751 (duplicates: 0)
+malformed lines (no grammar):     0
+offset-order/bounds violations:   none
+type distribution:                {'commit': 2090, 'blob': 13092, 'tree': 7569}
+
+--- per-pack cross-check vs .idx fanout counts (idx-results.txt, spaxel-d0ac8cf3) ---
+  pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack   parsed=  1932  idx=1,932  MATCH
+  pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack   parsed= 14148  idx=14,148  MATCH
+  pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack   parsed=  6671  idx=6,671  MATCH
+  total parsed=22751  total idx=22751  MATCH (== count-objects in-pack 22,751)
+  pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack   histogram/non-delta consistency: consistent
+  pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack   histogram/non-delta consistency: consistent
+  pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack   histogram/non-delta consistency: consistent
+
+=== CONCLUSION ===
+Corruption indicators found: NONE
+  - 0 corrupt packs (3/3 verified ok)
+  - 0 missing objects (all delta bases resolve; fsck reports no missing/broken links)
+  - 0 checksum failures
+  - 215 dangling objects are unreferenced-but-present (expected post-rebase/amend
+    churn), not corruption; full OID list in git-fsck-full.txt,
+    per-type counts in dangling-by-type.txt
+Parsed JSON for downstream compiler: verify-pack-corruption-indicators.json
