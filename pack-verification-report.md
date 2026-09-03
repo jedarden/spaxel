@@ -137,14 +137,105 @@ prune, or evidence of an interrupted operation)._
 
 ## 7. Corruption Indicators
 
-**Captured (RFC3339):** _TBD_
+**Captured (RFC3339):** staged indicators 2026-09-02T10:01Z → 2026-09-03T04:10Z;
+fill-time re-verification 2026-09-03T06:00–06:01Z at HEAD `5d5380e0` (single-pack
+layout, zero mutation — read-only verbs only). Each row states its own vintage.
 
-_Placeholder — consolidated corruption indicators derived from the verify-pack
-output (missing objects, checksum mismatches, unreadable entries), mirrored to
-the machine-readable JSON at repo root._
+Consolidated corruption indicators across every verification layer in this
+chain, one status per layer. This is the compile view: per-layer detail lives in
+§3 (fsck), §4 (pack index), §5 (MIDX), §6 (dangling); the machine-readable
+per-pack mirror is `verify-pack-corruption-indicators.json` (repo root).
+
+### 7.1 Status legend
+
+| Marker | Meaning |
+|---|---|
+| ✅ PASS | Layer ran to completion and reported zero corruption indicators |
+| ⚠️ BENIGN | Non-zero finding that is documented churn, not corruption |
+| ⚪ N/A | Layer does not apply to the current layout (nothing to verify) |
+| ❌ FAIL | Corruption confirmed (0 occurrences in this chain) |
+
+### 7.2 Consolidated status matrix
+
+| # | Verification layer | Status | Key numbers | Vintage | Source |
+|---|---|---|---|---|---|
+| 1 | Pack integrity — `git verify-pack -v` | ✅ PASS | 3/3 packs terminate `: ok`; 0 checksum failures; 0 corrupt packs; 0 unresolvable delta bases; 0 malformed lines; 22,751/22,751 unique OIDs parsed; offsets strictly ascending and in bounds | 2026-09-02T10:02Z (pre-gc 3-pack layout — point-in-time, §4.1) | `verify-pack-output.txt`; `verify-pack-corruption-indicators.txt`/`.json` |
+| 2 | Object-graph integrity — `git fsck --full` | ✅ PASS | exit 0; 0 error / missing / broken-link lines (stderr empty); 215 `dangling` lines — the file's only content type | 2026-09-02T10:01Z @ HEAD `3405d08e` | `git-fsck-full.txt` |
+| 3 | fsck re-run at fill | ✅ PASS | exit 0; stderr 0 lines (no corruption/missing/error); 19 dangling (12 commit / 4 blob / 3 tree) | 2026-09-03T06:00:12Z @ HEAD `5d5380e0` | live run this section (zero mutation) |
+| 4 | Pack index (`.idx`) structural check | ✅ VALID | 20,276 objects; fanout monotonic; OID table sorted; self-checksum valid; index checksum cross-matches pack filename and pack trailer; offset span 12…241,430,246 all within pack bounds; delta-chain histogram max depth 50 | 2026-09-03T04:10Z (single-pack `b8585481` capture, spaxel-eb8920c3) | `multi-pack-index-verify.txt` (offsets block); commit `1a6f16be` |
+| 5 | Multi-pack-index | ⚪ N/A — ABSENT | no base MIDX, no incremental chain, no per-layer `.midx`; `git multi-pack-index verify` exit 0 on an absent MIDX is **vacuous** (control-tested on a fresh empty repo, git 2.54) — recorded ABSENT / NOT APPLICABLE, never PASSED; re-confirmed absent 2026-09-03T06:00:12Z | verdict 2026-09-03T04:13Z, published `88afaa4c`; absence live-confirmed at fill | `multi-pack-index-verify{,-verbose}.txt` (⚠️ pre-deletion vintage — see below); §5 |
+| 6 | Dangling objects | ⚠️ BENIGN | capture 215 (168 commit / 40 tree / 7 blob) → published re-run 9 (7 commit / 2 tree) @ 02:59:05Z → fill re-run 19 (12 c / 4 b / 3 t); unreferenced-but-present rebase/stash/merge residue; pool emptied to 0 at the 21:59Z gc | per-row vintages as listed; trajectory in `dangling-results.txt` | `dangling-objects.log`; `dangling-count.txt`; `dangling-by-type.txt`; `dangling-results.txt` (repo root) |
+| 7 | References (refs) | ✅ PASS | staged: 4 branches / 0 tags / HEAD `3405d08e` @ 2026-09-02T10:06Z; at fill: 2 local branches (`main`, `backup/local-lineage-pre-reconcile`), 0 tags, 3 remote-tracking, 1 stash — **all resolve** (`cat-file -e` OK on every ref target); HEAD symref `refs/heads/main` → `5d5380e0` valid; main reflog intact (38 entries); fsck emitted zero ref errors (§ row 2–3) | staged 2026-09-02T10:06:29Z; live 2026-09-03T06:01:07Z | `verification-summary.txt` (REFS block); live enumeration this section |
+| 8 | Loose/garbage objects | ✅ NONE | garbage 0, size-garbage 0 B, prune-packable 0 at both vintages (loose 85 @ capture → 258 @ fill — ordinary accumulation, zero corruption) | 2026-09-02T10:06Z and 2026-09-03T06:00:12Z | `count-objects-verbose.txt`; live `git count-objects -v` |
+
+**Reading the matrix:** rows 1–4 and 7–8 are the corruption-bearing layers and
+all pass with zero indicators; row 5 is vacuous for a one-pack repository; row 6
+is the only non-zero count anywhere in the chain and is expected churn (§6).
+
+### 7.3 Corruption-vocabulary scan — 0 hits
+
+Word-boundary scan of the full 22,842-line `verify-pack -v` output for the
+corruption vocabulary (`corrupt`, `checksum error`, `fatal`, `error`,
+`missing`, `unreadable`, `premature end`, `SHA1 COLLISION`): **0 matches**
+(`verify-pack-corruption-indicators.txt` §3). The fsck capture contributes 0
+non-dangling lines (`git-fsck-full.txt` is 215 lines, all `dangling …`), and the
+fill-time re-run contributes 0 stderr bytes. No layer produced a single
+corruption-vocabulary line at any vintage.
+
+### 7.4 Dangling ≠ corruption — interpretation rule
+
+Every dangling count in this report is **unreferenced-but-present**: the object
+exists, parses, and its checksum verifies; only the reference to it is gone.
+fsck classifies dangling lines as informational (stdout), not errors (stderr) —
+in both captures stderr is empty. The pool is publish/stash/merge residue:
+`dangling-results.txt` traces the fill-era objects to dropped stash commits and
+index snapshots from per-deliverable publish windows, and the pool emptied to 0
+at the last gc (spaxel-af4d54a6 capture, 00:57:11Z). Disposition: reachable via
+reflogs until the next gc, then prunable — no action required, no data loss.
+
+### 7.5 MIDX staged-artifact vintage caveat
+
+`multi-pack-index-verify.txt` / `-verbose.txt` (executed 2026-09-03T04:10:35Z)
+show a **real** verify pass — OID-order 20,275 / sort+offsets 20,276, exit 0 —
+which requires a MIDX that existed at that instant. That MIDX was subsequently
+lost to a failed `git multi-pack-index write --bitmap` whose abort path deleted
+the base file (incident recorded 2026-09-03); it has been absent at every
+observation since (05:23:41Z listing, published verdict `88afaa4c`, umbrella
+re-close spot-check, and the 06:00:12Z fill check). The staged artifact is
+therefore a pre-deletion vintage of a MIDX that no longer exists and is not
+missing anything the repository needs — a single-pack layout is fully served by
+its `.idx` (row 4), which is why the status is ⚪ N/A rather than ❌. The
+authoritative verdict is the published ABSENT / NOT APPLICABLE one (§5).
+
+### 7.6 Machine-readable mirror
+
+`verify-pack-corruption-indicators.json` (repo root) mirrors rows 1, 2 and 6
+per-pack: `packs_not_ok`, `corrupt_packs`, `error_lines` all empty arrays;
+`per_pack` object counts and delta histograms; `dangling` totals by type. It is
+the parse output of the 2026-09-02T12:39:42Z compilation (spaxel-6ba4e5cb,
+published `49bc049b`) and is the artifact
+downstream consumers should read instead of re-parsing the 1.9 MB raw output.
+
+### 7.7 Verdict
+
+**NO CORRUPTION DETECTED** — at every vintage in this chain: 0 corrupt packs,
+0 missing objects, 0 checksum failures, 0 unresolvable delta bases, 0
+unreadable entries, 0 broken refs, 0 garbage files. The object database is
+internally consistent across all layers, and the only moving indicator (the
+dangling pool, row 6) is documented churn with zero corruption signal. Two
+open layout notes carry forward, neither a defect: the MIDX is absent and not
+applicable to the single-pack layout (§5, §7.5), and `verify-pack -v` has not
+been re-run against the post-gc single-pack layout — its integrity record there
+is the zero-mutation fsck pair (rows 2–3), per §4.2.
 
 - Source: `verify-pack-corruption-indicators.txt` (repo root)
 - Source: `verify-pack-corruption-indicators.json` (repo root)
+- Source: `.beads/diagnostics/pack-verification/git-fsck-full.txt`
+- Source: `.beads/diagnostics/pack-verification/dangling-objects.log`, `dangling-count.txt`, `dangling-by-type.txt`
+- Source: `.beads/diagnostics/pack-verification/multi-pack-index-verify.txt`, `multi-pack-index-verify-verbose.txt`
+- Source: `.beads/diagnostics/pack-verification/count-objects-verbose.txt`, `verification-summary.txt` (REFS block)
+- Source: `dangling-results.txt` (repo root, published 0a17123b)
+- Fill-time re-verification: `git fsck --full`, `git count-objects -v`, `git for-each-ref`, `ls .git/objects/pack/` at 2026-09-03T06:00–06:01Z (read-only, this section)
 
 ## 8. Raw Data Staging Inventory
 
