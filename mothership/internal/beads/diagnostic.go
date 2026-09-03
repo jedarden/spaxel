@@ -12,33 +12,33 @@ import (
 
 // DiagnosticReport captures the analysis of why Pluck returned zero candidates
 type DiagnosticReport struct {
-	Timestamp          string    `json:"timestamp"`
-	TotalBeads         int64     `json:"total_beads"`
-	OpenBeads          int64     `json:"open_beads"`
-	UnblockedBeads     int64     `json:"unblocked_beads"`
-	UnassignedBeads    int64     `json:"unassigned_beads"`
-	WithoutDependencies int64    `json:"without_dependencies"`
-	WithoutLockConflicts int64   `json:"without_lock_conflicts"`
-	ReadyCandidates    int64     `json:"ready_candidates"`
-	BlockedByStatus    int64     `json:"blocked_by_status"`
-	BlockedByManualBlock int64   `json:"blocked_by_manual_block"`
-	BlockedByAssignee  int64     `json:"blocked_by_assignee"`
-	BlockedByDependency int64    `json:"blocked_by_dependency"`
-	BlockedByLockConflict int64  `json:"blocked_by_lock_conflict"`
-	IdentifiedBottleneck string  `json:"identified_bottleneck,omitempty"`
-	Recommendations    []string  `json:"recommendations,omitempty"`
+	Timestamp             string   `json:"timestamp"`
+	TotalBeads            int64    `json:"total_beads"`
+	OpenBeads             int64    `json:"open_beads"`
+	UnblockedBeads        int64    `json:"unblocked_beads"`
+	UnassignedBeads       int64    `json:"unassigned_beads"`
+	WithoutDependencies   int64    `json:"without_dependencies"`
+	WithoutLockConflicts  int64    `json:"without_lock_conflicts"`
+	ReadyCandidates       int64    `json:"ready_candidates"`
+	BlockedByStatus       int64    `json:"blocked_by_status"`
+	BlockedByManualBlock  int64    `json:"blocked_by_manual_block"`
+	BlockedByAssignee     int64    `json:"blocked_by_assignee"`
+	BlockedByDependency   int64    `json:"blocked_by_dependency"`
+	BlockedByLockConflict int64    `json:"blocked_by_lock_conflict"`
+	IdentifiedBottleneck  string   `json:"identified_bottleneck,omitempty"`
+	Recommendations       []string `json:"recommendations,omitempty"`
 }
 
 // PluckQueryParameters captures the parameters used in a Pluck query
 type PluckQueryParameters struct {
-	Limit               int       `json:"limit"`
-	CurrentTimestamp    time.Time `json:"current_timestamp"`
+	Limit            int       `json:"limit"`
+	CurrentTimestamp time.Time `json:"current_timestamp"`
 }
 
 // RunDiagnostics analyzes the bead database to identify why Pluck returned zero candidates
 func RunDiagnostics(db *sql.DB, params *PluckQueryParameters) (*DiagnosticReport, error) {
 	report := &DiagnosticReport{
-		Timestamp: time.Now().Format(time.RFC3339),
+		Timestamp:       time.Now().Format(time.RFC3339),
 		Recommendations: []string{},
 	}
 
@@ -218,7 +218,7 @@ func WriteDiagnosticLog(report *DiagnosticReport, workspacePath string) error {
 		report.IdentifiedBottleneck,
 		report.ReadyCandidates,
 		report.TotalBeads,
-		fmt.Sprintf(report.Recommendations[0]))
+		report.Recommendations[0])
 
 	if _, err := f.WriteString(logEntry); err != nil {
 		return fmt.Errorf("failed to write to summary log: %w", err)
