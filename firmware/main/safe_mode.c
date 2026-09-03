@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "nvs.h"
+#include <inttypes.h>
 #include <string.h>
 
 static const char *TAG = "safe_mode";
@@ -89,9 +90,9 @@ esp_err_t safe_mode_init(void) {
 
     if (s_safe_mode_active) {
         ESP_LOGW(TAG, "SAFE MODE ACTIVE - Network + OTA only, CSI/BLE disabled");
-        ESP_LOGW(TAG, "Boot failure count: %u", s_boot_count);
+        ESP_LOGW(TAG, "Boot failure count: %" PRIu32, s_boot_count);
     } else if (s_boot_count > 0) {
-        ESP_LOGI(TAG, "Boot failure count: %u (threshold: %d)",
+        ESP_LOGI(TAG, "Boot failure count: %" PRIu32 " (threshold: %d)",
                  s_boot_count, SAFE_MODE_BOOT_COUNT_THRESHOLD);
     }
 
@@ -133,7 +134,7 @@ esp_err_t safe_mode_mark_boot_good(void) {
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Marking boot as good - resetting boot count from %u to 0", s_boot_count);
+    ESP_LOGI(TAG, "Marking boot as good - resetting boot count from %" PRIu32 " to 0", s_boot_count);
     s_boot_count = 0;
     esp_err_t err = nvs_set_u32(NVS_KEY_BOOT_COUNTER, 0);
     if (err != ESP_OK) {
@@ -152,7 +153,7 @@ esp_err_t safe_mode_mark_boot_good(void) {
 
 esp_err_t safe_mode_mark_boot_failed(void) {
     s_boot_count++;
-    ESP_LOGW(TAG, "Boot failure - incrementing count to %u (threshold: %d)",
+    ESP_LOGW(TAG, "Boot failure - incrementing count to %" PRIu32 " (threshold: %d)",
              s_boot_count, SAFE_MODE_BOOT_COUNT_THRESHOLD);
 
     esp_err_t err = nvs_set_u32(NVS_KEY_BOOT_COUNTER, s_boot_count);

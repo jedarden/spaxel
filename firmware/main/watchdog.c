@@ -13,8 +13,19 @@ esp_err_t watchdog_init(void) {
         return ESP_OK;
     }
 
-    // Initialize task watchdog
-    esp_err_t err = esp_task_wdt_init(SPAXEL_WATCHDOG_TIMEOUT_S);
+    // Initialize task watchdog (IDF 5.x API: takes a config struct, not a timeout).
+    // The TWDT is already initialized at startup (CONFIG_ESP_TASK_WDT_INIT=y,
+    // sdkconfig default 30s); update it to the 90s boot-good-safe timeout.
+    const esp_task_wdt_config_t wdt_config = {
+        .timeout_ms = SPAXEL_WATCHDOG_TIMEOUT_S * 1000,
+        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+        .trigger_panic = true,
+    };
+    esp_err_t err = esp_task_wdt_init(&wdt_config);
+    if (err == ESP_ERR_INVALID_STATE) {
+        // Already initialized by startup - reconfigure instead
+        err = esp_task_wdt_reconfigure(&wdt_config);
+    }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize task watchdog: %s", esp_err_to_name(err));
         return err;
