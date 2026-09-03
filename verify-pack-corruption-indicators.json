@@ -1,0 +1,102 @@
+{
+  "generated_utc": "2026-09-02 12:39:42Z",
+  "source_file": ".beads/diagnostics/pack-verification/verify-pack-output.txt",
+  "fsck_source": ".beads/diagnostics/pack-verification/git-fsck-full.txt",
+  "packs_in_raw_file": 3,
+  "pack_ok_terminators": 3,
+  "packs_not_ok": [],
+  "total_object_lines": 22751,
+  "total_by_type": {
+    "commit": 2090,
+    "blob": 13092,
+    "tree": 7569
+  },
+  "unique_oids": 22751,
+  "duplicate_oids": [],
+  "checksum_failures": 0,
+  "corrupt_packs": [],
+  "error_lines": [],
+  "malformed_lines": [],
+  "missing_delta_bases": [],
+  "offset_violations": [],
+  "dangling": {
+    "commit": 168,
+    "tree": 40,
+    "blob": 7
+  },
+  "dangling_total": 215,
+  "fsck_error_lines": [],
+  "idx_expected_counts": {
+    "pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack": 1932,
+    "pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack": 14148,
+    "pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack": 6671
+  },
+  "per_pack": [
+    {
+      "pack": "pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack",
+      "object_lines": 1932,
+      "by_type": {
+        "commit": 313,
+        "blob": 817,
+        "tree": 802
+      },
+      "delta_objects": 831,
+      "non_delta_objects": 1101,
+      "non_delta_reported": 1101,
+      "non_delta_match": true,
+      "histogram_sum": 831,
+      "histogram_sum_matches_delta_count": true,
+      "max_depth": 19,
+      "max_histogram_chain": 19,
+      "min_offset": 12,
+      "max_offset": 6145310,
+      "pack_size_bytes": 6145745,
+      "offsets_ascending": true,
+      "offsets_within_pack_bounds": true
+    },
+    {
+      "pack": "pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack",
+      "object_lines": 14148,
+      "by_type": {
+        "commit": 838,
+        "tree": 4071,
+        "blob": 9239
+      },
+      "delta_objects": 5859,
+      "non_delta_objects": 8289,
+      "non_delta_reported": 8289,
+      "non_delta_match": true,
+      "histogram_sum": 5859,
+      "histogram_sum_matches_delta_count": true,
+      "max_depth": 29,
+      "max_histogram_chain": 29,
+      "min_offset": 12,
+      "max_offset": 212470449,
+      "pack_size_bytes": 212470544,
+      "offsets_ascending": true,
+      "offsets_within_pack_bounds": true
+    },
+    {
+      "pack": "pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack",
+      "object_lines": 6671,
+      "by_type": {
+        "commit": 939,
+        "tree": 2696,
+        "blob": 3036
+      },
+      "delta_objects": 4215,
+      "non_delta_objects": 2456,
+      "non_delta_reported": 2456,
+      "non_delta_match": true,
+      "histogram_sum": 4215,
+      "histogram_sum_matches_delta_count": true,
+      "max_depth": 37,
+      "max_histogram_chain": 37,
+      "min_offset": 12,
+      "max_offset": 150042872,
+      "pack_size_bytes": 150043947,
+      "offsets_ascending": true,
+      "offsets_within_pack_bounds": true
+    }
+  ]
+}
