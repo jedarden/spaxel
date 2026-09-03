@@ -1,0 +1,359 @@
+================================================================================
+SPAXEL REPOSITORY — COMPREHENSIVE CORRUPTION REPORT
+================================================================================
+Compiled:       2026-09-03 (~08:2xZ / 04:2x EDT; live snapshot taken at compile time)
+Compiled by:    bead spaxel-07dbf7db (consolidation of all verification staging files)
+Repository:     /home/coding/spaxel
+                (Spaxel WiFi CSI Indoor Positioning System; git 2.54.0)
+Inputs:         All 8 staging captures in the repo root — the 4 required
+                (fsck-results.txt, refs-results.txt, packs-results.txt,
+                refdb-results.txt) plus 4 supplementary files from the same
+                verification chain (dangling-results.txt, idx-results.txt,
+                midx-results.txt, verify-pack-corruption-indicators.txt).
+                Every check recorded was run READ-ONLY against the object
+                database; no verification pass mutated the repository.
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+    +--------------------------------------------------------------+
+    |  OVERALL REPOSITORY HEALTH:  HEALTHY                         |
+    |  CORRUPTION DETECTED:         NONE                           |
+    |  CRITICAL ISSUES:             0                              |
+    |  WARNINGS:                    2 (both documentation-level)   |
+    |  INFO NOTES:                  6 (all expected repo activity) |
+    +--------------------------------------------------------------+
+
+Zero corruption was found by any check, in any capture, at any point in the
+verification window (2026-09-02 06:00Z through 2026-09-03 ~08:2xZ). Specifically:
+
+  - git fsck --full exited 0 with EMPTY STDERR at every capture, including a
+    fresh re-run at compile time. No missing objects, no broken links, no
+    corrupt/unreadable objects, no checksum failures — ever.
+  - Every pack file and pack index ever present in the window verified clean
+    (SHA-1 trailers, per-object checksums, delta chains, fanout tables).
+  - Every ref (loose, packed, symbolic, stash) resolves to an existing,
+    well-formed commit object; packed-refs is structurally valid.
+  - The only anomalies are benign and fully explained: a moving pool of
+    dangling (valid-but-unreachable) objects, a gc/repack at 2026-09-02 21:59Z
+    that collapsed 3 packs into 1 and removed the optional multi-pack-index,
+    and stale shadowed packed-refs entries.
+
+The two warnings are about DOCUMENTATION accuracy (a stale staging claim and
+dead SHAs cited in older reports), not about repository integrity.
+
+================================================================================
+2. INPUTS READ (STAGING FILES)
+================================================================================
+
+File                                      Capture (UTC)        Bead            Scope
+--------------------------------------------------------------------------------
+fsck-results.txt                          2026-09-02T19:39:23Z (chain: spaxel) git fsck --full
+refs-results.txt                          2026-09-02T20:04:30Z spaxel-8b55504f refs + HEAD
+packs-results.txt                         2026-09-02 08:53:48Z (chain: spaxel) packs+fsck+refs rollup
+idx-results.txt                           2026-09-02 11:54:06Z spaxel-d0ac8cf3 pack index deep validation
+verify-pack-corruption-indicators.txt     2026-09-02 12:39:42Z spaxel-6ba4e5cb line-grammar parse of raw verify-pack
+dangling-results.txt                      2026-09-03T00:57:11Z -> 02:59:05Z     spaxel-af4d54a6 et al.  dangling census + reconciliation
+midx-results.txt                          2026-09-03 04:08:06Z spaxel-eb8920c3 multi-pack-index status
+refdb-results.txt                         2026-09-03T07:43:17Z spaxel-8b92cb55 full ref database re-verify
+
+All internal capture timestamps cross-check against file mtimes (repo-local
+time = EDT, UTC-4); no input file is stale relative to its own claims.
+
+================================================================================
+3. CHECK CATEGORY RESULTS
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1  OBJECT INTEGRITY (git fsck --full)                        PASS
+--------------------------------------------------------------------------------
+
+  - fsck-results.txt (2026-09-02T19:39:23Z): exit 0. "NO CORRUPTION detected."
+    25,453 objects (55 loose / 25,398 packed), HEAD 577c2252 on main.
+    Output consisted solely of dangling-object notices (218 at that capture).
+  - dangling-results.txt (four live re-runs, 00:57:11Z -> 02:59:05Z): exit 0,
+    stderr empty at every run. Explicit corruption-vocabulary scan
+    (missing / broken-link / corrupt / error / invalid / unreadable) over BOTH
+    streams: 0 hits every time.
+  - COMPILE-TIME RE-RUN (2026-09-03 ~08:2xZ, this report): exit 0, stderr 0
+    lines, 25 dangling lines, 0 corruption-vocabulary hits. Consistent with
+    every prior capture.
+
+  Verdict: PASS — no missing, corrupt, or unreadable objects; full reachability
+  from all refs and reflogs verified at each capture.
+
+--------------------------------------------------------------------------------
+3.2  PACK FILE INTEGRITY                                       PASS
+--------------------------------------------------------------------------------
+
+  Pre-gc pack set (3 packs, 353.0 MB total) — packs-results.txt,
+  idx-results.txt, verify-pack-corruption-indicators.txt:
+
+    pack-4c6a0d90 (.pack/.idx/.rev)   5.9 MB    1,932 objects  verify-pack: ok
+    pack-6e51fdce (.pack/.idx/.rev) 202.6 MB   14,148 objects  verify-pack: ok
+    pack-fd6e34f4 (.pack/.idx/.rev) 143.1 MB    6,671 objects  verify-pack: ok
+
+  - git verify-pack -v: exit 0 on all 3 packs; every pack terminator read "ok".
+  - A line-grammar parser validated all 22,751 object lines of the 22,842-line
+    raw verify-pack output: 0 malformed lines, 0 duplicate OIDs, 0 offset
+    order/bounds violations, 0 unresolvable delta-base references.
+  - Checksums: idx self-checksums valid; embedded pack checksum == pack trailer
+    == filename for all 3 packs. Checksum failures: 0.
+  - Cross-checks: per-pack parsed counts == .idx fanout counts (MATCH x3);
+    total == count-objects in-pack (22,751 == 22,751); garbage: 0.
+
+  Post-gc pack set (1 pack, current) — midx-results.txt + compile-time check:
+
+    pack-b8585481 (.pack/.idx/.rev) 241,430,341 B   20,276 in-pack objects
+    verify-pack -v exit 0, verdict ": ok"; delta chains up to length 50 all
+    resolve; idx fanout monotonic, oid table sorted, self-checksum valid
+    (8fbd3ff7), offsets unique and within pack bounds; .rev carries valid RIDX
+    magic; .git/objects/info/packs lists exactly this one pack.
+
+  Verdict: PASS — every pack present at every moment of the window is intact.
+
+--------------------------------------------------------------------------------
+3.3  PACK INDEX / MULTI-PACK-INDEX                             PASS (with note)
+--------------------------------------------------------------------------------
+
+  Pack indexes (.idx): all validated in depth (idx-results.txt) and re-validated
+  for the current lone pack (midx-results.txt): version 2 with correct
+  \377tOc magic, monotonic fanout, sorted oid tables, zero large-offset
+  anomalies, offsets within pack bounds, valid checksums. Overall: ALL VALID.
+
+  Multi-pack-index (MIDX): ABSENT since the 2026-09-02 21:59Z gc/repack (which
+  collapsed 3 packs -> 1 and removed the 623.3 KiB MIDX with two of the three
+  packs). No MIDX, no incremental layer chain, no per-layer .midx files.
+  `git multi-pack-index verify` exits 0 here, but that exit is VACUOUS — a
+  control test on a freshly `git init`-ed empty repo also exits 0 silently
+  (Git 2.54 verify does not error when the MIDX file is missing).
+
+  This is NOT corruption: the MIDX is an optional lookup accelerator, its
+  absence costs only some object-lookup performance, and it can be regenerated
+  at any time with `git multi-pack-index write` (deliberately NOT done — this
+  verification chain is capture-only and must not mutate the repository).
+  See Warning W1 for the stale documentation this absence exposed.
+
+  Verdict: PASS — all present index structures valid; MIDX correctly reported
+  NOT APPLICABLE rather than counted as a pass.
+
+--------------------------------------------------------------------------------
+3.4  REFERENCES / REF DATABASE                                 PASS
+--------------------------------------------------------------------------------
+
+  refs-results.txt (2026-09-02T20:04:30Z, 6 loose refs + 1 packed entry) and
+  refdb-results.txt (2026-09-03T07:43:17Z, 3 loose + 5 packed entries, 6
+  distinct refnames) — the latter supersedes the former and re-ran every check
+  live:
+
+  - 6/6 refs resolve (rev-parse + cat-file -t + cat-file --batch-check): all
+    are existing, well-formed commit objects. Broken refs: 0. Missing/corrupt
+    targets: 0. Dangling refnames: 0. Malformed refnames: 0 (all pass
+    git check-ref-format).
+  - packed-refs format validation: valid v1 header, every entry matches
+    ^[0-9a-f]{40} <refname>$, sorted ascending, no duplicates, no stray lines,
+    peel-line count correct (0 annotated tags).
+  - HEAD: ref: refs/heads/main -> existing loose ref -> resolves to a real
+    commit. PASS. Single worktree confirmed (git worktree list).
+  - fsck --connectivity-only: rc=0 (no connectivity or ref errors).
+  - File modes sane (loose refs 0644, packed-refs 0600).
+
+  Shadowed packed-refs entries (refs/heads/main, refs/remotes/origin/main):
+  normal git semantics — loose wins; the stale packed values still exist as
+  objects. Not a defect. (See Info I3.)
+
+  Live at compile time: 6 refs, all resolving; main = 910b1d8e,
+  origin/main = origin/HEAD = b8998e8c.
+
+  Verdict: PASS — reference database fully consistent with HEAD and the
+  worktree.
+
+--------------------------------------------------------------------------------
+3.5  DANGLING OBJECTS                                          INFO (not corruption)
+--------------------------------------------------------------------------------
+
+  The dangling count is CAPTURE-TIME STATE, not damage. Dangling objects are
+  valid-but-unreachable; the pool shifts with every commit, stash drop, and
+  repack. Observed trajectory across the window:
+
+    2026-09-02 ~08:53Z  127  (82c/38t/7b)   packs-results.txt capture
+    2026-09-02 ~12:39Z  215  (168c/40t/7b)  verify-pack parse window
+    2026-09-02  15:24Z  217  (169c/41t/7b)  dangling-results.txt predecessor
+    2026-09-02  19:39Z  218  (170c/41t/7b)  fsck-results.txt on disk
+    2026-09-02  21:59Z   —   gc/repack: pruned the ENTIRE unreachable pool
+                              (22,751 -> 20,276 in-pack; 2,475 objects pruned)
+    2026-09-03 00:57Z    0                  post-gc: empty capture (genuine —
+                              exit 0, empty stderr; every later object was
+                              created after this capture)
+    2026-09-03 01:44Z    1                  + dropped stash commit 25c99c93
+    2026-09-03 02:19Z    5   (4c/1t)
+    2026-09-03 02:59Z    9   (7c/2t, 11,110 B)
+    2026-09-03 ~08:2xZ  25                  compile-time live re-run
+
+  Composition of the current pool (from dangling-results.txt analysis, which
+  identified every object): dropped two-parent "WIP on main" stash commits,
+  superseded variants of an already-landed deliverable, and full-repo root-tree
+  index snapshots from merge windows. All intact; all unreachable by
+  definition; all fresh residue of the day's publish/stash/merge activity.
+
+  The apparent 127 vs 215 vs 217 vs 218 "disagreement" between early captures
+  was fully reconciled in dangling-results.txt: it is about WHEN each capture
+  was taken, never about object-store damage. Every capture, including the
+  empty post-gc one, reported exit 0 with zero corruption findings.
+
+  Verdict: PASS — no corruption; benign, well-understood churn.
+
+--------------------------------------------------------------------------------
+3.6  HISTORICAL / CROSS-CAPTURE CONSISTENCY                    PASS (with note)
+--------------------------------------------------------------------------------
+
+  The verification chain spans a repository event that every staging file
+  independently detected and dated consistently: a gc/repack at
+  2026-09-02 21:59:37-39Z (pack-refs rewrite + 3->1 repack + prune). Ordering
+  was CORRECT (repack -> rewrite packed refs -> prune), which is why no ref
+  was left pointing at a pruned object. The one object that DID get pruned
+  while a report cited it — packed origin/main -> 92bdf8ca in refs-results.txt
+  — was already superseded at citation time and is named by NO live or packed
+  ref (see Warning W2).
+
+  Earlier in the window, the operator history cutover (main rebuilt on
+  b3ab62f2, 2026-09-02) means several SHAs cited in the earliest staging
+  files (e.g. 3197e52e, f6e45673, 672adf41) sat on the pre-cutover lineage and
+  were later gc-pruned. This is expected post-cutover gc behavior — documented
+  in dangling-results.txt with per-SHA verification — not corruption.
+
+  refs/heads/main advanced throughout the window (95a64aca -> 06366211 ->
+  910b1d8e live) entirely via clean fast-forwards/merges from concurrent
+  workers, with continuous reflogs — no divergence, no ref discontinuity.
+
+  Verdict: PASS — all captures tell one consistent story.
+
+================================================================================
+4. ISSUES AND OBSERVATIONS (WITH SEVERITY)
+================================================================================
+
+CRITICAL
+--------
+  (none)
+
+  No defect was found that threatens repository integrity, object data, ref
+  resolution, or history.
+
+WARNING
+-------
+  W1. STALE VERIFICATION CLAIM in the pre-gc staging summary
+      (staging-index.txt, 2026-09-02 10:07Z): "Multi-pack-index exists and is
+      valid / Verification: PASSED."
+      That described the 623.3 KiB MIDX the 2026-09-02 21:59Z gc removed. Any
+      downstream reader trusting that line would believe a MIDX exists today;
+      it does not, and `git multi-pack-index verify` would hand them a vacuous
+      exit 0 "pass" (midx-results.txt documents the control test proving the
+      exit code proves nothing). Impact: documentation only — the repo is
+      correct; the CLAIM is wrong. midx-results.txt already supersedes it.
+
+  W2. DEAD SHA REFERENCES in earlier staging reports. Several OIDs cited in
+      pre-cutover captures no longer resolve (92bdf8ca — pruned but no longer
+      ref-named; 3197e52e, f6e45673, 672adf41 — pre-cutover lineage, gc-pruned;
+      sampled OIDs from the 217-line capture confirmed absent via cat-file -e).
+      Impact: anyone re-verifying FROM the old reports will hit "not a valid
+      commit name". The reports' VERBAL conclusions remain valid; their SHA
+      citations are capture-time state. Re-derive from paths, not cited SHAs
+      (established practice in this repo's verification chain).
+
+INFO
+----
+  I1. Dangling-object pool churn (0 -> 25 and moving; see section 3.5).
+      Expected in a multi-worker repo with stash/merge/repack activity. No
+      action needed; the next gc will empty the pool again.
+
+  I2. Six empty directories under .git/refs/ (bisect, heads/backup,
+      remotes/origin/handoff, spaxel-slice, tags, trace-cleanup) — residue of
+      refs deleted or packed. Harmless; git recreates/prunes these lazily. The
+      two nonstandard namespace names are artifacts of this repo's own tooling.
+
+  I3. Two packed-refs entries are shadowed by same-name loose refs (normal
+      resolution semantics: loose wins). The stale packed values still exist
+      as objects, so nothing breaks.
+
+  I4. Concurrent NEEDLE workers advanced refs during the capture window
+      (main: multiple fast-forwards; stash updated; backup ref advanced). All
+      clean; reflogs continuous. This is the shared-checkout working model
+      functioning as designed.
+
+  I5. Pack files are mode 0400 (r--------) post-gc — stricter than needed, and
+      good hygiene (git only needs read). Not an issue; noted so it is not
+      mistaken for a permission fault.
+
+  I6. Pack set reduced 3 -> 1 pack and object count 22,751 -> 20,276 at the
+      21:59Z gc (2,475 unreachable objects pruned). Expected gc outcome; the
+      pruned set was exactly the unreachable pool, and everything reachable
+      was preserved and re-verified afterwards.
+
+================================================================================
+5. LIVE SNAPSHOT AT COMPILE TIME (2026-09-03 ~08:2xZ)
+================================================================================
+
+  HEAD:                 910b1d8e3536fc689e876327de278441be4db51d (main)
+                        "Merge branch 'main' of https://git.ardenone.com/jedarden/spaxel"
+  symbolic HEAD:        refs/heads/main  -> valid, checked out, sole worktree
+  Objects:              20,276 in-pack (1 pack) + 364 loose; garbage: 0
+  Pack:                 pack-b8585481 (.pack 241,430,341 B / .idx / .rev,
+                        all mtime 2026-09-02 21:59Z)
+  MIDX:                 absent (post-gc; see 3.3 / W1)
+  Refs (6, all resolving):
+    refs/heads/backup/local-lineage-pre-reconcile -> 67410010
+    refs/heads/main                               -> 910b1d8e
+    refs/remotes/origin/HEAD                      -> b8998e8c (symbolic -> origin/main)
+    refs/remotes/origin/handoff/golf-esp32-ota    -> 63a8a24b
+    refs/remotes/origin/main                      -> b8998e8c
+    refs/stash                                    -> 2f169887
+  git fsck --full:      exit 0; stderr 0 lines; 25 dangling lines;
+                        0 corruption-vocabulary lines on either stream.
+
+================================================================================
+6. RECOMMENDATIONS
+================================================================================
+
+  1. NO CORRECTIVE ACTION REQUIRED. The repository is healthy; nothing is
+     corrupt, and nothing in the object, pack, index, or ref databases needs
+     repair.
+  2. Do NOT run destructive cleanup in response to the dangling pool (I1). It
+     is benign and will be pruned by the next routine gc, exactly as the
+     previous pool was at 21:59Z.
+  3. Optionally run `git multi-pack-index write` (or set gc.writeMidx) to
+     restore MIDX acceleration over the single pack. Purely a performance
+     nicety; zero integrity impact. Must NOT be done as part of a
+     verification pass (verification stays read-only — see midx-results.txt).
+  4. Treat staging captures as point-in-time: re-derive state live rather
+     than from cited SHAs (W2), and supersede rather than edit old capture
+     files — the pattern refs-results.txt -> refdb-results.txt already
+     follows. Mark W1's stale claim superseded wherever staging-index.txt is
+     still consulted.
+  5. When reading future verification results, remember the vacuous-pass
+     traps this chain documented: `git multi-pack-index verify` exits 0 with
+     no MIDX present, and a dangling-only fsck output is success, not an
+     error.
+
+================================================================================
+7. METHOD / PROVENANCE
+================================================================================
+
+  - Consolidation read each staging file in full and preserved its own
+    conclusions, resolving conflicts in favor of the LATER capture (explicitly
+    self-declared supersession: refdb-results.txt supersedes refs-results.txt;
+    midx-results.txt supersedes the staging-index.txt MIDX claim;
+    dangling-results.txt supersedes all prior dangling counts).
+  - A fresh read-only `git fsck --full` plus ref/object/pack enumeration was
+    run at compile time solely to stamp current state onto this report; no
+    verification step wrote to .git/ (no gc, no pack-refs, no ref updates, no
+    MIDX write).
+  - All figures above are quoted from the staging captures or measured live at
+    compile time; nothing is estimated. Per-capture evidence and verbatim
+    command records live in the source files listed in section 2 and in
+    .beads/diagnostics/pack-verification/.
+
+================================================================================
+END OF REPORT — compiled by bead spaxel-07dbf7db, 2026-09-03
+OVERALL REPOSITORY HEALTH: HEALTHY — NO CORRUPTION DETECTED
+================================================================================
