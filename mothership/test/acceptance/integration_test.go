@@ -15,7 +15,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -34,48 +33,49 @@ const (
 	nodeOnlineTimeout    = 30 * time.Second
 )
 
-// TestMain runs all acceptance tests in sequence if integration mode is enabled.
+// TestMain hands the suite to the standard test runner so scenario failures
+// propagate to the process exit code.
 func TestMain(m *testing.M) {
+	os.Exit(m.Run())
+}
+
+// acceptanceScenarios run in sequence under TestAcceptanceScenarios.
+var acceptanceScenarios = []struct {
+	name string
+	fn   func(*testing.T)
+}{
+	{"IO1_FreshInstall_FirstBoot", IO1_FreshInstall_FirstBoot},
+	{"IO2_IdempotentRestart", IO2_IdempotentRestart},
+	{"IO2_UpgradeInPlace", IO2_UpgradeInPlace},
+	{"IO3_SingleNodeOnboarding", IO3_SingleNodeOnboarding},
+	{"IO4_MultiNodeFleetBringUp", IO4_MultiNodeFleetBringUp},
+	{"IO6_FullNewUserE2E", IO6_FullNewUserE2E},
+	{"IO7_ProvisioningTimeout", IO7_ProvisioningTimeout},
+	{"IO8_BadExpiredToken", IO8_BadExpiredToken},
+	{"IO9_DuplicateMAC", IO9_DuplicateMAC},
+	{"IO10_DropMidOnboard", IO10_DropMidOnboard},
+	{"IO11_FirmwareVersionSkew", IO11_FirmwareVersionSkew},
+	{"AS1_FirstTimeSetup", AS1_FirstTimeSetupIntegration},
+	{"AS2_WalkingDetection", AS2_WalkingDetectionIntegration},
+	{"AS3_FallDetection", AS3_FallDetectionIntegration},
+	{"AS4_BLEIdentity", AS4_BLEIdentityIntegration},
+	{"AS5_OTAUpdate", AS5_OTAUpdateIntegration},
+	{"AS6_Replay", AS6_ReplayIntegration},
+	{"AS7_AuthReject", AS7_AuthRejectIntegration},
+}
+
+// TestAcceptanceScenarios runs every acceptance scenario in sequence when
+// integration mode is enabled. Each scenario is a subtest so a t.Fatal aborts
+// only that scenario instead of killing the whole harness.
+func TestAcceptanceScenarios(t *testing.T) {
 	if os.Getenv("SPAXEL_INTEGRATION_TEST") != "1" {
-		return
+		t.Skip("set SPAXEL_INTEGRATION_TEST=1 to run acceptance scenarios")
 	}
 
-	// Parse flags to initialize testing framework (needed for testing.Short())
-	flag.Parse()
-
-	// Run tests in sequence
-	tests := []struct {
-		name string
-		fn   func(*testing.T)
-	}{
-		{"IO1_FreshInstall_FirstBoot", IO1_FreshInstall_FirstBoot},
-		{"IO2_IdempotentRestart", IO2_IdempotentRestart},
-		{"IO2_UpgradeInPlace", IO2_UpgradeInPlace},
-		{"IO3_SingleNodeOnboarding", IO3_SingleNodeOnboarding},
-		{"IO4_MultiNodeFleetBringUp", IO4_MultiNodeFleetBringUp},
-		{"IO6_FullNewUserE2E", IO6_FullNewUserE2E},
-		{"IO7_ProvisioningTimeout", IO7_ProvisioningTimeout},
-		{"IO8_BadExpiredToken", IO8_BadExpiredToken},
-		{"IO9_DuplicateMAC", IO9_DuplicateMAC},
-		{"IO10_DropMidOnboard", IO10_DropMidOnboard},
-		{"IO11_FirmwareVersionSkew", IO11_FirmwareVersionSkew},
-		{"AS1_FirstTimeSetup", AS1_FirstTimeSetupIntegration},
-		{"AS2_WalkingDetection", AS2_WalkingDetectionIntegration},
-		{"AS3_FallDetection", AS3_FallDetectionIntegration},
-		{"AS4_BLEIdentity", AS4_BLEIdentityIntegration},
-		{"AS5_OTAUpdate", AS5_OTAUpdateIntegration},
-		{"AS6_Replay", AS6_ReplayIntegration},
-		{"AS7_AuthReject", AS7_AuthRejectIntegration},
-	}
-
-	for _, tc := range tests {
-		t := &testing.T{}
-		tc.fn(t)
-		if t.Failed() {
-			fmt.Printf("FAIL: %s\n", tc.name)
-		} else {
-			fmt.Printf("PASS: %s\n", tc.name)
-		}
+	for _, tc := range acceptanceScenarios {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.fn(t)
+		})
 	}
 }
 
@@ -488,12 +488,17 @@ func startMothership(t *testing.T, dataDir string, extraArgs ...string) *exec.Cm
 		cmd := exec.Command(binPath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		cmd.Env = append(os.Environ(),
+		env := append(os.Environ(),
 			fmt.Sprintf("SPAXEL_DATA_DIR=%s", dataDir),
-			"SPAXEL_BIND_ADDR=0.0.0.0:8080",
 			"SPAXEL_LOG_LEVEL=info",
 			"SPAXEL_MDNS_ENABLED=false",
 		)
+		// Honor an externally supplied bind address so the suite can run on a
+		// host where 8080 is already taken; the default matches the CI image.
+		if os.Getenv("SPAXEL_BIND_ADDR") == "" {
+			env = append(env, "SPAXEL_BIND_ADDR=0.0.0.0:8080")
+		}
+		cmd.Env = env
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("Failed to start mothership binary %s: %v", binPath, err)
 		}
