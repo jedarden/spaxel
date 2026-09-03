@@ -500,3 +500,142 @@ Error: exit status 1
 - Full raw logs, per-pod snapshots and workflow JSON for each capture were
   preserved outside the repo under `/tmp/spaxel-logcap/` (ephemeral); this
   document is the durable copy of the failing-step excerpts.
+
+---
+
+## Classification by layer (spaxel-006b9f5d)
+
+Each failure gets exactly one layer: **cluster egress**, **DNS**, **runner
+image**, **shared cache/volume**, **argo config**, or **repo-level
+code/config** (infrastructure fine, the code under test is red). Scope is
+per template: **shared-layer (fleet-wide)** vs **template-specific**.
+
+Evidence rules used below: (a) a shared-layer failure must show its signature
+in the failing step itself (a failed fetch, a failed image pull, a DNS
+resolution error) — an error *after* successful fetches does not implicate the
+network; (b) every claim about repo state was verified against live git
+objects, not taken from the log text alone; (c) `forgejo.ardenone.com` /
+`git.ardenone.com` DNS was probed from ex44 on 2026-09-03 ~10:15 UTC.
+
+### Captured failures (logs in §1–§3)
+
+| # | Template | Failing step → first failing command | Layer | Evidence line | Scope |
+|---|---|---|---|---|---|
+| C1 | `mta-my-way-build` | `lint[lint]` → `npm run typecheck` (`tsc --build`) | **repo-level code** | `packages/shared/src/index.ts(237,3): error TS2300: Duplicate identifier 'formatDuration'.` — verified live: lines 237 and 351 of `packages/shared/src/index.ts` **both** re-export `formatDuration` at `076668d`, which is on `origin/main` | template-specific (jedarden/mta-my-way) |
+| C2 | `acb-build` | `test[run-tests]` → `go test ./engine/...` | **repo-level code** (own test exceeds the template's `-timeout 120s`) | `panic: test timed out after 2m0s` over `TestCombatDensityMetrics/6-player`; stack frames resolve against the captured tree `248273d` — `engine/integration_test.go:339` is exactly `t.Run("6-player", …)` and `runRandomRollout`/`ComputeWinProbability` exist at the cited lines | template-specific (ai-code-battle/ai-code-battle) |
+| C3 | `spaxel-build` | `golangci-lint(0)` → typecheck of the `internal/beads` test binary | **repo-level code** | `internal/beads/monitored_pluck.go:7:2: "os" imported and not used` (+ `:9:2 "path/filepath"`, `diagnostic_test.go:4:2 "database/sql"`) — verified at `88b4af9c`: neither `os` nor `filepath.` appears in `monitored_pluck.go`'s body and no `sql.` appears in `diagnostic_test.go`. Matches the prior attribution in spaxel-20f9f00f | template-specific (jedarden/spaxel) |
+| C4 | `spaxel-build` | `a11y-test(0)` → `npm ci` | **repo-level config** (manifest/lock desync) | `npm error Invalid: lock file's @axe-core/playwright@4.11.2 does not satisfy @axe-core/playwright@4.10.1` — verified at `88b4af9c`: `dashboard/package.json` pins `"@axe-core/playwright": "4.10.1"` while `package-lock.json` resolves `4.11.2` | template-specific (jedarden/spaxel) |
+
+**Why none of the four is a shared-layer failure** — in each log, every
+network-dependent operation *inside the same step* succeeded before the repo's
+own code failed:
+
+- C1: `apt-get update && apt-get install git` (deb.debian.org) and
+  `npm ci` both completed; `biome check .` + `eslint .` **passed**
+  ("Checked 628 files … No fixes applied") before `tsc --build` emitted its
+  first TS error. The failure is type-level, in repo code.
+- C2: `apk add` installed **34 packages** and `git clone` completed
+  (`Cloning into '/src'...`); the panic is Go's own test-timeout alarm inside
+  the repo's Monte-Carlo test (`FAIL github.com/aicodebattle/acb/engine
+  120.014s`).
+- C3: `golangci-lint` downloaded and installed itself from GitHub
+  ("info found version: 2.13.2 … info installed /usr/local/bin/golangci-lint")
+  seconds before reporting the typecheck failure. Egress worked inside the
+  failing step.
+- C4: npm error is `EUSAGE` (manifest/lock sync — a purely local check), not
+  `ENOTFOUND`/`ETIMEDOUT`; the step also reached `registry.npmjs.org` (the
+  "New major version of npm available" notice fetched successfully).
+
+### Supplementary: uncaptured 2026-09-03 failures
+
+Classified from workflow-level status (which survives podGC: node phases,
+exit codes, durations, stored template specs) plus the live WorkflowTemplate
+specs — **not** from step logs, which are destroyed. Confidence noted per row.
+
+| # | Template / run | Failing step | Layer | Evidence | Scope |
+|---|---|---|---|---|---|
+| C5 | `needle-ci` (`needle-ci-7tgdg`, 00:50) | `verify` | **repo-level code** (inferred, high confidence) | `verify` ran **788 s** then exited 1; sibling steps `post-pending-forgejo` and `post-pending-github` both **Succeeded** (10 s each — they make live network API calls). A 13-minute run means image pulled and pod healthy; exit 1 after 13 min of verify is the repo's own fmt/clippy/test verdict | template-specific (jedarden/NEEDLE) |
+| C6 | `spaxel-e2e` (4 runs, 08:06 & 08:35) | `go-test` | **repo-level code** (inferred, high confidence) | exit 1 after **13 s**. The step's first repo operation is `go build ./cmd/mothership` — and the C3 error lives in a *non-test* file (`monitored_pluck.go`), whose unused imports break every consumer's build. Compile-speed failure matches the provably non-compiling tree | template-specific |
+| C7 | `spaxel-e2e` | `acceptance-tests` | **repo-level code** (inferred, high confidence) | exit 1 after **20 s**; the step begins `go build -o /tmp/spaxel-sim ./cmd/sim` + `go build ./cmd/mothership` — same non-compiling tree as C6 | template-specific |
+| C8 | `spaxel-e2e` | `docker-e2e` | **repo-level code/config** (inferred, moderate confidence) | exit **22** after **97 s** with no pod-level infra message. 97 s covers `apk add`, the dind readiness loop (its failure path exits 1, not 22), clone and builds; 22 is curl's HTTP-error exit code — the repo's own e2e health check failing, not an infrastructure layer | template-specific |
+| C9 | `acb-site-pages-build` (`k9zhk` 07:47, `h7z2m` 09:56) | `build-and-deploy` → `git clone` | **argo config** (template's baked-in default parameter points at a nonexistent host) | stored template arguments: `git-repo: forgejo.ardenone.com/ai-code-battle/ai-code-battle`; **`forgejo.ardenone.com` does not resolve**, while the real repo is `git.ardenone.com/jedarden/ai-code-battle` (the URL every other template clones successfully). git exits 128 on any clone failure → `main: Error (exit code 128)`, deterministic **4/4 retries**, each attempt dying in 9–14 s (long enough for the in-step `apt-get install git`, then clone fails fast). Sibling `acb-build` cloned the correct URL with the **same** `forgejo-webhook-token` secret at 09:21 | template-specific (one template's default `git-repo` value) |
+| C10 | `armor-drift-check-daily` (`…1788426000`, 09:00 cron) | `run-check` → `scripts/version-drift-check.py` | **repo-level code** (inferred, high confidence) | exit **2** after 41 s. In the live script, `sys.exit(2)` appears at exactly one site — the catch-all `except Exception` handler; the designed drift signal is `exit 1` and clean is `exit 0`. 41 s covers `apk add` + `git clone` (which, under `set -e`, would have failed first otherwise); the script itself makes no network calls | template-specific (jedarden/ARMOR) |
+
+Repeat signatures folded into the rows above: `mta-my-way-build-ppdzr/-9d9zm/
+-zk4gw/-pnc92/-fmkvl/-dbcfr/-qn58f/-pkm8m/-rbxv2/-vpgxv` (13 real runs
+08:29→10:31, all = C1; the last three landed after child 1's inventory was
+taken), `acb-build-fgnv7`
+(07:47, now deleted from the cluster) and `-ttslw` (09:56) (= C2),
+`spaxel-build-qssc4/-wtc5b/-9nvs6/-6cgzf` (= C3+C4), `spaxel-e2e-2tmtz/-gqv8n/
+-m75bv/-htdcj` (= C6+C7+C8). The `-logcap-`/`-dbglog-`/`-step-mirror-` runs are
+captures/debug re-runs, not independent failures, and reproduced the same
+signatures.
+
+### Verdict
+
+**No — there is no single shared-layer root cause affecting multiple
+unrelated repos.** The deciding evidence: in every captured log the first
+failing operation is the repo's own code or config (C1 TS duplicate
+identifier, C2 test-timeout panic, C3 unused imports, C4 npm lock desync),
+while every network operation inside those same failing steps succeeded
+(C1's `apt-get` + `npm ci`, C2's 34-package `apk add` + clone, C3's
+golangci-lint install from GitHub, C4's registry reachability) — a real
+egress/DNS/image/cache layer would have failed those fetches first. The
+failures are three distinct failure modes across three unrelated repos
+(TS typecheck in mta-my-way, Go test timeout in ai-code-battle, Go imports +
+npm lock desync in spaxel), plus one template with a bad baked-in clone URL
+(C9, argo config) and one script crashing on its own exception path (C10).
+Fleet-wide negative evidence: across all failed nodes on 2026-09-03 there are
+**zero** infrastructure-shaped messages — no ImagePull, OOMKilled, eviction,
+unschedulable-pod or node failure anywhere; every failure is
+`main: Error (exit code N)` or a child-node propagation of one. Two further
+fleet-level observations (one due to the concurrent co-classification pass on
+this bead) corroborate the same conclusion: the per-template signatures
+persist for hours instead of clearing like an outage — mta's `lint` exit 2
+recurred across 13 runs between 08:29 and 10:31, acb's `run-tests` exit 1 at
+07:47 and again at 09:56, spaxel's lint+a11y pair at 08:06 and 08:35 — and
+`acb-bots-build-g9jc8`, an unrelated template, **Succeeded** at 09:56 in the
+middle of the failure storm.
+
+### Per-template scope summary
+
+| Template | Layer(s) | Scope |
+|---|---|---|
+| `spaxel-build` | repo-level code (C3) + repo-level config (C4) | template-specific |
+| `spaxel-e2e` | repo-level code (C6, C7; C8 moderate) | template-specific |
+| `mta-my-way-build` | repo-level code (C1) | template-specific |
+| `acb-build` | repo-level code (C2) | template-specific |
+| `acb-site-pages-build` | argo config (C9) | template-specific |
+| `armor-drift-check-daily` | repo-level code (C10) | template-specific |
+| `needle-ci` | repo-level code (C5) | template-specific |
+
+**Shared-layer (fleet-wide) failures found: none.**
+
+### Classification caveats
+
+- The only argo-config finding bearing on this incident is observational,
+  not causal: `spaxel-build`'s clone step takes no commit-SHA parameter and
+  `resolve-version`'s docs-only gate can skip the failing steps entirely on a
+  resubmit (§3). That made log capture harder; it produced none of the
+  failures above.
+- C5–C10 rest on workflow-level status, exit-code semantics and template
+  specs, not logs. The exit-code readings are exact (git = 128; the drift
+  script's only `sys.exit(2)` is its exception handler; curl = 22), but they
+  identify *where* control failed, not the underlying text.
+- The C9 DNS probe ran from ex44, not from inside iad-ci. A cluster-internal
+  split-horizon record for `forgejo.ardenone.com` cannot be fully excluded
+  post-hoc — but if one existed, the clone would then fail on the wrong
+  org/repo path (`ai-code-battle/ai-code-battle` vs the real
+  `jedarden/ai-code-battle`), so the layer assignment (argo config, the
+  template's parameter value) holds either way. `git.ardenone.com` resolved
+  and cloned successfully from other pods throughout the same windows, so
+  this is not a DNS-infrastructure outage.
+- The 07:47–08:06 workflows named in the inventory (`spaxel-build-qssc4`,
+  `-wtc5b`, `spaxel-e2e-2tmtz`, `-gqv8n`, `acb-build-fgnv7`,
+  `acb-site-pages-build-k9zhk`) have since been deleted from the cluster
+  (NotFound, checked ~10:15 UTC); their classification rests on child 1's
+  inventory (node names + exit codes) and their identical surviving siblings.
+- Workflow-level TTL also removes *successful* runs quickly (one Succeeded
+  workflow from 09-03 remained on-cluster at classification time), so
+  success-count ratios are not usable as evidence here; the negative evidence
+  is the zero infra-shaped messages and the in-log successful fetches.
