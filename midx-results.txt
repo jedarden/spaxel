@@ -1,0 +1,102 @@
+=== MULTI-PACK-INDEX (MIDX) VERIFICATION STATUS ===
+Captured:        2026-09-03 04:08:06 UTC
+Repository:      /home/coding/spaxel
+Bead ID:         spaxel-eb8920c3
+Git version:     git version 2.54.0
+
+=== VERDICT ===
+Multi-pack-index:  ABSENT
+MIDX verification: NOT APPLICABLE - there is no MIDX file to verify
+
+  .git/objects/pack/multi-pack-index       : ABSENT (stat: No such file or directory)
+  .git/objects/pack/multi-pack-index-chain : ABSENT (no incremental layer chain)
+  .git/objects/pack/multi-pack-index-*.midx: ABSENT (no incremental layer files)
+
+  git multi-pack-index verify
+    --object-dir=/home/coding/spaxel/.git/objects
+    -> exit 0, no output
+
+  CAUTION: that exit 0 is VACUOUS, not a pass. Control test: a freshly
+  `git init`-ed empty repo (no packs, no MIDX) also exits 0 silently from
+  `git multi-pack-index verify`. Git 2.54 verify does not report an error
+  when the MIDX file is missing. Exit 0 here means "nothing to verify".
+  The pre-gc staging summary ("Multi-pack-index exists and is valid /
+  Verification: PASSED", staging-index.txt, 2026-09-02 10:07Z) is STALE:
+  it described a 623.3 KiB MIDX that the 2026-09-02 21:59Z gc/repack
+  removed together with two of the three packs.
+
+=== TIMELINE ===
+  2026-09-02 06:00Z  MIDX present, 624K, valid over 3 packs
+                     (staging capture, bead spaxel-bda3f5f6)
+  2026-09-02 11:54Z  MIDX present, 623.3K, 3 packs, 22,751 in-pack
+                     objects (idx-results.txt, bead spaxel-d0ac8cf3)
+  2026-09-02 21:59Z  gc/repack collapsed 3 packs -> 1 pack and removed
+                     the MIDX (pack-file mtimes 2026-09-02 21:59:38-39Z;
+                     the event spaxel-af4d54a6's fsck capture labels the
+                     "17:59Z gc" - 17:59 EDT)
+  2026-09-03 04:08Z  MIDX still absent; 1 pack, 20,276 in-pack objects
+                     (22,751 -> 20,276: 2,475 unreachable objects pruned by
+                     the gc; post-gc fsck reported 0 dangling)
+
+=== MIDX LAYER STRUCTURE ===
+Git 2.54 supports incremental MIDX layers (a multi-pack-index-chain file
+plus per-layer multi-pack-index-<N>.midx files). Both the base MIDX and
+any layer chain are ABSENT, so there are zero MIDX layers and no layer
+integrity to check. core.multiPackIndex is unset (git default: enabled
+when a MIDX exists) and gc.writeMidx is unset; whatever ran the 21:59Z
+maintenance did not write a MIDX afterwards.
+
+=== PACK FILE REFERENCES (what a MIDX pack-names chunk would list) ===
+Current pack set (post-gc), all mtime 2026-09-02 21:59Z:
+  pack-b8585481940ab27f791aa464e033ba8b91fa045f.pack  241,430,341 bytes
+  pack-b8585481940ab27f791aa464e033ba8b91fa045f.idx    568,800 bytes
+  pack-b8585481940ab27f791aa464e033ba8b91fa045f.rev     81,156 bytes (RIDX magic)
+  .git/objects/info/packs lists exactly: P pack-b8585481940ab27f791aa464e033ba8b91fa045f.pack
+
+Superseded pre-gc packs (from idx-results.txt, spaxel-d0ac8cf3) - these
+are what the deleted 623.3 KiB MIDX referenced:
+  pack-4c6a0d90298359e12aafa65bbfa527d9dd4ca4f5.pack    5.9 M   1,932 objects
+  pack-6e51fdce68e45c809f87beac1a4df59aac8d05c4.pack  202.6 M  14,148 objects
+  pack-fd6e34f45329c516ca38978b6494c2ffb035fc2c.pack  143.1 M   6,671 objects
+
+=== OBJECT OFFSETS ===
+No MIDX offset table exists. The authoritative object offsets live in
+the lone .idx (a single-pack MIDX would carry these same offsets):
+  object count (fanout[255]): 20,276
+  idx version 2 (\377tOc), large offsets: 0, fanout monotonic
+  oid table sorted by oid: True
+  idx self-checksum valid: True (8fbd3ff784f560f60318ccfe63093d499a9a2856)
+  idx-embedded pack checksum == pack trailer == filename: True
+  offset span: 12 (pack header) .. 241,430,246
+  all offsets within pack bounds (< 241,430,321 = size - 20-byte trailer): True
+  offsets unique: True
+
+  Per-type offset ranges (git verify-pack -v, exit 0, verdict ": ok"):
+    commit count=  1,722  offset range 12 .. 679,593
+    tree   count=  6,622  offset range 22,341,660 .. 241,430,246
+    blob   count= 11,932  offset range 680,086 .. 241,430,082
+  Delta chains: 9,567 delta objects, max chain length 50;
+  non-delta objects: 10,709
+
+  Sample objects (first/last by pack offset):
+    offset=          12  oid=e1e1f999c880cee9f65d354ea6349bdbac20917f
+    offset=         234  oid=72a5fa0c0dd8a429816c43580d79892b417a6979
+    offset=         892  oid=e30c8495498a9a4acb8d74c7d1b7aa020c0f4b2b
+    offset=       1,242  oid=b8530f1902ac0174431426e4b4b9acc3890eb575
+    offset=       1,667  oid=ae5a6967cb92c7b4ff2a96c861abe1abb39f2bbe
+    ...
+    offset= 241,430,036  oid=458d37723f027f2a8c7bab1088d70434677f6e29
+    offset= 241,430,082  oid=8a62fecabacb76dc88d4c419ef77614ad486667e
+    offset= 241,430,246  oid=28958b908fbfab0d367abb92a44623378e77d327
+
+=== RAW OUTPUTS (staging: .beads/diagnostics/pack-verification/) ===
+  multi-pack-index-verify.txt          - this status capture
+  multi-pack-index-verify-verbose.txt  - verify run record + control test
+  (pre-existing: verify-pack-output.txt, git-fsck-full.txt,
+   pack-analysis-summary.txt, staging-index.txt, idx-results.txt at root)
+
+=== NOTE ===
+The MIDX can be regenerated with `git multi-pack-index write` (it would
+cover exactly the one current pack). That was deliberately NOT done: this
+task is capture-only and the repository must not be mutated by a
+verification pass.
