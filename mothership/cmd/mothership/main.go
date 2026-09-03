@@ -36,8 +36,6 @@ import (
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/db"
 	"github.com/spaxel/mothership/internal/diagnostics"
-	"github.com/spaxel/mothership/internal/logging"
-	"github.com/spaxel/mothership/internal/diagnostics"
 	"github.com/spaxel/mothership/internal/diskspace"
 	"github.com/spaxel/mothership/internal/doctor"
 	"github.com/spaxel/mothership/internal/eventbus"
@@ -47,6 +45,7 @@ import (
 	"github.com/spaxel/mothership/internal/fleet"
 	"github.com/spaxel/mothership/internal/floorplan"
 	"github.com/spaxel/mothership/internal/fusion"
+	githubclient "github.com/spaxel/mothership/internal/github"
 	guidedtroubleshoot "github.com/spaxel/mothership/internal/guidedtroubleshoot"
 	"github.com/spaxel/mothership/internal/health"
 	featurehelp "github.com/spaxel/mothership/internal/help"
@@ -54,7 +53,6 @@ import (
 	"github.com/spaxel/mothership/internal/learning"
 	"github.com/spaxel/mothership/internal/loadshed"
 	"github.com/spaxel/mothership/internal/localization"
-	githubclient "github.com/spaxel/mothership/internal/github"
 	"github.com/spaxel/mothership/internal/mqtt"
 	"github.com/spaxel/mothership/internal/notify"
 	"github.com/spaxel/mothership/internal/ntpserver"
@@ -714,48 +712,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize the structured logging system
-	logger, err := logging.New(logging.Config{
-		Level:         logging.ParseLevel(cfg.LogLevel),
-		FilePath:      cfg.LogFilePath,
-		EnableStdout:  cfg.LogStdout,
-		Prefix:        "spaxel",
-		MaxSize:       100 * 1024 * 1024, // 100MB default max size
-	})
-	if err != nil {
-		// Fall back to standard logging if structured logging fails
-		log.Printf("[WARN] Failed to initialize structured logging: %v, using standard log package", err)
-		logger = nil
-	} else {
-		defer func() {
-			if logger != nil {
-				logger.Close()
-			}
-		}()
-		logger.Info("Spaxel mothership v%s starting", version)
-	}
+	log.Printf("[INFO] Spaxel mothership v%s starting", version)
 
 	// Display and log the current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
-		if logger != nil {
-			logger.Warn("Failed to get current working directory: %v", err)
-		} else {
-			log.Printf("[WARN] Failed to get current working directory: %v", err)
-		}
+		log.Printf("[WARN] Failed to get current working directory: %v", err)
 	} else {
-		if logger != nil {
-			logger.Info("Current working directory: %s", cwd)
-		} else {
-			log.Printf("[INFO] Current working directory: %s", cwd)
-		}
+		log.Printf("[INFO] Current working directory: %s", cwd)
 	}
 
-	if logger != nil {
-		logger.Debug("Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
-	} else {
-		log.Printf("[DEBUG] Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
-	}
+	log.Printf("[DEBUG] Config: bind=%s data=%s static=%s mdns=%s", cfg.BindAddr, cfg.DataDir, cfg.StaticDir, cfg.MDNSName)
 
 	// Wrap all startup in a 30-second timeout context
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), startup.TotalTimeout)
