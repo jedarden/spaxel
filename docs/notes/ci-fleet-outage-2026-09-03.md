@@ -171,3 +171,44 @@ spaxel `-logcap-`/`-dbglog-` capture workflows.
 Nothing in this wave requires cluster, runner-image, cache, or Argo-version
 work. There is no fleet-wide incident to mitigate — only seven per-repo /
 per-template fixes.
+
+---
+
+## Ownership handoff addendum — 2026-09-03 12:13Z (child 4, bead spaxel-4d4ef661)
+
+This addendum closes the loop on the diagnosis above. It introduces no new
+findings; it fixes ownership for every indicted fix and re-checks status as of
+writing. **No fix was landed by this child, deliberately**: each one is either
+owned by a live bead, lives in a repo this checkout does not contain, or is an
+operator manifest change that must go through declarative-config rather than
+any live mutation.
+
+| # | Fix | Owner (bead id / manifest path / repo) | Status at addendum time |
+|---|---|---|---|
+| C1 | mta-my-way duplicate `formatDuration` export | jedarden/mta-my-way `packages/shared/src/index.ts` (no spaxel bead — different repo) | LIVE — `mta-my-way-build-q8n96` / `-f5n6z` Failed 12:03Z |
+| C2 | acb 6-player test exceeds the 2 min step timeout | repo leg: jedarden/ai-code-battle `engine/integration_test.go`; template leg (operator): `jedarden/declarative-config` → `k8s/iad-ci/argo-workflows/acb-build-workflowtemplate.yml`, `run-tests` `-timeout 120s` | UNCHANGED |
+| C3 | mothership test-code lint breaks | **spaxel-20f9f00f** (umbrella), work beads **spaxel-480d108b** + **spaxel-a2e3425d** | LIVE — `spaxel-build-qtf57` Failed 11:57:15Z on the post-`3fac88e9` tip, so further lint breaks remain beyond the original three |
+| C4 | dashboard axe pins contradict lockfile | **spaxel-be6766b4** | LIVE — re-verified at origin tip: `dashboard/package.json:10` pins `@axe-core/playwright` 4.10.1 while the lockfile resolves 4.11.2 (`axe-core` 4.11.3 vs the 4.10.3 pin) |
+| C5 | needle-ci `verify` exit 1 | jedarden/NEEDLE — capture first (podGC-overridden rerun), then fix per log | UNCHANGED (logs destroyed) |
+| C6–C8 | spaxel-e2e `go-test` / `acceptance-tests` / `docker-e2e` | No separate owner — clears with C3+C4 | LIVE — `spaxel-e2e-qsph2` / `-jgq8x` Failed 11:56–11:57Z, downstream signature unchanged |
+| C9 | acb-site-pages clone host typo | **Operator manifest:** `jedarden/declarative-config` → `k8s/iad-ci/argo-workflows/acb-site-pages-build-workflowtemplate.yml`, `arguments.parameters` `git-repo`: `forgejo.ardenone.com/ai-code-battle/ai-code-battle` → `git.ardenone.com/jedarden/ai-code-battle`. Push, let ArgoCD app `argo-workflows-ns-iad-ci` sync. Do not edit the live template. | LIVE (operator action) |
+| C10 | armor-drift-check catch-all exit 2 | jedarden/ARMOR `scripts/version-drift-check.py` — capture first | UNCHANGED |
+
+Verification contracts:
+
+- **C3 / C6–C8:** the verification for the mothership-Go-tree branch is a green
+  `spaxel-build` run landed by spaxel-20f9f00f's workers (per the child-4
+  dispatch, that bead's eventual green run *is* the verification for this
+  branch); spaxel-e2e is expected to clear in the same window since C6–C8 have
+  no independent fix.
+- **C4:** spaxel-be6766b4 owns the pin/lockfile reconciliation and its proof
+  run.
+- **C9:** the one-line template correction is operator-level — declarative-config
+  is outside this repo and the live WorkflowTemplate is ArgoCD-managed. This
+  addendum is the escalation; no cluster state was mutated by this child.
+
+No workflow went green between the ~12:00Z snapshot above and this addendum:
+the newest spaxel-family runs (`spaxel-build-qtf57`, `spaxel-e2e-qsph2`,
+`spaxel-e2e-jgq8x`, all 11:56–11:57Z) failed. The child-4 acceptance criterion
+is therefore satisfied by this handoff addendum rather than by a green run
+attributable to this child.
