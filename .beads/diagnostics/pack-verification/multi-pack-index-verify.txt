@@ -1,0 +1,11 @@
+=== git multi-pack-index verify (spaxel-eb8920c3) ===
+Executed: 2026-09-03 04:10:35 UTC
+
+--- command: git multi-pack-index verify --progress ---
+Verifying OID order in multi-pack-index:  20% (4096/20275)Verifying OID order in multi-pack-index:  40% (8192/20275)Verifying OID order in multi-pack-index:  60% (12288/20275)Verifying OID order in multi-pack-index:  80% (16384/20275)Verifying OID order in multi-pack-index: 100% (20275/20275)Verifying OID order in multi-pack-index: 100% (20275/20275), done.
+Sorting objects by packfile:   0% (0/20276)Sorting objects by packfile: 100% (20276/20276)Sorting objects by packfile: 100% (20276/20276), done.
+Verifying object offsets:  20% (4096/20276)Verifying object offsets:  40% (8192/20276)Verifying object offsets:  60% (12288/20276)Verifying object offsets:  80% (16384/20276)Verifying object offsets: 100% (20276/20276)Verifying object offsets: 100% (20276/20276), done.
+exit=0
+
+--- command: git multi-pack-index verify (plain) ---
+exit=0
