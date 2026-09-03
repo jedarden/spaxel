@@ -48,26 +48,21 @@ const (
 	// RetentionEnvVar is the environment variable for configuring retention.
 	// Accepts any value parseable by time.ParseDuration (e.g. "24h", "72h").
 	RetentionEnvVar = "SPAXEL_RECORDING_RETENTION"
-
-	// Record type markers
-	recordTypeUncompressed = 0
-	recordTypeCompressed   = 1
 )
 
 // Buffer is a disk-backed circular buffer for raw CSI frames with time-based
 // retention. It is safe for concurrent use.
 type Buffer struct {
-	mu           sync.Mutex
-	f            *os.File
-	fileSize     int64
-	writePos     int64
-	oldestPos    int64
-	wrapPos      int64
-	retention    time.Duration
-	compression  bool
-	compressor   *Compressor
-	chunkSize    int
-	pendingChunk []byte
+	mu          sync.Mutex
+	f           *os.File
+	fileSize    int64
+	writePos    int64
+	oldestPos   int64
+	wrapPos     int64
+	retention   time.Duration
+	compression bool
+	compressor  *Compressor
+	chunkSize   int
 }
 
 // NewBuffer opens or creates a recording buffer at path.
@@ -824,7 +819,7 @@ func (b *Buffer) getCompressedChunkSize(pos int64) (int64, error) {
 		return 0, err
 	}
 	dataLen := int64(binary.LittleEndian.Uint16(lenBuf[:])) // Length of header+data (not including prefix)
-	chunkLen := 2 + dataLen                                  // Total chunk length including prefix
+	chunkLen := 2 + dataLen                                 // Total chunk length including prefix
 
 	// Verify it's a compressed chunk magic
 	if chunkLen >= 18 && pos+chunkLen <= b.writePos { // At least 2+16 bytes

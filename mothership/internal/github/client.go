@@ -141,7 +141,7 @@ func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) ([]by
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to fetch latest release: GitHub API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return body, nil
@@ -157,15 +157,20 @@ func IsRateLimited(resp *http.Response) bool {
 
 // GetRateLimitInfo extracts and returns GitHub rate limit information from response headers.
 // Returns remaining requests, reset timestamp (Unix), and whether authentication was used.
+// A header value that fails to parse is treated as zero rather than left as a stale count.
 func GetRateLimitInfo(resp *http.Response) (remaining int, reset int64, authenticated bool) {
 	remainingStr := resp.Header.Get("X-RateLimit-Remaining")
 	if remainingStr != "" {
-		fmt.Sscanf(remainingStr, "%d", &remaining)
+		if _, err := fmt.Sscanf(remainingStr, "%d", &remaining); err != nil {
+			remaining = 0
+		}
 	}
 
 	resetStr := resp.Header.Get("X-RateLimit-Reset")
 	if resetStr != "" {
-		fmt.Sscanf(resetStr, "%d", &reset)
+		if _, err := fmt.Sscanf(resetStr, "%d", &reset); err != nil {
+			reset = 0
+		}
 	}
 
 	// Authenticated requests get 5000/hour, unauthenticated get 60/hour

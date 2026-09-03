@@ -22,14 +22,6 @@ var (
 		},
 		[]string{"trigger_type", "result"}, // trigger_type: "auto", result: "success" or "failure"
 	)
-
-	autoUpdateFirmwareVersion = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "spaxel_autoupdate_firmware_version",
-			Help: "Current firmware version being deployed by auto-update (encoded as semantic version)",
-		},
-		[]string{"stage"}, // selected, canary_before, canary_after, fleet_target
-	)
 )
 
 // AutoUpdateManager manages automatic OTA updates with canary deployment and quiet window scheduling.
@@ -45,21 +37,21 @@ type AutoUpdateManager struct {
 	zoneVacancyChecker ZoneVacancyChecker
 
 	// State
-	running                      bool
-	cancel                       context.CancelFunc
-	wg                           sync.WaitGroup
-	currentCanaryNode            string
-	canaryPreviousVersion        string // Firmware version before canary update, for rollback
-	baselineQuality              float64
-	updateStartTime              time.Time
-	updateState                  UpdateState
-	pendingFirmware            *FirmwareMeta
+	running               bool
+	cancel                context.CancelFunc
+	wg                    sync.WaitGroup
+	currentCanaryNode     string
+	canaryPreviousVersion string // Firmware version before canary update, for rollback
+	baselineQuality       float64
+	updateStartTime       time.Time
+	updateState           UpdateState
+	pendingFirmware       *FirmwareMeta
 
 	// Version selection tracking
-	firmwareSelectionFromCache bool           // Whether latest firmware came from cached scan
-	firmwareSnapshotTimestamp   time.Time     // When the firmware version list was last scanned
-	selectedFirmwareVersion     string        // The firmware version selected for this update cycle
-	canaryFirmwareVersionAfter  string        // Firmware version after canary update
+	firmwareSelectionFromCache bool      // Whether latest firmware came from cached scan
+	firmwareSnapshotTimestamp  time.Time // When the firmware version list was last scanned
+	selectedFirmwareVersion    string    // The firmware version selected for this update cycle
+	canaryFirmwareVersionAfter string    // Firmware version after canary update
 }
 
 // SettingsProvider provides access to system settings.
@@ -453,11 +445,11 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 		formatDuration(time.Since(m.firmwareSnapshotTimestamp)))
 
 	m.publishEvent("update_started", "", fmt.Sprintf("AUTO-UPDATE cycle started for firmware %s", firmware.Version), map[string]interface{}{
-		"firmware_version":     firmware.Version,
-		"filename":             firmware.Filename,
-		"from_cache":           m.firmwareSelectionFromCache,
-		"snapshot_timestamp":   m.firmwareSnapshotTimestamp.Format(time.RFC3339),
-		"trigger_type":         "automatic",
+		"firmware_version":   firmware.Version,
+		"filename":           firmware.Filename,
+		"from_cache":         m.firmwareSelectionFromCache,
+		"snapshot_timestamp": m.firmwareSnapshotTimestamp.Format(time.RFC3339),
+		"trigger_type":       "automatic",
 	})
 
 	// Select canary node and deploy
@@ -494,7 +486,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	autoUpdateTriggerCounter.WithLabelValues("auto", "success").Inc()
 
 	m.publishEvent("canary_deploy", canaryMAC, fmt.Sprintf("AUTO-UPDATE: Deploying canary update to node %s", canaryMAC), map[string]interface{}{
-		"firmware_version":         firmware.Version,
+		"firmware_version":          firmware.Version,
 		"previous_firmware_version": m.canaryPreviousVersion,
 		"baseline_quality":          m.baselineQuality,
 		"version_before":            m.canaryPreviousVersion,
@@ -686,10 +678,10 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 		canaryMAC, m.canaryPreviousVersion, firmware.Version, qualityDelta*100, config.QualityThreshold*100)
 
 	m.publishEvent("canary_passed", canaryMAC, "AUTO-UPDATE: Canary passed, proceeding with fleet update", map[string]interface{}{
-		"quality_delta":    qualityDelta,
-		"version_before":   m.canaryPreviousVersion,
-		"version_after":    firmware.Version,
-		"trigger_type":     "automatic_canary_success",
+		"quality_delta":  qualityDelta,
+		"version_before": m.canaryPreviousVersion,
+		"version_after":  firmware.Version,
+		"trigger_type":   "automatic_canary_success",
 	})
 
 	// Start fleet rollout
