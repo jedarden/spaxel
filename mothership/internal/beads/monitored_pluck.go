@@ -4,25 +4,23 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
 // MonitoredPluck wraps the bead-rs Pluck command with automatic diagnostics
 type MonitoredPluck struct {
-	db           *sql.DB
-	workspacePath string
+	db                *sql.DB
+	workspacePath     string
 	enableDiagnostics bool
 }
 
 // NewMonitoredPluck creates a new monitored Pluck instance
 func NewMonitoredPluck(db *sql.DB, workspacePath string) *MonitoredPluck {
 	return &MonitoredPluck{
-		db:           db,
-		workspacePath: workspacePath,
+		db:                db,
+		workspacePath:     workspacePath,
 		enableDiagnostics: true,
 	}
 }
