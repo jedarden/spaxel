@@ -12,31 +12,31 @@ import (
 
 // FuzzSessionSeekTo fuzzes Session.SeekTo() with arbitrary int64 timestamps.
 // Key properties:
-// 1. SeekTo must NEVER panic on any int64 target.
-// 2. After a seek, if a frame is retrieved from the recording buffer, its timestamp
-//    must be >= the (clamped) target timestamp.
-// 3. Seeking before the session range should clamp to FromMS.
-// 4. Seeking after the session range should clamp to ToMS.
-// 5. Edge cases: math.MinInt64, math.MaxInt64, 0, -1, negative values.
+//  1. SeekTo must NEVER panic on any int64 target.
+//  2. After a seek, if a frame is retrieved from the recording buffer, its timestamp
+//     must be >= the (clamped) target timestamp.
+//  3. Seeking before the session range should clamp to FromMS.
+//  4. Seeking after the session range should clamp to ToMS.
+//  5. Edge cases: math.MinInt64, math.MaxInt64, 0, -1, negative values.
 func FuzzSessionSeekTo(f *testing.F) {
 	// Seed corpus covering edge cases and typical scenarios
-	f.Add(int64(0))                                    // zero timestamp
-	f.Add(int64(1))                                    // one millisecond
-	f.Add(int64(-1))                                   // negative timestamp
-	f.Add(int64(1000))                                 // one second
-	f.Add(int64(60000))                                // one minute
-	f.Add(int64(math.MaxInt64))                        // maximum int64
-	f.Add(int64(math.MinInt64))                        // minimum int64
-	f.Add(int64(9223372036854775807))                 // MaxInt64 - 1
-	f.Add(int64(-9223372036854775808))                // MinInt64 + 1
-	f.Add(int64(1234567890123))                       // arbitrary large value
-	f.Add(int64(-1234567890123))                      // arbitrary negative value
+	f.Add(int64(0))                    // zero timestamp
+	f.Add(int64(1))                    // one millisecond
+	f.Add(int64(-1))                   // negative timestamp
+	f.Add(int64(1000))                 // one second
+	f.Add(int64(60000))                // one minute
+	f.Add(int64(math.MaxInt64))        // maximum int64
+	f.Add(int64(math.MinInt64))        // minimum int64
+	f.Add(int64(9223372036854775807))  // MaxInt64 - 1
+	f.Add(int64(-9223372036854775808)) // MinInt64 + 1
+	f.Add(int64(1234567890123))        // arbitrary large value
+	f.Add(int64(-1234567890123))       // arbitrary negative value
 
 	f.Fuzz(func(t *testing.T, targetMS int64) {
 		// Create a temporary recording buffer
 		tempDir := t.TempDir()
 		bufferPath := filepath.Join(tempDir, "test.bin")
-		buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+		buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 		if err != nil {
 			t.Skipf("Failed to create buffer: %v", err)
 		}
@@ -116,15 +116,15 @@ func FuzzEngineSeek(f *testing.F) {
 	f.Add("valid-session", int64(-1000))
 	f.Add("valid-session", int64(math.MaxInt64))
 	f.Add("valid-session", int64(math.MinInt64))
-	f.Add("", int64(12345))                                // empty session ID
-	f.Add("nonexistent-session", int64(5000))             // unknown session ID
+	f.Add("", int64(12345))                            // empty session ID
+	f.Add("nonexistent-session", int64(5000))          // unknown session ID
 	f.Add("session-with-special-chars", int64(999999)) // session ID with special chars (if allowed)
 
 	f.Fuzz(func(t *testing.T, sessionID string, targetMS int64) {
 		// Create a temporary recording buffer
 		tempDir := t.TempDir()
 		bufferPath := filepath.Join(tempDir, "test.bin")
-		buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+		buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 		if err != nil {
 			t.Skipf("Failed to create buffer: %v", err)
 		}
@@ -203,12 +203,12 @@ func FuzzEngineSeek(f *testing.F) {
 // TestSessionSeekToEdgeCases tests specific edge cases for Session.SeekTo.
 func TestSessionSeekToEdgeCases(t *testing.T) {
 	tests := []struct {
-		name         string
-		fromMS       int64
-		toMS         int64
-		targetMS     int64
-		wantClamped  int64
-		description  string
+		name        string
+		fromMS      int64
+		toMS        int64
+		targetMS    int64
+		wantClamped int64
+		description string
 	}{
 		{
 			name:        "seek to zero",
@@ -298,7 +298,7 @@ func TestSessionSeekToEdgeCases(t *testing.T) {
 func TestEngineSeekEdgeCases(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("Failed to create buffer: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestEngineSeekEdgeCases(t *testing.T) {
 func TestEngineSeekInvalidSession(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("Failed to create buffer: %v", err)
 	}
@@ -422,41 +422,41 @@ func TestEngineSeekInvalidSession(t *testing.T) {
 func FuzzSeek(f *testing.F) {
 	// Seed corpus covering comprehensive edge cases
 	// Basic range tests
-	f.Add(int64(0))                  // zero
-	f.Add(int64(1))                  // one millisecond
-	f.Add(int64(-1))                 // negative
-	f.Add(int64(1000))               // one second in ms
-	f.Add(int64(60000))              // one minute in ms
+	f.Add(int64(0))     // zero
+	f.Add(int64(1))     // one millisecond
+	f.Add(int64(-1))    // negative
+	f.Add(int64(1000))  // one second in ms
+	f.Add(int64(60000)) // one minute in ms
 
 	// Boundary cases at extreme values
-	f.Add(int64(math.MaxInt64))      // maximum int64
-	f.Add(int64(math.MinInt64))      // minimum int64
-	f.Add(int64(math.MaxInt64 - 1))  // MaxInt64 - 1
-	f.Add(int64(math.MinInt64 + 1))  // MinInt64 + 1
+	f.Add(int64(math.MaxInt64))     // maximum int64
+	f.Add(int64(math.MinInt64))     // minimum int64
+	f.Add(int64(math.MaxInt64 - 1)) // MaxInt64 - 1
+	f.Add(int64(math.MinInt64 + 1)) // MinInt64 + 1
 
 	// Boundary values around typical session ranges
-	f.Add(int64(499))                // just before a 500-10000 range
-	f.Add(int64(500))                // at FromMS boundary
-	f.Add(int64(10000))              // at ToMS boundary
-	f.Add(int64(10001))              // just after range
+	f.Add(int64(499))   // just before a 500-10000 range
+	f.Add(int64(500))   // at FromMS boundary
+	f.Add(int64(10000)) // at ToMS boundary
+	f.Add(int64(10001)) // just after range
 
 	// Arbitrary large values
-	f.Add(int64(1234567890123))      // large positive
-	f.Add(int64(-1234567890123))     // large negative
+	f.Add(int64(1234567890123))  // large positive
+	f.Add(int64(-1234567890123)) // large negative
 
 	// Additional edge cases for comprehensive coverage
-	f.Add(int64(2))                  // small positive
-	f.Add(int64(-2))                 // small negative
-	f.Add(int64(9223372036854775806)) // MaxInt64 - 1 (explicit duplicate for emphasis)
+	f.Add(int64(2))                    // small positive
+	f.Add(int64(-2))                   // small negative
+	f.Add(int64(9223372036854775806))  // MaxInt64 - 1 (explicit duplicate for emphasis)
 	f.Add(int64(-9223372036854775807)) // MinInt64 + 1 (explicit duplicate for emphasis)
-	f.Add(int64(999))                // another in-range value
-	f.Add(int64(1001))               // just past boundary
+	f.Add(int64(999))                  // another in-range value
+	f.Add(int64(1001))                 // just past boundary
 
 	f.Fuzz(func(t *testing.T, targetMS int64) {
 		// Setup: Create a temporary recording buffer with test data
 		tempDir := t.TempDir()
 		bufferPath := filepath.Join(tempDir, "test.bin")
-		buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+		buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 		if err != nil {
 			t.Skipf("Failed to create buffer: %v", err)
 		}

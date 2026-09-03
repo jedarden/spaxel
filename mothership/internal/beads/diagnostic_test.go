@@ -1,7 +1,6 @@
 package beads
 
 import (
-	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -14,15 +13,15 @@ import (
 func TestDiagnosticReportEmptyDatabase(t *testing.T) {
 	// This test demonstrates the expected output structure
 	report := &DiagnosticReport{
-		Timestamp:          time.Now().Format(time.RFC3339),
-		TotalBeads:         0,
-		OpenBeads:          0,
-		UnblockedBeads:     0,
-		UnassignedBeads:    0,
-		WithoutDependencies: 0,
+		Timestamp:            time.Now().Format(time.RFC3339),
+		TotalBeads:           0,
+		OpenBeads:            0,
+		UnblockedBeads:       0,
+		UnassignedBeads:      0,
+		WithoutDependencies:  0,
 		WithoutLockConflicts: 0,
-		ReadyCandidates:    0,
-		Recommendations:    []string{},
+		ReadyCandidates:      0,
+		Recommendations:      []string{},
 	}
 
 	report.identifyBottleneck()
@@ -39,15 +38,15 @@ func TestDiagnosticReportEmptyDatabase(t *testing.T) {
 // TestDiagnosticReportAllClosed tests when all beads are closed
 func TestDiagnosticReportAllClosed(t *testing.T) {
 	report := &DiagnosticReport{
-		Timestamp:          time.Now().Format(time.RFC3339),
-		TotalBeads:         100,
-		OpenBeads:          0,
-		UnblockedBeads:     0,
-		UnassignedBeads:    0,
-		WithoutDependencies: 0,
+		Timestamp:            time.Now().Format(time.RFC3339),
+		TotalBeads:           100,
+		OpenBeads:            0,
+		UnblockedBeads:       0,
+		UnassignedBeads:      0,
+		WithoutDependencies:  0,
 		WithoutLockConflicts: 0,
-		ReadyCandidates:    0,
-		Recommendations:    []string{},
+		ReadyCandidates:      0,
+		Recommendations:      []string{},
 	}
 
 	report.identifyBottleneck()
@@ -60,15 +59,15 @@ func TestDiagnosticReportAllClosed(t *testing.T) {
 // TestDiagnosticReportDependencyBlock tests when all beads are blocked by dependencies
 func TestDiagnosticReportDependencyBlock(t *testing.T) {
 	report := &DiagnosticReport{
-		Timestamp:          time.Now().Format(time.RFC3339),
-		TotalBeads:         100,
-		OpenBeads:          100,
-		UnblockedBeads:     100,
-		UnassignedBeads:    100,
-		WithoutDependencies: 0,
+		Timestamp:            time.Now().Format(time.RFC3339),
+		TotalBeads:           100,
+		OpenBeads:            100,
+		UnblockedBeads:       100,
+		UnassignedBeads:      100,
+		WithoutDependencies:  0,
 		WithoutLockConflicts: 0,
-		ReadyCandidates:    0,
-		Recommendations:    []string{},
+		ReadyCandidates:      0,
+		Recommendations:      []string{},
 	}
 
 	report.identifyBottleneck()
@@ -91,15 +90,15 @@ func TestDiagnosticReportDependencyBlock(t *testing.T) {
 // TestDiagnosticReportAssigneeBlock tests when all beads have assignees
 func TestDiagnosticReportAssigneeBlock(t *testing.T) {
 	report := &DiagnosticReport{
-		Timestamp:          time.Now().Format(time.RFC3339),
-		TotalBeads:         100,
-		OpenBeads:          100,
-		UnblockedBeads:     100,
-		UnassignedBeads:    0,
-		WithoutDependencies: 0,
+		Timestamp:            time.Now().Format(time.RFC3339),
+		TotalBeads:           100,
+		OpenBeads:            100,
+		UnblockedBeads:       100,
+		UnassignedBeads:      0,
+		WithoutDependencies:  0,
 		WithoutLockConflicts: 0,
-		ReadyCandidates:    0,
-		Recommendations:    []string{},
+		ReadyCandidates:      0,
+		Recommendations:      []string{},
 	}
 
 	report.identifyBottleneck()
@@ -117,15 +116,15 @@ func TestDiagnosticReportAssigneeBlock(t *testing.T) {
 // TestDiagnosticReportManualBlock tests when all beads are manually blocked
 func TestDiagnosticReportManualBlock(t *testing.T) {
 	report := &DiagnosticReport{
-		Timestamp:          time.Now().Format(time.RFC3339),
-		TotalBeads:         100,
-		OpenBeads:          100,
-		UnblockedBeads:     0,
-		UnassignedBeads:    0,
-		WithoutDependencies: 0,
+		Timestamp:            time.Now().Format(time.RFC3339),
+		TotalBeads:           100,
+		OpenBeads:            100,
+		UnblockedBeads:       0,
+		UnassignedBeads:      0,
+		WithoutDependencies:  0,
 		WithoutLockConflicts: 0,
-		ReadyCandidates:    0,
-		Recommendations:    []string{},
+		ReadyCandidates:      0,
+		Recommendations:      []string{},
 	}
 
 	report.identifyBottleneck()
@@ -143,21 +142,21 @@ func TestDiagnosticReportManualBlock(t *testing.T) {
 // TestDiagnosticReportSerialization tests JSON serialization
 func TestDiagnosticReportSerialization(t *testing.T) {
 	report := &DiagnosticReport{
-		Timestamp:          "2026-08-30T12:34:56Z",
-		TotalBeads:         100,
-		OpenBeads:          80,
-		UnblockedBeads:     70,
-		UnassignedBeads:    60,
-		WithoutDependencies: 40,
-		WithoutLockConflicts: 10,
-		ReadyCandidates:    10,
-		BlockedByStatus:    20,
-		BlockedByManualBlock: 10,
-		BlockedByAssignee:  10,
-		BlockedByDependency: 20,
+		Timestamp:             "2026-08-30T12:34:56Z",
+		TotalBeads:            100,
+		OpenBeads:             80,
+		UnblockedBeads:        70,
+		UnassignedBeads:       60,
+		WithoutDependencies:   40,
+		WithoutLockConflicts:  10,
+		ReadyCandidates:       10,
+		BlockedByStatus:       20,
+		BlockedByManualBlock:  10,
+		BlockedByAssignee:     10,
+		BlockedByDependency:   20,
 		BlockedByLockConflict: 30,
-		IdentifiedBottleneck: "all_beads_blocked_by_lock_conflicts",
-		Recommendations:    []string{"Check resource allocation", "Review lease expiration"},
+		IdentifiedBottleneck:  "all_beads_blocked_by_lock_conflicts",
+		Recommendations:       []string{"Check resource allocation", "Review lease expiration"},
 	}
 
 	data, err := json.Marshal(report)
@@ -189,16 +188,16 @@ func TestWriteDiagnosticLog(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	report := &DiagnosticReport{
-		Timestamp:          "2026-08-30T12:34:56Z",
-		TotalBeads:         10,
-		OpenBeads:          5,
-		UnblockedBeads:     5,
-		UnassignedBeads:    5,
-		WithoutDependencies: 0,
+		Timestamp:            "2026-08-30T12:34:56Z",
+		TotalBeads:           10,
+		OpenBeads:            5,
+		UnblockedBeads:       5,
+		UnassignedBeads:      5,
+		WithoutDependencies:  0,
 		WithoutLockConflicts: 0,
-		ReadyCandidates:    0,
+		ReadyCandidates:      0,
 		IdentifiedBottleneck: "all_beads_blocked_by_dependencies",
-		Recommendations:    []string{"Review dependency graph"},
+		Recommendations:      []string{"Review dependency graph"},
 	}
 
 	if err := WriteDiagnosticLog(report, tmpDir); err != nil {
@@ -235,14 +234,14 @@ func BenchmarkRunDiagnostics(b *testing.B) {
 	// This would require a test database setup
 	// For now, just benchmark the report processing
 	report := &DiagnosticReport{
-		Timestamp:          time.Now().Format(time.RFC3339),
-		TotalBeads:         1000,
-		OpenBeads:          500,
-		UnblockedBeads:     400,
-		UnassignedBeads:    300,
-		WithoutDependencies: 100,
+		Timestamp:            time.Now().Format(time.RFC3339),
+		TotalBeads:           1000,
+		OpenBeads:            500,
+		UnblockedBeads:       400,
+		UnassignedBeads:      300,
+		WithoutDependencies:  100,
 		WithoutLockConflicts: 50,
-		ReadyCandidates:    50,
+		ReadyCandidates:      50,
 	}
 
 	b.ResetTimer()
