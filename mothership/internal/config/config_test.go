@@ -463,12 +463,14 @@ func TestEnvExists(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		envKey      string
 		setupFunc   func()
 		expectedVal string
 		expectedOK  bool
 	}{
 		{
-			name: "variable exists with value",
+			name:   "variable exists with value",
+			envKey: "TEST_ENV_VAR",
 			setupFunc: func() {
 				os.Setenv("TEST_ENV_VAR", "/some/path")
 			},
@@ -476,7 +478,8 @@ func TestEnvExists(t *testing.T) {
 			expectedOK:  true,
 		},
 		{
-			name: "variable exists but empty",
+			name:   "variable exists but empty",
+			envKey: "TEST_ENV_VAR",
 			setupFunc: func() {
 				os.Setenv("TEST_ENV_VAR", "")
 			},
@@ -484,7 +487,8 @@ func TestEnvExists(t *testing.T) {
 			expectedOK:  true,
 		},
 		{
-			name: "variable does not exist",
+			name:   "variable does not exist",
+			envKey: "TEST_ENV_VAR",
 			setupFunc: func() {
 				// Already unset by deferred Unsetenv, but be explicit
 				os.Unsetenv("TEST_ENV_VAR")
@@ -493,7 +497,8 @@ func TestEnvExists(t *testing.T) {
 			expectedOK:  false,
 		},
 		{
-			name: "IDF_PATH exists",
+			name:   "IDF_PATH exists",
+			envKey: "IDF_PATH",
 			setupFunc: func() {
 				os.Setenv("IDF_PATH", "/esp/esp-idf")
 			},
@@ -501,7 +506,8 @@ func TestEnvExists(t *testing.T) {
 			expectedOK:  true,
 		},
 		{
-			name: "IDF_PATH does not exist",
+			name:   "IDF_PATH does not exist",
+			envKey: "IDF_PATH",
 			setupFunc: func() {
 				os.Unsetenv("IDF_PATH")
 			},
@@ -515,26 +521,18 @@ func TestEnvExists(t *testing.T) {
 			tt.setupFunc()
 
 			// Test EnvExists
-			exists := EnvExists("TEST_ENV_VAR")
+			exists := EnvExists(tt.envKey)
 			if exists != tt.expectedOK {
-				t.Errorf("EnvExists() = %v, want %v", exists, tt.expectedOK)
+				t.Errorf("EnvExists(%q) = %v, want %v", tt.envKey, exists, tt.expectedOK)
 			}
 
 			// Also test that os.LookupEnv matches
-			val, ok := os.LookupEnv("TEST_ENV_VAR")
+			val, ok := os.LookupEnv(tt.envKey)
 			if ok != tt.expectedOK {
-				t.Errorf("os.LookupEnv() ok = %v, want %v", ok, tt.expectedOK)
+				t.Errorf("os.LookupEnv(%q) ok = %v, want %v", tt.envKey, ok, tt.expectedOK)
 			}
 			if val != tt.expectedVal {
-				t.Errorf("os.LookupEnv() val = %q, want %q", val, tt.expectedVal)
-			}
-
-			// Special case for IDF_PATH tests
-			if tt.name == "IDF_PATH exists" || tt.name == "IDF_PATH does not exist" {
-				idfExists := EnvExists("IDF_PATH")
-				if idfExists != tt.expectedOK {
-					t.Errorf("EnvExists(IDF_PATH) = %v, want %v", idfExists, tt.expectedOK)
-				}
+				t.Errorf("os.LookupEnv(%q) val = %q, want %q", tt.envKey, val, tt.expectedVal)
 			}
 		})
 	}
