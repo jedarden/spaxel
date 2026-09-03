@@ -142,11 +142,16 @@ func TestNetworkSettingsHandler_EmptyPassword_BugSimulation(t *testing.T) {
 
 	// Final verification
 	t.Log("\n=== Final Verification ===")
-	resp2, _ := http.Get(server.URL + "/api/settings/network")
+	resp2, err := http.Get(server.URL + "/api/settings/network")
+	if err != nil {
+		t.Fatalf("Failed to GET /api/settings/network: %v", err)
+	}
 	defer resp2.Body.Close()
 
 	var finalResult map[string]interface{}
-	json.NewDecoder(resp2.Body).Decode(&finalResult)
+	if err := json.NewDecoder(resp2.Body).Decode(&finalResult); err != nil {
+		t.Fatalf("Failed to decode final response: %v", err)
+	}
 
 	t.Logf("Final state: configured=%v", finalResult["configured"])
 

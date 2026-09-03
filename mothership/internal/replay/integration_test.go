@@ -39,7 +39,7 @@ func TestSeekPerformance(t *testing.T) {
 
 	// Create a buffer with simulated 1-hour CSI data at 50 Hz
 	// 50 Hz = 50 frames/second = 180,000 frames/hour
-	buffer, err := recording.NewBuffer(bufferPath, 100, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 100, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestReplayIdenticalProcessing(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
 
-	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestParameterSliderReprocess(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
 
-	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestLivePipelineIsolation(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
 
-	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestSeekAccuracy(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
 
-	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -462,7 +462,7 @@ func TestTimelineEventMarkers(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
 
-	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestBackToLiveResumesDetection(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
 
-	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 10, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}

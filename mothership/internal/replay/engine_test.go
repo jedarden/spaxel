@@ -36,7 +36,7 @@ func (m *mockBroadcaster) Calls() int {
 func TestNewEngine(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestNewEngine(t *testing.T) {
 func TestStartSession(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestStartSession(t *testing.T) {
 func TestStartSessionClampsRange(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestStartSessionClampsRange(t *testing.T) {
 func TestStartSessionRejectsInvalidRange(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestStartSessionRejectsInvalidRange(t *testing.T) {
 func TestStopSession(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestStopSession(t *testing.T) {
 func TestStopSessionNotFound(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestStopSessionNotFound(t *testing.T) {
 func TestSeek(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestSeek(t *testing.T) {
 func TestSeekClampsToSessionRange(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestSeekClampsToSessionRange(t *testing.T) {
 func TestPlay(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestPlay(t *testing.T) {
 func TestPause(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -393,7 +393,7 @@ func TestPause(t *testing.T) {
 func TestSetSpeed(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestSetSpeed(t *testing.T) {
 func TestSetParams(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestSetParams(t *testing.T) {
 func TestGetTimestampRange(t *testing.T) {
 	tempDir := t.TempDir()
 	bufferPath := filepath.Join(tempDir, "test.bin")
-	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour)
+	buffer, err := recording.NewBuffer(bufferPath, 1, 24*time.Hour, false, 0)
 	if err != nil {
 		t.Fatalf("NewBuffer: %v", err)
 	}
