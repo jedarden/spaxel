@@ -20,6 +20,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "cJSON.h"
+#include <inttypes.h>
 #include <string.h>
 #include <strings.h>
 
@@ -987,7 +988,7 @@ static void handle_safe_mode_msg(cJSON *root) {
         bool active = safe_mode_is_active();
         uint32_t boot_count = safe_mode_get_boot_count();
 
-        ESP_LOGI(TAG, "Safe mode status: active=%d, boot_count=%u",
+        ESP_LOGI(TAG, "Safe mode status: active=%d, boot_count=%" PRIu32,
                  active, boot_count);
 
         // Send status back to mothership
