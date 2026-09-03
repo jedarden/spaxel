@@ -36,8 +36,18 @@ CONFIG_BTDM_CTRL_MODE_BTDM=n
 # Increase main task stack for WiFi/BLE operations
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
-# WebSocket buffer sizes
-CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=n
+# esp_http_client options. This component serves the OTA firmware download
+# (ota_task in main/websocket.c) — it is not the WebSocket control channel.
+#
+# HTTPS must stay ON: the mothership advertises SPAXEL_ADVERTISED_BASE_URL,
+# and production sets it to https://spaxel.ardenone.com, so every OTA URL a
+# node receives is https://. With =n the client cannot open a TLS connection
+# and every update fails before the first byte lands in the OTA slot.
+# Certificates validate against the compiled-in CA bundle
+# (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE, already linked for the wss:// control
+# channel); for a plain-http bench URL the bundle is simply unused.
+# See spaxel-bbe7f6fc / ADR-004.
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
 CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH=n
 
 # Log levels
