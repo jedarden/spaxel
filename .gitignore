@@ -40,6 +40,10 @@ temp/
 /acceptance.test
 spaxel-sim
 mothership/sim
+# `go build ./...` output from the mothership module and the standalone simulator:
+# both land here when the module is built in place and must never be tracked.
+/mothership/build/spaxel
+/cmd/sim/sim
 *.test
 
 # Node dependencies (regenerated via npm ci)
