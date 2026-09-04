@@ -395,3 +395,26 @@ is inert even when the version differs.
 | "Ensure all other steps are compatible" | They are; nothing else changes. §4. |
 | "Verify YAML syntax" | ArgoCD sync validation + the read-only checks in §5 step 3; no `kubectl apply --dry-run` (prohibited verb, and unnecessary). |
 | Its note "if creating new, can simplify by removing multi-arch logic" | Moot — we are not creating new. Do **not** remove any multi-arch logic. |
+
+---
+
+## 9. Implementation record (`spaxel-b0d532f0`, 2026-09-04)
+
+Steps 1–3 and 6 of §5 are done. The change lives in **`jedarden/declarative-config`**
+(the manifest is outside this repo; nothing else here changes — this section is the
+only spaxel-side artifact, as §Scope states).
+
+| Step | Result |
+|---|---|
+| 1 — edit `spaxel-build-workflowtemplate.yml` | Done. `platforms` added at `spec.arguments.parameters` with default `linux/amd64,linux/arm64` (byte-identical to the removed literal); `docker-build` now reads `--platform={{workflow.parameters.platforms}}`. Whole diff is the §3.1 line plus the parameter block. declarative-config commit `a979e063`. |
+| 2 — delete the fork | Done. `spaxel-build-amd64-workflowtemplate.yml` removed (797 lines). Its deletion rode in declarative-config commit `e30e76f0` rather than `a979e063`: a concurrent worker's `git commit` in the shared checkout swept the already-staged `git rm` into its own janitor-harness commit 29 s before mine. Net tree state is exactly as designed; only the attribution is off. |
+| 3 — ArgoCD sync + read-only verification | Done. App `argo-workflows-ns-iad-ci` (rs-manager argocd) reached `operationState=Succeeded, "successfully synced (all tasks run)"` at revision `a979e063`. Live checks on iad-ci: `spaxel-build` exposes 4 parameters incl. `platforms=linux/amd64,linux/arm64`; `docker-build` carries the substituted `--platform`; `spaxel-build-amd64` → `NotFound` (prune is on, no orphan). Residual app `OutOfSync` covers only other, concurrently-in-flight templates — `spaxel-build` itself reports `Synced`. |
+| 6 — functional verify of the amd64-only path | Done via the sanctioned manual submission with the §5 safety recipe (scratch `image-repo=ronaldraygun/spaxel-amd64verify`, `branch` default, `platforms=linux/amd64`). Workflow `spaxel-build-amd64-verify-28wp5` → **Succeeded**, stored params show `platforms=linux/amd64` overriding the default, and `resolve-version` resolved `should-build=false`, so every build step skipped — inert by construction, no image, no firmware, no pin rewrite. This also proves Argo instantiates the modified template. |
+
+YAML validity (bead AC5): proven by the sync — Argo validated and applied the manifest,
+and the verification workflow instantiated it. No `kubectl apply --dry-run` was used
+(prohibited verb; also unnecessary).
+
+Remaining: §7.2's follow-up — parameterise the sed's image ref in
+`update-declarative-config` so a scratch-repo run is inert even when the version
+differs. Tracked as bead `spaxel-fce2f7e4`.
