@@ -29,6 +29,11 @@ firmware/test_apps/
 *.out
 coverage.txt
 
+# Playwright artifacts (regenerated on every dashboard a11y/e2e run)
+dashboard/test-results/
+dashboard/playwright-report/
+dashboard/.auth/
+
 # Temporary files
 tmp/
 temp/
