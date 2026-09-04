@@ -331,5 +331,6 @@ delete `SPAXEL_DATA_DIR` to start completely fresh.
 - Dependency inventory, full 28-variable table, auth ground truth: `MOTHERSHIP_DASHBOARD_DEPENDENCIES.md`
 - Startup sequence internals, serving modes, env surface with config.go line cites: `MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md`
 - Asset locations and the embed mechanism: `MOTHERSHIP_DASHBOARD_LOCATIONS.md`
+- Browser-level access verification — the URL/access method used on this host, the Chromium route sweep, and the defects it found (including the ex44 port-8080 conflict): `MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md`
 - Advertised base URL / OTA: `docs/plan/plan.md` ADR-004 · first-boot WiFi seeding: ADR-005 · node token on `/firmware`: ADR-006
 - Two documented deviations from `docs/plan/plan.md` found while writing this: the compose file builds locally instead of pulling `ghcr.io/spaxel/spaxel` (§2 step 2), and the dashboard PIN gate is not mounted (§7 / §7.1)
