@@ -240,3 +240,77 @@ out-of-scope but adjacent: `mothership/go.mod` declares `go 1.25.0` while those
 two steps now run a 1.23 toolchain, which under the default `GOTOOLCHAIN=auto`
 has `go` fetch a 1.25 toolchain at build time — a CWD-independent failure mode
 that deserves its own bead if a step starts failing on toolchain download.
+
+## Addendum 2026-09-04 (b) — each invocation resolved to a filesystem path
+
+For bead spaxel-e50733ed (split-child of closed spaxel-2906589d, downstream of
+spaxel-5494ad08's final report). Where the addendum above derived each step's
+CWD base, this one closes the chain's actual question: **for each `run.sh`
+occurrence, the absolute path it would resolve to, and whether that path
+exists.** Every fact below was re-verified live on 2026-09-04, not cited.
+
+### The invocation set
+
+`spaxel-e2e` at `resourceVersion 71293261` (unchanged since the addendum above;
+re-read from the credential-free iad-ci endpoint, and its `spec` still equals
+the `declarative-config` manifest normalized-JSON) contains **zero `run.sh`
+occurrences** — case-insensitive `run\.sh` 0, `runsh` 0, `run_sh` 0,
+`tests/e2e` 0, `test/e2e` 0; only `.sh` string still `dockerd-entrypoint.sh`.
+There is therefore **no invocation to tag**: the raw list produced by
+spaxel-d3311966 is the empty set, and the table below tags the only thing that
+can carry one — each step's final CWD base — with the resolution of both
+candidate spellings from that base. `workingDir` remains absent on all four
+templates, so the bases stand as derived above.
+
+### Resolution table — valid vs non-existent, per base
+
+Clone root is always `/tmp/spaxel-src`. Existence is judged against a fresh
+clone of `origin/main`, whose tree matches the CI clone.
+
+| Step | Final CWD base | Spelling | Resolves to | Exists? | Verdict |
+|---|---|---|---|---|---|
+| `go-test` | `/tmp/spaxel-src/mothership` | `tests/e2e/run.sh` | `/tmp/spaxel-src/mothership/tests/e2e/run.sh` | **no** | **non-existent** — `mothership/tests/e2e/` holds only `*_test.go` |
+| `go-test` | `/tmp/spaxel-src/mothership` | `mothership/tests/e2e/run.sh` | `/tmp/spaxel-src/mothership/mothership/tests/e2e/run.sh` | **no** | **non-existent** — no nested `mothership/mothership` |
+| `acceptance-tests` | `/tmp/spaxel-src/mothership` | `tests/e2e/run.sh` | `/tmp/spaxel-src/mothership/tests/e2e/run.sh` | **no** | **non-existent** — same as above |
+| `acceptance-tests` | `/tmp/spaxel-src/mothership` | `mothership/tests/e2e/run.sh` | `/tmp/spaxel-src/mothership/mothership/tests/e2e/run.sh` | **no** | **non-existent** |
+| `docker-e2e` | `/tmp/spaxel-src` | `tests/e2e/run.sh` | `/tmp/spaxel-src/tests/e2e/run.sh` | **yes** | **valid** — the one base from which the root harness is addressable; nothing invokes it |
+| `docker-e2e` | `/tmp/spaxel-src` | `mothership/tests/e2e/run.sh` | `/tmp/spaxel-src/mothership/tests/e2e/run.sh` | **no** | **non-existent** |
+
+### Existence answers, repo side
+
+Checked against the pristine `origin/main` tree (`git ls-tree` / `git cat-file`
+— no checkout, so no working-tree or untracked-file noise), and cross-checked
+against the local working tree, which agrees:
+
+- `tests/e2e/run.sh` — **yes, exists.** Blob `7cacbbd9`, mode `100755`,
+  13,877 B, last touched by `0491965c` (2026-04-07). It is the only `run.sh`
+  path in the tracked tree.
+- `mothership/tests/e2e/run.sh` — **no, does not exist.** `mothership/tests/e2e/`
+  is tracked with exactly four files (`assertions_test.go`, `e2e_test.go`,
+  `io6_gate_conclusion_test.go`, `io6_gate_test.go`) and no shell script.
+  `git log --all --diff-filter=A -- mothership/tests/e2e/run.sh` is empty, so
+  the path was **never added on any branch** — it is not a deleted file that a
+  revert would restore, it never existed.
+- `mothership/mothership/` — no such directory anywhere in the tree, so the
+  doubly-nested spelling is unresolvable from any base.
+
+### No caller anywhere
+
+Beyond the template, a search for anything that actually *executes* the
+harness — Makefiles, shell scripts, workflows, YAML, across this repo and every
+tracked file of `declarative-config` at HEAD — finds **zero call sites**. (The
+only `run.sh` executions in the declarative-config checkout are under
+`.claude/worktrees/` throwaway agent copies of `drawrace-ci`, a different
+repo's `e2e/phone-smoke/run.sh`.) The root harness is reachable only by a human
+running `./tests/e2e/run.sh` from a repo root, per its own `SCRIPT_DIR` /
+`PROJECT_ROOT` derivation, which is repo-root-relative and would break from any
+other CWD.
+
+### Statement for the final report (spaxel-5494ad08)
+
+**This template references neither `tests/e2e/run.sh` nor
+`mothership/tests/e2e/run.sh`** — it contains no `run.sh` reference of any
+form. Had it contained one, the two-step base split above means the deciding
+variable would be which step it appeared in: `go-test` and `acceptance-tests`
+sit in `…/mothership`, where *both* candidate spellings are non-existent, and
+only `docker-e2e`'s final base resolves the repo-root spelling to a real file.
