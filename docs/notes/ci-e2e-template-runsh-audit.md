@@ -135,3 +135,108 @@ print("live == applied:", live == applied)
 print("run.sh in either:", "run.sh" in live or "run.sh" in applied)
 EOF
 ```
+
+## Addendum 2026-09-04 — re-verified against the recreated object; invocation → CWD map
+
+Re-derived for bead spaxel-2906589d (only child of closed `spaxel-d3311966`, a
+second extraction chain). The object audited above no longer exists in that
+form: `spaxel-e2e` was **recreated 2026-08-26** (`creationTimestamp
+2026-08-26T19:59:58Z`, now `resourceVersion 71293261`), and its last source
+change is `declarative-config` commit `64e3e540` (2026-08-29, "correct Go
+image version and install missing dependencies"). The zero-`run.sh` conclusion
+**holds** on the new object. Nothing below is carried over from the 2026-08-20
+section — every base was re-derived from the current manifest.
+
+### Object identity and negative searches (2026-09-04)
+
+- live `spec` (kubectl, credential-free read endpoint) vs
+  `declarative-config/k8s/iad-ci/argo-workflows/spaxel-e2e-workflowtemplate.yml`
+  `spec`: **equal** (normalized-JSON, sorted-keys).
+- Case-insensitive hit counts over the manifest: `run\.sh` **0**, `runsh` **0**,
+  `run_sh` **0**, `tests/e2e` **0**, `test/e2e` **0**.
+- Only `.sh` string in the whole manifest: `dockerd-entrypoint.sh`
+  (template line 507) — the `docker:dind` sidecar's stock command.
+- `workingDir` appears **nowhere** in the manifest (0 occurrences), so no step
+  overrides its image's default working directory.
+
+### Working-directory derivation
+
+Each step is an Argo `script` (`command: [sh]` + `source`), so a step's initial
+CWD is the base image's own `WORKDIR`. Base images were verified against the
+Docker Hub registry config blobs (linux/amd64), not assumed:
+
+| image | registry-verified `WorkingDir` | `Cmd` | `User` |
+|---|---|---|---|
+| `golang:1.23-bookworm` (`go-test`, `acceptance-tests`) | `/go` | `bash` | unset → root |
+| `golang:1.25-alpine` (`docker-e2e`) | `/go` | `/bin/sh` | unset → root |
+
+Every `git clone` targets the absolute path `/tmp/spaxel-src`, so the clone is
+CWD-independent; every subsequent base comes from an explicit absolute `cd`.
+There are no other volume mounts and no repo mount anywhere in the template.
+
+### Invocation → working directory map
+
+Line numbers are the declarative-config manifest. `run.sh` has no row anywhere
+— there is nothing to tag.
+
+**`go-test`** — `golang:1.23-bookworm`, no volumeMounts, deadline 300s
+
+| line | command | CWD at that point | resolves to |
+|---|---|---|---|
+| 62 | `git clone … /tmp/spaxel-src` | `/go` (image WORKDIR) | absolute target |
+| 65 | `cd /tmp/spaxel-src/mothership` | — | **base for the rest of the step; no later `cd`** |
+| 69 | `go build -v ./cmd/mothership` | `/tmp/spaxel-src/mothership` | exists |
+| 74 | `go build -v ./cmd/sim` | `/tmp/spaxel-src/mothership` | exists |
+| 79 | `GO_BUILD_SKIP=1 go test -short -v ./mothership/test/acceptance/...` | `/tmp/spaxel-src/mothership` | `…/mothership/mothership/test/acceptance/...` → **non-existent** (the CWD bug recorded above) |
+
+**`acceptance-tests`** — `golang:1.23-bookworm`, no volumeMounts, deadline 600s
+
+| line | command | CWD at that point | resolves to |
+|---|---|---|---|
+| 118 | `git clone … /tmp/spaxel-src` | `/go` | absolute target |
+| 121 | `cd /tmp/spaxel-src/mothership` | — | CWD base |
+| 125 | `go build -o /tmp/spaxel-sim ./cmd/sim` | `/tmp/spaxel-src/mothership` | package exists; output absolute |
+| 130 | `go build -o /tmp/spaxel-mothership ./cmd/mothership` | same | same |
+| 138 | `TEST_DATA=$(mktemp -d)` | same | absolute path |
+| 146 | `/tmp/spaxel-mothership &` | `/tmp/spaxel-src/mothership` | the server's CWD; `SPAXEL_DATA_DIR` and `SPAXEL_BIND_ADDR` are absolute/explicit so data placement does not follow it |
+| 204 | `cd /tmp/spaxel-src/mothership` | already there (explicit no-op) | base for all seven `go test` runs |
+| 205, 215, 225, 235, 245, 255, 265 | `go test -v -timeout 2m ./test/acceptance/... -run <TEST>` | `/tmp/spaxel-src/mothership` | `…/mothership/test/acceptance/...` → **exists** (the correct spelling, unlike `go-test` line 79) |
+
+**`docker-e2e`** — `golang:1.25-alpine`, deadline 900s, one volumeMount
+
+The step's only mount is `docker-sock` (emptyDir) at `/var/run`, shared with
+the `dind` sidecar so the CLI reaches the sidecar daemon at
+`/var/run/docker.sock`. It shapes the Docker socket path only — no repo, no
+workspace, nothing that moves a path base. The repo arrives by clone into the
+container's writable layer, not by mount.
+
+| line | command | CWD at that point | resolves to |
+|---|---|---|---|
+| 333 | `git clone … /tmp/spaxel-src` | `/go` | absolute target |
+| 340 | `cd /tmp/spaxel-src/mothership` | — | CWD base |
+| 341 | `go build -o /tmp/spaxel-sim ./cmd/sim` | `/tmp/spaxel-src/mothership` | package exists; output absolute |
+| 346 | `cd /tmp/spaxel-src` | — | **final base; no further `cd` for the rest of the step** |
+| 347 | `docker build -t spaxel-e2e:test .` | `/tmp/spaxel-src` | build context = repo **root**, so the root `Dockerfile` |
+| 352–481 | `docker run/stop/start/rm/logs`, `curl` | `/tmp/spaxel-src` | CWD-independent |
+| 431 | `/tmp/spaxel-sim … > /tmp/sim.log &` | `/tmp/spaxel-src` | binary and log both absolute; CWD-independent |
+
+### Where a `run.sh` reference would have to live
+
+`tests/e2e/run.sh` exists only as `/tmp/spaxel-src/tests/e2e/run.sh`. It is
+addressable by a relative path from exactly one base in this template —
+`docker-e2e`'s final base `/tmp/spaxel-src` — and from no base in the other two
+steps, which both sit in `…/mothership`, where `tests/e2e/` does not exist.
+`mothership/tests/e2e/` still holds only Go test files and no `.sh`
+(re-verified 2026-09-04), so the "non-existent" cell for
+`mothership/tests/e2e/run.sh` above still stands. Nothing invokes the root
+harness either way.
+
+### Image change since the audit above (path-neutral)
+
+`64e3e540` (2026-08-29) moved `go-test` and `acceptance-tests` from
+`golang:1.25-bookworm` to `golang:1.23-bookworm`. `WorkingDir` is `/go` in
+every tag this template has used, so **no path base moved**. Flagged as
+out-of-scope but adjacent: `mothership/go.mod` declares `go 1.25.0` while those
+two steps now run a 1.23 toolchain, which under the default `GOTOOLCHAIN=auto`
+has `go` fetch a 1.25 toolchain at build time — a CWD-independent failure mode
+that deserves its own bead if a step starts failing on toolchain download.
