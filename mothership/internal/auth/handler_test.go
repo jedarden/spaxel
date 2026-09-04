@@ -1039,3 +1039,145 @@ func TestDemoModeMiddleware(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleStatusDemoMode(t *testing.T) {
+	tests := []struct {
+		name              string
+		demoMode          bool
+		configurePin      bool
+		wantPinConfigured bool
+	}{
+		{"demo mode off, no pin", false, false, false},
+		{"demo mode off, pin set", false, true, true},
+		{"demo mode on, no pin", true, false, false},
+		{"demo mode on, pin set", true, true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close() //nolint:errcheck
+
+			h, err := NewHandler(Config{DB: db, DemoMode: tt.demoMode})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer h.Close() //nolint:errcheck
+
+			if tt.configurePin {
+				req := httptest.NewRequest("POST", "/api/auth/setup", strings.NewReader(`{"pin": "1234"}`))
+				req.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+				h.handleSetup(w, req)
+				if w.Code != http.StatusOK {
+					t.Fatalf("PIN setup failed with status %d", w.Code)
+				}
+			}
+
+			req := httptest.NewRequest("GET", "/api/auth/status", nil)
+			w := httptest.NewRecorder()
+			h.handleStatus(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("Expected status 200, got %d", w.Code)
+			}
+
+			var resp map[string]bool
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil { //nolint:errcheck
+				t.Fatal(err)
+			}
+
+			if resp["demo_mode"] != tt.demoMode {
+				t.Errorf("demo_mode = %v, want %v", resp["demo_mode"], tt.demoMode)
+			}
+			if resp["pin_configured"] != tt.wantPinConfigured {
+				t.Errorf("pin_configured = %v, want %v", resp["pin_configured"], tt.wantPinConfigured)
+			}
+		})
+	}
+}
+
+// TestMiddlewareDemoModePINBypass pins the dashboard PIN-bypass behavior: with
+// a PIN configured, demo mode admits unauthenticated page, API and websocket
+// requests, and the same requests stay locked out when demo mode is off.
+func TestMiddlewareDemoModePINBypass(t *testing.T) {
+	tests := []struct {
+		name       string
+		demoMode   bool
+		path       string
+		wantStatus int
+		wantNext   bool
+	}{
+		{"demo mode admits dashboard page", true, "/", http.StatusOK, true},
+		{"demo mode admits api", true, "/api/nodes", http.StatusOK, true},
+		{"demo mode admits websocket", true, "/ws/", http.StatusOK, true},
+		{"no demo mode blocks page with login", false, "/", http.StatusOK, false},
+		{"no demo mode returns 401 for api", false, "/api/nodes", http.StatusUnauthorized, false},
+		{"no demo mode returns 401 for websocket", false, "/ws/", http.StatusUnauthorized, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close() //nolint:errcheck
+
+			h, err := NewHandler(Config{DB: db, DemoMode: tt.demoMode})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer h.Close() //nolint:errcheck
+
+			// Configure a PIN so the normal authenticated gate is armed.
+			req := httptest.NewRequest("POST", "/api/auth/setup", strings.NewReader(`{"pin": "1234"}`))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			h.handleSetup(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("PIN setup failed with status %d", w.Code)
+			}
+
+			var called bool
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusOK)
+			})
+
+			handler := h.Middleware(next)
+			req = httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("%s (demoMode=%v) status = %d, want %d", tt.path, tt.demoMode, rec.Code, tt.wantStatus)
+			}
+			if called != tt.wantNext {
+				t.Errorf("%s (demoMode=%v) downstream handler called = %v, want %v", tt.path, tt.demoMode, called, tt.wantNext)
+			}
+
+			if tt.demoMode {
+				return
+			}
+
+			// Locked-out responses must never be the real dashboard.
+			if strings.HasPrefix(tt.path, "/api/") || strings.HasPrefix(tt.path, "/ws/") {
+				var body map[string]string
+				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+					t.Fatalf("401 body is not valid JSON: %v", err)
+				}
+				if body["error"] == "" {
+					t.Error("401 body has empty error field")
+				}
+				return
+			}
+			if body := rec.Body.String(); body != loginPage {
+				t.Error("page request while locked out did not receive the login page")
+			}
+		})
+	}
+}

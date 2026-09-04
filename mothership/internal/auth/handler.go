@@ -200,8 +200,8 @@ func (h *Handler) RegisterRoutes(r interface{}) {
 	router.Post("/api/auth/change-pin", h.RequireAuth(h.handleChangePIN))
 }
 
-// handleStatus returns whether a PIN is configured.
-// No authentication required.
+// handleStatus returns whether a PIN is configured and whether the
+// server is running in demo mode. No authentication required.
 func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	var pinBcrypt sql.NullString
 	err := h.db.QueryRow("SELECT pin_bcrypt FROM auth WHERE id = 1").Scan(&pinBcrypt)
@@ -214,6 +214,7 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{ //nolint:errcheck // HTTP response
 		"pin_configured": pinBcrypt.Valid,
+		"demo_mode":      h.demoMode,
 	})
 }
 
