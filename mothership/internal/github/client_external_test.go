@@ -35,6 +35,7 @@ var (
 	_ string                                  = github.GitHubAPIBaseURL
 	_ string                                  = github.KanikoRepoOwner
 	_ string                                  = github.KanikoRepoName
+	_ string                                  = github.DefaultUserAgent
 	_ func(*http.Response) bool               = github.IsRateLimited
 	_ func(*http.Response) (int, int64, bool) = github.GetRateLimitInfo
 )
@@ -48,6 +49,7 @@ func TestExportedMethodSurface(t *testing.T) {
 
 	for name, fn := range map[string]func(){
 		"Client.Ping":        func() { _ = client.Ping(context.Background()) },
+		"Client.Get":         func() { _, _ = client.Get(context.Background(), "") },
 		"Client.GetReleases": func() { _, _ = client.GetReleases(context.Background(), "", "") },
 		"Client.GetLatestRelease": func() {
 			_, _ = client.GetLatestRelease(context.Background(), "", "")
@@ -78,16 +80,19 @@ func TestExportedMethodSurface(t *testing.T) {
 func TestExternalConsumerRoundTrip(t *testing.T) {
 	const token = "external-test-token"
 
-	var gotAuth, gotAccept []string
+	var gotAuth, gotAccept, gotUserAgent []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Values("Authorization")
 		gotAccept = r.Header.Values("Accept")
+		gotUserAgent = r.Header.Values("User-Agent")
 
 		switch r.URL.Path {
 		case "/repos/GoogleContainerTools/kaniko/releases":
 			_ = json.NewEncoder(w).Encode([]map[string]any{{"tag_name": "v1.0.0"}})
 		case "/repos/GoogleContainerTools/kaniko/releases/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1.0.0"})
+		case "/rate_limit":
+			_ = json.NewEncoder(w).Encode(map[string]any{"rate": map[string]any{"remaining": 4999}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -108,14 +113,22 @@ func TestExternalConsumerRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLatestRelease: %v", err)
 	}
+	// The generic path-based request reaches the same stub through the same
+	// client, so the default headers it documents must hold there too.
+	if _, err := client.Get(context.Background(), "/rate_limit"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
 
-	// Both requests were authenticated and versioned the way the package
+	// Every request was authenticated and identified the way the package
 	// documents, so a consumer building on the same headers sees them too.
 	if len(gotAuth) != 1 || gotAuth[0] != "Bearer "+token {
 		t.Errorf("Authorization = %v, want exactly ['Bearer <token>']", gotAuth)
 	}
 	if len(gotAccept) != 1 || gotAccept[0] != "application/vnd.github+json" {
 		t.Errorf("Accept = %v, want exactly ['application/vnd.github+json']", gotAccept)
+	}
+	if len(gotUserAgent) != 1 || gotUserAgent[0] != github.DefaultUserAgent {
+		t.Errorf("User-Agent = %v, want exactly [%q]", gotUserAgent, github.DefaultUserAgent)
 	}
 
 	var release struct {

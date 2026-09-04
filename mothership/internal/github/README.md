@@ -5,11 +5,15 @@ Package `github` provides a GitHub API client for fetching Kaniko releases and o
 ## Features
 
 - **GitHub API v3 REST API client** with configurable base URL
+- **Generic `Get`** for any API path, returning the raw response body
 - **Token-based authentication** (Bearer token) for higher rate limits
 - **Unauthenticated access** support (subject to 60 requests/hour rate limit)
 - **Kaniko releases fetching** from `GoogleContainerTools/kaniko`
 - **GitHub API ping** for connectivity testing
 - **Rate limit detection** and information extraction
+- **Default headers on every request** — a `User-Agent` identifying the
+  application (`DefaultUserAgent`), which GitHub's API policy requires and
+  without which requests are rejected
 
 ## Usage
 
@@ -34,6 +38,24 @@ client := github.NewClientFromConfig(cfg)
 constructor to use once settings come from the environment or the settings
 store. A trailing slash on `BaseURL` is dropped, and a zero `Timeout` falls
 back to the 30-second default.
+
+### Fetch Any API Path
+
+`Get` is the generic request method the typed helpers are built on. The path is
+appended to the configured base URL verbatim (include the leading slash), and
+the raw response body comes back as `[]byte`:
+
+```go
+ctx := context.Background()
+body, err := client.Get(ctx, "/rate_limit")
+if err != nil {
+    log.Printf("rate limit lookup failed: %v", err)
+}
+```
+
+A non-200 response is an error carrying the status code and the body the API
+returned. Transport failures — connection refused, DNS lookup failure, the
+configured timeout — surface as the wrapped error from the HTTP client.
 
 ### Ping GitHub API
 
@@ -115,10 +137,10 @@ reachable:
 |------|----------------------|
 | Types | `Client`, `GitHubConfig` |
 | Constructors | `NewClient`, `NewClientFromConfig`, `NewGitHubConfig` |
-| `Client` methods | `Config`, `Clone`, `String`, `Ping`, `GetReleases`, `GetLatestRelease`, `SetRepoOwner`, `SetRepoName`, `SetBaseURL`, `GetRepoOwner`, `GetRepoName`, `GetBaseURL` |
+| `Client` methods | `Config`, `Clone`, `String`, `Get`, `Ping`, `GetReleases`, `GetLatestRelease`, `SetRepoOwner`, `SetRepoName`, `SetBaseURL`, `GetRepoOwner`, `GetRepoName`, `GetBaseURL` |
 | `GitHubConfig` methods | `Clone`, `WithToken`, `String` |
 | Package functions | `IsRateLimited`, `GetRateLimitInfo` |
-| Constants | `GitHubAPIBaseURL`, `KanikoRepoOwner`, `KanikoRepoName`, `DefaultGitHubTimeout` |
+| Constants | `GitHubAPIBaseURL`, `KanikoRepoOwner`, `KanikoRepoName`, `DefaultUserAgent`, `DefaultGitHubTimeout` |
 
 `Client`'s own fields stay unexported — configuration is read back through
 `Config()`, which returns a copy, so a caller cannot mutate a live client.
