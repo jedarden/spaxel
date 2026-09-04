@@ -126,17 +126,51 @@ func isTimeoutErr(err error) bool {
 
 const (
 	// Default test configuration
-	DefaultMothershipURL = "ws://localhost:8080/ws/node"
-	DefaultAPIURL        = "http://localhost:8080"
-	HealthTimeout        = 15 * time.Second
-	SimDuration          = 30 * time.Second
-	TestTimeout          = 90 * time.Second
+	HealthTimeout = 15 * time.Second
+	SimDuration   = 30 * time.Second
+	TestTimeout   = 90 * time.Second
 )
+
+// e2eBindAddr picks the loopback address the test mothership subprocess binds.
+//
+// The suite used to pin 127.0.0.1:8080, so on any host where something already
+// listens on 8080 (ex44 runs telegram-relay on *:8080) the subprocess died with
+// "bind: address already in use" and every test in the package failed on
+// "health check failed: context deadline exceeded" before a single assertion
+// ran. Each harness now claims a free ephemeral port instead; every URL and the
+// SPAXEL_BIND_ADDR handed to the subprocess derive from it, so the whole test
+// stays off the host's own services. Set SPAXEL_E2E_BIND_ADDR to pin a
+// deterministic address for debugging.
+//
+// The listener is closed before the subprocess starts, leaving a small window
+// in which the kernel could hand the port elsewhere; the health check that
+// follows reports a lost race loudly instead of hanging on it.
+func e2eBindAddr(t *testing.T) string {
+	t.Helper()
+
+	if override := os.Getenv("SPAXEL_E2E_BIND_ADDR"); override != "" {
+		if _, _, err := net.SplitHostPort(override); err != nil {
+			t.Fatalf("SPAXEL_E2E_BIND_ADDR=%s is not host:port: %v", override, err)
+		}
+		return override
+	}
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to reserve an ephemeral port for the test mothership: %v", err)
+	}
+	addr := l.Addr().String()
+	if err := l.Close(); err != nil {
+		t.Fatalf("failed to release reserved port %s: %v", addr, err)
+	}
+	return addr
+}
 
 // TestHarness manages the e2e test lifecycle
 type TestHarness struct {
 	MothershipCmd *exec.Cmd
 	SimulatorCmd  *exec.Cmd
+	BindAddr      string // loopback host:port the mothership subprocess binds
 	MothershipURL string
 	APIURL        string
 	t             *testing.T
@@ -145,9 +179,11 @@ type TestHarness struct {
 
 // NewTestHarness creates a new test harness
 func NewTestHarness(t *testing.T) *TestHarness {
+	bindAddr := e2eBindAddr(t)
 	return &TestHarness{
-		MothershipURL: DefaultMothershipURL,
-		APIURL:        DefaultAPIURL,
+		BindAddr:      bindAddr,
+		MothershipURL: "ws://" + bindAddr + "/ws/node",
+		APIURL:        "http://" + bindAddr,
 		t:             t,
 	}
 }
@@ -175,7 +211,7 @@ func (h *TestHarness) Start(ctx context.Context) error {
 	// Start mothership
 	h.MothershipCmd = exec.CommandContext(ctx, "/tmp/spaxel-mothership-test")
 	h.MothershipCmd.Env = append(os.Environ(),
-		"SPAXEL_BIND_ADDR=127.0.0.1:8080",
+		"SPAXEL_BIND_ADDR="+h.BindAddr,
 		"SPAXEL_DATA_DIR="+tmpDir,
 		"SPAXEL_LOG_LEVEL=info",
 		"TZ=UTC",
@@ -493,7 +529,7 @@ func AssertDetectionEventsObserved(events *EventsResponse) error {
 
 // WatchDashboardWS connects to the dashboard WebSocket and returns blob counts
 func (h *TestHarness) WatchDashboardWS(ctx context.Context, duration time.Duration) ([]int, error) {
-	wsURL := "ws://localhost:8080/ws/dashboard"
+	wsURL := strings.Replace(h.APIURL, "http://", "ws://", 1) + "/ws/dashboard"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to dashboard WS: %w", err)
@@ -1313,7 +1349,7 @@ func IO_2_IdempotentRestart_Upgrade(t *testing.T) {
 	h1 := NewTestHarness(t)
 	h1.MothershipCmd = exec.CommandContext(ctx, "/tmp/spaxel-mothership-test")
 	h1.MothershipCmd.Env = append(os.Environ(),
-		"SPAXEL_BIND_ADDR=127.0.0.1:8080",
+		"SPAXEL_BIND_ADDR="+h1.BindAddr,
 		"SPAXEL_DATA_DIR="+tmpDir,
 		"SPAXEL_LOG_LEVEL=info",
 		"TZ=UTC",
@@ -1373,7 +1409,7 @@ func IO_2_IdempotentRestart_Upgrade(t *testing.T) {
 	h2 := NewTestHarness(t)
 	h2.MothershipCmd = exec.CommandContext(ctx, "/tmp/spaxel-mothership-test")
 	h2.MothershipCmd.Env = append(os.Environ(),
-		"SPAXEL_BIND_ADDR=127.0.0.1:8080",
+		"SPAXEL_BIND_ADDR="+h2.BindAddr,
 		"SPAXEL_DATA_DIR="+tmpDir, // Same data directory
 		"SPAXEL_LOG_LEVEL=info",
 		"TZ=UTC",
