@@ -1,8 +1,10 @@
 # GDOP struct inventory — `mothership/internal/simulator/gdop.go`
 
-**Bead:** spaxel-48d1a2ab (split-child of the terminally-closed GDOP verification
-parent spaxel-23a4ea1c)
-**Verified at:** HEAD `1602ccd2`, 2026-09-04
+**Beads:** spaxel-48d1a2ab (structs, below) · spaxel-3917976b (imports and
+struct→dependency mapping, section at the end)
+**Verified at:** HEAD `1602ccd2` (structs), re-verified at HEAD `4b77b984`
+(imports) — the file is byte-identical between the two (still 1110 lines,
+same line numbers)
 **File:** `mothership/internal/simulator/gdop.go` — **1110 lines**, tracked,
 last modified by `69785e2b` (docs: function signature documentation)
 
@@ -166,6 +168,71 @@ inventory.
 |---|---|---|
 | `theta` | `float64` | Link angle in radians |
 | `link` | `Link` | The contributing link |
+
+## Imports and struct→dependency mapping
+
+*(spaxel-3917976b — verified at HEAD `4b77b984`, file unchanged from the
+struct pass above: 1110 lines, identical line numbers.)*
+
+### All import statements — :3-7, exactly three, all standard library
+
+```go
+import (
+	"fmt"
+	"math"
+	mrand "math/rand"
+)
+```
+
+| # | Import | Alias | Line | Call sites | Purpose |
+|---|---|---|---|---|---|
+| 1 | `fmt` | — | :4 | 4 (`:733`, `:734`, `:745`, `:746`) | `Sprintf` for synthetic node IDs and display names |
+| 2 | `math` | — | :5 | 42 on 36 lines | `IsInf`×15, `Inf`×12, `Ceil`×5, `Min`×3, `Max`×3, `Sqrt`/`Sin`/`Cos`/`Atan2`×1 each |
+| 3 | `math/rand` | `mrand` | :6 | 6 (`:740`-`:742`, `:770`-`:772`) | `Float64` for random node placement jitter |
+
+**No external (third-party) dependency.** `mothership/go.mod` requires nothing
+for this file. The only third-party import anywhere in the `simulator` package
+is `github.com/go-chi/chi/v5` in `handler.go` — a different file, and it never
+touches a struct defined here.
+
+**`mrand` alias rationale:** stylistic, package-internal, not forced. No local
+identifier named `rand` exists in gdop.go. The alias matches `accuracy.go`,
+the package's other `math/rand` importer, while `engine.go`, `node.go`,
+`walker.go` and `physics.go` use the bare form — the package's convention is
+internally mixed, so the alias is a per-file choice, not a collision avoider.
+
+### Mapping of structs to their dependencies: none via imports
+
+**No struct field in this file depends on any imported package.** Every field
+of all six structs is a Go builtin:
+
+| Struct | Field types | Imports used |
+|---|---|---|
+| `GDOPResult` :10 | `float64`, `string`, `[]string` | **none** |
+| `GridConfig` :18 | `float64` | **none** |
+| `GDOPComputer` :26 | `[]Link`, `GridConfig`, `int` | **none** — `Link` is same-package (`types.go:6`), `GridConfig` is same-file |
+| `linkAngle` :299 (local) | `float64`, `Link` | **none** — `Link` same-package |
+| `GDOPColor` :508 | `uint8` | **none** |
+| `GDOPHeatmapData` :531 | `int`, `float64`, `[]float64`, `[]string`, `[][]uint8` | **none** |
+
+The file's real dependency on other types is **intra-package, not
+import-based**: `Link` (`internal/simulator/types.go:6`) and `Point`
+(`internal/simulator/space.go:51`) are what the structs and their methods
+reach for. Both resolve within `package simulator`; neither appears in the
+import block. The 14 functions that *do* use `fmt`/`math`/`mrand` are methods
+and package-level helpers (`ComputeAll`, `ComputeAt`, `computeGDOPAngular`,
+`GDOPColorMap`, `OptimizeNodePositions`, …) — not a single struct definition
+sits among them.
+
+### Deliberate non-dependency: `encoding/json`
+
+`GDOPHeatmapData` is the only struct carrying JSON tags (all nine fields),
+yet `encoding/json` is **not imported** here. Struct tags are plain string
+literals consumed by the marshaler at the serialization site, not by the file
+declaring the type — serialization for this package happens in `handler.go`,
+which imports `encoding/json`. An import here would be unused and rejected at
+compile time (`imported and not used`), so its absence is correct, not an
+oversight.
 
 ## Scope notes
 
