@@ -906,27 +906,41 @@ node count recorded above.
 
 #### Sim-binary trap — why a naive reproduction gets 0 nodes
 
-The repo has **two** `cmd/sim` source trees; only the repo-root one connects under
-the strict window:
+> **2026-09-04 update:** the repo-root `cmd/sim` tree described below has been
+> **deleted** — it was the stale copy all along, and the in-module
+> `mothership/cmd/sim/` is the single canonical simulator. Its URL handling was
+> fixed long ago (`getHTTPBaseURL` at `cmd/sim/main.go:1447` strips the `/ws`
+> path, so provisioning POSTs to the right `/api/provision` root), it carries a
+> unit-test suite (`go test ./cmd/sim/` from `mothership/`), and it is what every
+> build path already compiled: spaxel-build, spaxel-e2e, the tracked
+> `acceptance-test-hang-workflow.yml`, `tests/e2e/run.sh` (docker `-w /src` over
+> the mothership dir) and `scripts/run-sim-ble-fixture.sh` all run
+> `go build ./cmd/sim` with the mothership module as the working directory.
+> `go build ./cmd/sim` from the repo root now fails — resolve it as
+> `cd mothership && go build -o /tmp/spaxel-sim ./cmd/sim`. The narrative below
+> is preserved as history and no longer reflects the tree.
 
-- **`cmd/sim/` (repo root — go.work module `github.com/spaxel/sim`)** — the canonical,
-  current sim. `apiBaseFromMothership` drops the WS path, so provisioning POSTs to
-  `http://localhost:8080/api/provision` (200) and nodes connect on real tokens.
-  **This is the one to build** (`go build -o /tmp/spaxel-sim ./cmd/sim` from the repo
-  root).
-- **`mothership/cmd/sim/` (in-module — part of the mothership module)** — a stale copy. Its `apiBaseFromMothership` does NOT drop the
-  path, so it POSTs to `http://localhost:8080/ws/node/api/provision` → **404**;
-  provisioning fails, it falls back to a token the strict-window validator rejects
-  (`[WARN] Node ... rejected: invalid_token`), and `/api/nodes` returns `[]`.
+Historical (superseded): the repo then had **two** `cmd/sim` source trees, and at
+the time only the repo-root one connected under the strict window:
 
-So the older instruction `cd mothership && go build -o /tmp/spaxel-sim ./cmd/sim`
+- **`cmd/sim/` (repo root — go.work module `github.com/spaxel/sim`)** — then the
+  working sim. `apiBaseFromMothership` dropped the WS path, so provisioning POSTed to
+  `http://localhost:8080/api/provision` (200) and nodes connected on real tokens.
+- **`mothership/cmd/sim/` (in-module — part of the mothership module)** — at that
+  time a stale copy whose `apiBaseFromMothership` did NOT drop the
+  path, so it POSTed to `http://localhost:8080/ws/node/api/provision` → **404**;
+  provisioning failed, it fell back to a token the strict-window validator rejected
+  (`[WARN] Node ... rejected: invalid_token`), and `/api/nodes` returned `[]`.
+
+At the time, the instruction `cd mothership && go build -o /tmp/spaxel-sim ./cmd/sim`
 (quoted in the "Run against the healthy mothership" block above and inherited from
-bf-3hji/bf-4ads8) now builds the STALE in-module sim and reproduces the 0-node
-failure. Build the repo-root `cmd/sim` instead. The `tests/e2e` harness has the same
-mismatch: `TestHarness.RunSimulator`/`moduleRoot()` resolve `./cmd/sim` to
-`mothership/cmd/sim`, so the e2e suite is RED at HEAD under the strict window
+bf-3hji/bf-4ads8) built the then-stale in-module sim and reproduced the 0-node
+failure. That divergence is what the 2026-09-04 consolidation above resolved: the
+in-module sim was fixed and the repo-root copy deleted. The `tests/e2e` harness had the same
+mismatch: `TestHarness.RunSimulator`/`moduleRoot()` resolved `./cmd/sim` to
+`mothership/cmd/sim`, so the e2e suite was RED under the strict window
 (`TestSimulatorConnection`, `TestConcurrentNodes`, `TestFullE2EIntegration`,
-`TestIO6HardGate_WalkerProducesTrackedBlob` all observe 0 online nodes; `go vet ./...`
+`TestIO6HardGate_WalkerProducesTrackedBlob` all observed 0 online nodes; `go vet ./...`
 is clean and all non-e2e unit tests pass). `TestConcurrentNodes` additionally uses
 `SimulateNode`, which dials with no token at all and is rejected. These are
 pre-existing (introduced by the in-flight sim migration, not by this bead) and belong
