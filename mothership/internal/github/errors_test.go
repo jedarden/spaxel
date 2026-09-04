@@ -92,14 +92,17 @@ func TestAPIErrorMessage(t *testing.T) {
 // kind, instead of matching message text.
 func TestAPIErrorClassification(t *testing.T) {
 	tests := []struct {
-		name          string
-		err           *APIError
-		wantNotFound  bool
-		wantRateLimit bool
-		wantTemporary bool
+		name             string
+		err              *APIError
+		wantNotFound     bool
+		wantRateLimit    bool
+		wantUnauthorized bool
+		wantTemporary    bool
 	}{
 		{name: "404 is not found", err: &APIError{Kind: ErrorKindHTTP, StatusCode: http.StatusNotFound},
 			wantNotFound: true},
+		{name: "401 is unauthorized and not temporary", err: &APIError{Kind: ErrorKindHTTP, StatusCode: http.StatusUnauthorized},
+			wantUnauthorized: true},
 		{name: "403 without exhausted quota is not rate limited", err: &APIError{Kind: ErrorKindHTTP, StatusCode: http.StatusForbidden}},
 		{name: "exhausted quota is rate limited and temporary",
 			err:           &APIError{Kind: ErrorKindRateLimit, StatusCode: http.StatusForbidden, RateLimit: RateLimit{Limit: 60}},
@@ -111,7 +114,6 @@ func TestAPIErrorClassification(t *testing.T) {
 			wantTemporary: true},
 		{name: "429 is temporary", err: &APIError{Kind: ErrorKindHTTP, StatusCode: http.StatusTooManyRequests},
 			wantTemporary: true},
-		{name: "4xx is not temporary", err: &APIError{Kind: ErrorKindHTTP, StatusCode: http.StatusUnauthorized}},
 	}
 
 	for _, tt := range tests {
@@ -122,10 +124,52 @@ func TestAPIErrorClassification(t *testing.T) {
 			if got := tt.err.IsRateLimited(); got != tt.wantRateLimit {
 				t.Errorf("IsRateLimited() = %v, want %v", got, tt.wantRateLimit)
 			}
+			if got := tt.err.IsUnauthorized(); got != tt.wantUnauthorized {
+				t.Errorf("IsUnauthorized() = %v, want %v", got, tt.wantUnauthorized)
+			}
 			if got := tt.err.Temporary(); got != tt.wantTemporary {
 				t.Errorf("Temporary() = %v, want %v", got, tt.wantTemporary)
 			}
 		})
+	}
+}
+
+// TestGetJSONUnauthorizedIsGraceful drives a rejected credential through a
+// real request: the failure is an *APIError a caller can classify as
+// unauthorized, it is not retriable, and it reports GitHub's own message
+// without echoing the token that was sent.
+func TestGetJSONUnauthorizedIsGraceful(t *testing.T) {
+	const token = "secret-token-value"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"Bad credentials","documentation_url":"https://docs.github.com/rest"}`))
+	}))
+	defer srv.Close()
+
+	client := NewClientFromConfig(GitHubConfig{BaseURL: srv.URL, Token: token, Timeout: time.Second})
+	_, err := client.GetReleases(context.Background(), "o", "r")
+	if err == nil {
+		t.Fatal("GetReleases returned nil error, want an *APIError for the rejected credential")
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("GetReleases error type = %T, want *APIError", err)
+	}
+	if !apiErr.IsUnauthorized() {
+		t.Errorf("IsUnauthorized() = false, want true (err = %v)", err)
+	}
+	if apiErr.Temporary() {
+		t.Error("Temporary() = true for a rejected credential, want false: retrying cannot fix the token")
+	}
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusUnauthorized)
+	}
+	if apiErr.Message != "Bad credentials" {
+		t.Errorf("Message = %q, want %q", apiErr.Message, "Bad credentials")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Errorf("error %q echoes the configured token, want the credential redacted", err)
 	}
 }
 

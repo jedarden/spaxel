@@ -128,6 +128,19 @@ environment:
 3. For private repositories, add appropriate scopes
 4. Set the token as `SPAXEL_GITHUB_TOKEN`
 
+### Token Refresh
+
+Not applicable: the client authenticates with a static personal access token
+read once at start-up, and GitHub provides no API to refresh a PAT — it stays
+valid until it expires or is revoked, and rotating it means deploying a new
+`SPAXEL_GITHUB_TOKEN` value (in Kubernetes, an ExternalSecret refresh plus a
+pod restart). No refresh flow is built in, and none is needed while the
+credential is a PAT. A rejected token is not retried: it surfaces as a
+non-temporary `*APIError` (`IsUnauthorized`), so a caller's retry loop stops
+instead of spinning on a credential that cannot recover on its own.
+GitHub App installation tokens, which do expire on their own, are a different
+authentication mode this client does not implement.
+
 ## Rate Limits
 
 - **Unauthenticated**: 60 requests per hour
@@ -160,7 +173,7 @@ reachable:
 | Constructors | `NewClient`, `NewClientFromConfig`, `NewGitHubConfig` |
 | `Client` methods | `Config`, `Clone`, `String`, `Get`, `Ping`, `GetReleases`, `GetLatestRelease`, `SetRepoOwner`, `SetRepoName`, `SetBaseURL`, `GetRepoOwner`, `GetRepoName`, `GetBaseURL` |
 | `GitHubConfig` methods | `Clone`, `WithToken`, `String` |
-| `APIError` methods | `Error`, `Unwrap`, `IsNotFound`, `IsRateLimited`, `Temporary` |
+| `APIError` methods | `Error`, `Unwrap`, `IsNotFound`, `IsUnauthorized`, `IsRateLimited`, `Temporary` |
 | `RateLimit` methods | `Exhausted`, `ResetsAt` |
 | Package functions | `IsRateLimited`, `GetRateLimitInfo` |
 | Constants | `GitHubAPIBaseURL`, `KanikoRepoOwner`, `KanikoRepoName`, `DefaultUserAgent`, `DefaultGitHubTimeout`, `ErrorKindHTTP`, `ErrorKindRateLimit`, `ErrorKindParse`, `ErrorKindTransport` |
@@ -217,6 +230,8 @@ if errors.As(err, &apiErr) {
     switch {
     case apiErr.IsNotFound():
         // no such repository, or no releases
+    case apiErr.IsUnauthorized():
+        // the token was rejected — stop and replace it, retrying cannot help
     case apiErr.IsRateLimited():
         // back off until apiErr.RateLimit.ResetsAt()
     case apiErr.Temporary():
@@ -224,6 +239,13 @@ if errors.As(err, &apiErr) {
     }
 }
 ```
+
+A rejected credential answers 401 with GitHub's `Bad credentials` message.
+`IsUnauthorized()` classifies it and `Temporary()` is false for it, so a
+caller that retries transient failures will not spin on an expired token. The
+error text carries the status and GitHub's message but never the token value,
+and neither does `Client.String()`. `Ping` deliberately treats a 401 as
+"API reachable, credential invalid" and returns nil.
 
 The error carries the method, the API path (never the base URL, so a
 configured token or host is not echoed into logs), the status code, GitHub's
