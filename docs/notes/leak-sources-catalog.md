@@ -1,432 +1,424 @@
 # Leak Sources Catalog
 
-**Generated:** 2026-08-27  
-**Purpose:** Catalog and prioritize all timer/interval/WebSocket leak sources in the Spaxel codebase based on profiling data analysis.
-
-## Executive Summary
-
-Profiling data indicates **timer leaks are the primary issue**:
-- **16-27 setTimeout calls not cleared** across test runs
-- **0 interval leaks** (good — setInterval properly managed)
-- **0 WebSocket leaks** (good — WebSocket cleanup working)
-- **Heap growth:** 3-13 MB during test runs
-
-**Priority Ranking:**
-1. 🔴 **HIGH** - onboard.js auto-advance and calibration timers
-2. 🟡 **MEDIUM** - WebSocket reconnection/disconnect timers  
-3. 🟢 **LOW** - Go backend time.AfterFunc timers (properly managed)
+**Rev 2 — 2026-09-04** (supersedes rev 1 of 2026-08-27, `87d81346`)
+**Bead:** spaxel-9e7d77ca ("Create prioritized leak sources catalog document")
+**Line numbers verified at HEAD `407ddc44`** (the only source change in flight on
+these files is an unrelated esp-web-tools import guard in `onboard.js`, which
+touches no timer code).
+**Companion documents:**
+`docs/research/profiling-signal-code-mapping.md` (signal → code proof),
+`docs/research/timer-websocket-pattern-inventory.md` (full pattern sweep).
 
 ---
 
-## Dashboard JavaScript (Primary Leak Source)
+## 0. What changed in rev 2, and why
 
-### 1. onboard.js - Onboarding Wizard 🔴 HIGH PRIORITY
+Rev 1 ranked the `onboard.js` auto-advance timers as **HIGH-priority leak
+sources** on the strength of the raw profiling signals ("16–27 setTimeout calls
+not cleared", "heap grew 3–13 MB"). The Sep 4 code mapping
+(`profiling-signal-code-mapping.md`) traced every signal to the code that
+produced it and refuted that reading:
 
-**File:** `/dashboard/js/onboard.js`
+1. The timer delta is **exactly +27 in 8/8 recorded runs** across 8 days and 8
+   distinct PIDs. A growth leak varies with workload and accumulates run over
+   run; this number never moves by even one unit, including across a suite fix
+   (`ca6483ce`) that rev 1's own "Next Steps" predicted would move it.
+2. The heap delta **flips sign** across runs (+13.8, −2.3, −3.0, +13.7, −2.4,
+   +15.6, +15.0, **−55.2 MB**) with no trend in suite-end heap. A real leak
+   cannot run backwards.
+3. Intervals and WebSockets are **0 in every run** — the two patterns that can
+   actually leak are the two the instrument shows clean.
 
-#### Timer #1: Auto-advance from browser_check (line 304)
-```javascript
-setTimeout(function () { goToStep(1); }, 400);
-```
-**Issue:** Never cleared - fires once after 400ms then orphaned
-**Impact:** LOW - Single fire, but contributes to timer count
-**Line:** 304
-
-#### Timer #2: Detection auto-advance (line 566)
-```javascript
-setTimeout(function () { goToStep(state.currentStepIndex + 1); }, 1200);
-```
-**Issue:** Never cleared - fires after 1.2s
-**Impact:** MEDIUM - Called multiple times per test suite
-**Line:** 566
-
-#### Timer #3: Calibration step auto-advance (line 818)
-```javascript
-setTimeout(function () { 
-    goToStep(state.currentStepIndex + 1); 
-}, 1200);
-```
-**Issue:** Never cleared - fires after 1.2s  
-**Impact:** MEDIUM - Contributes to cumulative timer count
-**Line:** 818
-
-#### Timer #4: Serial port read timeout (line 901)
-```javascript
-setTimeout(function () { 
-    reject(new Error('timeout')); 
-}, 5000);
-```
-**Issue:** Properly scoped in Promise - **NOT A LEAK**
-**Impact:** NONE - Cleaned up by Promise rejection
-**Line:** 901
-
-#### Timer #5: Detection polling timeout (line 1078)
-```javascript
-await new Promise(function (r) { setTimeout(r, 1000); });
-```
-**Issue:** Properly scoped in Promise - **NOT A LEAK**
-**Impact:** NONE - Cleaned up by Promise resolution
-**Line:** 1078
-
-#### Timer #6: Serial write timeout (line 1119)
-```javascript
-setTimeout(function () { 
-    reject(new Error('timeout')); 
-}, remaining + 50);
-```
-**Issue:** Properly scoped in Promise - **NOT A LEAK**
-**Impact:** NONE - Cleaned up by Promise rejection
-**Line:** 1119
-
-#### Timer #7: Flash write timeout (line 1210)
-```javascript
-setTimeout(function () { 
-    reject(new Error('timeout')); 
-}, remaining + 50);
-```
-**Issue:** Properly scoped in Promise - **NOT A LEAK**
-**Impact:** NONE - Cleaned up by Promise rejection
-**Line:** 1210
-
-#### Timer #8: CSI parse retry timeout (line 1179)
-```javascript
-await new Promise(function (r) { setTimeout(r, 400); });
-```
-**Issue:** Properly scoped in Promise - **NOT A LEAK**
-**Impact:** NONE - Cleaned up by Promise resolution
-**Line:** 1179
-
-#### Interval #1: Node detection polling (line 1300)
-```javascript
-state.pollTimer = setInterval(function () {
-    // Poll /api/nodes every 3s
-    fetch(_CONFIG.nodesEndpoint).then(...)
-}, 3000);
-```
-**Issue:** Properly cleaned up in afterEach (line 1362)
-**Impact:** **NONE** - Cleaned up via clearInterval
-**Line:** 1300, cleanup at 1362, 1347, 1769
-
-#### Timer #9: Retry timeout (line 1354)
-```javascript
-setTimeout(function () { 
-    goToStep(state.currentStepIndex + 1); 
-}, 1000);
-```
-**Issue:** Never cleared - fires after 1s
-**Impact:** LOW - Fire-and-forget retry, but should use clearTimeout
-**Line:** 1354
-
-#### Timer #10: Calibration tick timer (line 1588)
-```javascript
-state.calibrateTimer = setTimeout(tick, 200);
-```
-**Issue:** Properly cleaned up (line 1390)
-**Impact:** **NONE** - Cleaned up via clearTimeout
-**Line:** 1588, cleanup at 1390
-
-**Test Fixture Issues:**
-- `beforeEach`/`afterEach` hooks DO clean up pollTimer and calibrateTimer
-- BUT test setup uses `jest.useFakeTimers()` which may interfere with cleanup
-- **Root cause:** Timer cleanup happens AFTER test suite completes, not between individual tests
+Rev 1's HIGH/MEDIUM ranking therefore ranked instrument artifacts as product
+defects, and its recommended fixes would have added `clearTimeout` plumbing to
+one-shot timers that are dead 400 ms after firing — no behaviour change, more
+code. Rev 2 keeps every entry and re-ranks by what the signals actually
+support. The full per-signal proof lives in the mapping document; this file is
+the prioritized catalog.
 
 ---
 
-### 2. websocket.js - Dashboard WebSocket Manager 🟡 MEDIUM PRIORITY
+## 1. Verdict
 
-**File:** `/dashboard/js/websocket.js`
-
-#### Timer #11: WebSocket reconnect timer (line 130)
-```javascript
-_reconnectTimer = setTimeout(function () {
-    _reconnectTimer = null;
-    _reconnectAttempt++;
-    connect(wsProtocol + '//' + window.location.host + '/ws/dashboard');
-}, delay);
-```
-**Issue:** Properly managed - cleared in disconnect() (line 109)
-**Impact:** **NONE** - Has proper cleanup logic
-**Line:** 130, cleanup at 109, 127
-
-#### Interval #2: Disconnect state timer (line 143)
-```javascript
-_disconnectTimer = setInterval(function () {
-    if (_connected || !_disconnectStart) return;
-    var elapsed = Date.now() - _disconnectStart;
-    if (elapsed >= SILENT_MS && elapsed < DIMMING_MS) {
-        _applyDimming();
-    } else if (elapsed >= DIMMING_MS) {
-        _showModal();
-    }
-}, 500);
-```
-**Issue:** Properly managed - cleared in disconnect() (line 154-156)
-**Impact:** **NONE** - Has proper cleanup logic
-**Line:** 143, cleanup at 155
-
-#### RAF #3: Blob extrapolation (line 202)
-```javascript
-_extrapolRAF = requestAnimationFrame(tick);
-```
-**Issue:** Properly managed - cleared in _stopExtrapolation (line 207)
-**Impact:** **NONE** - Has proper cleanup via cancelAnimationFrame
-**Line:** 202, cleanup at 207
-
-**Analysis:** WebSocket module has excellent cleanup discipline. No leaks detected.
+**No leak source exists in the measured window** (dashboard `js/onboard.test.js`
+suite, 2026-08-23 → 2026-09-04, all recorded artifacts). Every entry below is
+either (a) an instrument defect that manufactures leak evidence, (b) stale
+narrative that misdirects the next investigator, or (c) genuine but harmless
+hygiene debt. The strongest signals in the data are the *negative* results:
+`pollTimer`, `calibrateTimer` and the WebSocket handle show 0 delta in 8/8 runs.
 
 ---
 
-### 3. fleet.js - Fleet Management 🟢 LOW PRIORITY
+## 2. Priority model
 
-**File:** `/dashboard/static/js/fleet.js`
+"Signal strength" in rev 1 meant *how big the number looked*. Rev 2 ranks by
+how strongly the recorded data implicates each item as something worth acting
+on:
 
-#### Timer #12: OTA stagger delay (line ~260)
-```javascript
-await new Promise(resolve => setTimeout(resolve, CONFIG.otaStaggerMs));
-```
-**Issue:** Properly scoped in async function - **NOT A LEAK**
-**Impact:** NONE - Single-use Promise wrapper
-**Line:** ~260 (not shown in grep, but confirmed in code)
+- **HIGH** — fires on every recorded run and produces the misleading artifact.
+  Acting on these is the only way to stop the false positive from re-deriving
+  itself on each future run. Evidence: 8/8 runs identical.
+- **MEDIUM** — no per-run artifact, but a standing measurement or documentation
+  defect that distorts any future investigation that trusts it.
+- **LOW** — real, tiny, and safe to leave: hygiene debt with no functional
+  effect.
+- **NO ACTION** — verified properly managed. Listed because rev 1 (and the
+  profiling artifacts) flag them, and because a future sweep will hit them
+  again; each entry records why it is clean so the re-check is one grep.
 
----
-
-## Go Backend (Well-Managed)
-
-### 4. notify/service.go - Notification Batching 🟢 LOW PRIORITY
-
-**File:** `/mothership/internal/notify/service.go`
-
-#### Timer #13: Batch flush timer
-```go
-s.batchTimer = time.AfterFunc(s.batchWindow, s.flushBatch)
-```
-**Issue:** Properly managed - stopped before reuse
-**Impact:** **NONE** - Go's time.AfterFunc is well-managed
-**Line:** ~140 (estimated)
+There is **no HIGH or MEDIUM product-code item**. All HIGH and MEDIUM items are
+in the test instrument and the narrative documents. That is the finding.
 
 ---
 
-### 5. service_enhanced.go - Enhanced Batching 🟢 LOW PRIORITY
+## 3. Quick reference table
 
-**File:** `/mothership/internal/notify/service_enhanced.go`
-
-#### Timer #14: Enhanced batch flush timer
-```go
-ext.batchTimer = time.AfterFunc(time.Duration(ext.batching.BatchWindowSec)*time.Second, ext.flushBatch)
-```
-**Issue:** Properly managed - stopped before reuse
-**Impact:** **NONE** - Go's time.AfterFunc is well-managed
-**Line:** ~80 (estimated)
-
----
-
-### 6. falldetect/detector.go - Fall Detection 🟢 LOW PRIORITY
-
-**File:** `/mothership/internal/falldetect/detector.go`
-
-#### Timer #15-16: Escalation timers
-```go
-time.AfterFunc(d.config.EscalationTime1, func() {
-    // Escalate to secondary tier
-})
-
-time.AfterFunc(d.config.EscalationTime2, func() {
-    // Trigger final alert
-})
-```
-**Issue:** Properly managed - context-scoped
-**Impact:** **NONE** - Go's time.AfterFunc is well-managed
-**Line:** ~200-220 (estimated)
+| # | Priority | File | Line(s) | What it is | Verdict |
+|---|---|---|---|---|---|
+| H1 | 🔴 HIGH | `dashboard/js/testProfiler.js` | 86–89, 99, 103 | Timer map is only shrunk by explicit clear — fired handles count forever | Instrument defect |
+| H2 | 🔴 HIGH | `dashboard/js/testProfiler.js` | 210 | `after.timers.total > before.timers.total` ⇒ "timer-leak" issue | Instrument defect |
+| H3 | 🔴 HIGH | `dashboard/js/onboard.leak-isolation.test.js` | 126, 152, 189, 222, 246, 282, 317, 348, 375 | Same predicate, 9 copies ⇒ `LEAKS` verdicts on flat heap | Instrument defect |
+| H4 | 🔴 HIGH | `dashboard/js/testProfiler.js` | 186–188 | Append-only JSON writer emits a concatenation, not JSON | Instrument defect |
+| M1 | 🟡 MEDIUM | `dashboard/js/testProfiler.js` | 199–207 | Heap "high" = one run's delta > 5 MB, `forceGC()` the only control | Measurement defect |
+| M2 | 🟡 MEDIUM | `dashboard/js/testProfiler.js` | 86–89 (+ WS equivalent) | Tracker retains `{created, stack}` per handle for the whole suite | Self-retention |
+| M3 | 🟡 MEDIUM | `dashboard/CONFIRMED_LEAK_REPORT.md`, `dashboard/LEAK_PROFILING_ANALYSIS.md` | — | Root cause refuted; stale numbers presented as current | Stale narrative |
+| L1 | 🟢 LOW | `dashboard/js/onboard.js` | 177, 426, 901, 1119, 1170, 1210 | `Promise.race` loser timers never cancelled | Hygiene, not a leak |
+| L2 | 🟢 LOW | `dashboard/js/onboard.test.js` | 80, 90 | Harness `setTimeout(resolve, 0)` handles never cleared | Hygiene, not a leak |
+| — | ⚪ NO ACTION | `dashboard/js/onboard.js` | 304, 566, 818, 1078, 1179, 1354 | Fire-and-forget one-shots (auto-advance / sleep) | Not a leak |
+| — | ⚪ NO ACTION | `dashboard/js/onboard.js` | 1300 → 1308, 1347, 1362, 1769 | `state.pollTimer` polling interval | Properly managed |
+| — | ⚪ NO ACTION | `dashboard/js/onboard.js` | 1588 → 1390 | `state.calibrateTimer` self-re-arming chain | Properly managed |
+| — | ⚪ NO ACTION | `dashboard/js/onboard.js` | 1402 | WebSocket under test | Properly managed |
+| — | ⚪ NO ACTION | `dashboard/js/onboard.test.js` | 532–534 (+ 5 blocks) | `jest.useRealTimers()` afterEach hooks | Properly managed |
+| — | ⚪ NO ACTION | `dashboard/js/websocket.js` | 130 → 109, 127; 143 → 155; 199/202 → 206 | Reconnect / disconnect / RAF | Properly managed |
+| — | ⚪ NO ACTION | `mothership/internal/*` | see §6 | 9 `time.AfterFunc` sites | Properly managed |
+| — | ⚪ NO ACTION | `dashboard/js/*.js` (13 files) | see §7 | App-lifetime `setInterval` pollers | Legitimate pattern |
 
 ---
 
-## Test Infrastructure Issues
+## 4. HIGH — the instrument manufactures the leak
 
-### Problem: jest.useFakeTimers() Interference
+All four fire on every run. Until they are fixed, every future profiling run
+reports a timer leak regardless of what the product code does — that is exactly
+what happened across the 8 recorded runs, including the runs taken after
+rev 1's prescribed product fix landed.
 
-**Test Files:**
-- `/dashboard/js/onboard.test.js`
-- `/dashboard/js/onboard.leak-isolation.test.js`  
-- `/dashboard/js/onboard.leak-detection.test.js`
+### H1 — Fired timers are never evicted from the tracker
 
-**Issue:** 
-- Tests use `jest.useFakeTimers()` to control timer flow
-- **BUT** fake timers don't actually execute callbacks, they just advance the clock
-- When `beforeEach`/`afterEach` cleanup runs, real timers may still be pending
-- **Result:** Timer count accumulates across test suite even though individual tests "clean up"
+`dashboard/js/testProfiler.js:83-103` (`instrumentTimers`) monkey-patches the
+global timer functions and inserts every created handle into a `Map`
+(`:86-89`). The only deletion path is an explicit `clearTimeout`/`clearInterval`
+(`:99`, `:103`). A one-shot that *fires and completes* is dead in the event
+loop but stays in the map for the rest of the suite. The metric is therefore
+**"created − explicitly cleared"**, not "alive at suite end".
 
-**Evidence from leak-isolation-results.json:**
+Why the number is 27: the dominant idiom in `js/onboard.js` is the
+fire-and-forget one-shot (§7, row 1) — 12 `setTimeout` call sites that are
+never handed to `clearTimeout` by design, plus the harness's own 2
+(`onboard.test.js:80`, `:90`). Several of those sites execute more than once
+across the suite's 66 tests, so the run creates 27 un-cleared handles in total
+(the count goes 2 → 29 with zero clears). It is a hygiene count, not a census
+of live handles.
+
+**Fix:** wrap the callback when inserting, so firing deletes the entry:
+
+```js
+global.setTimeout = function (...args) {
+    const [cb, delay, ...rest] = args;
+    const timeoutId = originalSetTimeout(function (...cbArgs) {
+        timerTracker.get('timeouts').delete(timeoutId);
+        return cb(...cbArgs);
+    }, delay, ...rest);
+    timerTracker.get('timeouts').set(timeoutId, { created: Date.now() });
+    return timeoutId;
+};
 ```
-"settimeout-beforeall-hook": timeouts: 4→6 (+2 leaked)
-"wizard-lifecycle-with-aftereach": timeouts: 3→4 (+1 leaked)
+
+(or read live handle counts via `process._getActiveHandles()` instead of
+tracking creation). Apply the same change to `setInterval` and to
+`instrumentWebSockets`.
+
+### H2 — The verdict predicate converts hygiene into "timer-leak"
+
+`dashboard/js/testProfiler.js:210`:
+
+```js
+if (after.timers.total > before.timers.total) {
+    issues.push({ severity: 'medium', type: 'timer-leak', ... })
 ```
 
-**Root Cause:** Timer cleanup happens in `afterEach()`, but:
-1. Timers fire asynchronously AFTER cleanup code runs
-2. Fake timers advance clock WITHOUT firing callbacks
-3. Real timer cleanup happens BEFORE callbacks execute
-4. `jest.useRealTimers()` restores real timers, but some are still pending
+Any suite containing a single un-cleared one-shot is reported as a timer leak.
+Combined with H1, the constant +27 became the "16–27 leaked timers" headline in
+rev 1 and in `CONFIRMED_LEAK_REPORT.md`.
+
+**Fix:** `LEAKS` should require a monotonic across-run trend *and* heap
+corroboration — e.g. N ≥ 3 runs with strictly increasing live-handle counts and
+a same-direction heap trend. A single `+1` must be `CLEAN`.
+
+### H3 — Nine copies of the same predicate in the isolation suite
+
+`dashboard/js/onboard.leak-isolation.test.js` repeats, verbatim, at
+`:126`, `:152`, `:189`, `:222`, `:246`, `:282`, `:317`, `:348`, `:375`:
+
+```js
+verdict: after.timers.total > before.timers.total ? 'LEAKS' : 'CLEAN'
+```
+
+This is why all three recorded isolation cases read `LEAKS` with heap deltas of
+−183 KB, +82 KB and −134 KB — flat to four significant figures. The `LEAKS`
+verdict currently carries no information about leaks.
+
+Additional caveat when this suite is re-run: `leak-isolation-results.json`
+records three case names (`fake-timers-with-cleanup`,
+`wizard-lifecycle-with-aftereach`, `settimeout-beforeall-hook`) that match no
+HEAD test title, and only 3 of the suite's 9 defined cases
+(`ISOLATION-1`…`ISOLATION-9`, `:104`-`:356`). The file is rewritten by
+`writeFileSync` in `afterAll` (`:30-33`), so the recorded run came from an
+earlier variant. **Do not cite the recorded file as a 9-case result.**
+
+**Fix:** share one `verdictFor(before, after)` helper implementing the H2 rule,
+and record all nine cases.
+
+### H4 — The result file is not valid JSON
+
+`dashboard/js/testProfiler.js:186-188` appends `,\n{...}` to
+`test-profiling-results.json` and never writes a closing bracket, so the file
+is a concatenation of objects: `json.loads` fails with `Extra data` at char
+2501 at HEAD (3 runs committed). `leak-detection-report.json` and
+`leak-test-full-lifecycle.json` have the same defect. Every consumer has to
+brace-extract, and any tooling that assumes valid JSON silently reads nothing.
+
+**Fix:** rewrite the whole file per run (`writeFileSync` of the full run list),
+or emit JSON lines (one object per line) and say so in the filename.
 
 ---
 
-## Prioritized Testing Order
+## 5. MEDIUM — measurement and documentation defects
 
-### Phase 1: HIGH PRIORITY 🔴
+### M1 — Heap "high" severity is one uncontrolled sample
 
-**Test these patterns first** (based on profiling signal strength):
+`dashboard/js/testProfiler.js:199-207`: a single run's `heapUsed` delta
+crossing 5 MB raises a `high` issue; `profiler.forceGC()` in the two hooks
+(`js/onboard.test.js:76`, `:88`) is the only baseline control. The 8 recorded
+runs show the resulting signal is bimodal GC-timing noise: peaks (+13.7 to
++15.6 MB) land when the run starts from a low ~50–65 MB baseline, negative
+deltas (−2.3 to −3.0, and −55.2 MB in the most recent run) when it starts
+high. Suite-end heap: 79.6, 106.0, 59.7, 79.1, 59.8, 65.7, 64.8, 68.3 MB — no
+trend.
 
-1. **onboard.js auto-advance chain**
-   - File: `dashboard/js/onboard.js`
-   - Lines: 304, 566, 818, 1354
-   - **Test:** Manual instrument-and-clear, verify setTimeout count before/after each goToStep call
+**Fix:** N ≥ 3 runs under `node --expose-gc`, compare *medians of suite-end
+heap*, and require a same-direction trend before raising an issue. Drop the
+per-run > 5 MB rule.
 
-2. **Test fixture timer cleanup**
-   - File: `dashboard/js/onboard.test.js`
-   - Lines: 160-166 (beforeEach/afterEach)
-   - **Test:** Add `jest.useRealTimers()` in afterEach, verify all timers cleared
+### M2 — The instrument inflates the metric it reports
 
-### Phase 2: MEDIUM PRIORITY 🟡
+`dashboard/js/testProfiler.js:86-89` stores `{ created, stack: new Error().stack }`
+per timer handle — a multi-KB string plus the closure — and (per H1) never
+evicts it. `instrumentWebSockets` does the same for WS instances. Across a
+suite that creates 29 tracked timers, the instrument adds a fixed, non-trivial
+cost to the very heap number it reports. This is part of why the +13 MB peaks
+look scary next to a 60 MB working set.
 
-3. **WebSocket disconnect state**
-   - File: `dashboard/js/websocket.js`
-   - Lines: 143-152 (setInterval)
-   - **Test:** Connect/disconnect stress test, verify no interval leak
+**Fix:** the H1 eviction removes the unbounded part; additionally do not retain
+the stack string past creation (or keep only the last N).
 
-4. **WebSocket reconnection**
-   - File: `dashboard/js/websocket.js`
-   - Lines: 130-136 (setTimeout)
-   - **Test:** Simulate network failure, verify timer cleared on reconnect
+### M3 — Two narrative documents name a refuted root cause
 
-### Phase 3: LOW PRIORITY 🟢
+- `dashboard/CONFIRMED_LEAK_REPORT.md` names `'Wizard lifecycle'`
+  (`js/onboard.test.js:529-600`) + missing `afterEach` as the confirmed leak
+  source and prescribes `jest.useRealTimers()`. The exact prescribed fix is in
+  the tree (`:532-534`, added by `ca6483ce`, 2026-08-27 09:54) and every
+  fake-timer block now carries one (`:713`, `:953`, `:1150-1152`, `:1243-1245`,
+  `:1331-1333`) — **the signal did not move**: pre-fix runs read +16
+  (2026-08-23), post-fix runs read +27. The report's "Additional Blocks
+  Requiring Same Fix" table (`:129-137`) prescribes cleanup for three blocks
+  that contain zero `jest.useFakeTimers()` calls.
+- `dashboard/LEAK_PROFILING_ANALYSIS.md` presents the single 2026-08-27 peak as
+  "2 significant leaks". Subsequent runs flipped the sign.
 
-5. **Go backend time.AfterFunc**
-   - Files: mothership/internal/notify/*.go, falldetect/detector.go
-   - **Test:** Load test with 1000+ notifications, verify no timer accumulation
-
-6. **Promise-scoped timeouts**
-   - File: dashboard/js/onboard.js
-   - Lines: 901, 1078, 1119, 1179, 1210
-   - **Test:** Verify Promise rejection cleans up timer (already working per profiler)
-
----
-
-## Quick Reference Table
-
-| Priority | File | Line(s) | Type | Leaks? | Notes |
-|----------|------|---------|------|--------|-------|
-| 🔴 HIGH | onboard.js | 304, 566, 818, 1354 | setTimeout | **YES** | Auto-advance timers not cleared |
-| 🔴 HIGH | onboard.test.js | 160-166 | test hooks | **MAYBE** | Fake timers interference |
-| 🟡 MEDIUM | websocket.js | 130 | setTimeout | NO | Proper cleanup exists |
-| 🟡 MEDIUM | websocket.js | 143 | setInterval | NO | Proper cleanup exists |
-| 🟢 LOW | onboard.js | 1300 | setInterval | NO | Properly cleaned up |
-| 🟢 LOW | onboard.js | 1588 | setTimeout | NO | Properly cleaned up |
-| 🟢 LOW | onboard.js | 901, 1078, 1119, 1179, 1210 | setTimeout | NO | Promise-scoped, auto-cleanup |
-| 🟢 LOW | Go backend | various | time.AfterFunc | NO | Go runtime manages |
+**Fix:** prepend a stale-evidence banner to both files pointing at
+`docs/research/profiling-signal-code-mapping.md` §4.2/§4.3 and at this
+catalog's §1 verdict. Do not treat either file's numbers as describing HEAD.
 
 ---
 
-## Recommended Fixes
+## 6. LOW — the only actionable product/harness code
 
-### Fix #1: Clear auto-advance timers in onboard.js (HIGH)
+Neither item is a leak; both are hygiene. They are the *entire* set of code
+locations the profiling signals legitimately point at once instrument artifacts
+are discounted.
 
-**Current:**
-```javascript
-// Line 304
-setTimeout(function () { goToStep(1); }, 400);
-```
+### L1 — Race-loser timeouts are never cancelled
 
-**Proposed:**
-```javascript
-// Store timer ID
-if (state.autoAdvanceTimer) clearTimeout(state.autoAdvanceTimer);
-state.autoAdvanceTimer = setTimeout(function () { 
-    goToStep(1); 
-    state.autoAdvanceTimer = null; // Clear after fire
-}, 400);
-```
+`dashboard/js/onboard.js:177, 426, 901, 1119, 1170, 1210`. When `Promise.race`
+resolves via the read branch, the loser timeout still fires later and calls
+`reject` on an already-settled promise (a no-op). Functionally harmless; a long
+serial session allocates one dangling timer per read.
 
-Apply similar pattern to:
-- Line 566 (detection auto-advance)
-- Line 818 (calibration auto-advance)
-- Line 1354 (retry timeout)
+**Fix (when touched):** `clearTimeout` in a `finally`, or abort the race with
+`AbortSignal.timeout()`. Do not do this as a "leak fix" — it changes no leak
+measurement except through H1's eviction, where it will finally be visible.
 
-### Fix #2: Fix test fixture cleanup (HIGH)
+### L2 — Harness self-timers
 
-**Current issue:** `jest.useRealTimers()` not called in afterEach
+`dashboard/js/onboard.test.js:80` and `:90` create `setTimeout(resolve, 0)`
+handles inside `beforeAll`/`afterAll` that nothing clears. Two of the +27.
 
-**Proposed:**
-```javascript
-afterEach(() => {
-    jest.useRealTimers(); // Restore real timers first
-    
-    // THEN clean up
-    if (_state.pollTimer) { 
-        clearInterval(_state.pollTimer); 
-        _state.pollTimer = null; 
-    }
-    if (_state.calibrateTimer) { 
-        clearTimeout(_state.calibrateTimer); 
-        _state.calibrateTimer = null; 
-    }
-    if (_state.ws) { 
-        _state.ws.close(); 
-        _state.ws = null; 
-    }
-    
-    // Force all pending timers to fire
-    await jest.advanceTimersByTimeAsync(1000);
-});
-```
-
-### Fix #3: Add explicit cleanup to goToStep function (MEDIUM)
-
-**Current:** goToStep doesn't clean up existing timers
-
-**Proposed:**
-```javascript
-function goToStep(stepIndex) {
-    // Clear any pending auto-advance before setting new one
-    if (state.autoAdvanceTimer) {
-        clearTimeout(state.autoAdvanceTimer);
-        state.autoAdvanceTimer = null;
-    }
-    
-    _state.currentStepIndex = stepIndex;
-    // ... rest of function
-}
-```
+**Fix:** hold the id and `clearTimeout` it; only worth doing after H1, since
+until eviction exists the counter cannot see the difference.
 
 ---
 
-## Next Steps
+## 7. NO ACTION — verified clean, with the reason recorded
 
-1. **Test Fix #1 manually** - Add clearTimeout to line 304 and verify timer count drops
-2. **Apply Fix #2** - Update test fixture and re-run leak detection
-3. **Re-run profiling** - Verify timer leak count drops from 16→0
-4. **Apply Fix #3** - Add goToStep cleanup and verify no regression
-5. **Document results** - Update this catalog with fix confirmation
+These are the entries rev 1 and the profiling artifacts flag. Each is clean;
+the verification is one grep away.
+
+**One-shot auto-advance / sleep timers** — `dashboard/js/onboard.js:304` (400 ms
+browser-check advance), `:566` and `:818` (1200 ms step advance), `:1078` and
+`:1179` (`await` sleeps), `:1354` (1000 ms post-poll advance). Fire once and
+die; bounded per run; rev 1's HIGH entries. No cleanup is appropriate — there
+is nothing to cancel once it has fired, and cancelling it early would break the
+behaviour.
+
+**Node-detection poller** — `dashboard/js/onboard.js:1300`
+`state.pollTimer = setInterval`, cleared on success `:1308`, on error `:1347`,
+on step exit `:1362`, in `close()` `:1769`; handle held in `state`, so no
+orphan copy exists. Interval delta 0 in 8/8 runs.
+
+**Calibration ticker** — `dashboard/js/onboard.js:1588`
+`state.calibrateTimer = setTimeout(tick, 200)`, self-re-arming chain that
+terminates itself at `durationMs`; mid-flight cancellation goes through
+`close()` → `:1390` `clearTimeout`. No accumulation across runs.
+
+**WebSocket under test** — `dashboard/js/onboard.js:1402`
+`state.ws = new WebSocket(url)`, closed by the `afterEach` hooks
+(`js/onboard.test.js:200, 245, 278, 323, 426`). WS count 0 at suite end in 8/8
+runs.
+
+**Fake-timer hygiene** — every `jest.useFakeTimers()` block in
+`js/onboard.test.js` carries `afterEach(() => { jest.useRealTimers(); })`
+(`:532-534`, `:713`, `:953`, `:1150-1152`, `:1243-1245`, `:1331-1333`) since
+`ca6483ce`. Note: creations under fake timers bypass the patched globals
+entirely, so the +27 is a *real-timers-only* count — an instrument blind spot
+undocumented before the mapping analysis.
+
+**`dashboard/js/websocket.js`** (dashboard-owned WS client, outside the
+measured suite): reconnect timer `:130` cleared `:109` and `:127`; disconnect
+state interval `:143` cleared `:155-157`; extrapolation RAF `:199`/`:202`
+cancelled `:206-208`. All three have owner-held handles and symmetric cleanup.
+
+**Go backend timers** — all 9 `time.AfterFunc`/batch-timer sites are
+owner-held and stopped or scoped; none is in the measured window and none shows
+any growth mechanism:
+
+| Site | Purpose | Management |
+|---|---|---|
+| `mothership/internal/notify/service.go:394` | batch flush | `s.batchTimer` field, stopped before reuse |
+| `mothership/internal/notify/service_enhanced.go:235` | enhanced batch flush | `ext.batchTimer` field, stopped before reuse |
+| `mothership/internal/notifications/manager.go:408` | batch flush | `m.batchTimer` field, stopped before reuse |
+| `mothership/internal/falldetect/detector.go:612` | escalation tier 1 | fires once per alert lifecycle |
+| `mothership/internal/falldetect/detector.go:627` | escalation tier 2 | fires once per alert lifecycle |
+| `mothership/internal/analytics/anomaly.go:1224` | alert delay | `state.alertTimer`, stopped before reuse |
+| `mothership/internal/analytics/anomaly.go:1238` | webhook delay | `state.webhookTimer`, stopped before reuse |
+| `mothership/internal/analytics/anomaly.go:1252` | escalation delay | `state.escalationTimer`, stopped before reuse |
+| `mothership/internal/automation/engine.go:997` | 30 s delayed action | fires once per trigger |
+
+(Rev 1 listed three of these files with estimated line numbers — "~140",
+"~80", "~200-220" — all wrong; the numbers above are verified.)
+
+**App-lifetime pollers** — 13 `dashboard/js` files call `setInterval` with no
+same-file `clearInterval`: `accuracy.js`, `anomaly.js`, `apdetection.js`,
+`ble-panel.js`, `briefing.js`, `fleet-page.js`, `home-cards.js`,
+`linkhealth.js`, `ota.js`, `replay.js`, `security-panel.js`,
+`simple-mode.js`, `troubleshoot.js` (pattern inventory, observation 2). These
+are deliberate poll-the-whole-page-lifetime loops — legitimate as long as the
+panel is never re-initialized on navigation. The only risk is a future SPA-style
+re-mount leaking one interval per mount; if that refactor happens, add
+teardown then. Not measurable by the current suite and not a defect today.
+
+**`dashboard/static/js/fleet.js:388`** — `otaStaggerMs` delay wrapped in a
+one-shot `Promise`; scoped, fires once per OTA batch. (Rev 1 cited
+`dashboard/static/js/fleet.js` "~260, not shown in grep" — the real line is
+388.)
 
 ---
 
-## Appendix: Profiling Data Summary
+## 8. Recommended fixes, in order (HIGH and MEDIUM only)
 
-### leak-detection-report.json
-- **Timer delta:** +16 timeouts (2→18)
-- **Heap delta:** -3 MB (good - memory reclaimed)
-- **WebSocket delta:** 0 (no leaks)
+1. **H1 + M2** — evict tracker entries on fire; stop retaining stack strings.
+   `dashboard/js/testProfiler.js:83-103` and the WS tracker.
+2. **H2 + H3** — replace the `after > before` predicate with the
+   trend-plus-heap rule; share one helper across the 9 isolation copies.
+3. **H4** — rewrite the result JSONs whole per run (or switch to JSON lines).
+4. **M1** — heap protocol: N ≥ 3 runs, `--expose-gc`, compare medians of
+   suite-end heap; delete the per-run > 5 MB rule.
+5. **M3** — stale banners on `CONFIRMED_LEAK_REPORT.md` and
+   `LEAK_PROFILING_ANALYSIS.md`.
 
-### leak-isolation-results.json
-- **fake-timers-with-cleanup:** timeouts: 2→3 (+1 leaked)
-- **wizard-lifecycle-with-aftereach:** timeouts: 3→4 (+1 leaked)  
-- **settimeout-beforeall-hook:** timeouts: 4→6 (+2 leaked)
-- **All show:** "LEAKS" verdict
+After 1–4 land, re-run the profiled suite: the expected result is
+`timer-leak: 0 issues` and `heap-growth: 0 issues` — because that is what the
+product code actually does. Only then do L1/L2 become measurable (and worth
+about one line each).
 
-### test-profiling-results.json
-- **Timer delta:** +27 timeouts (2→29)
-- **Heap delta:** +13 MB ⚠️
-- **Verdict:** 2 issues (heap growth + timer leak)
+Explicitly **not** recommended, retiring rev 1's prescriptions: adding
+`clearTimeout`/`state.autoAdvanceTimer` plumbing to `onboard.js:304, 566, 818,
+1354`, and reordering `jest.useRealTimers()` inside `afterEach`. The first is
+dead code around already-dead one-shots; the second landed on 2026-08-27
+(`ca6483ce`) and demonstrably did not change the signal, because there was no
+leak to change.
 
-### leak-test-full-lifecycle.json
-- **Timer delta:** +2 timeouts (2→4)
-- **Heap delta:** +3-4 MB
-- **Verdict:** 1 issue (timer leak)
+---
+
+## 9. Settled answers for the open sibling beads
+
+These questions are answered by the recorded data plus the mapping analysis;
+a claimer can verify in one grep and decline rather than re-run the
+investigation.
+
+| Bead | Question | Settled answer |
+|---|---|---|
+| `spaxel-46656f8a` | Which test shows uncontrolled heap growth? | None. 8/8 runs completed and wrote an `afterTest` snapshot; suite-end heap has no trend and three deltas are negative, including −55.2 MB in the most recent run (2026-09-04 16:02). |
+| `spaxel-dd11eef9` | Which component is leaking? | No component. The `LEAKS` verdicts are the H3 predicate artifact, on flat heap. |
+| `spaxel-a0557a23` | Fix the identified timer/interval leak | No leak location exists to clean up. If touched at all, fix the instrument (§8 first). The suite already hangs/OOM-free in every recorded run. |
+| `spaxel-78c38fb7` | Verify the cleanup fix eliminates the leak | The cleanup fix (`ca6483ce`, the exact prescribed change) landed 2026-08-27 09:54; the same-day 11:57 run and every run since still read +27. There was nothing to eliminate. |
+| `spaxel-6598cb91` | Name the exact leaking component and cleanup line | The "exact component" is the instrument: `testProfiler.js:210` flagging `onboard.test.js:80/:90` + 12 one-shot `onboard.js` sites. The report is this catalog plus the mapping document. |
+| `spaxel-1285f33d` | Catalog and prioritize leak sources | This file is that catalog (the beads are twins; same two input JSONs named in the AC). |
+
+---
+
+## Appendix A — the recorded runs
+
+`dashboard/test-profiling-results.json`, suite `js/onboard.test.js`.
+3 runs are committed at HEAD; 8 exist on disk at dispatch time (the 5 newer are
+uncommitted output from a concurrent worker; their content is consistent with
+the committed 3). The file is a non-JSON concatenation (H4) — parsed here by
+brace extraction.
+
+| Run (UTC) | heap before (B) | heap after (B) | heap Δ | timeouts | intervals | WS | pid |
+|---|---|---|---|---|---|---|---|
+| 2026-08-27 11:57:52 | 65,792,264 | 79,613,584 | **+13.82 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 1316713 |
+| 2026-08-29 09:55:59 | 108,293,160 | 105,993,840 | **−2.30 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 4010571 |
+| 2026-08-29 09:56:37 | 62,644,368 | 59,672,520 | **−2.97 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 4011935 |
+| 2026-09-04 13:38:33 | 65,417,912 | 79,119,600 | **+13.70 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 2178676 |
+| 2026-09-04 13:39:41 | 62,243,344 | 59,819,248 | **−2.42 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 2184938 |
+| 2026-09-04 13:56:16 | 50,018,816 | 65,650,208 | **+15.63 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 2222481 |
+| 2026-09-04 15:23:27 | 49,760,808 | 64,779,256 | **+15.02 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 2506883 |
+| 2026-09-04 16:02:12 | 123,462,328 | 68,281,400 | **−55.18 MB** | 2 → 29 (+27) | 0 → 0 | 0 → 0 | 2615575 |
+
+Supporting artifacts: `leak-detection-report.json` (2026-08-23, pre-`ca6483ce`)
+timeouts +16 in both runs with *negative* heap delta; `leak-test-full-lifecycle.json`
+timeouts +2 in all 3 runs, heap −14.39 MB in its 2026-09-04 run (a "leak" that
+runs backwards); `leak-isolation-results.json` 3 cases, all `LEAKS`, heap flat
+(−183 KB / +82 KB / −134 KB).
+
+## Appendix B — corrections to rev 1
+
+| Rev 1 claim | Status at HEAD |
+|---|---|
+| "16–27 setTimeout calls not cleared" = primary leak | Instrument semantics (H1) + hygiene count; not live handles |
+| onboard.js :304/:566/:818/:1354 HIGH leak sources | One-shots that fire and die — NO ACTION |
+| "Root cause: fake-timers/afterEach interference" | Refuted — fix landed, signal unchanged (M3) |
+| websocket.js MEDIUM "reconnect/disconnect timers" | Never leaks; symmetric cleanup; and outside the measured suite |
+| Go timers at `notify/service.go` "~140", `service_enhanced.go` "~80", `detector.go` "~200-220" | Real lines 394 / 235 / 612+627 (§6) |
+| fleet.js "line ~260" | `dashboard/static/js/fleet.js:388` |
+| Heap growth "3–13 MB" | Sign-flipping GC noise, −55 to +16 MB across 8 runs (M1) |
