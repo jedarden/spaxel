@@ -1,113 +1,79 @@
 # Spaxel Source Code Inventory
 
-**Generated:** 2026-08-29  
-**Total Source Files:** 789 files
+**Generated:** 2026-08-29; reconciled 2026-09-04 (spaxel-7737eea8 — this is the surviving
+copy; the duplicate root `SOURCE_CODE_INVENTORY.md` was deleted and its per-file purpose
+annotations folded in)  
+**Total Source Files:** 789 files (counts below are point-in-time; re-derive with
+`git ls-files` before relying on them)
 
 ## Summary Statistics
 
 | File Type | Count | Primary Location |
 |-----------|-------|------------------|
-| Go (.go) | 372 | mothership/, cmd/, test/ |
+| Go (.go) | 378 | mothership/ |
 | JavaScript (.js) | 97 | dashboard/ |
 | TypeScript (.ts) | 169 | dashboard/, firmware/build/ |
 | C source (.c) | 57 | firmware/main/, firmware/managed_components/ |
 | C headers (.h) | 37 | firmware/main/, firmware/managed_components/ |
-| Python (.py) | 19 | scripts/, dashboard/css/, firmware/managed_components/ |
+| Python (.py) | 4 project (+ vendored) | scripts/, dashboard/css/ |
 | HTML (.html) | 9 | dashboard/ |
 | CSS (.css) | 29 | dashboard/ |
-| Shell scripts (.sh) | 19 | scripts/, firmware/, tests/ |
+| Shell scripts (.sh) | 11 project (+ vendored) | scripts/, firmware/scripts/ |
 | YAML (.yml/.yaml) | 19 | Project root, firmware/ |
 
 ## Directory Structure Overview
 
 ```
 /home/coding/spaxel/
-├── mothership/          # Go backend service (356 .go files)
-│   ├── cmd/            # Main application entrypoints
-│   └── internal/      # Internal packages (35+ subsystems)
+├── mothership/          # Go backend service (the only Go module)
+│   ├── cmd/            # mothership/ (binary) + sim/ (spaxel-sim CLI)
+│   ├── internal/      # Internal packages (56 packages)
+│   ├── test/acceptance/  # Acceptance scenarios + IO install/upgrade tests
+│   └── tests/e2e/     # End-to-end Go tests
 ├── dashboard/          # Web frontend (97 .js, 169 .ts files)
-│   ├── js/            # JavaScript modules
+│   ├── js/            # JavaScript modules (+ co-located jest tests)
 │   ├── types/         # TypeScript type definitions
 │   ├── css/           # Stylesheets
-│   └── tests/         # Frontend tests
-├── firmware/          # ESP32-S3 firmware (57 .c, 37 .h files)
+│   └── tests/         # Playwright accessibility tests
+├── firmware/          # ESP32-S3 firmware (12 .c in main/, 9 host-test .c)
 │   ├── main/          # Main application code
-│   ├── test/          # Firmware tests
+│   ├── test/          # Firmware host tests (gcc harness)
 │   └── managed_components/  # ESP-IDF components
-├── cmd/               # Additional commands (simulator)
-├── test/              # Acceptance tests
 └── scripts/           # Utility scripts
 ```
 
 ## Detailed Inventory by Type
 
-### 1. Go Source Files (372 files)
+### 1. Go Source Files (378 files)
 
 #### Main Mothership Application (`mothership/`)
 
-**Command Entry Points** (16 files):
-- `cmd/mothership/main.go` - Main application entry
-- `cmd/mothership/dashboard_embed.go` - Dashboard embedding
-- `cmd/mothership/main_test.go` - Main tests
-- `cmd/mothership/mdns_binding.go` - mDNS binding
-- `cmd/mothership/migrate.go` - Database migrations
-- `cmd/mothership/firmware_test.go` - Firmware tests
-- `cmd/mothership/dashboard_static_test.go` - Dashboard static tests
-- `cmd/mothership/mdns_binding_test.go` - mDNS binding tests
-- `cmd/sim/main.go` - Simulator CLI
+**Command Entry Points** (`mothership/cmd/`):
+- `mothership/main.go` - Main application entry (startup phases, subsystem wiring)
+- `mothership/dashboard_embed.go` - Dashboard embedding (go:embed, `-tags=embed`)
+- `mothership/mdns_binding.go` - mDNS advertisement
+- `mothership/migrate.go` - Database migration registration
+- `sim/main.go` (+ `generator.go`, `walker.go`, `scenario.go`, `verify.go`) - Simulator CLI
 
-**Internal Packages** (356 files across 35+ subsystems):
+**Internal Packages** (`mothership/internal/`, 56 packages, 332 files):
 
-| Package | File Count | Purpose |
-|---------|-------------|---------|
-| analytics | 8 | Analytics and metrics |
-| api | 38 | REST API handlers |
-| auth | 3 | Authentication and session management |
-| automation | 3 | Spatial automation system |
-| ble | 6 | Bluetooth Low Energy handling |
-| briefing | 5 | Morning briefing generation |
-| config | 2 | Configuration management |
-| dashboard | 3 | Dashboard serving |
-| db | 4 | Database operations |
-| diagnostics | 2 | System diagnostics |
-| events | 5 | Event handling and logging |
-| explainability | 3 | Detection explainability |
-| falldetect | 2 | Fall detection algorithms |
-| fleet | 10 | Node fleet management |
-| floorplan | 2 | Floor plan handling |
-| fusion | 4 | Sensor fusion engine |
-| github | 2 | GitHub API integration |
-| guidedtroubleshoot | 3 | Guided troubleshooting system |
-| health | 2 | Health monitoring |
-| help | 2 | Help system |
-| ingestion | 8 | CSI data ingestion |
-| learning | 5 | Machine learning models |
-| loadshed | 2 | Load shedding under pressure |
-| localization | 9 | Position localization |
-| mqtt | 2 | MQTT client |
-| notifications | 4 | Notification system |
-| ntpserver | 2 | NTP server configuration |
-| ota | 5 | Over-the-air updates |
-| oui | 4 | OUI database lookup |
-| prediction | 6 | Presence prediction |
-| provisioning | 2 | Node provisioning |
-| recorder | 3 | CSI recording |
-| replay | 8 | Time-travel replay |
-| signal | 13 | Signal processing pipeline |
-| simulator | 12 | CSI simulator |
-| sleep | 10 | Sleep quality monitoring |
-| startup | 2 | Startup sequencing |
-| timeline | 2 | Activity timeline |
-| tracker | 5 | Blob tracking |
-| tracking | 3 | Tracking core |
-| volume | 3 | 3D volume detection |
-| webhook | 2 | Webhook handling |
-| zones | 4 | Zone management |
+| Domain | Packages |
+|---------|-------------|
+| Ingestion & signal | `ingestion`, `signal` (flat: phase/features/breathing/baseline/diurnal), `recorder`, `recording`, `replay`, `simulator` |
+| Localization & tracking | `fusion`, `localizer` (+`fusion/`), `localization`, `tracker`, `tracking`, `ble` |
+| Fleet & node lifecycle | `fleet`, `provisioning`, `ota`, `autoupdate`, `apdetector` |
+| Spaces, events & automation | `zones`, `floorplan`, `volume`, `automation`, `eventbus`, `events`, `timeline` |
+| Inference & monitoring | `analytics`, `prediction`, `learning`, `sleep`, `falldetect`, `health` |
+| API & persistence | `api`, `auth`, `config`, `db`, `dashboard` |
+| Notifications & integrations | `briefing`, `notify`, `notifications`, `render`, `webhook`, `mqtt`, `github`, `help`, `guidedtroubleshoot` |
+| Platform & operations | `startup`, `shutdown`, `doctor`, `diagnostics`, `explainability`, `loadshed`, `diskspace`, `logging`, `types`, `beads`, `ntpserver`, `oui` |
 
-**Test Files** (40+ files):
-- `mothership/test/acceptance/` - Acceptance tests (12 files)
-- `mothership/tests/e2e/` - End-to-end tests (3 files)
-- Unit tests throughout internal packages
+Per-file detail per package: `docs/research/go-backend-code-directories.md`.
+
+**Test Files**:
+- `mothership/test/acceptance/` - Acceptance tests (11 files, AS-1…AS-7 + IO install/upgrade)
+- `mothership/tests/e2e/` - End-to-end tests (4 files, incl. IO-6 gate)
+- Unit tests throughout internal packages (142 `*_test.go`)
 
 ### 2. JavaScript Files (97 files)
 
@@ -185,20 +151,22 @@
 
 #### ESP32 Firmware (`firmware/`)
 
-**Main Application** (9 files):
-- `main/main.c` - Main entry point
-- `main/ble.c` - BLE scanning
-- `main/csi.c` - CSI capture
-- `main/led.c` - LED control
-- `main/ntp.c` - NTP time sync
-- `main/nvs_migration.c` - NVS schema migration
-- `main/provision.c` - Provisioning handler
-- `main/transport.c` - Transport layer
-- `main/websocket.c` - WebSocket client
-- `main/wifi.c` - WiFi management
+**Main Application** (12 files):
+- `main/main.c` - Main entry point, startup sequencing
+- `main/wifi.c` - WiFi station, mDNS, captive portal
+- `main/csi.c` - CSI capture (promiscuous mode, callback, frame serialization)
+- `main/websocket.c` - WebSocket client (binary CSI up, JSON config down)
+- `main/transport.c` - Transport abstraction (UART0 + USB-Serial/JTAG)
+- `main/ble.c` - BLE passive scanning, advertisement parsing
+- `main/led.c` - LED control (identify, OTA progress)
+- `main/ntp.c` - NTP time sync for TX stagger slots
+- `main/nvs_migration.c` - NVS read/write + schema migration
+- `main/provision.c` - Serial provisioning handler
+- `main/safe_mode.c` - Safe-mode entry/recovery
+- `main/watchdog.c` - Task watchdog (esp_task_wdt)
 
-**Test Files** (8 files):
-- `test/test_*.c` - Unit tests
+**Test Files** (9 files):
+- `test/test_*.c` - Host-based gcc unit tests (`test_runner.c` harness)
 
 **Build System** (2 files):
 - `build/project_elf_src_esp32s3.c`
@@ -235,7 +203,7 @@
 **Test Headers** (1 file):
 - `test/test_runner.h`
 
-### 6. Python Files (19 files)
+### 6. Python Files (4 project files + vendored)
 
 #### Scripts and Utilities
 
@@ -243,8 +211,7 @@
 - `dashboard/css/_fix_html.py`
 - `dashboard/css/_tokenize.py`
 
-**Main Scripts** (3 files):
-- `fix_ble_handlers.py`
+**Main Scripts** (2 files):
 - `scripts/measure_csi_rate.py`
 - `scripts/provision_esp32.py`
 
@@ -289,12 +256,11 @@
 - `static/css/fleet-page.css`
 - `static/css/mobile.css`
 
-### 9. Shell Scripts (19 files)
+### 9. Shell Scripts (11 project files + vendored)
 
 #### Project Scripts
 
-**Main Scripts** (8 files):
-- `blob_observation.sh`
+**Simulator & Device Scripts** (`scripts/`, 8 files):
 - `scripts/flash-esp32s3.sh`
 - `scripts/run-sim-ble-fixture.sh`
 - `scripts/run-sim-ble-match.sh`
@@ -302,20 +268,15 @@
 - `scripts/run-sim-identity.sh`
 - `scripts/run-sim-local.sh`
 - `scripts/test-github-api.sh`
+- `scripts/walkthrough_monitor.sh`
 
 **Firmware Scripts** (3 files):
 - `firmware/scripts/generate-signing-key.sh`
 - `firmware/scripts/sign-firmware.sh`
 - `firmware/scripts/verify-console-config.sh`
 
-**Test Scripts** (3 files):
-- `test/acceptance/run_with_diagnostics.sh`
-- `tests/e2e/run.sh`
-- `window_test.sh`
-
-**Third-party** (5 files):
-- ESP WebSocket client examples
-- mDNS utilities
+**Third-party** (vendored, under `firmware/managed_components/` and `.beads/`):
+- ESP WebSocket client examples and mDNS utilities
 
 ### 10. YAML Files (19 files)
 
@@ -337,24 +298,24 @@
 
 ## Go Module Structure
 
-The project uses a Go workspace with 3 modules:
+The project uses a Go workspace with **one module**:
 
-1. **Main mothership**: `mothership/go.mod`
-2. **Simulator CLI**: `cmd/sim/go.mod`
-3. **Acceptance tests**: `test/acceptance/go.mod`
+1. **Main mothership**: `mothership/go.mod` — the simulator CLI
+   (`mothership/cmd/sim/`) and both test trees (`mothership/test/acceptance/`,
+   `mothership/tests/e2e/`) live inside it
 
 ## Architecture Summary
 
 ### Three-Tier Architecture
 
-**Backend (Go)**: 372 files
-- Mothership service with 35+ internal packages
+**Backend (Go)**: 378 files
+- Mothership service with 56 internal packages
 - Handles CSI ingestion, signal processing, localization
 - Manages ESP32 fleet, OTA updates, MQTT integration
 - Comprehensive test coverage
 
 **Frontend (JavaScript/TypeScript)**: 266 files
-- React-based web dashboard
+- Vanilla-JS web dashboard (no framework, no build step)
 - 3D visualization with Three.js
 - Real-time WebSocket updates
 - Multiple UI modes (expert, simple, ambient)

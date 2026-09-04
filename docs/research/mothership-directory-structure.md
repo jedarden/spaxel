@@ -10,9 +10,11 @@ from. `go build ./...` and `go vet ./...` on the mothership module were both cle
 time of writing.
 
 Companions in this survey series: `go-backend-code-directories.md` (Go package-level detail),
-`esp32-firmware-code-directories.md` (firmware half). Repo-root catalogs
-`top_level_directories.md` and `DIRECTORY_STRUCTURE.md` cover the top level only; this document
-adds the tree view and the dashboard's internal organization, which no existing doc maps.
+`esp32-firmware-code-directories.md` (firmware half). The repo-root catalogs this document
+once leant on for the top level (`top_level_directories.md`, `DIRECTORY_STRUCTURE.md`) were
+removed by the 2026-09-04 root exhaust sweep; the surviving top-level maps are
+`docs/inventory/repository-directory-structure.md` and `docs/repo-structure.md`. This document
+adds the tree view and the dashboard's internal organization.
 
 ---
 
@@ -71,12 +73,15 @@ spaxel/
 └── ~                        # tilde-named untracked scratch directory (never committed)
 ```
 
-Root also carries ~30 tracked markdown reports from prior investigation sessions
-(`top_level_directories.md`, `DIRECTORY_STRUCTURE.md`, `WORKSPACE_STRUCTURE.md`,
-`SOURCE_CODE_INVENTORY.md`, `MOTHERSHIP_DASHBOARD_LOCATIONS.md`, `PROGRESS.md`,
-`SYSTEM_CATALOG.md`, `README.md`, …) alongside search-output scratch
-(`mothership-files.txt`, `refs-results.txt`, `*-results.txt`). The durable documentation lives
-under `docs/`; the root-level set is a work-log, not a map.
+Root also carried ~30 tracked markdown reports from prior investigation sessions
+(`top_level_directories.md`, `DIRECTORY_STRUCTURE.md`, `WORKSPACE_STRUCTURE_DOCUMENTATION.md`,
+`SOURCE_CODE_INVENTORY.md`, the root `SYSTEM_CATALOG.md`, `MOTHERSHIP_DASHBOARD_LOCATIONS.md`, …)
+alongside search-output scratch (`mothership-files.txt`, `refs-results.txt`, `*-results.txt`).
+The 2026-09-04 root exhaust sweep deleted the scratch and the raw dumps and collapsed the
+duplicated structure catalogs to one copy per topic under `docs/` — `WORKSPACE_STRUCTURE.md`
+and `rust-source-inventory.md` remain at the root as the reconciled keepers, with `README.md`
+and `PROGRESS.md` there by design. The durable documentation lives under `docs/`; the
+root-level set is a work-log, not a map.
 
 ---
 

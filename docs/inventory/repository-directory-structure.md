@@ -21,20 +21,37 @@ The repository follows a Go module structure with ESP-IDF firmware as a major su
 
 ```
 spaxel/
-├── mothership/          # Go backend (primary application)
+├── mothership/          # Go module: backend + simulator + all Go tests
 ├── firmware/            # ESP32-S3 firmware (ESP-IDF C project)
 ├── dashboard/           # Frontend web interface
-├── cmd/                 # Additional CLI tools
 ├── docs/                # Documentation and plans
 ├── scripts/             # Utility scripts
-├── tests/               # End-to-end integration tests
-├── test/                # Acceptance tests (Go module)
-├── testdata/            # Test fixtures and data
-├── data/                # Runtime data directory (gitignored)
-├── notes/               # Development notes (gitignored)
-├── memory/              # Agent memory (gitignored)
+├── testdata/            # CSI-recording utilities (//go:build ignore, in no module)
+├── data/                # Captured runtime state (SQLite, backups) — not source
+├── notes/               # Per-bead investigation findings (belongs under docs/notes/)
+├── memory/              # Agent memory notes
 └── [System directories] # .git, .beads, .claude, .marathon
 ```
+
+---
+
+## Root-Level Files (tracked)
+
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | 3-stage image build: firmware fetch → Go build → distroless runtime |
+| `docker-compose.yml` | Single-service deployment manifest (host networking) |
+| `.dockerignore` | Docker build exclusions |
+| `VERSION` | Release version — single source of truth, consumed by the build and OTA filenames |
+| `go.work` / `go.work.sum` | Go workspace definition (one module: `./mothership`) |
+| `.gitignore` / `.gitattributes` | VCS controls |
+| `.golangci.yml` | golangci-lint configuration (v2) |
+| `.needle.yaml` / `.needle-predispatch-sha` | NEEDLE fleet-dispatch config and pre-dispatch SHA tracking |
+| `README.md` | Project overview and quickstart |
+| `PROGRESS.md` | Phase-by-phase implementation status |
+| `LICENSE` | Project license |
+| `*.md` investigation reports | Point-in-time work-log reports (API status, dashboard discovery/access, GDOP guide, verification summaries, …). Durable documentation lives under `docs/`; disposition of the root set is tracked by the repo-root exhaust sweep (`spaxel-1b8df9a3`) |
+| `acceptance-test-hang-workflow.yml` | Argo Workflow draft left at the root while debugging acceptance hangs (disposition owned by a separate sweep) |
 
 ---
 
@@ -47,27 +64,18 @@ spaxel/
 ```
 mothership/
 ├── cmd/                 # Application entry points
-│   └── mothership/      # Main application (dashboard embedded via go:embed)
-├── internal/            # Internal packages (55 packages)
+│   ├── mothership/      # Main application (dashboard embedded via go:embed)
+│   └── sim/             # spaxel-sim CLI — the simulator the Docker image ships
+├── internal/            # Internal packages (56 packages)
 │   ├── ingestion/        # WebSocket server, binary frame parsing, node lifecycle
-│   ├── pipeline/        # Signal processing pipeline
-│   │   ├── phase/       # Phase sanitization (unwrap, OLS, residual)
-│   │   ├── nbvi/        # NBVI subcarrier selection
-│   │   ├── feature/     # deltaRMS, phase variance, breathing band
-│   │   └── baseline/    # EMA baseline, diurnal slots, snapshot persistence
+│   ├── signal/          # Signal processing (flat package: phase sanitization, features,
+│   │                    #   breathing, baseline, diurnal, ambient, persistence, processor)
 │   ├── localizer/       # Fusion & localization engine
-│   │   ├── fresnel/     # Zone number cache, grid accumulation
-│   │   ├── ukf/         # Biomechanical UKF (gonum/mat)
-│   │   ├── gdop/        # Fisher information matrix, GDOP computation
 │   │   └── fusion/      # Full localization loop (10 Hz)
 │   ├── fleet/           # Node registry, role assignment, stagger scheduler
 │   ├── ble/             # BLE centroid, rotation heuristics, identity matching
-│   ├── portal/          # Crossing detection, zone occupancy
 │   ├── replay/          # CSI replay buffer reader/writer
-│   ├── anomaly/         # Pattern learning, anomaly scoring
-│   ├── predict/         # Presence prediction model
 │   ├── sleep/           # Sleep state machine, breathing FFT
-│   ├── flow/            # Crowd flow accumulator
 │   ├── notify/          # Notification renderer (fogleman/gg)
 │   ├── mqtt/            # MQTT client, HA auto-discovery
 │   ├── auth/            # HMAC token derivation, bcrypt PIN, sessions
@@ -75,17 +83,22 @@ mothership/
 │   ├── db/              # SQLite open/migrate, schema migrations
 │   ├── config/          # Environment variable parsing
 │   ├── api/             # REST API handlers
+│   ├── analytics/       # Anomaly scoring, patterns, crowd flow, alert chain
+│   ├── apdetector/      # AP auto-detection for passive radar
 │   ├── automation/      # Spatial automation trigger system
 │   ├── autoupdate/      # OTA auto-update manager
+│   ├── beads/           # Bead-state diagnostics helpers
 │   ├── briefing/        # Morning briefing generation
 │   ├── dashboard/       # Dashboard WebSocket feed
 │   ├── diagnostics/     # Link health diagnostics
+│   ├── diskspace/       # Disk space monitoring
 │   ├── doctor/          # System health checking
 │   ├── eventbus/        # Event publishing system
 │   ├── events/          # Event storage and querying
 │   ├── explainability/  # Detection explanation ("Why is this here?")
 │   ├── falldetect/      # Fall detection algorithm
 │   ├── floorplan/       # Floor plan management
+│   ├── fusion/          # 3D grid fusion engine
 │   ├── github/          # GitHub API client
 │   ├── guidedtroubleshoot/ # Contextual help system
 │   ├── health/          # Health check endpoints
@@ -93,26 +106,27 @@ mothership/
 │   ├── learning/        # Machine learning components
 │   ├── loadshed/        # Load shedding under pressure
 │   ├── localization/    # Localization state management
+│   ├── logging/         # Shared logging setup
 │   ├── ntpserver/       # NTP server configuration
 │   ├── ota/             # OTA update server
-│   ├── prediction/      # Presence prediction (alias for predict?)
+│   ├── prediction/      # Presence prediction engine
 │   ├── provisioning/    # Node provisioning flow
 │   ├── recorder/        # CSI recording management
 │   ├── recording/       # Recording buffer implementation
 │   ├── render/          # Notification image rendering
 │   ├── shutdown/        # Graceful shutdown
-│   ├── signal/          # Signal processing utilities
 │   ├── simulator/       # CSI simulator integration
 │   ├── startup/         # Startup sequencing
 │   ├── timeline/        # Activity timeline
-│   ├── tracker/         # Entity tracking
-│   ├── tracking/        # Position tracking
+│   ├── tracker/         # Entity tracking + BLE identity
+│   ├── tracking/        # UKF tracking core
+│   ├── types/           # Shared log-level types
 │   ├── volume/          # Trigger volume management
 │   ├── webhook/         # Webhook client
 │   └── zones/           # Zone management
 ├── build/               # Build output directory (gitignored)
-├── test/                # Unit and integration tests
-├── tests/               # Additional test files
+├── test/acceptance/     # Acceptance scenarios AS-1…AS-7 + IO install/upgrade tests
+├── tests/e2e/           # End-to-end Go tests (e2e_test.go, IO-6 gate)
 ├── go.mod               # Go module definition
 ├── go.sum               # Go module checksums
 ├── mothership           # Compiled binary (gitignored)
@@ -132,16 +146,18 @@ mothership/
 
 ```
 firmware/
-├── main/                # Main application source
+├── main/                # Main application source (12 .c files + headers)
 │   ├── main.c           # app_main(), startup sequencing
 │   ├── wifi.c/h         # WiFi station, mDNS, captive portal
 │   ├── csi.c/h          # Promiscuous mode, CSI callback
-│   ├── ws.c/h           # WebSocket client
+│   ├── websocket.c/h    # WebSocket client (binary CSI up, JSON config down)
+│   ├── transport.c/h    # Transport abstraction (UART0 + USB-Serial/JTAG)
 │   ├── ble.c/h          # BLE passive scan
-│   ├── ota.c/h          # OTA download, verification
-│   ├── nvs.c/h          # NVS read/write helpers
-│   ├── serial_prov.c    # Serial provisioning listener
-│   ├── sntp.c/h         # NTP sync
+│   ├── ntp.c/h          # NTP sync for TX stagger slots
+│   ├── nvs_migration.c/h # NVS read/write helpers + schema migration
+│   ├── provision.c/h    # Serial provisioning listener
+│   ├── safe_mode.c/h    # Safe-mode entry/recovery
+│   ├── watchdog.c/h     # Task watchdog (esp_task_wdt)
 │   ├── led.c/h          # LED control
 │   └── CMakeLists.txt   # Component build configuration
 ├── build/               # ESP-IDF build output (gitignored)
@@ -153,16 +169,20 @@ firmware/
 ├── managed_components/  # ESP-IDF component manager
 ├── test/                # Host-based gcc tests (no hardware)
 │   ├── test_runner.c    # Test harness
-│   ├── test_nvs.c       # NVS schema migration tests
-│   ├── test_csi.c       # Binary frame serialization tests
-│   └── test_serial_prov.c  # Provisioning parser + fuzz tests
+│   ├── test_nvs_migration.c      # NVS schema migration tests
+│   ├── test_csi_frame.c          # Binary frame serialization tests
+│   ├── test_serial_prov.c        # Provisioning parser + fuzz tests
+│   ├── test_console_config.c     # Console routing config
+│   ├── test_sanity.c             # Sanity checks
+│   ├── test_wifi_restart_race.c  # WiFi restart race
+│   ├── test_ota_during_wifi_reconnect.c
+│   └── test_all_restart_trigger_points.c
 ├── docs/                # Firmware-specific documentation
 ├── scripts/             # Build/utility scripts
 ├── CMakeLists.txt       # Top-level project configuration
 ├── partitions.csv       # Partition layout (factory + ota_0 + ota_1 + nvs)
-├── sdkconfig            # Current active configuration (gitignored?)
-├── sdkconfig.defaults   # Project-specific defaults
-├── sdkconfig.old        # Previous configuration
+├── sdkconfig.defaults   # Project-specific defaults (committed; the active
+│                        #   `sdkconfig` is generated and gitignored)
 ├── sdkconfig.uart-console      # UART console configuration variant
 ├── sdkconfig.usbjtag           # USB-Serial/JTAG console variant
 ├── BUILD.md             # Build instructions
@@ -218,14 +238,21 @@ dashboard/
 
 ---
 
-### 4. CLI Tools (`cmd/`)
+### 4. Simulator CLI (`mothership/cmd/sim/`)
 
-**Purpose:** Additional command-line utilities beyond the main mothership binary.
+**Purpose:** The CSI simulator CLI (`spaxel-sim`) — part of the mothership module,
+not a separate one; this is the binary the Docker image ships.
 
 ```
-cmd/
-└── sim/                 # CSI simulator CLI (spaxel-sim)
-    └── (Go source for simulator)
+mothership/cmd/sim/
+├── main.go             # CLI entry point
+├── generator.go        # Synthetic CSI frame generation
+├── walker.go           # Synthetic walker motion
+├── scenario.go         # Test scenario definitions
+├── verify.go           # Result verification (--verify poll/assert)
+├── main_test.go
+├── Makefile
+└── README.md
 ```
 
 **Simulator Usage:** Emulates ESP32 nodes for testing without hardware. See `spaxel-sim --help`.
@@ -271,27 +298,20 @@ docs/
 **Purpose:** Multi-level testing strategy from unit tests to hardware-in-the-loop integration.
 
 ```
-tests/                    # Shell-based E2E test harness
-└── e2e/
-    └── run.sh          # End-to-end test runner script
-
-test/                     # Acceptance tests (separate Go module)
-└── acceptance/           # Simulator-based acceptance tests
-    ├── [test files]    # Integration tests using spaxel-sim
-    └── go.mod          # Separate module for cross-cutting tests
-
-testdata/                 # Test fixtures and data
-└── [test data files]    # Static test data, fixtures
-
-mothership/test/           # In-module mothership tests
-mothership/tests/          # Additional mothership test files
-firmware/test/            # Host-based firmware tests (gcc harness)
+mothership/test/acceptance/   # Acceptance scenarios AS-1…AS-7 (+ WiFi restart race),
+                              #   integration_test.go, io_install_upgrade_test.go
+mothership/tests/e2e/         # End-to-end Go tests: e2e_test.go, assertions_test.go,
+                              #   io6_gate_test.go (+ _conclusion)
+testdata/                     # CSI-recording utilities (//go:build ignore, in no module)
+firmware/test/                # Host-based firmware tests (gcc harness, 9 test_*.c)
+dashboard/tests/              # Playwright accessibility specs
+dashboard/js/*.test.js        # Co-located jest unit tests
 ```
 
 **Testing Strategy:**
-1. **Unit tests:** Package-level `_test.go` files
-2. **Integration tests:** `test/acceptance/` using `spaxel-sim`
-3. **E2E tests:** `tests/e2e/run.sh` shell harness
+1. **Unit tests:** Package-level `_test.go` files, co-located
+2. **Acceptance tests:** `mothership/test/acceptance/` using `spaxel-sim`
+3. **E2E tests:** `mothership/tests/e2e/` (Go, drives a running mothership + sim)
 4. **Firmware tests:** `firmware/test/` with gcc (no hardware required)
 
 ---
@@ -388,20 +408,19 @@ The following directories contain build artifacts and should be excluded from do
 
 ## Go Module Architecture
 
-The repository uses a **Go workspace** structure (`go.work` at root) stitching together three separate Go modules:
+The repository uses a **Go workspace** structure (`go.work` at root) with **one module**:
 
-1. **`mothership/`** — Primary backend module (`mothership/go.mod`)
-2. **`cmd/sim/`** — Simulator CLI module (`cmd/sim/go.mod`)  
-3. **`test/acceptance/`** — Cross-cutting acceptance tests (`test/acceptance/go.mod`)
+1. **`mothership/`** — the backend module (`mothership/go.mod`); the simulator CLI
+   (`mothership/cmd/sim/`) and both test trees (`mothership/test/acceptance/`,
+   `mothership/tests/e2e/`) live inside it
 
 ```
 go.work
-mothership/go.mod        # Main application module
-cmd/sim/go.mod           # Simulator tool module
-test/acceptance/go.mod   # Acceptance tests module
+mothership/go.mod        # The only Go module (go 1.25.0)
 ```
 
-There is **no single root Go module** — the workspace pattern allows each component to have its own dependencies.
+There is **no root `go.mod`** and no second/third module — run `go` commands from
+`mothership/`.
 
 ---
 
@@ -462,10 +481,13 @@ The repository integrates with external systems:
 ## Notes for Navigation
 
 1. **Start here:** `docs/plan/plan.md` for complete system architecture
-2. **Implementation status:** `PROGRESS.md` (check if exists) for current progress
-3. **Testing:** Run `go test ./...` from `mothership/` for unit tests
-4. **Firmware build:** Requires ESP-IDF environment setup before building
-5. **Dashboard development:** No build step required — edit files and refresh browser
+2. **Newer structural survey:** `docs/repo-structure.md` supersedes this inventory
+   where the two disagree
+3. **Implementation status:** `PROGRESS.md` for current progress
+4. **Testing:** Run `go test ./...` from `mothership/` for unit tests
+5. **Firmware build:** Built in CI (`spaxel-build` Argo workflow); a local build needs
+   an ESP-IDF environment
+6. **Dashboard development:** No build step required — edit files and refresh browser
 
 ---
 
@@ -488,6 +510,8 @@ This inventory covers:
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-08-29  
+**Document Version:** 1.1 (2026-09-04 — absorbed the deleted root `DIRECTORY_STRUCTURE.md`
+root-level-files table and reconciled the module/test-tree layout; see `docs/repo-structure.md`
+for the newest survey)  
+**Generated:** 2026-08-29  
 **Maintained in:** `docs/inventory/repository-directory-structure.md`

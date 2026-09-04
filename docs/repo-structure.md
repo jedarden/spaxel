@@ -66,7 +66,7 @@ spaxel/
 ├── testdata/ ⚑              two `//go:build ignore` CSI-recording utilities — in no module
 ├── tests/e2e/run.sh ⚑       shell e2e harness — separate from the Go e2e tests (§6)
 ├── notes/ ⚑, memory/ ⚑      per-bead findings dumped at the repo root, not under docs/
-├── *.md, *.txt ⚑ (~45)      one-off investigation reports at the root (§13)
+├── *.md ⚑ (~21)             one-off investigation reports at the root (§13)
 └── firmware/build/ ⌫  firmware/managed_components/ ⌫  cmd/sim/sim ⌫
     mothership/cmd/mothership/dashboard/ ⌫ (go:embed staging)  *.db-shm/*.db-wal ⌫
 ```
@@ -327,11 +327,18 @@ artifacts of a past local run — not source, not fixtures; do not treat them as
 
 The repo root carries two categories of clutter worth recognising before adding anything:
 
-- **One-off reports** (~45 files): `DIRECTORY_STRUCTURE.md`, `SOURCE_CODE_INVENTORY.md`,
-  `WORKSPACE_STRUCTURE*.md`, `SYSTEM_CATALOG.md`, `MOTHERSHIP_DASHBOARD_LOCATIONS.md`,
-  `GDOP_COMPUTATION_GUIDE.md`, `*VERIFY*.md`, `*_results.txt`,
-  `verify-pack-corruption-indicators.*`, `bug_verification_report.md`, … These are
-  point-in-time investigation outputs. They go stale fast; prefer `docs/notes/` for new
+- **One-off reports**: the root once carried ~45 of them (`DIRECTORY_STRUCTURE.md`,
+  `SOURCE_CODE_INVENTORY.md`, `WORKSPACE_STRUCTURE_DOCUMENTATION.md`, the root
+  `SYSTEM_CATALOG.md`, `top_level_directories.md`, `*_results.txt`,
+  `verify-pack-corruption-indicators.*`, `bug_verification_report.md`, …). The
+  2026-09-04 exhaust sweeps deleted the raw dumps and search scratch, and collapsed
+  the duplicated structure catalogs to one copy per topic under `docs/`
+  (`docs/inventory/`, `docs/codebase-structure-and-test-patterns.md`,
+  `docs/SYSTEM_CATALOG.md`); `WORKSPACE_STRUCTURE.md` and `rust-source-inventory.md`
+  remain at the root as the reconciled keepers. What is still at the root is the
+  point-in-time investigation-report set (`MOTHERSHIP_DASHBOARD_*.md`,
+  `GDOP_COMPUTATION_GUIDE.md`, the verification summaries, …) whose disposition is
+  owned by a separate sweep. These go stale fast; prefer `docs/notes/` for new
   work (as the repo-init convention requires) and treat root reports as history.
 - **Stray directories**: `notes/` (per-bead `bf-*` findings that belong under `docs/notes/`)
   and `memory/` (a single agent-memory note). Untracked at any given moment you may also

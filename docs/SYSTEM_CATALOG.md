@@ -1,6 +1,8 @@
 # Spaxel Repository Structure Catalog
 
-**Generated:** 2026-08-21
+**Generated:** 2026-08-21; reconciled 2026-09-04 (spaxel-7737eea8 — this is the surviving
+copy; the duplicate root `SYSTEM_CATALOG.md` was deleted and its build-trigger path
+classification folded in)  
 **Purpose:** Complete directory structure reference for build path classification and trigger routing
 
 ## Repository Overview
@@ -15,32 +17,29 @@ Spaxel is a WiFi CSI-based indoor positioning system with three main components:
 ## Root-Level Files
 
 ### Core Build & Deployment
-- `Dockerfile` — Multi-stage build (firmware + Go + distroless runtime)
+- `Dockerfile` — Multi-stage build (firmware fetch + Go + distroless runtime)
 - `docker-compose.yml` — Single-service deployment manifest
 - `VERSION` — Single source of truth for release version
-- `go.work` — Go workspace stitching mothership, cmd/sim, test/acceptance modules
+- `go.work` — Go workspace with a single module (`use ./mothership`)
 - `go.work.sum` — Go workspace dependencies
 
 ### Configuration
 - `.needle.yaml` — NEEDLE fleet dispatch configuration
 - `.needle-predispatch-sha` — NEEDLE pre-dispatch SHA tracking
-- `.golangci.yml` — Linting configuration
+- `.golangci.yml` — Linting configuration (v2)
 - `.gitignore`, `.dockerignore`, `.gitattributes` — VCS and build controls
 
 ### Documentation
 - `README.md` — Project overview and quickstart
 - `PROGRESS.md` — Implementation status tracking
-- `LICENSE` — Apache 2.0
+- `LICENSE` — Project license
 
-### ADR & Investigation Records
+### Investigation Records (point-in-time root reports)
 - `API_IMPLEMENTATION_STATUS.md`
 - `BLE_PERSONID_INVESTIGATION.md`
 - `GDOP_COMPUTATION_GUIDE.md`
-
-### Scripts
-- `blob_observation.sh` — Observation/testing script
-- `fix_ble_handlers.py` — BLE handler fixes
-- `window_test.sh` — Testing script
+- plus the `MOTHERSHIP_DASHBOARD_*` and verification-summary reports — durable
+  documentation lives under `docs/`
 
 ---
 
@@ -53,16 +52,16 @@ spaxel/
 │   │   ├── main.c              # Entry point, startup sequencing
 │   │   ├── wifi.c / wifi.h     # WiFi station, mDNS, captive portal
 │   │   ├── csi.c / csi.h       # CSI capture, binary frame serialization
-│   │   ├── ws.c / websocket.c  # WebSocket client, JSON/binary framing
+│   │   ├── websocket.c / .h    # WebSocket client, binary CSI up / JSON config down
+│   │   ├── transport.c / .h    # Transport abstraction (UART0 + USB-Serial/JTAG)
 │   │   ├── ble.c / ble.h       # BLE passive scan, advertisement parsing
-│   │   ├── ota.c               # OTA download, SHA-256 verification
-│   │   ├── nvs.c               # NVS helpers (not migration)
-│   │   ├── nvs_migration.c/h   # NVS schema migration
-│   │   ├── serial_prov.c       # Serial provisioning (UART + USB-Serial/JTAG)
-│   │   ├── sntp.c              # NTP sync for TX stagger scheduling
-│   │   ├── led.c               # LED control (identify, OTA progress, status)
-│   │   ├── transport.c/h       # Transport layer abstractions
-│   │   ├── spaxel.h            # Common headers
+│   │   ├── led.c / led.h       # LED control (identify, OTA progress)
+│   │   ├── ntp.c / ntp.h       # NTP time sync for TX stagger slots
+│   │   ├── nvs_migration.c/.h  # NVS read/write + schema migration
+│   │   ├── provision.c / .h    # Serial provisioning handler
+│   │   ├── safe_mode.c         # Safe-mode entry/recovery
+│   │   ├── watchdog.c          # Task watchdog (esp_task_wdt)
+│   │   ├── spaxel.h            # Common header
 │   │   └── CMakeLists.txt      # Component manifest
 │   ├── managed_components/     # ESP-IDF component dependencies
 │   │   ├── espressif__esp_websocket_client/
@@ -80,61 +79,68 @@ spaxel/
 │   ├── cmd/
 │   │   └── mothership/        # Main entry point
 │   │       └── main.go        # Startup sequencing, subsystem wiring
-│   ├── internal/              # All internal packages
+│   ├── internal/              # All internal packages (56)
 │   │   ├── ingestion/         # WebSocket server, binary frame parsing
-│   │   ├── pipeline/          # Signal processing pipeline
-│   │   │   ├── phase/        # Phase sanitization (unwrap, OLS, residual)
-│   │   │   ├── nbvi/         # NBVI subcarrier selection
-│   │   │   ├── feature/      # deltaRMS, phase variance, breathing band
-│   │   │   └── baseline/     # EMA baseline, diurnal slots, snapshots
-│   │   ├── localizer/        # Fusion & localization
-│   │   │   ├── fresnel/      # Zone number cache, grid accumulation
-│   │   │   ├── ukf/          # Biomechanical UKF (gonum/mat)
-│   │   │   ├── gdop/         # Fisher information matrix, GDOP computation
-│   │   │   └── fusion/       # Full localization loop (10 Hz)
-│   │   ├── fleet/            # Node registry, role assignment, stagger scheduler
-│   │   ├── ble/              # BLE centroid, rotation heuristics, identity matching
-│   │   ├── portal/           # Crossing detection, zone occupancy
-│   │   ├── replay/           # CSI replay buffer reader/writer
-│   │   ├── anomaly/          # Pattern model (Welford), anomaly scoring
-│   │   ├── predict/          # Presence prediction model
-│   │   ├── sleep/            # Sleep state machine, breathing FFT
-│   │   ├── flow/             # Crowd flow accumulator, dwell heatmap
-│   │   ├── notify/           # Notification rendering (fogleman/gg)
-│   │   ├── mqtt/             # MQTT client, HA auto-discovery
-│   │   ├── auth/             # HMAC token derivation, bcrypt PIN, sessions
-│   │   ├── oui/              # OUI lookup table (go:generate from IEEE)
-│   │   ├── db/               # SQLite open/migrate, schema migrations
-│   │   ├── config/           # Environment variable parsing
-│   │   ├── apdetector/       # AP auto-detection for passive radar
-│   │   ├── automation/       # Spatial automation (triggers, volumes)
-│   │   ├── autoupdate/       # OTA auto-update with canary deployment
-│   │   ├── doctor/           # System health diagnostics
-│   │   ├── falldetect/       # Fall detection algorithm
-│   │   ├── floorplan/        # Floor plan image management
+│   │   ├── signal/            # Signal processing (flat: phase sanitization, features,
+│   │   │                      #   breathing, baseline, diurnal, ambient, processor)
+│   │   ├── localizer/         # Fusion & localization
+│   │   │   └── fusion/        # Full localization loop (10 Hz)
+│   │   ├── fusion/            # 3D grid fusion engine
+│   │   ├── localization/      # Grid, ground truth, spatial-weight learning
+│   │   ├── tracker/           # Blob tracking + BLE identity
+│   │   ├── tracking/          # UKF tracking core
+│   │   ├── fleet/             # Node registry, role assignment, stagger scheduler
+│   │   ├── ble/               # BLE centroid, rotation heuristics, identity matching
+│   │   ├── replay/            # CSI replay buffer reader/writer + pipeline
+│   │   ├── analytics/         # Anomaly scoring, patterns, crowd flow, alert chain
+│   │   ├── prediction/        # Presence prediction engine
+│   │   ├── learning/          # Feedback processing, accuracy trends
+│   │   ├── sleep/             # Sleep state machine, breathing FFT
+│   │   ├── falldetect/        # Fall detection algorithm
+│   │   ├── notify/            # Notification rendering (fogleman/gg)
+│   │   ├── notifications/     # Notification channels (ntfy, Pushover, webhook)
+│   │   ├── briefing/          # Morning briefing generation
+│   │   ├── render/            # 2D rendering for notifications
+│   │   ├── webhook/           # Webhook publisher
+│   │   ├── mqtt/              # MQTT client, HA auto-discovery
+│   │   ├── github/            # GitHub releases client
+│   │   ├── help/              # Help article monitor
 │   │   ├── guidedtroubleshoot/ # Contextual help system
-│   │   ├── health/           # Health check endpoints
-│   │   ├── help/             # Help system
-│   │   ├── loadshed/         # Load shedding under high CPU
-│   │   ├── ntpserver/        # NTP server for testing
-│   │   ├── notifications/   # Notification channel management
-│   │   ├── ota/              # OTA manager, firmware serving
-│   │   ├── prediction/       # Presence prediction engine
-│   │   ├── provisioning/    # Node provisioning, token generation
-│   │   ├── recorder/         # CSI recording to disk
-│   │   ├── recording/        # CSI replay storage
-│   │   ├── render/          # 2D rendering for notifications
-│   │   ├── shutdown/        # Graceful shutdown orchestration
-│   │   ├── simulator/       # CSI simulator interfaces
-│   │   ├── sleep/            # Sleep quality monitoring
-│   │   ├── startup/          # Startup sequencing phases
-│   │   ├── timeline/         # Activity timeline
-│   │   ├── tracker/          # Blob tracking
-│   │   ├── volume/           # 3D volume handling
-│   │   └── webhook/          # Webhook delivery
-│   ├── test/                 # Mothership tests
-│   ├── tests/                # Additional test files
-│   └── build/                # Go build output
+│   │   ├── explainability/    # Detection explanation
+│   │   ├── timeline/          # Activity timeline
+│   │   ├── eventbus/          # In-process event bus
+│   │   ├── events/            # Event storage and querying
+│   │   ├── zones/             # Zone manager + occupancy history
+│   │   ├── floorplan/         # Floor plan image management
+│   │   ├── volume/            # 3D trigger volume shapes
+│   │   ├── automation/        # Spatial automation (triggers, volumes)
+│   │   ├── api/               # REST + WebSocket handlers
+│   │   ├── auth/              # HMAC token derivation, bcrypt PIN, sessions
+│   │   ├── dashboard/         # Dashboard WebSocket feed
+│   │   ├── config/            # Environment variable parsing
+│   │   ├── db/                # SQLite open/migrate, schema migrations
+│   │   ├── provisioning/      # Node provisioning, token generation
+│   │   ├── ota/               # OTA manager, firmware serving
+│   │   ├── autoupdate/        # OTA auto-update with canary deployment
+│   │   ├── apdetector/        # AP auto-detection for passive radar
+│   │   ├── recorder/          # CSI recording to disk
+│   │   ├── recording/         # CSI replay storage
+│   │   ├── simulator/         # CSI simulator engine
+│   │   ├── oui/               # OUI lookup table (generated from IEEE list)
+│   │   ├── health/            # Health check endpoints
+│   │   ├── doctor/            # System health diagnostics
+│   │   ├── diagnostics/       # Link weather + repositioning advice
+│   │   ├── loadshed/          # Load shedding under high CPU
+│   │   ├── diskspace/         # Disk space monitoring
+│   │   ├── startup/           # Startup sequencing phases
+│   │   ├── shutdown/          # Graceful shutdown orchestration
+│   │   ├── logging/           # Shared logging setup
+│   │   ├── types/             # Shared log-level types
+│   │   ├── beads/             # Bead-state diagnostics helpers
+│   │   └── ntpserver/         # NTP server for testing
+│   ├── test/acceptance/       # Acceptance scenarios AS-1…AS-7 + IO install/upgrade
+│   ├── tests/e2e/             # End-to-end Go tests (incl. IO-6 gate)
+│   └── build/                 # Go build output (gitignored)
 │
 ├── dashboard/                # Embedded web UI (embedded into Go binary)
 │   ├── index.html            # Main entry point
@@ -185,14 +191,6 @@ spaxel/
 │   ├── deployment/           # Deployment guides
 │   ├── examples/             # Example configurations
 │   └── tests/                # Test documentation
-│
-├── cmd/sim/                   # CSI simulator CLI (separate Go module)
-│   └── main.go              # Simulator entry point
-│
-├── test/acceptance/          # Cross-cutting acceptance tests (Go module)
-│
-├── tests/e2e/               # Shell-based E2E test harness
-│   └── run.sh              # E2E test runner
 │
 ├── scripts/                 # Utility scripts
 │
@@ -260,25 +258,16 @@ spaxel/
 - **Storage:** SQLite with `modernc.org/sqlite` (pure Go, no CGO)
 - **Dashboard:** Embedded static files served at `/`
 
-**Internal Packages (50+):**
-All subsystems are independent internal packages under `internal/`:
-- `ingestion` — WebSocket server, frame parsing
-- `pipeline/*` — Signal processing stages
-- `localizer/*` — Fusion, Fresnel, UKF, GDOP
-- `fleet` — Node management
-- `ble` — BLE device registry, identity matching
-- `portal` — Crossing detection, zone occupancy
-- `replay` — CSI replay buffer
-- `anomaly` — Pattern learning, anomaly scoring
-- `predict` — Presence prediction
-- `sleep` — Sleep quality monitoring
-- `flow` — Crowd flow visualization
-- `notify` — Notification rendering
-- `mqtt` — Home Assistant integration
-- `auth` — Token derivation, PIN, sessions
-- `db` — Schema migrations
-- `config` — Environment parsing
-- And 30+ more specialized packages
+**Internal Packages (56):**
+All subsystems are independent internal packages under `internal/`, grouped by domain:
+- **Ingestion & signal** — `ingestion`, `signal` (flat: phase sanitization, features, breathing, baseline, diurnal), `recorder`, `recording`, `replay`, `simulator`
+- **Localization & tracking** — `fusion`, `localizer` (+`fusion/`), `localization`, `tracker`, `tracking`, `ble`
+- **Fleet & node lifecycle** — `fleet`, `provisioning`, `ota`, `autoupdate`, `apdetector`
+- **Spaces, events & automation** — `zones`, `floorplan`, `volume`, `automation`, `eventbus`, `events`, `timeline`
+- **Inference & monitoring** — `analytics` (anomaly scoring, patterns, crowd flow), `prediction`, `learning`, `sleep`, `falldetect`, `health`
+- **API & persistence** — `api`, `auth`, `config`, `db`, `dashboard`
+- **Notifications & integrations** — `briefing`, `notify`, `notifications`, `render`, `webhook`, `mqtt`, `github`, `help`, `guidedtroubleshoot`
+- **Platform & operations** — `startup`, `shutdown`, `doctor`, `diagnostics`, `explainability`, `loadshed`, `diskspace`, `logging`, `types`, `beads`, `ntpserver`, `oui`
 
 ---
 
@@ -321,19 +310,21 @@ All subsystems are independent internal packages under `internal/`:
 
 ---
 
-### Build & Test Modules
+### Simulator, Acceptance & E2E
 
-**`cmd/sim/`** — CSI simulator CLI (separate Go module)
+All three live inside the single `mothership` Go module:
+
+**`mothership/cmd/sim/`** — CSI simulator CLI (`spaxel-sim`)
 - Generates synthetic CSI frames for development/testing
 - Multi-node, multi-walker simulation
 - BLE advertisement simulation
 
-**`test/acceptance/`** — Cross-cutting acceptance tests (Go module)
+**`mothership/test/acceptance/`** — Acceptance scenarios (AS-1…AS-7)
 - Simulator-based integration tests
-- Validates full new-user journey
+- Validates full new-user journey, plus IO install/upgrade tests
 
-**`tests/e2e/`** — Shell-based E2E harness
-- `run.sh` — End-to-end test runner
+**`mothership/tests/e2e/`** — End-to-end Go tests
+- `e2e_test.go`, `assertions_test.go`, IO-6 gate tests
 
 ---
 
@@ -357,27 +348,36 @@ All subsystems are independent internal packages under `internal/`:
 
 ## Build Impact Classification
 
-This catalog serves as the foundation for classifying which paths trigger builds:
+This catalog serves as the foundation for classifying which paths trigger builds
+(the path globs below are folded in from the deleted root copy):
 
 ### Firmware Build Triggers
-- **Firmware sources:** `firmware/main/*.c`, `firmware/main/*.h`
-- **ESP-IDF config:** `firmware/sdkconfig.defaults`, `firmware/partitions.csv`
-- **Build scripts:** `firmware/scripts/`
-- **Dependencies:** `firmware/managed_components/`
+- `firmware/main/*.c`, `firmware/main/*.h`
+- `firmware/CMakeLists.txt`, `firmware/partitions.csv`, `firmware/sdkconfig.defaults`
+- `firmware/test/*.c`, `firmware/test/*.h`, `firmware/scripts/*.sh`
+- `firmware/managed_components/`
+- `VERSION` — a bump is build-relevant here too (the firmware bakes a version header)
 
 ### Mothership Build Triggers
-- **Go sources:** `mothership/**/*.go`
-- **Go modules:** `mothership/go.mod`, `go.work`, `go.work.sum`
-- **Embedded assets:** `dashboard/**` (any change triggers rebuild due to `//go:embed`)
-- **Templates:** Any Go templates
+- `mothership/cmd/**/*.go`, `mothership/internal/**/*.go`
+- `mothership/test/**/*.go`, `mothership/tests/**/*.go`
+- `mothership/go.mod`, `mothership/go.sum`, `go.work`, `go.work.sum`
+- `VERSION`
 
-### Dashboard Updates (No Rebuild Required)
-- **Dashboard static files** are hot-reloadable during development
-- But **changes are embedded at build time** for production
+### Dashboard Build Triggers (embedded)
+- `dashboard/*.html`, `dashboard/css/*.css`, `dashboard/js/*.js`
+- `dashboard/static/**`, `dashboard/types/**`
+- `dashboard/package.json`, `dashboard/tsconfig.json`
+- Dashboard files are hot-reloadable during development (served from disk), but they
+  are embedded at build time via `//go:embed`, so production images rebuild.
+
+### Container & Lint Triggers
+- `Dockerfile`, `docker-compose.yml`
+- `.golangci.yml` (lint only), `.jest.config.js` / `.playwright.config.js` (test config)
 
 ### Documentation Changes
-- **No build impact:** `docs/**`, `*.md`, `scripts/`
-- These are purely informational
+- `docs/**/*.md`, `README.md`, `PROGRESS.md`
+- No build impact — these are purely informational
 
 ---
 
@@ -398,6 +398,6 @@ This catalog serves as the foundation for classifying which paths trigger builds
 ## Notes
 
 - **Dashboard is embedded:** Entire `dashboard/` directory is embedded into the Go binary via `//go:embed`. Dashboard changes require rebuilding the mothership binary.
-- **Go workspace:** Three separate Go modules are stitched together by `go.work`: `mothership/`, `cmd/sim/`, `test/acceptance/`.
+- **Go workspace:** One Go module — `mothership/` (go 1.25.0) — stitched into the workspace by the root `go.work` (`use ./mothership`). The simulator CLI (`mothership/cmd/sim/`) and both test trees live inside it.
 - **Firmware artifact:** The merged binary at `firmware/build/spaxel-firmware` is the OTA payload baked into the Docker image.
 - **Bead backend:** Uses `bead` CLI (bead-rs) as of 2026-08-14; deprecated `bf` CLI should not be used.
