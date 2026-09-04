@@ -13,6 +13,7 @@
     // ============================================
     const authState = {
         pinConfigured: null,
+        demoMode: false,
         isAuthenticated: false,
         isLoading: true,
         setupStep: 'enter', // 'enter' | 'confirm'
@@ -48,10 +49,14 @@
             })
             .then(function(data) {
                 authState.pinConfigured = data.pin_configured;
+                authState.demoMode = data.demo_mode === true;
                 authState.isLoading = false;
 
+                // Demo mode admits everything server-side — never gate on auth
+                if (authState.demoMode) {
+                    renderOverlays();
                 // If PIN is configured, check if we have a valid session
-                if (authState.pinConfigured) {
+                } else if (authState.pinConfigured) {
                     return checkSession();
                 } else {
                     // Show first-run setup
@@ -63,6 +68,7 @@
                 authState.isLoading = false;
                 // On error, assume auth is required
                 authState.pinConfigured = true;
+                authState.demoMode = false;
                 renderOverlays();
             });
     }
@@ -200,6 +206,11 @@
 
         // If loading, show nothing
         if (authState.isLoading) {
+            return;
+        }
+
+        // Demo mode: PIN is bypassed server-side — never render an auth barrier
+        if (authState.demoMode) {
             return;
         }
 
@@ -486,11 +497,12 @@
 
         // Returns a promise resolving to whether a non-interactive view (e.g.
         // /ambient) may proceed: true when no PIN is configured (no auth barrier,
-        // e.g. a fresh install or hardware-free sim) OR an authenticated session
-        // exists. Used by ambient.html's bootstrap before enabling ambient mode.
+        // e.g. a fresh install or hardware-free sim), demo mode bypasses the PIN,
+        // OR an authenticated session exists. Used by ambient.html's bootstrap
+        // before enabling ambient mode.
         checkStatus: function() {
             return checkAuthStatus().then(function() {
-                return !authState.pinConfigured || authState.isAuthenticated;
+                return !authState.pinConfigured || authState.demoMode || authState.isAuthenticated;
             });
         },
 
@@ -500,6 +512,10 @@
 
         isAuthenticated: function() {
             return authState.isAuthenticated;
+        },
+
+        isDemoMode: function() {
+            return authState.demoMode;
         },
 
         refreshStatus: function() {
