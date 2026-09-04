@@ -39,6 +39,7 @@ var (
 	_ func(*http.Response) bool               = github.IsRateLimited
 	_ func(*http.Response) (int, int64, bool) = github.GetRateLimitInfo
 	_ *github.APIError                        = &github.APIError{}
+	_ func(*github.APIError) bool             = (*github.APIError).IsUnauthorized
 	_ github.ErrorKind                        = github.ErrorKindHTTP
 	_ github.Release                          = github.Release{TagName: "v1"}
 	_ github.ReleaseAsset                     = github.ReleaseAsset{Name: "a"}

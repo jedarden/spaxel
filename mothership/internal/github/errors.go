@@ -138,6 +138,15 @@ func (e *APIError) IsNotFound() bool {
 	return e.Kind == ErrorKindHTTP && e.StatusCode == http.StatusNotFound
 }
 
+// IsUnauthorized reports whether the API rejected the credential — a 401
+// carrying GitHub's "Bad credentials" message. Retrying cannot help, so
+// Temporary is false for it: the only fix is a different token. The error
+// never echoes the token value, so a caller can log or report this failure
+// as it stands.
+func (e *APIError) IsUnauthorized() bool {
+	return e.Kind == ErrorKindHTTP && e.StatusCode == http.StatusUnauthorized
+}
+
 // IsRateLimited reports whether the failure is the request quota being
 // exhausted rather than a refused request.
 func (e *APIError) IsRateLimited() bool {
