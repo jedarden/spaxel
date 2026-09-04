@@ -27,7 +27,7 @@ f1e7dfaa's subject).
 | `bool` fields | 5 |
 | Struct tags | **None** — zero backticked tags on any field |
 | Annotation style | Line comments (`//`) + block comments (`//` paragraphs above the field); env-var name recorded in the comment, never in a tag |
-| Named groups | 9 `// Group` header lines inside the body |
+| Named groups | **11** group-header comment lines inside the body: 10 top-level groups + 1 sub-comment (`// Replay buffer`, nested inside `Processing`) |
 | Ungrouped fields | 2 (`AdvertisedBaseURL`, `NTPLocalEnabled`) — both carry multi-line block doc comments instead of a group header |
 | Exported types in package | 1 (`Config` is the only `type` declaration in the file) |
 | Env vars read by `Load()` | 27 (`SPAXEL_BIND_ADDR` … `TZ`) |
@@ -87,9 +87,9 @@ break the naive field-name expectation:
 ## 3. Grouping
 
 Grouping is by **`// <Group name>` comment lines inside the struct body** —
-plain comments, not Go constructs. There is no nesting mechanism beyond one
-sub-comment (`// Replay buffer`) inside the `Processing` group. Blank lines
-separate groups.
+plain comments, not Go constructs. There are 11 such header lines: 10 top-level
+groups, plus one sub-comment (`// Replay buffer`) nested inside the
+`Processing` group. Blank lines separate groups.
 
 | Group header (verbatim) | Fields | Lines |
 |---|---|---|
