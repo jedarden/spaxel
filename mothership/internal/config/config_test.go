@@ -351,6 +351,90 @@ func TestMDNSEnabledVariants(t *testing.T) {
 	}
 }
 
+// TestConfigDemoModeFieldExists tests that the Config struct carries an
+// exported DemoMode bool field. The struct literal and assignment below are a
+// compile-time guarantee the field exists; the assertions check its zero value
+// and set/get behavior.
+func TestConfigDemoModeFieldExists(t *testing.T) {
+	var cfg Config
+	if cfg.DemoMode != false {
+		t.Errorf("zero-value Config.DemoMode = %t, want false", cfg.DemoMode)
+	}
+
+	cfg.DemoMode = true
+	if cfg.DemoMode != true {
+		t.Errorf("Config.DemoMode after assignment = %t, want true", cfg.DemoMode)
+	}
+}
+
+// TestDemoModeVariants tests all valid SPAXEL_DEMO_MODE values plus the unset
+// and empty-string cases (both fall back to the default of false via envOr).
+func TestDemoModeVariants(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		set      bool
+		expected bool
+	}{
+		{"true", "true", true, true},
+		{"numeric 1", "1", true, true},
+		{"false", "false", true, false},
+		{"numeric 0", "0", true, false},
+		{"unset defaults to false", "", false, false},
+		{"empty string treated as unset", "", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnvVars()
+			if tt.set {
+				t.Setenv("SPAXEL_DEMO_MODE", tt.value)
+			}
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() failed: %v", err)
+			}
+			if cfg.DemoMode != tt.expected {
+				t.Errorf("DemoMode = %t, want %t", cfg.DemoMode, tt.expected)
+			}
+		})
+	}
+}
+
+// TestInvalidDemoMode tests that invalid SPAXEL_DEMO_MODE values are rejected.
+// Matching is exact and case-sensitive: "TRUE" and "True" are not accepted.
+func TestInvalidDemoMode(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{"yes", "yes"},
+		{"uppercase TRUE", "TRUE"},
+		{"mixed case True", "True"},
+		{"numeric 2", "2"},
+		{"word enabled", "enabled"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnvVars()
+			t.Setenv("SPAXEL_DEMO_MODE", tt.value)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatal("Load() succeeded, want error")
+			}
+			if !strings.Contains(err.Error(), "SPAXEL_DEMO_MODE="+tt.value+" invalid") {
+				t.Errorf("error = %v, want containing 'SPAXEL_DEMO_MODE=%s invalid'", err, tt.value)
+			}
+			if !strings.Contains(err.Error(), "must be one of true, false, 1, 0") {
+				t.Errorf("error = %v, want containing 'must be one of true, false, 1, 0'", err)
+			}
+		})
+	}
+}
+
 // TestLogLevelVariants tests all valid LOG_LEVEL values.
 func TestLogLevelVariants(t *testing.T) {
 	levels := []string{"debug", "info", "warn", "error"}
@@ -448,6 +532,7 @@ func clearEnvVars() {
 		"SPAXEL_MQTT_PASSWORD",
 		"SPAXEL_WIFI_SSID",
 		"SPAXEL_WIFI_PASSWORD",
+		"SPAXEL_DEMO_MODE",
 		"TZ",
 	}
 	for _, v := range envVars {
