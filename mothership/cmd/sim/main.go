@@ -1,5 +1,8 @@
-// Command sim is a CSI simulator CLI for testing Spaxel without hardware.
-// It connects to a running mothership via WebSocket and streams synthetic CSI data.
+// Command sim is the canonical CSI simulator CLI for testing Spaxel without
+// hardware. It connects to a running mothership via WebSocket and streams
+// synthetic CSI data. CI builds this package (spaxel-build and spaxel-e2e both
+// run `go build ./cmd/sim` from the mothership module dir); the former
+// repo-root cmd/sim copy was removed as redundant.
 package main
 
 import (
