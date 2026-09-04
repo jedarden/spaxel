@@ -25,13 +25,14 @@ Spaxel is CSI-only — it never captures camera images or audio. Detection is lo
 
 ## Repository layout
 
-Spaxel is a [Go workspace](go.work) of three modules, plus ESP32 firmware and a static frontend:
+Spaxel is a [Go workspace](go.work) of one module (`mothership/`), plus ESP32 firmware and a static frontend:
 
 | Path | Description |
 |------|-------------|
 | [`mothership/`](mothership/) | Go backend — ingestion, signal pipeline, localizer, fleet manager, REST/WebSocket API, dashboard server (`github.com/spaxel/mothership`) |
-| [`cmd/sim/`](cmd/sim/) | `spaxel-sim` — CSI/node simulator CLI for hardware-free development and integration tests (`github.com/spaxel/sim`) |
-| [`test/acceptance/`](test/acceptance/) | Acceptance-test module (AS-1 … AS-7), driven by the simulator |
+| [`mothership/cmd/sim/`](mothership/cmd/sim/) | `spaxel-sim` — CSI/node simulator CLI for hardware-free development and integration tests |
+| [`mothership/test/acceptance/`](mothership/test/acceptance/) | Acceptance suite (AS-1 … AS-7, IO-1 … IO-11), driven by the simulator |
+| [`mothership/tests/e2e/`](mothership/tests/e2e/) | Go e2e package (plus the opt-in `-tags io6_gate` release hard gate) |
 | [`firmware/`](firmware/) | ESP-IDF (C) firmware for the ESP32-S3 node fleet |
 | [`dashboard/`](dashboard/) | Vanilla JS + Three.js single-page UI (see [`dashboard/README.md`](dashboard/README.md)) |
 | [`docs/`](docs/) | Plan, notes, and research (see [Documentation](#documentation) below) |
@@ -93,10 +94,10 @@ The full list is in the *Deployment* section of [`docs/plan/plan.md`](docs/plan/
 cd mothership && go test ./... && go vet ./...
 
 # CSI / node simulator
-go build -o spaxel-sim ./cmd/sim
+go build -o /tmp/spaxel-sim ./cmd/sim
 
-# Hardware-free acceptance suite (no ESP32 needed)
-cd test/acceptance && go test ./...
+# Acceptance suite (no ESP32 needed; needs a built mothership + spaxel-sim in PATH)
+SPAXEL_INTEGRATION_TEST=1 go test ./test/acceptance/
 
 # Dashboard unit + accessibility tests (CI quality gate)
 cd dashboard && npm test && npm run test:a11y
