@@ -596,3 +596,177 @@ func TestGetRateLimitInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestGetReturnsRawBody(t *testing.T) {
+	const payload = `{"login":"octocat","id":1}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(payload))
+	}))
+	defer srv.Close()
+
+	client := NewClientFromConfig(GitHubConfig{BaseURL: srv.URL, Timeout: time.Second})
+	got, err := client.Get(context.Background(), "/users/octocat")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if string(got) != payload {
+		t.Errorf("Get body = %q, want %q", got, payload)
+	}
+}
+
+func TestGetJoinsConfiguredBaseURL(t *testing.T) {
+	var gotPath, gotRawQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotRawQuery = r.URL.Path, r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	// The trailing slash exercises the same normalisation the typed
+	// constructors document; the path must still join onto the base URL.
+	client := NewClientFromConfig(GitHubConfig{BaseURL: srv.URL + "/", Timeout: time.Second})
+	if _, err := client.Get(context.Background(), "/rate_limit?resource=core"); err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if gotPath != "/rate_limit" {
+		t.Errorf("request path = %q, want %q", gotPath, "/rate_limit")
+	}
+	if gotRawQuery != "resource=core" {
+		t.Errorf("request query = %q, want %q", gotRawQuery, "resource=core")
+	}
+}
+
+// TestDefaultHeadersOnEveryRequest asserts the headers GitHub's API policy
+// expects are applied by the shared request builder rather than per method, so
+// a method added later cannot silently ship without them.
+func TestDefaultHeadersOnEveryRequest(t *testing.T) {
+	requests := map[string]func(*Client) error{
+		"Get":              func(c *Client) error { _, err := c.Get(context.Background(), "/user"); return err },
+		"Ping":             func(c *Client) error { return c.Ping(context.Background()) },
+		"GetReleases":      func(c *Client) error { _, err := c.GetReleases(context.Background(), "o", "r"); return err },
+		"GetLatestRelease": func(c *Client) error { _, err := c.GetLatestRelease(context.Background(), "o", "r"); return err },
+	}
+
+	tests := []struct {
+		name     string
+		token    string
+		wantAuth string
+	}{
+		{name: "unauthenticated client omits Authorization", token: "", wantAuth: ""},
+		{name: "token client sends bearer credentials", token: "tok-1", wantAuth: "Bearer tok-1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for method, call := range requests {
+				t.Run(method, func(t *testing.T) {
+					var gotUA, gotAccept, gotAuth string
+					srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+						gotUA = r.Header.Get("User-Agent")
+						gotAccept = r.Header.Get("Accept")
+						gotAuth = r.Header.Get("Authorization")
+					}))
+					defer srv.Close()
+
+					client := NewClientFromConfig(GitHubConfig{BaseURL: srv.URL, Token: tt.token, Timeout: time.Second})
+					if err := call(client); err != nil {
+						t.Fatalf("%s returned error: %v", method, err)
+					}
+
+					if gotUA != DefaultUserAgent {
+						t.Errorf("User-Agent = %q, want %q", gotUA, DefaultUserAgent)
+					}
+					if !strings.Contains(gotAccept, "application/vnd.github+json") {
+						t.Errorf("Accept = %q, want it to contain %q", gotAccept, "application/vnd.github+json")
+					}
+					if gotAuth != tt.wantAuth {
+						t.Errorf("Authorization = %q, want %q", gotAuth, tt.wantAuth)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestGetReportsErrorStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantStatus string
+		wantBody   string
+	}{
+		{
+			name:       "not found",
+			status:     http.StatusNotFound,
+			body:       `{"message":"Not Found"}`,
+			wantStatus: "404",
+			wantBody:   "Not Found",
+		},
+		{
+			name:       "server error",
+			status:     http.StatusInternalServerError,
+			body:       "boom",
+			wantStatus: "500",
+			wantBody:   "boom",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+
+			client := NewClientFromConfig(GitHubConfig{BaseURL: srv.URL, Timeout: time.Second})
+			got, err := client.Get(context.Background(), "/repos/o/r")
+			if err == nil {
+				t.Fatalf("Get succeeded with body %q, want an error for status %d", got, tt.status)
+			}
+			if !strings.Contains(err.Error(), tt.wantStatus) {
+				t.Errorf("error %q does not mention status %s", err, tt.wantStatus)
+			}
+			if !strings.Contains(err.Error(), tt.wantBody) {
+				t.Errorf("error %q does not include the response body %q", err, tt.wantBody)
+			}
+		})
+	}
+}
+
+// TestGetTransportErrors covers the failures that happen before a response
+// exists: nothing is listening, and the request outlives the configured
+// timeout. Both must come back as errors rather than panics or empty bodies.
+func TestGetTransportErrors(t *testing.T) {
+	t.Run("connection refused", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		url := srv.URL
+		srv.Close() // nothing is listening on url any more
+
+		client := NewClientFromConfig(GitHubConfig{BaseURL: url, Timeout: time.Second})
+		body, err := client.Get(context.Background(), "/user")
+		if err == nil {
+			t.Fatal("Get against a closed server succeeded, want an error")
+		}
+		if body != nil {
+			t.Errorf("body = %q on a transport failure, want nil", body)
+		}
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+			time.Sleep(500 * time.Millisecond)
+		}))
+		defer srv.Close()
+
+		client := NewClientFromConfig(GitHubConfig{BaseURL: srv.URL, Timeout: 50 * time.Millisecond})
+		if _, err := client.Get(context.Background(), "/slow"); err == nil {
+			t.Fatal("Get past the client timeout succeeded, want an error")
+		} else if !strings.Contains(err.Error(), "Client.Timeout") {
+			t.Errorf("error %q does not identify the client timeout", err)
+		}
+	})
+}

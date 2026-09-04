@@ -18,6 +18,10 @@ const (
 	KanikoRepoOwner = "GoogleContainerTools"
 	// KanikoRepoName is the repository name for Kaniko
 	KanikoRepoName = "kaniko"
+	// DefaultUserAgent is sent on every request. GitHub's API policy requires
+	// requests to identify the calling application via User-Agent and rejects
+	// those that arrive without one.
+	DefaultUserAgent = "Spaxel/1.0"
 )
 
 // Client represents a GitHub API client with optional authentication.
@@ -89,71 +93,115 @@ func (c *Client) String() string {
 	return fmt.Sprintf("Client{%s}", c.config.String())
 }
 
-// Ping verifies GitHub API accessibility by making a lightweight authenticated request.
-// It returns an error if the API is unreachable or returns an unexpected status code.
-// This is a simple health check - it doesn't verify the token has any specific scopes.
-func (c *Client) Ping(ctx context.Context) error {
-	// Use the root endpoint which requires minimal quota
-	req, err := http.NewRequestWithContext(ctx, "GET", c.config.BaseURL+"/user", nil)
+// newRequest builds a request for path against the configured base URL with
+// the client's default headers already applied: the User-Agent GitHub's API
+// policy requires, the versioned Accept header, and a bearer Authorization
+// header when a token is configured. path is appended to BaseURL verbatim, so
+// callers include the leading slash.
+func (c *Client) newRequest(ctx context.Context, method, path string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.config.BaseURL+path, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create ping request: %w", err)
+		return nil, err
 	}
+
+	req.Header.Set("User-Agent", DefaultUserAgent)
+	req.Header.Set("Accept", "application/vnd.github+json")
 
 	// Add authorization header if token is available
 	if c.config.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.config.Token)
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
+	return req, nil
+}
 
+// do sends req and returns the response body together with its status code.
+// Transport failures — connection refused, DNS lookup failure, the configured
+// timeout — come back as the error with an empty body and a zero status. A
+// non-2xx status is not an error here: callers decide what each status means
+// for their endpoint, and the drained body is returned so it can be included
+// in whatever message they build from it.
+func (c *Client) do(req *http.Request) (body []byte, status int, err error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("GitHub API ping failed: %w", err)
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
-	// We accept 200 OK (authenticated), 401 (token invalid but API reachable), or 403 (forbidden)
-	// Any of these means the API endpoint is accessible
-	if resp.StatusCode != 200 && resp.StatusCode != 401 && resp.StatusCode != 403 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API ping returned unexpected status %d: %s", resp.StatusCode, string(body))
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
+	}
+	return body, resp.StatusCode, nil
+}
+
+// Get issues a GET request for path against the configured base URL and
+// returns the raw response body. It is the generic request method the typed
+// helpers below are built on: path is appended to BaseURL verbatim (leading
+// slash included), so callers can reach endpoints those helpers do not wrap.
+//
+// A non-200 response is an error carrying the status code and whatever body
+// the API returned. Transport failures — connection refused, DNS lookup
+// failure, the configured timeout — surface as the wrapped error from the
+// HTTP client.
+func (c *Client) Get(ctx context.Context, path string) ([]byte, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	log.Printf("[GITHUB] API ping successful (status %d)", resp.StatusCode)
+	body, status, err := c.do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GitHub API request failed: %w", err)
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d: %s", status, body)
+	}
+	return body, nil
+}
+
+// Ping verifies GitHub API accessibility by making a lightweight authenticated request.
+// It returns an error if the API is unreachable or returns an unexpected status code.
+// This is a simple health check - it doesn't verify the token has any specific scopes.
+func (c *Client) Ping(ctx context.Context) error {
+	// Use the root endpoint which requires minimal quota
+	req, err := c.newRequest(ctx, http.MethodGet, "/user")
+	if err != nil {
+		return fmt.Errorf("failed to create ping request: %w", err)
+	}
+
+	body, status, err := c.do(req)
+	if err != nil {
+		return fmt.Errorf("GitHub API ping failed: %w", err)
+	}
+
+	// We accept 200 OK (authenticated), 401 (token invalid but API reachable), or 403 (forbidden)
+	// Any of these means the API endpoint is accessible
+	if status != 200 && status != 401 && status != 403 {
+		return fmt.Errorf("GitHub API ping returned unexpected status %d: %s", status, body)
+	}
+
+	log.Printf("[GITHUB] API ping successful (status %d)", status)
 	return nil
 }
 
 // GetReleases fetches releases from a GitHub repository.
 // Returns the raw JSON response body and any error encountered.
 func (c *Client) GetReleases(ctx context.Context, owner, repo string) ([]byte, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases", c.config.BaseURL, owner, repo)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/releases", owner, repo))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create releases request: %w", err)
 	}
 
-	if c.config.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.config.Token)
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	resp, err := c.httpClient.Do(req)
+	body, status, err := c.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch releases: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if status == 404 {
 		return nil, fmt.Errorf("repository %s/%s not found", owner, repo)
 	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
+	if status != 200 {
+		return nil, fmt.Errorf("GitHub API returned status %d: %s", status, body)
 	}
 
 	return body, nil
@@ -162,31 +210,18 @@ func (c *Client) GetReleases(ctx context.Context, owner, repo string) ([]byte, e
 // GetLatestRelease fetches the latest release from a GitHub repository.
 // Returns the raw JSON response body and any error encountered.
 func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) ([]byte, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", c.config.BaseURL, owner, repo)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/releases/latest", owner, repo))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create latest release request: %w", err)
 	}
 
-	if c.config.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.config.Token)
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	resp, err := c.httpClient.Do(req)
+	body, status, err := c.do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch latest release: %w", err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to fetch latest release: GitHub API returned status %d: %s", resp.StatusCode, string(body))
+	if status != 200 {
+		return nil, fmt.Errorf("failed to fetch latest release: GitHub API returned status %d: %s", status, body)
 	}
 
 	return body, nil
