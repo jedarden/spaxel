@@ -268,6 +268,98 @@ Wire notes on the remaining nine fields:
 - `PersonName string` - Set from TrackedBlob.PersonName
 - `AssignedColor string` - Set from TrackedBlob.AssignedColor
 
+## IdentityMatch Analysis Summary
+
+Consolidated from the three analysis passes this family produced — (1) struct
+fields and types, (2) existing methods, (3) `Label()` test cases and contract —
+each re-verified against HEAD with zero drift. Section 1 compresses the
+detailed field table above; sections 2 and 3 are new to this document and are
+the reference for anything touching `IdentityMatch` API surface.
+
+### 1. Struct fields and types
+
+`ble.IdentityMatch` (`mothership/internal/ble/identity.go:37-50`) — 11 fields,
+declaration order:
+
+| Field | Type | JSON tag |
+|---|---|---|
+| `BlobID` | `int` | `json:"blob_id"` |
+| `DeviceAddr` | `string` | `json:"device_addr"` |
+| `DeviceName` | `string` | `json:"device_name,omitempty"` |
+| `PersonID` | `string` | `json:"person_id,omitempty"` |
+| `PersonName` | `string` | `json:"person_name,omitempty"` |
+| `PersonColor` | `string` | `json:"person_color,omitempty"` |
+| `Confidence` | `float64` | `json:"confidence"` |
+| `TriangulationPos` | `Position` | `json:"triangulation_pos"` |
+| `TriangulationConf` | `float64` | `json:"triangulation_confidence"` |
+| `Timestamp` | `time.Time` | `json:"timestamp"` |
+| `IsBLEOnly` | `bool` | `json:"is_ble_only"` |
+
+The four `string` identity fields carry `omitempty` and drop out of the JSON
+when empty; the other seven always serialize (per-field population semantics:
+see the detailed table above). Two companion facts that recur across this
+family: `api.IdentityMatch` (`mothership/internal/api/status.go:45-50`) is a
+deliberate **four-field projection** (`PersonName`, `PersonID`, `DeviceName`,
+`IsBLEOnly`) so `internal/api` need not import the `ble` type — not a mirror;
+and `Position` (identity.go:71-73) carries no JSON tags, so
+`triangulation_pos` emits capitalised `"X"`/`"Y"`/`"Z"` keys.
+
+### 2. Existing methods
+
+`mothership/internal/ble/identity.go` defines **two distinct types**, the
+likely source of this family's repeated confusion: `IdentityMatch` (line 38,
+the per-person data record) and `IdentityMatcher` (line 86, the matcher
+engine). The file holds 29 `func` declarations in total:
+
+- **Methods with an `IdentityMatch` receiver: exactly one.**
+  `func (m *IdentityMatch) Label() string` (identity.go:60) — nil-safe,
+  returns `PersonName` if set else `DeviceName`. A repo-wide grep finds no
+  other `IdentityMatch` method anywhere in `mothership/`.
+- **Methods on the different type `*IdentityMatcher` (21)** — if a task says
+  "add/find an IdentityMatch method", check which type it actually means:
+  `SetRotationDetector` (104), `UpdateBlobs` (126), `getTriangulatedDevices`
+  (162), `triangulateAllDevices` (175), `triangulate` (258), `assignBLEToBlobs`
+  (399), `createBLEOnlyTracks` (556), `decayOldMatches` (621), `GetMatches`
+  (645), `GetMatch` (657), `GetBLEOnlyTracks` (664), `GetAllMatches` (676),
+  `GetPersistentIdentity` (691), `ForceMatch` (741), `ClearMatch` (760),
+  `ProcessBLEObservations` (770), `GetRotationCandidates` (779),
+  `GetRotationHistory` (788), `ExtendGracePeriod` (798),
+  `IsWithinGracePeriod` (807), `EnrichBlobsWithIdentity` (819).
+- **Package-level funcs in the same file, not methods (7):** `bleDebug` (13),
+  `NewIdentityMatcher` (111), `rssiToDistance` (394), `computeMatchConfidence`
+  (521), `sortDevicesByConfidence` (698), `getPersonColor` (709),
+  `defaultColorForPerson` (720).
+
+### 3. Test cases and the `Label()` contract
+
+`mothership/internal/ble/label_test.go:9-43` — one table-driven test,
+`TestIdentityMatch_Label`, four cases:
+
+| Case | Receiver | Want |
+|---|---|---|
+| person name preferred over device name | `&IdentityMatch{PersonName: "Alice", DeviceName: "iPhone"}` | `"Alice"` |
+| device name fallback when person name empty | `&IdentityMatch{DeviceName: "Dog Tracker"}` | `"Dog Tracker"` |
+| empty when both names empty | `&IdentityMatch{}` | `""` |
+| nil receiver returns empty without panic | `nil` | `""` |
+
+Contract (label_test.go:5-8 doc comment, matching the implementation at
+identity.go:59-70):
+
+- Returns the canonical human-facing identity for an `IdentityMatch`.
+- Precedence: `PersonName` if non-empty, else `DeviceName`. Only `!= ""` is
+  checked — no trimming, no coalescing of whitespace-only strings.
+- Both empty → `""`.
+- Nil-safe: an explicit `if m == nil { return "" }` guard means a nil
+  `*IdentityMatch` yields `""` without panicking.
+- Single `string` return; no error, no ok-flag.
+- Purpose (implementation doc comment): the accessor every human-facing
+  projection (falldetect, zone-crossing, anomaly/notify) reads identity
+  through at runtime, because projections previously read `DeviceName`
+  directly — the BLE hardware name, frequently empty for registered persons.
+
+Verified live (Go 1.25.0, from `mothership/`):
+`go test ./internal/ble/ -run TestIdentityMatch_Label -v` → all 4 subtests PASS.
+
 ## Conclusion
 
 PersonID **IS POPULATED** when EvaluateTriggers is called with a BlobPos. The field is populated through the BLE identity matching pipeline in Stage 2b of the fusion loop (main.go:2226) BEFORE volume triggers are evaluated. The PersonID flows from:
