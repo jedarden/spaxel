@@ -14,9 +14,6 @@ const DefaultGitHubTimeout = 30 * time.Second
 // It is a plain value type: every field is exported and comparable, so two
 // configs can be compared with == and copied by assignment. The zero value is
 // not a usable configuration — build one with NewGitHubConfig.
-//
-// Client does not consume this type yet; wiring it in is a separate change so
-// the config shape can settle first.
 type GitHubConfig struct {
 	// BaseURL is the GitHub REST API base URL, with no trailing slash. Point
 	// it at a GitHub Enterprise instance or a test server as needed.

@@ -16,8 +16,8 @@ func TestNewClient(t *testing.T) {
 	if clientWithToken == nil {
 		t.Fatal("NewClient returned nil")
 	}
-	if clientWithToken.token != "test-token-123" {
-		t.Errorf("Expected token 'test-token-123', got '%s'", clientWithToken.token)
+	if got := clientWithToken.Config().Token; got != "test-token-123" {
+		t.Errorf("Expected token 'test-token-123', got '%s'", got)
 	}
 
 	// Test client creation without token
@@ -25,20 +25,187 @@ func TestNewClient(t *testing.T) {
 	if clientWithoutToken == nil {
 		t.Fatal("NewClient returned nil")
 	}
-	if clientWithoutToken.token != "" {
-		t.Errorf("Expected empty token, got '%s'", clientWithoutToken.token)
+	if got := clientWithoutToken.Config().Token; got != "" {
+		t.Errorf("Expected empty token, got '%s'", got)
 	}
 
 	// Verify default values
-	if clientWithToken.baseURL != GitHubAPIBaseURL {
-		t.Errorf("Expected base URL '%s', got '%s'", GitHubAPIBaseURL, clientWithToken.baseURL)
+	cfg := clientWithToken.Config()
+	if cfg.BaseURL != GitHubAPIBaseURL {
+		t.Errorf("Expected base URL '%s', got '%s'", GitHubAPIBaseURL, cfg.BaseURL)
 	}
-	if clientWithToken.repoOwner != KanikoRepoOwner {
-		t.Errorf("Expected repo owner '%s', got '%s'", KanikoRepoOwner, clientWithToken.repoOwner)
+	if cfg.RepoOwner != KanikoRepoOwner {
+		t.Errorf("Expected repo owner '%s', got '%s'", KanikoRepoOwner, cfg.RepoOwner)
 	}
-	if clientWithToken.repoName != KanikoRepoName {
-		t.Errorf("Expected repo name '%s', got '%s'", KanikoRepoName, clientWithToken.repoName)
+	if cfg.RepoName != KanikoRepoName {
+		t.Errorf("Expected repo name '%s', got '%s'", KanikoRepoName, cfg.RepoName)
 	}
+	if cfg.Timeout != DefaultGitHubTimeout {
+		t.Errorf("Expected timeout %s, got %s", DefaultGitHubTimeout, cfg.Timeout)
+	}
+}
+
+func TestNewClientFromConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  GitHubConfig
+		want GitHubConfig
+	}{
+		{
+			name: "keeps a fully specified configuration",
+			cfg: GitHubConfig{
+				BaseURL:   "https://ghe.example.com/api/v3/",
+				Token:     "ghp_test",
+				RepoOwner: "someone",
+				RepoName:  "somewhere",
+				Timeout:   5 * time.Second,
+			},
+			want: GitHubConfig{
+				BaseURL:   "https://ghe.example.com/api/v3",
+				Token:     "ghp_test",
+				RepoOwner: "someone",
+				RepoName:  "somewhere",
+				Timeout:   5 * time.Second,
+			},
+		},
+		{
+			name: "drops a trailing slash from the base URL",
+			cfg:  NewGitHubConfig().WithToken("t"),
+			want: GitHubConfig{
+				BaseURL:   GitHubAPIBaseURL,
+				Token:     "t",
+				RepoOwner: KanikoRepoOwner,
+				RepoName:  KanikoRepoName,
+				Timeout:   DefaultGitHubTimeout,
+			},
+		},
+		{
+			name: "replaces a zero timeout with the default",
+			cfg:  GitHubConfig{BaseURL: GitHubAPIBaseURL, Timeout: 0},
+			want: GitHubConfig{
+				BaseURL:   GitHubAPIBaseURL,
+				Token:     "",
+				RepoOwner: "",
+				RepoName:  "",
+				Timeout:   DefaultGitHubTimeout,
+			},
+		},
+		{
+			name: "keeps an unauthenticated client when no token is set",
+			cfg:  NewGitHubConfig(),
+			want: GitHubConfig{
+				BaseURL:   GitHubAPIBaseURL,
+				Token:     "",
+				RepoOwner: KanikoRepoOwner,
+				RepoName:  KanikoRepoName,
+				Timeout:   DefaultGitHubTimeout,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewClientFromConfig(tt.cfg)
+			if client == nil {
+				t.Fatal("NewClientFromConfig returned nil")
+			}
+			if got := client.Config(); got != tt.want {
+				t.Errorf("Config() = %+v, want %+v", got, tt.want)
+			}
+			if client.httpClient.Timeout != tt.want.Timeout {
+				t.Errorf("httpClient.Timeout = %s, want %s", client.httpClient.Timeout, tt.want.Timeout)
+			}
+		})
+	}
+}
+
+func TestNewClientFromConfigTrailingSlashRequestPath(t *testing.T) {
+	// A trailing slash on the base URL must not produce "//repos/..." request
+	// URLs, which some servers treat as a different route.
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := NewClientFromConfig(GitHubConfig{BaseURL: srv.URL + "/", Timeout: time.Second})
+	if _, err := client.GetLatestRelease(context.Background(), "o", "r"); err != nil {
+		t.Fatalf("GetLatestRelease returned error: %v", err)
+	}
+	if gotPath != "/repos/o/r/releases/latest" {
+		t.Errorf("request path = %q, want %q", gotPath, "/repos/o/r/releases/latest")
+	}
+}
+
+func TestClientConfigReturnsCopy(t *testing.T) {
+	client := NewClient("keep-me")
+
+	cfg := client.Config()
+	cfg.Token = "mutated"
+	cfg.RepoName = "mutated"
+
+	if got := client.Config(); got.Token != "keep-me" || got.RepoName != KanikoRepoName {
+		t.Errorf("Config() mutation leaked into the client: %+v", got)
+	}
+}
+
+func TestClientClone(t *testing.T) {
+	orig := NewClientFromConfig(GitHubConfig{
+		BaseURL:   GitHubAPIBaseURL,
+		Token:     "tok",
+		RepoOwner: KanikoRepoOwner,
+		RepoName:  KanikoRepoName,
+		Timeout:   DefaultGitHubTimeout,
+	})
+
+	clone := orig.Clone()
+	if clone == orig {
+		t.Fatal("Clone returned the same pointer")
+	}
+	if clone.Config() != orig.Config() {
+		t.Errorf("Clone() config = %+v, want %+v", clone.Config(), orig.Config())
+	}
+	if clone.httpClient == orig.httpClient {
+		t.Error("Clone shares the receiver's http.Client")
+	}
+
+	// Mutating the clone must not affect the receiver.
+	clone.SetRepoName("other-repo")
+	clone.SetBaseURL("https://ghe.example.com/")
+	if got := orig.GetRepoName(); got != KanikoRepoName {
+		t.Errorf("receiver RepoName changed to %q after clone mutation", got)
+	}
+	if got := orig.GetBaseURL(); got != GitHubAPIBaseURL {
+		t.Errorf("receiver BaseURL changed to %q after clone mutation", got)
+	}
+}
+
+func TestClientString(t *testing.T) {
+	secret := "ghp_super_secret_token_value"
+
+	t.Run("redacts the token value", func(t *testing.T) {
+		got := NewClient(secret).String()
+		if strings.Contains(got, secret) {
+			t.Errorf("String() leaked the token: %q", got)
+		}
+		if !strings.Contains(got, "token: set") {
+			t.Errorf("String() did not report the token state: %q", got)
+		}
+	})
+
+	t.Run("reports an unauthenticated client", func(t *testing.T) {
+		got := NewClient("").String()
+		if strings.Contains(got, "token: set") {
+			t.Errorf("String() reported a token for an unauthenticated client: %q", got)
+		}
+	})
+
+	t.Run("identifies the target repository", func(t *testing.T) {
+		got := NewClient("").String()
+		if !strings.Contains(got, KanikoRepoOwner+"/"+KanikoRepoName) {
+			t.Errorf("String() = %q, want it to name %s/%s", got, KanikoRepoOwner, KanikoRepoName)
+		}
+	})
 }
 
 func TestPing(t *testing.T) {
@@ -48,7 +215,7 @@ func TestPing(t *testing.T) {
 		responseStatus int
 		responseBody   string
 		expectError    bool
-		errorContains   string
+		errorContains  string
 	}{
 		{
 			name:           "successful authenticated ping",
@@ -77,7 +244,7 @@ func TestPing(t *testing.T) {
 			responseStatus: 500,
 			responseBody:   `{"message": "Internal server error"}`,
 			expectError:    true,
-			errorContains:   "unexpected status 500",
+			errorContains:  "unexpected status 500",
 		},
 	}
 
@@ -139,7 +306,7 @@ func TestGetReleases(t *testing.T) {
 		responseStatus int
 		responseBody   string
 		expectError    bool
-		errorContains   string
+		errorContains  string
 	}{
 		{
 			name:           "successful releases fetch",
@@ -158,7 +325,7 @@ func TestGetReleases(t *testing.T) {
 			responseStatus: 404,
 			responseBody:   `{"message": "Not Found"}`,
 			expectError:    true,
-			errorContains:   "not found",
+			errorContains:  "not found",
 		},
 		{
 			name:           "unauthenticated rate limited",
@@ -233,7 +400,7 @@ func TestGetLatestRelease(t *testing.T) {
 		responseStatus int
 		responseBody   string
 		expectError    bool
-		errorContains   string
+		errorContains  string
 	}{
 		{
 			name:           "successful latest release fetch",
@@ -252,7 +419,7 @@ func TestGetLatestRelease(t *testing.T) {
 			responseStatus: 404,
 			responseBody:   `{"message": "Not Found"}`,
 			expectError:    true,
-			errorContains:   "failed to fetch latest release",
+			errorContains:  "failed to fetch latest release",
 		},
 	}
 
@@ -325,18 +492,18 @@ func TestSettersAndGetters(t *testing.T) {
 func TestIsRateLimited(t *testing.T) {
 	tests := []struct {
 		name     string
-		headers map[string]string
+		headers  map[string]string
 		expected bool
 	}{
 		{
-			name:     "rate limited (403 with zero remaining)",
+			name: "rate limited (403 with zero remaining)",
 			headers: map[string]string{
 				"X-RateLimit-Remaining": "0",
 			},
 			expected: true,
 		},
 		{
-			name:     "not rate limited (403 with requests remaining)",
+			name: "not rate limited (403 with requests remaining)",
 			headers: map[string]string{
 				"X-RateLimit-Remaining": "100",
 			},
@@ -369,40 +536,40 @@ func TestIsRateLimited(t *testing.T) {
 
 func TestGetRateLimitInfo(t *testing.T) {
 	tests := []struct {
-		name           string
-		headers        map[string]string
-		expectedRem    int
-		expectedReset   int64
-		expectedAuth   bool
+		name          string
+		headers       map[string]string
+		expectedRem   int
+		expectedReset int64
+		expectedAuth  bool
 	}{
 		{
 			name: "authenticated request with full headers",
 			headers: map[string]string{
 				"X-RateLimit-Remaining": "4999",
 				"X-RateLimit-Reset":     "1234567890",
-				"X-RateLimit-Limit":      "5000",
+				"X-RateLimit-Limit":     "5000",
 			},
-			expectedRem:  4999,
+			expectedRem:   4999,
 			expectedReset: 1234567890,
-			expectedAuth: true,
+			expectedAuth:  true,
 		},
 		{
 			name: "unauthenticated request",
 			headers: map[string]string{
 				"X-RateLimit-Remaining": "59",
 				"X-RateLimit-Reset":     "1234567890",
-				"X-RateLimit-Limit":      "60",
+				"X-RateLimit-Limit":     "60",
 			},
-			expectedRem:  59,
+			expectedRem:   59,
 			expectedReset: 1234567890,
-			expectedAuth: false,
+			expectedAuth:  false,
 		},
 		{
-			name:           "missing headers",
-			headers:        map[string]string{},
-			expectedRem:    0,
+			name:          "missing headers",
+			headers:       map[string]string{},
+			expectedRem:   0,
 			expectedReset: 0,
-			expectedAuth:   false,
+			expectedAuth:  false,
 		},
 	}
 

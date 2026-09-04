@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 const (
@@ -22,26 +21,72 @@ const (
 )
 
 // Client represents a GitHub API client with optional authentication.
+//
+// Every configurable behaviour — base URL, default repository, request
+// timeout, and the authentication token — lives in config, which is the
+// single source of truth. Keeping one copy rather than mirroring the
+// settings onto separate fields means the setters and the request methods
+// can never disagree about what the client is configured to do.
 type Client struct {
+	// config is the GitHubConfig this client was built from. It holds the
+	// base URL, the default repository, the per-request timeout, and the
+	// authentication token (empty means unauthenticated).
+	config GitHubConfig
+
+	// httpClient issues the client's requests. Its timeout mirrors
+	// config.Timeout as of construction.
 	httpClient *http.Client
-	token      string
-	baseURL    string
-	repoOwner  string
-	repoName   string
 }
 
 // NewClient creates a new GitHub API client. If token is empty, requests will be unauthenticated
 // and subject to GitHub's rate limits (60 requests/hour for unauthenticated IPs).
 func NewClient(token string) *Client {
-	return &Client{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		token:     token,
-		baseURL:   GitHubAPIBaseURL,
-		repoOwner: KanikoRepoOwner,
-		repoName:  KanikoRepoName,
+	return NewClientFromConfig(NewGitHubConfig().WithToken(token))
+}
+
+// NewClientFromConfig returns a Client configured by cfg: requests go to
+// cfg.BaseURL, carry cfg.Token as a bearer credential when it is non-empty,
+// are bounded by cfg.Timeout, and default to cfg.RepoOwner/cfg.RepoName.
+//
+// BaseURL is normalised by dropping any trailing slash, so
+// "https://api.github.com" and "https://api.github.com/" build the same
+// request URLs. A zero Timeout would leave requests unbounded, so it falls
+// back to DefaultGitHubTimeout.
+//
+// This is the constructor to reach for once configuration is read from the
+// environment or settings rather than hardcoded; NewClient(token) is the
+// shorthand for the default configuration plus a token.
+func NewClientFromConfig(cfg GitHubConfig) *Client {
+	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = DefaultGitHubTimeout
 	}
+	return &Client{
+		config:     cfg,
+		httpClient: &http.Client{Timeout: cfg.Timeout},
+	}
+}
+
+// Config returns the configuration the client was built from, including the
+// authentication token. The result is a copy: mutating it does not affect the
+// client. String() is the log-safe view of the same values.
+func (c *Client) Config() GitHubConfig {
+	return c.config
+}
+
+// Clone returns an independent copy of the client. Changes to the copy —
+// including through the Set* methods — leave the receiver untouched. The HTTP
+// client is rebuilt from the configuration rather than shared, so the two
+// clients also have separate connection pools.
+func (c *Client) Clone() *Client {
+	return NewClientFromConfig(c.config.Clone())
+}
+
+// String renders the client for logs. Token redaction is delegated to
+// GitHubConfig.String, which reports whether a token is set without ever
+// including its value.
+func (c *Client) String() string {
+	return fmt.Sprintf("Client{%s}", c.config.String())
 }
 
 // Ping verifies GitHub API accessibility by making a lightweight authenticated request.
@@ -49,14 +94,14 @@ func NewClient(token string) *Client {
 // This is a simple health check - it doesn't verify the token has any specific scopes.
 func (c *Client) Ping(ctx context.Context) error {
 	// Use the root endpoint which requires minimal quota
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/user", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.config.BaseURL+"/user", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create ping request: %w", err)
 	}
 
 	// Add authorization header if token is available
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.config.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.config.Token)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 
@@ -80,15 +125,15 @@ func (c *Client) Ping(ctx context.Context) error {
 // GetReleases fetches releases from a GitHub repository.
 // Returns the raw JSON response body and any error encountered.
 func (c *Client) GetReleases(ctx context.Context, owner, repo string) ([]byte, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases", c.baseURL, owner, repo)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases", c.config.BaseURL, owner, repo)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create releases request: %w", err)
 	}
 
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.config.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.config.Token)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 
@@ -117,15 +162,15 @@ func (c *Client) GetReleases(ctx context.Context, owner, repo string) ([]byte, e
 // GetLatestRelease fetches the latest release from a GitHub repository.
 // Returns the raw JSON response body and any error encountered.
 func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) ([]byte, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", c.baseURL, owner, repo)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", c.config.BaseURL, owner, repo)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create latest release request: %w", err)
 	}
 
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.config.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.config.Token)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 
@@ -181,30 +226,31 @@ func GetRateLimitInfo(resp *http.Response) (remaining int, reset int64, authenti
 
 // SetRepoOwner sets a custom repository owner (useful for testing or forks).
 func (c *Client) SetRepoOwner(owner string) {
-	c.repoOwner = owner
+	c.config.RepoOwner = owner
 }
 
 // SetRepoName sets a custom repository name (useful for testing or forks).
 func (c *Client) SetRepoName(name string) {
-	c.repoName = name
+	c.config.RepoName = name
 }
 
 // SetBaseURL sets a custom base URL (useful for testing or GitHub Enterprise).
+// A trailing slash is dropped, matching NewClientFromConfig's normalisation.
 func (c *Client) SetBaseURL(url string) {
-	c.baseURL = strings.TrimRight(url, "/")
+	c.config.BaseURL = strings.TrimRight(url, "/")
 }
 
 // GetRepoOwner returns the current repository owner.
 func (c *Client) GetRepoOwner() string {
-	return c.repoOwner
+	return c.config.RepoOwner
 }
 
 // GetRepoName returns the current repository name.
 func (c *Client) GetRepoName() string {
-	return c.repoName
+	return c.config.RepoName
 }
 
 // GetBaseURL returns the current base URL.
 func (c *Client) GetBaseURL() string {
-	return c.baseURL
+	return c.config.BaseURL
 }
