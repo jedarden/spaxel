@@ -104,6 +104,32 @@ This tests:
 - Kaniko releases endpoint availability
 - Actual data retrieval
 
+## Public API Surface
+
+Everything a consumer outside the package may reach is exported, and pinned by
+`client_external_test.go`, which imports the package as an external consumer
+would (`package github_test`) and fails to compile if any of these stops being
+reachable:
+
+| Kind | Exported identifiers |
+|------|----------------------|
+| Types | `Client`, `GitHubConfig` |
+| Constructors | `NewClient`, `NewClientFromConfig`, `NewGitHubConfig` |
+| `Client` methods | `Config`, `Clone`, `String`, `Ping`, `GetReleases`, `GetLatestRelease`, `SetRepoOwner`, `SetRepoName`, `SetBaseURL`, `GetRepoOwner`, `GetRepoName`, `GetBaseURL` |
+| `GitHubConfig` methods | `Clone`, `WithToken`, `String` |
+| Package functions | `IsRateLimited`, `GetRateLimitInfo` |
+| Constants | `GitHubAPIBaseURL`, `KanikoRepoOwner`, `KanikoRepoName`, `DefaultGitHubTimeout` |
+
+`Client`'s own fields stay unexported — configuration is read back through
+`Config()`, which returns a copy, so a caller cannot mutate a live client.
+
+The import path is `github.com/spaxel/mothership/internal/github`. The
+`internal/` element is Go's module privacy boundary: the package is reachable
+from anywhere inside the `mothership` module (as `cmd/mothership` does), and
+not from a different Go module. That matches every other package in this
+module; it is what "exported" means here, and is why the boundary is asserted
+by an external-package test rather than by relocating the package.
+
 ## HTTP Client Configuration
 
 The client uses a 30-second timeout for all requests (`DefaultGitHubTimeout`).
