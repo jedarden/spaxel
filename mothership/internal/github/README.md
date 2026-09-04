@@ -23,7 +23,17 @@ client := github.NewClient("")
 
 // Authenticated client (5000 requests/hour rate limit)
 client := github.NewClient("ghp_your_token_here")
+
+// Fully configured client (base URL, token, default repo, timeout)
+cfg := github.NewGitHubConfig().WithToken(os.Getenv("SPAXEL_GITHUB_TOKEN"))
+client := github.NewClientFromConfig(cfg)
 ```
+
+`NewClient(token)` is shorthand for the default configuration plus a token.
+`NewClientFromConfig(GitHubConfig)` takes the full configuration and is the
+constructor to use once settings come from the environment or the settings
+store. A trailing slash on `BaseURL` is dropped, and a zero `Timeout` falls
+back to the 30-second default.
 
 ### Ping GitHub API
 
@@ -96,7 +106,10 @@ This tests:
 
 ## HTTP Client Configuration
 
-The client uses a 30-second timeout for all requests. This can be modified in the `NewClient` function if needed.
+The client uses a 30-second timeout for all requests (`DefaultGitHubTimeout`).
+Set `GitHubConfig.Timeout` and build with `NewClientFromConfig` to change it.
+`client.String()` renders the configuration for logs and never includes the
+token value, so a client is safe to log.
 
 ## Dependencies
 
