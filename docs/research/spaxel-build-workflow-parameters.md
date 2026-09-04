@@ -153,7 +153,7 @@ Most build/test steps use exponential backoff retry:
 
 ## Related Documentation
 
-- **Workflow location:** `k8s/iad-ci/argo-workflows/spaxel-build.yml` in `jedarden/declarative-config`
+- **Workflow location:** `k8s/iad-ci/argo-workflows/spaxel-build-workflowtemplate.yml` in `jedarden/declarative-config` (the earlier `spaxel-build.yml` citation here was wrong — see `spaxel-build-architecture-targeting.md` §1)
 - **Namespace:** `argo-workflows`
 - **ServiceAccount:** `argo-workflow`
 - **Template type:** WorkflowTemplate (can be referenced via `workflowTemplateRef`)
