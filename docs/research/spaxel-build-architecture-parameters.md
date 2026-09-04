@@ -11,6 +11,16 @@ each is used, and note defaults and constraints. No templates were modified.
 at the same date. Line references to the template are given by step and field, since
 the authoritative manifest lives in `jedarden/declarative-config`, outside this repo.
 
+> **Status (2026-09-04, later the same day): superseded in its headline claim.**
+> The template *now has* a platform parameter — `platforms`, default
+> `linux/amd64,linux/arm64`, substituted into `docker-build`'s `--platform` flag —
+> added by declarative-config commit `a979e063` (design and implementation record:
+> `docs/notes/amd64-only-build-template-design.md`; usage:
+> `docs/notes/amd64-only-build-usage.md`). Everything below that is not about the
+> parameter's absence still holds: the three-parameter inventory, the `esp32s3`
+> firmware literal, and the Dockerfile build-arg inventory are unchanged. Read the
+> rest as the pre-parameter state.
+
 ---
 
 ## 0. The answer in one line
