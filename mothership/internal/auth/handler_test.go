@@ -963,3 +963,79 @@ func TestHandler_ChangePIN_InvalidNewPIN(t *testing.T) {
 		})
 	}
 }
+
+func TestDemoModeMiddleware(t *testing.T) {
+	// demoModeMessage is the exact response message demo mode must return for
+	// every rejected mutation.
+	const demoModeMessage = "Spaxel is running in demo mode - mutating operations are disabled"
+
+	tests := []struct {
+		name       string
+		demoMode   bool
+		method     string
+		path       string
+		wantStatus int
+	}{
+		// Mutating methods are rejected on every endpoint type while demo mode is active.
+		{"reject POST node identify", true, http.MethodPost, "/api/nodes/AA:BB:CC:DD:EE:FF/identify", http.StatusForbidden},
+		{"reject PUT node position", true, http.MethodPut, "/api/nodes/AA:BB:CC:DD:EE:FF/position", http.StatusForbidden},
+		{"reject PATCH node label", true, http.MethodPatch, "/api/nodes/AA:BB:CC:DD:EE:FF/label", http.StatusForbidden},
+		{"reject DELETE node", true, http.MethodDelete, "/api/nodes/AA:BB:CC:DD:EE:FF", http.StatusForbidden},
+		{"reject POST automations", true, http.MethodPost, "/api/automations", http.StatusForbidden},
+		{"reject DELETE automation", true, http.MethodDelete, "/api/automations/1", http.StatusForbidden},
+		{"reject POST floorplan image", true, http.MethodPost, "/api/floorplan/image", http.StatusForbidden},
+		{"reject POST floorplan calibration", true, http.MethodPost, "/api/floorplan/calibrate", http.StatusForbidden},
+		{"reject POST provisioning", true, http.MethodPost, "/api/provision", http.StatusForbidden},
+		// Read methods are unaffected in demo mode.
+		{"allow GET nodes in demo mode", true, http.MethodGet, "/api/nodes", http.StatusOK},
+		{"allow HEAD nodes in demo mode", true, http.MethodHead, "/api/nodes", http.StatusOK},
+		{"allow GET floorplan in demo mode", true, http.MethodGet, "/api/floorplan", http.StatusOK},
+		// With demo mode disabled nothing is rejected.
+		{"allow POST node identify when demo mode off", false, http.MethodPost, "/api/nodes/AA:BB:CC:DD:EE:FF/identify", http.StatusOK},
+		{"allow DELETE automation when demo mode off", false, http.MethodDelete, "/api/automations/1", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var called bool
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusOK)
+			})
+
+			handler := DemoModeMiddleware(tt.demoMode)(next)
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("%s %s (demoMode=%v) status = %d, want %d", tt.method, tt.path, tt.demoMode, rec.Code, tt.wantStatus)
+			}
+			if called != (tt.wantStatus == http.StatusOK) {
+				t.Errorf("%s %s (demoMode=%v) downstream handler called = %v, want %v", tt.method, tt.path, tt.demoMode, called, tt.wantStatus == http.StatusOK)
+			}
+
+			if tt.wantStatus != http.StatusForbidden {
+				return
+			}
+
+			if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+				t.Errorf("Content-Type = %q, want application/json", ct)
+			}
+
+			var body struct {
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("403 body is not valid JSON: %v", err)
+			}
+			if body.Message != demoModeMessage {
+				t.Errorf("403 message = %q, want %q", body.Message, demoModeMessage)
+			}
+			if body.Error == "" {
+				t.Error("403 body has empty error field")
+			}
+		})
+	}
+}

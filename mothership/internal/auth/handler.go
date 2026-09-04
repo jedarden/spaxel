@@ -743,7 +743,7 @@ func DemoModeMiddleware(demoMode bool) func(http.Handler) http.Handler {
 				w.WriteHeader(http.StatusForbidden)
 				_ = json.NewEncoder(w).Encode(map[string]string{
 					"error": "demo mode active",
-					"message": "Mutating operations are not permitted in demo mode",
+					"message": "Spaxel is running in demo mode - mutating operations are disabled",
 				}) //nolint:errcheck // HTTP response
 				log.Printf("[INFO] Demo mode: rejected %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 				return
