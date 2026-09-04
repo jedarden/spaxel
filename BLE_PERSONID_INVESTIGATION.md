@@ -175,9 +175,22 @@ EvaluateTriggers (shape.go:622-624)
 **DeviceRecord** (BLE registry):
 - `PersonID string` - Foreign key to people.id
 
-**IdentityMatch** (BLE matcher):
+**IdentityMatch** (BLE matcher, `mothership/internal/ble/identity.go:38`):
+- `DeviceName string` `json:"device_name,omitempty"` (line 41) - BLE hardware name, e.g. "iPhone"
 - `PersonID string` - From DeviceRecord
-- `PersonName string` - From people table join
+- `PersonName string` `json:"person_name,omitempty"` (line 43) - From people table join
+
+Both identity name fields are plain `string` — never nil, empty when unknown —
+and both carry `omitempty`, so an unidentified match drops them from the JSON
+rather than sending `""`. Human-facing projections should read them through
+`IdentityMatch.Label()` (identity.go:60), which prefers `PersonName` and falls
+back to `DeviceName`. `api.IdentityMatch`
+(`mothership/internal/api/status.go:45`) mirrors the pair with identical types
+and tags — `PersonName string` `json:"person_name,omitempty"` (line 46),
+`DeviceName string` `json:"device_name,omitempty"` (line 48) — as a deliberate
+duplicate so `internal/api` need not import the `ble` type (status.go:44);
+`getOccupancy` applies the same PersonName-then-DeviceName fallback at
+status.go:191-200.
 
 **TrackedBlob** (signal processor):
 - `PersonID string` - Set by identity write-back
