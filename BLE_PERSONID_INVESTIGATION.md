@@ -176,9 +176,43 @@ EvaluateTriggers (shape.go:622-624)
 - `PersonID string` - Foreign key to people.id
 
 **IdentityMatch** (BLE matcher, `mothership/internal/ble/identity.go:38`):
-- `DeviceName string` `json:"device_name,omitempty"` (line 41) - BLE hardware name, e.g. "iPhone"
-- `PersonID string` - From DeviceRecord
-- `PersonName string` `json:"person_name,omitempty"` (line 43) - From people table join
+
+Complete extraction — all 11 fields, declaration order, with types and JSON
+tags as declared at identity.go:38-50. `DeviceName` and `PersonName` were
+documented in the previous pass; the other nine are the remainder.
+
+| Field | Type | JSON tag | Line | Populated by / semantics |
+|---|---|---|---|---|
+| `BlobID` | `int` | `json:"blob_id"` | 39 | ID of the CSI blob the identity is attached to. `-1` for BLE-only placeholder tracks (identity.go:602), which are keyed by PersonID in `bleOnlyTracks` instead of by blob |
+| `DeviceAddr` | `string` | `json:"device_addr"` | 40 | BLE address — the `DeviceRecord` registry key, copied from `td.Device.Addr` |
+| `DeviceName` | `string` | `json:"device_name,omitempty"` | 41 | BLE hardware name, e.g. "iPhone"; advertised `Device.Name` falling back to the registry's `DeviceName` when the advertisement is empty (identity.go:482-485) |
+| `PersonID` | `string` | `json:"person_id,omitempty"` | 42 | From `DeviceRecord` — foreign key to people.id |
+| `PersonName` | `string` | `json:"person_name,omitempty"` | 43 | From people table join |
+| `PersonColor` | `string` | `json:"person_color,omitempty"` | 44 | `getPersonColor(td.Device)` (identity.go:709): `defaultColorForPerson(PersonID)` — a hash of the PersonID into a fixed 8-colour palette (identity.go:720) — or gray `#6b7280` when there is no PersonID. It does **not** read a colour stored in the people table; the function's own comment concedes this |
+| `Confidence` | `float64` | `json:"confidence"` | 45 | `computeMatchConfidence` (identity.go:521) = f_observations × f_node_count × f_residual × f_distance, gated at `MinMatchConfidence` 0.6; **halved** (`×0.5`) for BLE-only tracks (identity.go:608) |
+| `TriangulationPos` | `Position` | `json:"triangulation_pos"` | 46 | RSSI-triangulated **device** position (`TriangulatedDevice.Position`) — a different point from the blob's position; the geometric divergence between the two is what bf-6d2ii is logging |
+| `TriangulationConf` | `float64` | `json:"triangulation_confidence"` | 47 | `TriangulatedDevice.Confidence` — quality of the RSSI triangulation, independent of the match `Confidence` above |
+| `Timestamp` | `time.Time` | `json:"timestamp"` | 48 | `time.Now()` at match creation; drives expiry in `decayOldMatches` against `matchTimeout` |
+| `IsBLEOnly` | `bool` | `json:"is_ble_only"` | 49 | True when no CSI blob was within `MaxBLEBlobDistance` (2.0 m) — the match is a placeholder track with no spatial blob behind it |
+
+Complete struct definition, verbatim (identity.go:37-50, including the doc comment):
+
+```go
+// IdentityMatch represents a match between a blob and a device/person.
+type IdentityMatch struct {
+	BlobID            int       `json:"blob_id"`
+	DeviceAddr        string    `json:"device_addr"`
+	DeviceName        string    `json:"device_name,omitempty"`
+	PersonID          string    `json:"person_id,omitempty"`
+	PersonName        string    `json:"person_name,omitempty"`
+	PersonColor       string    `json:"person_color,omitempty"`
+	Confidence        float64   `json:"confidence"`
+	TriangulationPos  Position  `json:"triangulation_pos"`
+	TriangulationConf float64   `json:"triangulation_confidence"`
+	Timestamp         time.Time `json:"timestamp"`
+	IsBLEOnly         bool      `json:"is_ble_only"` // True if no CSI blob within range
+}
+```
 
 Both identity name fields are plain `string` — never nil, empty when unknown —
 and both carry `omitempty`, so an unidentified match drops them from the JSON
@@ -191,6 +225,38 @@ and tags — `PersonName string` `json:"person_name,omitempty"` (line 46),
 duplicate so `internal/api` need not import the `ble` type (status.go:44);
 `getOccupancy` applies the same PersonName-then-DeviceName fallback at
 status.go:191-200.
+
+Wire notes on the remaining nine fields:
+
+- The complete struct reaches JSON **verbatim** only at `GET /api/ble/matches`
+  (main.go:3362-3368, served via `GetAllMatches`, identity.go:676). Everywhere
+  else it is projected down first.
+- That projection is four fields, not a mirror: `bleIdentityAdapter.GetMatch`
+  (main.go:6009-6025) copies `PersonName`, `PersonID`, `DeviceName` and
+  `IsBLEOnly` into `api.IdentityMatch` and drops `BlobID`, `DeviceAddr`,
+  `PersonColor`, `Confidence`, `TriangulationPos`, `TriangulationConf` and
+  `Timestamp`. `api.IdentityMatch` (status.go:45-50) is the dashboard-feed
+  subset, not a field-for-field copy.
+- `TriangulationPos`'s element type `Position` (identity.go:71-73) carries **no
+  JSON tags** — `type Position struct { X, Y, Z float64 }` — so
+  `encoding/json` emits the exported Go field names `"X"`, `"Y"`, `"Z"` inside
+  `triangulation_pos`, not `"x"`/`"y"`/`"z"`. Consumers of
+  `/api/ble/matches` must read the capitalised keys.
+- `Timestamp` is `time.Time`, so it marshals as an RFC3339 string rather than
+  the Unix-millisecond integer the node↔mothership protocol convention uses;
+  that convention governs the WebSocket frames, not this dashboard-facing REST
+  shape.
+- Seven fields have no `omitempty` — `BlobID`, `DeviceAddr`, `Confidence`,
+  `TriangulationPos`, `TriangulationConf`, `Timestamp` and `IsBLEOnly` are
+  always emitted, including `blob_id: -1` on BLE-only tracks and
+  `is_ble_only: false` on blob-attached ones. Only the four `string` identity
+  fields disappear when empty.
+- `ForceMatch` (identity.go:741, the manual-override path) sets only `BlobID`,
+  `PersonID`, `PersonName`, `PersonColor`, `Confidence`, `Timestamp` and
+  `IsBLEOnly`, leaving `DeviceAddr`, `DeviceName`, `TriangulationPos` and
+  `TriangulationConf` at their zero values — so a forced match legitimately
+  serves `device_addr: ""`, `triangulation_pos: {"X":0,"Y":0,"Z":0}` and
+  `triangulation_confidence: 0`.
 
 **TrackedBlob** (signal processor):
 - `PersonID string` - Set by identity write-back
