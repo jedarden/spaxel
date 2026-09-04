@@ -10,11 +10,23 @@ The docker-build step is a critical component of the spaxel CI/CD pipeline that 
 
 ## File Location
 
-```
-/home/coding/declarative-config/k8s/iad-ci/argo-workflows/spaxel-build-workflowtemplate.yml
+The authoritative manifest lives in the **`jedarden/declarative-config`** repo (outside
+this one), at `k8s/iad-ci/argo-workflows/spaxel-build-workflowtemplate.yml`, and is
+applied to the cluster by ArgoCD. Cite it by template + step name rather than line
+number — the file is edited in place and line numbers go stale.
+
+**Verification basis for this document:** the *live* `WorkflowTemplate/spaxel-build`
+object in the `argo-workflows` namespace on iad-ci (read via the credential-free
+endpoint), re-verified 2026-09-04 against this repo's `Dockerfile` at the same date:
+
+```bash
+kubectl --server=http://traefik-iad-ci:8001 \
+  get workflowtemplate spaxel-build -n argo-workflows -o json | \
+  jq '.spec.templates[] | select(.name=="docker-build")'
 ```
 
-**Lines:** 305-383 (docker-build template definition)
+Every claim below marked *(live 2026-09-04)* was checked against that object; the
+Dockerfile-side claims were checked against the repo `Dockerfile` the same day.
 
 ## Step Structure
 
@@ -54,10 +66,26 @@ The docker-build step is a critical component of the spaxel CI/CD pipeline that 
 
 ### Primary Container Image
 
-**`docker:29.7.2-dind`**
+**`docker:29.7.2-dind`** *(live 2026-09-04)*
 - Docker Engine with Docker-in-Docker support
 - Version: 29.7.2 (Docker CLI and daemon)
 - Runs in privileged mode for full Docker functionality
+
+### Base Images Pulled by the Build Itself
+
+The step's buildx invocation consumes the repo `Dockerfile`, whose three `FROM` stages
+pull three further images (per build platform leg). These are documented in depth in
+`docs/research/mothership-build-and-configuration.md` §2.1; listed here because they are
+images this step pulls, not images the step runs in:
+
+| Image | Dockerfile stage | Role |
+|---|---|---|
+| `alpine:3.20` | `firmware-fetcher` | Adds `curl` and downloads the prebuilt ESP32-S3 firmware from GitHub Releases (see *Firmware Integration* below) |
+| `golang:1.25-bookworm` | `builder` | Builds `spaxel` and `spaxel-sim` on `$BUILDPLATFORM` (native; Go cross-compiles via `GOARCH=$TARGETARCH`) |
+| `gcr.io/distroless/static-debian12:nonroot` | runtime | Final single-layer image; no shell, runs as UID 65532 |
+
+No ESP-IDF image is pulled here — per ADR-001 the firmware is built once by the separate
+`firmware-build` step and fetched as a release artifact.
 
 ### Build Platform
 
@@ -65,7 +93,10 @@ The docker-build step is a critical component of the spaxel CI/CD pipeline that 
 - `linux/amd64` - Standard x86_64 platform
 - `linux/arm64` - ARM64/AArch64 platform
 
-**Native builds** (no QEMU emulation) for maximum performance and correctness.
+**Native builds** (no QEMU emulation) for maximum performance and correctness — in effect
+rather than by construction: every `RUN` executes on `$BUILDPLATFORM` (the amd64 CI
+runner) and Go cross-compiles via `GOARCH=$TARGETARCH`, so no per-arch native builder and
+no emulator is involved. See `docs/research/spaxel-build-architecture-parameters.md` §3.
 
 ### Tools and Commands
 
@@ -80,7 +111,12 @@ The docker-build step is a critical component of the spaxel CI/CD pipeline that 
 
 | Argument | Value | Purpose |
 |----------|-------|---------|
-| `VERSION` | `{{inputs.parameters.version}}` | Passed to Dockerfile for version embedding |
+| `VERSION` | `{{inputs.parameters.version}}` | The only build-arg CI passes explicitly. Embeds the version in the Go binary via `-X main.version` **and** names the firmware files copied into the image — the OTA store derives its version from that filename, so this arg has functional weight |
+
+The Dockerfile declares further build args that buildx populates per platform leg
+(`TARGETARCH`, `TARGETPLATFORM`, `BUILDPLATFORM`) — CI never passes them explicitly, and
+they cannot be set at workflow-submit time. Full table with defaults and consumers:
+`docs/research/spaxel-build-architecture-parameters.md` §3.
 
 ### Buildx Command Arguments
 
@@ -260,15 +296,46 @@ Verifies the resulting multi-architecture manifest.
 
 ### 3. Firmware Integration
 
-The Dockerfile fetches ESP32-S3 firmware from GitHub Releases during the build:
+*(Corrected 2026-09-04 against the repo `Dockerfile` — the snippet previously quoted here
+described an older single-fetch layout and no longer matched the file.)*
+
+The Dockerfile's first stage (`alpine:3.20 AS firmware-fetcher`) installs `curl` and
+downloads **two** firmware artifacts from GitHub Releases, both required (`&&`-chained —
+there is no fallback; either one missing fails the build):
 
 ```dockerfile
-# From the spaxel Dockerfile
-RUN curl -L -o /tmp/spaxel-firmware.bin \
-  "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware-merged.bin"
+FROM alpine:3.20 AS firmware-fetcher
+ARG VERSION=dev
+RUN apk add --no-cache curl
+WORKDIR /firmware
+RUN curl -fsSL \
+    "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware-${VERSION}-merged.bin" \
+    -o spaxel-firmware-merged.bin && \
+    curl -fsSL \
+    "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware.bin" \
+    -o spaxel-firmware.bin && \
+    ...
 ```
 
-This ensures the mothership binary includes the correct firmware version.
+Stage 3 then places them at two deliberately different destinations:
+
+| Artifact | Copied to | Why |
+|---|---|---|
+| `spaxel-firmware.bin` | `/firmware/spaxel-firmware-${VERSION}.bin` | App-only image; seeded into the OTA store at startup. The semver-bearing filename **is** the OTA store's version source, so the `VERSION` build-arg has functional weight beyond labelling. |
+| `spaxel-firmware-merged.bin` | `/firmware/serial/spaxel-firmware-${VERSION}-merged.bin` | Offset-0 full-flash image for first-flash serial provisioning, isolated in a subdirectory `seedFirmwareDir` deliberately does **not** copy into the OTA store — a merged image must never be written into an OTA app partition. |
+
+**The firmware is not part of the Go binary.** Only the dashboard is embedded via
+`go:embed`; the firmware arrives as files under `/firmware/`. This step's role is to bake
+the version-correct firmware *files* into the image at build time.
+
+**Ordering caveat:** `build-firmware` and this step's `build` node are **siblings in the
+same parallel step group** (the entrypoint is a `steps:` template, not a `dag:`), not a
+sequence — `docker-build` does not wait for the firmware
+release to exist. Both use the same resolved `version`, so the fetch stage can race the
+`firmware-build` step's release upload for that version. If a build fails in
+`firmware-fetcher` with a 404 on `spaxel-firmware-${VERSION}-merged.bin`, that race is the
+first thing to check, and the step's `retryStrategy` (2 retries, 30 s→60 s backoff) is
+what usually absorbs it.
 
 ### 4. Dual Tagging
 
@@ -331,9 +398,13 @@ steps:
 ```
 
 The docker-build step:
-- Runs after all tests pass
-- Runs after firmware is built and uploaded to GitHub Releases
-- Runs before updating declarative-config with the new image tag
+- Runs after all test/lint steps (they occupy earlier step groups) and only when
+  `{{steps.resolve-version.outputs.parameters.should-build}} == true` — the same guard
+  every build step carries, so doc-only pushes skip it entirely
+- Runs **in parallel with** `build-firmware`, not after it (see *Firmware Integration*
+  above for the fetch-vs-upload consequence)
+- Runs before `update-declarative-config`, which rewrites the deployment's image pin to
+  the version this step just pushed
 
 ## Output Artifacts
 
@@ -392,8 +463,8 @@ This outputs the manifest showing both AMD64 and ARM64 architectures.
 
 ## Related Documentation
 
-- **BUILD_PATHS.md** - What triggers docker builds in spaxel
-- **kaniko-version-research.md** - Kaniko v1.24.0 research (not currently used)
+- **`docs/BUILD_PATHS.md`** - What triggers docker builds in spaxel
+- **`docs/kaniko-version-research.md`** - Kaniko v1.24.0 research (not currently used)
 - **github-api-authentication-kaniko-releases.md** - GitHub API client for Kaniko (not currently used)
 - **declarative-config/k8s/iad-ci/argo-workflows/spaxel-build-workflowtemplate.yml** - Full workflow definition
 
@@ -401,10 +472,12 @@ This outputs the manifest showing both AMD64 and ARM64 architectures.
 
 | Date | Version | Changes |
 |------|---------|---------|
-| 2026-09-01 | 1.0 | Initial documentation of docker-build step |
+| 2026-09-01 | 1.0 | Initial documentation of docker-build step (bead spaxel-afa4858e) |
+| 2026-09-04 | 1.1 | Verified every claim against the live `WorkflowTemplate/spaxel-build` (image, env, resources, deadline, retry, volume mount, securityContext, buildx flags, step ordering — all accurate); corrected the firmware-fetch section to match the current `Dockerfile` (fetcher stage, two mandatory artifacts, OTA-store vs serial isolation, "not part of the Go binary"); corrected the step ordering (docker-build is a parallel sibling of build-firmware, not downstream of it); added the base images the build pulls (3 `FROM` stages, not 4); replaced the out-of-repo local path citation with the declarative-config repo path; `steps:` group terminology rather than `dag:` (bead spaxel-c52b5ef7) |
 
 ## Sources
 
-- Argo WorkflowTemplate: `/home/coding/declarative-config/k8s/iad-ci/argo-workflows/spaxel-build-workflowtemplate.yml`
+- Argo WorkflowTemplate: `jedarden/declarative-config` → `k8s/iad-ci/argo-workflows/spaxel-build-workflowtemplate.yml` (authoritative manifest lives outside this repo; the live cluster object was used for verification)
+- Repo `Dockerfile` (this repo) — base images, build args, firmware fetch
 - Docker Documentation: https://docs.docker.com/
 - Docker Buildx Documentation: https://docs.docker.com/buildx/working-with-buildx/
