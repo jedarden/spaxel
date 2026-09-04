@@ -38,6 +38,10 @@ var (
 	_ string                                  = github.DefaultUserAgent
 	_ func(*http.Response) bool               = github.IsRateLimited
 	_ func(*http.Response) (int, int64, bool) = github.GetRateLimitInfo
+	_ *github.APIError                        = &github.APIError{}
+	_ github.ErrorKind                        = github.ErrorKindHTTP
+	_ github.Release                          = github.Release{TagName: "v1"}
+	_ github.ReleaseAsset                     = github.ReleaseAsset{Name: "a"}
 )
 
 // TestExportedMethodSurface pins the exported method set of both types. A
@@ -88,7 +92,15 @@ func TestExternalConsumerRoundTrip(t *testing.T) {
 
 		switch r.URL.Path {
 		case "/repos/GoogleContainerTools/kaniko/releases":
-			_ = json.NewEncoder(w).Encode([]map[string]any{{"tag_name": "v1.0.0"}})
+			_ = json.NewEncoder(w).Encode([]map[string]any{{
+				"tag_name": "v1.0.0",
+				"name":     "Release 1.0.0",
+				"assets": []map[string]any{{
+					"name":                 "releases_1.0.0.yaml",
+					"browser_download_url": "http://" + r.Host + "/download/releases_1.0.0.yaml",
+					"size":                 2048,
+				}},
+			}})
 		case "/repos/GoogleContainerTools/kaniko/releases/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1.0.0"})
 		case "/rate_limit":
@@ -106,7 +118,8 @@ func TestExternalConsumerRoundTrip(t *testing.T) {
 	cfg.Timeout = 5 * time.Second
 
 	client := github.NewClientFromConfig(cfg)
-	if _, err := client.GetReleases(context.Background(), cfg.RepoOwner, cfg.RepoName); err != nil {
+	releases, err := client.GetReleases(context.Background(), cfg.RepoOwner, cfg.RepoName)
+	if err != nil {
 		t.Fatalf("GetReleases: %v", err)
 	}
 	latest, err := client.GetLatestRelease(context.Background(), cfg.RepoOwner, cfg.RepoName)
@@ -131,14 +144,27 @@ func TestExternalConsumerRoundTrip(t *testing.T) {
 		t.Errorf("User-Agent = %v, want exactly [%q]", gotUserAgent, github.DefaultUserAgent)
 	}
 
-	var release struct {
-		TagName string `json:"tag_name"`
+	// The typed release methods decode the payload for the consumer: the
+	// release fields and the asset's download URL arrive as struct fields, not
+	// as JSON to be interpreted again.
+	if len(releases) != 1 {
+		t.Fatalf("len(releases) = %d, want 1", len(releases))
 	}
-	if err := json.Unmarshal(latest, &release); err != nil {
-		t.Fatalf("decode latest release: %v", err)
+	if releases[0].TagName != "v1.0.0" {
+		t.Errorf("releases[0].TagName = %q, want %q", releases[0].TagName, "v1.0.0")
 	}
-	if release.TagName != "v1.0.0" {
-		t.Errorf("tag_name = %q, want %q", release.TagName, "v1.0.0")
+	if len(releases[0].Assets) != 1 {
+		t.Fatalf("len(releases[0].Assets) = %d, want 1", len(releases[0].Assets))
+	}
+	asset := releases[0].Assets[0]
+	if asset.Name != "releases_1.0.0.yaml" || asset.Size != 2048 {
+		t.Errorf("asset = %+v, want name releases_1.0.0.yaml size 2048", asset)
+	}
+	if asset.BrowserDownloadURL == "" {
+		t.Error("asset.BrowserDownloadURL is empty, want the download URL")
+	}
+	if latest == nil || latest.TagName != "v1.0.0" {
+		t.Errorf("latest = %+v, want tag_name v1.0.0", latest)
 	}
 }
 
