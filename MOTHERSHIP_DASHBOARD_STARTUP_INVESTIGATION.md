@@ -375,3 +375,57 @@ The Mothership dashboard is **not a standalone service**. It is served as part o
 - Verify `/healthz` endpoint responds
 - Check browser console for WebSocket connection
 - Review logs for "Dashboard directory not found" warnings
+
+---
+
+## 12. Re-verification at HEAD 3eb3eb42 (2026-09-04, bead spaxel-c8fd07bb)
+
+This document was authored for sibling bead **spaxel-c79cdd86** ("Investigate Mothership
+dashboard startup method"). Split-child **spaxel-c8fd07bb** ("Identify Mothership dashboard
+startup command and entry point") carries the same four acceptance criteria; every one is
+answered by sections 2, 4 and 5 above and was re-verified against
+`main` @ `3eb3eb426725464a773c755802fa70e739f7814b` on 2026-09-04:
+
+| Acceptance criterion | Answer at HEAD | Evidence (git grep, tracked files) |
+|---|---|---|
+| Startup command | `docker compose up -d` (production) or `docker run … ENTRYPOINT` | `Dockerfile:99` `ENTRYPOINT ["/spaxel"]`, `Dockerfile:96` `EXPOSE 8080`; `docker-compose.yml:23` `network_mode: host`; dev: `cd mothership && go run ./cmd/mothership` |
+| Entry point file | `mothership/cmd/mothership/main.go` — `func main()` at **:703** | single `func main()` in the package; dashboard assets embedded via `mothership/cmd/mothership/dashboard_embed.go` (`//go:build embed`, `//go:embed dashboard`) |
+| Env vars / flags | No CLI flags exist; configuration is environment-only (table below) | `mothership/internal/config/config.go` — every knob is an `envOr(...)` read; `main.go` accepts no argv |
+| Default port / host | **`0.0.0.0:8080`** | `config.go:92` `envOr("SPAXEL_BIND_ADDR", "0.0.0.0:8080")`; compose healthcheck probes `http://localhost:8080/healthz` |
+
+### Line-cite drift since 2026-08-28 (same code, moved lines)
+
+| Claim | Cited in §2/§7 | Actual at HEAD 3eb3eb42 |
+|---|---|---|
+| `http.Server` construction | main.go 5027–5032 | **main.go:5059** |
+| Static-file serving / StaticDir resolution | main.go 4893–4929 | **main.go:4939–4949** (`dashboardStaticHandler` at main.go:381) |
+| 7-phase startup sequence | main.go 702+ | unchanged — `func main()` main.go:703 |
+| Dev fallback path list | §3 | unchanged — `{"./dashboard", "./../dashboard", "/app/dashboard"}` at main.go:295 |
+
+### Complete environment-variable surface at HEAD (`mothership/internal/config/config.go`)
+
+None is required — every entry has a working default; the dashboard starts with an empty
+environment. `SPAXEL_BIND_ADDR` is the only one that affects the dashboard's port/host.
+
+| Variable | Default (config.go) | Effect |
+|---|---|---|
+| `SPAXEL_BIND_ADDR` | `0.0.0.0:8080` (:92) | HTTP + WebSocket listen address — dashboard port/host |
+| `SPAXEL_DATA_DIR` | `/data` (:119) | SQLite DB, CSI replay buffer, floor plans, firmware store |
+| `SPAXEL_STATIC_DIR` | `/dashboard` (:122) | Overrides the dashboard asset directory when it exists on disk (dev); embedded FS wins in `embed`-tagged builds |
+| `SPAXEL_SEED_FIRMWARE_DIR` | `/firmware` (:126) | Seed source copied into `SPAXEL_DATA_DIR` on first run (note: `SPAXEL_FIRMWARE_DIR` is read by no code) |
+| `SPAXEL_MDNS_ENABLED` | `true` (:129) | `_spaxel._tcp.local` advertisement; needs host networking |
+| `SPAXEL_MDNS_NAME` | `spaxel` (:139) | mDNS service instance name |
+| `SPAXEL_LOG_LEVEL` / `SPAXEL_LOG_STDOUT` | `info` / `true` (:142,151) | Logging |
+| `SPAXEL_NTP_LOCAL_ENABLED` | `false` (:245) | Local NTP server for nodes (compose `cap_add: NET_BIND_SERVICE`) |
+| `SPAXEL_MQTT_BROKER` / `_USERNAME` / `_PASSWORD` | unset (:73,284,287) | Optional HA integration; disabled when broker unset |
+| `SPAXEL_WIFI_SSID` / `SPAXEL_WIFI_PASSWORD` | unset (:290,293) | First-boot seed only (ADR-005); DB setting is authoritative after |
+| `SPAXEL_ADVERTISED_BASE_URL` | derived (:94–101) | Base URL handed to nodes for OTA fetch (ADR-004) — must be routable; not the bind address |
+| `SPAXEL_DEMO_MODE` | `false` (:299) | Demo mode |
+| `SPAXEL_GITHUB_TOKEN` | unset (:296) | GitHub API client |
+| `TZ` | `UTC` (Go runtime) | Diurnal baselines, briefings, quiet hours |
+
+### Family state at closure
+
+Umbrella `spaxel-832b2a7d` is closed (rev 15). Sibling `spaxel-c79cdd86`, which authored this
+document, was still open at rev 11 as of this re-verification — its deliverable has been
+landed here since 2026-08-28, so a re-dispatch on it is answerable from this file alone.
