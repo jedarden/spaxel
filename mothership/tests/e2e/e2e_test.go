@@ -1,5 +1,11 @@
 // Package e2e provides end-to-end integration tests for Spaxel.
 // These tests start the mothership, run the CSI simulator, and assert on behavior.
+//
+// This is the only e2e harness: part of the mothership module, so `go test ./...`
+// from mothership/ compiles and runs it (spaxel-build's go-test step); the
+// io6_gate-tagged release scenario is opt-in via `-tags io6_gate`. The former
+// repo-root tests/e2e/run.sh shell harness was orphaned from CI and was
+// removed on 2026-09-04.
 package e2e
 
 // ============================================================================

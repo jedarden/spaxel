@@ -2,6 +2,12 @@
 // These tests use the spaxel-sim CLI as a test harness to verify the system
 // meets its acceptance criteria.
 //
+// This is the only acceptance suite: it is what CI runs (spaxel-build's
+// acceptance-test step and spaxel-e2e's acceptance-tests step, both from the
+// mothership module). The former repo-root test/acceptance module was a
+// duplicate driver with no CI reference and was consolidated into this suite
+// on 2026-09-04.
+//
 // To run these tests:
 //
 //	SPAXEL_INTEGRATION_TEST=1 go test -v ./mothership/test/acceptance/
