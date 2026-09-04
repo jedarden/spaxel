@@ -8,6 +8,11 @@ Package `github` provides a GitHub API client for fetching Kaniko releases and o
 - **Generic `Get`** for any API path, returning the raw response body
 - **Token-based authentication** (Bearer token) for higher rate limits
 - **Unauthenticated access** support (subject to 60 requests/hour rate limit)
+- **Typed release parsing** — `Release`/`ReleaseAsset` structs decoded from
+  the release endpoints, no JSON left for the caller to interpret
+- **One typed error** — every failure is an `*APIError` classified by
+  `ErrorKind` (HTTP, rate limit, parse, transport), branchable without
+  matching message text
 - **Kaniko releases fetching** from `GoogleContainerTools/kaniko`
 - **GitHub API ping** for connectivity testing
 - **Rate limit detection** and information extraction
@@ -55,7 +60,9 @@ if err != nil {
 
 A non-200 response is an error carrying the status code and the body the API
 returned. Transport failures — connection refused, DNS lookup failure, the
-configured timeout — surface as the wrapped error from the HTTP client.
+configured timeout — come back as an `*APIError` with Kind
+`ErrorKindTransport` wrapping the underlying cause. Both are the same
+`*APIError` type described under [Error Handling](#error-handling).
 
 ### Ping GitHub API
 
@@ -69,11 +76,21 @@ if err != nil {
 
 ### Fetch Kaniko Releases
 
+The release methods decode GitHub's payload into typed values: tag name,
+title, draft/prerelease flags, publish timestamps, and the asset list with
+each asset's name, download URL and size. Unknown fields in the response are
+ignored, so a new field upstream does not break parsing.
+
 ```go
 ctx := context.Background()
 releases, err := client.GetReleases(ctx, "GoogleContainerTools", "kaniko")
 if err != nil {
     log.Printf("Failed to fetch Kaniko releases: %v", err)
+}
+for _, r := range releases {
+    for _, a := range r.Assets {
+        log.Printf("%s: %s (%d bytes) -> %s", r.TagName, a.Name, a.Size, a.BrowserDownloadURL)
+    }
 }
 ```
 
@@ -85,7 +102,11 @@ latest, err := client.GetLatestRelease(ctx, "GoogleContainerTools", "kaniko")
 if err != nil {
     log.Printf("Failed to fetch latest Kaniko release: %v", err)
 }
+log.Printf("latest is %s", latest.TagName)
 ```
+
+A repository with no releases answers 404, which surfaces as a not-found
+`*APIError` (see [Error Handling](#error-handling)).
 
 ## Configuration
 
@@ -135,12 +156,14 @@ reachable:
 
 | Kind | Exported identifiers |
 |------|----------------------|
-| Types | `Client`, `GitHubConfig` |
+| Types | `Client`, `GitHubConfig`, `APIError`, `ErrorKind`, `RateLimit`, `Release`, `ReleaseAsset` |
 | Constructors | `NewClient`, `NewClientFromConfig`, `NewGitHubConfig` |
 | `Client` methods | `Config`, `Clone`, `String`, `Get`, `Ping`, `GetReleases`, `GetLatestRelease`, `SetRepoOwner`, `SetRepoName`, `SetBaseURL`, `GetRepoOwner`, `GetRepoName`, `GetBaseURL` |
 | `GitHubConfig` methods | `Clone`, `WithToken`, `String` |
+| `APIError` methods | `Error`, `Unwrap`, `IsNotFound`, `IsRateLimited`, `Temporary` |
+| `RateLimit` methods | `Exhausted`, `ResetsAt` |
 | Package functions | `IsRateLimited`, `GetRateLimitInfo` |
-| Constants | `GitHubAPIBaseURL`, `KanikoRepoOwner`, `KanikoRepoName`, `DefaultUserAgent`, `DefaultGitHubTimeout` |
+| Constants | `GitHubAPIBaseURL`, `KanikoRepoOwner`, `KanikoRepoName`, `DefaultUserAgent`, `DefaultGitHubTimeout`, `ErrorKindHTTP`, `ErrorKindRateLimit`, `ErrorKindParse`, `ErrorKindTransport` |
 
 `Client`'s own fields stay unexported — configuration is read back through
 `Config()`, which returns a copy, so a caller cannot mutate a live client.
@@ -161,7 +184,7 @@ token value, so a client is safe to log.
 
 ## Dependencies
 
-- Go standard library `net/http`, `context`, `io`, `log`, `fmt`, `time`, `strings`
+- Go standard library `net/http`, `context`, `io`, `log`, `fmt`, `time`, `strings`, `encoding/json`
 - No external dependencies required
 
 ## Kaniko Repository
@@ -174,12 +197,51 @@ This can be customized using `SetRepoOwner()` and `SetRepoName()` methods.
 
 ## Error Handling
 
-All methods return descriptive errors:
-- Network failures
-- HTTP errors (4xx, 5xx)
-- Repository not found (404)
-- Rate limiting (403)
-- Invalid responses
+Every failing method returns an `*APIError`, whether the request never
+completed, the API answered with an error status, or a 2xx body would not
+decode. `Kind` classifies the failure:
+
+| Kind | Meaning |
+|------|---------|
+| `ErrorKindHTTP` | the API answered with a non-2xx status |
+| `ErrorKindRateLimit` | a 403 carrying `X-RateLimit-Remaining: 0` — the quota is used up |
+| `ErrorKindParse` | a 2xx response whose body would not decode into the typed value |
+| `ErrorKindTransport` | the failure happened before a complete response existed: connection refused, DNS failure, the configured timeout, a body read that failed partway |
+
+Branch on the kind, or on the helpers, rather than on message text:
+
+```go
+releases, err := client.GetReleases(ctx, "GoogleContainerTools", "kaniko")
+var apiErr *github.APIError
+if errors.As(err, &apiErr) {
+    switch {
+    case apiErr.IsNotFound():
+        // no such repository, or no releases
+    case apiErr.IsRateLimited():
+        // back off until apiErr.RateLimit.ResetsAt()
+    case apiErr.Temporary():
+        // retrying later can succeed (transport failure, 429, 5xx)
+    }
+}
+```
+
+The error carries the method, the API path (never the base URL, so a
+configured token or host is not echoed into logs), the status code, GitHub's
+own `message` and `documentation_url` when the body carried them, the quota
+headers, and up to 4 KiB of the response body. The underlying cause stays
+reachable via `Unwrap`, so `errors.Is(err, context.DeadlineExceeded)` works
+for a timed-out request. `Get` keeps returning the raw body for paths the
+typed methods do not wrap; its failures are `*APIError`s too.
+
+## Response Parsing
+
+`GetReleases` and `GetLatestRelease` decode into `Release` and `ReleaseAsset`
+(`releases.go`), covering the fields this client's consumers read: release
+`id`, `tag_name`, `name`, `draft`, `prerelease`, `created_at`, `published_at`
+and `html_url`, plus per asset the `id`, `name`, `browser_download_url`,
+`size` and `content_type`. Parsing is strict — a 2xx body that does not
+decode is an `ErrorKindParse` error carrying the offending body, rather than
+silently returning zero values.
 
 ## Integration
 

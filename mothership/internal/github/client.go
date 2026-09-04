@@ -4,6 +4,8 @@ package github
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -114,24 +116,80 @@ func (c *Client) newRequest(ctx context.Context, method, path string) (*http.Req
 	return req, nil
 }
 
-// do sends req and returns the response body together with its status code.
-// Transport failures — connection refused, DNS lookup failure, the configured
-// timeout — come back as the error with an empty body and a zero status. A
-// non-2xx status is not an error here: callers decide what each status means
-// for their endpoint, and the drained body is returned so it can be included
-// in whatever message they build from it.
-func (c *Client) do(req *http.Request) (body []byte, status int, err error) {
+// do sends req and returns the response. The caller owns resp.Body: it must
+// be read and closed, which the helpers this package uses (drainBody,
+// newHTTPError) both do. Transport failures — connection refused, DNS lookup
+// failure, the configured timeout — come back as an *APIError with Kind
+// ErrorKindTransport and the underlying error wrapped, so the request that
+// failed is identified without the caller reconstructing it.
+func (c *Client) do(req *http.Request) (*http.Response, error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, &APIError{
+			Kind:   ErrorKindTransport,
+			Method: req.Method,
+			Path:   req.URL.Path,
+			Err:    err,
+		}
+	}
+	return resp, nil
+}
+
+// drainBody reads the whole response body and closes it, so the underlying
+// connection goes back to the pool.
+func drainBody(resp *http.Response) ([]byte, error) {
+	if resp.Body == nil {
+		return nil, nil
 	}
 	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
 
-	body, err = io.ReadAll(resp.Body)
+// fetch sends a GET for path and returns the response body. A failure before
+// a usable body exists — a transport failure, a non-2xx status, or a body
+// that could not be read — comes back as an *APIError. A 2xx body is returned
+// uninterpreted: decoding it into a typed value is the caller's job.
+func (c *Client) fetch(ctx context.Context, method, path string) ([]byte, error) {
+	req, err := c.newRequest(ctx, method, path)
 	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
+		return nil, &APIError{Kind: ErrorKindTransport, Method: method, Path: path, Err: err}
 	}
-	return body, resp.StatusCode, nil
+
+	resp, err := c.do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, newHTTPError(req, resp)
+	}
+
+	body, err := drainBody(resp)
+	if err != nil {
+		return nil, &APIError{Kind: ErrorKindTransport, Method: method, Path: path, Err: err}
+	}
+	return body, nil
+}
+
+// getJSON fetches path and decodes the response body into v. Every failure
+// is an *APIError, so a caller branches on Kind rather than on message text;
+// a body that will not decode reports ErrorKindParse and carries the
+// offending body.
+func (c *Client) getJSON(ctx context.Context, path string, v any) error {
+	body, err := c.fetch(ctx, http.MethodGet, path)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(body, v); err != nil {
+		return &APIError{
+			Kind:       ErrorKindParse,
+			Method:     http.MethodGet,
+			Path:       path,
+			StatusCode: http.StatusOK,
+			Body:       truncateBody(body),
+			Err:        err,
+		}
+	}
+	return nil
 }
 
 // Get issues a GET request for path against the configured base URL and
@@ -139,24 +197,12 @@ func (c *Client) do(req *http.Request) (body []byte, status int, err error) {
 // helpers below are built on: path is appended to BaseURL verbatim (leading
 // slash included), so callers can reach endpoints those helpers do not wrap.
 //
-// A non-200 response is an error carrying the status code and whatever body
-// the API returned. Transport failures — connection refused, DNS lookup
-// failure, the configured timeout — surface as the wrapped error from the
-// HTTP client.
+// A non-2xx response is an *APIError carrying the status code, the
+// rate-limit headers and whatever body the API returned. Transport failures —
+// connection refused, DNS lookup failure, the configured timeout — come back
+// as an *APIError with Kind ErrorKindTransport.
 func (c *Client) Get(ctx context.Context, path string) ([]byte, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	body, status, err := c.do(req)
-	if err != nil {
-		return nil, fmt.Errorf("GitHub API request failed: %w", err)
-	}
-	if status != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", status, body)
-	}
-	return body, nil
+	return c.fetch(ctx, http.MethodGet, path)
 }
 
 // Ping verifies GitHub API accessibility by making a lightweight authenticated request.
@@ -169,62 +215,52 @@ func (c *Client) Ping(ctx context.Context) error {
 		return fmt.Errorf("failed to create ping request: %w", err)
 	}
 
-	body, status, err := c.do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return fmt.Errorf("GitHub API ping failed: %w", err)
 	}
 
 	// We accept 200 OK (authenticated), 401 (token invalid but API reachable), or 403 (forbidden)
 	// Any of these means the API endpoint is accessible
-	if status != 200 && status != 401 && status != 403 {
-		return fmt.Errorf("GitHub API ping returned unexpected status %d: %s", status, body)
+	if resp.StatusCode != 200 && resp.StatusCode != 401 && resp.StatusCode != 403 {
+		apiErr := newHTTPError(req, resp)
+		return fmt.Errorf("GitHub API ping returned unexpected status %d: %w", apiErr.StatusCode, apiErr)
 	}
+	_, _ = drainBody(resp)
 
-	log.Printf("[GITHUB] API ping successful (status %d)", status)
+	log.Printf("[GITHUB] API ping successful (status %d)", resp.StatusCode)
 	return nil
 }
 
-// GetReleases fetches releases from a GitHub repository.
-// Returns the raw JSON response body and any error encountered.
-func (c *Client) GetReleases(ctx context.Context, owner, repo string) ([]byte, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/releases", owner, repo))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create releases request: %w", err)
-	}
+// GetReleases fetches the releases of owner/repo, newest first, decoded into
+// Release values. A repository that does not exist is reported with the
+// repository named in the error; every other failure — an error status, the
+// quota exhausted, a body that will not decode — comes back as an *APIError.
+func (c *Client) GetReleases(ctx context.Context, owner, repo string) ([]Release, error) {
+	path := fmt.Sprintf("/repos/%s/%s/releases", owner, repo)
 
-	body, status, err := c.do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch releases: %w", err)
+	var releases []Release
+	if err := c.getJSON(ctx, path, &releases); err != nil {
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.IsNotFound() {
+			err = fmt.Errorf("repository %s/%s not found: %w", owner, repo, err)
+		}
+		return nil, err
 	}
-
-	if status == 404 {
-		return nil, fmt.Errorf("repository %s/%s not found", owner, repo)
-	}
-	if status != 200 {
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", status, body)
-	}
-
-	return body, nil
+	return releases, nil
 }
 
-// GetLatestRelease fetches the latest release from a GitHub repository.
-// Returns the raw JSON response body and any error encountered.
-func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) ([]byte, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/releases/latest", owner, repo))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create latest release request: %w", err)
-	}
+// GetLatestRelease fetches the latest published release of owner/repo,
+// decoded into a Release. A repository with no releases answers 404, which
+// surfaces as an *APIError reporting not found.
+func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) (*Release, error) {
+	path := fmt.Sprintf("/repos/%s/%s/releases/latest", owner, repo)
 
-	body, status, err := c.do(req)
-	if err != nil {
+	var release Release
+	if err := c.getJSON(ctx, path, &release); err != nil {
 		return nil, fmt.Errorf("failed to fetch latest release: %w", err)
 	}
-
-	if status != 200 {
-		return nil, fmt.Errorf("failed to fetch latest release: GitHub API returned status %d: %s", status, body)
-	}
-
-	return body, nil
+	return &release, nil
 }
 
 // IsRateLimited checks if the given HTTP response indicates GitHub rate limiting.

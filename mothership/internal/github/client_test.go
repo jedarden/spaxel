@@ -124,7 +124,9 @@ func TestNewClientFromConfigTrailingSlashRequestPath(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		w.WriteHeader(http.StatusOK)
+		// The typed release method decodes the body it is handed, so the stub
+		// has to answer with something decodable.
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
@@ -305,6 +307,11 @@ func TestGetReleases(t *testing.T) {
 		repo           string
 		responseStatus int
 		responseBody   string
+		wantReleases   int
+		wantTagName    string
+		wantAssets     int
+		wantAssetName  string
+		wantAssetSize  int64
 		expectError    bool
 		errorContains  string
 	}{
@@ -314,7 +321,34 @@ func TestGetReleases(t *testing.T) {
 			owner:          "testowner",
 			repo:           "testrepo",
 			responseStatus: 200,
-			responseBody:   `[{"tag_name": "v1.0.0", "name": "Release 1.0.0"}]`,
+			responseBody: `[{"id": 101, "tag_name": "v1.0.0", "name": "Release 1.0.0", "draft": false, "prerelease": false,
+				"assets": [{"id": 7, "name": "releases_1.0.0.yaml", "browser_download_url": "https://example.com/a.yaml", "size": 2048, "content_type": "application/yaml"}]}]`,
+			wantReleases:  1,
+			wantTagName:   "v1.0.0",
+			wantAssets:    1,
+			wantAssetName: "releases_1.0.0.yaml",
+			wantAssetSize: 2048,
+			expectError:   false,
+		},
+		{
+			name:           "unknown fields are ignored",
+			token:          "test-token",
+			owner:          "testowner",
+			repo:           "testrepo",
+			responseStatus: 200,
+			responseBody:   `[{"tag_name": "v2.0.0", "some_future_field": {"nested": true}}]`,
+			wantReleases:   1,
+			wantTagName:    "v2.0.0",
+			expectError:    false,
+		},
+		{
+			name:           "empty release list",
+			token:          "test-token",
+			owner:          "testowner",
+			repo:           "testrepo",
+			responseStatus: 200,
+			responseBody:   `[]`,
+			wantReleases:   0,
 			expectError:    false,
 		},
 		{
@@ -328,12 +362,24 @@ func TestGetReleases(t *testing.T) {
 			errorContains:  "not found",
 		},
 		{
+			name:           "unparsable body is a parse error",
+			token:          "test-token",
+			owner:          "testowner",
+			repo:           "testrepo",
+			responseStatus: 200,
+			responseBody:   `<html>gateway error</html>`,
+			expectError:    true,
+			errorContains:  "could not be parsed",
+		},
+		{
 			name:           "unauthenticated rate limited",
 			token:          "",
 			owner:          "testowner",
 			repo:           "testrepo",
 			responseStatus: 200,
 			responseBody:   `[{"tag_name": "v1.0.0"}]`,
+			wantReleases:   1,
+			wantTagName:    "v1.0.0",
 			expectError:    false,
 		},
 	}
@@ -370,7 +416,7 @@ func TestGetReleases(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			body, err := client.GetReleases(ctx, tt.owner, tt.repo)
+			releases, err := client.GetReleases(ctx, tt.owner, tt.repo)
 
 			if tt.expectError {
 				if err == nil {
@@ -379,13 +425,35 @@ func TestGetReleases(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.errorContains) {
 					t.Errorf("Expected error to contain '%s', got '%s'", tt.errorContains, err.Error())
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Expected no error, got: %v", err)
-				}
-				if body == nil {
-					t.Errorf("Expected response body, got nil")
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+			if len(releases) != tt.wantReleases {
+				t.Fatalf("len(releases) = %d, want %d", len(releases), tt.wantReleases)
+			}
+			if tt.wantReleases == 0 {
+				return
+			}
+			if tt.wantTagName != "" && releases[0].TagName != tt.wantTagName {
+				t.Errorf("TagName = %q, want %q", releases[0].TagName, tt.wantTagName)
+			}
+			if len(releases[0].Assets) != tt.wantAssets {
+				t.Fatalf("len(assets) = %d, want %d", len(releases[0].Assets), tt.wantAssets)
+			}
+			if tt.wantAssets == 0 {
+				return
+			}
+			asset := releases[0].Assets[0]
+			if asset.Name != tt.wantAssetName {
+				t.Errorf("asset.Name = %q, want %q", asset.Name, tt.wantAssetName)
+			}
+			if asset.Size != tt.wantAssetSize {
+				t.Errorf("asset.Size = %d, want %d", asset.Size, tt.wantAssetSize)
+			}
+			if asset.BrowserDownloadURL == "" {
+				t.Error("asset.BrowserDownloadURL is empty, want the download URL")
 			}
 		})
 	}
@@ -393,23 +461,31 @@ func TestGetReleases(t *testing.T) {
 
 func TestGetLatestRelease(t *testing.T) {
 	tests := []struct {
-		name           string
-		token          string
-		owner          string
-		repo           string
-		responseStatus int
-		responseBody   string
-		expectError    bool
-		errorContains  string
+		name             string
+		token            string
+		owner            string
+		repo             string
+		responseStatus   int
+		responseBody     string
+		wantTag          string
+		wantName         string
+		wantPrerelease   bool
+		wantPublishField string
+		expectError      bool
+		errorContains    string
 	}{
 		{
-			name:           "successful latest release fetch",
-			token:          "test-token",
-			owner:          "testowner",
-			repo:           "testrepo",
-			responseStatus: 200,
-			responseBody:   `{"tag_name": "v1.2.0", "name": "Latest Release"}`,
-			expectError:    false,
+			name:             "successful latest release fetch",
+			token:            "test-token",
+			owner:            "testowner",
+			repo:             "testrepo",
+			responseStatus:   200,
+			responseBody:     `{"id": 5, "tag_name": "v1.2.0", "name": "Latest Release", "draft": false, "prerelease": true, "published_at": "2026-01-02T03:04:05Z", "html_url": "https://github.com/o/r/releases/v1.2.0"}`,
+			wantTag:          "v1.2.0",
+			wantName:         "Latest Release",
+			wantPrerelease:   true,
+			wantPublishField: "2026-01-02T03:04:05Z",
+			expectError:      false,
 		},
 		{
 			name:           "no releases found",
@@ -446,7 +522,7 @@ func TestGetLatestRelease(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			body, err := client.GetLatestRelease(ctx, tt.owner, tt.repo)
+			release, err := client.GetLatestRelease(ctx, tt.owner, tt.repo)
 
 			if tt.expectError {
 				if err == nil {
@@ -455,13 +531,25 @@ func TestGetLatestRelease(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.errorContains) {
 					t.Errorf("Expected error to contain '%s', got '%s'", tt.errorContains, err.Error())
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Expected no error, got: %v", err)
-				}
-				if body == nil {
-					t.Errorf("Expected response body, got nil")
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+			if release == nil {
+				t.Fatal("Expected release, got nil")
+			}
+			if release.TagName != tt.wantTag {
+				t.Errorf("TagName = %q, want %q", release.TagName, tt.wantTag)
+			}
+			if release.Name != tt.wantName {
+				t.Errorf("Name = %q, want %q", release.Name, tt.wantName)
+			}
+			if release.Prerelease != tt.wantPrerelease {
+				t.Errorf("Prerelease = %v, want %v", release.Prerelease, tt.wantPrerelease)
+			}
+			if release.PublishedAt != tt.wantPublishField {
+				t.Errorf("PublishedAt = %q, want %q", release.PublishedAt, tt.wantPublishField)
 			}
 		})
 	}
@@ -663,10 +751,19 @@ func TestDefaultHeadersOnEveryRequest(t *testing.T) {
 			for method, call := range requests {
 				t.Run(method, func(t *testing.T) {
 					var gotUA, gotAccept, gotAuth string
-					srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+					srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						gotUA = r.Header.Get("User-Agent")
 						gotAccept = r.Header.Get("Accept")
 						gotAuth = r.Header.Get("Authorization")
+						// The typed release methods decode what they are handed,
+						// so each endpoint the map reaches answers with its own
+						// decodable shape.
+						switch r.URL.Path {
+						case "/repos/o/r/releases":
+							_, _ = w.Write([]byte(`[]`))
+						default:
+							_, _ = w.Write([]byte(`{}`))
+						}
 					}))
 					defer srv.Close()
 
