@@ -6,6 +6,9 @@
 `jedarden/declarative-config` → `k8s/iad-ci/argo-workflows/`, which is outside this
 repo — nothing in *this* repo changes under this design except this document.
 No template was modified while producing it.
+**Usage:** the operator-facing how-to (submitting an amd64-only build, the full
+parameter table, and the safety recipe) is now in
+`docs/notes/amd64-only-build-usage.md` (`spaxel-723a3646`).
 
 **Verification basis:** the live `WorkflowTemplate/spaxel-build` and
 `WorkflowTemplate/spaxel-build-amd64` objects in `argo-workflows` on iad-ci, read via

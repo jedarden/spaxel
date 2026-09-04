@@ -5,6 +5,15 @@
 amd64/arm64 targeting works, and identify what restricts the build to amd64-only.
 No templates were modified.
 
+> **Status (2026-09-04): the amd64-only fork described below is deleted.**
+> `k8s/iad-ci/argo-workflows/spaxel-build-amd64-workflowtemplate.yml` was removed
+> (declarative-config commit `e30e76f0`) and amd64-only became a submit-time
+> parameter on the original template instead. See
+> `docs/notes/amd64-only-build-usage.md` for current usage and
+> `docs/notes/amd64-only-build-template-design.md` for the decision record. The
+> rest of this document is retained as the record of the targeting mechanism and of
+> why the fork route was abandoned.
+
 ---
 
 ## 1. Location

@@ -11,6 +11,7 @@ These parameters are defined at the workflow level and can be overridden when su
 | `git-repo` | Forgejo repository path (format: `owner/repo`) | `jedarden/spaxel` | Optional |
 | `image-repo` | Docker image repository for build output | `ronaldraygun/spaxel` | Optional |
 | `branch` | Git branch to build from | `main` | Optional |
+| `platforms` | Comma-separated buildx platform list, substituted verbatim into `docker-build`'s `--platform` flag (added 2026-09-04, commit `a979e063`; amd64-only is `linux/amd64`) | `linux/amd64,linux/arm64` | Optional |
 
 **Usage Example:**
 ```yaml
@@ -31,8 +32,13 @@ spec:
       value: "ronaldraygun/spaxel"
     - name: branch
       value: "main"
+    - name: platforms
+      value: "linux/amd64,linux/arm64"
 EOF
 ```
+
+For amd64-only builds and the safety recipe a non-release amd64-only submission must
+follow, see `docs/notes/amd64-only-build-usage.md`.
 
 ## Template-Level Parameters
 
@@ -99,18 +105,18 @@ The workflow requires the following secrets to be mounted:
 
 Which step actually references which workflow parameter:
 
-| Step template | `git-repo` | `branch` | `image-repo` | `version` (input) | `should-build` (when) |
-|---------------|:----------:|:--------:|:------------:|:-----------------:|:---------------------:|
-| `resolve-version` | ✔ | ✔ | — | n/a | n/a |
-| `golangci-lint` | ✔ | ✔ | — | declared, **unread** | ✔ |
-| `a11y-test` | ✔ | ✔ | — | declared, **unread** | ✔ |
-| `go-test` | ✔ | ✔ | — | — | ✔ |
-| `timing-benchmark` | ✔ | ✔ | — | — | ✔ |
-| `acceptance-test` | ✔ | ✔ | — | — | ✔ |
-| `firmware-test` | ✔ | ✔ | — | — | ✔ |
-| `firmware-build` | ✔ | ✔ | — | ✔ | ✔ |
-| `docker-build` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `update-declarative-config` | — | — | — | ✔ | ✔ |
+| Step template | `git-repo` | `branch` | `image-repo` | `platforms` | `version` (input) | `should-build` (when) |
+|---------------|:----------:|:--------:|:------------:|:-----------:|:-----------------:|:---------------------:|
+| `resolve-version` | ✔ | ✔ | — | — | n/a | n/a |
+| `golangci-lint` | ✔ | ✔ | — | — | declared, **unread** | ✔ |
+| `a11y-test` | ✔ | ✔ | — | — | declared, **unread** | ✔ |
+| `go-test` | ✔ | ✔ | — | — | — | ✔ |
+| `timing-benchmark` | ✔ | ✔ | — | — | — | ✔ |
+| `acceptance-test` | ✔ | ✔ | — | — | — | ✔ |
+| `firmware-test` | ✔ | ✔ | — | — | — | ✔ |
+| `firmware-build` | ✔ | ✔ | — | — | ✔ | ✔ |
+| `docker-build` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `update-declarative-config` | — | — | — | — | ✔ | ✔ |
 
 `GH_TOKEN`, `GIT_TOKEN`, and `FORGEJO_TOKEN` are **not** uniformly mounted — the three
 secrets have different scopes. Verified against the live template 2026-09-04:
@@ -154,20 +160,28 @@ How each is actually used:
    Overriding `image-repo` therefore changes the *pushed* tag but **not** the
    *deployed* pin, and a mismatch between the two ships a pin pointing at an image that
    was never published. Treat `image-repo` as fixed in practice.
-3. **`update-declarative-config` consumes neither `git-repo` nor `branch`.** It clones
+3. **`platforms` reaches exactly one step, once.** It is referenced only inside
+   `docker-build` (as `--platform={{workflow.parameters.platforms}}`); no other step,
+   and no other line of `docker-build`, reads it. Its default is byte-identical to the
+   literal it replaced, so every submission that does not override it — including every
+   push-sensor-triggered run — builds the same two-platform manifest list as before.
+   Firmware is deliberately not coupled to it (ADR-001: firmware is the ESP32 target,
+   built once for every image platform). Usage and caveats:
+   `docs/notes/amd64-only-build-usage.md`.
+4. **`update-declarative-config` consumes neither `git-repo` nor `branch`.** It clones
    `jedarden/declarative-config` at a hardcoded URL on whatever its default branch is,
    so building a non-`main` source branch still rewrites the pin that `main`'s ArgoCD
    will deploy.
-4. **`version` is the only chain between resolve and build.** `should-build` gates
+5. **`version` is the only chain between resolve and build.** `should-build` gates
    execution but is never passed as an argument, so `version` and `should-build` must
    stay consistent by convention: a doc-only push writes the repo's current `VERSION`
    into `/tmp/version` (not a bump) precisely so that any `version` consumer that
    somehow still runs sees a real value.
-5. **`git-repo` is a template-wide assumption.** Every step that clones does so from
+6. **`git-repo` is a template-wide assumption.** Every step that clones does so from
    `https://git.ardenone.com/{{workflow.parameters.git-repo}}.git`, but
    `update-declarative-config` and the hardcoded image prefix in (2) remain
    spaxel-specific — the template is not fully reusable for a different `git-repo`.
-6. **`docker-config` secret volume is mounted only by `docker-build`** (at
+7. **`docker-config` secret volume is mounted only by `docker-build`** (at
    `/root/.docker`); the token secrets are env-level and fleet-wide as noted above.
 
 ```
@@ -177,7 +191,7 @@ How each is actually used:
  ─ git-repo ───┬────┴───────────────│
  ─ branch ─────┼──→ clone steps:    ├── version ──→ docker-build ──→ image-repo:version
  ─ image-repo ─┼─── (docker-build   │
-               │     only)          └── version ──→ update-declarative-config
+ ─ platforms ──┤     only)          └── version ──→ update-declarative-config
                │                          (hardcodes ronaldraygun/spaxel: prefix,
                │                           clones declarative-config default branch)
                └──→ golangci-lint · a11y-test · go-test · timing-benchmark ·
@@ -252,7 +266,7 @@ the workflow on the first attempt. The workflow-level `activeDeadlineSeconds` is
 | Artifact | Location | Format |
 |----------|----------|--------|
 | Firmware binary | GitHub Releases (`jedarden/spaxel`) | `spaxel-firmware-<version>-merged.bin` |
-| Docker image | Docker Hub (`ronaldraygun/spaxel`) | Multi-arch manifest (amd64, arm64) |
+| Docker image | Docker Hub (`ronaldraygun/spaxel`) | Multi-arch manifest (amd64, arm64) by default; the platform set follows `platforms` |
 | Config updates | `jedarden/declarative-config` repo | Deployment YAML updates |
 
 ## Related Documentation
@@ -266,7 +280,7 @@ the workflow on the first attempt. The workflow-level `activeDeadlineSeconds` is
 
 **Re-verified field-by-field against the live WorkflowTemplate on 2026-09-04**
 (`kubectl --server=http://traefik-iad-ci:8001 get workflowtemplate spaxel-build -n
-argo-workflows -o json`): 3 workflow parameters and their defaults, the single
+argo-workflows -o json`): 4 workflow parameters and their defaults, the single
 template-level parameter and its 5 declared (3 reading) consumers, both
 `resolve-version` outputs, the `when` gate and doc-only exclusion patterns, all 10
 resource limits, all 11 deadlines, every retry strategy, and the
@@ -277,6 +291,16 @@ in this pass: the previous dependency diagram wrongly showed `image-repo` feedin
 secret-mounting claim was corrected — the earlier text said all three token env vars
 were mounted on every step, when `GIT_TOKEN` exists on `resolve-version` alone and
 `update-declarative-config` has no `GH_TOKEN`.
+
+**2026-09-04 update, second pass** (after the template gained `platforms`):
+live re-check confirms 4 workflow-level parameters
+(`git-repo=jedarden/spaxel`, `image-repo=ronaldraygun/spaxel`, `branch=main`,
+`platforms=linux/amd64,linux/arm64`), `docker-build` carrying
+`--platform={{workflow.parameters.platforms}}` in place of the former
+`linux/amd64,linux/arm64` literal, `platforms` appearing in no other step, and the
+`spaxel-build-amd64` fork template deleted (live object `NotFound`). This document
+was corrected to match; see `docs/notes/amd64-only-build-usage.md` for the usage
+guide and `docs/notes/amd64-only-build-template-design.md` for the design record.
 
 To verify the current template definition:
 ```bash
