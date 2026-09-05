@@ -64,6 +64,11 @@ Then open `http://<server-ip>:8080`, set a dashboard PIN, and use **Add Node** (
 | `SPAXEL_MQTT_BROKER` | *(unset)* | Optional MQTT broker URL for Home Assistant integration (e.g. `mqtt://homeassistant.local:1883`) |
 | `TZ` | `UTC` | Timezone for diurnal baselines, briefings, and quiet hours (IANA name) |
 | `SPAXEL_MDNS_ENABLED` | `true` | Disable when not using host networking |
+| `SPAXEL_DEMO_MODE` | `false` | Read-only demo dashboard: mutating API calls return `403`, everything else is browsable with no PIN |
+
+### Demo mode
+
+Set `SPAXEL_DEMO_MODE=true` to run Spaxel as a read-only showcase — handy for screenshots, kiosk displays, or letting someone explore the dashboard on a live deployment. Every mutating API request (`POST`/`PUT`/`PATCH`/`DELETE`) is rejected with `403` before it reaches a handler, while all read endpoints and dashboard pages stay open with no PIN prompt. Because first-run PIN setup is itself a `POST`, set the PIN *before* enabling demo mode. `SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS` (default 5) caps concurrent dashboard WebSocket viewers while the mode is on.
 
 The full list is in the *Deployment* section of [`docs/plan/plan.md`](docs/plan/plan.md).
 
