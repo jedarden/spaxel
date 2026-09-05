@@ -152,6 +152,26 @@ static esp_err_t load_nvs_config(void) {
 }
 
 static void state_machine_task(void *arg) {
+    // Subscribe to the task watchdog, then feed it once per loop pass below.
+    //
+    // This is the one task worth watching: it is long-lived, and if it wedges
+    // while the node is CONNECTED nothing else notices — health_task keeps
+    // reporting a healthy node to the mothership, and the mothership-lost
+    // reboot in health_task only fires when the state is not CONNECTED. The
+    // idle tasks (always subscribed, fed by IDF's own idle hook) cover a task
+    // that starves the scheduler; this subscription adds the blocked-forever
+    // case, where the idle tasks run fine and the node just sits dead.
+    //
+    // Subscribing is a commitment: a task that goes SPAXEL_WATCHDOG_TIMEOUT_S
+    // (90s) without feeding is reset. Every pass of this loop is bounded well
+    // inside that — the longest is CAPTIVE_PORTAL at 60s, with WIFI_CONNECTING
+    // and WIFI_LOST at ~40s (30s event wait + 10s NTP) — so a trip here means
+    // this task really did stop making progress.
+    // Feeding is only meaningful while subscribed; skipping it on failure keeps
+    // a node whose watchdog_init() failed (app_main treats the watchdog as
+    // optional) from logging a warning on every pass of this loop.
+    bool wdt_subscribed = (watchdog_subscribe() == ESP_OK);
+
     // Tracks whether CSI has been armed for the current CONNECTED session, so
     // entering CONNECTED arms it exactly once rather than on every loop pass.
     bool csi_armed_this_session = false;
@@ -160,6 +180,9 @@ static void state_machine_task(void *arg) {
     int discovery_fail_count = 0;
 
     while (1) {
+        if (wdt_subscribed) {
+            watchdog_feed();
+        }
         ESP_LOGD(TAG, "State machine: %s", node_state_str(g_state.state));
 
         switch (g_state.state) {
