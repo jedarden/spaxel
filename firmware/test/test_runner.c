@@ -13,11 +13,11 @@
  *                   file-scope jmp_buf the ASSERT_* macros longjmp into, a
  *                   run-wide failure counter, and test_record_failure()
  *                   itself.
- *   - sibling  (bf-bq9, this change): main() — the entry point that sorts
- *                   the registered tests by name, drives each through the
- *                   setjmp/longjmp recovery loop, prints a one-line
- *                   RUN marker per test plus a run summary, and returns
- *                   non-zero iff any test failed.
+ *   - sibling  (bf-bq9): main() — the entry point that sorts the registered
+ *                   tests by name, drives each through the setjmp/longjmp
+ *                   recovery loop, prints exactly one outcome line per test
+ *                   ("PASS: <name>" / "FAIL: <name>"), and returns non-zero
+ *                   iff any test failed.
  *
  * main() setjmp()s into g_test_jmp before each test and calls the body; on a
  * longjmp return (a failed assertion) it prints FAIL and moves on, so one
@@ -206,15 +206,16 @@ static int test_entry_cmp(const void *a, const void *b)
  * binary; THIS function's exit code is what make propagates, so a non-zero
  * return here fails CI.
  *
- * This is child 2 of the bf-22vg re-split: child 1 (bf-1fd4) restored the naive
- * direct-call loop, and THIS change (bf-27ud) layers the per-test recovery
- * target back on — gating the body call on setjmp(). Flow:
+ * bf-3b3a3bf6 — the last child of parent bf-1na — replaces the neutral RUN
+ * marker bf-27ud's loop printed with an outcome line per test, and adds the
+ * passed/failed tallies. Flow:
  *   1. Sort the registry by name (test_entry_cmp) for a deterministic order.
  *      The TEST() constructors have already fully populated it before main().
- *   2. For each test: print its RUN line, then setjmp() into g_test_jmp and call
- *      g_tests[i].fn() only on the direct (zero) return. A non-zero return is a
- *      longjmp from a failed assertion and falls straight through to the next
- *      iteration (no else body), so a failure in test N never blocks N+1..end.
+ *   2. For each test: setjmp() into g_test_jmp and, on the direct (zero)
+ *      return, call g_tests[i].fn() then print "PASS: <name>" and bump the
+ *      passed tally. A non-zero return is a longjmp from a failed assertion:
+ *      print "FAIL: <name>" and bump the failed tally WITHOUT re-invoking the
+ *      body, so a failure in test N never blocks N+1..end.
  *
  * A failed assertion still allows the remaining tests to run, but the
  * run-wide g_failure_count is checked after the loop so make receives a
@@ -227,89 +228,44 @@ int main(void)
     qsort(g_tests, (size_t)g_test_count, sizeof(g_tests[0]), test_entry_cmp);
 
     /*
-     * i spans the setjmp/longjmp recovery below, so it is volatile-qualified.
+     * Per-test outcome tallies. Each iteration below bumps exactly one of
+     * them, so passed + failed == g_test_count once the loop finishes. Like i
+     * they span the setjmp/longjmp recovery, so both are volatile-qualified.
      * The full per-variable C11 7.13.2.1 clobber audit — which variables are in
      * scope across the boundary, why each is safe, and why volatile is kept
      * despite the standard not strictly requiring it — lives at the setjmp call
-     * site further down this loop body.
+     * site inside this loop body.
      */
+    volatile int passed = 0;
+    volatile int failed = 0;
+
     for (volatile int i = 0; i < g_test_count; i++) {
         /*
-         * The RUN line is the one observable line per test and prints BEFORE the
-         * setjmp, so it appears regardless of how the body ends. The body itself
-         * runs only on the direct (zero) setjmp return; a non-zero return is a
-         * longjmp from a failed assertion and simply falls through to the next
-         * iteration — no else body — so the loop's i++ still advances and a
-         * failure in test N never blocks N+1..end.
-         */
-        printf("RUN: %s\n", g_tests[i].name);
-        /*
-         * DYNAMIC CONFIRMATION (bf-50yh, child 4/4 of umbrella bf-tof1) — the
-         * per-test RUN-line isolation contract this loop exists to provide,
-         * verified against the stdout of a successful `make -C firmware/test
-         * test` run (the bf-27ud recovery loop + this driver):
+         * The outcome line is the one observable line per test and prints
+         * exactly once, labelled by how the body ended: PASS after a clean
+         * return from g_tests[i].fn(), FAIL on the non-zero (longjmp) return
+         * that a tripped test_record_failure() produces — the body is NOT
+         * re-invoked on that path.
          *
-         *   registered TEST() definitions ......... 29   (test_sanity 1,
-         *                                                 test_csi_frame 7,
-         *                                                 test_nvs_migration 9,
-         *                                                 test_serial_prov 12)
-         *   RUN: lines emitted by this loop ....... 29
-         *   bidirectional set diff ................ IDENTICAL — every registered
-         *                                                 name has exactly one RUN
-         *                                                 line; none skipped, none
-         *                                                 duplicated. The suite is
-         *                                                 fully driven.
-         *
-         * The 29 RUN lines captured, in the order this loop emitted them:
-         *
-         *   RUN: arithmetic_sanity
-         *   RUN: csi_frame_header_only_probe
-         *   RUN: csi_frame_header_size
-         *   RUN: csi_frame_ingestion_validation
-         *   RUN: csi_frame_iq_payload
-         *   RUN: csi_frame_roundtrip_fields
-         *   RUN: csi_frame_signed_rssi_roundtrip
-         *   RUN: csi_frame_timestamp_is_little_endian
-         *   RUN: nvs_migration_already_current_is_noop
-         *   RUN: nvs_migration_does_not_downgrade_newer_version
-         *   RUN: nvs_migration_fresh_install_inits_to_v1
-         *   RUN: nvs_migration_index_arithmetic_picks_correct_step
-         *   RUN: nvs_migration_multi_step_advance
-         *   RUN: nvs_migration_undefined_future_version_returns_not_found
-         *   RUN: nvs_migration_v1_to_v2_preserves_existing_ntp
-         *   RUN: nvs_migration_v1_to_v2_renames_ms_ip_and_defaults_ntp
-         *   RUN: nvs_migration_v1_to_v2_without_ms_ip_skips_rename
-         *   RUN: serial_prov_debug_non_bool_writes_zero
-         *   RUN: serial_prov_empty_ssid_rejected
-         *   RUN: serial_prov_fuzz_deep_nesting_capped
-         *   RUN: serial_prov_fuzz_random_bytes_never_crash
-         *   RUN: serial_prov_invalid_json
-         *   RUN: serial_prov_minimal_payload_ok
-         *   RUN: serial_prov_missing_provision_key
-         *   RUN: serial_prov_missing_ssid_rejected
-         *   RUN: serial_prov_port_wrong_type_ignored
-         *   RUN: serial_prov_string_escapes_decoded
-         *   RUN: serial_prov_top_level_array_is_missing_key
-         *   RUN: serial_prov_valid_full_payload
-         *
-         * That emitted order is byte-for-byte the strcmp-sorted order the qsort
-         * above produces — confirming per-test isolation at the observable level:
-         * the loop reaches every test regardless of how the prior body ended, and
-         * for this all-passing suite every body returns normally (no longjmp), so
-         * all RUN: lines land in sorted order with no FAIL/stderr interleaving
-         * them. RUN-line set and order are unchanged vs the naive direct-call
-         * baseline (bf-1fd4): the recovery gating added no test, dropped no test,
-         * and reordered nothing. Umbrella bf-tof1 (and thereby parent bf-22vg)
-         * acceptance is satisfied.
+         * SUPERSEDED EVIDENCE (bf-50yh, child 4/4 of umbrella bf-tof1): the
+         * RUN marker this branch replaced was dynamically confirmed against
+         * `make -C firmware/test test` stdout — every registered test got
+         * exactly one marker, none skipped, none duplicated, in the
+         * strcmp-sorted order the qsort above produces (29 tests at the time;
+         * the suite has grown since). Branching here replaces the marker
+         * rather than adding an iteration, so the substance of that
+         * confirmation carries over intact: the loop still reaches every test
+         * regardless of how the previous body ended, and the emitted order is
+         * unchanged.
          */
         /*
          * SETJMP/LONGJMP CLOBBER AUDIT — C11 7.13.2.1 (bf-31rd, child 2/3 of
          * bf-53ut). The standard renders an automatic object indeterminate on
          * longjmp return only if it is local to THIS function, non-volatile, AND
          * changed between the setjmp() call and the longjmp(). No object in scope
-         * here meets all three; volatile on i (loop above) is kept solely to
-         * satisfy gcc's -Wclobbered, which is heuristic and ignores that
-         * distinction. Variables in scope across the boundary:
+         * here meets all three; volatile on i and the passed/failed tallies is
+         * kept solely to satisfy gcc's -Wclobbered, which is heuristic and
+         * ignores that distinction. Variables in scope across the boundary:
          *
          *  - i (automatic, loop index, volatile-qualified): written ONLY by the
          *    for-init (i = 0) and the for-increment (i++). The increment runs
@@ -319,8 +275,15 @@ int main(void)
          *    only READS i. The 7.13.2.1 "changed between setjmp and longjmp"
          *    condition is therefore not met, and i is determinate on the longjmp-
          *    return path (where i++ and the i < g_test_count re-test read it).
-         *  - No local tallies (passed/failed counters) live in main().
-         *    g_failure_count is file-scope static, not automatic, so 7.13.2.1
+         *  - passed/failed (automatic tallies, volatile-qualified): written
+         *    only AFTER control resumes at this setjmp site — passed++ on the
+         *    clean-return path, failed++ on the longjmp-return path — so no
+         *    write to either lands between the setjmp() call and a longjmp()
+         *    fired inside g_tests[i].fn(). The 7.13.2.1 "changed between
+         *    setjmp and longjmp" condition is therefore not met and both are
+         *    determinate on either return path; volatile is kept (as for i)
+         *    to keep gcc's heuristic -Wclobbered quiet at every -O level.
+         *  - g_failure_count is file-scope static, not automatic, so 7.13.2.1
          *    does not apply to it at all; it is bumped inside
          *    test_record_failure() before the longjmp, not in this frame.
          *    g_test_jmp is likewise file-scope static.
@@ -338,8 +301,28 @@ int main(void)
          */
         if (setjmp(g_test_jmp) == 0) {
             g_tests[i].fn();
+            printf("PASS: %s\n", g_tests[i].name);
+            passed++;
+        } else {
+            printf("FAIL: %s\n", g_tests[i].name);
+            failed++;
         }
     }
 
+    /*
+     * bf-1na's scope ends at the tallies: each iteration above bumped exactly
+     * one, so passed + failed == g_test_count here. The run-summary line that
+     * would surface them is deliberately out of scope (a later sibling), so
+     * the tallies are consumed by these casts — which keeps -Wall -Wextra
+     * clean until that lands.
+     */
+    (void)passed;
+    (void)failed;
+
+    /*
+     * Exit contract, untouched by bf-1na: keyed on the run-wide failure count
+     * (landed separately, da81d14f) — non-zero iff any assertion failed, which
+     * the documented `make -C firmware/test test` propagates to CI.
+     */
     return g_failure_count > 0 ? 1 : 0;
 }
