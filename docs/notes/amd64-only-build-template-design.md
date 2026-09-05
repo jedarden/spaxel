@@ -368,12 +368,17 @@ pattern hardcodes `ronaldraygun/spaxel:`. A casually-submitted amd64-only run ca
 therefore (a) replace a multi-arch manifest with a single-platform one under the
 production tags, and (b) pin production to it.
 
-Operational rule, requiring **no template change**: any amd64-only submission that is
-not a real release must set **both** `platforms=linux/amd64` **and** a scratch
-`image-repo`, and run on an already-published version (i.e. `branch=main` default) so
-the pin rewrite is a no-op. This is the recipe in step 4. Worth a follow-up bead:
-parameterise the sed's image ref in `update-declarative-config` so a scratch-repo run
-is inert even when the version differs.
+Operational rule: any amd64-only submission that is not a real release must set a
+scratch `image-repo` — that is what keeps a single-platform manifest out of the
+production *tags* (hazard (a) above), and it is the recipe in step 4.
+
+**Follow-up landed** (`spaxel-fce2f7e4`, declarative-config `0ec96fc9`, 2026-09-04):
+`update-declarative-config`'s sed now matches `{{workflow.parameters.image-repo}}`
+instead of a hardcoded `ronaldraygun/spaxel:`, so hazard (b) is closed — a
+scratch-repo run cannot pin production at all, whatever version resolves. The
+`branch=main` clause of the original rule is no longer load-bearing for pin safety;
+it survives in the usage guide only so a verification run resolves the
+already-published version and stays comparable with a real release.
 
 ### 7.3 Residual observations (not defects in this design)
 
@@ -418,6 +423,11 @@ YAML validity (bead AC5): proven by the sync — Argo validated and applied the 
 and the verification workflow instantiated it. No `kubectl apply --dry-run` was used
 (prohibited verb; also unnecessary).
 
-Remaining: §7.2's follow-up — parameterise the sed's image ref in
-`update-declarative-config` so a scratch-repo run is inert even when the version
-differs. Tracked as bead `spaxel-fce2f7e4`.
+Remaining: none. §7.2's follow-up landed as bead `spaxel-fce2f7e4`
+(declarative-config `0ec96fc9`, 2026-09-04): `update-declarative-config`'s sed takes
+its image ref from `{{workflow.parameters.image-repo}}`. Production path verified
+byte-identical under the default parameter (old-literal sed output vs
+parameterised-with-default output diff empty on both target files); a scratch-repo
+run leaves the declarative-config clone clean, so the step takes its existing "No
+image tag changes to commit" branch. Default-behaviour risk in this change is the
+ArgoCD propagation lag on the app, not the diff — see the closure notes on the bead.

@@ -103,7 +103,10 @@ The workflow requires the following secrets to be mounted:
 
 ### Consumer matrix (verified against the live template 2026-09-04)
 
-Which step actually references which workflow parameter:
+Which step actually references which workflow parameter. The
+`update-declarative-config` / `image-repo` cell changed in declarative-config
+`0ec96fc9` (bead `spaxel-fce2f7e4`) — see gotcha 2 and the Verification section for
+the live-sync caveat:
 
 | Step template | `git-repo` | `branch` | `image-repo` | `platforms` | `version` (input) | `should-build` (when) |
 |---------------|:----------:|:--------:|:------------:|:-----------:|:-----------------:|:---------------------:|
@@ -116,7 +119,7 @@ Which step actually references which workflow parameter:
 | `firmware-test` | ✔ | ✔ | — | — | — | ✔ |
 | `firmware-build` | ✔ | ✔ | — | — | ✔ | ✔ |
 | `docker-build` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `update-declarative-config` | — | — | — | — | ✔ | ✔ |
+| `update-declarative-config` | — | — | ✔ (since `0ec96fc9`) | — | ✔ | ✔ |
 
 `GH_TOKEN`, `GIT_TOKEN`, and `FORGEJO_TOKEN` are **not** uniformly mounted — the three
 secrets have different scopes. Verified against the live template 2026-09-04:
@@ -151,15 +154,22 @@ How each is actually used:
 
 ### Couplings and gotchas
 
-1. **`image-repo` reaches exactly one step.** It is referenced only inside
-   `docker-build` (as the `docker buildx build -t` target). `resolve-version` and
-   `update-declarative-config` never see it.
-2. **`update-declarative-config` hardcodes the image prefix anyway.** Its `sed` rewrites
-   the literal `ronaldraygun/spaxel:[^ "]*` in
-   `k8s/ardenone-cluster/spaxel/deployment.yml` and `nixos/bench/modules/mothership.nix`.
-   Overriding `image-repo` therefore changes the *pushed* tag but **not** the
-   *deployed* pin, and a mismatch between the two ships a pin pointing at an image that
-   was never published. Treat `image-repo` as fixed in practice.
+1. **`image-repo` reaches two steps.** `docker-build` uses it as the `docker buildx
+   build -t`/`--tag` target, and — since declarative-config `0ec96fc9`
+   (bead `spaxel-fce2f7e4`, 2026-09-04) — `update-declarative-config` uses it as its
+   sed's match-and-replacement ref. `resolve-version` still never sees it.
+2. **The deployed pin now follows `image-repo`.** `update-declarative-config`'s sed is
+   `s|${IMAGE_REPO}:[^ "]*|${IMAGE_REPO}:${VERSION}|g` with
+   `IMAGE_REPO={{workflow.parameters.image-repo}}`, rewriting
+   `k8s/ardenone-cluster/spaxel/deployment.yml` and
+   `nixos/bench/modules/mothership.nix`. Overriding `image-repo` therefore changes the
+   pushed tag *and* the pin, consistently. Two consequences: (a) a production-path run
+   behaves exactly as before, because the default is `ronaldraygun/spaxel`; (b) a run
+   pointed at a scratch repository rewrites nothing in those files and takes the
+   step's existing "No image tag changes to commit" branch — it cannot pin production
+   to an image that was never published. Before `0ec96fc9` the prefix was a hardcoded
+   literal and the two were decoupled; that is the behaviour the usage guide's
+   `spaxel-build-amd64-verify-28wp5` example was written against.
 3. **`platforms` reaches exactly one step, once.** It is referenced only inside
    `docker-build` (as `--platform={{workflow.parameters.platforms}}`); no other step,
    and no other line of `docker-build`, reads it. Its default is byte-identical to the
@@ -179,8 +189,9 @@ How each is actually used:
    somehow still runs sees a real value.
 6. **`git-repo` is a template-wide assumption.** Every step that clones does so from
    `https://git.ardenone.com/{{workflow.parameters.git-repo}}.git`, but
-   `update-declarative-config` and the hardcoded image prefix in (2) remain
-   spaxel-specific — the template is not fully reusable for a different `git-repo`.
+   `update-declarative-config` remains spaxel-specific — it clones
+   `jedarden/declarative-config` at a hardcoded URL and rewrites spaxel's own two pin
+   paths — so the template is not fully reusable for a different `git-repo`.
 7. **`docker-config` secret volume is mounted only by `docker-build`** (at
    `/root/.docker`); the token secrets are env-level and fleet-wide as noted above.
 
@@ -190,10 +201,10 @@ How each is actually used:
  workflow args      │   resolve-version ── version ──→ firmware-build ──→ GitHub Release
  ─ git-repo ───┬────┴───────────────│
  ─ branch ─────┼──→ clone steps:    ├── version ──→ docker-build ──→ image-repo:version
- ─ image-repo ─┼─── (docker-build   │
- ─ platforms ──┤     only)          └── version ──→ update-declarative-config
-               │                          (hardcodes ronaldraygun/spaxel: prefix,
-               │                           clones declarative-config default branch)
+ ─ image-repo ─┼─── (docker-build   │               └── version ──→ update-declarative-config
+ ─ platforms ──┤     + udc: image-                       (sed matches image-repo,
+               │      repo → sed)                         clones declarative-config
+               │                                          default branch)
                └──→ golangci-lint · a11y-test · go-test · timing-benchmark ·
                     acceptance-test · firmware-test   (clone + test only)
 ```
@@ -301,6 +312,25 @@ live re-check confirms 4 workflow-level parameters
 `spaxel-build-amd64` fork template deleted (live object `NotFound`). This document
 was corrected to match; see `docs/notes/amd64-only-build-usage.md` for the usage
 guide and `docs/notes/amd64-only-build-template-design.md` for the design record.
+
+**2026-09-04 update, third pass** (declarative-config `0ec96fc9`, bead
+`spaxel-fce2f7e4`): `update-declarative-config`'s sed now reads
+`IMAGE_REPO={{workflow.parameters.image-repo}}` in place of the former
+`ronaldraygun/spaxel:` literal, and gotchas 1–2 plus the consumer matrix above were
+corrected accordingly (gotcha 2 previously said "treat `image-repo` as fixed in
+practice" — no longer true). Verified against the *manifest*, not the live object:
+the live template on iad-ci still carried the pre-change script at the time of
+writing because the whole `argo-workflows-ns-iad-ci` app lagged behind
+`origin/main` (the immediately preceding commit `1c85ed79` was equally unlanded, so
+this is propagation lag on the app, not a regression introduced by `0ec96fc9`).
+Auto-sync + `selfHeal` are on, so it converges without action; check it with:
+
+```bash
+kubectl --server=http://traefik-iad-ci:8001 get workflowtemplate spaxel-build \
+  -n argo-workflows -o json | \
+  jq -r '.spec.templates[] | select(.name=="update-declarative-config")
+         | .source' | grep -c IMAGE_REPO   # expect 1 once synced
+```
 
 To verify the current template definition:
 ```bash
