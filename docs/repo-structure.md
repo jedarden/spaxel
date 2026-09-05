@@ -331,15 +331,18 @@ The repo root carries two categories of clutter worth recognising before adding 
   `SOURCE_CODE_INVENTORY.md`, `WORKSPACE_STRUCTURE_DOCUMENTATION.md`, the root
   `SYSTEM_CATALOG.md`, `top_level_directories.md`, `*_results.txt`,
   `verify-pack-corruption-indicators.*`, `bug_verification_report.md`, …). The
-  2026-09-04 exhaust sweeps deleted the raw dumps and search scratch, and collapsed
+  2026-09-04 exhaust sweeps deleted the raw dumps and search scratch, collapsed
   the duplicated structure catalogs to one copy per topic under `docs/`
   (`docs/inventory/`, `docs/codebase-structure-and-test-patterns.md`,
-  `docs/SYSTEM_CATALOG.md`); `WORKSPACE_STRUCTURE.md` and `rust-source-inventory.md`
-  remain at the root as the reconciled keepers. What is still at the root is the
-  point-in-time investigation-report set (`MOTHERSHIP_DASHBOARD_*.md`,
-  `GDOP_COMPUTATION_GUIDE.md`, the verification summaries, …) whose disposition is
-  owned by a separate sweep. These go stale fast; prefer `docs/notes/` for new
-  work (as the repo-init convention requires) and treat root reports as history.
+  `docs/SYSTEM_CATALOG.md`), and relocated the last investigation reports out of
+  the root: `workspace-structure.md` and `rust-source-inventory.md` now live in
+  `docs/inventory/`, the `mothership-dashboard-*` set and the verification
+  summaries in `docs/notes/` (kebab-case), and the GDOP guide was folded into
+  `docs/gdop-computation-functions.md`. Per-file record:
+  `docs/notes/root-exhaust-classification.md` (addendum). What remains at the
+  root is only the newcomer-facing set plus `README.md` and `PROGRESS.md`.
+  These reports went stale fast; keep new work under `docs/notes/` (as the
+  repo-init convention requires) and treat the relocated files as history.
 - **Stray directories**: `notes/` (per-bead `bf-*` findings that belong under `docs/notes/`)
   and `memory/` (a single agent-memory note). Untracked at any given moment you may also
   find `tmp/`, `.claude/`, `~`-style accident dirs and built binaries — those are

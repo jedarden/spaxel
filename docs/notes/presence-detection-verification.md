@@ -12,7 +12,7 @@
 - Requires EMPTY room for 60-second capture window
 - Mothership API requires Google OAuth authentication
 - Zero nodes currently online
-- See `BASELINE_CAPTURE_SUMMARY.md` for full details
+- See `baseline-capture-summary.md` for full details
 
 ### 2. Hardware Deployment (bf-2po1) - BLOCKED
 **Status**: Awaiting physical hardware setup

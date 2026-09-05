@@ -84,7 +84,7 @@ If operator is unavailable now:
 
 ✅ **Documentation Created**:
 - `notes/bf-3v39-baseline.md` - Detailed investigation and procedures
-- `BASELINE_CAPTURE_SUMMARY.md` - This summary
+- `baseline-capture-summary.md` - This summary
 - Clear blocker analysis and next steps
 
 ## Next Steps (Operator Action Required)

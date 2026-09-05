@@ -2,6 +2,9 @@
 
 **Generated:** 2026-08-29, refreshed 2026-09-04 (spaxel-7737eea8; absorbs the deleted
 `WORKSPACE_STRUCTURE_DOCUMENTATION.md`)
+**Relocated:** 2026-09-04 from the repository root to `docs/inventory/` (spaxel-2ee3e526,
+root exhaust sweep) — the root keeps only the newcomer-facing set plus `README.md` and
+`PROGRESS.md`
 **Workspace Root:** `/home/coding/spaxel`
 
 Spaxel is a WiFi CSI-based indoor positioning system for self-hosted homes: ESP32-S3
@@ -142,19 +145,20 @@ runtime) · `docker-compose.yml` (single service, host networking) · `.dockerig
 **Project docs:** `README.md` (overview + quickstart) · `PROGRESS.md`
 (phase-by-phase implementation status) · `LICENSE`
 
-**Investigation reports (point-in-time work-log, disposition in progress under the
-repo-root exhaust sweep `spaxel-1b8df9a3`):** `API_IMPLEMENTATION_STATUS.md`,
-`BASELINE_CAPTURE_SUMMARY.md`, `BENCH_HOSTNAME_INFO.md`,
-`BLE_PERSONID_INVESTIGATION.md`, `console-implementation-status.md`,
-`CSI_RECORDING_FILES_SEARCH_RESULTS.md`, `dashboard_discovery_notes.md`,
-`EMPTY_PASSWORD_TEST_RESULTS.md`, `GDOP_COMPUTATION_GUIDE.md`,
-`MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md`, `MOTHERSHIP_DASHBOARD_DEPENDENCIES.md`,
-`MOTHERSHIP_DASHBOARD_LOCATIONS.md`, `MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md`,
-`MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md`, `mothership_location.md`,
-`PERMISSION_VERIFICATION_SUMMARY.md`, `PRESENCE_DETECTION_VERIFICATION.md`,
-`rust-source-inventory.md` (0 Rust files — Go + C + JS only)
+**Investigation reports:** none at the root any more. The point-in-time work-log that
+used to sit here (`API_IMPLEMENTATION_STATUS.md`, `BASELINE_CAPTURE_SUMMARY.md`,
+`BENCH_HOSTNAME_INFO.md`, `BLE_PERSONID_INVESTIGATION.md`,
+`console-implementation-status.md`, `CSI_RECORDING_FILES_SEARCH_RESULTS.md`,
+`dashboard_discovery_notes.md`, `EMPTY_PASSWORD_TEST_RESULTS.md`,
+`GDOP_COMPUTATION_GUIDE.md`, the `MOTHERSHIP_DASHBOARD_*` set,
+`mothership_location.md`, `PERMISSION_VERIFICATION_SUMMARY.md`,
+`PRESENCE_DETECTION_VERIFICATION.md`, `rust-source-inventory.md`) was disposed of on
+2026-09-04 under the repo-root exhaust sweep `spaxel-1b8df9a3`: the survivors were
+relocated into `docs/notes/` and `docs/inventory/` under kebab-case names, and the
+stale/duplicate ones were deleted. Per-file record:
+`docs/notes/root-exhaust-classification.md` (addendum).
 
-Durable documentation belongs under `docs/`; the root reports are history, not a map.
+Durable documentation belongs under `docs/`; investigation reports are history, not a map.
 
 ---
 
@@ -192,4 +196,4 @@ behind the `embed` build tag; untagged local builds serve the canonical tree fro
 - `docs/codebase-structure-and-test-patterns.md` — test conventions and coverage
 - `docs/research/go-backend-code-directories.md`,
   `docs/research/esp32-firmware-code-directories.md` — per-package trees
-- `PROGRESS.md` — implementation phase status
+- `../../PROGRESS.md` — implementation phase status

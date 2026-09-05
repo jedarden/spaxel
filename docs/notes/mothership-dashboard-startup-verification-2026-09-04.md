@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-04
 **Bead:** spaxel-fc68b47e ("Start Mothership dashboard on port 8080")
-**Procedure followed:** `MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md` (repo root, spaxel-1cae2893) — Path B, dev run from source
+**Procedure followed:** `mothership-dashboard-startup-procedure.md` (spaxel-1cae2893) — Path B, dev run from source
 **Outcome:** dashboard **running** (loopback, alternate port — see §1), every §6 checklist item green, boot log clean apart from two explained WARNs.
 
 ---

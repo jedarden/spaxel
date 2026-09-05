@@ -8,10 +8,10 @@ the live instance by this bead.
 **Verified against:** `main` @ `5e2f28b4` — every `file:line` below was confirmed via `git show HEAD:`,
 not against the working tree (which carries another worker's in-flight edits to `onboard.js`,
 `troubleshoot.js`, `main.go` and `config.go`; none of those files is cited here).
-**Sibling deliverables:** `MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md` (how to start it),
-`MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md` (startup internals + env surface),
-`MOTHERSHIP_DASHBOARD_DEPENDENCIES.md` (prerequisites),
-`MOTHERSHIP_DASHBOARD_LOCATIONS.md` (asset locations),
+**Sibling deliverables:** `mothership-dashboard-startup-procedure.md` (how to start it),
+`mothership-dashboard-startup-investigation.md` (startup internals + env surface),
+`mothership-dashboard-dependencies.md` (prerequisites),
+`mothership-dashboard-locations.md` (asset locations),
 `docs/notes/mothership-dashboard-startup-verification-2026-09-04.md` (execution log of the running instance)
 
 ---
@@ -159,19 +159,19 @@ scratch. The instance's reported version is `dev` (Path B builds pass no `-ldfla
 
 ## 6. Cross-references
 
-- Operating procedure — paths A/B/C, healthy-boot log, verification checklist, 12-row troubleshooting: `MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md`
+- Operating procedure — paths A/B/C, healthy-boot log, verification checklist, 12-row troubleshooting: `mothership-dashboard-startup-procedure.md`
 - Execution log and runbook of the running instance: `docs/notes/mothership-dashboard-startup-verification-2026-09-04.md`
-- Dependency inventory and the full 28-variable env table: `MOTHERSHIP_DASHBOARD_DEPENDENCIES.md`
-- Startup sequence internals and serving modes: `MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md`
-- Asset locations and the embed mechanism: `MOTHERSHIP_DASHBOARD_LOCATIONS.md`
+- Dependency inventory and the full 28-variable env table: `mothership-dashboard-dependencies.md`
+- Startup sequence internals and serving modes: `mothership-dashboard-startup-investigation.md`
+- Asset locations and the embed mechanism: `mothership-dashboard-locations.md`
 - Bead-level provenance: spaxel-fc68b47e (instance), spaxel-68620881 (Chromium run), spaxel-a48234c7 (this document)
 
 ## 7. Acceptance-criteria mapping
 
 | AC | Status |
 |---|---|
-| Document the startup procedure (commands, steps) | **Met at HEAD before this bead** — `MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md` carries the full commands for paths A/B/C; this document links rather than duplicates, and §1 records the URL and access method actually used |
+| Document the startup procedure (commands, steps) | **Met at HEAD before this bead** — `mothership-dashboard-startup-procedure.md` carries the full commands for paths A/B/C; this document links rather than duplicates, and §1 records the URL and access method actually used |
 | Record any errors encountered and how they were resolved | **Met** — §4 lists the access errors, all resolved; §3 records the product defects encountered during access (D1/D2/D3/D5/D6) with mechanisms, evidence, and fix shapes; D3 corrects the earlier record |
 | Note the dashboard URL and access method | **Met** — §1 |
-| Update relevant project documentation if needed | **Met** — this file is new; `MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md` §10 gained a cross-reference; D3 supersedes the mis-transcribed mechanism in the 68620881 notes |
+| Update relevant project documentation if needed | **Met** — this file is new; `mothership-dashboard-startup-procedure.md` §10 gained a cross-reference; D3 supersedes the mis-transcribed mechanism in the 68620881 notes |
 | Document any configuration changes made | **Met** — §5 (none in-repo; the runtime env deviations are tabulated in the execution note §2) |

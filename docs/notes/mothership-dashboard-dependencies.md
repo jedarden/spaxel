@@ -3,7 +3,7 @@
 **Date:** 2026-09-04
 **Bead:** spaxel-e92e73bf
 **Verified against:** `main` @ `2f8a6e270d857aa10164dc820445426c6a2ad568`
-**Sibling deliverables:** `MOTHERSHIP_DASHBOARD_LOCATIONS.md`, `MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md` (startup command / entry point / serving modes)
+**Sibling deliverables:** `mothership-dashboard-locations.md`, `mothership-dashboard-startup-investigation.md` (startup command / entry point / serving modes)
 
 All `file:line` citations below were re-confirmed with `git grep`/`git show HEAD:` at the
 revision above, not from a stale or dirty working tree.
@@ -265,6 +265,6 @@ To run the dashboard with nothing optional enabled:
 
 ## 7. Cross-references
 
-- Startup command, entry point, 7-phase sequence, serving modes: `MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md` (§12 re-verifies its own line cites at `3eb3eb42`; the config.go lines there are unchanged at `2f8a6e27`)
-- Dashboard asset locations and embed mechanism: `MOTHERSHIP_DASHBOARD_LOCATIONS.md`
+- Startup command, entry point, 7-phase sequence, serving modes: `mothership-dashboard-startup-investigation.md` (§12 re-verifies its own line cites at `3eb3eb42`; the config.go lines there are unchanged at `2f8a6e27`)
+- Dashboard asset locations and embed mechanism: `mothership-dashboard-locations.md`
 - Auth-layer decision (Traefik/Google OAuth vs in-app PIN): `docs/plan/plan.md` ADR-006; first-boot WiFi seeding ADR-005; advertised base URL ADR-004

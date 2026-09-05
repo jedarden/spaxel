@@ -3,7 +3,7 @@
 **Date:** 2026-09-04
 **Bead:** spaxel-1cae2893 (synthesis bead — compiles the family's findings into one operating procedure)
 **Verified against:** `main` @ `95041178` — `mothership/`, `Dockerfile`, `docker-compose.yml` and `VERSION` are byte-identical to `2f8a6e27` / `3eb3eb42` (`git diff --stat 2f8a6e27..HEAD` over those paths is empty), so the line cites in the sibling deliverables remain valid here.
-**Sibling deliverables:** `MOTHERSHIP_DASHBOARD_LOCATIONS.md` (asset locations), `MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md` (startup method + env surface), `MOTHERSHIP_DASHBOARD_DEPENDENCIES.md` (dependency/prerequisite inventory)
+**Sibling deliverables:** `mothership-dashboard-locations.md` (asset locations), `mothership-dashboard-startup-investigation.md` (startup method + env surface), `mothership-dashboard-dependencies.md` (dependency/prerequisite inventory)
 
 Every `file:line` below was confirmed against `git show HEAD:` at the revision above, not
 against this working tree (which carries another worker's in-flight edits to `main.go` and
@@ -50,7 +50,7 @@ Three facts that shape every step below:
 Nothing else: no config file, no `.env`, no external database, no message queue, no
 required credentials. `mothership/internal/config/config.go` is the complete
 configuration surface (28 env vars, all optional — table in
-`MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md` §12).
+`mothership-dashboard-startup-investigation.md` §12).
 
 ---
 
@@ -69,7 +69,7 @@ with `VERSION: ${VERSION:-dev}`; the prebuilt-image line is **commented out**
 (`# image: ghcr.io/spaxel/spaxel:latest`, `docker-compose.yml:20`). So a bare
 `docker compose up -d` compiles the Go binary from your checkout and pulls the ESP32
 firmware from GitHub Releases inside the build (§2 step 3). Plan.md's and
-`MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md` §5's "run `ghcr.io/spaxel/spaxel:latest`"
+`mothership-dashboard-startup-investigation.md` §5's "run `ghcr.io/spaxel/spaxel:latest`"
 describes the commented-out alternative, not what the file does.
 
 - **Production / prebuilt (fast, no toolchain, no network fetch of firmware):** flip the
@@ -328,9 +328,9 @@ delete `SPAXEL_DATA_DIR` to start completely fresh.
 
 ## 10. Cross-references
 
-- Dependency inventory, full 28-variable table, auth ground truth: `MOTHERSHIP_DASHBOARD_DEPENDENCIES.md`
-- Startup sequence internals, serving modes, env surface with config.go line cites: `MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md`
-- Asset locations and the embed mechanism: `MOTHERSHIP_DASHBOARD_LOCATIONS.md`
-- Browser-level access verification — the URL/access method used on this host, the Chromium route sweep, and the defects it found (including the ex44 port-8080 conflict): `MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md`
+- Dependency inventory, full 28-variable table, auth ground truth: `mothership-dashboard-dependencies.md`
+- Startup sequence internals, serving modes, env surface with config.go line cites: `mothership-dashboard-startup-investigation.md`
+- Asset locations and the embed mechanism: `mothership-dashboard-locations.md`
+- Browser-level access verification — the URL/access method used on this host, the Chromium route sweep, and the defects it found (including the ex44 port-8080 conflict): `mothership-dashboard-access-findings.md`
 - Advertised base URL / OTA: `docs/plan/plan.md` ADR-004 · first-boot WiFi seeding: ADR-005 · node token on `/firmware`: ADR-006
 - Two documented deviations from `docs/plan/plan.md` found while writing this: the compose file builds locally instead of pulling `ghcr.io/spaxel/spaxel` (§2 step 2), and the dashboard PIN gate is not mounted (§7 / §7.1)
