@@ -4759,11 +4759,36 @@ func main() {
 
 	// Auto-update manager with canary strategy and quiet window
 	var autoUpdateMgr *ota.AutoUpdateManager
+	var driftMonitor *ota.DriftMonitor
 	if err := startup.SubsystemStart(startupCtx, "Auto-update manager", func(ctx context.Context) error {
 		autoUpdateMgr = ota.NewAutoUpdateManager(otaSrv, otaMgr, zonesTz)
 
 		// Wire up settings provider
 		autoUpdateMgr.SetSettingsProvider(settingsHandler)
+
+		// ADR-009: automatic firmware convergence is the default now, but
+		// deployments that predate the flip carry auto_update_enabled=false
+		// in their settings row, which a new default cannot reach. Apply the
+		// flip once; an operator who disables it afterwards keeps their
+		// choice because the marker is then already present.
+		if err := ota.EnsureAutoUpdateEnabled(settingsHandler); err != nil {
+			log.Printf("[WARN] Failed to apply auto-update default: %v", err)
+		}
+
+		// Firmware drift monitor (ADR-009 decision 6): a node left on a
+		// version other than this mothership's own build for longer than one
+		// quiet window is a fault, not something to notice by eye. It gets
+		// the warning-severity notifier so its events do not read as routine.
+		// Started here; stopped at main scope below, since a defer inside
+		// this closure would fire the moment startup returns.
+		if fleetReg != nil {
+			driftMonitor = ota.NewDriftMonitor(version, autoUpdateMgr.GetConfig)
+			driftMonitor.SetNodeVersionSource(autoupdate.NewNodeVersionSource(fleetReg))
+			driftMonitor.SetStateStore(settingsHandler)
+			driftMonitor.SetEventNotifier(autoupdate.NewEventNotifierWithSeverity(eventbus.SeverityWarning))
+			autoUpdateMgr.SetDriftMonitor(driftMonitor)
+			driftMonitor.Start(ctx)
+		}
 
 		// Wire up quality provider from link weather diagnostics
 		if weatherDiagnostics != nil {
@@ -4821,6 +4846,11 @@ func main() {
 				autoUpdateMgr.Stop()
 			}
 		}()
+		// Registered after the manager's own stop so it runs first: nothing
+		// evaluates drift against a manager that is already shutting down.
+		if driftMonitor != nil {
+			defer driftMonitor.Stop()
+		}
 		log.Printf("[INFO] Auto-update manager started (canary strategy, quiet window)")
 
 		// Auto-update REST API
