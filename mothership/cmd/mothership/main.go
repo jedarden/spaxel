@@ -1835,8 +1835,11 @@ func main() {
 	ingestSrv.SetCollisionDetector(fleetMgr.GetCollisionDetector())
 	log.Printf("[INFO] TX slot collision detection enabled (threshold: 5%% over 60s window)")
 
-	// Dashboard hub and server
-	dashboardHub = dashboard.NewHub(cfg.MaxDashboardClients)
+	// Dashboard hub and server. In demo mode the lower demo client cap bounds
+	// resource use on publicly reachable demo instances.
+	dashboardClientCap := cfg.DashboardClientLimit()
+	log.Printf("[INFO] Dashboard client cap: %d (demo mode: %t)", dashboardClientCap, cfg.DemoMode)
+	dashboardHub = dashboard.NewHub(dashboardClientCap)
 	dashboardSrv := dashboard.NewServer(dashboardHub)
 
 	dashboardHub.SetIngestionState(ingestSrv)
