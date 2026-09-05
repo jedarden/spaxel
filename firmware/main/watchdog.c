@@ -7,6 +7,12 @@
 static const char *TAG = "watchdog";
 static bool s_watchdog_initialized = false;
 
+// Validation note: the task watchdog cannot be exercised under QEMU. A control
+// build arming this 90s window with a task that deliberately never fed ran 30s
+// past its due reset in the emulator without resetting, so a "no reset within
+// Ns" QEMU uptime run is inert evidence in both directions. Trip behaviour is
+// validated on-target only, on the bench rig; QEMU remains useful for every
+// other behaviour (spaxel-69cdd68c).
 esp_err_t watchdog_init(void) {
     if (s_watchdog_initialized) {
         ESP_LOGW(TAG, "Watchdog already initialized");
