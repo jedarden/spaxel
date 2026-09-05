@@ -13,6 +13,10 @@ static bool s_watchdog_initialized = false;
 // Ns" QEMU uptime run is inert evidence in both directions. Trip behaviour is
 // validated on-target only, on the bench rig; QEMU remains useful for every
 // other behaviour (spaxel-69cdd68c).
+//
+// Path-filter probe (spaxel-bce210be, 2026-09-05): comment-only edit in a
+// substantive path, pushed to confirm the spaxel-sensor still admits firmware/
+// changes to spaxel-build now that the docs/beads exclusion filter is live.
 esp_err_t watchdog_init(void) {
     if (s_watchdog_initialized) {
         ESP_LOGW(TAG, "Watchdog already initialized");
