@@ -138,6 +138,57 @@ The Bluedroid → NimBLE migration is not just an optimization—it is an **enab
 3. **Headroom remaining:** Even after security features, ~274-434 KiB flash buffer remains
 4. **No tradeoffs:** NimBLE provides equivalent BLE functionality with better memory characteristics
 
+## Recommendation: GO — NimBLE is the permanent BT stack (and already landed)
+
+**Go/no-go: GO.** The Bluedroid → NimBLE switch should be permanent, and it
+already is: commit `d4ad6737` (2026-08-27) migrated `firmware/main/ble.c` to
+the NimBLE host API and set `CONFIG_BT_NIMBLE_ENABLED=y` /
+`CONFIG_BT_BLUEDROID_ENABLED=n` — both still true at HEAD. There is nothing to
+revert to: the firmware's only Bluetooth role is passive GAP advertisement
+scanning, which NimBLE provides, and no current Bluedroid build exists (the
+2026-08-27 baseline in `bluedroid-baseline.txt` is historical, marked as such
+by `41052018`).
+
+*Provenance note:* the analysis above was written as a pre-decision comparison;
+this section states the decision explicitly, added 2026-09-05 (bead
+spaxel-4ca0dd6a) after the switch had already landed.
+
+### Why GO
+
+1. **The savings are real and stable at HEAD.** `libbt.a` measured
+   byte-identical (3,260 B flash / 257 B RAM) in the 2026-08-27 capture above
+   and in the 2026-09-05 re-capture
+   (`size-components-2026-09-05.{md,json}`, built from a clean `git archive`
+   of `b995e781`).
+2. **Headroom is sufficient for the security roadmap.** 404 KiB flash freed
+   against an estimated 70–130 KiB for HTTPS OTA + signed-app verification
+   leaves ~274–434 KiB of buffer (see *Budget Analysis* above).
+3. **No functional tradeoff.** Equivalent BLE functionality for the node's
+   passive-scan use case, at 99% less stack footprint.
+
+### Measurement refinement (recorded, no conclusion change)
+
+The 2026-09-05 capture shows the NimBLE build still links a vestigial
+`libbtdm_app.a` (475 B flash / 41 B RAM) and `libbtbb.a` (0 B). Whole
+BT-family savings are therefore **413,121 B flash / 26,462 B RAM** rather than
+the libbt.a-only 413,596 / 26,503 quoted above — a 0.1% refinement.
+
+### Next steps
+
+1. **HTTPS + signed-app verification is unblocked on flash, not on segments.**
+   The 404 KiB BT savings clear the 70–130 KiB estimate with room to spare,
+   but the *segment* budget is the binding one: the 2026-09-05 capture shows
+   static IRAM at 16,383/16,384 bytes (1 byte remain), so any new
+   IRAM-resident crypto path needs `noflash`/place-in-flash triage first.
+   App-partition headroom at the capture tip: 0xcce20 B (41%) of 0x1f0000.
+2. **The heap go/no-go for mTLS stays hardware-gated.** ADR-008's resource
+   spike — measured peak heap through a real TLS handshake with PSRAM enabled —
+   is the gating number for the asymmetric node-identity plan. Flash savings
+   do not substitute for it; it requires the bench rig.
+3. **Do not re-run this comparison.** `libbt.a` is byte-identical across both
+   capture passes and the only app-code change since the first capture touched
+   watchdog sdkconfig only; the figures in this document are current.
+
 ## Appendix: Raw Build Output
 
 NimBLE build summary:
