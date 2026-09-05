@@ -74,3 +74,24 @@ testdata/*.bin
 *.bin
 *.db-shm
 *.db-wal
+
+# Root-level agent scratch (spaxel-9bf355e0).
+# One-off investigation output kept landing at the repo root and accumulating as
+# tracked exhaust (24 raw tool-output dumps + 11 stale docs, removed by the
+# repo-root exhaust sweep — disposition per file in
+# docs/notes/root-exhaust-classification.md). These patterns ignore the next
+# agent's dump at the root too, instead of only the names already deleted.
+# The leading "/" is load-bearing: docs/ holds the retained siblings of these
+# exact names (empty-password-test-results.md, presence-detection-verification.md,
+# mothership-dashboard-access-findings.md, ...), which must stay tracked.
+/*[-_]results.txt
+/*[-_]results.md
+/*[-_]matches.txt
+/*[-_]files.txt
+/*[-_]report.txt
+/*[-_]report.md
+/*[-_]findings.md
+/*[-_]verification.md
+# One-off probe scripts. Tracked shell entry points live in scripts/ and
+# tests/e2e/ (run-sim-local.sh, run.sh); a script at the repo root is scratch.
+/*.sh
