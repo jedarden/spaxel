@@ -1,6 +1,28 @@
 Bluedroid Flash and RAM Baseline Measurement
 =============================================
 
+ADDENDUM 2026-09-05 — READ THIS FIRST (bead spaxel-31dbab8b)
+------------------------------------------------------------
+This file is the *historical* Bluedroid baseline. The firmware has been on
+NimBLE since 2026-08-27: sdkconfig.defaults sets CONFIG_BT_NIMBLE_ENABLED=y
+and CONFIG_BT_BLUEDROID_ENABLED=n, and main/ble.c is written against the
+NimBLE host API (nimble/nimble_port.h, esp_nimble_hci.h), which ESP-IDF only
+builds when NimBLE is the selected host stack. There is therefore no current
+Bluedroid build to measure — the figures below describe the last
+Bluedroid-built image and cannot be re-measured at HEAD.
+
+Everything below the addendum is unchanged from the 2026-08-27 measurement.
+
+Where the comparison data lives:
+  * Current (NimBLE) build, machine-readable, with full provenance:
+    firmware/docs/size-components-2026-09-05.md and .json
+    (62 archives keyed per input section; idf.py size + size-components).
+  * Bluedroid vs NimBLE analysis and savings: firmware/docs/nimble-savings.md
+  * Cross-check that both measurement passes agree: the NimBLE BT footprint
+    in the 2026-09-05 capture (libbt.a: flash_total 3260, ram_st_total 257)
+    is byte-identical to the raw per-archive line recorded on 2026-08-27 in
+    nimble-savings.md — two independent builds, same numbers.
+
 Date: 2026-08-27
 Build: ESP-IDF v5.2, Target ESP32-S3
 Configuration: CONFIG_BT_BLUEDROID_ENABLED=y
