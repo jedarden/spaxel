@@ -22,6 +22,10 @@ var (
 		},
 		[]string{"trigger_type", "result"}, // trigger_type: "auto", result: "success" or "failure"
 	)
+	// Exactly one increment per trigger attempt, written once the cycle's
+	// outcome is known: "success" when the fleet rollout completes
+	// (fleetRollout), "failure" when the cycle fails (failUpdateCycle).
+	// Starting a cycle or deploying the canary does not count on its own.
 )
 
 // AutoUpdateManager manages automatic OTA updates with canary deployment and quiet window scheduling.
@@ -460,9 +464,6 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	m.baselineQuality = 0
 	m.mu.Unlock()
 
-	// Increment Prometheus counter for auto-update trigger
-	autoUpdateTriggerCounter.WithLabelValues("auto", "success").Inc()
-
 	// Determine comprehensive selection reason
 	selectionReason := "latest_stable_from_cache"
 	if !m.firmwareSelectionFromCache {
@@ -527,8 +528,6 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s version_before=%s version_after=%s baseline_quality=%.2f trigger_type=automatic_canary",
 		canaryMAC, m.canaryPreviousVersion, firmware.Version, m.baselineQuality)
 
-	autoUpdateTriggerCounter.WithLabelValues("auto", "success").Inc()
-
 	m.publishEvent("canary_deploy", canaryMAC, fmt.Sprintf("AUTO-UPDATE: Deploying canary update to node %s", canaryMAC), map[string]interface{}{
 		"firmware_version":          firmware.Version,
 		"previous_firmware_version": m.canaryPreviousVersion,
@@ -554,7 +553,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 func (m *AutoUpdateManager) selectCanaryNode() string {
 	m.mu.RLock()
 	np := m.nodeProvider
-	m.mu.Unlock()
+	m.mu.RUnlock()
 
 	if np == nil {
 		return ""
@@ -776,7 +775,18 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 
 	nodesUpdatedCount := len(remainingNodes)
 
+	// Success is recorded only once the rollout actually finished. The
+	// cancel paths below run failUpdateCycle, which already recorded the
+	// outcome as a failure; letting this block run after one of them
+	// counted a single trigger as both a failure and a success, flipped
+	// StateFailed back to StateComplete and published "update_complete"
+	// for a cycle that failed.
+	rolloutComplete := false
 	defer func() {
+		if !rolloutComplete {
+			return
+		}
+
 		m.mu.Lock()
 		m.updateState = StateComplete
 		m.mu.Unlock()
@@ -794,6 +804,7 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 
 	if len(remainingNodes) == 0 {
 		log.Printf("[INFO] ota: all nodes already updated")
+		rolloutComplete = true
 		return
 	}
 
@@ -833,11 +844,19 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 		if i < len(remainingNodes)-1 {
 			select {
 			case <-ctx.Done():
+				// Same as the pre-update check above: a cancelled rollout
+				// is a failed cycle, not a quiet end. Returning without
+				// failing it left updateState in StateFleetDeploy, which
+				// wedged the manager (inCycle never clears) until a
+				// manual CancelUpdate.
+				m.failUpdateCycle("context cancelled during fleet rollout")
 				return
 			case <-time.After(rollingGap):
 			}
 		}
 	}
+
+	rolloutComplete = true
 }
 
 // waitForQuietWindow parks the fleet rollout until the configured quiet
