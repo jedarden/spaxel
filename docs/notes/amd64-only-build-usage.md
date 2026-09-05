@@ -7,6 +7,13 @@ implementation record for the same change — that document explains *why*; this
 explains *how to use it*).
 **Verified live:** 2026-09-04 against `WorkflowTemplate/spaxel-build` in namespace
 `argo-workflows` on iad-ci via the credential-free read-only endpoint.
+**Updated 2026-09-04** (`spaxel-fce2f7e4`, declarative-config `0ec96fc9`):
+`update-declarative-config`'s sed now takes its image ref from
+`{{workflow.parameters.image-repo}}` instead of a hardcoded `ronaldraygun/spaxel:`,
+so a scratch-repo run can no longer rewrite the production pin at all. §3.2's
+scratch-repo rule is unchanged and still required — it is what keeps the
+single-platform manifest out of the production *tags* — but the version-matching
+rule below it is no longer load-bearing for pin safety.
 
 ---
 
@@ -100,7 +107,7 @@ version.
 | `resolve-version` | no | Version is resolved once and applied to every platform. |
 | `golangci-lint`, `a11y-test`, `go-test`, `timing-benchmark`, `acceptance-test`, `firmware-test` | no | Test the source in amd64 CI containers; they do not inspect the image's target platforms. |
 | `firmware-build` | no | ESP32-S3 is the *hardware* target — an independent axis by ADR-001. Firmware is built once and fetched by every image platform, so it is unaffected by which image platforms are built. |
-| `update-declarative-config` | no, but see the hazard in §5 | Its sed rewrites image pins with an arch-agnostic pattern. |
+| `update-declarative-config` | no | Its sed rewrites image pins matching `{{workflow.parameters.image-repo}}` (since `spaxel-fce2f7e4`); a scratch-repo run matches nothing in the production files. |
 
 ---
 
@@ -130,11 +137,14 @@ Only `platforms` is needed; the other three parameters fall back to their defaul
 ### 3.2 The same submission, made safe for testing (always use this unless you are cutting a real release)
 
 An amd64-only run is still the **full release path**: it pushes `:version` and
-`:latest` to `image-repo`, and `update-declarative-config` rewrites the production
-image pin with a pattern hardcoded to `ronaldraygun/spaxel:` regardless of which
-`image-repo` you passed. To keep an experimental amd64-only run from overwriting the
-production multi-arch manifest, pass **both** a scratch repository and leave
-`branch` at its default:
+`:latest` to `image-repo`. Since `spaxel-fce2f7e4` (declarative-config `0ec96fc9`)
+`update-declarative-config` matches its sed against
+`{{workflow.parameters.image-repo}}` rather than a hardcoded literal, so a run
+pointed at a scratch repository can no longer rewrite the production pin even when
+its resolved version differs from the published one. Passing a scratch repository is
+still required — that is what keeps a single-platform manifest out of the production
+*tags* — and leaving `branch` at its default keeps the run's resolved version the
+published one:
 
 ```bash
 kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig create -f - <<EOF
@@ -161,18 +171,21 @@ Rules for a non-release amd64-only submission:
    The production `:version`/`:latest` tags stay untouched — this is the part that
    stops an amd64-only single-platform manifest replacing the multi-arch manifest
    list under the production tags.
-2. **`branch` left at `main` (the default).** `resolve-version` then resolves against
-   the already-published version, so `update-declarative-config`'s sed becomes a
-   no-op instead of repinning production to an amd64-only manifest.
-3. **Know the residual risk.** If `HEAD` on `main` is a *substantive* (non-doc-only)
-   commit, `should-build` resolves `true` and the build runs — pushing to your
-   scratch repo as intended, but the production pin rewrite still fires, because the
-   sed's pattern is hardcoded to `ronaldraygun/spaxel:` and does not follow
-   `image-repo`. This is tracked as open bead `spaxel-fce2f7e4` (parameterise the
-   sed's image ref); until it lands, a scratch-repo run is inert-by-construction only
-   when `should-build=false`.
+2. **`branch` left at `main` (the default).** Not a pin-safety rule any more — the sed
+   follows `image-repo`, so it matches nothing in the production files under a scratch
+   repo whatever version resolves — but it keeps `resolve-version` landing on the
+   already-published version, which makes the run's output predictable and comparable
+   against a real release.
+3. **Pin safety no longer depends on `should-build`.** Before `spaxel-fce2f7e4`
+   (declarative-config `0ec96fc9`), a substantive commit on `main` set
+   `should-build=true` and the sed then rewrote the production pin even under a scratch
+   repo — a run was only inert-by-construction when `should-build=false`. That residual
+   risk is closed: the sed's pattern is now `{{workflow.parameters.image-repo}}`, and no
+   production file references a scratch repository. The verified example below predates
+   the fix and remains a valid demonstration that an inert run still proves Argo
+   accepted and resolved the override.
 
-Verified example of rule 3 working as intended: workflow
+Verified example (predates the fix, still valid): workflow
 `spaxel-build-amd64-verify-28wp5` (2026-09-04) submitted with `platforms=linux/amd64`
 + the scratch `image-repo` resolved `should-build=false`, so every build step skipped
 — no image, no firmware upload, no pin rewrite — while still proving that Argo
@@ -239,9 +252,10 @@ makes the change invisible to every existing submitter, including the push senso
    contents for one tag and the later push wins, so an amd64-only run pointed at
    production silently downgrades that version's manifest to amd64 — breaking
    arm64 consumers (the plan's Raspberry Pi reference platform). Use the §3.2 recipe.
-2. **Production pin rewrite is not yet scoped to `image-repo`.**
-   `update-declarative-config`'s sed pattern is hardcoded to `ronaldraygun/spaxel:`.
-   Open bead: `spaxel-fce2f7e4`.
+2. **Production pin rewrite is scoped to `image-repo`** (since `spaxel-fce2f7e4`,
+   declarative-config `0ec96fc9`) — the sed matches only the repo you passed, so a
+   scratch-repo run cannot touch the production pin. **The same-tag hazard above is
+   therefore the one remaining way a scratch-less amd64-only run damages production.**
 3. **ADR-001 governs the default.** The shipping shape remains the multi-arch
    manifest list. Making amd64-only the *default* would supersede ADR-001 and needs
    a new ADR plus a `docs/plan/plan.md` edit — not a default flip inside the
