@@ -136,11 +136,14 @@ step — not resurrecting a Dockerfile cache-bust, which has nothing left to bus
 
 Preconditions, in order:
 
-1. **spaxel-fce2f7e4 must land first.** It parameterises
-   `update-declarative-config`'s image ref. Until then a should-build=true run
-   pointed at a scratch `image-repo` rewrites the production image pin via a
-   sed hardcoded to `ronaldraygun/spaxel:` — a real run is not safely
-   submittable today. Do not force one.
+1. ~~spaxel-fce2f7e4 must land first~~ — **LANDED 2026-09-04**
+   (declarative-config `0ec96fc9`, live on the cluster). It parameterises
+   `update-declarative-config`'s image ref, so a run pointed at a scratch
+   `image-repo` now rewrites nothing in the production files at any version.
+   What survives of the original caution: still do not force a substantive
+   commit to flip `should-build` (precondition 2), and still keep a
+   non-release run off production (same-tag hazard,
+   `amd64-only-build-usage.md` §5).
 2. `should-build` is an output of `resolve-version` computed from
    `git diff --name-only HEAD~1 HEAD` (anything outside `docs/`, `.beads/`,
    `*.md`, `LICENSE`, `.gitignore` is substantive). It is not a submission
@@ -175,5 +178,7 @@ any layer listed HIT there that comes back MISS is the finding.
 | 4. Verify FIRMWARE_CACHE_BUST invalidations | premise-false | mechanism removed at b25dc130 with the stage it busted (§1.3) |
 | 5. Save raw logs + analysis summary | partially | raw logs do not exist and cannot be retro-fetched; this document is the analysis summary, plus the §3 capture recipe for the first real run |
 
-Raw-log capture remains blocked on spaxel-fce2f7e4. This bead makes no source
-change and submits no workflow.
+Raw-log capture is no longer blocked on spaxel-fce2f7e4 (landed 2026-09-04,
+declarative-config `0ec96fc9`); the remaining preconditions are the `should-build`
+gate (§3.2) and the `podGC` override (§3.3). This bead made no source change and
+submitted no workflow.
