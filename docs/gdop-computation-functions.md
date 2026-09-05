@@ -271,3 +271,86 @@ cd mothership && go test ./internal/simulator/...
 3. **Self-healing Fleet:** Automatic role re-optimization based on GDOP analysis
 4. **Node Position Recommendations:** Suggest optimal positions for additional nodes
 5. **Coverage Quality Dashboard:** Display coverage score and dead zones
+
+---
+
+## Fleet-Side GDOP Integration
+
+*Consolidated 2026-09-04 from the root-level `GDOP_COMPUTATION_GUIDE.md` (deleted;
+its simulator-side sections duplicated this document). Line numbers verified
+against HEAD at consolidation time.*
+
+### GDOPCalculator interface
+
+```go
+// mothership/internal/fleet/healer.go
+type GDOPCalculator interface {
+    GDOPMap(positions []NodePosition) ([]float32, int, int)
+}
+
+type NodePosition struct {
+    MAC string
+    X   float64
+    Z   float64
+}
+```
+
+Only X and Z are used — the fleet-side GDOP model is a 2D floor-plane projection.
+A concrete implementation lives at `mothership/internal/localization/fusion.go:248`
+(`Engine.GDOPMap`), which evaluates `computeGDOP` per 0.2 m grid cell; main.go
+bridges it into the fleet package through the `gdopAdapter` wrapper:
+
+```go
+// mothership/cmd/mothership/main.go (self-heal wiring)
+gdopCalc := &gdopAdapter{eng: selfImprovingLocalizer.GetEngine()}
+selfHealManager.SetGDOPCalculator(gdopCalc)
+roleOptimiser.SetGDOPCalculator(gdopCalc)
+```
+
+`SelfHealManager.SetGDOPCalculator` (`mothership/internal/fleet/selfheal.go:124`)
+also forwards to the internal optimiser.
+
+### Map encoding
+
+The flattened map returned by `GDOPMap` uses **9999.0 as the infinity / no-coverage
+sentinel** (see `mothership/internal/simulator/engine.go:508,557,570` and
+`mothership/internal/simulator/gdop.go:537`). Treat any value above the worst real
+threshold (GDOP > 8, "poor") as effectively uncovered.
+
+### FleetHealer entry points
+
+```go
+// mothership/internal/fleet/healer.go:620
+func (fh *FleetHealer) GetWorstCoverageZone() (x, z, gdop float64)
+```
+Scans the current GDOP grid for the worst (maximum) cell and returns its room
+coordinates as cell centres (`room.OriginX/OriginZ + (col|row + 0.5) * 0.2m`).
+Sentinel: `(0, 0, 10)` when no calculator is wired or fewer than two node
+positions are known.
+
+```go
+// mothership/internal/fleet/healer.go:665
+func (fh *FleetHealer) SuggestNodePosition() (x, z float64, improvement float64)
+```
+Grid-searches the room for the placement of an additional node with the best
+expected worst-GDOP improvement, and returns the chosen coordinates together
+with that improvement.
+
+### Before/after a node move
+
+To evaluate a hypothetical move (the pattern `SuggestNodePosition` embodies):
+
+1. Collect current `NodePosition` values and call `GDOPMap` → worst cell = current GDOP.
+2. Copy the position slice and overwrite the moved node's `X`/`Z`.
+3. Call `GDOPMap` on the hypothetical layout → worst cell = after GDOP.
+4. `improvement = currentGDOP − afterGDOP` (positive means the move helps).
+
+### Diagnostic accessor
+
+```go
+// mothership/internal/diagnostics/linkweather.go:155
+func (de *DiagnosticEngine) SetGDOPImprovementAccessor(fn func(nodeMAC string, targetPos Vec3) float64)
+```
+Registers the callback the diagnostics engine uses to estimate the GDOP impact of
+repositioning a node; wired in `mothership/cmd/mothership/main.go:2238`. Note the
+receiver is `DiagnosticEngine`, not `FleetHealer`.

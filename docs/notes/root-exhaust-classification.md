@@ -144,3 +144,82 @@ beads can reconcile them rather than rediscover them:
    script; harmless, but a one-line rewording ("matching the peak-over-window poll the
    `--verify` flag performs") would remove the dangling reference. Left alone here:
    comment-only Go change, out of this bead's scope.
+
+---
+
+## Addendum — child 3 disposition of the durable root `.md` docs (spaxel-2ee3e526, 2026-09-04)
+
+This document classified only the 24 raw dumps. The durable root `.md` docs were
+child 3's (`spaxel-2ee3e526`); their per-file record follows. Method: every file was
+read, then a literal-filename reference sweep was run over all tracked files
+(`git grep -n -F`, excluding `.beads/`, `.needle*`, build dirs, and the root exhaust
+cluster itself). README.md, PROGRESS.md, `.needle.yaml`, Dockerfile and
+docker-compose.yml referenced **none** of the 19 candidates.
+
+**Moved with `git mv` (history follows) into `docs/notes/`, kebab-case:**
+`API_IMPLEMENTATION_STATUS.md` → `api-implementation-status.md`;
+`BASELINE_CAPTURE_SUMMARY.md` → `baseline-capture-summary.md`;
+`BLE_PERSONID_INVESTIGATION.md` → `ble-personid-investigation.md`;
+`console-implementation-status.md` → `console-implementation-status.md`;
+`dashboard_discovery_notes.md` → `dashboard-discovery-notes.md`;
+`EMPTY_PASSWORD_TEST_RESULTS.md` → `empty-password-test-results.md`;
+`MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md` → `mothership-dashboard-access-findings.md`;
+`MOTHERSHIP_DASHBOARD_DEPENDENCIES.md` → `mothership-dashboard-dependencies.md`;
+`MOTHERSHIP_DASHBOARD_LOCATIONS.md` → `mothership-dashboard-locations.md`;
+`MOTHERSHIP_DASHBOARD_STARTUP_INVESTIGATION.md` → `mothership-dashboard-startup-investigation.md`;
+`MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md` → `mothership-dashboard-startup-procedure.md`;
+`PRESENCE_DETECTION_VERIFICATION.md` → `presence-detection-verification.md`.
+The two reconciled inventory keepers went to `docs/inventory/` (that directory is the
+established home for that kind of file):
+`WORKSPACE_STRUCTURE.md` → `workspace-structure.md`,
+`rust-source-inventory.md` → `rust-source-inventory.md`.
+
+**Consolidated, then deleted:** `GDOP_COMPUTATION_GUIDE.md`. Its simulator-side
+sections (§1–§6, §8, appendix) duplicate `docs/gdop-computation-functions.md`,
+`docs/gdop-function-analysis.md`, `docs/gdop-function-signature.md` and
+`notes/gdop-computation-catalog.md`, and its specifics had drifted: the appendix cites
+`computeGDOPAngular` at gdop.go:114-165 (actual: :296) and §11 places the
+`GDOPCalculator` interface in `optimiser.go:13-16` (actual: `healer.go:13-16`). Its
+unique accurate residue — the fleet-side integration (§7 before/after pattern, §9
+`FleetHealer.GetWorstCoverageZone`/`SuggestNodePosition`, §11 interface and the
+9999.0 infinity encoding) — is preserved as a new "Fleet-Side GDOP Integration"
+section in `docs/gdop-computation-functions.md`, re-verified against HEAD. §10's
+"complete example" was dropped: it sketches a `FleetHealer.SetGDOPImprovementAccessor`
+that does not exist; the real accessor is `DiagnosticEngine.SetGDOPImprovementAccessor`
+(`mothership/internal/diagnostics/linkweather.go:155`, wired at `main.go:2238`), now
+noted in the same section.
+
+**Deleted (stale beyond recovery / duplicate / empty), disclosed per the dispatch:**
+- `mothership_location.md` — describes a layout that no longer exists: its tree lists
+  root `cmd/` and `test/` (both gone), compiled `mothership`/`sim` binaries (git-ignored
+  residue), and claims `go.work` coordinates "multiple modules" (it defines exactly one).
+  Superseded by `docs/inventory/workspace-structure.md`.
+- `BENCH_HOSTNAME_INFO.md` — strict condensed duplicate of
+  `docs/deployment/bench-connectivity.md` (same hostname, IP, port 6080, nc check,
+  network path, same 2026-08-28 verification date, same usage notes; it even cites that
+  document as its source).
+- `PERMISSION_VERIFICATION_SUMMARY.md` — a five-line stub: title, a date, and an empty
+  "Verification Scope" heading. Nothing to preserve.
+- `CSI_RECORDING_FILES_SEARCH_RESULTS.md` — a raw grep/find search dump (bead
+  spaxel-f7b5d01c, 2026-08-29): the same category this document's Cluster B deleted,
+  which the child-1 sweep missed. Regenerable; zero references.
+
+**References updated in the same commit:** the `MOTHERSHIP_DASHBOARD_*` sibling
+cross-references inside the five moved dashboard docs; `baseline-capture-summary.md`
+self-reference and the `presence-detection-verification.md` → baseline link;
+`docs/notes/web-serial-chromium-verification-2026-09-04.md` (:26,:95,:110,:118),
+`docs/notes/web-serial-esp32s3-enumeration-2026-09-04.md` (:35,:121,:208) and
+`docs/notes/mothership-dashboard-startup-verification-2026-09-04.md` (:5, which also
+dropped its now-false "(repo root" qualifier);
+`docs/SYSTEM_CATALOG.md` (Investigation Records section),
+`docs/repo-structure.md` (§13), `docs/research/mothership-directory-structure.md` (§1),
+and the relocated `docs/inventory/workspace-structure.md` (root-files block, header
+provenance, PROGRESS link). `notes/bf-3f16.md` still names `API_IMPLEMENTATION_STATUS.md`
+— that is a closed bead's historical note and was deliberately left untouched.
+
+**Retained at the root, by design:** `README.md` and `PROGRESS.md` (README links
+PROGRESS.md twice and `.needle.yaml` lists it in the worker reading list; it is the one
+status file a newcomer needs). One untracked root file remains out of scope:
+`BUG_VERIFICATION_EMPTY_PASSWORD.md` — an in-flight verification report distinct from
+the moved `empty-password-test-results.md`, not owned by this sweep, left alone.
+`acceptance-test-hang-workflow.yml` is owned by a separate twin chain.

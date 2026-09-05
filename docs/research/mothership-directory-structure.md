@@ -77,11 +77,12 @@ Root also carried ~30 tracked markdown reports from prior investigation sessions
 (`top_level_directories.md`, `DIRECTORY_STRUCTURE.md`, `WORKSPACE_STRUCTURE_DOCUMENTATION.md`,
 `SOURCE_CODE_INVENTORY.md`, the root `SYSTEM_CATALOG.md`, `MOTHERSHIP_DASHBOARD_LOCATIONS.md`, …)
 alongside search-output scratch (`mothership-files.txt`, `refs-results.txt`, `*-results.txt`).
-The 2026-09-04 root exhaust sweep deleted the scratch and the raw dumps and collapsed the
-duplicated structure catalogs to one copy per topic under `docs/` — `WORKSPACE_STRUCTURE.md`
-and `rust-source-inventory.md` remain at the root as the reconciled keepers, with `README.md`
-and `PROGRESS.md` there by design. The durable documentation lives under `docs/`; the
-root-level set is a work-log, not a map.
+The 2026-09-04 root exhaust sweep deleted the scratch and the raw dumps, collapsed the
+duplicated structure catalogs to one copy per topic under `docs/`, and relocated the
+survivors: `workspace-structure.md` and `rust-source-inventory.md` now sit in
+`docs/inventory/`, the `mothership-dashboard-*` set and the verification summaries in
+`docs/notes/`. Only `README.md` and `PROGRESS.md` remain at the root by design. The
+durable documentation lives under `docs/`; the relocated set is a work-log, not a map.
 
 ---
 

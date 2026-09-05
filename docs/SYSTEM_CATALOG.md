@@ -34,12 +34,16 @@ Spaxel is a WiFi CSI-based indoor positioning system with three main components:
 - `PROGRESS.md` — Implementation status tracking
 - `LICENSE` — Project license
 
-### Investigation Records (point-in-time root reports)
-- `API_IMPLEMENTATION_STATUS.md`
-- `BLE_PERSONID_INVESTIGATION.md`
-- `GDOP_COMPUTATION_GUIDE.md`
-- plus the `MOTHERSHIP_DASHBOARD_*` and verification-summary reports — durable
-  documentation lives under `docs/`
+### Investigation Records (relocated from the root, 2026-09-04)
+The point-in-time investigation reports no longer live at the repo root; they were
+moved into `docs/notes/` and `docs/inventory/` under kebab-case names
+(`api-implementation-status.md`, `ble-personid-investigation.md`,
+`mothership-dashboard-*.md`, the verification summaries, …), the GDOP guide was
+consolidated into `docs/gdop-computation-functions.md`, and four
+stale/duplicate files were deleted. See
+`docs/notes/root-exhaust-classification.md` (addendum) for the per-file record.
+Durable documentation lives under `docs/`; only `README.md` and `PROGRESS.md`
+remain at the root.
 
 ---
 

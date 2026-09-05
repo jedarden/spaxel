@@ -23,7 +23,7 @@ error of any kind was produced. The only behaviour worth flagging is a headless-
 The AC says "navigate to `http://localhost:8080`". That was attempted and recorded: it returns
 **HTTP 404 `text/plain` "404 page not found"** — the answer of the unrelated `telegram-relay`
 (pid 2794), which holds `*:8080` on ex44. This is the same host fact already recorded in
-`MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md` §1/§4 and in the closed blocker spaxel-435deb61.
+`mothership-dashboard-access-findings.md` §1/§4 and in the closed blocker spaxel-435deb61.
 The verification therefore ran against the working URL `http://127.0.0.1:18080`, which serves
 this repo's dashboard. `localhost:8080` would have been a secure context too — the port
 collision, not the origin, is what blocks that URL.
@@ -92,7 +92,7 @@ Neither call produced a permission prompt, a console message, a page error, or a
   `navigator.serial` (the jest suite already does the latter — `dashboard/js/onboard.test.setup.js:48`).
 - **No other errors:** the whole run produced zero `pageerror`s. The console noise that did appear
   (the `/undefined` WebSocket on `/`, the `/api/events` 400 listing `anomaly_detected`) is
-  pre-existing and already owned by `MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md` §3 defects D2/D3 —
+  pre-existing and already owned by `mothership-dashboard-access-findings.md` §3 defects D2/D3 —
   unrelated to Web Serial, re-observed here only as corroboration.
 
 ## 6. Product wiring this verification applies to
@@ -107,7 +107,7 @@ Neither call produced a permission prompt, a console message, a page error, or a
 ## 7. Reproduce
 
 ```bash
-# instance (if not already running) — see MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md Path B
+# instance (if not already running) — see mothership-dashboard-startup-procedure.md Path B
 SPAXEL_BIND_ADDR=127.0.0.1:18080 SPAXEL_MDNS_ENABLED=false \
   SPAXEL_DATA_DIR=tmp/spaxel-devdata go run ./cmd/mothership &   # from mothership/
 
@@ -115,7 +115,7 @@ node tmp/web-serial-probe.js        # playwright + executablePath(nix chromium),
                                     # tmp/web-serial-results.json + screenshots
 ```
 
-Ops reminder (same as `MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md` §4 row 3): the playwright-cached
+Ops reminder (same as `mothership-dashboard-access-findings.md` §4 row 3): the playwright-cached
 Chromium cannot launch on NixOS (`libglib-2.0.so.0` absent) — always pass `executablePath`
 pointing at the nix-store chromium.
 

@@ -32,7 +32,7 @@ eternally disabled "Waiting for device…" button instead.
 | Probe artifacts | `tmp/web-serial-enum-probe.js`, `tmp/web-serial-enum-results.json`, `tmp/web-serial-enum-wizard.png` — all git-ignored |
 
 `localhost:8080` remains held by the unrelated `telegram-relay` (same host fact recorded
-in `MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md` §1/§4 and by the predecessor bead); the run
+in `mothership-dashboard-access-findings.md` §1/§4 and by the predecessor bead); the run
 used the working URL.
 
 ## 2. Host-side enumeration — the deciding evidence
@@ -118,7 +118,7 @@ headless it never rejects, so the wizard presents an eternally disabled
 Anyone testing the no-device UX must run headed, not headless.
 
 Console noise during the run (the `/undefined` WebSocket, the `/api/events` 400) is the
-pre-existing D2/D3 already owned by `MOTHERSHIP_DASHBOARD_ACCESS_FINDINGS.md` §3 —
+pre-existing D2/D3 already owned by `mothership-dashboard-access-findings.md` §3 —
 unrelated to serial, re-observed only as corroboration.
 
 ## 5. The board's expected USB identity (from repo bench evidence)
@@ -205,7 +205,7 @@ see (a headless server's USB bus is irrelevant to a browser running on a desktop
 ## 9. Reproduce
 
 ```bash
-# instance (if not already running) — see MOTHERSHIP_DASHBOARD_STARTUP_PROCEDURE.md Path B
+# instance (if not already running) — see mothership-dashboard-startup-procedure.md Path B
 SPAXEL_BIND_ADDR=127.0.0.1:18080 SPAXEL_MDNS_ENABLED=false \
   SPAXEL_DATA_DIR=tmp/spaxel-devdata go run ./cmd/mothership &   # from mothership/
 
