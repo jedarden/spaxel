@@ -89,31 +89,45 @@ Spaxel has the same shape:
 - 60-second safe mode boot-good window
 - Watchdog enabled with generous timeout
 
-**Configuration (implemented in sdkconfig.defaults):**
+**Configuration:**
 ```
-# Task watchdog timeout (CONFIG_ESP_TASK_WDT_TIMEOUT_S)
-# Must be > 120s to cover both validation phases
-CONFIG_ESP_TASK_WDT_TIMEOUT_S=150  # 2.5 minutes
+# Task watchdog timeout
+CONFIG_ESP_TASK_WDT_INIT=y
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
 CONFIG_ESP_TASK_WDT_PANIC=y
 ```
 
-**Validation timeline:**
+> **Corrected 2026-09-05 (spaxel-b2a66fb7).** This ADR originally recorded
+> `CONFIG_ESP_TASK_WDT_TIMEOUT_S=150` as the shipped timeout. That line has
+> never been effective: `components/esp_system/Kconfig` declares the symbol
+> `range 1 60, default 5`, so ESP-IDF drops the 150 on every reconfigure
+> (`warning: user value 150 on the int symbol ESP_TASK_WDT_TIMEOUT_S ...
+> ignored due to being outside the active range ([1, 60])`) and startup arms
+> the 5 s default instead. A window beyond the 60 s Kconfig cap can only be
+> set at runtime, and the firmware does exactly that: `watchdog_init()`
+> (`main/watchdog.c`) calls `esp_task_wdt_reconfigure()` with
+> `SPAXEL_WATCHDOG_TIMEOUT_S` (90 s, `main/watchdog.h`), which is the
+> effective steady-state window. The 5 s window covers only the short,
+> yielding stretch of `app_main` before that reconfigure (NVS init,
+> migration, safe-mode init) — before WiFi/BLE/CSI exist.
+
+**Validation timeline** (the two windows are sequential — the boot-good timer
+starts only after OTA validation succeeds, in `confirm_ota_valid()`,
+`main/websocket.c`):
 ```
-0s:     Boot starts, OTA validation timer armed
-60s:    OTA validation completes → boot-good timer starts
-120s:   Boot-good timer fires → boot marked good, counter reset
-150s:   Earliest safe watchdog reset point (well after validation)
+0s:     Boot starts; watchdog_init() reconfigures the watchdog to 90s
+t:      WebSocket connects → OTA validation timer armed (60s, rollback-critical)
+t+60s:  OTA validation completes → boot-good timer starts (60s)
+t+120s: Boot-good timer fires → boot marked good, counter reset
 ```
 
-**Validation timeline:**
-```
-0s:     Boot starts, OTA validation timer armed
-60s:    OTA validation completes → boot-good timer starts
-120s:   Boot-good timer fires → boot marked good, counter reset
-150s:   Earliest safe watchdog reset point
-```
+The rollback-critical span is the 60 s validation window — the partition is
+pending-verify until `esp_ota_mark_app_valid_cancel_rollback()` — and the
+90 s runtime window covers it with 30 s of margin. The ">120 s" figure this
+ADR previously required came from adding the two windows and comparing the
+sum against a config line that was silently dropped; the 90 s runtime window
+is the design that actually ships.
 
 ### API Reference
 
@@ -207,7 +221,8 @@ If safe mode causes issues:
 ✅ `safe_mode.c` and `safe_mode.h` implemented
 ✅ Boot sequence integration (CSI/BLE conditional init)
 ✅ OTA validation integration (boot-good timer, fail marking)
-✅ Watchdog configuration documentation (CONFIG_ESP_TASK_WDT_TIMEOUT_S=150)
+✅ Watchdog configuration (runtime 90 s via `watchdog_init()`; the
+   `CONFIG_ESP_TASK_WDT_TIMEOUT_S=150` line was inert — see correction above)
 ⏳ Testing and verification (unit and integration tests)
 
 ## References
