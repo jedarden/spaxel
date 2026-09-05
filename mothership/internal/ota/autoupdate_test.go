@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // mockSettingsProvider is a test implementation of SettingsProvider.
@@ -1447,5 +1449,141 @@ func TestCheckForNewFirmwareOccupiedZonesNoDeadlock(t *testing.T) {
 
 	if got := autoMgr.GetState(); got != StateIdle {
 		t.Errorf("state = %s, want %s (occupied zones must not start a cycle)", got, StateIdle)
+	}
+}
+
+// triggerCounterValue reads one label pair of the package-global auto-update
+// trigger counter. Every assertion below compares against a value taken
+// immediately before the action, because the counter is shared by the whole
+// package and other tests in it run cycles too.
+func triggerCounterValue(t *testing.T, result string) float64 {
+	t.Helper()
+	return testutil.ToFloat64(autoUpdateTriggerCounter.WithLabelValues("auto", result))
+}
+
+// clearQuietWindow removes the quiet-window default (GetConfig falls back to
+// 02:00–05:00 when no settings provider is set) so a fleet rollout runs
+// immediately instead of parking until the window opens.
+func clearQuietWindow(t *testing.T, autoMgr *AutoUpdateManager) {
+	t.Helper()
+	settings := newMockSettingsProvider()
+	settings.set("quiet_window_start", "")
+	settings.set("quiet_window_end", "")
+	autoMgr.SetSettingsProvider(settings)
+}
+
+// TestAutoUpdateTriggerCounterRecordsOutcomeOnce verifies the counter is
+// incremented exactly once per auto-update trigger attempt and only after the
+// cycle's outcome is known: "success" when the fleet rollout completes,
+// "failure" when the cycle fails. Starting a cycle or deploying the canary
+// must not count anything on its own.
+func TestAutoUpdateTriggerCounterRecordsOutcomeOnce(t *testing.T) {
+	firmware := &FirmwareMeta{
+		Filename:  "spaxel-0.1.350.bin",
+		Version:   "0.1.350",
+		SHA256:    "abc123",
+		SizeBytes: 1024,
+	}
+
+	cases := []struct {
+		name        string
+		setup       func(t *testing.T, autoMgr *AutoUpdateManager)
+		act         func(t *testing.T, autoMgr *AutoUpdateManager)
+		wantSuccess float64
+		wantFailure float64
+		wantState   UpdateState
+	}{
+		{
+			name: "cycle failing before canary selection records failure only",
+			setup: func(t *testing.T, autoMgr *AutoUpdateManager) {
+				// No node provider: selectCanaryNode finds nothing and the
+				// cycle fails right after the trigger fired.
+			},
+			act: func(t *testing.T, autoMgr *AutoUpdateManager) {
+				autoMgr.startUpdateCycle(context.Background(), firmware)
+			},
+			wantFailure: 1,
+			wantState:   StateFailed,
+		},
+		{
+			name: "fleet rollout completing records success only",
+			setup: func(t *testing.T, autoMgr *AutoUpdateManager) {
+				clearQuietWindow(t, autoMgr)
+
+				nodes := newMockNodeProvider()
+				// The canary is the only connected node, so the rollout has
+				// nothing left to deploy and completes straight away.
+				nodes.addNodeWithFirmware("AA:BB:CC:DD:EE:01", "tx_rx", 0.9, "0.1.349")
+				autoMgr.SetNodeProvider(nodes)
+
+				autoMgr.mu.Lock()
+				autoMgr.currentCanaryNode = "AA:BB:CC:DD:EE:01"
+				autoMgr.updateState = StateFleetDeploy
+				autoMgr.mu.Unlock()
+			},
+			act: func(t *testing.T, autoMgr *AutoUpdateManager) {
+				// Dispatch the way evaluateCanary does: fleetRollout owns a
+				// wg.Done, so it must run under a matching wg.Add.
+				autoMgr.wg.Add(1)
+				go autoMgr.fleetRollout(context.Background(), firmware)
+				autoMgr.wg.Wait()
+			},
+			wantSuccess: 1,
+			wantState:   StateComplete,
+		},
+		{
+			name: "cancelled fleet rollout records failure only",
+			setup: func(t *testing.T, autoMgr *AutoUpdateManager) {
+				// Clear the quiet window so waitForQuietWindow returns
+				// immediately instead of parking on the wall clock.
+				clearQuietWindow(t, autoMgr)
+
+				nodes := newMockNodeProvider()
+				nodes.addNodeWithFirmware("AA:BB:CC:DD:EE:01", "tx_rx", 0.9, "0.1.349")
+				nodes.addNodeWithFirmware("AA:BB:CC:DD:EE:02", "tx_rx", 0.8, "0.1.349")
+				nodes.addNodeWithFirmware("AA:BB:CC:DD:EE:03", "tx_rx", 0.7, "0.1.349")
+				autoMgr.SetNodeProvider(nodes)
+
+				autoMgr.mu.Lock()
+				autoMgr.currentCanaryNode = "AA:BB:CC:DD:EE:01"
+				autoMgr.updateState = StateFleetDeploy
+				autoMgr.mu.Unlock()
+			},
+			act: func(t *testing.T, autoMgr *AutoUpdateManager) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				autoMgr.wg.Add(1)
+				go autoMgr.fleetRollout(ctx, firmware)
+				autoMgr.wg.Wait()
+			},
+			wantFailure: 1,
+			wantState:   StateFailed,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := &Server{}
+			autoMgr := NewAutoUpdateManager(srv, NewManager(srv, "http://localhost:8080"), time.UTC)
+			if tc.setup != nil {
+				tc.setup(t, autoMgr)
+			}
+
+			successBefore := triggerCounterValue(t, "success")
+			failureBefore := triggerCounterValue(t, "failure")
+
+			tc.act(t, autoMgr)
+
+			if got := triggerCounterValue(t, "success") - successBefore; got != tc.wantSuccess {
+				t.Errorf("auto/success delta = %v, want %v", got, tc.wantSuccess)
+			}
+			if got := triggerCounterValue(t, "failure") - failureBefore; got != tc.wantFailure {
+				t.Errorf("auto/failure delta = %v, want %v", got, tc.wantFailure)
+			}
+			if got := autoMgr.GetState(); got != tc.wantState {
+				t.Errorf("state = %s, want %s", got, tc.wantState)
+			}
+		})
 	}
 }
