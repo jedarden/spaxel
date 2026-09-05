@@ -310,14 +310,16 @@ int main(void)
     }
 
     /*
-     * bf-1na's scope ends at the tallies: each iteration above bumped exactly
-     * one, so passed + failed == g_test_count here. The run-summary line that
-     * would surface them is deliberately out of scope (a later sibling), so
-     * the tallies are consumed by these casts — which keeps -Wall -Wextra
-     * clean until that lands.
+     * Run summary (spaxel-63d63db4, child 3/3 of bf-bq9) — the line bf-1na's
+     * comment left for "a later sibling". Each iteration above bumped exactly
+     * one of the tallies, so passed + failed == g_test_count here and the
+     * third number is the registry total the two tally against. Printed
+     * unconditionally: a failing suite still reports its counts before the
+     * exit contract below turns them into make's non-zero status. The
+     * volatile qualifiers drop off in the lvalue-to-rvalue conversion, so the
+     * variadic arguments are plain int and %d is exact for all three.
      */
-    (void)passed;
-    (void)failed;
+    printf("%d passed, %d failed of %d\n", passed, failed, g_test_count);
 
     /*
      * Exit contract, untouched by bf-1na: keyed on the run-wide failure count
