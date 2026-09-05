@@ -86,3 +86,9 @@ makes this the safe direction — over-triggering, never under-triggering.
 **Status:** ✅ Implemented in declarative-config (`spaxel-sensor.yml`),
 verified live 2026-08-20 from git history and workflow records. This note is
 the in-repo record for ADR-009 decision 3.
+
+The `.beads/` entry has its own decision record, with the rationale the
+`.beads/` bead asked for explicitly (image-content grounds, the masking-risk
+analysis, and a measured 18.6%-of-pushes operational impact):
+[beads-path-build-trigger-decision.md](beads-path-build-trigger-decision.md)
+(spaxel-62c1b7bf, 2026-09-05).
