@@ -40,8 +40,8 @@ type NodeRecord struct {
 	LastSeenAt      time.Time `json:"last_seen_at"`
 	FirmwareVersion string    `json:"firmware_version"`
 	ChipModel       string    `json:"chip_model"`
-	HealthScore     float64   `json:"health_score"` // Latest health score from ambient confidence
-	FreeHeapBytes   int64     `json:"free_heap_bytes"`   // Current free heap from last health message
+	HealthScore     float64   `json:"health_score"`    // Latest health score from ambient confidence
+	FreeHeapBytes   int64     `json:"free_heap_bytes"` // Current free heap from last health message
 }
 
 // RoomConfig stores room geometry.
@@ -338,14 +338,13 @@ func (r *Registry) SetNodeHealthScore(mac string, score float64) error {
 	return err
 }
 
-// UpdateNodeHealth persists health metrics from a node health message.
-// Updates uptime_ms, wifi_rssi_dbm, free_heap_bytes, temperature_c, and ip.
-func (r *Registry) UpdateNodeHealth(mac string, uptimeMS, wifiRSSIdBm, freeHeapBytes int64, temperatureC float64, ip string) error {
-	_, err := r.db.Exec(`
-		UPDATE nodes
-		SET uptime_ms=?, wifi_rssi_dbm=?, free_heap_bytes=?, temperature_c=?, ip=?, updated_at=strftime('%s', 'now') * 1000
-		WHERE mac=?
-	`, uptimeMS, wifiRSSIdBm, freeHeapBytes, temperatureC, ip, mac)
+// UpdateNodeHealth persists the free-heap reading from a node health message.
+// free_heap_bytes is the only health metric in the fleet schema — the rest of
+// the reading (uptime, RSSI, temperature, IP) lives in the ingestion
+// connection's LastHealth, not in fleet.db. An unknown MAC is a no-op, so a
+// health message that races the node's registration is harmless.
+func (r *Registry) UpdateNodeHealth(mac string, freeHeapBytes int64) error {
+	_, err := r.db.Exec(`UPDATE nodes SET free_heap_bytes=? WHERE mac=?`, freeHeapBytes, mac)
 	return err
 }
 

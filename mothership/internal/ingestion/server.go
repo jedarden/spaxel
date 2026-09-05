@@ -94,13 +94,17 @@ type Recorder interface {
 // BLEHandler handles incoming BLE scan data from nodes.
 type BLEHandler func(nodeMAC string, devices []BLEDevice)
 
-// Server manages WebSocket connections from ESP32 nodes
 // NodeHealthUpdater persists health metrics from node health messages.
 // Interface type to avoid circular import with fleet package.
+//
+// free_heap_bytes is the only health metric the fleet registry persists:
+// the rest of the reading (uptime, RSSI, temperature, IP) stays in the
+// connection's LastHealth, which is what the dashboard WebSocket serves.
 type NodeHealthUpdater interface {
-	UpdateNodeHealth(mac string, uptimeMS, wifiRSSIdBm, freeHeapBytes int64, temperatureC float64, ip string) error
+	UpdateNodeHealth(mac string, freeHeapBytes int64) error
 }
 
+// Server manages WebSocket connections from ESP32 nodes
 type Server struct {
 	mu          sync.RWMutex
 	connections map[string]*NodeConnection // keyed by MAC
@@ -846,6 +850,18 @@ func (s *Server) handleJSONMessage(nc *NodeConnection, data []byte) {
 		nc.LastHealth = msg
 		nc.LastHealthTime = time.Now()
 
+		// Persist the reading for the REST surfaces (GET /api/nodes,
+		// /api/nodes/{mac}, /api/fleet, /api/fleet/health), which read
+		// fleet.db rather than this connection's in-memory LastHealth.
+		s.mu.RLock()
+		healthUpdater := s.nodeHealthUpdater
+		s.mu.RUnlock()
+		if healthUpdater != nil {
+			if err := healthUpdater.UpdateNodeHealth(nc.MAC, msg.FreeHeapBytes); err != nil {
+				log.Printf("[WARN] persist free_heap_bytes for %s: %v", nc.MAC, err)
+			}
+		}
+
 	case *BLEMessage:
 		s.mu.RLock()
 		handler := s.bleHandler
@@ -1054,11 +1070,11 @@ func (s *Server) GetConnectedNodes() []string {
 
 // NodeInfo represents a connected node's state for dashboard
 type NodeInfo struct {
-	MAC            string  `json:"mac"`
-	FirmwareVersion string  `json:"firmware_version,omitempty"`
-	Chip           string  `json:"chip,omitempty"`
-	Unpaired       bool    `json:"unpaired,omitempty"`
-	FreeHeapBytes  int64   `json:"free_heap_bytes,omitempty"`
+	MAC             string `json:"mac"`
+	FirmwareVersion string `json:"firmware_version,omitempty"`
+	Chip            string `json:"chip,omitempty"`
+	Unpaired        bool   `json:"unpaired,omitempty"`
+	FreeHeapBytes   int64  `json:"free_heap_bytes,omitempty"`
 }
 
 // GetConnectedNodesInfo returns detailed info about connected nodes
