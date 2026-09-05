@@ -44,6 +44,9 @@ The scratch `image-repo` is mandatory per the bead's handoff note and
 `amd64-only-build-usage.md` §3.2: `update-declarative-config`'s sed is hardcoded to
 `ronaldraygun/spaxel:` regardless of the parameter (open bead `spaxel-fce2f7e4`), so a
 non-release run must not point at production.
+*(Recorded at run time. `spaxel-fce2f7e4` landed later the same day — declarative-config
+`0ec96fc9` — so the sed now follows the parameter and a scratch-repo run rewrites nothing
+at any version; the scratch repo stays mandatory for the §5 same-tag hazard.)*
 
 ## Outcome: parameter override accepted, image build gated off
 
@@ -80,6 +83,8 @@ declarative-config pin rewrite — which is precisely what a test submission mus
 Until `spaxel-fce2f7e4` parameterises the pin-rewrite sed, an amd64-only run against a
 scratch repo is only safe while `should-build=false`, so the honest ceiling of this bead
 is a verified parameter-override submission, which is what was delivered.
+*(Ceiling superseded 2026-09-04 by `spaxel-fce2f7e4` / `0ec96fc9` — it was a property of
+the template as it stood on this run's date, not a permanent one.)*
 
 ## Acceptance criteria
 

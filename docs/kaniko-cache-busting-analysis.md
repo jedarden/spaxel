@@ -332,9 +332,9 @@ order:
    `--progress=plain` output (`grep -E 'CACHED|DONE|exporting|pushing|ERROR|
    failed to solve'`). Preconditions per
    `docs/notes/amd64-build-cache-analysis.md` §3: the
-   `update-declarative-config` sed must be parameterized first
-   (`spaxel-fce2f7e4`), and the submitted workflow needs a `podGC` override
-   so the docker-build pod outlives its own completion.
+   `update-declarative-config` sed parameterisation is done (`spaxel-fce2f7e4`,
+   declarative-config `0ec96fc9`, live on the cluster 2026-09-04); still needed
+   is a `podGC` override so the docker-build pod outlives its own completion.
 3. **Verify the buildcache's multi-platform shape** — whether the single
    `:buildcache` tag holds a per-platform manifest list with entries for both
    legs, or whether each run overwrites the other leg's entries. Unverifiable

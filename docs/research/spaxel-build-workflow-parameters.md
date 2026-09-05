@@ -318,19 +318,26 @@ guide and `docs/notes/amd64-only-build-template-design.md` for the design record
 `IMAGE_REPO={{workflow.parameters.image-repo}}` in place of the former
 `ronaldraygun/spaxel:` literal, and gotchas 1–2 plus the consumer matrix above were
 corrected accordingly (gotcha 2 previously said "treat `image-repo` as fixed in
-practice" — no longer true). Verified against the *manifest*, not the live object:
-the live template on iad-ci still carried the pre-change script at the time of
-writing because the whole `argo-workflows-ns-iad-ci` app lagged behind
-`origin/main` (the immediately preceding commit `1c85ed79` was equally unlanded, so
-this is propagation lag on the app, not a regression introduced by `0ec96fc9`).
-Auto-sync + `selfHeal` are on, so it converges without action; check it with:
+practice" — no longer true). Verified against the **live object**, not just the
+manifest: the step's `.script.source` on
+`kubectl --server=http://traefik-iad-ci:8001 get workflowtemplate spaxel-build -n
+argo-workflows -o json` carries `IMAGE_REPO="{{workflow.parameters.image-repo}}"`,
+the explanatory comment block, and the `s|${IMAGE_REPO}:[^ "]*|${IMAGE_REPO}:${VERSION}|g`
+sed. Re-check it with:
 
 ```bash
 kubectl --server=http://traefik-iad-ci:8001 get workflowtemplate spaxel-build \
   -n argo-workflows -o json | \
   jq -r '.spec.templates[] | select(.name=="update-declarative-config")
-         | .source' | grep -c IMAGE_REPO   # expect 1 once synced
+         | .script.source' | grep -c 'IMAGE_REPO="{{workflow.parameters.image-repo}}"'
+# expect 1
 ```
+
+Trap worth keeping: a step's body lives under **`.script.source`**, not `.source`
+(`.source` is null on every template here). Grepping the wrong path prints `0` for
+*every* pattern, which reads exactly like "the change is not synced yet" — an
+earlier pass in this same investigation briefly concluded the cluster was lagging
+on that basis before the empty-output cause was found.
 
 To verify the current template definition:
 ```bash

@@ -429,5 +429,7 @@ its image ref from `{{workflow.parameters.image-repo}}`. Production path verifie
 byte-identical under the default parameter (old-literal sed output vs
 parameterised-with-default output diff empty on both target files); a scratch-repo
 run leaves the declarative-config clone clean, so the step takes its existing "No
-image tag changes to commit" branch. Default-behaviour risk in this change is the
-ArgoCD propagation lag on the app, not the diff — see the closure notes on the bead.
+image tag changes to commit" branch. Also confirmed against the **live** cluster
+object: `WorkflowTemplate/spaxel-build` on iad-ci carries the parameterised sed in
+`update-declarative-config`'s `.script.source`, so no ArgoCD lag remains between the
+landed commit and what a submitted workflow executes.
