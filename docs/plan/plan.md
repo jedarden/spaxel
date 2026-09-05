@@ -3482,23 +3482,28 @@ Taxonomy of failure types with recovery strategy per type. Each failure mode has
 
 ## Go Module Layout
 
-```
-go.work at the repository root stitches together THREE separate Go modules
-(mothership, cmd/sim, test/acceptance). There is no single root module and no
-`test/integration/` directory; simulator-based tests live in `test/acceptance/`
-and `mothership/test/acceptance/`, with a shell harness in `tests/e2e/run.sh`.
+`go.work` at the repository root resolves a **single Go module**, `mothership/`.
+The simulator CLI (`spaxel-sim`, `mothership/cmd/sim/`), the simulator-driven
+acceptance suite (`mothership/test/acceptance/`) and the Go e2e harness
+(`mothership/tests/e2e/`) all live inside that one module, which is how CI
+invokes them (`go build ./cmd/sim`, `go test ./test/acceptance/`, run from
+`mothership/`). There is no repo-root `cmd/sim/` module, no repo-root
+`test/acceptance/` module, no `tests/e2e/run.sh` shell harness, and no
+`test/integration/` directory — the three former root-level duplicates were
+removed on 2026-09-04, and each surviving path carries a header comment
+explaining why it is canonical.
 
 ```
 spaxel/
-  go.work                — Go workspace stitching three modules (see below)
+  go.work                — Go workspace (use ./mothership — the only module)
   VERSION                — single source of truth for the release version
   Dockerfile             — multi-stage: ESP-IDF firmware build + Go binary + distroless runtime
   docker-compose.yml     — single-service deployment manifest
 
-  # --- Module 1: the mothership (primary backend) ---
-  mothership/            — Go module (mothership/go.mod)
+  mothership/            — the one Go module (mothership/go.mod)
     cmd/
       mothership/        — main.go: startup sequencing, subsystem wiring (dashboard embedded via go:embed)
+      sim/               — spaxel-sim: CSI simulator CLI (built by spaxel-build and spaxel-e2e CI)
     internal/
       ingestion/         — WebSocket server, binary frame parsing, node lifecycle
       pipeline/
@@ -3525,19 +3530,12 @@ spaxel/
       oui/               — OUI lookup table (go:generate from IEEE list)
       db/                — SQLite open/migrate, schema migrations
       config/            — Environment variable parsing and defaults
-    test/acceptance/     — simulator-based acceptance/integration tests (in-module)
-
-  # --- Module 2: the CSI simulator CLI ---
-  cmd/sim/               — Go module (cmd/sim/go.mod): CSI simulator CLI (spaxel-sim)
-
-  # --- Module 3: cross-cutting acceptance tests ---
-  test/acceptance/       — Go module (test/acceptance/go.mod): acceptance/integration tests
+    test/acceptance/     — simulator-based acceptance/integration tests (AS-1…, IO-…)
+    tests/e2e/           — Go end-to-end harness (spawns mothership + sim; -tags io6_gate release gate)
 
   # --- Non-Go trees ---
-  tests/e2e/             — shell-based end-to-end test harness (run.sh)
   dashboard/             — Static assets: HTML, JS (Three.js), CSS (embedded into the binary at build time)
   firmware/              — ESP-IDF project (C source, CMakeLists, partitions.csv)
-```
 ```
 
 ---
@@ -4130,7 +4128,7 @@ Each algorithmic module has a companion `_test.go` file. Tests are table-driven 
 
 ### Integration Tests (using CSI simulator)
 
-Located in `test/acceptance/` (the cross-cutting acceptance Go module), `mothership/test/acceptance/` (in-module acceptance tests), and the shell harness `tests/e2e/run.sh`. (There is no `test/integration/` directory.) Each test:
+Located in `mothership/test/acceptance/` (simulator-driven acceptance suite) and `mothership/tests/e2e/` (Go end-to-end harness). The repo-root `test/acceptance/` module and `tests/e2e/run.sh` shell harness were removed on 2026-09-04 as duplicates, and there is no `test/integration/` directory. Each test:
 1. Starts a mothership in a Docker container (or in-process for unit-level integration)
 2. Runs `spaxel-sim` with specific walker configurations
 3. Polls `GET /api/blobs` and `/api/events` to assert outcomes
