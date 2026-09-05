@@ -3815,6 +3815,8 @@ All environment variables are optional unless marked (required on production). U
 | `SPAXEL_REPLAY_MAX_MB` | `360` | Maximum size of the CSI replay buffer in MB (48h at 8 nodes / 20 Hz) |
 | `SPAXEL_REPLAY_RETAIN_H` | `48` | CSI replay retention in hours. Eviction is size-based (`REPLAY_MAX_MB`), this is advisory |
 | `SPAXEL_MAX_DASHBOARD_CLIENTS` | `10` | Maximum concurrent dashboard WebSocket clients |
+| `SPAXEL_DEMO_MODE` | `false` | **Demo mode** — run Spaxel as a read-only public showcase. When `true` (accepts `true`/`1`/`false`/`0`), a global middleware rejects every mutating REST request (`POST`/`PUT`/`PATCH`/`DELETE`) with `403 {"error":"demo mode active", ...}` before routing, while all `GET`/`HEAD`/`OPTIONS` endpoints and dashboard pages stay open with no PIN and no login: `/api/auth/status` reports `"demo_mode":true` and the dashboard never renders the PIN setup or login overlays. Because setup itself is a `POST`, configure the PIN *before* enabling demo mode. Non-mutating intake that already works in normal operation (node WebSocket reports) is unaffected |
+| `SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS` | `5` | Demo-mode override of `SPAXEL_MAX_DASHBOARD_CLIENTS` — the dashboard WebSocket client cap used when `SPAXEL_DEMO_MODE=true`. Must be an integer in `[1,100]`; a non-positive value falls back to the normal cap so a zero-value config can never cap the hub at zero clients. Ignored when demo mode is off |
 | `SPAXEL_NODE_STALE_S` | `15` | Seconds since last health report before a connected node is marked STALE |
 | `SPAXEL_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `SPAXEL_SKIP_MIGRATIONS` | `false` | Set to `true` to skip automatic schema migrations (advanced; for manual migration management) |

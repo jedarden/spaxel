@@ -32,6 +32,7 @@ See [`wifi-configuration.md`](wifi-configuration.md) for complete WiFi configura
 | `SPAXEL_BIND_ADDR` | `0.0.0.0:8080` | HTTP/WebSocket listen address | ✅ Implemented |
 | `SPAXEL_DATA_DIR` | `/data` | Persistent storage path (SQLite, baselines, CSI replay, firmware) | ✅ Implemented |
 | `TZ` | `UTC` | Timezone for diurnal baselines, morning briefings, quiet hours | ✅ Implemented |
+| `SPAXEL_DEMO_MODE` | `false` | Demo mode — read-only showcase dashboard: mutating REST requests (`POST`/`PUT`/`PATCH`/`DELETE`) are rejected with `403`, all `GET` endpoints and dashboard pages stay open with no PIN. Set the PIN before enabling (setup is itself a `POST`). Accepts `true`/`1`/`false`/`0` | ✅ Implemented |
 
 ### Networking & Discovery
 
