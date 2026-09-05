@@ -1715,6 +1715,12 @@ func main() {
 	multiNotify := newMultiNotifier(fleetMgr, fleetHealer, selfHealManager)
 	ingestSrv.SetFleetNotifier(multiNotify)
 
+	// Persist each node health message's free-heap reading into the fleet
+	// registry, so the REST surfaces (GET /api/nodes, /api/nodes/{mac},
+	// /api/fleet, /api/fleet/health) serve the last reported value rather
+	// than the schema default of 0.
+	ingestSrv.SetNodeHealthUpdater(fleetReg)
+
 	// Guided troubleshooting manager (for proactive contextual help)
 	// Created after multiNotify since we need to create the FleetNotifier
 	guidedMgr = guidedtroubleshoot.NewManager(guidedtroubleshoot.ManagerConfig{

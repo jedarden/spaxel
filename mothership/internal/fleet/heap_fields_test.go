@@ -15,13 +15,16 @@ package fleet
 // dashboard WebSocket from in-memory state — is covered by
 // internal/ingestion/nodeinfo_test.go.
 //
-// Note on seeding: the tests below write free_heap_bytes straight into the
-// nodes table rather than through Registry.UpdateNodeHealth, because that
-// method cannot currently execute — its UPDATE names uptime_ms,
-// wifi_rssi_dbm, temperature_c, ip and updated_at, columns that exist in
-// the OTHER database's nodes table (spaxel.db, internal/db/migrations.go)
-// but not in the fleet.db schema this Registry owns. See
-// docs/research/free-heap-verification.md for the full finding.
+// Note on seeding: the read-path tests below write free_heap_bytes straight
+// into the nodes table, so each test pins exactly one layer; the write half
+// has its own test (TestUpdateNodeHealthPersistsFreeHeapBytes). History: the
+// read tests originally had no choice, because Registry.UpdateNodeHealth's
+// UPDATE named uptime_ms, wifi_rssi_dbm, temperature_c, ip and updated_at —
+// columns that exist in the OTHER database's nodes table (spaxel.db,
+// internal/db/migrations.go) but not in the fleet.db schema this Registry
+// owns, so the method could not execute at all. See
+// docs/research/free-heap-verification.md and §3 of
+// docs/research/protobuf-verification-summary.md for the finding.
 
 import (
 	"context"
@@ -37,8 +40,9 @@ import (
 
 const heapJSONKey = "free_heap_bytes"
 
-// seedFreeHeapBytes writes a free-heap reading into the nodes table the way
-// a working health write would, bypassing the broken Registry.UpdateNodeHealth.
+// seedFreeHeapBytes writes a free-heap reading straight into the nodes
+// table, independent of the write path exercised by
+// TestUpdateNodeHealthPersistsFreeHeapBytes.
 func seedFreeHeapBytes(t *testing.T, reg *Registry, mac string, freeHeapBytes int64) {
 	t.Helper()
 	if _, err := reg.db.Exec(`UPDATE nodes SET free_heap_bytes=? WHERE mac=?`, freeHeapBytes, mac); err != nil {
@@ -322,4 +326,62 @@ func TestGetFleetHealthServesHeapFromRegistry(t *testing.T) {
 		return
 	}
 	t.Fatalf("node %s missing from /api/fleet/health response: %s", mac, w.Body.String())
+}
+
+// TestUpdateNodeHealthPersistsFreeHeapBytes exercises the write half through
+// the real method rather than the seedFreeHeapBytes bypass above. Its UPDATE
+// once named uptime_ms, wifi_rssi_dbm, temperature_c, ip and updated_at —
+// columns the fleet schema has never had — so the first call failed with
+// "no such column" and every REST surface below could only ever serve the
+// schema default. It now writes the one health metric the fleet schema
+// carries, and a later reading replaces an earlier one.
+func TestUpdateNodeHealthPersistsFreeHeapBytes(t *testing.T) {
+	const mac = "AA:BB:CC:DD:EE:10"
+
+	reg := newTestRegistry(t)
+	if err := reg.UpsertNode(mac, "1.0.0", "ESP32-S3"); err != nil {
+		t.Fatalf("UpsertNode: %v", err)
+	}
+
+	if err := reg.UpdateNodeHealth(mac, 187456); err != nil {
+		t.Fatalf("UpdateNodeHealth: %v", err)
+	}
+
+	node, err := reg.GetNode(mac)
+	if err != nil {
+		t.Fatalf("GetNode: %v", err)
+	}
+	if node.FreeHeapBytes != 187456 {
+		t.Errorf("FreeHeapBytes = %d, want 187456 (the reported reading)", node.FreeHeapBytes)
+	}
+
+	if err := reg.UpdateNodeHealth(mac, 165000); err != nil {
+		t.Fatalf("second UpdateNodeHealth: %v", err)
+	}
+	node, err = reg.GetNode(mac)
+	if err != nil {
+		t.Fatalf("GetNode after second write: %v", err)
+	}
+	if node.FreeHeapBytes != 165000 {
+		t.Errorf("FreeHeapBytes = %d, want 165000 (latest reading wins)", node.FreeHeapBytes)
+	}
+}
+
+// TestUpdateNodeHealthUnknownMACIsNoOp pins the shape a racing health message
+// takes: a node's first health tick can arrive while its registration is still
+// in flight, and the UPDATE must neither error nor create a row.
+func TestUpdateNodeHealthUnknownMACIsNoOp(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	if err := reg.UpdateNodeHealth("AA:BB:CC:DD:EE:11", 99999); err != nil {
+		t.Fatalf("UpdateNodeHealth for unknown MAC: %v", err)
+	}
+
+	nodes, err := reg.GetAllNodes()
+	if err != nil {
+		t.Fatalf("GetAllNodes: %v", err)
+	}
+	if len(nodes) != 0 {
+		t.Errorf("GetAllNodes = %v, want none (a health write must not register a node)", nodes)
+	}
 }
