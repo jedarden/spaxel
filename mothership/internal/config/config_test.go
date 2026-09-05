@@ -435,6 +435,115 @@ func TestInvalidDemoMode(t *testing.T) {
 	}
 }
 
+// TestDemoMaxDashboardClientsVariants tests the SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS
+// parse: unset and empty both fall back to the default of 5; valid integers in
+// [1,100] are accepted; the sibling SPAXEL_MAX_DASHBOARD_CLIENTS default is
+// unaffected.
+func TestDemoMaxDashboardClientsVariants(t *testing.T) {
+	tests := []struct {
+		name         string
+		value        string
+		set          bool
+		normalValue  string
+		expected     int
+		expectedNorm int
+	}{
+		{"unset defaults to 5", "", false, "", 5, 10},
+		{"empty string treated as unset", "", true, "", 5, 10},
+		{"explicit 5", "5", true, "", 5, 10},
+		{"lower bound 1", "1", true, "", 1, 10},
+		{"upper bound 100", "100", true, "", 100, 10},
+		{"independent of raised normal cap", "5", true, "25", 5, 25},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnvVars()
+			if tt.set {
+				t.Setenv("SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS", tt.value)
+			}
+			if tt.normalValue != "" {
+				t.Setenv("SPAXEL_MAX_DASHBOARD_CLIENTS", tt.normalValue)
+			}
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() failed: %v", err)
+			}
+			if cfg.DemoMaxDashboardClients != tt.expected {
+				t.Errorf("DemoMaxDashboardClients = %d, want %d", cfg.DemoMaxDashboardClients, tt.expected)
+			}
+			if cfg.MaxDashboardClients != tt.expectedNorm {
+				t.Errorf("MaxDashboardClients = %d, want %d", cfg.MaxDashboardClients, tt.expectedNorm)
+			}
+		})
+	}
+}
+
+// TestInvalidDemoMaxDashboardClients tests that non-integer and out-of-range
+// SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS values are rejected, mirroring the
+// validation of SPAXEL_MAX_DASHBOARD_CLIENTS.
+func TestInvalidDemoMaxDashboardClients(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{"not a number", "five"},
+		{"zero", "0"},
+		{"negative", "-1"},
+		{"above upper bound", "101"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnvVars()
+			t.Setenv("SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS", tt.value)
+
+			_, err := Load()
+			if err == nil {
+				t.Fatal("Load() succeeded, want error")
+			}
+			if !strings.Contains(err.Error(), "SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS") {
+				t.Errorf("error = %v, want naming SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS", err)
+			}
+		})
+	}
+}
+
+// TestDashboardClientLimit tests the effective cap handed to the dashboard hub:
+// the demo cap in demo mode, the normal cap otherwise, with a non-positive
+// demo cap falling back to the normal cap (guards the zero-value Config).
+func TestDashboardClientLimit(t *testing.T) {
+	tests := []struct {
+		name      string
+		demoMode  bool
+		normalCap int
+		demoCap   int
+		expected  int
+	}{
+		{"normal mode uses normal cap", false, 10, 5, 10},
+		{"demo mode uses demo cap", true, 10, 5, 5},
+		{"demo mode ignores a raised normal cap", true, 50, 5, 5},
+		{"demo cap raised above normal cap is still honored", true, 10, 20, 20},
+		{"zero-value demo cap falls back to normal cap", true, 10, 0, 10},
+		{"negative demo cap falls back to normal cap", true, 10, -3, 10},
+		{"zero-value Config falls back to zero normal cap", false, 0, 0, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				DemoMode:                tt.demoMode,
+				MaxDashboardClients:     tt.normalCap,
+				DemoMaxDashboardClients: tt.demoCap,
+			}
+			if got := cfg.DashboardClientLimit(); got != tt.expected {
+				t.Errorf("DashboardClientLimit() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}
+
 // TestLogLevelVariants tests all valid LOG_LEVEL values.
 func TestLogLevelVariants(t *testing.T) {
 	levels := []string{"debug", "info", "warn", "error"}
@@ -533,6 +642,8 @@ func clearEnvVars() {
 		"SPAXEL_WIFI_SSID",
 		"SPAXEL_WIFI_PASSWORD",
 		"SPAXEL_DEMO_MODE",
+		"SPAXEL_MAX_DASHBOARD_CLIENTS",
+		"SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS",
 		"TZ",
 	}
 	for _, v := range envVars {

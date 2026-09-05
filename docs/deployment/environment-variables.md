@@ -77,6 +77,7 @@ payload instead.
 | `SPAXEL_GRID_CELL_M` | `0.2` | Fresnel zone grid cell size (meters) | ✅ Implemented |
 | `SPAXEL_NODE_STALE_S` | `15` | Seconds before node marked STALE if no health received | ✅ Implemented |
 | `SPAXEL_MAX_DASHBOARD_CLIENTS` | `10` | Maximum concurrent dashboard WebSocket clients | ✅ Implemented |
+| `SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS` | `5` | Demo-mode dashboard WebSocket client cap — overrides `SPAXEL_MAX_DASHBOARD_CLIENTS` when `SPAXEL_DEMO_MODE=true` | ✅ Implemented |
 
 ### OTA & Updates
 

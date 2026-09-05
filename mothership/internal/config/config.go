@@ -56,8 +56,9 @@ type Config struct {
 	// Security
 	InstallSecret        string // Installation secret (64-char hex, optional if set must be 32+ bytes)
 	MigrationWindowHours int    // How long after startup nodes without tokens are tolerated (default 24, 0 = disabled)
-	DemoMode             bool   // Demo mode: read-only dashboard, mutating endpoints blocked, no PIN required (default false)
-	MaxDashboardClients   int    // Maximum concurrent dashboard WebSocket clients (default 10, applies in both normal and demo mode)
+	DemoMode                bool   // Demo mode: read-only dashboard, mutating endpoints blocked, no PIN required (default false)
+	MaxDashboardClients     int    // Maximum concurrent dashboard WebSocket clients outside demo mode (default 10, range [1,100])
+	DemoMaxDashboardClients int    // Demo-mode dashboard WebSocket client cap (default 5, range [1,100]); overrides MaxDashboardClients when DemoMode is set
 
 	// Time
 	NTPServer string // NTP server hostname (default "pool.ntp.org", or this host's own address when NTPLocalEnabled)
@@ -80,6 +81,17 @@ type Config struct {
 
 	// GitHub API access (for Kaniko releases and other GitHub operations)
 	GitHubToken string // SPAXEL_GITHUB_TOKEN - GitHub personal access token (optional, recommended for authenticated requests)
+}
+
+// DashboardClientLimit returns the effective concurrent dashboard WebSocket
+// client cap: DemoMaxDashboardClients in demo mode, MaxDashboardClients
+// otherwise. A non-positive demo cap falls back to the normal cap so a
+// zero-value Config literal can never cap the hub at zero clients.
+func (c *Config) DashboardClientLimit() int {
+	if c.DemoMode && c.DemoMaxDashboardClients > 0 {
+		return c.DemoMaxDashboardClients
+	}
+	return c.MaxDashboardClients
 }
 
 // Load reads all environment variables, validates them, and returns a Config.
@@ -320,6 +332,23 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS - int, default 5, range [1,100]
+	// Lower dashboard WebSocket cap for publicly reachable demo instances,
+	// where resource use must be bounded more tightly than a private install.
+	demoMaxClientsStr := os.Getenv("SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS")
+	if demoMaxClientsStr == "" {
+		cfg.DemoMaxDashboardClients = 5
+	} else {
+		val, err := strconv.Atoi(demoMaxClientsStr)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS=%s invalid: must be an integer", demoMaxClientsStr))
+		} else if val < 1 || val > 100 {
+			errs = append(errs, fmt.Errorf("SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS=%d invalid: must be in range [1,100]", val))
+		} else {
+			cfg.DemoMaxDashboardClients = val
+		}
+	}
+
 	// TZ - string, default 'UTC'
 	tz := os.Getenv("TZ")
 	if tz == "" {
@@ -506,6 +535,7 @@ func logConfig(cfg *Config) {
 		log.Printf("[CONFIG] SPAXEL_DEMO_MODE=true (read-only dashboard, mutating endpoints blocked)")
 	}
 	log.Printf("[CONFIG] SPAXEL_MAX_DASHBOARD_CLIENTS=%d", cfg.MaxDashboardClients)
+	log.Printf("[CONFIG] SPAXEL_DEMO_MAX_DASHBOARD_CLIENTS=%d", cfg.DemoMaxDashboardClients)
 }
 
 // joinErrors combines multiple errors into a single error.
