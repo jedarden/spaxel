@@ -60,4 +60,76 @@ fails does not bear on whether it should have been created.)
 
 ## Results
 
-Appended below after the observation window closes.
+Recorded 2026-09-05 ~07:00 UTC, observation window 06:29–07:00.
+
+### Push timeline
+
+From `git reflog show origin/main` (local ref update times, UTC). The three pushes
+are **three separate `update by push` events**, so the docs push is an isolated
+push — not one bundled push whose diff merely contained a docs file.
+
+| push (UTC) | commit | changed paths | live `ignored_path()` verdict |
+|---|---|---|---|
+| 06:29:30 | `a54c9951` (this test) | `docs/notes/ci-doc-only-push-live-verification-2026-09-05.md` | **ignored** — first rule `docs/` prefix; also matches `%.md$` |
+| 06:30:09 | `79f3f286` | `firmware/main/{main.c,watchdog.c,watchdog.h}` | trigger — `firmware/main/**` |
+| 06:31:48 | `bf40f1b6` | `VERSION` | trigger — `VERSION` |
+
+### Sensor outcomes
+
+Workflow attribute `events.argoproj.io/action-timestamp` (ms epoch) → UTC.
+
+| action-ts (UTC) | workflow | trigger | latency from its push |
+|---|---|---|---|
+| — | **none** | — | docs push: no workflow within its 39 s clean window |
+| 06:30:20.686 | `spaxel-e2e-jcfxc` | spaxel-e2e | +11.7 s from the firmware push |
+| 06:32:13.355 | `spaxel-e2e-ftrdn` | spaxel-e2e | +25.4 s from the bump push |
+| 06:32:13.365 | `spaxel-build-bqlsr` | spaxel-build | +25.4 s from the bump push |
+
+Observed latency band in this window: **+4.8 s to +25.4 s** (tightest: push `0d5e6dad`
+05:46:31 → pair 05:46:35.8). A docs-push trigger would have appeared by ~06:30:00 at
+the latest. Nothing did.
+
+### Acceptance criteria
+
+| AC | Result |
+|---|---|
+| Test commit touching only documentation | `a54c9951` — one file, `docs/notes/*.md`, nothing else |
+| Argo Events sensor shows no workflow triggered | zero spaxel workflows with action-ts in [06:29:30, 06:30:09) |
+| No `spaxel-build` workflow run in iad-ci | none attributable to the docs push (see attribution below) |
+| VERSION file unchanged | `0.2.173` → `0.2.173` by the docs push; `0.2.174` came only from the firmware build's bump `bf40f1b6` |
+| declarative-config deployment pin unchanged | live `spaxel` + `spaxel-sim` Deployments (ardenone-cluster ns `spaxel`) still `docker.io/ronaldraygun/spaxel:0.2.24` before and after |
+| No new `ronaldraygun/spaxel` image tag | no VERSION bump ⇒ no tag could be minted for the docs push; `0.2.174` (if minted) belongs to the firmware build |
+
+### Code-level proof, independent of timing
+
+The live predicate `ignored_path()` (`docs/build-path-filter-spec.md` §5.1) returns
+true for this commit's only path on its **first** rule (`docs/` prefix) and again on
+`%.md$` — two independent rules would have to fail for this push to build. §4.1
+confirms `spaxel-e2e` is submitted on the same `conditions: spaxel-push`, so a
+filtered push suppresses **both** triggers: the docs push produced neither.
+
+### Attribution caveat
+
+Workflow specs carry only `git-repo` / `branch` / `image-repo` — no SHA — so
+workflow→push attribution is timing-based. `jcfxc` is a lone e2e with no build
+partner; its latency is +50.7 s from the docs push (outside the whole observed band)
+and +11.7 s from the firmware push (inside it). It belongs to the firmware push.
+
+### Incidental findings, out of scope here
+
+1. The firmware push `79f3f286` produced an e2e but **no `spaxel-build` partner**
+   despite `firmware/main/**` being in the build trigger set — a lone-e2e shape this
+   sensor should not produce under a shared predicate. (Same shape a docs-push leak
+   would have had to produce, which is why latency had to settle it.)
+2. §4.1's second non-path guard — "commits authored by `Argo Workflows CI` (the
+   version auto-bump) are dropped to prevent a cascade loop" — is **inert live**:
+   bump commits are authored `jedarden <github@jedarden.com>` (the org-wide git
+   identity), and `bf40f1b6` did fire a pair. No bump ladder ran only because spaxel
+   CI is red and the bump step never executes. Worth a follow-up bead if the build
+   ever goes green.
+
+### Second data point
+
+This section was itself pushed as a **second doc-only commit** (same path set, same
+two ignore rules). Its observation is recorded in bead `spaxel-3c9854cd`'s notes
+rather than in a third commit, to avoid an infinite regress of append-only notes.
