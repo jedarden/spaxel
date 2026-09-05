@@ -26,6 +26,14 @@ var (
 	// outcome is known: "success" when the fleet rollout completes
 	// (fleetRollout), "failure" when the cycle fails (failUpdateCycle).
 	// Starting a cycle or deploying the canary does not count on its own.
+
+	// Pre-create both label combinations at zero. A CounterVec with no
+	// children emits no series at all, so without this a fresh process
+	// reports auto_update_triggers_total as absent until the first cycle
+	// resolves — scrape dashboards and `absent()` alerts see a metric that
+	// vanishes on every restart. At zero the series is simply present.
+	_ = autoUpdateTriggerCounter.WithLabelValues("auto", "success")
+	_ = autoUpdateTriggerCounter.WithLabelValues("auto", "failure")
 )
 
 // AutoUpdateManager manages automatic OTA updates with canary deployment and quiet window scheduling.
