@@ -67,14 +67,26 @@ CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
 # and triggered spurious OTA rollbacks. Tune these two together, never
 # independently. See bf-2tgcx.
 #
-# CRITICAL: Timeout must be > 120s (150s here) to cover:
-#   - 60s OTA validation window (websocket.c SPAXEL_OTA_VALID_TIMEOUT_S)
-#   - 60s boot-good window (safe_mode.c SAFE_MODE_BOOT_GOOD_AFTER_S)
-#   - Margin for watchdog check granularity
-# A 30s timeout would reset before validation completes, causing exactly
-# the spurious rollback ESPHome experienced.
+# The window that matters is armed in code, not here: watchdog_init()
+# (firmware/main/watchdog.c, called early in app_main, before wifi_init())
+# reconfigures the running TWDT to SPAXEL_WATCHDOG_TIMEOUT_S — 90s, pinned in
+# watchdog.h, which is the single place to tune it. ESP-IDF caps this Kconfig
+# symbol at 60 ("range 1 60" in components/esp_system/Kconfig) and silently
+# drops a larger value on every reconfigure rather than erroring: 150 was set
+# here until 2026-09-05 and configured nothing. 60 is the ceiling, and it only
+# covers startup (IDF init until watchdog_init() runs), where the idle tasks
+# are the only subscribers.
+#
+# Corrected 2026-09-05 (with ADR-004): the two boot windows are sequential,
+# not additive — the 60s boot-good timer starts only after OTA validation
+# succeeds (confirm_ota_valid(), websocket.c), so the rollback-critical span
+# is the 60s validation window (websocket.c SPAXEL_OTA_VALID_TIMEOUT_S), which
+# the 90s runtime window covers with 30s of margin. This block used to claim
+# the two windows summed to ">120s (150s here)"; that sum was compared against
+# a value IDF was discarding, and the 90s runtime window is what actually
+# ships.
 CONFIG_ESP_TASK_WDT_INIT=y
-CONFIG_ESP_TASK_WDT_TIMEOUT_S=150
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=60
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
 CONFIG_ESP_TASK_WDT_PANIC=y
