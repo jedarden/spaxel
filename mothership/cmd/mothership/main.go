@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hashicorp/mdns"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spaxel/mothership/internal/analytics"
 	"github.com/spaxel/mothership/internal/apdetector"
 	"github.com/spaxel/mothership/internal/api"
@@ -798,6 +799,13 @@ func main() {
 		Shedder:      shedder,
 	})
 	r.Get("/healthz", healthChecker.Handler(version))
+
+	// Prometheus scrape endpoint for the default registry. Every promauto
+	// metric (auto_update_triggers_total, the drift gauges, ...) registers
+	// there; without this route nothing serves them. Unauthenticated like
+	// /healthz — scrape traffic is not dashboard traffic, and auth in
+	// production happens at the Traefik layer.
+	r.Handle("/metrics", promhttp.Handler())
 
 	// Phase 6: Auth REST API (PIN-based dashboard authentication)
 	authHandler, err := auth.NewHandler(auth.Config{DB: mainDB, DemoMode: cfg.DemoMode})
