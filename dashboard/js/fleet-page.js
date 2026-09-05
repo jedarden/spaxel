@@ -28,6 +28,7 @@
             roles: []
         },
         latestFirmware: null,     // Latest firmware version
+        driftByMac: {},           // MAC -> firmware drift report (ADR-009 decision 6)
         wsConnected: false
     };
 
@@ -295,6 +296,7 @@
 
             // Get latest firmware version
             await fetchLatestFirmware();
+            await fetchFirmwareDrift();
 
             applyFilters();
             updateSummary();
@@ -322,6 +324,28 @@
             }
         } catch (error) {
             console.debug('[FleetPage] Firmware endpoint not available:', error);
+        }
+    }
+
+    async function fetchFirmwareDrift() {
+        // Per-node firmware drift from the version the mothership runs
+        // (ADR-009 decision 6). Absence of the endpoint is not an error: a
+        // mothership older than the drift monitor simply reports nothing.
+        try {
+            const response = await fetch('/api/ota/auto/drift');
+            if (!response.ok) {
+                state.driftByMac = {};
+                return;
+            }
+
+            const report = await response.json();
+            state.driftByMac = {};
+            for (const node of (report && report.nodes) || []) {
+                state.driftByMac[node.mac] = node;
+            }
+        } catch (error) {
+            console.debug('[FleetPage] Firmware drift endpoint not available:', error);
+            state.driftByMac = {};
         }
     }
 
@@ -578,6 +602,7 @@
                                     ${escapeHtml(state.latestFirmware || '?')}
                                 </span>
                             ` : ''}
+                            ${firmwareDriftBadge(node)}
                         </div>
                     </td>
                     <td class="col-uptime">
@@ -1471,6 +1496,29 @@
             return false;
         }
         return node.firmware_version !== state.latestFirmware;
+    }
+
+    // Firmware drift badge (ADR-009 decision 6): "outdated" above only means
+    // the OTA store has something newer. Drift means the mothership itself
+    // runs a different build, and once that has outlived one quiet window it
+    // is a fault — surfaced here rather than left for someone to spot.
+    function firmwareDriftBadge(node) {
+        const drift = state.driftByMac[node.mac];
+        if (!drift || !drift.node_version || drift.node_version === drift.expected_version) {
+            return '';
+        }
+
+        const hours = drift.drift_seconds / 3600;
+        const drifted = hours >= 1
+            ? `${hours.toFixed(1)}h`
+            : `${Math.max(1, Math.round(drift.drift_seconds / 60))}m`;
+        const title = `Running ${drift.node_version}, mothership runs ${drift.expected_version || '?'}` +
+            (drift.first_seen_ms ? ` — drifting since ${new Date(drift.first_seen_ms).toLocaleString()}` : '');
+
+        if (drift.fault) {
+            return `<span class="firmware-drift-badge drift-fault" title="${escapeHtml(title)}">DRIFT FAULT ${drifted}</span>`;
+        }
+        return `<span class="firmware-drift-badge" title="${escapeHtml(title)}">DRIFT ${drifted}</span>`;
     }
 
     function getHealthClass(score) {

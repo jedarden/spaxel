@@ -241,8 +241,13 @@ var defaultSettings = map[string]interface{}{
 	"events_archive_days":    90,    // Events archive retention in days
 	"quiet_hours_start":      "",    // Quiet hours start time (HH:MM format)
 	"quiet_hours_end":        "",    // Quiet hours end time (HH:MM format)
-	// Auto-update settings
-	"auto_update_enabled":           false,   // Auto-update mode enabled
+	// Auto-update settings. Convergence is on by default as of ADR-009: the
+	// versioned seed artifact, the canary rollback path and the quiet-window
+	// rollout are all in place, so a fleet that drifts from the mothership's
+	// build is a fault rather than the expected steady state. Deployments
+	// that already carry auto_update_enabled=false in their settings row are
+	// migrated once at startup — see ota.EnsureAutoUpdateEnabled.
+	"auto_update_enabled":           true,    // Automatic firmware convergence (ADR-009)
 	"quiet_window_start":            "02:00", // Auto-update quiet window start (HH:MM)
 	"quiet_window_end":              "05:00", // Auto-update quiet window end (HH:MM)
 	"canary_duration_min":           10,      // Canary monitoring duration in minutes

@@ -35,6 +35,8 @@ type AutoUpdateManager struct {
 	notifier           EventNotifier
 	timezone           *time.Location
 	zoneVacancyChecker ZoneVacancyChecker
+	windowPoll         time.Duration // how often a parked rollout re-reads the quiet window
+	drift              *DriftMonitor
 
 	// State
 	running               bool
@@ -123,9 +125,11 @@ func formatDuration(d time.Duration) string {
 }
 
 // DefaultAutoUpdateConfig returns the default auto-update configuration.
+// Enabled matches the shipped default in internal/api/settings.go: automatic
+// convergence is on as of ADR-009.
 func DefaultAutoUpdateConfig() AutoUpdateConfig {
 	return AutoUpdateConfig{
-		Enabled:           false,
+		Enabled:           true,
 		QuietWindowStart:  "02:00",
 		QuietWindowEnd:    "05:00",
 		CanaryDurationMin: 10,
@@ -139,6 +143,7 @@ func NewAutoUpdateManager(server *Server, otaMgr *Manager, timezone *time.Locati
 		server:      server,
 		otaManager:  otaMgr,
 		timezone:    timezone,
+		windowPoll:  30 * time.Second,
 		updateState: StateIdle,
 	}
 }
@@ -176,6 +181,28 @@ func (m *AutoUpdateManager) SetZoneVacancyChecker(zvc ZoneVacancyChecker) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.zoneVacancyChecker = zvc
+}
+
+// SetDriftMonitor attaches the firmware drift monitor whose report the
+// auto-update API serves. The monitor itself is constructed and started by
+// cmd/mothership, which owns the fleet registry and the build version.
+func (m *AutoUpdateManager) SetDriftMonitor(dm *DriftMonitor) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.drift = dm
+}
+
+// DriftSnapshot returns the firmware drift report from the attached monitor,
+// or an empty report when no monitor is attached.
+func (m *AutoUpdateManager) DriftSnapshot() DriftSnapshotReport {
+	m.mu.RLock()
+	dm := m.drift
+	m.mu.RUnlock()
+
+	if dm == nil {
+		return DriftSnapshotReport{Nodes: []DriftStatus{}}
+	}
+	return dm.DriftSnapshot()
 }
 
 // GetConfig returns the current auto-update configuration from settings.
@@ -300,15 +327,6 @@ func (m *AutoUpdateManager) checkForNewFirmware(ctx context.Context) {
 	scanTimestamp := m.server.GetLastScanTimestamp()
 	fromCache := !scanTimestamp.IsZero() && time.Since(scanTimestamp) < 1*time.Minute
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Store firmware selection metadata
-	m.firmwareSelectionFromCache = fromCache
-	m.firmwareSnapshotTimestamp = scanTimestamp
-	m.selectedFirmwareVersion = latest.Version
-	m.canaryFirmwareVersionAfter = latest.Version
-
 	// Build comprehensive selection reason
 	selectionReason := "latest_stable_fresh_scan"
 	if fromCache {
@@ -325,33 +343,59 @@ func (m *AutoUpdateManager) checkForNewFirmware(ctx context.Context) {
 		scanTimestamp.Format(time.RFC3339),
 		formatDuration(time.Since(scanTimestamp)))
 
-	// Check if we're already in an update cycle
-	if m.updateState != StateIdle && m.updateState != StateComplete && m.updateState != StateFailed {
-		log.Printf("[DEBUG] ota: auto-update check - already in cycle (state=%s)", m.updateState)
+	// Snapshot cycle liveness under the lock. The gate checks below run
+	// without it: zonesVacant takes the read lock and startUpdateCycle takes
+	// the write lock, so holding the write lock across them self-deadlocked
+	// the run loop on the first release an enabled manager ever saw.
+	m.mu.Lock()
+	inCycle := m.updateState != StateIdle && m.updateState != StateComplete && m.updateState != StateFailed
+	alreadyHandled := m.pendingFirmware != nil && m.pendingFirmware.Filename == latest.Filename
+	m.mu.Unlock()
+
+	if inCycle {
+		log.Printf("[DEBUG] ota: auto-update check - already in cycle")
 		return
 	}
 
-	// Check if this is new firmware (different from current pending)
-	if m.pendingFirmware != nil && m.pendingFirmware.Filename == latest.Filename {
-		log.Printf("[DEBUG] ota: auto-update check - firmware already pending (%s)", latest.Filename)
-		return
-	}
-	m.pendingFirmware = latest
-
-	// Check if we're in quiet window
-	if !m.isInQuietWindow(config) {
-		log.Printf("[DEBUG] ota: auto-update check - not in quiet window (start=%s end=%s)",
-			config.QuietWindowStart, config.QuietWindowEnd)
-		return
-	}
-
-	// Check if zones are vacant (all zones empty for >10 minutes)
+	// Check if zones are vacant (all zones empty for >10 minutes). This gates
+	// the canary too: rebooting one node is still rebooting a node, and the
+	// check runs every minute, so an occupied room just delays the start.
 	if !m.zonesVacant(ctx) {
 		log.Printf("[DEBUG] ota: zones not vacant, skipping auto-update")
 		return
 	}
 
-	// All conditions met, start update cycle
+	// This release has already been through a cycle. The latch is set when a
+	// cycle starts (below), not when a release is merely seen — otherwise a
+	// release detected outside the quiet window would be latched out of the
+	// very window it was supposed to wait for.
+	if alreadyHandled {
+		log.Printf("[DEBUG] ota: auto-update check - firmware already handled (%s)", latest.Filename)
+		return
+	}
+
+	// Record the selection and start the cycle. ADR-009 decision 4: the
+	// canary may deploy immediately — that is one node, deliberately, and it
+	// only ever starts with the zones vacant. The rest of the fleet is what
+	// waits for the quiet window (see fleetRollout).
+	m.mu.Lock()
+	if m.updateState != StateIdle && m.updateState != StateComplete && m.updateState != StateFailed {
+		// A cycle started between the snapshot above and here (the tick loop
+		// and the upload callback can both land on this function).
+		m.mu.Unlock()
+		return
+	}
+	if m.pendingFirmware != nil && m.pendingFirmware.Filename == latest.Filename {
+		m.mu.Unlock()
+		return
+	}
+	m.pendingFirmware = latest
+	m.firmwareSelectionFromCache = fromCache
+	m.firmwareSnapshotTimestamp = scanTimestamp
+	m.selectedFirmwareVersion = latest.Version
+	m.canaryFirmwareVersionAfter = latest.Version
+	m.mu.Unlock()
+
 	m.startUpdateCycle(ctx, latest)
 }
 
@@ -691,6 +735,11 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 
 // fleetRollout performs a rolling update of all remaining nodes.
 func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *FirmwareMeta) {
+	// Done is deferred first so every early return below (including the ones
+	// that predate the window hold) releases the WaitGroup that
+	// evaluateCanary incremented.
+	defer m.wg.Done()
+
 	m.mu.RLock()
 	np := m.nodeProvider
 	canaryMAC := m.currentCanaryNode
@@ -698,6 +747,16 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 
 	if np == nil {
 		m.failUpdateCycle("node provider not available")
+		return
+	}
+
+	// ADR-009 decision 4: the canary went out immediately; the rest of the
+	// fleet holds for the quiet window. Nothing is deployed while people may
+	// be relying on positioning at 3am in a lit room — the window is the
+	// agreed quiet period, and it is re-read every tick so an operator can
+	// widen, move or clear it while a rollout is parked.
+	if err := m.waitForQuietWindow(ctx, firmware); err != nil {
+		m.failUpdateCycle(fmt.Sprintf("cancelled while waiting for quiet window: %v", err))
 		return
 	}
 
@@ -717,7 +776,6 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 
 	nodesUpdatedCount := len(remainingNodes)
 
-	defer m.wg.Done()
 	defer func() {
 		m.mu.Lock()
 		m.updateState = StateComplete
@@ -778,6 +836,60 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 				return
 			case <-time.After(rollingGap):
 			}
+		}
+	}
+}
+
+// waitForQuietWindow parks the fleet rollout until the configured quiet
+// window opens, announcing the hold on the timeline as it does. It returns
+// nil immediately when no window is configured or the window is already
+// open, and ctx.Err() if the manager is shut down mid-hold. The window is
+// re-read every tick, so a configuration change takes effect while waiting.
+func (m *AutoUpdateManager) waitForQuietWindow(ctx context.Context, firmware *FirmwareMeta) error {
+	poll := m.windowPoll
+	if poll <= 0 {
+		poll = 30 * time.Second
+	}
+
+	announced := false
+	for {
+		config := m.GetConfig()
+		if config.QuietWindowStart == "" || config.QuietWindowEnd == "" || m.isInQuietWindow(config) {
+			if announced {
+				m.mu.Lock()
+				m.updateState = StateFleetDeploy
+				m.mu.Unlock()
+
+				log.Printf("[INFO] ota: AUTO-UPDATE quiet window open, resuming fleet rollout of %s", firmware.Version)
+				m.publishEvent("quiet_window_open", "", fmt.Sprintf("Quiet window open — fleet rollout of %s resuming", firmware.Version), map[string]interface{}{
+					"firmware_version": firmware.Version,
+					"trigger_type":     "automatic_fleet_window_open",
+				})
+			}
+			return nil
+		}
+
+		if !announced {
+			announced = true
+
+			m.mu.Lock()
+			m.updateState = StateWaitingWindow
+			m.mu.Unlock()
+
+			log.Printf("[INFO] ota: AUTO-UPDATE fleet rollout of %s holding for quiet window (%s–%s), canary already deployed",
+				firmware.Version, config.QuietWindowStart, config.QuietWindowEnd)
+			m.publishEvent("waiting_window", "", fmt.Sprintf("Canary deployed — fleet rollout of %s holding for quiet window %s–%s", firmware.Version, config.QuietWindowStart, config.QuietWindowEnd), map[string]interface{}{
+				"firmware_version":   firmware.Version,
+				"quiet_window_start": config.QuietWindowStart,
+				"quiet_window_end":   config.QuietWindowEnd,
+				"trigger_type":       "automatic_fleet_waiting_window",
+			})
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(poll):
 		}
 	}
 }

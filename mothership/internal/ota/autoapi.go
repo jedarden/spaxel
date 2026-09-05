@@ -79,12 +79,22 @@ func NewAutoAPIHandler(mgr *AutoUpdateManager, timezone *time.Location, db *sql.
 //	@Produce		json
 //	@Success		200	{array}		map[string]interface{}	"Auto-update history"
 //	@Router			/api/ota/auto/history [get]
+//
+//	GET /api/ota/auto/drift — Per-node firmware drift from this build
+//
+//	@Summary		Get firmware drift
+//	@Description	Returns each node's firmware version against the version this mothership runs, with the drift age and whether it has passed the one-quiet-window fault threshold (ADR-009 decision 6).
+//	@Tags			ota
+//	@Produce		json
+//	@Success		200	{object}	DriftSnapshotReport	"Per-node firmware drift"
+//	@Router			/api/ota/auto/drift [get]
 func (h *AutoAPIHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/ota/auto/status", h.handleStatus)
 	r.Post("/api/ota/auto/trigger", h.handleTrigger)
 	r.Post("/api/ota/auto/cancel", h.handleCancel)
 	r.Get("/api/ota/auto/config", h.handleConfig)
 	r.Get("/api/ota/auto/history", h.handleHistory)
+	r.Get("/api/ota/auto/drift", h.handleDrift)
 }
 
 // handleStatus handles GET /api/ota/auto/status
@@ -268,6 +278,18 @@ func (h *AutoAPIHandler) handleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+// handleDrift handles GET /api/ota/auto/drift — per-node firmware drift from
+// the version this mothership runs (ADR-009 decision 6). The fleet page
+// badges a node from this report once its drift passes one quiet window.
+func (h *AutoAPIHandler) handleDrift(w http.ResponseWriter, r *http.Request) {
+	if h.mgr == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "auto-update manager not available")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.mgr.DriftSnapshot())
 }
 
 // isInQuietWindow checks if current time is within the quiet window

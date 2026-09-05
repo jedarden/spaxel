@@ -168,6 +168,42 @@ func (p *nodeProviderAdapter) GetNodeFirmwareVersion(mac string) string {
 	return node.FirmwareVersion
 }
 
+// nodeVersionSourceAdapter adapts fleet.Registry to implement
+// ota.NodeVersionSource for the firmware drift monitor.
+type nodeVersionSourceAdapter struct {
+	registry *fleet.Registry
+}
+
+// NewNodeVersionSource creates an ota.NodeVersionSource from the fleet
+// registry. Drift is measured against every registered node — a node that
+// went offline on an old version is exactly the case the drift monitor exists
+// to surface — so this deliberately does not filter on connection state.
+// Virtual nodes (the router construct) run no firmware of their own.
+func NewNodeVersionSource(registry *fleet.Registry) ota.NodeVersionSource {
+	return &nodeVersionSourceAdapter{registry: registry}
+}
+
+func (a *nodeVersionSourceAdapter) GetAllNodeVersions() map[string]string {
+	versions := make(map[string]string)
+	if a.registry == nil {
+		return versions
+	}
+
+	nodes, err := a.registry.GetAllNodes()
+	if err != nil {
+		log.Printf("[WARN] autoupdate: failed to list nodes for drift check: %v", err)
+		return versions
+	}
+
+	for _, node := range nodes {
+		if node.Virtual || node.MAC == "" {
+			continue
+		}
+		versions[node.MAC] = node.FirmwareVersion
+	}
+	return versions
+}
+
 // NodeNotFoundError is returned when a node is not found.
 type NodeNotFoundError struct {
 	MAC string
@@ -178,18 +214,32 @@ func (e *NodeNotFoundError) Error() string {
 }
 
 // eventNotifierAdapter adapts eventbus to implement ota.EventNotifier.
-type eventNotifierAdapter struct{}
+type eventNotifierAdapter struct {
+	severity string
+}
 
 // NewEventNotifier creates an ota.EventNotifier using the eventbus.
 func NewEventNotifier() ota.EventNotifier {
-	return &eventNotifierAdapter{}
+	return NewEventNotifierWithSeverity(eventbus.SeverityInfo)
+}
+
+// NewEventNotifierWithSeverity creates an ota.EventNotifier that publishes
+// every OTA event at the given severity. The drift monitor uses the warning
+// variant: a firmware drift fault must not arrive looking like routine info.
+func NewEventNotifierWithSeverity(severity string) ota.EventNotifier {
+	return &eventNotifierAdapter{severity: severity}
 }
 
 func (a *eventNotifierAdapter) PublishOTAEvent(eventType, mac, message string, metadata map[string]interface{}) {
+	severity := a.severity
+	if severity == "" {
+		severity = eventbus.SeverityInfo
+	}
+
 	event := eventbus.Event{
 		Type:        eventbus.TypeOTAUpdate,
 		TimestampMs: timestampNowMs(),
-		Severity:    eventbus.SeverityInfo,
+		Severity:    severity,
 		Detail: map[string]interface{}{
 			"ota_event": eventType,
 			"mac":       mac,

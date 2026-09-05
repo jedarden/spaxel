@@ -3,6 +3,7 @@ package ota
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -1258,4 +1259,193 @@ func TestCanaryRollbackWithFullOTADetails(t *testing.T) {
 
 	t.Logf("Canary rollback with full OTA details verified: MAC=%s, rollbackVersion=%s, SHA256=%s, URL=%s, qualityDelta=%.2f%%",
 		canaryMAC, previousVersion, previousSHA256, expectedURL, qualityDelta*100)
+}
+
+// TestWaitForQuietWindow verifies the fleet-rollout hold (ADR-009 decision 4):
+// the canary deploys immediately, but the rest of the fleet waits for the
+// configured quiet window, and the hold is announced on the timeline while it
+// lasts. A fleet-wide reboot in the middle of the day blinds the house, so
+// the hold is the whole point of the window.
+func TestWaitForQuietWindow(t *testing.T) {
+	// A window the wall clock is comfortably inside of, so the test does not
+	// depend on where it runs relative to a minute boundary.
+	openStart := time.Now().In(time.Local).Add(-2 * time.Hour)
+	openEnd := time.Now().In(time.Local).Add(2 * time.Hour)
+	// A window that opens well after the test finishes, so a rollout parked
+	// against it stays parked for the duration of the test.
+	closedStart := time.Now().In(time.Local).Add(4 * time.Hour)
+	closedEnd := time.Now().In(time.Local).Add(8 * time.Hour)
+
+	newHoldManager := func(start, end string) (*AutoUpdateManager, *mockSettingsProvider, *mockEventNotifier) {
+		mgr := NewAutoUpdateManager(nil, nil, time.Local)
+		settings := newMockSettingsProvider()
+		settings.set("quiet_window_start", start)
+		settings.set("quiet_window_end", end)
+		mgr.SetSettingsProvider(settings)
+		notifier := newMockEventNotifier()
+		mgr.SetEventNotifier(notifier)
+		mgr.windowPoll = 10 * time.Millisecond
+		return mgr, settings, notifier
+	}
+
+	state := func(mgr *AutoUpdateManager) UpdateState {
+		mgr.mu.Lock()
+		defer mgr.mu.Unlock()
+		return mgr.updateState
+	}
+
+	t.Run("returns immediately when the window is open", func(t *testing.T) {
+		mgr, _, notifier := newHoldManager(openStart.Format("15:04"), openEnd.Format("15:04"))
+
+		if err := mgr.waitForQuietWindow(context.Background(), &FirmwareMeta{Version: "0.2.177"}); err != nil {
+			t.Fatalf("waitForQuietWindow = %v, want nil", err)
+		}
+		if got := state(mgr); got != StateIdle {
+			t.Errorf("state = %s, want it untouched at %s", got, StateIdle)
+		}
+		if events := notifier.getEvents(); len(events) != 0 {
+			t.Errorf("got %d events for an already-open window, want 0", len(events))
+		}
+	})
+
+	t.Run("returns immediately when no window is configured", func(t *testing.T) {
+		mgr, _, notifier := newHoldManager("", "")
+
+		if err := mgr.waitForQuietWindow(context.Background(), &FirmwareMeta{Version: "0.2.177"}); err != nil {
+			t.Fatalf("waitForQuietWindow = %v, want nil", err)
+		}
+		if events := notifier.getEvents(); len(events) != 0 {
+			t.Errorf("got %d events with no window configured, want 0", len(events))
+		}
+	})
+
+	t.Run("holds outside the window and releases when it opens", func(t *testing.T) {
+		mgr, settings, notifier := newHoldManager(closedStart.Format("15:04"), closedEnd.Format("15:04"))
+
+		done := make(chan error, 1)
+		go func() { done <- mgr.waitForQuietWindow(context.Background(), &FirmwareMeta{Version: "0.2.177"}) }()
+
+		// The hold must be announced: state parked on waiting_window and a
+		// waiting_window event on the timeline, before the window opens.
+		deadline := time.Now().Add(2 * time.Second)
+		for state(mgr) != StateWaitingWindow {
+			if time.Now().After(deadline) {
+				t.Fatal("rollout never parked on waiting_window")
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+		for _, e := range notifier.getEvents() {
+			if e.eventType == "quiet_window_open" {
+				t.Fatalf("quiet_window_open published before the window opened: %+v", e)
+			}
+		}
+
+		// The window is re-read every tick, so opening it in settings is
+		// enough to release the rollout — no restart required.
+		settings.set("quiet_window_start", openStart.Format("15:04"))
+		settings.set("quiet_window_end", openEnd.Format("15:04"))
+
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("waitForQuietWindow = %v, want nil once the window opened", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("rollout still holding after the quiet window opened")
+		}
+
+		if got := state(mgr); got != StateFleetDeploy {
+			t.Errorf("state = %s, want %s after release", got, StateFleetDeploy)
+		}
+
+		var announced, opened bool
+		for _, e := range notifier.getEvents() {
+			switch e.eventType {
+			case "waiting_window":
+				announced = true
+			case "quiet_window_open":
+				opened = true
+			}
+		}
+		if !announced || !opened {
+			t.Errorf("timeline events: waiting_window=%v quiet_window_open=%v, want both", announced, opened)
+		}
+	})
+
+	t.Run("returns the context error when shut down mid-hold", func(t *testing.T) {
+		mgr, _, notifier := newHoldManager(closedStart.Format("15:04"), closedEnd.Format("15:04"))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- mgr.waitForQuietWindow(ctx, &FirmwareMeta{Version: "0.2.177"}) }()
+
+		deadline := time.Now().Add(2 * time.Second)
+		for state(mgr) != StateWaitingWindow {
+			if time.Now().After(deadline) {
+				t.Fatal("rollout never parked on waiting_window")
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+
+		cancel()
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("waitForQuietWindow = %v, want context.Canceled", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("waitForQuietWindow did not return after shutdown")
+		}
+		if events := notifier.getEvents(); len(events) == 0 {
+			t.Error("expected the hold to be announced before shutdown")
+		}
+	})
+}
+
+// TestCheckForNewFirmwareOccupiedZonesNoDeadlock is a regression test for the
+// self-deadlock that fired the first time an enabled manager's run loop saw a
+// release: checkForNewFirmware used to hold the manager's write lock across
+// zonesVacant (read lock) and startUpdateCycle (write lock), which
+// sync.RWMutex forbids re-entering. The gate decisions now run on a snapshot
+// taken under the lock, so an occupied house must make the check return
+// promptly instead of wedging the run loop forever.
+func TestCheckForNewFirmwareOccupiedZonesNoDeadlock(t *testing.T) {
+	srv := &Server{}
+	srv.firmware = map[string]*FirmwareMeta{
+		"spaxel-0.2.177.bin": {
+			Filename:   "spaxel-0.2.177.bin",
+			Version:    "0.2.177",
+			SHA256:     "abc123",
+			SizeBytes:  1024,
+			UploadedAt: time.Now(),
+			IsLatest:   true,
+		},
+	}
+	srv.latestFile = "spaxel-0.2.177.bin"
+
+	autoMgr := NewAutoUpdateManager(srv, NewManager(srv, "http://localhost:8080"), time.UTC)
+
+	settings := newMockSettingsProvider()
+	settings.set("auto_update_enabled", true)
+	autoMgr.SetSettingsProvider(settings)
+
+	checker := newMockZoneVacancyChecker()
+	checker.setVacant(false)
+	autoMgr.SetZoneVacancyChecker(checker)
+
+	done := make(chan struct{})
+	go func() {
+		autoMgr.checkForNewFirmware(context.Background())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("checkForNewFirmware deadlocked with zones occupied — the run loop would never recover")
+	}
+
+	if got := autoMgr.GetState(); got != StateIdle {
+		t.Errorf("state = %s, want %s (occupied zones must not start a cycle)", got, StateIdle)
+	}
 }
