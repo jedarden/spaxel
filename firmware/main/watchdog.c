@@ -14,8 +14,12 @@ esp_err_t watchdog_init(void) {
     }
 
     // Initialize task watchdog (IDF 5.x API: takes a config struct, not a timeout).
-    // The TWDT is already initialized at startup (CONFIG_ESP_TASK_WDT_INIT=y,
-    // sdkconfig default 30s); update it to the 90s boot-good-safe timeout.
+    // The TWDT is already initialized at startup (CONFIG_ESP_TASK_WDT_INIT=y) at
+    // the 5s Kconfig default — CONFIG_ESP_TASK_WDT_TIMEOUT_S is declared
+    // "range 1 60" in components/esp_system/Kconfig, so the value in
+    // sdkconfig.defaults is dropped on every reconfigure. This call is the only
+    // way to arm a window beyond 60s, and it is what makes the effective
+    // timeout 90s rather than that 5s default.
     const esp_task_wdt_config_t wdt_config = {
         .timeout_ms = SPAXEL_WATCHDOG_TIMEOUT_S * 1000,
         .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
