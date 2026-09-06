@@ -196,7 +196,7 @@ Attempt to flash an older firmware version (lower security version). The bootloa
 
 1. **HTTPS enablement**: Enable CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y after measuring flash/RAM impact
 2. **Partition sizing**: Adjust partition sizes if needed for TLS overhead
-3. **Security versioning**: Implement separate security version counter independent of firmware version
+3. **Security versioning**: ~~Implement separate security version counter independent of firmware version~~ **DONE 2026-09-05 (spaxel-497aee78)** — [`anti-rollback-secure-version.md`](anti-rollback-secure-version.md); `firmware/SECURE_VERSION` feeds `CONFIG_BOOTLOADER_APP_SECURE_VERSION`, first value 1
 4. **Hardware security**: Burn eFuses to disable JTAG/USB for physical attack resistance
 5. **Key management**: Integrate with HSM for production signing key storage
 

@@ -58,6 +58,39 @@ Signs a firmware binary with the private key.
 
 This script is typically called automatically by the build system (see `CMakeLists.txt`).
 
+### bump-secure-version.sh
+
+Increments the anti-rollback secure version and records the reason. Unlike the
+app version (`../VERSION`), this counter moves only when a release changes the
+firmware's security posture, because every node burns it into the one-way
+`SECURE_VERSION` eFuse field.
+
+```bash
+./scripts/bump-secure-version.sh                        # show current state
+./scripts/bump-secure-version.sh --reason "why"         # bump by one
+./scripts/bump-secure-version.sh --to 4 --reason "why"  # bump to a value
+```
+
+Decreasing is refused outright, and every bump appends a row to
+`../SECURE_VERSION_LOG.md`. Policy, the eFuse one-way behaviour and the
+rollback interaction are documented in
+`../../docs/notes/anti-rollback-secure-version.md`.
+
+### inspect-firmware-header.py
+
+Reads the anti-rollback fields back out of a built image — no IDF toolchain
+required — and cross-checks the secure version in the image header against the
+one in the app descriptor. Works on both the bare app image and the merged
+flash image.
+
+```bash
+./scripts/inspect-firmware-header.py build/spaxel-firmware.bin --expect 1
+```
+
+Exit status is non-zero when the image does not carry the expected value, so
+it is safe to use as a release gate. This is the check that would have caught
+every image before 2026-09-05 shipping with secure version 0.
+
 ## Key Management
 
 ### Key Storage

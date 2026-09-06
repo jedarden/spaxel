@@ -1,0 +1,18 @@
+# SPAXEL firmware anti-rollback security version.
+#
+# This number is stamped into every firmware image as
+# CONFIG_BOOTLOADER_APP_SECURE_VERSION and is what the ESP32-S3 bootloader
+# compares against the SECURE_VERSION eFuse field. It is NOT the app version
+# (that is ../VERSION) and must not follow it: it moves only when a release
+# changes the security posture of the firmware.
+#
+# Rules (enforced by firmware/scripts/bump-secure-version.sh, see
+# docs/notes/anti-rollback-secure-version.md):
+#   - integer, >= 0, and only ever increased — never decreased
+#   - every increase needs a reason, recorded in firmware/SECURE_VERSION_LOG.md
+#   - a node burns its SECURE_VERSION eFuse to match the first image it
+#     accepts, and that burn is one-way: a higher eFuse permanently rejects
+#     every lower image
+#
+# Bump with:  ./scripts/bump-secure-version.sh --reason "why"
+1
