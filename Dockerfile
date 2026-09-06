@@ -11,18 +11,47 @@ FROM alpine:3.20 AS firmware-fetcher
 ARG VERSION=dev
 
 # Install dependencies
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl jq
 
 # Fetch firmware from GitHub Releases
-# The firmware-build CI step uploads spaxel-firmware-${VERSION}-merged.bin to releases
+# The firmware-build CI step uploads spaxel-firmware-${VERSION}-merged.bin to releases.
+# Releases are created as DRAFTS, and GitHub serves draft assets only through the
+# authenticated API: the public releases/download/ URL 404s even with a token. So CI
+# passes its GitHub token in as a BuildKit secret (spaxel-build WorkflowTemplate:
+# --secret id=gh_token,env=GH_TOKEN), this stage resolves the release by tag in the
+# /releases list (drafts never appear in /releases/tags/... either) and downloads
+# each asset via /releases/assets/{id} with Accept: application/octet-stream. Builds
+# that do not supply the secret fall back to the anonymous direct URLs, which keep
+# working once a release is published.
 WORKDIR /firmware
-RUN curl -fsSL \
-    "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware-${VERSION}-merged.bin" \
-    -o spaxel-firmware-merged.bin && \
-    curl -fsSL \
-    "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware.bin" \
-    -o spaxel-firmware.bin && \
-    echo "=== Firmware binaries downloaded ===" && \
+RUN --mount=type=secret,id=gh_token \
+    set -eu; \
+    if [ -s /run/secrets/gh_token ]; then \
+      API="https://api.github.com/repos/jedarden/spaxel"; \
+      printf 'Authorization: Bearer %s\n' "$(tr -d '[:space:]' < /run/secrets/gh_token)" > /tmp/gh_auth; \
+      RELEASES="$(curl -fsSL -H @/tmp/gh_auth "${API}/releases?per_page=100")"; \
+      MERGED_ID="$(printf '%s' "$RELEASES" | jq -r --arg t "v${VERSION}" --arg n "spaxel-firmware-${VERSION}-merged.bin" \
+        '.[] | select(.tag_name == $t) | .assets[] | select(.name == $n) | .id')"; \
+      APP_ID="$(printf '%s' "$RELEASES" | jq -r --arg t "v${VERSION}" --arg n "spaxel-firmware.bin" \
+        '.[] | select(.tag_name == $t) | .assets[] | select(.name == $n) | .id')"; \
+      if [ -z "$MERGED_ID" ] || [ "$MERGED_ID" = "null" ] || [ -z "$APP_ID" ] || [ "$APP_ID" = "null" ]; then \
+        echo "release v${VERSION} (or its firmware assets) not found in the first 100 releases" >&2; \
+        exit 1; \
+      fi; \
+      curl -fsSL -H @/tmp/gh_auth -H "Accept: application/octet-stream" \
+        "${API}/releases/assets/${MERGED_ID}" -o spaxel-firmware-merged.bin; \
+      curl -fsSL -H @/tmp/gh_auth -H "Accept: application/octet-stream" \
+        "${API}/releases/assets/${APP_ID}" -o spaxel-firmware.bin; \
+      rm -f /tmp/gh_auth; \
+    else \
+      curl -fsSL \
+      "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware-${VERSION}-merged.bin" \
+      -o spaxel-firmware-merged.bin && \
+      curl -fsSL \
+      "https://github.com/jedarden/spaxel/releases/download/v${VERSION}/spaxel-firmware.bin" \
+      -o spaxel-firmware.bin; \
+    fi; \
+    echo "=== Firmware binaries downloaded ==="; \
     ls -lh
 
 # Stage 2: Build the Go binary (cross-platform)
