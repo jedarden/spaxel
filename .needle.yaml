@@ -56,9 +56,10 @@ prompt:
   templates:
     pluck: "## Workflow\n\nYou are a coding agent. Complete the task below, then close\
       \ the bead.\n\nSteps:\n1. Read the task description and context below\n2. Implement\
-      \ the required changes in {workspace_path}\n3. Commit your work: `git commit\
-      \ -am \"brief description of what was done\"`\n4. Push: `git push`\n5. Close\
-      \ the bead: `br close {bead_id} --body \"brief summary of what was implemented\"\
+      \ the required changes in {workspace_path}\n3. Inspect `git status --short`, stage\
+      \ only files you changed with `git add <path>...`, then commit with `git commit\
+      \ -m \"brief description of what was done\"`\n4. Push: `git push origin main`\n5. Close\
+      \ the bead: `bead close {bead_id} --reason \"brief summary of what was implemented\"\
       `\n\nIf you cannot complete the task \u2014 do NOT close the bead. It will be\
       \ retried automatically.\n\n---\n\n## Task: {bead_title}\n\n{bead_body}\n\n\
       ## Rules\n\n{workspace_instructions}\n\n## Context\n\n{context_file_contents}\n\
