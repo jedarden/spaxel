@@ -6,7 +6,7 @@ This directory contains scripts for managing Spaxel firmware security: Secure Bo
 
 Spaxel firmware uses ESP-IDF Secure Boot V2 to prevent unauthorized firmware execution:
 
-- **Signed App Verification**: Every firmware image is signed with an RSA-2048 private key. The bootloader verifies the signature before execution, rejecting any unsigned or incorrectly signed images.
+- **Signed App Verification**: Every firmware image is signed with an RSA-3072 private key (the only RSA size Secure Boot V2 supports). The bootloader verifies the signature before execution, rejecting any unsigned or incorrectly signed images.
 - **Anti-Rollback**: An eFuse-based security version counter prevents downgrade attacks. Once a higher security version is written, the device permanently refuses to boot lower versions.
 - **Defense in Depth**: Even if an attacker can intercept HTTP traffic or impersonate the mothership, they cannot execute arbitrary code because the bootloader will reject unsigned firmware.
 
@@ -27,10 +27,12 @@ Spaxel firmware uses ESP-IDF Secure Boot V2 to prevent unauthorized firmware exe
 
 ### generate-signing-key.sh
 
-Generates a new RSA-2048 key pair for firmware signing.
+Generates a new RSA-3072 key pair for firmware signing.
 
 ```bash
-./scripts/generate-signing-key.sh [output_dir]
+./scripts/generate-signing-key.sh [output_dir]              # dev: self-serve local key
+./scripts/generate-signing-key.sh --stdout                  # prod: PEM on stdout only
+./scripts/generate-signing-key.sh --stdout --pubout FILE    # also extract the public half
 ```
 
 **Output:**
@@ -42,21 +44,39 @@ Generates a new RSA-2048 key pair for firmware signing.
 - Add the keys directory to `.gitignore` to prevent accidental commits.
 - If the private key is lost, you cannot sign new firmware images.
 - If the private key is compromised, immediately rotate to a new key and use Secure Boot V2 key revocation.
+- **Development keys** land in `firmware/keys/` and are for bench boards only.
+  **The production key is generated once via `--stdout`, piped into OpenBao,
+  and never stored in a repo path or displayed on a terminal** — the full
+  ceremony is in [`docs/notes/firmware-signing-keys.md`](../../docs/notes/firmware-signing-keys.md).
 
 ### sign-firmware.sh
 
-Signs a firmware binary with the private key.
+Signs a firmware binary with one or more Secure Boot V2 private keys.
 
 ```bash
-./scripts/sign-firmware.sh <binary_path> <output_path> [version]
+./scripts/sign-firmware.sh <binary_path> <output_path> [version]   # dev key from ../keys/
+./scripts/sign-firmware.sh --keyfile K.pem <binary> <output>       # explicit key file
+./scripts/sign-firmware.sh --key-fd 0 <binary> <output>            # key read from a file descriptor
 ```
 
 **Parameters:**
 - `binary_path` - Path to unsigned firmware `.bin` file
 - `output_path` - Path for signed output
-- `version` - Optional firmware version string (for anti-rollback)
+- `version` - Accepted for compatibility and echoed only; the anti-rollback value is stamped into the image by the build from `../SECURE_VERSION`
+- `--keyfile PATH` - Repeatable, up to 3 keys total; one signature block per key (how a transitional rotation release is signed)
+- `--key-fd FD` - Repeatable, same as `--keyfile /dev/fd/FD` — lets the key be piped in without touching disk
 
-This script is typically called automatically by the build system (see `CMakeLists.txt`).
+The production signing pipeline, with the key never landing on disk:
+
+```bash
+bao-as openbao-v2 bao kv get -field=key_pem \
+    secret/ardenone-cluster/spaxel/firmware-signing/prod \
+  | ./scripts/sign-firmware.sh --key-fd 0 build/spaxel.bin build/spaxel-signed.bin
+```
+
+The build does **not** invoke this script — `idf.py` signs internally when
+secure boot is enabled (see `firmware/CMakeLists.txt`). Use it for
+out-of-band signing of an existing image.
 
 ### bump-secure-version.sh
 
@@ -96,17 +116,26 @@ every image before 2026-09-05 shipping with secure version 0.
 ### Key Storage
 
 - **Development**: Store keys in `firmware/keys/` (added to `.gitignore`)
-- **Production**: Store private keys in a hardware security module (HSM) or offline cold storage
-- **Backup**: Maintain secure, offline backups of private keys
+- **Production**: OpenBao —
+  `secret/ardenone-cluster/spaxel/firmware-signing/prod` on instance
+  `openbao-v2`, written via the key ceremony in
+  [`docs/notes/firmware-signing-keys.md`](../../docs/notes/firmware-signing-keys.md)
+- **Backup**: an operator-held offline escrow copy (cold storage). Agents
+  never create key copies outside OpenBao.
 
 ### Key Rotation
 
-If the private key is compromised, rotate to a new key:
+There is no calendar rotation — each rotation is a physical event (dual-signed
+transitional release plus an irreversible eFuse burn per node). Rotate only on
+compromise, suspected compromise, or a custody change:
 
-1. Generate a new signing key: `./scripts/generate-signing-key.sh`
-2. Rebuild and sign firmware with the new key
+1. Generate and store a new key as a new version at the same OpenBao path (via the ceremony)
+2. Ship a dual-signed transitional release: `./scripts/sign-firmware.sh --keyfile NEW.pem --key-fd 0 <binary> <output>` (one signature block per key)
 3. Deploy firmware to all nodes
-4. Burn the key revocation eFuse to invalidate the old public key (requires physical access or secure bootloader support)
+4. Burn the key revocation eFuse for the retired key (requires physical access)
+
+Full mechanics, and the eFuse budget (three trusted digests, ever), are in
+[`docs/notes/firmware-signing-keys.md`](../../docs/notes/firmware-signing-keys.md).
 
 ### Key Revocation
 
