@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-12T15:10:09.454352156Z",
-  "total_open_beads": 50,
+  "timestamp": "2026-09-12T16:10:22.495201942Z",
+  "total_open_beads": 56,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 31,
+    "has_dependencies": 36,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 11,
+  "final_candidate_count": 13,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -386,6 +386,50 @@
     {
       "bead_id": "spaxel-8c5a088c",
       "title": "Document the burn-efuses.sh guard behaviour in the usage text and the eFuse provisioning note",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-c7968492",
+      "title": "Fix sim token binding so the provisioned IO-3 node registers",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-e15a759b",
+      "title": "Reconcile node status vocabulary and coverage assertions for IO-4",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-e132e12d",
+      "title": "Raise spaxel-build acceptance-test budget in declarative-config",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-cb8414cb",
+      "title": "Submit spaxel-acceptance-diag green run citing the Succeeded node",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
