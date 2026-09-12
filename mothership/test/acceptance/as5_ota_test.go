@@ -18,6 +18,8 @@ package acceptance
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -65,21 +67,11 @@ func AS5_OTAUpdateSucceeds(t *testing.T) {
 	})
 
 	t.Run("NodeAppliesUpdate", func(t *testing.T) {
-		// Register node for OTA
-		node := map[string]interface{}{
-			"mac":      "AA:BB:CC:DD:EE:FF",
-			"name":     "TestNode",
-			"role":     "tx_rx",
-			"version":  "v1.2.2",
-			"platform": "esp32s3",
-		}
-
-		body, _ := json.Marshal(node)
-		resp, err := http.Post(srv.URL+"/api/nodes", "application/json", bytes.NewReader(body))
-		if err != nil {
-			t.Fatalf("Failed to register node: %v", err)
-		}
-		resp.Body.Close()
+		// Onboard the node for OTA through the provisioning API: the wizard
+		// POSTs the node's MAC to /api/provision and flashes the returned
+		// payload (node_token) to the node. There is no node-creation REST
+		// route — nodes enter the fleet by provisioning + connecting.
+		provisionMockNode(t, srv.URL, "AA:BB:CC:DD:EE:FF")
 
 		// Request OTA update
 		otaRequest := map[string]interface{}{
@@ -166,20 +158,8 @@ func AS5_RollbackOnBootFailure(t *testing.T) {
 	defer srv.Close()
 
 	t.Run("BadFirmwareTriggersRollback", func(t *testing.T) {
-		// Register node
-		node := map[string]interface{}{
-			"mac":      "AA:BB:CC:DD:EF:00",
-			"name":     "BadFirmwareNode",
-			"version":  "v1.2.3",
-			"platform": "esp32s3",
-		}
-
-		body, _ := json.Marshal(node)
-		resp, err := http.Post(srv.URL+"/api/nodes", "application/json", bytes.NewReader(body))
-		if err != nil {
-			t.Fatalf("Failed to register node: %v", err)
-		}
-		resp.Body.Close()
+		// Onboard the node via the provisioning API (see provisionMockNode)
+		provisionMockNode(t, srv.URL, "AA:BB:CC:DD:EF:00")
 
 		// Request OTA with bad firmware
 		otaRequest := map[string]interface{}{
@@ -363,6 +343,32 @@ func AS5_DifferentialUpdate(t *testing.T) {
 	t.Log("Differential update available - PASSED")
 }
 
+// provisionMockNode onboards a node against the mock mothership the way the
+// real flow does: POST /api/provision with the node's MAC returns the
+// provisioning payload whose node_token is the node's fleet credential.
+func provisionMockNode(t *testing.T, baseURL, mac string) {
+	t.Helper()
+
+	body, _ := json.Marshal(map[string]string{"mac": mac})
+	resp, err := http.Post(baseURL+"/api/provision", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("Failed to provision node: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Provision returned status %d", resp.StatusCode)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("Failed to decode provision payload: %v", err)
+	}
+	if token, _ := payload["node_token"].(string); token == "" {
+		t.Fatal("Provision payload missing node_token")
+	}
+}
+
 // startMockMothershipForOTA creates a mock server for OTA tests.
 func startMockMothershipForOTA(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -422,31 +428,41 @@ func startMockMothershipForOTA(t *testing.T) *httptest.Server {
 				"timeout_sec": 60,
 			})
 
-		case r.URL.Path == "/api/nodes":
-			// Node listing and registration
-			if r.Method == "POST" {
-				var node map[string]interface{}
-				json.NewDecoder(r.Body).Decode(&node)
-				json.NewEncoder(w).Encode(map[string]bool{"ok": true})
-			} else {
-				nodes := []map[string]interface{}{
-					{
-						"mac":      "AA:BB:CC:DD:EE:FF",
-						"name":     "TestNode",
-						"version":  "v1.2.3",
-						"platform": "esp32s3",
-						"status":   "online",
-					},
-					{
-						"mac":      "AA:BB:CC:DD:EF:00",
-						"name":     "BadFirmwareNode",
-						"version":  "v1.2.3",
-						"platform": "esp32s3",
-						"status":   "online",
-					},
-				}
-				json.NewEncoder(w).Encode(nodes)
+		case r.URL.Path == "/api/provision":
+			// Provisioning: mints the node's credential from its MAC (the
+			// real endpoint derives HMAC-SHA256(installSecret, mac)).
+			var req struct {
+				MAC string `json:"mac"`
 			}
+			json.NewDecoder(r.Body).Decode(&req)
+			sum := sha256.Sum256([]byte(strings.ToUpper(strings.ReplaceAll(req.MAC, ":", ""))))
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"version":    1,
+				"node_id":    "mock-" + strings.ReplaceAll(req.MAC, ":", ""),
+				"node_token": hex.EncodeToString(sum[:]),
+				"ms_port":    8080,
+			})
+
+		case r.URL.Path == "/api/nodes":
+			// Node listing (read-only, as in the real fleet API — nodes enter
+			// the fleet via provisioning + /ws/node, not via POST)
+			nodes := []map[string]interface{}{
+				{
+					"mac":      "AA:BB:CC:DD:EE:FF",
+					"name":     "TestNode",
+					"version":  "v1.2.3",
+					"platform": "esp32s3",
+					"status":   "online",
+				},
+				{
+					"mac":      "AA:BB:CC:DD:EF:00",
+					"name":     "BadFirmwareNode",
+					"version":  "v1.2.3",
+					"platform": "esp32s3",
+					"status":   "online",
+				},
+			}
+			json.NewEncoder(w).Encode(nodes)
 
 		case r.URL.Path == "/api/events":
 			// Events endpoint
