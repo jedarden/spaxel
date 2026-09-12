@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-12T16:10:22.495201942Z",
-  "total_open_beads": 56,
+  "timestamp": "2026-09-12T18:10:36.372520915Z",
+  "total_open_beads": 55,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 36,
+    "has_dependencies": 37,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 13,
+  "final_candidate_count": 12,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -100,6 +100,17 @@
     {
       "bead_id": "spaxel-b792e668",
       "title": "Dashboard: relay the device CSR to the mothership and return the signed certificate",
+      "priority": 1,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-0af585c1",
+      "title": "spaxel-acceptance-diag is failing in iad-ci while spaxel-build passes",
       "priority": 1,
       "assignee": null,
       "manual_blocked": false,
@@ -386,17 +397,6 @@
     {
       "bead_id": "spaxel-8c5a088c",
       "title": "Document the burn-efuses.sh guard behaviour in the usage text and the eFuse provisioning note",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-c7968492",
-      "title": "Fix sim token binding so the provisioned IO-3 node registers",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
