@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -172,20 +173,29 @@ func IO2_IdempotentRestart(t *testing.T) {
 		t.Fatal("IO-2 FAIL: Failed to set initial PIN")
 	}
 
-	// Create a test node via the API (simulating onboarding)
-	testMAC := "AA:BB:CC:DD:EE:FF"
-	if !createTestNode(t, mothershipURL, testMAC) {
-		t.Fatal("IO-2 FAIL: Failed to create test node")
+	// Once the PIN is configured the auth middleware requires a session on
+	// /api/*, so everything from here on goes through a logged-in client.
+	authed := loginSession(t, mothershipURL, "654321")
+
+	// Onboard a node through the real provisioning flow: mint its credential
+	// via POST /api/provision, then let the virtual node connect to /ws/node
+	// with it — the fleet row is created by the node's hello, not by
+	// provisioning. spaxel-sim node 0 announces AA:BB:CC:00:00:00
+	// (generateMAC(0)), so that is the MAC the token must be minted for.
+	testMAC := "AA:BB:CC:00:00:00"
+	token := provisionTestNode(t, mothershipURL, testMAC)
+	if got := onboardSimNode(t, ctx, authed, mothershipURL, token); got != testMAC {
+		t.Fatalf("IO-2 FAIL: Provisioned node %s did not register (last seen %q)", testMAC, got)
 	}
 
 	// Create a test zone
-	if !createTestZone(t, mothershipURL, "test-zone") {
+	if !createZoneAuthed(t, authed, mothershipURL, "test-zone") {
 		t.Fatal("IO-2 FAIL: Failed to create test zone")
 	}
 
 	// Get initial state for comparison
-	initialNodes := getNodesIntegration(t, mothershipURL)
-	initialZones := getZonesIntegration(t, mothershipURL)
+	initialNodes := getNodesAuthed(t, authed, mothershipURL)
+	initialZones := getZonesAuthed(t, authed, mothershipURL)
 
 	if len(initialNodes) == 0 {
 		t.Fatal("IO-2 FAIL: Expected at least one node after setup")
@@ -216,15 +226,31 @@ func IO2_IdempotentRestart(t *testing.T) {
 		t.Error("IO-2 FAIL: PIN not intact after restart")
 	}
 
+	// Re-login: sessions live in the restarted process's database, but a
+	// fresh login keeps this check self-contained.
+	authed = loginSession(t, mothershipURL, "654321")
+
 	// Verify nodes intact
-	restartedNodes := getNodesIntegration(t, mothershipURL)
+	restartedNodes := getNodesAuthed(t, authed, mothershipURL)
 	if len(restartedNodes) != len(initialNodes) {
 		t.Errorf("IO-2 FAIL: Node count changed after restart: %d -> %d",
 			len(initialNodes), len(restartedNodes))
 	}
 
+	// The onboarded node itself must still be in the fleet
+	foundNode := false
+	for _, n := range restartedNodes {
+		if n["mac"] == testMAC {
+			foundNode = true
+			break
+		}
+	}
+	if !foundNode {
+		t.Errorf("IO-2 FAIL: Node %s missing from fleet after restart", testMAC)
+	}
+
 	// Verify zones intact
-	restartedZones := getZonesIntegration(t, mothershipURL)
+	restartedZones := getZonesAuthed(t, authed, mothershipURL)
 	if len(restartedZones) != len(initialZones) {
 		t.Errorf("IO-2 FAIL: Zone count changed after restart: %d -> %d",
 			len(initialZones), len(restartedZones))
@@ -271,13 +297,16 @@ func IO2_UpgradeInPlace(t *testing.T) {
 		t.Fatal("IO-2 FAIL: Failed to set initial PIN")
 	}
 
-	// Create test data
-	testMAC := "11:22:33:44:55:66"
-	if !createTestNode(t, mothershipURL, testMAC) {
-		t.Fatal("IO-2 FAIL: Failed to create test node")
+	// Create test data — onboard a node through the real provisioning flow
+	// (see IO2_IdempotentRestart for the flow and the fixed sim node-0 MAC).
+	authed := loginSession(t, mothershipURL, "111111")
+	testMAC := "AA:BB:CC:00:00:00"
+	token := provisionTestNode(t, mothershipURL, testMAC)
+	if got := onboardSimNode(t, ctx, authed, mothershipURL, token); got != testMAC {
+		t.Fatalf("IO-2 FAIL: Provisioned node %s did not register (last seen %q)", testMAC, got)
 	}
 
-	if !createTestZone(t, mothershipURL, "upgrade-test-zone") {
+	if !createZoneAuthed(t, authed, mothershipURL, "upgrade-test-zone") {
 		t.Fatal("IO-2 FAIL: Failed to create test zone")
 	}
 
@@ -308,12 +337,13 @@ func IO2_UpgradeInPlace(t *testing.T) {
 	}
 
 	// Verify prior data readable
-	nodes := getNodesIntegration(t, mothershipURL)
+	authed = loginSession(t, mothershipURL, "111111")
+	nodes := getNodesAuthed(t, authed, mothershipURL)
 	if len(nodes) == 0 {
 		t.Error("IO-2 FAIL: Nodes not readable after upgrade")
 	}
 
-	zones := getZonesIntegration(t, mothershipURL)
+	zones := getZonesAuthed(t, authed, mothershipURL)
 	if len(zones) == 0 {
 		t.Error("IO-2 FAIL: Zones not readable after upgrade")
 	}
@@ -501,24 +531,186 @@ func loginWithPIN(t *testing.T, baseURL, pin string) bool {
 	return true
 }
 
-// createTestNode creates a test node via the API.
-func createTestNode(t *testing.T, baseURL, mac string) bool {
+// provisionTestNode performs the first half of the production onboarding
+// flow: POST /api/provision mints the node's credential (node_token =
+// HMAC-SHA256(installSecret, mac)). Provisioning intentionally creates no
+// fleet row — the row appears when the node connects to /ws/node with the
+// token and says hello.
+func provisionTestNode(t *testing.T, baseURL, mac string) string {
 	t.Helper()
 
-	nodeData := map[string]interface{}{
-		"mac":      mac,
-		"name":     "test-node-" + strings.ReplaceAll(mac, ":", ""),
-		"role":     "tx_rx",
-		"position": map[string]float64{"x": 1.0, "y": 2.0, "z": 0.0},
+	bodyBytes, err := json.Marshal(map[string]string{"mac": mac})
+	if err != nil {
+		t.Fatalf("IO-2 FAIL: Failed to encode provision request: %v", err)
 	}
-
-	bodyBytes, _ := json.Marshal(nodeData)
-	req, _ := http.NewRequest("POST", baseURL+"/api/nodes", bytes.NewReader(bodyBytes))
+	req, err := http.NewRequest("POST", baseURL+"/api/provision", bytes.NewReader(bodyBytes))
+	if err != nil {
+		t.Fatalf("IO-2 FAIL: Failed to build provision request: %v", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Logf("Failed to create node: %v", err)
+		t.Fatalf("IO-2 FAIL: Provision request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("IO-2 FAIL: Provision returned status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		NodeToken string `json:"node_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("IO-2 FAIL: Failed to decode provision payload: %v", err)
+	}
+	if payload.NodeToken == "" {
+		t.Fatal("IO-2 FAIL: Provision payload missing node_token")
+	}
+
+	return payload.NodeToken
+}
+
+// onboardSimNode hands the provisioned credential to a virtual node and lets
+// it join the fleet exactly as production onboarding does: spaxel-sim dials
+// /ws/node with the token, sends hello (which creates the fleet row) and
+// waits for a role assignment. nodeToken must be minted for AA:BB:CC:00:00:00,
+// the MAC generateMAC(0) assigns to sim node 0. Returns the MAC of the first
+// node that shows up in /api/nodes, or "" if none registers in time.
+func onboardSimNode(t *testing.T, ctx context.Context, authed *http.Client, mothershipURL, nodeToken string) string {
+	t.Helper()
+
+	wsURL := "ws://" + strings.TrimPrefix(mothershipURL, "http://") + "/ws/node"
+	simCmd := startSimulator(t, ctx, []string{
+		"--mothership", wsURL,
+		"--token", nodeToken,
+		"--nodes", "1",
+		"--duration", "60",
+	})
+	t.Cleanup(func() { stopSimulator(simCmd) })
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, n := range getNodesAuthed(t, authed, mothershipURL) {
+			if mac, ok := n["mac"].(string); ok && mac != "" {
+				return mac
+			}
+		}
+		time.Sleep(time.Second)
+	}
+
+	return ""
+}
+
+// loginSession logs in with the PIN and returns a client whose cookie jar
+// carries the spaxel_session cookie. Once a PIN is configured, the auth
+// middleware rejects unauthenticated /api/* requests, so every API call after
+// setPIN must run through a logged-in client.
+func loginSession(t *testing.T, baseURL, pin string) *http.Client {
+	t.Helper()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("IO-2 FAIL: Failed to create cookie jar: %v", err)
+	}
+	client := &http.Client{Jar: jar}
+
+	body := []byte(fmt.Sprintf(`{"pin":"%s"}`, pin))
+	req, err := http.NewRequest("POST", baseURL+"/api/auth/login", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("IO-2 FAIL: Failed to build login request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("IO-2 FAIL: Login request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("IO-2 FAIL: Login returned status %d", resp.StatusCode)
+	}
+
+	return client
+}
+
+// getNodesAuthed fetches the node list with a logged-in client.
+func getNodesAuthed(t *testing.T, client *http.Client, baseURL string) []map[string]interface{} {
+	t.Helper()
+
+	resp, err := client.Get(baseURL + "/api/nodes")
+	if err != nil {
+		t.Logf("IO-2: Failed to get nodes: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Logf("IO-2: GET /api/nodes returned status %d", resp.StatusCode)
+		return nil
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
+		t.Logf("IO-2: Failed to decode nodes: %v", err)
+		return nil
+	}
+
+	return nodes
+}
+
+// getZonesAuthed fetches the zone list with a logged-in client.
+func getZonesAuthed(t *testing.T, client *http.Client, baseURL string) []map[string]interface{} {
+	t.Helper()
+
+	resp, err := client.Get(baseURL + "/api/zones")
+	if err != nil {
+		t.Logf("IO-2: Failed to get zones: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Logf("IO-2: GET /api/zones returned status %d", resp.StatusCode)
+		return nil
+	}
+
+	var zones []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&zones); err != nil {
+		t.Logf("IO-2: Failed to decode zones: %v", err)
+		return nil
+	}
+
+	return zones
+}
+
+// createZoneAuthed creates a test zone with a logged-in client.
+func createZoneAuthed(t *testing.T, client *http.Client, baseURL, name string) bool {
+	t.Helper()
+
+	zoneData := map[string]interface{}{
+		"name":     name,
+		"floor":    "default",
+		"geometry": map[string]interface{}{"type": "Polygon", "coordinates": [][][]float64{{{0, 0}, {1, 0}, {1, 1}, {0, 1}, {0, 0}}}},
+	}
+
+	bodyBytes, err := json.Marshal(zoneData)
+	if err != nil {
+		t.Logf("IO-2: Failed to encode zone: %v", err)
+		return false
+	}
+	req, err := http.NewRequest("POST", baseURL+"/api/zones", bytes.NewReader(bodyBytes))
+	if err != nil {
+		t.Logf("IO-2: Failed to build zone request: %v", err)
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Logf("IO-2: Failed to create zone: %v", err)
 		return false
 	}
 	defer resp.Body.Close()
