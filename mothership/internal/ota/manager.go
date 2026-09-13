@@ -48,6 +48,13 @@ func (s NodeOTAState) String() string {
 	}
 }
 
+// How an update was triggered. Every update log entry records one of these so
+// upgrade paths and rollbacks can be attributed after the fact.
+const (
+	UpdateTypeAuto   = "auto"
+	UpdateTypeManual = "manual"
+)
+
 // NodeOTAProgress tracks per-node OTA progress.
 type NodeOTAProgress struct {
 	MAC             string
@@ -56,6 +63,7 @@ type NodeOTAProgress struct {
 	Error           string
 	ExpectedVersion string
 	PreviousVersion string
+	TriggerType     string // UpdateTypeAuto or UpdateTypeManual
 	UpdatedAt       time.Time
 }
 
@@ -63,6 +71,23 @@ type NodeOTAProgress struct {
 type NodeSender interface {
 	SendOTAToMAC(mac, url, sha256, version string)
 	GetConnectedMACs() []string
+}
+
+// versionProvider is an optional NodeSender extension: the sender also knows
+// which firmware version a node is currently running (the ingestion server,
+// from the node's hello message). Update logs fall back to
+// version_before=unknown when the sender does not implement it.
+type versionProvider interface {
+	GetNodeFirmwareVersion(mac string) string
+}
+
+// nodeFirmwareVersion asks the sender what version mac is running, "" if it
+// cannot say.
+func nodeFirmwareVersion(sender NodeSender, mac string) string {
+	if vp, ok := sender.(versionProvider); ok {
+		return vp.GetNodeFirmwareVersion(mac)
+	}
+	return ""
 }
 
 // DashboardBroadcaster can broadcast OTA progress updates to dashboard clients.
@@ -118,11 +143,22 @@ func (m *Manager) GetProgress() map[string]NodeOTAProgress {
 // SendOTA triggers an OTA update for a single node.
 // Uses the latest available firmware.
 func (m *Manager) SendOTA(mac string) error {
+	return m.sendOTA(mac, UpdateTypeManual)
+}
+
+// SendOTAAuto triggers an OTA update for a single node as part of an automatic
+// update cycle (canary deployment or fleet rollout). Uses the latest available
+// firmware.
+func (m *Manager) SendOTAAuto(mac string) error {
+	return m.sendOTA(mac, UpdateTypeAuto)
+}
+
+func (m *Manager) sendOTA(mac, updateType string) error {
 	meta := m.server.GetLatest()
 	if meta == nil {
 		return fmt.Errorf("%w: no firmware uploaded", ErrFirmwareNotFound)
 	}
-	return m.sendOTAWithMeta(mac, meta)
+	return m.sendOTAWithMeta(mac, meta, updateType)
 }
 
 // SendOTAVersion triggers an OTA update for a single node using a specific
@@ -133,6 +169,17 @@ func (m *Manager) SendOTA(mac string) error {
 // Accept both: version first (what callers actually supply), then filename for
 // backwards compatibility. See ADR-004 / bf-2cb85.
 func (m *Manager) SendOTAVersion(mac, versionOrFilename string) error {
+	return m.sendOTAVersion(mac, versionOrFilename, UpdateTypeManual)
+}
+
+// SendOTAVersionAuto triggers an OTA to a specific version as part of an
+// automatic cycle: the canary rollback path sends the node back to the version
+// it ran before the failed update.
+func (m *Manager) SendOTAVersionAuto(mac, versionOrFilename string) error {
+	return m.sendOTAVersion(mac, versionOrFilename, UpdateTypeAuto)
+}
+
+func (m *Manager) sendOTAVersion(mac, versionOrFilename, updateType string) error {
 	meta := m.server.GetByVersion(versionOrFilename)
 	if meta == nil {
 		meta = m.server.GetByFilename(versionOrFilename)
@@ -140,16 +187,20 @@ func (m *Manager) SendOTAVersion(mac, versionOrFilename string) error {
 	if meta == nil {
 		return fmt.Errorf("%w: %q", ErrFirmwareNotFound, versionOrFilename)
 	}
-	return m.sendOTAWithMeta(mac, meta)
+	return m.sendOTAWithMeta(mac, meta, updateType)
 }
 
-func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta) error {
+func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta, updateType string) error {
 	m.mu.RLock()
 	sender := m.sender
 	m.mu.RUnlock()
 
 	if sender == nil {
 		return fmt.Errorf("sender not configured")
+	}
+
+	if updateType == "" {
+		updateType = UpdateTypeManual
 	}
 
 	// Refuse rather than hand the node a URL it cannot fetch. Previously the
@@ -163,19 +214,29 @@ func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta) error {
 
 	url := fmt.Sprintf("%s/firmware/%s", m.baseURL, meta.Filename)
 
+	// Resolve version_before outside m.mu: the probe reads the sender's own
+	// connection state, and that state's handlers call back into this manager
+	// (OnNodeReconnected) while holding it.
+	runningVersion := nodeFirmwareVersion(sender, mac)
+
 	m.mu.Lock()
 	p := m.progress[mac]
 	if p == nil {
 		p = &NodeOTAProgress{MAC: mac}
 		m.progress[mac] = p
 	}
+	// Record what the node runs now so the outcome lines in OnNodeReconnected
+	// show a real version transition instead of version_before=unknown.
+	if p.PreviousVersion == "" && runningVersion != "" {
+		p.PreviousVersion = runningVersion
+	}
 	versionBefore := p.PreviousVersion
 	if versionBefore == "" {
-		// Try to get version from progress tracker if not set
 		versionBefore = "unknown"
 	}
 	p.State = OTAPending
 	p.ExpectedVersion = meta.Version
+	p.TriggerType = updateType
 	p.UpdatedAt = time.Now()
 
 	// Broadcast pending state to dashboard
@@ -186,8 +247,8 @@ func (m *Manager) sendOTAWithMeta(mac string, meta *FirmwareMeta) error {
 	m.mu.Unlock()
 
 	sender.SendOTAToMAC(mac, url, meta.SHA256, meta.Version)
-	log.Printf("[INFO] ota: OTA initiated by user: node=%s version_before=%s version_after=%s sha256=%s trigger_type=manual",
-		mac, versionBefore, meta.Version, meta.SHA256)
+	log.Printf("[INFO] ota: OTA initiated: node=%s update_type=%s version_before=%s version_after=%s sha256=%s",
+		mac, updateType, versionBefore, meta.Version, meta.SHA256)
 	return nil
 }
 
@@ -223,7 +284,7 @@ func (m *Manager) SendOTAAll(ctx context.Context, rollingGap time.Duration) erro
 		default:
 		}
 
-		if err := m.sendOTAWithMeta(mac, meta); err != nil {
+		if err := m.sendOTAWithMeta(mac, meta, UpdateTypeManual); err != nil {
 			log.Printf("[WARN] ota: failed to trigger %s: %v", mac, err)
 			continue
 		}
@@ -302,18 +363,25 @@ func (m *Manager) OnNodeReconnected(mac, firmwareVersion string) {
 	if versionBefore == "" {
 		versionBefore = "unknown"
 	}
+	updateType := p.TriggerType
+	if updateType == "" {
+		// Progress entries can reach the rebooting state without having gone
+		// through sendOTAWithMeta (a node that reboots on its own and reports
+		// status), so the trigger type is genuinely unknown there.
+		updateType = "unknown"
+	}
 
 	var broadcastState string
 	if firmwareVersion == p.ExpectedVersion {
 		p.State = OTAVerified
 		broadcastState = "verified"
-		log.Printf("[INFO] ota: update verified: node=%s version_before=%s version_after=%s trigger_type=%s",
-			mac, versionBefore, firmwareVersion, p.ExpectedVersion)
+		log.Printf("[INFO] ota: update verified: node=%s update_type=%s version_before=%s version_after=%s",
+			mac, updateType, versionBefore, firmwareVersion)
 	} else {
 		p.State = OTARollback
 		broadcastState = "rollback"
-		log.Printf("[WARN] ota: update rollback: node=%s version_before=%s version_after=%s expected_version=%s trigger_type=rollback",
-			mac, versionBefore, firmwareVersion, p.ExpectedVersion)
+		log.Printf("[WARN] ota: update rollback: node=%s update_type=%s version_before=%s version_after=%s expected_version=%s",
+			mac, updateType, versionBefore, firmwareVersion, p.ExpectedVersion)
 	}
 	p.UpdatedAt = time.Now()
 
