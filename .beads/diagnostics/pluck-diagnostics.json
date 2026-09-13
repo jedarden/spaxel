@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T03:06:32.670860606Z",
-  "total_open_beads": 68,
+  "timestamp": "2026-09-13T04:06:36.981327944Z",
+  "total_open_beads": 51,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 50,
+    "has_dependencies": 34,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 27,
+  "final_candidate_count": 13,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -109,17 +109,6 @@
       "conflict_count": 0
     },
     {
-      "bead_id": "spaxel-e45bb1e0",
-      "title": "Add CSI binary frame serialization host test",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
       "bead_id": "spaxel-0758fba5",
       "title": "Build-verify a -Wclobbered-clean compile of test_runner.c at -O0..-Os and confirm the suite still runs green with no out-of-scope changes",
       "priority": 2,
@@ -197,30 +186,8 @@
       "conflict_count": 0
     },
     {
-      "bead_id": "spaxel-af69e510",
-      "title": "Wire npm test into spaxel-build CI template before a11y gate",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
       "bead_id": "spaxel-283d3cda",
       "title": "Ingress: exempt /firmware from OAuth and move SPAXEL_ADVERTISED_BASE_URL to the public origin",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-005c84ce",
-      "title": "Implement downgrade prevention in auto-update manager",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
