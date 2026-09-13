@@ -269,7 +269,7 @@ func (d *Detector) emitAPChangeAlert(oldAP, newAP *APInfo) {
 
 	detailJSON, _ := json.Marshal(detail)
 
-	_, err := d.db.Exec(` //nolint:errcheck
+	_, err := d.db.Exec(`
 		INSERT INTO events (timestamp_ms, type, zone, detail_json, severity)
 		VALUES (?, 'ap_changed', 'system', ?, 'warning')
 	`, time.Now().UnixNano(), string(detailJSON))
