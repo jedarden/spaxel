@@ -1,17 +1,17 @@
 [
   {
-    "testName": "fake-timers-with-cleanup",
+    "testName": "fake-timers-no-cleanup",
     "before": {
-      "id": 2,
-      "timestamp": "2026-08-27T12:11:13.711Z",
-      "label": "fake-timers-with-cleanup-before",
+      "id": 1,
+      "timestamp": "2026-09-13T03:00:27.700Z",
+      "label": "fake-timers-no-cleanup-before",
       "heap": {
-        "heapUsed": 42,
-        "heapTotal": 81,
-        "external": 3,
-        "rss": 142,
-        "heapUsedBytes": 43826120,
-        "heapTotalBytes": 85266432
+        "heapUsed": 155,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 162047664,
+        "heapTotalBytes": 262901760
       },
       "timers": {
         "intervals": 0,
@@ -23,28 +23,28 @@
         "instances": []
       },
       "process": {
-        "pid": 1372308,
-        "uptime": 6,
+        "pid": 1774833,
+        "uptime": 14,
         "memoryUsage": {
-          "rss": 149291008,
-          "heapTotal": 85266432,
-          "heapUsed": 43826896,
-          "external": 3509389,
-          "arrayBuffers": 1168822
+          "rss": 355246080,
+          "heapTotal": 262901760,
+          "heapUsed": 162056400,
+          "external": 8323774,
+          "arrayBuffers": 5619007
         }
       }
     },
     "after": {
-      "id": 3,
-      "timestamp": "2026-08-27T12:11:17.749Z",
-      "label": "fake-timers-with-cleanup-after",
+      "id": 2,
+      "timestamp": "2026-09-13T03:00:28.700Z",
+      "label": "fake-timers-no-cleanup-after",
       "heap": {
-        "heapUsed": 42,
-        "heapTotal": 81,
-        "external": 3,
-        "rss": 143,
-        "heapUsedBytes": 43642720,
-        "heapTotalBytes": 85266432
+        "heapUsed": 155,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 162228120,
+        "heapTotalBytes": 262901760
       },
       "timers": {
         "intervals": 0,
@@ -56,14 +56,154 @@
         "instances": []
       },
       "process": {
-        "pid": 1372308,
-        "uptime": 6,
+        "pid": 1774833,
+        "uptime": 14,
         "memoryUsage": {
-          "rss": 149454848,
-          "heapTotal": 85266432,
-          "heapUsed": 43643496,
-          "external": 3509354,
-          "arrayBuffers": 1168822
+          "rss": 355246080,
+          "heapTotal": 262901760,
+          "heapUsed": 162228896,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "fake-timers-with-cleanup",
+    "before": {
+      "id": 3,
+      "timestamp": "2026-09-13T03:00:27.702Z",
+      "label": "fake-timers-with-cleanup-before",
+      "heap": {
+        "heapUsed": 155,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 162312176,
+        "heapTotalBytes": 262901760
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 3,
+        "total": 3
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355246080,
+          "heapTotal": 262901760,
+          "heapUsed": 162313184,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "after": {
+      "id": 4,
+      "timestamp": "2026-09-13T03:00:27.703Z",
+      "label": "fake-timers-with-cleanup-after",
+      "heap": {
+        "heapUsed": 155,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 162479496,
+        "heapTotalBytes": 262901760
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 4,
+        "total": 4
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355246080,
+          "heapTotal": 262901760,
+          "heapUsed": 162480480,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "wizard-lifecycle-no-aftereach",
+    "before": {
+      "id": 5,
+      "timestamp": "2026-09-13T03:00:27.704Z",
+      "label": "wizard-lifecycle-no-aftereach-before",
+      "heap": {
+        "heapUsed": 155,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 162550896,
+        "heapTotalBytes": 262901760
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 4,
+        "total": 4
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355246080,
+          "heapTotal": 262901760,
+          "heapUsed": 162551688,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "after": {
+      "id": 6,
+      "timestamp": "2026-09-13T03:00:28.104Z",
+      "label": "wizard-lifecycle-no-aftereach-after",
+      "heap": {
+        "heapUsed": 157,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 164553424,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 5,
+        "total": 5
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355246080,
+          "heapTotal": 263163904,
+          "heapUsed": 164554216,
+          "external": 8323774,
+          "arrayBuffers": 5619007
         }
       }
     },
@@ -72,119 +212,49 @@
   {
     "testName": "wizard-lifecycle-with-aftereach",
     "before": {
-      "id": 5,
-      "timestamp": "2026-08-27T12:11:18.158Z",
+      "id": 7,
+      "timestamp": "2026-09-13T03:00:27.708Z",
       "label": "wizard-lifecycle-with-aftereach-before",
       "heap": {
-        "heapUsed": 43,
-        "heapTotal": 51,
-        "external": 3,
-        "rss": 143,
-        "heapUsedBytes": 44579648,
-        "heapTotalBytes": 53284864
+        "heapUsed": 157,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 164625872,
+        "heapTotalBytes": 263163904
       },
       "timers": {
         "intervals": 0,
-        "timeouts": 3,
-        "total": 3
+        "timeouts": 5,
+        "total": 5
       },
       "websockets": {
         "count": 0,
         "instances": []
       },
       "process": {
-        "pid": 1372308,
-        "uptime": 11,
+        "pid": 1774833,
+        "uptime": 14,
         "memoryUsage": {
-          "rss": 149782528,
-          "heapTotal": 53284864,
-          "heapUsed": 44580424,
-          "external": 3509354,
-          "arrayBuffers": 1168822
-        }
-      }
-    },
-    "after": {
-      "id": 6,
-      "timestamp": "2026-08-27T12:11:22.795Z",
-      "label": "wizard-lifecycle-with-aftereach-after",
-      "heap": {
-        "heapUsed": 43,
-        "heapTotal": 54,
-        "external": 3,
-        "rss": 115,
-        "heapUsedBytes": 44661824,
-        "heapTotalBytes": 56692736
-      },
-      "timers": {
-        "intervals": 0,
-        "timeouts": 4,
-        "total": 4
-      },
-      "websockets": {
-        "count": 0,
-        "instances": []
-      },
-      "process": {
-        "pid": 1372308,
-        "uptime": 11,
-        "memoryUsage": {
-          "rss": 120860672,
-          "heapTotal": 56692736,
-          "heapUsed": 44662696,
-          "external": 3509354,
-          "arrayBuffers": 1168822
-        }
-      }
-    },
-    "verdict": "LEAKS"
-  },
-  {
-    "testName": "settimeout-beforeall-hook",
-    "before": {
-      "id": 7,
-      "timestamp": "2026-08-27T12:11:22.804Z",
-      "label": "settimeout-beforeall-hook-before",
-      "heap": {
-        "heapUsed": 42,
-        "heapTotal": 54,
-        "external": 3,
-        "rss": 115,
-        "heapUsedBytes": 44393728,
-        "heapTotalBytes": 56692736
-      },
-      "timers": {
-        "intervals": 0,
-        "timeouts": 4,
-        "total": 4
-      },
-      "websockets": {
-        "count": 0,
-        "instances": []
-      },
-      "process": {
-        "pid": 1372308,
-        "uptime": 11,
-        "memoryUsage": {
-          "rss": 120860672,
-          "heapTotal": 56692736,
-          "heapUsed": 44394520,
-          "external": 3509354,
-          "arrayBuffers": 1168822
+          "rss": 355246080,
+          "heapTotal": 263163904,
+          "heapUsed": 164626664,
+          "external": 8323774,
+          "arrayBuffers": 5619007
         }
       }
     },
     "after": {
       "id": 8,
-      "timestamp": "2026-08-27T12:11:22.813Z",
-      "label": "settimeout-beforeall-hook-after",
+      "timestamp": "2026-09-13T03:00:27.712Z",
+      "label": "wizard-lifecycle-with-aftereach-after",
       "heap": {
-        "heapUsed": 42,
-        "heapTotal": 54,
-        "external": 3,
-        "rss": 115,
-        "heapUsedBytes": 44259632,
-        "heapTotalBytes": 56692736
+        "heapUsed": 159,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 166618880,
+        "heapTotalBytes": 263163904
       },
       "timers": {
         "intervals": 0,
@@ -196,14 +266,364 @@
         "instances": []
       },
       "process": {
-        "pid": 1372308,
-        "uptime": 11,
+        "pid": 1774833,
+        "uptime": 14,
         "memoryUsage": {
-          "rss": 120860672,
-          "heapTotal": 56692736,
-          "heapUsed": 44260424,
-          "external": 3509354,
-          "arrayBuffers": 1168822
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 166619672,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "settimeout-beforeall-hook",
+    "before": {
+      "id": 9,
+      "timestamp": "2026-09-13T03:00:27.713Z",
+      "label": "settimeout-beforeall-hook-before",
+      "heap": {
+        "heapUsed": 159,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 166698256,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 6,
+        "total": 6
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 166737816,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "after": {
+      "id": 10,
+      "timestamp": "2026-09-13T03:00:27.715Z",
+      "label": "settimeout-beforeall-hook-after",
+      "heap": {
+        "heapUsed": 159,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 166880120,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 8,
+        "total": 8
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 166881200,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "node-detection-polltimer-no-cleanup",
+    "before": {
+      "id": 11,
+      "timestamp": "2026-09-13T03:00:27.716Z",
+      "label": "node-detection-polltimer-no-cleanup-before",
+      "heap": {
+        "heapUsed": 159,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 166951792,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 8,
+        "total": 8
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 166953080,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "after": {
+      "id": 12,
+      "timestamp": "2026-09-13T03:00:27.816Z",
+      "label": "node-detection-polltimer-no-cleanup-after",
+      "heap": {
+        "heapUsed": 159,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 167119880,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 9,
+        "total": 9
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 167120736,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "calibration-calibratetimer-no-cleanup",
+    "before": {
+      "id": 13,
+      "timestamp": "2026-09-13T03:00:27.718Z",
+      "label": "calibration-calibratetimer-no-cleanup-before",
+      "heap": {
+        "heapUsed": 159,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 167191968,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 9,
+        "total": 9
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 167192824,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "after": {
+      "id": 14,
+      "timestamp": "2026-09-13T03:00:27.818Z",
+      "label": "calibration-calibratetimer-no-cleanup-after",
+      "heap": {
+        "heapUsed": 160,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 167359104,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 10,
+        "total": 10
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 167359960,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "multiple-sequential-fake-timers",
+    "before": {
+      "id": 15,
+      "timestamp": "2026-09-13T03:00:27.720Z",
+      "label": "multiple-sequential-fake-timers-before",
+      "heap": {
+        "heapUsed": 160,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 167431264,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 10,
+        "total": 10
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 167432120,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "after": {
+      "id": 16,
+      "timestamp": "2026-09-13T03:00:27.820Z",
+      "label": "multiple-sequential-fake-timers-after",
+      "heap": {
+        "heapUsed": 160,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 167732248,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 11,
+        "total": 11
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 167733104,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "verdict": "LEAKS"
+  },
+  {
+    "testName": "websocket-no-cleanup",
+    "before": {
+      "id": 17,
+      "timestamp": "2026-09-13T03:00:27.721Z",
+      "label": "websocket-no-cleanup-before",
+      "heap": {
+        "heapUsed": 160,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 167804544,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 11,
+        "total": 11
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 167805400,
+          "external": 8323774,
+          "arrayBuffers": 5619007
+        }
+      }
+    },
+    "after": {
+      "id": 18,
+      "timestamp": "2026-09-13T03:00:27.722Z",
+      "label": "websocket-no-cleanup-after",
+      "heap": {
+        "heapUsed": 160,
+        "heapTotal": 251,
+        "external": 8,
+        "rss": 339,
+        "heapUsedBytes": 167949616,
+        "heapTotalBytes": 263163904
+      },
+      "timers": {
+        "intervals": 0,
+        "timeouts": 12,
+        "total": 12
+      },
+      "websockets": {
+        "count": 0,
+        "instances": []
+      },
+      "process": {
+        "pid": 1774833,
+        "uptime": 14,
+        "memoryUsage": {
+          "rss": 355409920,
+          "heapTotal": 263163904,
+          "heapUsed": 167950472,
+          "external": 8323774,
+          "arrayBuffers": 5619007
         }
       }
     },

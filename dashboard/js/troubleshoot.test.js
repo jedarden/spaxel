@@ -140,9 +140,18 @@ describe('SpaxelTroubleshoot', function () {
 
             var card = document.querySelector('.troubleshoot-offline-card');
             var more = card.querySelector('.troubleshoot-more');
+            // 029c658e moved the reset/power steps into a second "Advanced options"
+            // expander; "More options" now holds the AP-reconfigure step alone.
             var steps = more.querySelectorAll('.troubleshoot-step');
-            expect(steps.length).toBe(3);
-            expect(more.textContent).toContain('factory defaults');
+            expect(steps.length).toBe(1);
+            expect(steps[0].textContent).toContain('spaxel-EEFF');
+
+            var expanders = card.querySelectorAll('.troubleshoot-more');
+            expect(expanders.length).toBe(2);
+            var advanced = expanders[1];
+            expect(advanced.textContent).toContain('Advanced options');
+            expect(advanced.querySelectorAll('.troubleshoot-step').length).toBe(2);
+            expect(advanced.textContent).toContain('factory defaults');
         });
     });
 
