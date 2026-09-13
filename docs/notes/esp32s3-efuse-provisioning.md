@@ -387,18 +387,28 @@ espefuse.py --port /dev/ttyACM0 --chip esp32s3 summary
   `firmware/scripts/bump-secure-version.sh`.
 - **The burn script itself** — spaxel-2e256299, `firmware/scripts/burn-efuses.sh`,
   implements the order above; the prod-signed-image guard (spaxel-30940d60) is
-  delivered — see "The burn script's guard" above; spaxel-566b18de still pends,
-  wiring it into `firmware/scripts/README.md`.
+  delivered — see "The burn script's guard" above — and so is the README wiring
+  (spaxel-566b18de): `firmware/scripts/README.md` documents the script alongside
+  the signing scripts, and its Physical-Access threat line and Key-Revocation
+  section now point at it.
 - **The go/no-go on enabling Secure Boot and flash encryption** —
   spaxel-30a23d74 (ADR-007 phase 3), including the `ALLOW_UNUSED_DIGEST_SLOTS`
   and `ENABLE_SECURITY_DOWNLOAD` choices flagged above.
 
 ## Validation status
 
-Delivered unvalidated on hardware. The bench bead
+End state (2026-09-13): **procedure and script delivered, hardware validation
+pending.** Everything on the paper side has landed — this procedure, the burn
+script with its confirm/live-flash guards, and the wiring into
+`firmware/scripts/README.md` and
+[firmware-signing-keys.md](firmware-signing-keys.md) (spaxel-566b18de) — so a
+reader holding any of these holds *delivered* work, not *validated* work.
+
+The bench bead
 spaxel-6c9344e4 (real ESP32-S3 flashing on the Lenovo T450s bench) is
-**deferred**, and ex44 has no flashing host, so every command in this
-document is unexecuted against real silicon. The symbol table, the log
+**deferred**, and the current box (codinghome, which replaced ex44) has no
+flashing host, so every command in this document is unexecuted against real
+silicon. The symbol table, the log
 strings and the CLI shapes come from the pinned ESP-IDF v5.2.3 tree, which is
 the same version the firmware builds with — but eFuse behaviour under
 `espefuse.py` is exactly the kind of thing the docs get subtly wrong per chip

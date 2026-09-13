@@ -163,9 +163,18 @@ Signing infrastructure and key custody are in place; **secure boot
 verification is not yet enabled in the build** (`CONFIG_SECURE_BOOT` is not
 set in `firmware/sdkconfig.defaults`, so nothing checks signatures at boot
 yet). Note that `CONFIG_SECURE_BOOT_V2` — the symbol referenced by some older
-comments — never existed in ESP-IDF 5.x. Enabling it, and provisioning the
-public key digest into the bootloader/eFuse on real hardware, is the
-remaining ADR-004 work; this document covers key management only.
+comments — never existed in ESP-IDF 5.x.
+
+Of the two remaining pieces, the per-node burn is no longer an unwritten
+step: the procedure is documented in
+[`esp32s3-efuse-provisioning.md`](esp32s3-efuse-provisioning.md) and
+implemented by `firmware/scripts/burn-efuses.sh` (dry-run default,
+prod-signed live-flash verify gate, `--confirm-irreversible` before anything
+irreversible, key digest burned before `SECURE_BOOT_EN` — the enable bit
+comes last). What is still outstanding: hardware validation of that
+procedure (bench spaxel-6c9344e4, deferred), and the go/no-go on flipping
+`CONFIG_SECURE_BOOT` in the build — owned by spaxel-30a23d74. This document
+covers key management only.
 
 ## Rotation policy
 
