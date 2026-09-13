@@ -680,6 +680,30 @@
             var transport = null;
             var flashSucceeded = false;
             try {
+                // 0. The flashing component has to be loadable before anything
+                // else — without it this step is a dead end, so check it first
+                // and offer a way past instead of a progress bar that can never
+                // move. (Restores the esp-web-tools guard dropped by 26b369d0.)
+                setStatus('Loading flashing component...');
+                var flashLib;
+                try {
+                    flashLib = await import('/js/esptool-bundle.js');
+                } catch (loadErr) {
+                    restoreConsole();
+                    appendLog('error', ['Firmware flashing component failed to load: ' +
+                        (loadErr && loadErr.message ? loadErr.message : loadErr)]);
+                    contentEl.innerHTML =
+                        '<div class="wizard-step-content">' +
+                        '<h2>Flash Firmware</h2>' +
+                        '<p class="wizard-error">Firmware flashing component failed to load. ' +
+                        'Please refresh the page and ensure you have a stable internet connection.</p>' +
+                        '</div>';
+                    renderNav(true, 'Skip Flashing', function () { goToStep(state.currentStepIndex + 1); }, false);
+                    return;
+                }
+                var ESPLoader = flashLib.ESPLoader;
+                var Transport = flashLib.Transport;
+
                 // 1. Fetch firmware manifest
                 setStatus('Fetching firmware info...');
                 appendLog('log', ['Fetching /api/firmware/manifest']);
@@ -722,10 +746,6 @@
                         'hold BOOT, press & release RST, then release BOOT.']);
                 }
                 if (cancelled) { return; }
-
-                var flashLib = await import('/js/esptool-bundle.js');
-                var ESPLoader = flashLib.ESPLoader;
-                var Transport = flashLib.Transport;
 
                 transport = new Transport(state.port, false);
                 var loader = new ESPLoader({

@@ -160,7 +160,7 @@
         }
 
         // Render credentials section for captive portal recovery
-        var credsContainer = card.querySelector('#credentials-container-' + escapeAttr(mac));
+        var credsContainer = card.querySelector('#credentials-container-' + escapeSelector(mac));
         if (credsContainer) {
             credsContainer.appendChild(renderCredentialsSection(mac));
         }
@@ -207,7 +207,7 @@
                     '<div class="troubleshoot-credentials-label">Network Name (SSID):</div>' +
                     '<div class="troubleshoot-credentials-value">' +
                         '<code id="cred-ssid-' + escapeAttr(mac) + '">&mdash;</code>' +
-                        '<button class="troubleshoot-copy-btn" data-clipboard-target="#cred-ssid-' + escapeAttr(mac) + '" title="Copy SSID">' +
+                        '<button class="troubleshoot-copy-btn" data-clipboard-target="#cred-ssid-' + escapeSelector(mac) + '" title="Copy SSID">' +
                             '<span class="troubleshoot-copy-icon">&#x1F4CB;</span>' +
                         '</button>' +
                     '</div>' +
@@ -216,7 +216,7 @@
                     '<div class="troubleshoot-credentials-label">Password:</div>' +
                     '<div class="troubleshoot-credentials-value">' +
                         '<code id="cred-pass-' + escapeAttr(mac) + '">&mdash;</code>' +
-                        '<button class="troubleshoot-copy-btn" data-clipboard-target="#cred-pass-' + escapeAttr(mac) + '" title="Copy Password">' +
+                        '<button class="troubleshoot-copy-btn" data-clipboard-target="#cred-pass-' + escapeSelector(mac) + '" title="Copy Password">' +
                             '<span class="troubleshoot-copy-icon">&#x1F4CB;</span>' +
                         '</button>' +
                     '</div>' +
@@ -226,11 +226,11 @@
 
         // Fetch and populate credentials
         fetchWiFiCredentials().then(function(data) {
-            var loadingEl = section.querySelector('#creds-loading-' + escapeAttr(mac));
-            var contentEl = section.querySelector('#creds-content-' + escapeAttr(mac));
-            var ssidEl = section.querySelector('#cred-ssid-' + escapeAttr(mac));
-            var passEl = section.querySelector('#cred-pass-' + escapeAttr(mac));
-            var noteEl = section.querySelector('#creds-note-' + escapeAttr(mac));
+            var loadingEl = section.querySelector('#creds-loading-' + escapeSelector(mac));
+            var contentEl = section.querySelector('#creds-content-' + escapeSelector(mac));
+            var ssidEl = section.querySelector('#cred-ssid-' + escapeSelector(mac));
+            var passEl = section.querySelector('#cred-pass-' + escapeSelector(mac));
+            var noteEl = section.querySelector('#creds-note-' + escapeSelector(mac));
 
             if (loadingEl) loadingEl.style.display = 'none';
 
@@ -693,6 +693,13 @@
     function escapeAttr(s) {
         return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
             .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Escape for use inside a CSS selector string (querySelector / data-clipboard-target).
+    // escapeAttr only makes a value safe as HTML — an id carrying raw ':' (any MAC) is
+    // parsed as a pseudo-class there and throws. Element ids themselves keep escapeAttr.
+    function escapeSelector(s) {
+        return String(s || '').replace(/[^a-zA-Z0-9_-]/g, '\\$&');
     }
 
     // ============================================

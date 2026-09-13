@@ -92,6 +92,28 @@ describe('SidebarTimeline', function() {
                         </button>
                     </div>
                 </div>
+                <div id="sidebar-timeline-filters" class="sidebar-timeline-filters">
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-presence" checked>
+                        <span class="sidebar-category-label">Presence</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-zones" checked>
+                        <span class="sidebar-category-label">Zones</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-alerts" checked>
+                        <span class="sidebar-category-label">Alerts</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-system">
+                        <span class="sidebar-category-label">System</span>
+                    </label>
+                    <label class="sidebar-category-checkbox">
+                        <input type="checkbox" id="filter-category-learning">
+                        <span class="sidebar-category-label">Learning</span>
+                    </label>
+                </div>
                 <div id="sidebar-timeline-content" class="sidebar-panel-content">
                     <div id="sidebar-timeline-events" class="sidebar-timeline-events"></div>
                     <div id="sidebar-timeline-loading" class="sidebar-timeline-loading" style="display: none;">
@@ -334,6 +356,16 @@ describe('SidebarTimeline', function() {
                             ];
                             global.__sidebarTimelineMockEventData.cursor = null;
                             global.__sidebarTimelineMockEventData.total_filtered = 15;
+
+                            // System and Learning categories are opt-in by
+                            // design (the filter bar ships with them
+                            // unchecked), so check them before rendering or
+                            // the system/learning fixtures stay filtered out.
+                            ['system', 'learning'].forEach(function(cat) {
+                                var checkbox = document.getElementById('filter-category-' + cat);
+                                checkbox.checked = true;
+                                checkbox.dispatchEvent(new Event('change'));
+                            });
         });
 
         test('all event types render correctly', function(done) {
@@ -938,19 +970,26 @@ describe('SidebarTimeline', function() {
             });
         });
 
-        test('system events have secondary class', function(done) {
+        test('system events have secondary class', function() {
+            // System events are opt-in by default (the System category
+            // checkbox ships unchecked), so check it before rendering or the
+            // node_online fixture below stays filtered out.
+            var systemCheckbox = document.getElementById('filter-category-system');
+            systemCheckbox.checked = true;
+            systemCheckbox.dispatchEvent(new Event('change'));
+
             SidebarTimeline.show();
             SidebarTimeline.refresh();
 
             return new Promise(function(resolve) {
                 setTimeout(function() {
-                    // Check node_online (id=10) which is a system event
-                    const eventEl = mockElements.eventsContainer.querySelector('[data-id="10"]');
+                    // Check node_online (id=2) which is a system event
+                    const eventEl = mockElements.eventsContainer.querySelector('[data-id="2"]');
                     expect(eventEl).toBeTruthy();
                     expect(eventEl.classList.contains('secondary')).toBe(true);
-                    done();
+                    resolve();
                 }, 300);
-            }, 10000);
+            });
         });
     });
 

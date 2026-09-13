@@ -134,6 +134,12 @@ describe('Proactive Quality Module', () => {
         });
 
         test('should not track non-qualifying settings', () => {
+            // The document global resolves to the shared jsdom document (the
+            // mock above cannot replace it), so a hint created by the
+            // preceding qualifying-change test is still attached. Dismiss it
+            // so the assertion below reflects only this test's tracking.
+            Proactive.dismissSettingHint();
+
             Proactive.trackSettingChange('theme', 'dark');
             Proactive.trackSettingChange('theme', 'light');
             Proactive.trackSettingChange('theme', 'dark');
@@ -184,12 +190,18 @@ describe('Proactive Quality Module', () => {
     });
 
     describe('Link Diagnostics', () => {
-        test('should format link IDs for display', () => {
+        test('should format link IDs for display', async () => {
             // This tests the internal formatLinkID function
             // Since it's not exposed, we verify through diagnoseLink
             const linkID = 'AA:BB:CC:DD:EE:FF:11:22';
 
             Proactive.diagnoseLink(linkID);
+
+            // The results panel is created once the diagnostics fetch chain
+            // resolves, not synchronously - flush pending microtasks first.
+            for (var i = 0; i < 20; i++) {
+                await Promise.resolve();
+            }
 
             // Should create a diagnostic panel
             const panel = document.getElementById('diagnostic-results-panel');
@@ -222,8 +234,12 @@ describe('Proactive Quality Module', () => {
     describe('Helper Functions', () => {
         test('should format setting names for display', () => {
             // Test the internal formatSettingName function
-            // Since it's not exposed, we verify it works through setting change tracking
+            // Since it's not exposed, we verify it works through setting change tracking.
+            // The hint only appears after 3 qualifying changes within 24h, so
+            // track the motion threshold three times.
             Proactive.trackSettingChange('delta_rms_threshold', 0.02);
+            Proactive.trackSettingChange('delta_rms_threshold', 0.025);
+            Proactive.trackSettingChange('delta_rms_threshold', 0.03);
 
             const hint = document.getElementById('setting-change-hint');
             expect(hint).not.toBeNull();

@@ -105,6 +105,10 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         const testName = 'fake-timers-no-cleanup';
         const before = profiler.captureSnapshot(`${testName}-before`);
 
+        // Capture the settle timer while real timers are still installed so
+        // the await below resolves even once fake timers take over.
+        const settled = new Promise(resolve => setTimeout(resolve, 0));
+
         // Simulate test that uses fake timers but forgets to restore
         jest.useFakeTimers();
         jest.advanceTimersByTime(1000);
@@ -112,7 +116,7 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         // NO jest.useRealTimers() call here - this simulates the leak
 
         profiler.forceGC();
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await settled;
 
         const after = profiler.captureSnapshot(`${testName}-after`);
 
@@ -161,6 +165,10 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         const testName = 'wizard-lifecycle-no-aftereach';
         const before = profiler.captureSnapshot(`${testName}-before`);
 
+        // Capture the settle timer while real timers are still installed so
+        // the await below resolves even once fake timers take over.
+        const settled = new Promise(resolve => setTimeout(resolve, 0));
+
         // Simulate the 'Wizard lifecycle' test pattern
         jest.useFakeTimers();
         SpaxelOnboard.start();
@@ -172,7 +180,7 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         // NO afterEach cleanup - no timer/WebSocket cleanup
 
         profiler.forceGC();
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await settled;
 
         const after = profiler.captureSnapshot(`${testName}-after`);
 
@@ -255,6 +263,10 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         const testName = 'node-detection-polltimer-no-cleanup';
         const before = profiler.captureSnapshot(`${testName}-before`);
 
+        // Capture the settle timer while real timers are still installed so
+        // the await below resolves even once fake timers take over.
+        const settled = new Promise(resolve => setTimeout(resolve, 0));
+
         // Simulate node detection step creating pollTimer
         _state.currentStepIndex = 4; // detect_node
         _state.nodeMAC = null;
@@ -267,7 +279,7 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         // NO cleanup
 
         profiler.forceGC();
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await settled;
 
         const after = profiler.captureSnapshot(`${testName}-after`);
 
@@ -291,6 +303,10 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         const testName = 'calibration-calibratetimer-no-cleanup';
         const before = profiler.captureSnapshot(`${testName}-before`);
 
+        // Capture the settle timer while real timers are still installed so
+        // the await below resolves even once fake timers take over.
+        const settled = new Promise(resolve => setTimeout(resolve, 0));
+
         // Simulate calibration step creating calibrateTimer
         _state.currentStepIndex = 5; // calibrate
         _state.nodeMAC = 'AA:BB:CC:DD:EE:FF';
@@ -302,7 +318,7 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         // NO cleanup
 
         profiler.forceGC();
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await settled;
 
         const after = profiler.captureSnapshot(`${testName}-after`);
 
@@ -326,6 +342,10 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         const testName = 'multiple-sequential-fake-timers';
         const before = profiler.captureSnapshot(`${testName}-before`);
 
+        // Capture the settle timer while real timers are still installed so
+        // the await below resolves even once fake timers take over.
+        const settled = new Promise(resolve => setTimeout(resolve, 0));
+
         // Simulate multiple tests using fake timers sequentially
         for (let i = 0; i < 5; i++) {
             jest.useFakeTimers();
@@ -334,7 +354,7 @@ describe('Leak Isolation - Targeted Component Tests', () => {
         }
 
         profiler.forceGC();
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await settled;
 
         const after = profiler.captureSnapshot(`${testName}-after`);
 

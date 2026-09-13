@@ -794,11 +794,12 @@ describe('Wizard state transitions', () => {
         jest.useRealTimers();
     });
 
-    test('flash_firmware shows skip option when esp-web-tools is not loaded', () => {
+    test('flash_firmware shows skip option when the flashing component fails to load', async () => {
         jest.useFakeTimers();
-        // Make customElements.get return null to simulate missing esp-web-tools
-        customElements.get = jest.fn(() => null);
-
+        // Since 26b369d0 the flash step loads its flashing component by dynamic
+        // import of the vendored esptool bundle. Under jest that module path
+        // does not resolve, which is the same "component unavailable" failure
+        // the esp-web-tools build simulated via customElements.get.
         sessionStorage.setItem(_CONFIG.storageKey, JSON.stringify({
             currentStepIndex: 3,
             nodeMAC: null,
@@ -811,6 +812,9 @@ describe('Wizard state transitions', () => {
         _state.port = { mock: true };
 
         SpaxelOnboard.start();
+
+        // The fallback renders once the failed import settles (microtask chain).
+        for (var i = 0; i < 20; i++) { await Promise.resolve(); }
 
         var content = document.getElementById('wizard-content');
         expect(content.innerHTML).toContain('Firmware flashing component failed to load');
