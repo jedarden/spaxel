@@ -678,7 +678,7 @@ func BenchmarkGetConfig(b *testing.B) {
 // mockOTAManager is a test implementation of OTA Manager that tracks SendOTAVersion calls.
 type mockOTAManager struct {
 	*Manager
-	mu                sync.RWMutex
+	mu                  sync.RWMutex
 	sendOTAVersionCalls []sendOTAVersionCall
 }
 
@@ -690,7 +690,7 @@ type sendOTAVersionCall struct {
 func newMockOTAManager(srv *Server) *mockOTAManager {
 	baseMgr := NewManager(srv, "http://localhost:8080")
 	return &mockOTAManager{
-		Manager:            baseMgr,
+		Manager:             baseMgr,
 		sendOTAVersionCalls: make([]sendOTAVersionCall, 0),
 	}
 }
@@ -1064,8 +1064,8 @@ func TestCanaryRollbackSkipsWhenPreviousVersionUnknown(t *testing.T) {
 // mockOTAManagerWithDetails is a test implementation that captures full OTA call details.
 type mockOTAManagerWithDetails struct {
 	*Manager
-	mu         sync.RWMutex
-	otaCalls   []otaCallDetails
+	mu       sync.RWMutex
+	otaCalls []otaCallDetails
 }
 
 type otaCallDetails struct {
@@ -1585,5 +1585,284 @@ func TestAutoUpdateTriggerCounterRecordsOutcomeOnce(t *testing.T) {
 				t.Errorf("state = %s, want %s", got, tc.wantState)
 			}
 		})
+	}
+}
+
+// TestCompareFirmwareVersions covers the dotted-version ordering used by
+// downgrade prevention (spaxel-005c84ce): numeric per component, absent
+// components count as 0, unparsable components fall back to strings.
+func TestCompareFirmwareVersions(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"0.1.358", "0.1.357", 1},  // newer vs older (AC scenario)
+		{"0.1.357", "0.1.357", 0},  // same version (AC scenario)
+		{"0.1.357", "0.1.358", -1}, // older vs newer (AC scenario)
+		{"0.1.9", "0.1.10", -1},    // numeric, not lexicographic
+		{"0.2.188", "0.2.99", 1},   // numeric, not lexicographic
+		{"1.2", "1.2.0", 0},        // absent component counts as 0
+		{"1.2.0", "1.2", 0},        // absent component counts as 0
+		{"1.2.0", "1.2.1", -1},     // absent component counts as 0
+		{"", "0.1.357", -1},        // unknown version sorts lowest
+		{"0.1.357", "", 1},         // unknown version sorts lowest
+		{"", "", 0},                // both unknown are equal
+		{"1.2.x", "1.2.0", 1},      // unparsable component falls back to string compare
+		{"0.1.357", "0.01.357", 0}, // leading zeros parse numerically
+	}
+
+	for _, tc := range cases {
+		if got := compareFirmwareVersions(tc.a, tc.b); got != tc.want {
+			t.Errorf("compareFirmwareVersions(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+// TestDowngradeBlocked covers the gate predicate: unknown running versions
+// and the explicit allowance never block; anything at or past the candidate
+// does.
+func TestDowngradeBlocked(t *testing.T) {
+	cases := []struct {
+		candidate, current string
+		allow              bool
+		want               bool
+	}{
+		{"0.1.357", "0.1.358", false, true},  // candidate older → blocked
+		{"0.1.357", "0.1.357", false, true},  // same version → blocked
+		{"0.1.359", "0.1.358", false, false}, // candidate newer → allowed
+		{"0.1.357", "0.1.358", true, false},  // explicit allowance opts in
+		{"0.1.357", "", false, false},        // unknown running version never blocks
+		{"", "0.1.358", false, true},         // unknown candidate still not pushed over a known node
+	}
+
+	for _, tc := range cases {
+		if got := downgradeBlocked(tc.candidate, tc.current, tc.allow); got != tc.want {
+			t.Errorf("downgradeBlocked(%q, %q, %v) = %v, want %v", tc.candidate, tc.current, tc.allow, got, tc.want)
+		}
+	}
+}
+
+// TestGetConfigAllowDowngrade verifies the allow_downgrade setting is read
+// from the settings provider and type-guarded, and defaults to false.
+func TestGetConfigAllowDowngrade(t *testing.T) {
+	srv := &Server{}
+	autoMgr := NewAutoUpdateManager(srv, NewManager(srv, "http://localhost:8080"), time.UTC)
+	settings := newMockSettingsProvider()
+	autoMgr.SetSettingsProvider(settings)
+
+	if DefaultAutoUpdateConfig().AllowDowngrade {
+		t.Error("expected AllowDowngrade to default to false")
+	}
+
+	config := autoMgr.GetConfig()
+	if config.AllowDowngrade {
+		t.Error("expected AllowDowngrade false when unset")
+	}
+
+	settings.set("auto_update_allow_downgrade", true)
+	config = autoMgr.GetConfig()
+	if !config.AllowDowngrade {
+		t.Error("expected AllowDowngrade true when set")
+	}
+
+	settings.set("auto_update_allow_downgrade", "yes")
+	config = autoMgr.GetConfig()
+	if config.AllowDowngrade {
+		t.Error("expected non-bool allow_downgrade to be ignored")
+	}
+}
+
+// newDowngradeTestManager wires a manager with auto-update enabled, a mock
+// node provider and a mock event notifier for the downgrade-prevention
+// tests.
+func newDowngradeTestManager(t *testing.T) (*AutoUpdateManager, *mockSettingsProvider, *mockNodeProvider, *mockEventNotifier, *Server) {
+	t.Helper()
+
+	srv := &Server{}
+	autoMgr := NewAutoUpdateManager(srv, NewManager(srv, "http://localhost:8080"), time.UTC)
+
+	settings := newMockSettingsProvider()
+	settings.set("auto_update_enabled", true)
+	autoMgr.SetSettingsProvider(settings)
+
+	nodeProvider := newMockNodeProvider()
+	autoMgr.SetNodeProvider(nodeProvider)
+
+	notifier := newMockEventNotifier()
+	autoMgr.SetEventNotifier(notifier)
+
+	return autoMgr, settings, nodeProvider, notifier, srv
+}
+
+func seedLatestFirmware(t *testing.T, srv *Server, filename, version string) {
+	t.Helper()
+
+	srv.firmware = map[string]*FirmwareMeta{
+		filename: {Filename: filename, Version: version},
+	}
+	srv.latestFile = filename
+}
+
+func hasEvent(t *testing.T, notifier *mockEventNotifier, eventType string) bool {
+	t.Helper()
+
+	for _, e := range notifier.getEvents() {
+		if e.eventType == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+// TestAutoUpdateRejectsOlderFirmware verifies the explicit downgrade check:
+// with every node already running 0.1.358, a candidate 0.1.357 is skipped,
+// no cycle starts, and the release is latched so the per-minute check stays
+// quiet.
+func TestAutoUpdateRejectsOlderFirmware(t *testing.T) {
+	autoMgr, _, nodeProvider, notifier, srv := newDowngradeTestManager(t)
+
+	nodeProvider.addNodeWithFirmware("AA", "tx_rx", 0.9, "0.1.358")
+	seedLatestFirmware(t, srv, "spaxel-0.1.357.bin", "0.1.357")
+
+	autoMgr.checkForNewFirmware(context.Background())
+
+	if got := autoMgr.GetState(); got != StateIdle {
+		t.Errorf("state = %s, want %s", got, StateIdle)
+	}
+	if hasEvent(t, notifier, "update_started") {
+		t.Error("update_started published for a downgrade candidate")
+	}
+	autoMgr.mu.RLock()
+	latched := autoMgr.pendingFirmware != nil && autoMgr.pendingFirmware.Filename == "spaxel-0.1.357.bin"
+	autoMgr.mu.RUnlock()
+	if !latched {
+		t.Error("downgrade candidate not latched as handled; the check will re-log every minute")
+	}
+}
+
+// TestAutoUpdateRejectsSameVersion verifies the <= in the downgrade check:
+// the candidate equal to the running version does not start a cycle.
+func TestAutoUpdateRejectsSameVersion(t *testing.T) {
+	autoMgr, _, nodeProvider, notifier, srv := newDowngradeTestManager(t)
+
+	nodeProvider.addNodeWithFirmware("AA", "tx_rx", 0.9, "0.1.357")
+	seedLatestFirmware(t, srv, "spaxel-0.1.357.bin", "0.1.357")
+
+	autoMgr.checkForNewFirmware(context.Background())
+
+	if got := autoMgr.GetState(); got != StateIdle {
+		t.Errorf("state = %s, want %s", got, StateIdle)
+	}
+	if hasEvent(t, notifier, "update_started") {
+		t.Error("update_started published for an equal-version candidate")
+	}
+}
+
+// TestAutoUpdateAllowsNewerFirmware verifies a strictly newer candidate
+// still starts a cycle: the canary is selected, the update_started event
+// fires, and the cycle leaves idle (the unconfigured OTA sender fails the
+// cycle afterwards, which is fine here).
+func TestAutoUpdateAllowsNewerFirmware(t *testing.T) {
+	autoMgr, _, nodeProvider, notifier, srv := newDowngradeTestManager(t)
+
+	nodeProvider.addNodeWithFirmware("AA", "tx_rx", 0.9, "0.1.356")
+	seedLatestFirmware(t, srv, "spaxel-0.1.357.bin", "0.1.357")
+
+	autoMgr.checkForNewFirmware(context.Background())
+
+	if !hasEvent(t, notifier, "update_started") {
+		t.Fatal("update_started not published for a newer candidate")
+	}
+	if got := autoMgr.GetCanaryNode(); got != "AA" {
+		t.Errorf("canary = %q, want AA", got)
+	}
+	if got := autoMgr.GetState(); got == StateIdle {
+		t.Error("cycle did not start for a newer candidate")
+	}
+}
+
+// TestCanarySelectionPrefersUpgradeableNode verifies mixed fleets: the
+// healthiest node already runs a newer build than the candidate, so it must
+// not be picked as canary — the candidate goes to the node it upgrades.
+func TestCanarySelectionPrefersUpgradeableNode(t *testing.T) {
+	autoMgr, _, nodeProvider, notifier, srv := newDowngradeTestManager(t)
+
+	nodeProvider.addNodeWithFirmware("AA", "tx_rx", 0.9, "0.1.358") // healthy, but a downgrade for it
+	nodeProvider.addNodeWithFirmware("BB", "tx_rx", 0.5, "0.1.356") // laggard the candidate upgrades
+	seedLatestFirmware(t, srv, "spaxel-0.1.357.bin", "0.1.357")
+
+	autoMgr.checkForNewFirmware(context.Background())
+
+	if !hasEvent(t, notifier, "update_started") {
+		t.Fatal("update_started not published; candidate 0.1.357 upgrades BB so the cycle should run")
+	}
+	if got := autoMgr.GetCanaryNode(); got != "BB" {
+		t.Errorf("canary = %q, want BB (AA already runs a newer build)", got)
+	}
+}
+
+// versionFlipNodeProvider reports a stale version on the first call and the
+// real one afterwards, simulating a node that reports a newer build between
+// canary selection and deployment.
+type versionFlipNodeProvider struct {
+	*mockNodeProvider
+	calls int
+}
+
+func (v *versionFlipNodeProvider) GetNodeFirmwareVersion(mac string) string {
+	v.calls++
+	if v.calls == 1 {
+		return "0.1.100"
+	}
+	return "0.1.358"
+}
+
+// TestCanaryGateResetsCycleOnDowngrade verifies the deployment-time gate is
+// defense in depth: when the canary turns out to already run a newer build
+// than the candidate, the cycle resets to idle (a skip, not a failure — no
+// failure metric is recorded) instead of rolling the node back.
+func TestCanaryGateResetsCycleOnDowngrade(t *testing.T) {
+	autoMgr, _, nodeProvider, notifier, srv := newDowngradeTestManager(t)
+
+	flip := &versionFlipNodeProvider{mockNodeProvider: nodeProvider}
+	autoMgr.mu.Lock()
+	autoMgr.nodeProvider = flip
+	autoMgr.mu.Unlock()
+	nodeProvider.addNodeWithFirmware("AA", "tx_rx", 0.9, "0.1.100")
+	seedLatestFirmware(t, srv, "spaxel-0.1.357.bin", "0.1.357")
+
+	failureBefore := triggerCounterValue(t, "failure")
+	if err := autoMgr.TriggerUpdate(context.Background()); err != nil {
+		t.Fatalf("TriggerUpdate: %v", err)
+	}
+
+	if got := autoMgr.GetState(); got != StateIdle {
+		t.Errorf("state = %s, want %s (gate must reset the cycle, not fail it)", got, StateIdle)
+	}
+	if !hasEvent(t, notifier, "update_skipped") {
+		t.Error("update_skipped not published by the deployment-time downgrade gate")
+	}
+	if got := triggerCounterValue(t, "failure") - failureBefore; got != 0 {
+		t.Errorf("auto/failure delta = %v, want 0 (a skip is not a failure)", got)
+	}
+}
+
+// TestAllowDowngradeOptOut verifies the explicit allowance: with
+// auto_update_allow_downgrade set, the same older candidate starts a cycle
+// instead of being skipped.
+func TestAllowDowngradeOptOut(t *testing.T) {
+	autoMgr, settings, nodeProvider, notifier, srv := newDowngradeTestManager(t)
+
+	settings.set("auto_update_allow_downgrade", true)
+	nodeProvider.addNodeWithFirmware("AA", "tx_rx", 0.9, "0.1.358")
+	seedLatestFirmware(t, srv, "spaxel-0.1.357.bin", "0.1.357")
+
+	autoMgr.checkForNewFirmware(context.Background())
+
+	if !hasEvent(t, notifier, "update_started") {
+		t.Fatal("update_started not published despite allow_downgrade")
+	}
+	if got := autoMgr.GetState(); got == StateIdle {
+		t.Error("cycle did not start despite allow_downgrade")
 	}
 }

@@ -252,6 +252,7 @@ var defaultSettings = map[string]interface{}{
 	"quiet_window_end":              "05:00", // Auto-update quiet window end (HH:MM)
 	"canary_duration_min":           10,      // Canary monitoring duration in minutes
 	"auto_update_quality_threshold": 0.05,    // Quality degradation threshold (0-1)
+	"auto_update_allow_downgrade":   false,   // Let auto-update install firmware older than a node runs (spaxel-005c84ce)
 }
 
 // RegisterRoutes registers settings endpoints on the given router.
@@ -484,6 +485,13 @@ func validateSettings(settings map[string]interface{}) error {
 	if v, ok := settings["auto_update_enabled"]; ok {
 		if _, ok := v.(bool); !ok {
 			return &ValidationError{Key: "auto_update_enabled", Reason: "must be a boolean"}
+		}
+	}
+
+	// Validate auto_update_allow_downgrade: boolean
+	if v, ok := settings["auto_update_allow_downgrade"]; ok {
+		if _, ok := v.(bool); !ok {
+			return &ValidationError{Key: "auto_update_allow_downgrade", Reason: "must be a boolean"}
 		}
 	}
 
