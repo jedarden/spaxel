@@ -125,6 +125,14 @@ CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
 # Production devices should burn this eFuse to permanently enable verification.
 CONFIG_SECURE_BOOT_V2_ALLOW_EFUSE_DISABLE=y
 
+# The per-node burn this enablement waits on now exists (2026-09-13):
+# firmware/scripts/burn-efuses.sh, procedure in
+# docs/notes/esp32s3-efuse-provisioning.md — key digest before enable,
+# SECURE_BOOT_EN last; dry-run default, prod-signed live-flash verify gate,
+# --confirm-irreversible gate. Burning eFuses does NOT enable
+# CONFIG_SECURE_BOOT in the build: flipping that symbol remains owned by
+# spaxel-30a23d74's Secure Boot sizing go/no-go.
+
 # Increase partition sizes for OTA
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
