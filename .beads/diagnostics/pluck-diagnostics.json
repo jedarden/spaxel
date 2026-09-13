@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-09-13T11:08:11.276031914Z",
-  "total_open_beads": 45,
+  "timestamp": "2026-09-13T12:07:12.124674639Z",
+  "total_open_beads": 47,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 26,
+    "has_dependencies": 28,
     "resource_conflicts": 0
   },
   "final_candidate_count": 11,
@@ -296,17 +296,6 @@
       "conflict_count": 0
     },
     {
-      "bead_id": "spaxel-7c202641",
-      "title": "Verify the target's live-flash image against the production key before burn-efuses.sh burns",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
       "bead_id": "spaxel-8c5a088c",
       "title": "Document the burn-efuses.sh guard behaviour in the usage text and the eFuse provisioning note",
       "priority": 2,
@@ -342,6 +331,39 @@
     {
       "bead_id": "spaxel-cb8414cb",
       "title": "Submit spaxel-acceptance-diag green run citing the Succeeded node",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-c4fdbc63",
+      "title": "Collect the pinned ESP-IDF tool-presence checks in burn-efuses.sh",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-03f7c42c",
+      "title": "Collect the key-fetch and image-content guard failures in burn-efuses.sh",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-31a4af3e",
+      "title": "Wire the abort-before-any-burn gate and stage-guard collection into burn-efuses.sh",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
