@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T12:07:12.124674639Z",
-  "total_open_beads": 47,
+  "timestamp": "2026-09-13T13:09:17.923715098Z",
+  "total_open_beads": 43,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 28,
+    "has_dependencies": 25,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 11,
+  "final_candidate_count": 10,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -331,39 +331,6 @@
     {
       "bead_id": "spaxel-cb8414cb",
       "title": "Submit spaxel-acceptance-diag green run citing the Succeeded node",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-c4fdbc63",
-      "title": "Collect the pinned ESP-IDF tool-presence checks in burn-efuses.sh",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-03f7c42c",
-      "title": "Collect the key-fetch and image-content guard failures in burn-efuses.sh",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-31a4af3e",
-      "title": "Wire the abort-before-any-burn gate and stage-guard collection into burn-efuses.sh",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
