@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T00:06:18.776778064Z",
-  "total_open_beads": 55,
+  "timestamp": "2026-09-13T01:06:22.834375755Z",
+  "total_open_beads": 72,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 37,
+    "has_dependencies": 54,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 12,
+  "final_candidate_count": 29,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
