@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T09:11:58.20881107Z",
-  "total_open_beads": 47,
+  "timestamp": "2026-09-13T10:09:56.117841836Z",
+  "total_open_beads": 44,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 30,
+    "has_dependencies": 28,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 12,
+  "final_candidate_count": 10,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -34,17 +34,6 @@
     {
       "bead_id": "spaxel-ac9fea37",
       "title": "Firmware: generate an ECC P-256 keypair on-device, emit a CSR, store and present the certificate",
-      "priority": 1,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-8398b00e",
-      "title": "Auto-update manager silently rolled a node back to an older firmware, undoing manual fixes",
       "priority": 1,
       "assignee": null,
       "manual_blocked": false,
