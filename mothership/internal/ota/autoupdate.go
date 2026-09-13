@@ -50,6 +50,7 @@ type AutoUpdateManager struct {
 	timezone           *time.Location
 	zoneVacancyChecker ZoneVacancyChecker
 	windowPoll         time.Duration // how often a parked rollout re-reads the quiet window
+	monitorPoll        time.Duration // canary monitor tick interval (0 → 30s)
 	drift              *DriftMonitor
 
 	// State
@@ -768,8 +769,12 @@ func (m *AutoUpdateManager) selectCanaryNode() string {
 func (m *AutoUpdateManager) monitorCanary(ctx context.Context, firmware *FirmwareMeta) {
 	defer m.wg.Done()
 
-	m.mu.Lock()
+	// GetConfig takes m.mu.RLock itself, so it must run outside the write
+	// lock: acquiring it under m.mu.Lock self-deadlocked the monitor on its
+	// first line and wedged every later lock user with it.
 	config := m.GetConfig()
+
+	m.mu.Lock()
 	canaryMAC := m.currentCanaryNode
 	m.mu.Unlock()
 
@@ -779,7 +784,11 @@ func (m *AutoUpdateManager) monitorCanary(ctx context.Context, firmware *Firmwar
 	log.Printf("[INFO] ota: monitoring canary %s for %v minutes", canaryMAC, config.CanaryDurationMin)
 
 	// Monitor loop
-	ticker := time.NewTicker(30 * time.Second)
+	poll := m.monitorPoll
+	if poll <= 0 {
+		poll = 30 * time.Second
+	}
+	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 
 	for {
@@ -813,8 +822,10 @@ func (m *AutoUpdateManager) monitorCanary(ctx context.Context, firmware *Firmwar
 
 // evaluateCanary evaluates the canary node's quality and decides whether to proceed.
 func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *FirmwareMeta) {
-	m.mu.Lock()
+	// Same lock-ordering rule as monitorCanary: GetConfig locks internally.
 	config := m.GetConfig()
+
+	m.mu.Lock()
 	canaryMAC := m.currentCanaryNode
 	baselineQuality := m.baselineQuality
 	m.mu.Unlock()
@@ -1143,9 +1154,9 @@ func (m *AutoUpdateManager) GetBaselineQuality() float64 {
 
 // TriggerUpdate manually triggers an auto-update cycle for testing.
 func (m *AutoUpdateManager) TriggerUpdate(ctx context.Context) error {
-	m.mu.RLock()
+	// No outer RLock here: GetConfig takes m.mu.RLock itself, and a recursive
+	// read acquisition can deadlock against a writer that queues in between.
 	config := m.GetConfig()
-	m.mu.RUnlock()
 
 	if !config.Enabled {
 		return fmt.Errorf("auto-update is disabled")
