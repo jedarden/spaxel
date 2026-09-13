@@ -8,7 +8,8 @@
 #
 #   ./scripts/burn-efuses.sh <image>                       # dry-run plan (default)
 #   ./scripts/burn-efuses.sh --check-only <image>          # preflight + stage (a), no device
-#   ./scripts/burn-efuses.sh --burn --port /dev/ttyACM0 <image>
+#   ./scripts/burn-efuses.sh --burn --confirm-irreversible \
+#       --port /dev/ttyACM0 <image>                        # a burn that may actually run
 #
 # Modes:
 #   (default)   print the ordered plan — every command that would run and what
@@ -34,7 +35,25 @@
 #   --do-not-confirm           pass --do-not-confirm to espefuse.py. Without it
 #                              espefuse prompts BURN before every burn, which
 #                              also means a non-interactive run aborts — the
-#                              safe default.
+#                              safe default. This flag only silences espefuse's
+#                              own prompt; it does not satisfy this script's
+#                              gate below.
+#   --confirm-irreversible     REQUIRED before this script burns anything
+#                              irreversible: stage (b) burn_key_digest, stage
+#                              (c) JTAG/USB-disable (and DIS_DOWNLOAD_MODE when
+#                              --allow-dis-download-mode is given), stage (d)
+#                              SECURE_VERSION, stage (e) SECURE_BOOT_EN. A
+#                              --burn that selects any of them and omits this
+#                              flag is refused before anything runs. Accepted
+#                              forms: --confirm-irreversible,
+#                              --confirm-irreversible=1|true|yes|y, and
+#                              =0|false|no|n to refuse explicitly. It is a
+#                              deliberate flag and not a y/N prompt, so it
+#                              works from a script with stdin piped, redirected
+#                              or closed, an unattended run cannot proceed by
+#                              default, and an interactive default cannot be
+#                              bypassed by a pipe. Plan mode, --check-only,
+#                              preflight and stage (a) never require it.
 #   -h|--help                  this text
 #
 # Exit codes: 0 success (a dry-run plan is a success), 1 failure, 2 usage.
@@ -69,7 +88,7 @@
 set -euo pipefail
 
 usage() {
-    sed -n '2,67p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,86p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 }
 
@@ -86,6 +105,7 @@ SECURE_VERSION=""
 STAGES="preflight,a,b,c,d,e"
 ALLOW_DIS_DOWNLOAD_MODE=0
 DO_NOT_CONFIRM=0
+CONFIRM_IRREVERSIBLE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -113,6 +133,20 @@ while [ $# -gt 0 ]; do
         --secure-version=*) SECURE_VERSION="${1#--secure-version=}"; shift ;;
         --allow-dis-download-mode) ALLOW_DIS_DOWNLOAD_MODE=1; shift ;;
         --do-not-confirm) DO_NOT_CONFIRM=1; shift ;;
+        --confirm-irreversible) CONFIRM_IRREVERSIBLE=1; shift ;;
+        --confirm-irreversible=*)
+            _confirm_val="${1#--confirm-irreversible=}"
+            case "$_confirm_val" in
+                1|true|yes|y) CONFIRM_IRREVERSIBLE=1 ;;
+                0|false|no|n) CONFIRM_IRREVERSIBLE=0 ;;
+                *)
+                    echo "invalid value for --confirm-irreversible: '$_confirm_val'" >&2
+                    echo "(expected 1|true|yes|y or 0|false|no|n, or the bare flag)" >&2
+                    usage
+                    ;;
+            esac
+            shift
+            ;;
         -h|--help) usage ;;
         --*) echo "unknown option: $1" >&2; usage ;;
         *)
@@ -153,9 +187,38 @@ wants() {
     return 1
 }
 
+# The stages of this run that are irreversible — the subset of b c d e that is
+# selected, in canonical order. Empty when the run burns nothing permanent
+# (preflight and stage (a) only), which is exactly the set that never needs
+# --confirm-irreversible.
+irreversible_stages() {
+    local s out=""
+    for s in b c d e; do
+        if wants "$s"; then
+            out="$out $s"
+        fi
+    done
+    printf '%s' "${out# }"
+}
+
+IRREVERSIBLE="$(irreversible_stages)"
+
 if [ "$MODE" = "burn" ]; then
     [ -n "$PORT" ] || { echo "ERROR: --burn requires --port DEV" >&2; exit 2; }
     [ -e "$PORT" ] || { echo "ERROR: serial port not found: $PORT" >&2; exit 1; }
+    if [ -n "$IRREVERSIBLE" ] && [ "$CONFIRM_IRREVERSIBLE" -ne 1 ]; then
+        echo "ERROR: refusing to burn. This run selects irreversible stage(s):$IRREVERSIBLE" >&2
+        echo "and --confirm-irreversible was not given." >&2
+        echo "" >&2
+        echo "Pass --confirm-irreversible (or --confirm-irreversible=1) to acknowledge" >&2
+        echo "that those eFuse burns are write-once and cannot be undone." >&2
+        echo "" >&2
+        echo "The gate is an explicit flag on purpose, not a y/N prompt: it works with" >&2
+        echo "stdin piped, redirected or closed, an unattended run cannot proceed by" >&2
+        echo "default, and a pipe cannot answer an interactive default for you." >&2
+        echo "Nothing was burned." >&2
+        exit 2
+    fi
 fi
 # --check-only has no device, so the espefuse stages cannot run in it.
 if [ "$MODE" = "check" ]; then
@@ -352,6 +415,17 @@ fi
 
 echo "burn-efuses.sh — mode: $MODE, stages: ${WANT[*]}"
 echo "image: $IMAGE"
+if [ "$MODE" = "burn" ] && [ -n "$IRREVERSIBLE" ]; then
+    echo "confirmation: --confirm-irreversible given for irreversible stage(s):$IRREVERSIBLE"
+elif [ -n "$IRREVERSIBLE" ]; then
+    if [ "$CONFIRM_IRREVERSIBLE" -eq 1 ]; then
+        echo "confirmation: --confirm-irreversible accepted; a --burn of stage(s):$IRREVERSIBLE would pass the gate"
+    else
+        echo "confirmation: a --burn of stage(s):$IRREVERSIBLE would require --confirm-irreversible"
+    fi
+else
+    echo "confirmation: not required — nothing irreversible is selected"
+fi
 echo ""
 echo "NOT VALIDATED ON HARDWARE: bench spaxel-6c9344e4 is deferred and ex44 has"
 echo "no flashing host, so this script has never run against a real ESP32-S3."
