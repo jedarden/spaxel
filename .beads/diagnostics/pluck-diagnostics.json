@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T01:06:22.834375755Z",
-  "total_open_beads": 72,
+  "timestamp": "2026-09-13T02:11:40.519106938Z",
+  "total_open_beads": 70,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 54,
+    "has_dependencies": 52,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 29,
+  "final_candidate_count": 28,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -82,7 +82,7 @@
       "assignee": null,
       "manual_blocked": false,
       "has_blockers": true,
-      "blocker_count": 2,
+      "blocker_count": 1,
       "has_resource_conflicts": false,
       "conflict_count": 0
     },
@@ -188,17 +188,6 @@
     {
       "bead_id": "spaxel-8cbba203",
       "title": "Measure TLS handshake heap",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-43d204ac",
-      "title": "Add comprehensive logging to auto-update manager",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
