@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T07:06:50.542699472Z",
-  "total_open_beads": 50,
+  "timestamp": "2026-09-13T08:07:18.840685486Z",
+  "total_open_beads": 49,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 33,
+    "has_dependencies": 32,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 12,
+  "final_candidate_count": 13,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -219,17 +219,6 @@
       "conflict_count": 0
     },
     {
-      "bead_id": "spaxel-387835cf",
-      "title": "Verify jest CI gate runs fail-fast and a11y behavior unchanged",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
       "bead_id": "spaxel-8c344c26",
       "title": "Flip the IO-6 hard-gate to GREEN end-to-end once bf-4q5w lands",
       "priority": 2,
@@ -237,17 +226,6 @@
       "manual_blocked": false,
       "has_blockers": true,
       "blocker_count": 2,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-0b49ab99",
-      "title": "Verify auto-update fixes with integration test",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
       "has_resource_conflicts": false,
       "conflict_count": 0
     },
