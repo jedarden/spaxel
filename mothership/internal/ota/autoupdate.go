@@ -533,7 +533,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	}
 	m.mu.Unlock()
 
-	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s version_before=%s version_after=%s baseline_quality=%.2f trigger_type=automatic_canary",
+	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s update_type=auto version_before=%s version_after=%s baseline_quality=%.2f trigger_type=automatic_canary",
 		canaryMAC, m.canaryPreviousVersion, firmware.Version, m.baselineQuality)
 
 	m.publishEvent("canary_deploy", canaryMAC, fmt.Sprintf("AUTO-UPDATE: Deploying canary update to node %s", canaryMAC), map[string]interface{}{
@@ -542,11 +542,12 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 		"baseline_quality":          m.baselineQuality,
 		"version_before":            m.canaryPreviousVersion,
 		"version_after":             firmware.Version,
+		"update_type":               UpdateTypeAuto,
 		"trigger_type":              "automatic_canary",
 	})
 
 	// Trigger OTA on canary node
-	if err := m.otaManager.SendOTA(canaryMAC); err != nil {
+	if err := m.otaManager.SendOTAAuto(canaryMAC); err != nil {
 		m.failUpdateCycle(fmt.Sprintf("failed to send OTA to canary: %v", err))
 		return
 	}
@@ -704,13 +705,13 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 
 		// Trigger rollback to previous firmware version
 		if previousVersion != "" {
-			if err := m.otaManager.SendOTAVersion(canaryMAC, previousVersion); err != nil {
+			if err := m.otaManager.SendOTAVersionAuto(canaryMAC, previousVersion); err != nil {
 				log.Printf("[ERROR] ota: failed to trigger rollback for canary %s to version %s: %v",
 					canaryMAC, previousVersion, err)
 				m.failUpdateCycle(fmt.Sprintf("canary quality degraded and rollback failed: %v", err))
 				return
 			}
-			log.Printf("[INFO] ota: triggered rollback for canary %s to version %s", canaryMAC, previousVersion)
+			log.Printf("[INFO] ota: triggered rollback for canary %s to version %s update_type=auto", canaryMAC, previousVersion)
 		} else {
 			log.Printf("[WARN] ota: cannot rollback canary %s: previous firmware version unknown", canaryMAC)
 		}
@@ -725,13 +726,14 @@ func (m *AutoUpdateManager) evaluateCanary(ctx context.Context, firmware *Firmwa
 	m.canaryFirmwareVersionAfter = firmware.Version
 	m.mu.Unlock()
 
-	log.Printf("[INFO] ota: AUTO-UPDATE canary passed: node=%s version_before=%s version_after=%s quality_delta=%.2f%% threshold=%.2f%%",
+	log.Printf("[INFO] ota: AUTO-UPDATE canary passed: node=%s update_type=auto version_before=%s version_after=%s quality_delta=%.2f%% threshold=%.2f%%",
 		canaryMAC, m.canaryPreviousVersion, firmware.Version, qualityDelta*100, config.QualityThreshold*100)
 
 	m.publishEvent("canary_passed", canaryMAC, "AUTO-UPDATE: Canary passed, proceeding with fleet update", map[string]interface{}{
 		"quality_delta":  qualityDelta,
 		"version_before": m.canaryPreviousVersion,
 		"version_after":  firmware.Version,
+		"update_type":    UpdateTypeAuto,
 		"trigger_type":   "automatic_canary_success",
 	})
 
@@ -838,12 +840,13 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 		m.publishEvent("node_update", mac, fmt.Sprintf("Updating node %s (%d/%d)", mac, i+1, len(remainingNodes)), map[string]interface{}{
 			"version_before": versionBefore,
 			"version_after":  firmware.Version,
+			"update_type":    UpdateTypeAuto,
 		})
 
-		log.Printf("[INFO] ota: AUTO-UPDATE node update: node=%s version_before=%s version_after=%s trigger_type=automatic_fleet",
+		log.Printf("[INFO] ota: AUTO-UPDATE node update: node=%s update_type=auto version_before=%s version_after=%s trigger_type=automatic_fleet",
 			mac, versionBefore, firmware.Version)
 
-		if err := m.otaManager.SendOTA(mac); err != nil {
+		if err := m.otaManager.SendOTAAuto(mac); err != nil {
 			log.Printf("[WARN] ota: failed to update node %s: %v", mac, err)
 			// Continue with next node
 		}

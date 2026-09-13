@@ -528,6 +528,20 @@ func (s *Server) IsNodeConnected(mac string) bool {
 	return ok
 }
 
+// GetNodeFirmwareVersion returns the firmware version the node reported in its
+// hello message, or "" if it is not connected or has not said hello yet.
+// Satisfies the OTA manager's version probe, so update logs record a real
+// version_before instead of "unknown".
+func (s *Server) GetNodeFirmwareVersion(mac string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	nc, ok := s.connections[mac]
+	if !ok || nc.Hello == nil {
+		return ""
+	}
+	return nc.Hello.FirmwareVersion
+}
+
 // HandleNodeWS handles WebSocket connections at /ws/node
 func (s *Server) HandleNodeWS(w http.ResponseWriter, r *http.Request) {
 	// Step 1 of shutdown: return HTTP 503 for new WebSocket upgrade requests
