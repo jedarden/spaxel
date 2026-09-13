@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-09-13T16:07:30.71389432Z",
-  "total_open_beads": 39,
+  "timestamp": "2026-09-13T17:07:35.234862299Z",
+  "total_open_beads": 38,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 22,
+    "has_dependencies": 21,
     "resource_conflicts": 0
   },
   "final_candidate_count": 9,
@@ -287,17 +287,6 @@
     {
       "bead_id": "spaxel-566b18de",
       "title": "Wire the eFuse burn procedure into firmware/scripts/README.md and the ADR-007 phase-3 cross-reference",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-cb8414cb",
-      "title": "Submit spaxel-acceptance-diag green run citing the Succeeded node",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
