@@ -33,6 +33,13 @@
 # instead). See verify-live-image.sh for the measured espsecure behaviour it
 # relies on.
 #
+# FAIL-FIRST ORDERING — a --burn runs every check before the first burn:
+# preflight, stage (a)'s verification of <image> and the live-flash gate all
+# report before stage (b), the first irreversible stage, is reached. Any
+# refusal exits with nothing burned; the first eFuse write happens only after
+# every check has passed, and the stages after it run in canonical order
+# (--stage picks a subset, never a reordering).
+#
 # Flags:
 #   --port DEV                 serial port (required for --burn)
 #   --stage LIST               comma-separated subset of
@@ -110,7 +117,7 @@
 set -euo pipefail
 
 usage() {
-    sed -n '2,108p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,115p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 }
 
