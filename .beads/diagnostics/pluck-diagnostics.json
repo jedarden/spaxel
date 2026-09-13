@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T08:07:18.840685486Z",
-  "total_open_beads": 49,
+  "timestamp": "2026-09-13T09:11:58.20881107Z",
+  "total_open_beads": 47,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 32,
+    "has_dependencies": 30,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 13,
+  "final_candidate_count": 12,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -364,17 +364,6 @@
     {
       "bead_id": "spaxel-30a23d74",
       "title": "Phase 3: size and enable flash encryption + Secure Boot v2",
-      "priority": 3,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-b1e593e7",
-      "title": "Wire dashboard jest unit test suite into CI (only a11y runs today)",
       "priority": 3,
       "assignee": null,
       "manual_blocked": false,
