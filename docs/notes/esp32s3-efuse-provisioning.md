@@ -1,7 +1,7 @@
 # ESP32-S3 eFuse provisioning — Secure Boot V2, key revocation, JTAG and download-mode closure
 
 Split child of spaxel-6a829fea (ADR-004 OTA security hardening). This is the
-written reference the burn script (spaxel-2e256299) will implement. It is a
+written reference the burn script (spaxel-2e256299) implements. It is a
 reference only: nothing in this repository burns an eFuse, and every command
 below is a host-side provisioning action run by a person with the board on a
 bench, not something a build or a CI leg does.
@@ -193,7 +193,7 @@ espefuse.py --port /dev/ttyACM0 --chip esp32s3 burn_efuse DIS_USB_JTAG
 espefuse.py --port /dev/ttyACM0 --chip esp32s3 burn_efuse DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE
 espefuse.py --port /dev/ttyACM0 --chip esp32s3 burn_efuse DIS_USB_OTG_DOWNLOAD_MODE
 espefuse.py --port /dev/ttyACM0 --chip esp32s3 burn_efuse DIS_DIRECT_BOOT
-# Fleet decision, burn script must gate it on an explicit flag:
+# Fleet decision; the burn script gates it on --allow-dis-download-mode:
 espefuse.py --port /dev/ttyACM0 --chip esp32s3 burn_efuse DIS_DOWNLOAD_MODE
 ```
 
@@ -241,6 +241,71 @@ bootloader verifies every app image, against the digest provisioned in (b).
 There is no un-burn. A node in this state that rejects its own image does not
 boot, and cannot be re-flashed if (c) also landed. That is the protection
 working.
+
+## The burn script's guard
+
+`firmware/scripts/burn-efuses.sh` (spaxel-2e256299, commit 8762adc4)
+implements the order above and gates it: spaxel-6d5ca68e (78810480) added
+the confirmation gate, spaxel-7c202641 (c7e76675) the live-flash
+verification. The guard, as delivered:
+
+**Confirmation is an explicit flag, not a prompt.** Any run that selects an
+irreversible stage — (b) the key digest, (c) the JTAG/download closures
+(plus `DIS_DOWNLOAD_MODE` when `--allow-dis-download-mode` is given),
+(d) `SECURE_VERSION`, (e) `SECURE_BOOT_EN` — is refused with exit 2 and
+nothing burned unless `--confirm-irreversible` was passed: bare, or
+`=1|true|yes|y` to accept; `=0|false|no|n` refuses explicitly. The gate is
+a flag on purpose — an unattended run cannot proceed by default, and it
+works with stdin piped, redirected or closed, where a y/N prompt cannot be
+answered by a pipe. `--do-not-confirm` only silences espefuse's own BURN
+prompt; it never satisfies this gate. Plan mode, `--check-only`, preflight
+and stage (a) never require it.
+
+**The live flash is verified against the production key before the first
+burn.** The gate is not a `--stage`, cannot be selected away, and never
+touches a device in plan mode or `--check-only`. In a `--burn` it reads the
+bootloader region (`0x0..0x8000`) and every app partition — offsets parsed
+from `firmware/partitions.csv`, so it follows the real layout — with the
+pinned `esptool.py read_flash`, and verifies each dump against the
+production public key fetched from OpenBao: the same `verify_signature`
+pipeline as stage (a), pointed at what is actually on the node instead of
+the image argument. The burn is refused, with the reason named and no key
+material printed, when a region cannot be read; when the bytes are not a
+firmware image (no `0xE9` header — unsigned or corrupt); when no Secure
+Boot v2 signature block covers the image (unsigned); when a signature block
+is present but does not verify against the production key (a
+dev-key-signed bench board, or a corrupt signature); when the bootloader
+region is blank (every later burn a guaranteed brick); or when no app
+partition verifies at all. A blank (erased) app slot is skipped as nothing
+to verify. The measured espsecure behaviour the classifier relies on is
+documented in `firmware/scripts/verify-live-image.sh` and exercised
+device-free by `firmware/scripts/test-verify-live-image.sh`.
+
+**Fail-first: every check reports before the first burn.** In a `--burn`,
+preflight, stage (a)'s verification of the image argument and the
+live-flash gate all complete before stage (b) — the first irreversible
+stage — so any refusal exits with the node exactly as it was. `--stage`
+selects a subset of the canonical order; it is never a reordering, because
+the order is the safety property.
+
+Two further refusals close the remaining foot-guns: a run that burns
+refuses `--pubkey` (production verification is against the OpenBao
+production key only; `firmware/keys/` is bench material and must never
+stand in for it — `--pubkey` remains available to `--check-only` for
+offline checks), and stage (d) refuses `SECURE_VERSION 0` (0 is exactly
+what this fleet's images silently carried until 2026-09-05 — see
+[anti-rollback-secure-version.md](anti-rollback-secure-version.md)). The
+script also works entirely from the public half of the production key: it
+fetches only `public_key_pem` from OpenBao and feeds the PEM straight to
+`burn_key_digest`, so the private key never leaves the store for a
+provisioning run.
+
+> **The guard is unvalidated on hardware, like every other stage above.**
+> The live-flash gate's read path has never run against a real ESP32-S3 —
+> same bench deferral (spaxel-6c9344e4), same missing flashing host — so no
+> stage of the script is validated until the first bench run. Only the
+> gate's classification logic has been exercised, device-free, by
+> `test-verify-live-image.sh`.
 
 ## Console survival — which profile lives through provisioning
 
@@ -321,8 +386,9 @@ espefuse.py --port /dev/ttyACM0 --chip esp32s3 summary
   [anti-rollback-secure-version.md](anti-rollback-secure-version.md), plus
   `firmware/scripts/bump-secure-version.sh`.
 - **The burn script itself** — spaxel-2e256299, `firmware/scripts/burn-efuses.sh`,
-  implements the order above; spaxel-30940d60 adds the prod-signed-image guard;
-  spaxel-566b18de wires it into `firmware/scripts/README.md`.
+  implements the order above; the prod-signed-image guard (spaxel-30940d60) is
+  delivered — see "The burn script's guard" above; spaxel-566b18de still pends,
+  wiring it into `firmware/scripts/README.md`.
 - **The go/no-go on enabling Secure Boot and flash encryption** —
   spaxel-30a23d74 (ADR-007 phase 3), including the `ALLOW_UNUSED_DIGEST_SLOTS`
   and `ENABLE_SECURITY_DOWNLOAD` choices flagged above.
@@ -361,6 +427,8 @@ to the bench bead's record.
   `firmware/scripts/verify-console-config.sh`,
   `firmware/scripts/inspect-firmware-header.py`,
   `scripts/flash-esp32s3.sh`.
-- Beads: parent spaxel-6a829fea, script spaxel-2e256299, guard
-  spaxel-30940d60, README wiring spaxel-566b18de, bench spaxel-6c9344e4
+- Beads: parent spaxel-6a829fea, script spaxel-2e256299 (8762adc4), guard
+  spaxel-30940d60 — delivered as spaxel-6d5ca68e (confirm gate, 78810480)
+  and spaxel-7c202641 (live-flash verify, c7e76675) — this document
+  spaxel-8c5a088c, README wiring spaxel-566b18de, bench spaxel-6c9344e4
   (deferred), phase-3 go/no-go spaxel-30a23d74.
