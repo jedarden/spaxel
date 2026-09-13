@@ -661,6 +661,67 @@ func getNodesAuthed(t *testing.T, client *http.Client, baseURL string) []map[str
 	return nodes
 }
 
+// waitForNodeAuthed waits for a node to appear and come back online in the
+// node list, polled with a logged-in client.
+func waitForNodeAuthed(t *testing.T, client *http.Client, baseURL, mac string, timeout time.Duration) map[string]interface{} {
+	t.Helper()
+
+	start := time.Now()
+	for time.Since(start) < timeout {
+		for _, node := range getNodesAuthed(t, client, baseURL) {
+			if mac == "" || node["mac"] == mac {
+				if node["status"] == "online" {
+					return node
+				}
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	return nil
+}
+
+// updateNodeAuthed assigns a label and 3D position to a node with a
+// logged-in client. The API splits the write in two — PATCH .../label then
+// PUT .../position — and both answer 204 No Content on success.
+func updateNodeAuthed(t *testing.T, client *http.Client, baseURL, mac, label string, position map[string]float64) bool {
+	t.Helper()
+
+	labelBody, _ := json.Marshal(map[string]string{"label": label})
+	req, _ := http.NewRequest("PATCH", baseURL+"/api/nodes/"+mac+"/label", bytes.NewReader(labelBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Logf("Failed to update node label: %v", err)
+		return false
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		t.Logf("PATCH /api/nodes/%s/label returned status %d", mac, resp.StatusCode)
+		return false
+	}
+
+	posBody, _ := json.Marshal(map[string]float64{
+		"x": position["x"], "y": position["y"], "z": position["z"],
+	})
+	req, _ = http.NewRequest("PUT", baseURL+"/api/nodes/"+mac+"/position", bytes.NewReader(posBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Logf("Failed to update node position: %v", err)
+		return false
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		t.Logf("PUT /api/nodes/%s/position returned status %d", mac, resp.StatusCode)
+		return false
+	}
+
+	return true
+}
+
 // getZonesAuthed fetches the zone list with a logged-in client.
 func getZonesAuthed(t *testing.T, client *http.Client, baseURL string) []map[string]interface{} {
 	t.Helper()
@@ -828,6 +889,11 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 		t.Fatal("IO-3 FAIL: Failed to set PIN")
 	}
 
+	// Once the PIN is configured the auth middleware requires a session on
+	// /api/*, so everything from here on goes through a logged-in client.
+	// (/api/provision stays public — nodes mint their own credentials.)
+	authed := loginSession(t, mothershipURL, "333333")
+
 	// Step 3: Provision a token for the node
 	token := provisionNodeToken(t, mothershipURL)
 	if token == "" {
@@ -838,7 +904,9 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 	simPath := os.Getenv("SPAXEL_SIM_PATH")
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io3"
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-3 FAIL: Failed to build simulator: %v: %s", err, string(output))
@@ -869,7 +937,7 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 	defer stopSimulator(simCmd)
 
 	// Step 6: Wait for node to be discovered (appears in nodes list)
-	node := waitForNode(t, mothershipURL, "", 10*time.Second)
+	node := waitForNodeAuthed(t, authed, mothershipURL, "", 10*time.Second)
 	if node == nil {
 		t.Fatal("IO-3 FAIL: Node did not appear in /api/nodes within 10 seconds")
 	}
@@ -882,16 +950,22 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 	nodeMAC := node["mac"].(string)
 	t.Logf("IO-3: Node discovered with MAC %s", nodeMAC)
 
+	// The token was minted for generateMAC(0); a different MAC here means the
+	// sim and the provision record have drifted apart again.
+	if nodeMAC != "AA:BB:CC:00:00:00" {
+		t.Errorf("IO-3 FAIL: expected sim node 0 MAC AA:BB:CC:00:00:00, got %s", nodeMAC)
+	}
+
 	// Step 7: Assign label and 3D position to the node
 	label := "Test-Living-Room"
 	position := map[string]float64{"x": 1.5, "y": 2.0, "z": 2.0}
 
-	if !updateNode(t, mothershipURL, nodeMAC, label, position) {
+	if !updateNodeAuthed(t, authed, mothershipURL, nodeMAC, label, position) {
 		t.Fatal("IO-3 FAIL: Failed to assign label and position to node")
 	}
 
 	// Step 8: Verify label and position persist
-	nodes := getNodesIntegration(t, mothershipURL)
+	nodes := getNodesAuthed(t, authed, mothershipURL)
 	var foundNode map[string]interface{}
 	for _, n := range nodes {
 		if n["mac"] == nodeMAC {
@@ -908,15 +982,23 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 		t.Errorf("IO-3 FAIL: Expected label=%s, got %v", label, foundNode["name"])
 	}
 
-	nodePos, ok := foundNode["position"].(map[string]interface{})
-	if !ok {
-		t.Fatal("IO-3 FAIL: Node position not found or wrong type")
+	// /api/nodes serializes position as the flat pos_x/pos_y/pos_z registry
+	// columns — the same contract the dashboard's fleet view consumes. The
+	// nested "position" object this check once expected never existed on the
+	// wire, so the assertion could only fail.
+	nodePosX, okX := foundNode["pos_x"].(float64)
+	nodePosY, okY := foundNode["pos_y"].(float64)
+	nodePosZ, okZ := foundNode["pos_z"].(float64)
+	if !okX || !okY || !okZ {
+		t.Fatalf("IO-3 FAIL: Node position fields missing or wrong type (pos_x=%v pos_y=%v pos_z=%v)",
+			foundNode["pos_x"], foundNode["pos_y"], foundNode["pos_z"])
 	}
 
-	if nodePos["x"].(float64) != position["x"] ||
-		nodePos["y"].(float64) != position["y"] ||
-		nodePos["z"].(float64) != position["z"] {
-		t.Errorf("IO-3 FAIL: Position mismatch: expected %v, got %v", position, nodePos)
+	if nodePosX != position["x"] ||
+		nodePosY != position["y"] ||
+		nodePosZ != position["z"] {
+		t.Errorf("IO-3 FAIL: Position mismatch: expected %v, got (%v, %v, %v)",
+			position, nodePosX, nodePosY, nodePosZ)
 	}
 
 	// Step 9: Restart simulator to verify persistence
@@ -937,7 +1019,7 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 	defer stopSimulator(simCmd2)
 
 	// Wait for node to come back online
-	node2 := waitForNode(t, mothershipURL, nodeMAC, 10*time.Second)
+	node2 := waitForNodeAuthed(t, authed, mothershipURL, nodeMAC, 10*time.Second)
 	if node2 == nil {
 		t.Fatal("IO-3 FAIL: Node did not reappear after restart")
 	}
@@ -950,11 +1032,15 @@ func IO3_SingleNodeOnboarding(t *testing.T) {
 	t.Log("IO-3: Single simulated node onboarding PASSED")
 }
 
-// provisionNodeToken provisions a node token via the API.
+// provisionNodeToken provisions a node token via the API. The token must be
+// minted for AA:BB:CC:00:00:00 — the MAC generateMAC(0) assigns to spaxel-sim
+// node 0, the node every --token-launched scenario connects as. node_token is
+// HMAC-SHA256(installSecret, mac), so a token minted for any other MAC is
+// rejected on the strict path now that the migration window has closed.
 func provisionNodeToken(t *testing.T, baseURL string) string {
 	t.Helper()
 
-	body := []byte(`{"mac": "AA:BB:CC:DD:EE:FF", "comment": "IO-3 test node", "wifi_ssid": "TestNet"}`)
+	body := []byte(`{"mac": "AA:BB:CC:00:00:00", "comment": "IO-3 test node", "wifi_ssid": "TestNet"}`)
 	req, _ := http.NewRequest("POST", baseURL+"/api/provision", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -1059,7 +1145,9 @@ func IO4_MultiNodeFleetBringUp(t *testing.T) {
 	simPath := os.Getenv("SPAXEL_SIM_PATH")
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io4"
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-4 FAIL: Failed to build simulator: %v: %s", err, string(output))
@@ -1249,7 +1337,9 @@ func IO6_FullNewUserE2E(t *testing.T) {
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io6"
 		// Build simulator
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-6 FAIL: Failed to build simulator: %v: %s", err, string(output))
@@ -1538,7 +1628,9 @@ func IO7_ProvisioningTimeout(t *testing.T) {
 	simPath := os.Getenv("SPAXEL_SIM_PATH")
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io7"
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-7 FAIL: Failed to build simulator: %v: %s", err, string(output))
@@ -1646,7 +1738,9 @@ func IO8_BadExpiredToken(t *testing.T) {
 	simPath := os.Getenv("SPAXEL_SIM_PATH")
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io8"
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-8 FAIL: Failed to build simulator: %v: %s", err, string(output))
@@ -1736,7 +1830,9 @@ func IO9_DuplicateMAC(t *testing.T) {
 	simPath := os.Getenv("SPAXEL_SIM_PATH")
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io9"
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-9 FAIL: Failed to build simulator: %v: %s", err, string(output))
@@ -1861,7 +1957,9 @@ func IO10_DropMidOnboard(t *testing.T) {
 	simPath := os.Getenv("SPAXEL_SIM_PATH")
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io10"
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-10 FAIL: Failed to build simulator: %v: %s", err, string(output))
@@ -1970,7 +2068,9 @@ func IO11_FirmwareVersionSkew(t *testing.T) {
 	simPath := os.Getenv("SPAXEL_SIM_PATH")
 	if simPath == "" {
 		simPath = "/tmp/spaxel-sim-io11"
-		buildCmd := exec.Command("go", "build", "-o", simPath, "../cmd/sim")
+		// mothership/cmd/sim is canonical since the repo-root cmd/sim was
+		// removed; Dir below is already the mothership module root.
+		buildCmd := exec.Command("go", "build", "-o", simPath, "./cmd/sim")
 		buildCmd.Dir = filepath.Join("..", "..")
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("IO-11 FAIL: Failed to build simulator: %v: %s", err, string(output))
