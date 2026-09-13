@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -120,6 +122,7 @@ type AutoUpdateConfig struct {
 	QuietWindowEnd    string  `json:"quiet_window_end"`    // HH:MM format
 	CanaryDurationMin int     `json:"canary_duration_min"` // Canary monitoring duration
 	QualityThreshold  float64 `json:"quality_threshold"`   // Quality degradation threshold (0-1)
+	AllowDowngrade    bool    `json:"allow_downgrade"`     // Let auto-update install firmware a node would see as a rollback
 }
 
 // formatDuration formats a duration into a human-readable string.
@@ -145,8 +148,86 @@ func DefaultAutoUpdateConfig() AutoUpdateConfig {
 		QuietWindowStart:  "02:00",
 		QuietWindowEnd:    "05:00",
 		CanaryDurationMin: 10,
-		QualityThreshold:  0.05, // 5% degradation threshold
+		QualityThreshold:  0.05,  // 5% degradation threshold
+		AllowDowngrade:    false, // never auto-install older firmware (spaxel-005c84ce)
 	}
+}
+
+// compareFirmwareVersions compares two dotted firmware version strings
+// component by component, numerically where both sides parse ("0.1.9" sorts
+// before "0.1.10"). A component missing from one side counts as 0 ("1.2"
+// equals "1.2.0"); components that do not parse as integers fall back to
+// string comparison. Returns -1 when a < b, 0 when a == b, +1 when a > b.
+func compareFirmwareVersions(a, b string) int {
+	as := strings.Split(a, ".")
+	bs := strings.Split(b, ".")
+	for i := 0; i < len(as) || i < len(bs); i++ {
+		var av, bv string
+		if i < len(as) {
+			av = as[i]
+		}
+		if i < len(bs) {
+			bv = bs[i]
+		}
+		an, aerr := strconv.Atoi(av)
+		bn, berr := strconv.Atoi(bv)
+		if aerr != nil && i >= len(as) {
+			an, aerr = 0, nil // absent component counts as 0
+		}
+		if berr != nil && i >= len(bs) {
+			bn, berr = 0, nil
+		}
+		if aerr == nil && berr == nil {
+			if an != bn {
+				if an < bn {
+					return -1
+				}
+				return 1
+			}
+			continue
+		}
+		if c := strings.Compare(av, bv); c != 0 {
+			return c
+		}
+	}
+	return 0
+}
+
+// downgradeBlocked reports whether an auto-update to the candidate version
+// must be refused because the node is already running current or newer. An
+// unknown running version (empty string) never blocks — a node that has not
+// reported its firmware must stay upgradeable — and neither does anything
+// when downgrades are explicitly allowed.
+func downgradeBlocked(candidate, current string, allowDowngrade bool) bool {
+	if allowDowngrade || current == "" {
+		return false
+	}
+	return compareFirmwareVersions(candidate, current) <= 0
+}
+
+// oldestNodeFirmwareVersion returns the oldest non-empty firmware version
+// currently reported across connected nodes, together with a node carrying
+// it. Nodes that do not report a version are ignored: an unknown version
+// must not make the manager believe the fleet is already ahead.
+func (m *AutoUpdateManager) oldestNodeFirmwareVersion() (version, node string, ok bool) {
+	m.mu.RLock()
+	np := m.nodeProvider
+	m.mu.RUnlock()
+
+	if np == nil {
+		return "", "", false
+	}
+
+	for _, mac := range np.GetConnectedNodes() {
+		v := np.GetNodeFirmwareVersion(mac)
+		if v == "" {
+			continue
+		}
+		if !ok || compareFirmwareVersions(v, version) < 0 {
+			version, node, ok = v, mac, true
+		}
+	}
+	return version, node, ok
 }
 
 // NewAutoUpdateManager creates a new auto-update manager.
@@ -258,6 +339,14 @@ func (m *AutoUpdateManager) GetConfig() AutoUpdateConfig {
 	if threshold, ok := m.settingsProvider.GetSingle("auto_update_quality_threshold"); ok {
 		if t, ok := threshold.(float64); ok {
 			config.QualityThreshold = t
+		}
+	}
+
+	// Read downgrade allowance. Default false: auto-update never installs
+	// firmware that is not strictly newer than what a node already runs.
+	if allow, ok := m.settingsProvider.GetSingle("auto_update_allow_downgrade"); ok {
+		if b, ok := allow.(bool); ok {
+			config.AllowDowngrade = b
 		}
 	}
 
@@ -386,6 +475,29 @@ func (m *AutoUpdateManager) checkForNewFirmware(ctx context.Context) {
 		return
 	}
 
+	// Downgrade prevention (spaxel-005c84ce): a release that is not strictly
+	// newer than the oldest version any connected node already runs would
+	// roll that node back, and the fleet with it — an older build can sit in
+	// the firmware directory for other reasons (re-upload, rollback staging).
+	// Skip the cycle and latch the release as handled so the per-minute
+	// check stays quiet until a different filename shows up. The explicit
+	// allow_downgrade setting opts back in.
+	if !config.AllowDowngrade {
+		if current, node, ok := m.oldestNodeFirmwareVersion(); ok &&
+			downgradeBlocked(latest.Version, current, false) {
+			log.Printf("[INFO] ota: downgrade prevention: candidate %s (%s) is not newer than %s already running on %s, skipping auto-update",
+				latest.Version, latest.Filename, current, node)
+
+			m.mu.Lock()
+			if (m.updateState == StateIdle || m.updateState == StateComplete || m.updateState == StateFailed) &&
+				(m.pendingFirmware == nil || m.pendingFirmware.Filename != latest.Filename) {
+				m.pendingFirmware = latest
+			}
+			m.mu.Unlock()
+			return
+		}
+	}
+
 	// Record the selection and start the cycle. ADR-009 decision 4: the
 	// canary may deploy immediately — that is one node, deliberately, and it
 	// only ever starts with the zones vacant. The rest of the fleet is what
@@ -470,6 +582,7 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	m.updateStartTime = time.Now()
 	m.currentCanaryNode = ""
 	m.baselineQuality = 0
+	m.selectedFirmwareVersion = firmware.Version
 	m.mu.Unlock()
 
 	// Determine comprehensive selection reason
@@ -533,6 +646,31 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 	}
 	m.mu.Unlock()
 
+	// Defense in depth for the downgrade gate (spaxel-005c84ce): canary
+	// selection already prefers nodes the candidate upgrades, but a cycle
+	// that bypassed selection-time version tracking (a manual TriggerUpdate)
+	// must still not roll the canary back. Reset to idle rather than fail:
+	// nothing has been attempted, and the pendingFirmware latch keeps the
+	// per-minute check quiet.
+	if cfg := m.GetConfig(); downgradeBlocked(firmware.Version, m.canaryPreviousVersion, cfg.AllowDowngrade) {
+		log.Printf("[INFO] ota: downgrade prevention: canary %s already runs %s, candidate %s is not newer, skipping auto-update cycle",
+			canaryMAC, m.canaryPreviousVersion, firmware.Version)
+
+		m.publishEvent("update_skipped", canaryMAC, fmt.Sprintf("AUTO-UPDATE skipped: %s already runs %s, candidate %s is not newer", canaryMAC, m.canaryPreviousVersion, firmware.Version), map[string]interface{}{
+			"firmware_version": firmware.Version,
+			"running_version":  m.canaryPreviousVersion,
+			"reason":           "downgrade_prevented",
+			"trigger_type":     "automatic",
+		})
+
+		m.mu.Lock()
+		m.updateState = StateIdle
+		m.currentCanaryNode = ""
+		m.canaryPreviousVersion = ""
+		m.mu.Unlock()
+		return
+	}
+
 	log.Printf("[INFO] ota: AUTO-UPDATE canary deployment: node=%s update_type=auto version_before=%s version_after=%s baseline_quality=%.2f trigger_type=automatic_canary",
 		canaryMAC, m.canaryPreviousVersion, firmware.Version, m.baselineQuality)
 
@@ -562,11 +700,14 @@ func (m *AutoUpdateManager) startUpdateCycle(ctx context.Context, firmware *Firm
 func (m *AutoUpdateManager) selectCanaryNode() string {
 	m.mu.RLock()
 	np := m.nodeProvider
+	candidate := m.selectedFirmwareVersion
 	m.mu.RUnlock()
 
 	if np == nil {
 		return ""
 	}
+
+	allowDowngrade := m.GetConfig().AllowDowngrade
 
 	nodes := np.GetConnectedNodes()
 	if len(nodes) == 0 {
@@ -587,6 +728,14 @@ func (m *AutoUpdateManager) selectCanaryNode() string {
 
 		// Skip virtual nodes and APs
 		if role == "ap" || role == "passive_ap" {
+			continue
+		}
+
+		// Skip nodes the candidate would roll back (spaxel-005c84ce): the
+		// canary must be a node this release actually upgrades. An unknown
+		// candidate version (manual trigger) skips this filter — the
+		// deployment-time gate still applies.
+		if candidate != "" && downgradeBlocked(candidate, np.GetNodeFirmwareVersion(mac), allowDowngrade) {
 			continue
 		}
 
@@ -783,7 +932,7 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 		}
 	}
 
-	nodesUpdatedCount := len(remainingNodes)
+	nodesUpdatedCount := 0
 
 	// Success is recorded only once the rollout actually finished. The
 	// cancel paths below run failUpdateCycle, which already recorded the
@@ -836,6 +985,18 @@ func (m *AutoUpdateManager) fleetRollout(ctx context.Context, firmware *Firmware
 		if np != nil {
 			versionBefore = np.GetNodeFirmwareVersion(mac)
 		}
+
+		// Downgrade prevention (spaxel-005c84ce): skip nodes already at or
+		// past the candidate instead of rolling them back. The canary was
+		// picked because the candidate upgrades it, but the rest of the
+		// fleet can lag, lead, or match it.
+		if downgradeBlocked(firmware.Version, versionBefore, m.GetConfig().AllowDowngrade) {
+			log.Printf("[INFO] ota: downgrade prevention: skipping node %s already running %s, candidate %s is not newer",
+				mac, versionBefore, firmware.Version)
+			continue
+		}
+
+		nodesUpdatedCount++
 
 		m.publishEvent("node_update", mac, fmt.Sprintf("Updating node %s (%d/%d)", mac, i+1, len(remainingNodes)), map[string]interface{}{
 			"version_before": versionBefore,
