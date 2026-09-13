@@ -20,12 +20,30 @@
 #               should provision?" gate.
 #   --burn      execute the selected stages in order against --port.
 #
+# LIVE-FLASH VERIFY GATE — before any irreversible stage, a --burn reads the
+# bootloader and every app partition from the target's live flash over --port
+# (esptool.py read_flash) and verifies each against the production PUBLIC key
+# fetched from OpenBao, the same verify_signature pipeline as stage (a) but
+# pointed at what is actually on the node instead of the <image> argument.
+# The burn is refused when the running image is unsigned, signed by a key
+# other than the production key (a dev-key-signed bench board), or when flash
+# cannot be read — naming which of the three failed, never printing key
+# material. The gate is not a --stage: it cannot be selected away, and it
+# never touches a device in plan mode or --check-only (described there
+# instead). See verify-live-image.sh for the measured espsecure behaviour it
+# relies on.
+#
 # Flags:
 #   --port DEV                 serial port (required for --burn)
 #   --stage LIST               comma-separated subset of
 #                              preflight,a,b,c,d,e (canonical order enforced)
 #   --pubkey FILE              use this public PEM instead of fetching
-#                              public_key_pem from OpenBao
+#                              public_key_pem from OpenBao. Accepted for
+#                              --check-only (offline preflight); refused for
+#                              a run that burns, because a production burn
+#                              verifies only against the OpenBao production
+#                              key — a dev/bench key from firmware/keys/ must
+#                              never stand in for it.
 #   --secure-version N         override the SECURE_VERSION burned in stage (d)
 #                              (default: read from the image header)
 #   --allow-dis-download-mode  include DIS_DOWNLOAD_MODE in stage (c). This is
@@ -73,26 +91,37 @@
 #
 # TOOLS — this script runs espefuse.py / espsecure.py from the pinned ESP-IDF
 # 5.2 python environment (~/.espressif/python_env/idf5.2*), the same
-# environment docs/notes/firmware-signing-keys.md requires for espsecure.py.
-# It deliberately does NOT fall back to whatever is on PATH or to another
-# idf version's env: eFuse names, key purposes and the secure_version field
-# are version-specific, so a wrong tool version fails loudly here instead of
-# burning the wrong thing.
+# environment docs/notes/firmware-signing-keys.md requires for espsecure.py
+# (esptool.py, for the live-flash gate's read_flash, comes from the same
+# environment). It deliberately does NOT fall back to whatever is on PATH or
+# to another idf version's env: eFuse names, key purposes and the
+# secure_version field are version-specific, so a wrong tool version fails
+# loudly here instead of burning the wrong thing.
 #
 # NOT VALIDATED ON HARDWARE. The bench bead spaxel-6c9344e4 is deferred and
 # ex44 has no flashing host, so no stage of this script has run against a real
 # ESP32-S3. Treat the first bench run as the validation gate: diff
 # `espefuse.py summary` before and after each stage and attach both dumps to
-# the bench record. See docs/notes/esp32s3-efuse-provisioning.md.
+# the bench record. The live-flash gate's read path is unvalidated for the
+# same reason; its classification logic is exercised device-free by
+# scripts/test-verify-live-image.sh. See
+# docs/notes/esp32s3-efuse-provisioning.md.
 
 set -euo pipefail
 
 usage() {
-    sed -n '2,86p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,108p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Live-flash verify gate helpers (pure functions, no side effects at source
+# time — see the lib header for the measured espsecure behaviour they encode).
+LIVE_LIB="${SCRIPT_DIR}/verify-live-image.sh"
+[ -f "$LIVE_LIB" ] || { echo "ERROR: missing ${SCRIPT_DIR}/verify-live-image.sh" >&2; exit 1; }
+# shellcheck source-path=SCRIPT_DIR source=verify-live-image.sh disable=SC1091
+. "$LIVE_LIB"
 REFERENCE_DOC="docs/notes/esp32s3-efuse-provisioning.md"
 BAO_PATH="secret/ardenone-cluster/spaxel/firmware-signing/prod"
 BAO_FETCH=(bao-as openbao-v2 bao kv get -field=public_key_pem "$BAO_PATH")
@@ -230,6 +259,18 @@ if [ "$MODE" = "check" ]; then
     done
 fi
 
+# A production burn verifies only against the OpenBao production key.
+# --pubkey exists for offline preflight (--check-only); letting it stand in
+# on the burn path would let a dev/bench key (firmware/keys/ is bench-only)
+# masquerade as the production key for an irreversible act.
+if [ "$MODE" = "burn" ] && [ -n "$IRREVERSIBLE" ] && [ -n "$PUBKEY_FILE" ]; then
+    echo "ERROR: --pubkey is not accepted for a run that burns (stages:$IRREVERSIBLE)." >&2
+    echo "A production burn verifies only against the production key fetched from" >&2
+    echo "OpenBao ($BAO_PATH) — --pubkey would let a bench or dev key stand in for" >&2
+    echo "it. Use --check-only with --pubkey for offline checks. Nothing was burned." >&2
+    exit 2
+fi
+
 # ---------------------------------------------------------------------------
 # Tools — pinned ESP-IDF 5.2 environment only, no PATH fallback (see header).
 
@@ -268,6 +309,21 @@ else
         echo "Expected under ~/.espressif/python_env/idf5.2*/bin/. Burning eFuses" >&2
         echo "with a mismatched espefuse version risks resolving the wrong eFuse" >&2
         echo "names or bit positions for this chip." >&2
+        exit 1
+    fi
+fi
+
+# The live-flash verify gate reads the running image with the same pinned
+# esptool the flash flow uses — needed only when this run would burn.
+ESPTOOL=""
+if [ "$MODE" = "burn" ] && [ -n "$IRREVERSIBLE" ]; then
+    if ! ESPTOOL="$(find_idf5_2_tool esptool.py)"; then
+        echo "ERROR: esptool.py not found in the pinned ESP-IDF 5.2 environment" >&2
+        echo "" >&2
+        echo "Expected under ~/.espressif/python_env/idf5.2*/bin/. The live-flash" >&2
+        echo "verify gate reads the bootloader/app partitions with esptool before" >&2
+        echo "anything irreversible runs, and a mismatched version risks reading" >&2
+        echo "the wrong offsets. Nothing was burned." >&2
         exit 1
     fi
 fi
@@ -362,6 +418,23 @@ stage_note_e() {
 EOF
 }
 
+gate_note() {
+    cat <<'EOF'
+  LIVE-FLASH VERIFY GATE — before any irreversible stage, a --burn reads the
+  bootloader and every app partition from the target's live flash over --port:
+    esptool.py --chip esp32s3 --port <port> read_flash <offset> <length> <dump>
+  (regions parsed from firmware/partitions.csv) and verifies each against the
+  production public key — the same verify_signature pipeline as stage (a),
+  pointed at what is actually on the node instead of the <image> argument. A
+  node whose currently-booted image is dev-signed, unsigned, or unreadable is
+  refused before any eFuse is touched; the refusal names which of those
+  failed and never prints key material. A blank (erased) app slot is
+  skipped; a blank bootloader, or no verified app at all, is a refusal.
+  This gate is not a --stage and cannot be selected away. Nothing is read
+  from a device in plan mode or --check-only — this note is the description.
+EOF
+}
+
 # ---------------------------------------------------------------------------
 # Key by reference.
 
@@ -439,6 +512,7 @@ if wants preflight; then
     announce preflight "Read-only checks. Burns nothing."
     echo "espsecure.py: ${ESPSECURE:-<pinned ESP-IDF 5.2 environment not found>}"
     echo "espefuse.py:  ${ESPEFUSE:-<pinned ESP-IDF 5.2 environment not found>}"
+    echo "esptool.py:   ${ESPTOOL:-<needed only for the live-flash gate in --burn>}"
     if [ "$MODE" = "plan" ]; then
         echo "Would fetch the production public key by reference:"
         printf '  %s\n' "${BAO_FETCH[*]}"
@@ -489,6 +563,75 @@ if wants a; then
         fi
         echo "Verified: $IMAGE carries a signature from the production key."
     fi
+fi
+
+# ---------------------------------------------------------------------------
+# live-flash verify gate — what is ON THE NODE must be prod-signed before
+# anything irreversible runs. Not a stage: never runs in --check-only (no
+# device), cannot be deselected with --stage, and skips runs that burn
+# nothing (preflight / stage (a) only).
+
+if [ "$MODE" = "plan" ] && [ -n "$IRREVERSIBLE" ]; then
+    printf '\n=== live-flash verify gate ===\n%s\n' "Described only — plan mode touches no device."
+    gate_note
+fi
+
+if [ "$MODE" = "burn" ] && [ -n "$IRREVERSIBLE" ]; then
+    announce gate "Verify the image live in the target's flash is prod-signed. Reads flash; burns nothing."
+    [ -n "$PUBKEY_OUT" ] || fetch_public_key
+    LIVE_DUMPS="${TMPD}/liveflash"
+    mkdir -p "$LIVE_DUMPS"
+    bootloader_verified=0
+    apps_verified=0
+    while read -r live_offset live_length live_name; do
+        echo "-- reading ${live_name} partition (offset ${live_offset}, length ${live_length}) over ${PORT}"
+        live_dump="${LIVE_DUMPS}/${live_name}.bin"
+        if ! "$ESPTOOL" --chip esp32s3 --port "$PORT" read_flash "$live_offset" "$live_length" "$live_dump"; then
+            echo "" >&2
+            echo "ERROR: flash read failure over ${PORT}: could not read the ${live_name}" >&2
+            echo "partition (offset ${live_offset}, length ${live_length}) with the pinned" >&2
+            echo "esptool. Without the bytes in flash there is nothing to verify, so the" >&2
+            echo "burn is refused. Nothing was burned." >&2
+            exit 1
+        fi
+        live_rc=0
+        verify_live_dump "$live_dump" "${live_name} (offset ${live_offset})" "$PUBKEY_OUT" "$ESPSECURE" || live_rc=$?
+        case "$live_rc" in
+            0)
+                if [ "$live_name" = "bootloader" ]; then
+                    bootloader_verified=1
+                else
+                    apps_verified=$((apps_verified + 1))
+                fi
+                ;;
+            3) : ;; # blank (erased): nothing to verify; judged below
+            *)
+                echo "" >&2
+                echo "Refusing every irreversible stage: the live-flash gate found an" >&2
+                echo "image in flash that the production key does not sign. Provision" >&2
+                echo "the node with a prod-signed image first (see $REFERENCE_DOC)." >&2
+                echo "Nothing was burned." >&2
+                exit 1
+                ;;
+        esac
+    done < <(live_flash_partitions "${SCRIPT_DIR}/../partitions.csv")
+    if [ "$bootloader_verified" -ne 1 ]; then
+        echo "" >&2
+        echo "ERROR: the bootloader region (0x0..0x8000) is empty — there is no" >&2
+        echo "bootloader in flash. Enabling Secure Boot on a node with no bootloader" >&2
+        echo "is a guaranteed brick. Nothing was burned." >&2
+        exit 1
+    fi
+    if [ "$apps_verified" -eq 0 ]; then
+        echo "" >&2
+        echo "ERROR: no application image was found in any app partition — nothing" >&2
+        echo "is running the image stage (a) verified against. Nothing was burned." >&2
+        exit 1
+    fi
+    echo ""
+    echo "Live-flash gate passed: the bootloader and ${apps_verified} app image(s) in"
+    echo "flash are signed by the production key. Proceeding to the irreversible"
+    echo "stages."
 fi
 
 # ---------------------------------------------------------------------------
@@ -593,6 +736,9 @@ case "$MODE" in
     check)
         echo "CHECK ONLY — preflight and stage (a) ran; no device was touched, no"
         echo "eFuse was burned."
+        echo "A --burn would also run the live-flash verify gate first: read the"
+        echo "bootloader/app partitions over --port and verify each against the"
+        echo "production key before anything irreversible (described in plan mode)."
         ;;
     burn)
         echo "BURN COMPLETE — diff the final 'espefuse.py summary' output against the"
