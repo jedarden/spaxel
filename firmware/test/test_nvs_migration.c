@@ -297,11 +297,11 @@ void host_compat_log(const char *tag, const char *fmt, ...)
     (void)fmt;
 }
 
-const char *esp_err_to_name(esp_err_t code)
-{
-    (void)code;
-    return "ESP_ERR";
-}
+/* esp_err_to_name() is deliberately NOT defined here: the harness links every
+ * test_*.c into one binary, so exactly one definition may exist, and it lives
+ * in test_watchdog.c — a real code-to-name switch that serves this TU's
+ * ESP_LOGE/W formatting too (silenced here, so the constant-string shim this
+ * file used to carry was observationally identical). */
 
 /* ---- Assertions over the store -------------------------------------------- */
 

@@ -108,6 +108,31 @@ $(BUILD_DIR)/nvs_migration_v4.o: $(NVS_MIG_SRC) $(NVS_MIG_HDRS) $(HOST_COMPAT)
 		-Dnvs_migration_run=nvs_migration_run_compiled_v4 -c $< -o $@
 
 # ============================================================================
+#  Production TU: firmware/main/watchdog.c
+# ============================================================================
+#
+#  test_watchdog.c includes the real watchdog.c directly, so the IDF surface
+#  that TU pulls (esp_err.h via watchdog.h, esp_log.h, esp_task_wdt.h,
+#  freertos/FreeRTOS.h, freertos/task.h) must resolve to stubs/ — recording
+#  mocks for the esp_task_wdt calls plus a controllable current-task identity
+#  — and NOT to host_compat/, whose esp_err.h/esp_log.h/FreeRTOS.h are a
+#  different stub dialect (the guard namespaces differ, so both trees would
+#  expand in one TU). Scoped to this one object with a target-specific
+#  override, so no other TU's include path changes and host_compat/ keeps
+#  serving the nvs migration objects exactly as before. esp_task_wdt.h and
+#  freertos/task.h exist only in stubs/, which is why -Istubs alone was never
+#  enough to just append to the shared NVS_MIG_INC: provenance has to be
+#  single-rooted, not merely extended.
+#
+#  Like the nvs block above, nothing here is reachable from the ESP-IDF build:
+#  no CMake file references firmware/test/.
+# ============================================================================
+
+WATCHDOG_TEST_INC := -Istubs -I../main
+
+$(BUILD_DIR)/test_watchdog.o: NVS_MIG_INC = $(WATCHDOG_TEST_INC)
+
+# ============================================================================
 #  Build rules
 # ============================================================================
 
