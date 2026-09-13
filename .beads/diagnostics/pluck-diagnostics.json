@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T22:07:56.530444071Z",
-  "total_open_beads": 35,
+  "timestamp": "2026-09-13T23:07:59.13147062Z",
+  "total_open_beads": 39,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 18,
+    "has_dependencies": 22,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 9,
+  "final_candidate_count": 10,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -78,17 +78,6 @@
     {
       "bead_id": "spaxel-b792e668",
       "title": "Dashboard: relay the device CSR to the mothership and return the signed certificate",
-      "priority": 1,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-0af585c1",
-      "title": "spaxel-acceptance-diag is failing in iad-ci while spaxel-build passes",
       "priority": 1,
       "assignee": null,
       "manual_blocked": false,
@@ -259,6 +248,50 @@
       "manual_blocked": true,
       "has_blockers": false,
       "blocker_count": 0,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-33cd4ee7",
+      "title": "Pin SPAXEL_MIGRATION_WINDOW_HOURS=0 in the acceptance harness so IO-8/AS-7 pass",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-b5fad407",
+      "title": "Align IO-4 and IO-6 acceptance scenarios with the live fleet/zone API contract",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-fc22b1b3",
+      "title": "Repair AS-4/AS-6 contract drift and the orphaned AS-5 OTA mocks",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-c835e22e",
+      "title": "Resubmit the spaxel-acceptance-diag wrapper and record the green run on spaxel-0af585c1",
+      "priority": 2,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
       "has_resource_conflicts": false,
       "conflict_count": 0
     },
