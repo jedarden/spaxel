@@ -1,7 +1,9 @@
 # spaxel-build pipeline — operating runbook
 
-Status: current as of 2026-09-06. Live template revision `75948173`
-(argo-workflows-ns-iad-ci), last template sync 2026-09-06T13:44:09Z.
+Status: current as of 2026-09-13. Live template last synced
+2026-09-13T07:51:49Z (declarative-config `a3ba6e29`, app
+`argo-workflows-ns-iad-ci` generation 11) — the sync that added jest to the
+a11y-test step (§2, §9).
 
 This file exists because the `spaxel-build` WorkflowTemplate's operating
 state — credential wiring, gating, failure owners, evidence conventions —
@@ -43,7 +45,7 @@ all.
 | # | Step group | Image | Notes |
 |---|---|---|---|
 | 1 | resolve-version | golang:1.25-bookworm | always runs; decides `should-build` |
-| 2 | golangci-lint + a11y-test | golang:1.25-bookworm / node:20-bookworm | |
+| 2 | golangci-lint + a11y-test | golang:1.25-bookworm / node:20-bookworm | a11y-test runs jest (`npm test`) after `npm ci` and **before** the playwright install + axe gate; a jest failure fails the step under `set -e` and is terminal (retryPolicy OnError) |
 | 3 | go-test + timing-benchmark | golang:1.25-bookworm | |
 | 4 | acceptance-test | golang:1.25-bookworm | **only leg with `continueOn: {failed: true}`** — its red does not block downstream |
 | 5 | firmware-test | gcc:16.1.0-trixie | host-side test build, no ESP-IDF |
@@ -230,6 +232,30 @@ verification around it:
   subsequent `main` tip is docs/.beads-only and skips the pipeline by
   design. Do not manufacture one just to have a name to cite: it would
   push a production image and a draft release for nothing.
+- **Jest-before-a11y verification, 2026-09-13** (spaxel-387835cf; wiring
+  declarative-config `a3ba6e29`, applied live 2026-09-13T07:51:49Z). No
+  natural post-wiring run existed — `main` tips after the wiring are
+  docs/.beads-only — so the a11y-test script was exercised twice as scratch
+  Workflows carrying the template's script byte-verbatim (no image push, no
+  release, no VERSION bump):
+  - `spaxel-a11ygate-387835cf-green-6qp26` — Succeeded. One container log
+    proves the order end to end: `> jest --verbose` →
+    `Tests: 18 skipped, 516 passed, 534 total` (27.6 s) → playwright
+    chromium 147.0.7727.15 download → `> test:a11y` → `25 passed (1.3m)` →
+    exit 0.
+  - `spaxel-a11ygate-387835cf-fail-4bnds` — Failed by an **induced** jest
+    failure (a throwaway `zz-induced-fail.test.js` written inside the
+    container before `npm test`). Log: `Tests: 1 failed, 18 skipped,
+    516 passed`, then zero playwright/chromium/`test:a11y` output; node
+    message `main: Error (exit code 1)`; exactly one pod node —
+    retryPolicy OnError does not retry an exit-code Failure, so the
+    fail-fast is terminal.
+  - Baseline for "a11y unchanged": `spaxel-build-z8fd8` (Succeeded,
+    07:13:53 → 07:56:26Z) ran the **pre**-wiring script (`npm ci` →
+    playwright install → `test:a11y`, no jest) and its `a11y-test(0)` node
+    was Succeeded (07:14:27 → 07:17:51Z). The wiring inserts only `npm
+    test` between `npm ci` and the playwright install, so the a11y portion
+    is byte-identical, and post-wiring it still passes 25/25.
 
 ## 10. Red owners — attribute, don't re-fix
 
