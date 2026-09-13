@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-09-13T13:09:17.923715098Z",
-  "total_open_beads": 43,
+  "timestamp": "2026-09-13T13:52:20.615433612Z",
+  "total_open_beads": 42,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
@@ -298,17 +298,6 @@
     {
       "bead_id": "spaxel-8c5a088c",
       "title": "Document the burn-efuses.sh guard behaviour in the usage text and the eFuse provisioning note",
-      "priority": 2,
-      "assignee": null,
-      "manual_blocked": false,
-      "has_blockers": true,
-      "blocker_count": 1,
-      "has_resource_conflicts": false,
-      "conflict_count": 0
-    },
-    {
-      "bead_id": "spaxel-e15a759b",
-      "title": "Reconcile node status vocabulary and coverage assertions for IO-4",
       "priority": 2,
       "assignee": null,
       "manual_blocked": false,
