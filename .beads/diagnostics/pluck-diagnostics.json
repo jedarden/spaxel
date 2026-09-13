@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-09-13T04:06:36.981327944Z",
+  "timestamp": "2026-09-13T05:06:42.652373501Z",
   "total_open_beads": 51,
   "exclusion_criteria": {
     "has_assignee": 0,
     "manually_blocked": 8,
-    "has_dependencies": 34,
+    "has_dependencies": 33,
     "resource_conflicts": 0
   },
-  "final_candidate_count": 13,
+  "final_candidate_count": 12,
   "excluded_beads": [
     {
       "bead_id": "spaxel-a79ee8d3",
@@ -101,6 +101,17 @@
       "bead_id": "spaxel-0af585c1",
       "title": "spaxel-acceptance-diag is failing in iad-ci while spaxel-build passes",
       "priority": 1,
+      "assignee": null,
+      "manual_blocked": false,
+      "has_blockers": true,
+      "blocker_count": 1,
+      "has_resource_conflicts": false,
+      "conflict_count": 0
+    },
+    {
+      "bead_id": "spaxel-e45bb1e0",
+      "title": "Add CSI binary frame serialization host test",
+      "priority": 2,
       "assignee": null,
       "manual_blocked": false,
       "has_blockers": true,
