@@ -109,16 +109,47 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/api/import", h.importConfig)
 }
 
+// nodeView is the /api/nodes response shape: the registry record plus a
+// computed connection status. The registry persists no status of its own —
+// online-ness is live connection state — so it is derived here rather than
+// stored, using the same vocabulary and priority as /api/fleet.
+type nodeView struct {
+	NodeRecord
+	Status string `json:"status"` // "online", "offline", "unpaired"
+}
+
 func (h *Handler) listNodes(w http.ResponseWriter, r *http.Request) {
 	nodes, err := h.mgr.registry.GetAllNodes()
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	if nodes == nil {
-		nodes = []NodeRecord{}
+
+	connectedSet := make(map[string]struct{})
+	unpairedSet := make(map[string]struct{})
+	if h.nodeID != nil {
+		for _, mac := range h.nodeID.GetConnectedMACs() {
+			connectedSet[mac] = struct{}{}
+		}
+		for _, mac := range h.nodeID.GetUnpairedMACs() {
+			unpairedSet[mac] = struct{}{}
+		}
 	}
-	writeJSON(w, nodes)
+
+	views := make([]nodeView, 0, len(nodes))
+	for _, node := range nodes {
+		status := "offline"
+		// Unpaired outranks online, as in listFleet: a node that connected
+		// without valid credentials is not a healthy fleet member even
+		// though its websocket is up.
+		if _, unpaired := unpairedSet[node.MAC]; unpaired {
+			status = "unpaired"
+		} else if _, connected := connectedSet[node.MAC]; connected {
+			status = "online"
+		}
+		views = append(views, nodeView{NodeRecord: node, Status: status})
+	}
+	writeJSON(w, views)
 }
 
 // FleetNode represents extended node data for the fleet page.
@@ -210,7 +241,7 @@ func (h *Handler) listFleet(w http.ResponseWriter, r *http.Request) {
 			LastSeenMS:      node.LastSeenAt.UnixMilli(),
 			ConfiguredRate:  20, // Default configured rate
 			Temperature:     0,  // Not currently tracked
-			FreeHeapBytes:  node.FreeHeapBytes,
+			FreeHeapBytes:   node.FreeHeapBytes,
 		}
 
 		// Check unpaired status first (highest priority visual indicator)

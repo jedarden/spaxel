@@ -1288,20 +1288,20 @@ func TestHandlerRebaselineAllNodes(t *testing.T) {
 			wantCount:     1,
 		},
 		{
-			name:          "two connected nodes with one shared link",
-			connectedMACs: []string{"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"},
-			existingLinks: []string{"AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"},
-			wantCount:     2,
+			name:                "two connected nodes with one shared link",
+			connectedMACs:       []string{"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"},
+			existingLinks:       []string{"AA:BB:CC:DD:EE:FF:11:22:33:44:55:66"},
+			wantCount:           2,
 			wantLinksInBaseline: 1,
 		},
 		{
-			name: "two connected nodes with multiple links",
+			name:          "two connected nodes with multiple links",
 			connectedMACs: []string{"AA:BB:CC:DD:EE:FF", "11:22:33:44:55:66"},
 			existingLinks: []string{
 				"AA:BB:CC:DD:EE:FF:11:22:33:44:55:66",
 				"AA:BB:CC:DD:EE:FF:22:33:44:55:66:77",
 			},
-			wantCount:       2,
+			wantCount:           2,
 			wantLinksInBaseline: 2,
 		},
 		{
@@ -2938,5 +2938,94 @@ func TestRouteRegistrationNoPanic(t *testing.T) {
 		if !found {
 			t.Errorf("Expected route %s not found", pattern)
 		}
+	}
+}
+
+// TestListNodesReportsConnectionStatus verifies that GET /api/nodes carries a
+// computed status field. The registry persists no status of its own, so the
+// handler derives it from the live connection state. The vocabulary and the
+// unpaired-outranks-online priority must match listFleet, which serves the
+// same notion of status to the dashboard.
+func TestListNodesReportsConnectionStatus(t *testing.T) {
+	reg, err := NewRegistry(":memory:")
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+
+	macs := []string{"aa:bb:cc:00:00:01", "aa:bb:cc:00:00:02", "aa:bb:cc:00:00:03"}
+	for _, mac := range macs {
+		if err := reg.UpsertNode(mac, "v1.0.0", "ESP32-S3"); err != nil {
+			t.Fatalf("UpsertNode %s: %v", mac, err)
+		}
+	}
+
+	h := &Handler{
+		mgr: NewManager(reg),
+		nodeID: &mockNodeIdentifier{
+			getConnectedMACs: func() []string { return []string{macs[0], macs[1]} },
+			getUnpairedMACs:  func() []string { return []string{macs[1]} },
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/nodes", nil)
+	w := httptest.NewRecorder()
+	h.listNodes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listNodes status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	// The response must be a JSON array, never null, so clients can range
+	// over an empty fleet without a nil check.
+	var got []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v: %s", err, w.Body.String())
+	}
+	if len(got) != len(macs) {
+		t.Fatalf("got %d nodes, want %d", len(got), len(macs))
+	}
+
+	byMAC := make(map[string]string, len(got))
+	for _, node := range got {
+		mac, _ := node["mac"].(string)
+		status, ok := node["status"].(string)
+		if !ok {
+			t.Errorf("node %s: status missing or not a string (got %v)", mac, node["status"])
+			continue
+		}
+		byMAC[mac] = status
+	}
+
+	want := map[string]string{
+		macs[0]: "online",   // connected and paired
+		macs[1]: "unpaired", // connected without valid credentials: unpaired outranks online
+		macs[2]: "offline",  // known to the registry but not connected
+	}
+	for mac, wantStatus := range want {
+		if byMAC[mac] != wantStatus {
+			t.Errorf("node %s status = %q, want %q", mac, byMAC[mac], wantStatus)
+		}
+	}
+}
+
+// TestListNodesEmptyFleetReturnsArray verifies the empty-fleet response stays
+// a JSON array now that listNodes wraps records in a computed-status view.
+func TestListNodesEmptyFleetReturnsArray(t *testing.T) {
+	reg, err := NewRegistry(":memory:")
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+
+	h := &Handler{mgr: NewManager(reg)}
+
+	req := httptest.NewRequest("GET", "/api/nodes", nil)
+	w := httptest.NewRecorder()
+	h.listNodes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("listNodes status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if body := w.Body.String(); body != "[]\n" && body != "[]" {
+		t.Errorf("empty fleet response = %q, want []", body)
 	}
 }
