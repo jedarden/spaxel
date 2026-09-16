@@ -1,3 +1,0 @@
-      7 blob
-    168 commit
-     40 tree
