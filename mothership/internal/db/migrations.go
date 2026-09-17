@@ -115,6 +115,11 @@ func AllMigrations() []Migration {
 			Description: "add execution-owner leases and fenced execution writes",
 			Up:          migration_021_add_execution_owner_leases,
 		},
+		{
+			Version:     22,
+			Description: "add durable work-planner lease and work items",
+			Up:          migration_022_add_work_planner,
+		},
 	}
 }
 
