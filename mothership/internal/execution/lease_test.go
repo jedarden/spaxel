@@ -205,6 +205,9 @@ func TestFencedExecutionWriteRejectsStaleOwner(t *testing.T) {
 	if _, err := store.Append(ctx, staleWrite); !errors.Is(err, ErrStaleFence) {
 		t.Fatalf("stale Append error = %v, want ErrStaleFence", err)
 	}
+	if _, err := store.Append(ctx, firstWrite); !errors.Is(err, ErrStaleFence) {
+		t.Fatalf("stale duplicate Append error = %v, want ErrStaleFence", err)
+	}
 
 	currentWrite := firstWrite
 	currentWrite.OwnerID = second.OwnerID
@@ -224,6 +227,44 @@ func TestFencedExecutionWriteRejectsStaleOwner(t *testing.T) {
 	}
 	if rows != 2 {
 		t.Fatalf("execution write count = %d, want 2", rows)
+	}
+}
+
+func TestCurrentOwnerCanResumeRecordedRequestAfterHandoff(t *testing.T) {
+	store, clock, _ := newTestStore(t, time.Minute)
+	ctx := context.Background()
+
+	first, err := store.Acquire(ctx, "account-a", "engine-a")
+	if err != nil {
+		t.Fatalf("first Acquire: %v", err)
+	}
+	original := ExecutionWrite{
+		AccountID:  "account-a",
+		OwnerID:    first.OwnerID,
+		FenceToken: first.FenceToken,
+		RequestID:  "command-1",
+		Kind:       "command.submitted",
+		Payload:    []byte("payload"),
+	}
+	originalReceipt, err := store.Append(ctx, original)
+	if err != nil {
+		t.Fatalf("original Append: %v", err)
+	}
+
+	clock.Set(clock.Now().Add(2 * time.Minute))
+	second, err := store.Acquire(ctx, "account-a", "engine-b")
+	if err != nil {
+		t.Fatalf("takeover Acquire: %v", err)
+	}
+	resumed := original
+	resumed.OwnerID = second.OwnerID
+	resumed.FenceToken = second.FenceToken
+	resumedReceipt, err := store.Append(ctx, resumed)
+	if err != nil {
+		t.Fatalf("resumed Append: %v", err)
+	}
+	if !resumedReceipt.Duplicate || resumedReceipt.ID != originalReceipt.ID {
+		t.Fatalf("resumed receipt = %#v, want duplicate of ID %d", resumedReceipt, originalReceipt.ID)
 	}
 }
 
@@ -259,6 +300,37 @@ func TestFencedExecutionWriteIsIdempotentButConflictsAreRejected(t *testing.T) {
 	conflict.Payload = []byte("different")
 	if _, err := store.Append(ctx, conflict); !errors.Is(err, ErrRequestConflict) {
 		t.Fatalf("conflicting Append error = %v, want ErrRequestConflict", err)
+	}
+}
+
+func TestFencedExecutionWriteRetryWithoutCreatedAtSurvivesClockAdvance(t *testing.T) {
+	store, clock, _ := newTestStore(t, time.Minute)
+	ctx := context.Background()
+	lease, err := store.Acquire(ctx, "account-a", "engine-a")
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+
+	write := ExecutionWrite{
+		AccountID:  "account-a",
+		OwnerID:    lease.OwnerID,
+		FenceToken: lease.FenceToken,
+		RequestID:  "command-with-server-time",
+		Kind:       "command.prepared",
+		Payload:    []byte("payload"),
+	}
+	first, err := store.Append(ctx, write)
+	if err != nil {
+		t.Fatalf("first Append: %v", err)
+	}
+
+	clock.Set(clock.Now().Add(5 * time.Second))
+	second, err := store.Append(ctx, write)
+	if err != nil {
+		t.Fatalf("retry Append after clock advance: %v", err)
+	}
+	if !second.Duplicate || second.ID != first.ID {
+		t.Fatalf("retry receipt = %#v, want duplicate of ID %d", second, first.ID)
 	}
 }
 

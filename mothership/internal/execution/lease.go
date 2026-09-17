@@ -292,6 +292,7 @@ func (s *Store) Append(ctx context.Context, write ExecutionWrite) (WriteReceipt,
 		return WriteReceipt{}, err
 	}
 	now := s.now()
+	createdAtProvided := !write.CreatedAt.IsZero()
 	if write.CreatedAt.IsZero() {
 		write.CreatedAt = now
 	}
@@ -347,7 +348,7 @@ func (s *Store) Append(ctx context.Context, write ExecutionWrite) (WriteReceipt,
 	if !found {
 		return WriteReceipt{}, ErrStaleFence
 	}
-	if !sameWrite(stored.Write, write) {
+	if !sameWrite(stored.Write, write, createdAtProvided) {
 		return WriteReceipt{}, ErrRequestConflict
 	}
 	return WriteReceipt{ID: stored.ID, Write: stored.Write, Duplicate: true}, nil
@@ -440,11 +441,15 @@ func (s *Store) loadWrite(ctx context.Context, accountID, requestID string) (sto
 	}, true, nil
 }
 
-func sameWrite(a, b ExecutionWrite) bool {
-	return a.AccountID == b.AccountID && a.OwnerID == b.OwnerID &&
-		a.FenceToken == b.FenceToken && a.RequestID == b.RequestID &&
+func sameWrite(a, b ExecutionWrite, compareCreatedAt bool) bool {
+	// OwnerID and FenceToken authorize the retry at the current lease boundary;
+	// they are not request content. A replacement owner must be able to resume
+	// an already-recorded request without creating a second durable row. The
+	// caller's current fence is checked before this comparison, so an expired
+	// owner cannot use the same request ID to obtain a duplicate receipt.
+	return a.AccountID == b.AccountID && a.RequestID == b.RequestID &&
 		a.Kind == b.Kind && string(a.Payload) == string(b.Payload) &&
-		a.CreatedAt.UnixMilli() == b.CreatedAt.UnixMilli()
+		(!compareCreatedAt || a.CreatedAt.UnixMilli() == b.CreatedAt.UnixMilli())
 }
 
 func validateIdentity(accountID, ownerID string) error {
