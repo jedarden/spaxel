@@ -646,12 +646,14 @@ func wsURL(httpURL string) string {
 		u.Scheme = "wss"
 	}
 
-	// Ensure /ws/node path
-	if !strings.HasSuffix(u.Path, "/ws") && !strings.Contains(u.Path, "/ws/") {
+	// Ensure the /ws/node path — that is what the mux registers
+	// (cmd/mothership/main.go); /ws has no route and falls through to the SPA
+	// index handler, whose 200 HTML response fails the WebSocket handshake.
+	if !strings.HasSuffix(u.Path, "/ws/node") {
 		if strings.HasSuffix(u.Path, "/") {
-			u.Path += "ws"
+			u.Path += "ws/node"
 		} else {
-			u.Path += "/ws"
+			u.Path += "/ws/node"
 		}
 	}
 
