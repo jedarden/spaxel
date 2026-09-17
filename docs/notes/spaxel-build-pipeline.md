@@ -1,9 +1,9 @@
 # spaxel-build pipeline — operating runbook
 
-Status: current as of 2026-09-13. Live template last synced
-2026-09-13T07:51:49Z (declarative-config `a3ba6e29`, app
-`argo-workflows-ns-iad-ci` generation 11) — the sync that added jest to the
-a11y-test step (§2, §9).
+Status: current as of 2026-09-17. Live template last synced 2026-09-17
+~23:28Z (declarative-config `bef14245`, app `argo-workflows-ns-iad-ci`)
+— the sync that added simulator-deployment.yml to the pin-bump file list
+(§7).
 
 This file exists because the `spaxel-build` WorkflowTemplate's operating
 state — credential wiring, gating, failure owners, evidence conventions —
@@ -169,15 +169,25 @@ Image `docker:29.7.2-dind`, buildx with a `docker-container` driver
   matters because podGC never preserves pods (§8) — node phase plus a
   registry-side digest check is the evidence, not logs.
 
-## 7. update-declarative-config (group[6]) — known not landing
+## 7. update-declarative-config (group[6]) — the deployment pin bump
 
 The leg clones declarative-config (credential helper above) and seds the
-new version into `k8s/ardenone-cluster/spaxel/deployment.yml` and
-`nixos/bench/modules/mothership.nix`. It has **never landed a pin bump**:
-the bench still pins `0.2.24` (declarative-config `adb644cf`, 2026-08-07),
-while the pipeline is at 0.2.18x. The work is currently **unowned** — no
-open bead carries it. Until someone owns it, assume the cluster image ref
-does **not** follow `main`, and do not treat a green pipeline as "deployed".
+new version into every consumer of the image, in one bump commit:
+`k8s/ardenone-cluster/spaxel/deployment.yml` (cluster mothership),
+`k8s/ardenone-cluster/spaxel/simulator-deployment.yml` (simulator — bound
+by the tag-lockstep rule in its own header; added 2026-09-17,
+declarative-config `bef14245`, spaxel-8d87b551), and
+`nixos/bench/modules/mothership.nix` (bench rig). The sed pattern is
+`${IMAGE_REPO}:` from the workflow's `image-repo` parameter, so a scratch
+verification run with a different repo matches nothing in the tree and
+commits nothing (spaxel-fce2f7e4).
+
+Earlier copies of this section said the leg had "never landed a pin
+bump" — true when written (bench sat on `0.2.24` from 2026-08-07) and
+stale by 2026-09-17: releases land bump commits (e.g. `a14b6e66` →
+0.2.196) and the bench/cluster pins follow. Treat a green pipeline
+through this leg as "the pin moved in git"; the cluster then follows via
+ArgoCD sync of the spaxel Application, not synchronously.
 
 ## 8. Evidence conventions
 
