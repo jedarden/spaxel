@@ -49,13 +49,13 @@ type Config struct {
 	FusionRateHz int // Fusion loop rate in Hz, range [1,20] (default 10)
 
 	// Replay buffer
-	ReplayMaxMB         int   // Maximum replay buffer size in MB, range [10,10000] (default 360)
-	ReplayCompression   bool  // Enable zstd compression for CSI replay buffer (default true)
-	ReplayChunkSizeMB   int   // Target chunk size for compression in MB, range [1,100] (default 64)
+	ReplayMaxMB       int  // Maximum replay buffer size in MB, range [10,10000] (default 360)
+	ReplayCompression bool // Enable zstd compression for CSI replay buffer (default true)
+	ReplayChunkSizeMB int  // Target chunk size for compression in MB, range [1,100] (default 64)
 
 	// Security
-	InstallSecret        string // Installation secret (64-char hex, optional if set must be 32+ bytes)
-	MigrationWindowHours int    // How long after startup nodes without tokens are tolerated (default 24, 0 = disabled)
+	InstallSecret           string // Installation secret (64-char hex, optional if set must be 32+ bytes)
+	MigrationWindowHours    int    // How long after startup nodes without tokens are tolerated (default 24, 0 = disabled)
 	DemoMode                bool   // Demo mode: read-only dashboard, mutating endpoints blocked, no PIN required (default false)
 	MaxDashboardClients     int    // Maximum concurrent dashboard WebSocket clients outside demo mode (default 10, range [1,100])
 	DemoMaxDashboardClients int    // Demo-mode dashboard WebSocket client cap (default 5, range [1,100]); overrides MaxDashboardClients when DemoMode is set
@@ -81,6 +81,11 @@ type Config struct {
 
 	// GitHub API access (for Kaniko releases and other GitHub operations)
 	GitHubToken string // SPAXEL_GITHUB_TOKEN - GitHub personal access token (optional, recommended for authenticated requests)
+
+	// GitHubAPIURL overrides the REST API base URL the client talks to. Empty
+	// means the client default (https://api.github.com); point it at a GitHub
+	// Enterprise instance, e.g. https://ghe.example.com/api/v3.
+	GitHubAPIURL string // SPAXEL_GITHUB_API_URL
 }
 
 // DashboardClientLimit returns the effective concurrent dashboard WebSocket
@@ -307,6 +312,9 @@ func Load() (*Config, error) {
 	// SPAXEL_GITHUB_TOKEN - string, optional (GitHub API access for Kaniko releases, recommended for authenticated requests)
 	cfg.GitHubToken = envOr("SPAXEL_GITHUB_TOKEN", "")
 
+	// SPAXEL_GITHUB_API_URL - string, optional (GitHub REST API base URL override, e.g. GitHub Enterprise)
+	cfg.GitHubAPIURL = envOr("SPAXEL_GITHUB_API_URL", "")
+
 	// SPAXEL_DEMO_MODE - bool, default false
 	demoModeStr := envOr("SPAXEL_DEMO_MODE", "false")
 	if demoModeStr == "true" || demoModeStr == "1" {
@@ -525,11 +533,14 @@ func logConfig(cfg *Config) {
 		log.Printf("[CONFIG] SPAXEL_WIFI_SSID=%s (will seed DB on first boot if no existing setting)", cfg.WifiSSID)
 		log.Printf("[CONFIG] SPAXEL_WIFI_PASSWORD=*** (will seed DB on first boot if no existing setting)")
 	}
-		if cfg.GitHubToken != "" {
-			log.Printf("[CONFIG] SPAXEL_GITHUB_TOKEN=%s... (configured for GitHub API access)", cfg.GitHubToken[:8])
-		} else {
-			log.Printf("[CONFIG] SPAXEL_GITHUB_TOKEN=(not set, unauthenticated GitHub API requests will be rate-limited)")
-		}
+	if cfg.GitHubToken != "" {
+		log.Printf("[CONFIG] SPAXEL_GITHUB_TOKEN=%s... (configured for GitHub API access)", cfg.GitHubToken[:8])
+	} else {
+		log.Printf("[CONFIG] SPAXEL_GITHUB_TOKEN=(not set, unauthenticated GitHub API requests will be rate-limited)")
+	}
+	if cfg.GitHubAPIURL != "" {
+		log.Printf("[CONFIG] SPAXEL_GITHUB_API_URL=%s (GitHub API base URL override)", cfg.GitHubAPIURL)
+	}
 	log.Printf("[CONFIG] TZ=%s", cfg.Timezone)
 	if cfg.DemoMode {
 		log.Printf("[CONFIG] SPAXEL_DEMO_MODE=true (read-only dashboard, mutating endpoints blocked)")

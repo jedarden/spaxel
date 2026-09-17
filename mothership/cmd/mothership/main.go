@@ -1043,7 +1043,12 @@ func main() {
 	// Phase 5: GitHub API client for Kaniko releases
 	var ghClient *githubclient.Client
 	if err := startup.SubsystemStart(startupCtx, "GitHub API client", func(ctx context.Context) error {
-		ghClient = githubclient.NewClient(cfg.GitHubToken)
+		ghCfg := githubclient.NewGitHubConfig().WithToken(cfg.GitHubToken)
+		if cfg.GitHubAPIURL != "" {
+			ghCfg.BaseURL = cfg.GitHubAPIURL
+		}
+		ghClient = githubclient.NewClientFromConfig(ghCfg)
+		log.Printf("[INFO] GitHub API client endpoint: %s", ghClient.GetBaseURL())
 
 		// Ping GitHub API to verify accessibility
 		if pingErr := ghClient.Ping(ctx); pingErr != nil {
