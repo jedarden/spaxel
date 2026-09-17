@@ -110,6 +110,11 @@ func AllMigrations() []Migration {
 			Description: "allow role='ap' so passive-radar router virtual nodes can be stored",
 			Up:          migration_020_allow_ap_role,
 		},
+		{
+			Version:     21,
+			Description: "add execution-owner leases and fenced execution writes",
+			Up:          migration_021_add_execution_owner_leases,
+		},
 	}
 }
 
