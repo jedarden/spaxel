@@ -10,11 +10,10 @@ CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
 
-# WiFi CSI Configuration
-CONFIG_ESP_WIFI_RX_BCN_ADAPT=y
-CONFIG_ESP_WIFI_RX_BCN_ADAPT_THRESHOLD=10
-
-# Enable CSI
+# WiFi CSI Configuration. CSI needs only the enabled flag below. The former
+# CONFIG_ESP_WIFI_RX_BCN_ADAPT / _THRESHOLD lines were removed 2026-09-04:
+# neither symbol exists in any ESP-IDF release, so both were silently dropped
+# on every reconfigure.
 CONFIG_ESP_WIFI_CSI_ENABLED=y
 
 # WiFi power save disabled for stable CSI
@@ -27,11 +26,12 @@ CONFIG_FREERTOS_UNICORE=n
 CONFIG_BT_ENABLED=y
 CONFIG_BT_BLUEDROID_ENABLED=n
 CONFIG_BT_NIMBLE_ENABLED=y
-CONFIG_BT_BLE_42_FEATURES_SUPPORTED=y
-CONFIG_BT_BLE_RPA_SUPPORTED=y
-CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
-CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=n
-CONFIG_BTDM_CTRL_MODE_BTDM=n
+# The former BT_BLE_42_FEATURES_SUPPORTED / BT_BLE_RPA_SUPPORTED /
+# BTDM_CTRL_MODE_* lines were removed 2026-09-04: they are Bluedroid and
+# ESP32-classic-controller symbols, and this target runs NimBLE on an
+# ESP32-S3, whose BT controller is BLE-only, so none of them exist here and
+# every line was silently dropped on each reconfigure. NimBLE's RPA is
+# already handled by CONFIG_BT_NIMBLE_RPA_TIMEOUT (IDF default 900s).
 
 # Increase main task stack for WiFi/BLE operations
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
@@ -99,31 +99,47 @@ CONFIG_NVS_ENCRYPTION=n
 
 # OTA — dual-partition rollback support
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
-CONFIG_BOOTLOADER_APP_ROLLBACK_COUNT=1
-CONFIG_APP_ROLLBACK_ENABLE=y
+# CONFIG_BOOTLOADER_APP_ROLLBACK_COUNT and the duplicate old short name
+# CONFIG_APP_ROLLBACK_ENABLE were removed 2026-09-04: no count symbol exists
+# in ESP-IDF (rollback is the fixed pending-verify/boot mechanism), and the
+# short name was already covered by the line above via sdkconfig.rename.
 
 # OTA — anti-rollback protection (prevents downgrade attacks)
 # Uses eFuse-based security version counter. Once a higher version is written,
 # the device permanently refuses to boot lower versions, even if an attacker
 # can flash the firmware. This is defense-in-depth against mothership compromise.
-CONFIG_APP_ANTI_ROLLBACK=y
-CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK_EFuse=y
-CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK_EFuse_WP_DISABLE=y
+CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y
+# The former CONFIG_APP_ANTI_ROLLBACK (old short name, worked only via the
+# sdkconfig.rename map) and the *_EFuse / *_EFuse_WP_DISABLE lines were
+# corrected 2026-09-04: the EFuse lines name symbols that do not exist, so
+# they configured nothing. The real eFuse-side knobs are
+# CONFIG_BOOTLOADER_APP_SECURE_VERSION (deliberately left at the IDF default
+# of 0 — building an app whose security version exceeds the burned eFuse
+# value makes the bootloader refuse to boot it) and
+# CONFIG_BOOTLOADER_APP_SEC_VER_SIZE_EFUSE_FIELD (default 16 bits on the
+# ESP32-S3). Burning the eFuse counter is a provisioning/release action, not
+# a compile-time default.
 
 # Secure Boot V2 — signed app verification
-# Verifies RSA-PSS signature of every firmware image before booting.
-# An attacker who can serve the firmware URL or intercept HTTP still cannot
-# execute arbitrary code because the bootloader will reject unsigned images.
-# Requires firmware signing key (see scripts/generate-signing-key.sh).
-CONFIG_SECURE_BOOT_V2=y
-CONFIG_SECURE_BOOT_V2_RSA_SUPPORTED=y
-CONFIG_SECURE_BOOT_V2_PREFERRED=y
-CONFIG_SECURE_BOOT_V2_RSA_MODE_2048=y
-CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
-
-# Allow secure boot to be disabled via eFuse for development boards.
-# Production devices should burn this eFuse to permanently enable verification.
-CONFIG_SECURE_BOOT_V2_ALLOW_EFUSE_DISABLE=y
+#
+# DELIBERATELY NOT ENABLED (corrected 2026-09-04). Every CONFIG_SECURE_BOOT_V2*
+# line previously in this block named a symbol that does not exist in
+# ESP-IDF 5.x — the enable symbol is CONFIG_SECURE_BOOT — so no firmware build
+# ever had Secure Boot on, and the images were signed only by the build, not
+# verified by the bootloader. CONFIG_SECURE_BOOT_V2_RSA_SUPPORTED and
+# CONFIG_SECURE_BOOT_V2_PREFERRED are target-capability flags, not settings;
+# RSA signatures are always 3072-bit, so there is no RSA_MODE_2048 either.
+#
+# Enabling it for real is a provisioning project, not a config flip: the
+# signing key must exist (scripts/generate-signing-key.sh; key storage:
+# spaxel-5bf35319) and the verification eFuse must be burned on every node,
+# or the bootloader refuses to boot. Until that lands (spaxel-30a23d74), the
+# real symbols stay commented out so this file does not claim a protection
+# the binary does not have. CMakeLists.txt keys its signing step off
+# CONFIG_SECURE_BOOT and activates automatically once this is uncommented.
+#
+# CONFIG_SECURE_BOOT=y
+# CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
 
 # The per-node burn this enablement waits on now exists (2026-09-13):
 # firmware/scripts/burn-efuses.sh, procedure in
@@ -137,16 +153,21 @@ CONFIG_SECURE_BOOT_V2_ALLOW_EFUSE_DISABLE=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
-# LED identification blink
+# LED identification blink (symbol defined in main/Kconfig.projbuild; before
+# that file existed this line was a silent no-op and led.c used its own
+# identical #ifndef fallback)
 CONFIG_SPAXEL_LED_GPIO=8
 
 # PSRAM support — 2MB external PSRAM on ESP32-S3
 # Critical for TLS handshake heap measurement (ADR-008 decision 5)
 CONFIG_SPIRAM=y
-CONFIG_SPIRAM_USE_MEMMAP=y
-CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+# SPIRAM_USE_* is a choice — exactly one allocation mode. MALLOC wins, which
+# is what the TLS heap measurement needs; the former MEMMAP and CAPS_ALLOC
+# lines were dead-on-arrival overrides of it.
 CONFIG_SPIRAM_USE_MALLOC=y
+# TYPE_AUTO discovers the PSRAM chip at boot. The former
+# CONFIG_SPIRAM_SIZE_AUTO and CONFIG_SPIRAM_CACHE_WRITETHROUGH lines were
+# removed 2026-09-04: neither symbol exists in ESP-IDF 5.x (size detection is
+# what TYPE_AUTO does; the cache-writeback option was ESP32-classic only).
 CONFIG_SPIRAM_TYPE_AUTO=y
-CONFIG_SPIRAM_SIZE_AUTO=y
 CONFIG_SPIRAM_SPEED_80M=y
-CONFIG_SPIRAM_CACHE_WRITETHROUGH=y

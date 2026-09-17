@@ -1,5 +1,21 @@
 # OTA Security Hardening Implementation
 
+> **CORRECTION (2026-09-04):** the `sdkconfig.defaults` lines quoted in
+> sections 1 and 2 below never took effect. `CONFIG_SECURE_BOOT_V2`,
+> `CONFIG_SECURE_BOOT_V2_RSA_MODE_2048`, `CONFIG_SECURE_BOOT_V2_ALLOW_EFUSE_DISABLE`,
+> `CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK_EFuse` and `..._EFuse_WP_DISABLE` are
+> not ESP-IDF symbols at all (the enable symbol is `CONFIG_SECURE_BOOT`),
+> so ESP-IDF silently dropped them on every configure: **no firmware image
+> from this project was ever Secure-Boot-verified or anti-rollback-enforced.**
+> Verified against ESP-IDF 5.2.3's Kconfig tree and the generated sdkconfig
+> (`# CONFIG_SECURE_BOOT is not set`). Anti-rollback *is* now genuinely
+> enabled via the correct symbol (`CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK`);
+> its eFuse counter stays at 0 until the release process burns it. Secure
+> Boot remains deliberately off until the signing-key and eFuse-provisioning
+> work lands. sdkconfig.defaults and `firmware/CMakeLists.txt` carry the
+> corrected, commented state. The claims below are retained as the record of
+> what was attempted.
+
 **Date:** 2026-08-15
 **Bead:** spaxel-8aa9703c
 **ADR:** ADR-004 / bf-1447x

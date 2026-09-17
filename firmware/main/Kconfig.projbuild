@@ -1,0 +1,18 @@
+# SPAXEL firmware project-specific configuration.
+#
+# Without this file, CONFIG_SPAXEL_LED_GPIO in sdkconfig.defaults was a
+# silent no-op — ESP-IDF drops unknown symbols — and led.c compiled against
+# its own identical #ifndef fallback. Defining the symbol here makes the
+# documented knob real: it now appears in `idf.py menuconfig` under SPAXEL
+# and lands in the generated sdkconfig.
+menu "SPAXEL"
+
+    config SPAXEL_LED_GPIO
+        int "GPIO number of the identification LED"
+        default 8
+        range 0 48
+        help
+            GPIO driving the identification blink in led.c. 8 is the
+            ESP32-S3-DevKitC default the firmware originally hardcoded.
+
+endmenu

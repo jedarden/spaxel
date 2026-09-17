@@ -155,8 +155,10 @@ configure_file(
 
 # Secure Boot V2: Firmware signing configuration
 #
-# When Secure Boot V2 is enabled (CONFIG_SECURE_BOOT_V2=y), the build system
-# automatically signs bootloader and app binaries with the private key.
+# When Secure Boot is enabled (CONFIG_SECURE_BOOT=y — the actual ESP-IDF 5.x
+# symbol; the CONFIG_SECURE_BOOT_V2 name this file previously tested never
+# existed, so this block never ran), the build system automatically signs
+# bootloader and app binaries with the private key.
 # The signing key is expected at firmware/keys/firmware_signing_key.pem.
 #
 # Generate signing key if it doesn't exist:
@@ -168,7 +170,7 @@ configure_file(
 # For production deployment, store the private key in a secure location (HSM, offline storage)
 # and set the path via secure_boot_signing_key in the project configuration.
 
-if(CONFIG_SECURE_BOOT_V2)
+if(CONFIG_SECURE_BOOT)
     message(STATUS "Secure Boot V2 enabled - firmware will be signed")
 
     # Set signing key path (default: keys/firmware_signing_key.pem)
