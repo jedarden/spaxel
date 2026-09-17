@@ -120,6 +120,11 @@ func AllMigrations() []Migration {
 			Description: "add durable work-planner lease and work items",
 			Up:          migration_022_add_work_planner,
 		},
+		{
+			Version:     23,
+			Description: "add durable execution breaker state and history",
+			Up:          migration_023_add_execution_breaker,
+		},
 	}
 }
 

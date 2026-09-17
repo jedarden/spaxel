@@ -57,7 +57,7 @@ func TestMigrateIdempotent(t *testing.T) {
 		"replay_sessions", "crowd_flow", "diurnal_baselines",
 		"anomaly_patterns", "prediction_models", "ble_device_aliases",
 		"execution_owner_leases", "execution_writes", "work_planner_leases",
-		"work_items",
+		"work_items", "execution_breaker_states", "execution_breaker_events",
 	}
 
 	for _, table := range tables {
