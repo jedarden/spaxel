@@ -49,6 +49,8 @@ mothership/sim
 # both land here when the module is built in place and must never be tracked.
 /mothership/build/spaxel
 /cmd/sim/sim
+# Root-level build/ output (go build -o build/ from the repo root).
+/build/
 *.test
 
 # Node dependencies (regenerated via npm ci)

@@ -177,6 +177,14 @@ The filter **fails open**: missing `commits`, a non-table path list, a
 non-string path, or a GitHub-truncated payload (`size > #commits`) all build.
 No release can be silently dropped by a malformed webhook.
 
+One scope note: `spaxel-e2e` is submitted on the same
+`conditions: spaxel-push`, so every rule in this section also suppresses that
+push's e2e run — intended, since a docs/beads-only push has nothing to teach
+the e2e suite either. When a prefix length is added here, count it: `notes/`
+is 6 characters, `testdata/` is 9, `.marathon/` is 10 — an off-by-one
+`string.sub` length silently never matches (caught in review on the
+`testdata/` rule below, §5.1).
+
 ### 4.2 Inert paths that currently DO trigger — recommended additions
 
 These are tracked, outside the live ignore list, and change no image content
@@ -252,7 +260,7 @@ local function ignored_path(path)
   if path == ".gitignore"                 then return true end
   -- new in this spec: inert paths that previously triggered builds
   if string.sub(path, 1, 5) == "data/"    then return true end
-  if string.sub(path, 1, 10) == "testdata/" then return true end
+  if string.sub(path, 1, 9) == "testdata/"  then return true end
   if string.sub(path, 1, 10) == ".marathon/" then return true end
   if path == ".gitattributes"                       then return true end
   if path == "acceptance-test-hang-workflow.yml"    then return true end
