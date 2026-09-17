@@ -65,6 +65,80 @@ func TestGrid3D_NormalizeEmpty(t *testing.T) {
 	}
 }
 
+// TestGrid3D_Peaks_BorderVoxels pins the border-participation contract of
+// Peaks: a voxel on the grid boundary is a local maximum when every in-bounds
+// 26-neighbour is strictly smaller — out-of-bounds neighbours are ignored, not
+// treated as implicit loss. Before the boundary-aware neighbour check the scan
+// skipped border voxels entirely, so a ridge hugging the grid edge (the normal
+// case for ceiling-mounted nodes whose links paint near the top of the grid)
+// never produced a peak.
+func TestGrid3D_Peaks_BorderVoxels(t *testing.T) {
+	tests := []struct {
+		name      string
+		paint     func(g *Grid3D)
+		wantPeaks int
+		wantFirst [3]float64 // centre of the top peak; ignored when wantPeaks == 0
+	}{
+		{
+			name: "corner voxel is a local maximum",
+			paint: func(g *Grid3D) {
+				g.cells[g.idx(0, 0, 0)] = 1.0
+			},
+			wantPeaks: 1,
+			wantFirst: [3]float64{0.5, 0.5, 0.5},
+		},
+		{
+			name: "face voxel on the upper Y boundary is a local maximum",
+			paint: func(g *Grid3D) {
+				g.cells[g.idx(1, 2, 1)] = 1.0
+			},
+			wantPeaks: 1,
+			wantFirst: [3]float64{1.5, 2.5, 1.5},
+		},
+		{
+			name: "border voxel dominated by interior neighbour is not a peak",
+			paint: func(g *Grid3D) {
+				g.cells[g.idx(0, 0, 0)] = 1.0
+				g.cells[g.idx(1, 1, 1)] = 2.0
+			},
+			wantPeaks: 1,
+			wantFirst: [3]float64{1.5, 1.5, 1.5},
+		},
+		{
+			name: "interior peak unchanged by border rule",
+			paint: func(g *Grid3D) {
+				g.cells[g.idx(1, 1, 1)] = 1.0
+			},
+			wantPeaks: 1,
+			wantFirst: [3]float64{1.5, 1.5, 1.5},
+		},
+		{
+			name: "below-threshold border voxel is not a peak",
+			paint: func(g *Grid3D) {
+				g.cells[g.idx(0, 0, 0)] = 0.2
+			},
+			wantPeaks: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewGrid3D(3, 3, 3, 1.0, 0, 0, 0)
+			tt.paint(g)
+			peaks := g.Peaks(5, 0.5)
+			if len(peaks) != tt.wantPeaks {
+				t.Fatalf("Peaks returned %d peaks, want %d: %v", len(peaks), tt.wantPeaks, peaks)
+			}
+			if tt.wantPeaks > 0 {
+				for axis, want := range tt.wantFirst {
+					if math.Abs(peaks[0][axis]-want) > 1e-9 {
+						t.Fatalf("peak axis %d = %f, want %f", axis, peaks[0][axis], want)
+					}
+				}
+			}
+		})
+	}
+}
+
 // ---- Fresnel zone geometry ----
 
 func TestFresnelZoneRadius(t *testing.T) {

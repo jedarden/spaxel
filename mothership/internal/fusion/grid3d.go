@@ -147,7 +147,10 @@ func (g *Grid3D) Normalize() bool {
 
 // Peaks returns the top-N local maxima as (x, y, z, weight) tuples.
 // A voxel is a local maximum if it exceeds threshold and is strictly greater
-// than all 26-connected neighbours.
+// than all in-bounds 26-connected neighbours. Border voxels participate:
+// out-of-bounds neighbours are ignored, so an activation ridge that hugs the
+// grid boundary — the normal case for ceiling-mounted nodes whose links paint
+// the ridge near the top of the grid — can still be promoted to a blob.
 func (g *Grid3D) Peaks(n int, threshold float64) [][4]float64 {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -155,9 +158,9 @@ func (g *Grid3D) Peaks(n int, threshold float64) [][4]float64 {
 	type peak struct{ x, y, z, w float64 }
 	var candidates []peak
 
-	for iz := 1; iz < g.nz-1; iz++ {
-		for iy := 1; iy < g.ny-1; iy++ {
-			for ix := 1; ix < g.nx-1; ix++ {
+	for iz := 0; iz < g.nz; iz++ {
+		for iy := 0; iy < g.ny; iy++ {
+			for ix := 0; ix < g.nx; ix++ {
 				v := g.cells[g.idx(ix, iy, iz)]
 				if v < threshold {
 					continue
@@ -170,7 +173,11 @@ func (g *Grid3D) Peaks(n int, threshold float64) [][4]float64 {
 							if dx == 0 && dy == 0 && dz == 0 {
 								continue
 							}
-							if g.cells[g.idx(ix+dx, iy+dy, iz+dz)] > v {
+							nx, ny, nz := ix+dx, iy+dy, iz+dz
+							if nx < 0 || nx >= g.nx || ny < 0 || ny >= g.ny || nz < 0 || nz >= g.nz {
+								continue
+							}
+							if g.cells[g.idx(nx, ny, nz)] > v {
 								isMax = false
 								break outer
 							}
