@@ -68,6 +68,7 @@ var acceptanceScenarios = []struct {
 	{"AS5_OTAUpdate", AS5_OTAUpdateIntegration},
 	{"AS6_Replay", AS6_ReplayIntegration},
 	{"AS7_AuthReject", AS7_AuthRejectIntegration},
+	{"AS8_2DPositionAccuracy", AS8_2DPositionAccuracyIntegration},
 }
 
 // TestAcceptanceScenarios runs every acceptance scenario in sequence when
