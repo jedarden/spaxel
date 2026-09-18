@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>TransformControls Test</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -15,10 +15,13 @@
         // Test if TransformControls is available
         const output = document.getElementById('output');
 
+        // Status text colors must keep a >= 4.5:1 contrast ratio on the white
+        // page background (WCAG 2.1 AA 1.4.3) in BOTH outcomes below — the a11y
+        // gate scans this page regardless of whether the CDN scripts loaded.
         if (typeof THREE === 'undefined') {
-            output.innerHTML = '<p style="color:red">ERROR: THREE.js not loaded</p>';
+            output.innerHTML = '<p style="color:#b71c1c">ERROR: THREE.js not loaded</p>';
         } else if (typeof THREE.TransformControls === 'undefined') {
-            output.innerHTML = '<p style="color:red">ERROR: TransformControls not loaded</p>';
+            output.innerHTML = '<p style="color:#b71c1c">ERROR: TransformControls not loaded</p>';
         } else {
             output.innerHTML = '<p style="color:green">✓ TransformControls is available</p>';
 

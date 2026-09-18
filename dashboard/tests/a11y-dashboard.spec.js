@@ -1,12 +1,6 @@
 const { test } = require('@playwright/test');
 const { expectNoAccessibilityViolations } = require('./accessibility/helper');
-
-const dashboardPages = [
-  { name: 'ambient', path: '/ambient.html' },
-  { name: 'live', path: '/live.html' },
-  { name: 'simple', path: '/simple.html' },
-  { name: 'simulator', path: '/simulator.html' },
-];
+const { dashboardPages } = require('./accessibility/pages');
 
 for (const page of dashboardPages) {
   test.describe(`${page.name} page`, () => {

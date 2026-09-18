@@ -10,10 +10,26 @@ Accessibility tests enforce WCAG 2.1 AA compliance as a CI quality gate for the 
 
 **Test runner:** Playwright + @axe-core/playwright
 
-**What it tests:** WCAG 2.1 AA compliance across:
-- Main dashboard pages (index, live, fleet, setup, integrations)
-- Onboarding flow
-- Dashboard interactive elements
+**What it tests:** WCAG 2.1 AA compliance across **all nine** dashboard HTML
+entry points (the set enumerated in `docs/codebase-structure-and-test-patterns.md`
+and `docs/repo-structure.md` §8):
+
+| # | Entry point | Covered by |
+|---|-------------|------------|
+| 1 | `index.html` | `tests/a11y.spec.js` |
+| 2 | `live.html` | `tests/a11y.spec.js` + `tests/a11y-dashboard.spec.js` |
+| 3 | `fleet.html` | `tests/a11y.spec.js` |
+| 4 | `setup.html` | `tests/a11y.spec.js` |
+| 5 | `integrations.html` | `tests/a11y.spec.js` |
+| 6 | `ambient.html` | `tests/a11y-dashboard.spec.js` |
+| 7 | `simple.html` | `tests/a11y-dashboard.spec.js` |
+| 8 | `simulator.html` | `tests/a11y-dashboard.spec.js` |
+| 9 | `test-transformcontrols.html` | `tests/a11y-dashboard.spec.js` |
+
+Plus the onboarding flow (wizard steps, `tests/a11y-onboarding.spec.js`) and a
+coverage guard (`tests/a11y-entrypoint-coverage.spec.js`) that fails the gate
+whenever an `.html` entry point exists in `dashboard/` without a page in one of
+the two page specs.
 
 **Accessibility standard:** WCAG 2.1 AA (via axe-core tags: `wcag2a`, `wcag2aa`)
 
@@ -56,9 +72,10 @@ The accessibility tests run as a quality gate in the `spaxel-build` Argo Workflo
 
 | File | Purpose |
 |------|---------|
-| `tests/a11y.spec.js` | Main dashboard pages (index, live, fleet, setup, integrations) |
+| `tests/a11y.spec.js` | Core dashboard pages (index, live, fleet, setup, integrations) |
+| `tests/a11y-dashboard.spec.js` | Remaining entry points (ambient, live, simple, simulator, test-transformcontrols) |
 | `tests/a11y-onboarding.spec.js` | New user onboarding flow |
-| `tests/a11y-dashboard.spec.js` | Dashboard-specific interactive elements |
+| `tests/a11y-entrypoint-coverage.spec.js` | Guard: every `dashboard/*.html` must appear in one of the two page specs |
 | `tests/accessibility/helper.js` | Shared axe-core scanning and assertion helpers |
 
 ## Common Violations
