@@ -56,11 +56,12 @@ func DataSubcarrierIndices(nSub int) []int {
 
 // ProcessedCSI holds the result of phase sanitization
 type ProcessedCSI struct {
-	Amplitude     []float64 // RSSI-normalized amplitude per subcarrier
-	ResidualPhase []float64 // Residual phase after STO/CFO removal per subcarrier
-	RawPhase      []float64 // Unwrapped phase before regression (for diagnostics)
-	STOSlope      float64   // STO slope (radians/subcarrier)
-	CFOIntercept  float64   // CFO intercept (radians)
+	Amplitude      []float64 // RSSI-normalized amplitude per subcarrier
+	ResidualPhase  []float64 // Residual phase after STO/CFO removal per subcarrier
+	DetrendedPhase []float64 // Phase with STO slope removed, CFO intercept retained: unwrapped[k] - STOSlope*k
+	RawPhase       []float64 // Unwrapped phase before regression (for diagnostics)
+	STOSlope       float64   // STO slope (radians/subcarrier)
+	CFOIntercept   float64   // CFO intercept (radians)
 }
 
 // PhaseSanitize performs full phase sanitization on CSI I/Q data
@@ -112,11 +113,12 @@ func PhaseSanitize(payload []int8, rssiDBm int8, nSub int) (*ProcessedCSI, error
 	if len(dataIndices) < 2 {
 		// Not enough data subcarriers for regression, return with zero STO/CFO
 		return &ProcessedCSI{
-			Amplitude:     amplitude,
-			ResidualPhase: unwrapped,
-			RawPhase:      unwrapped,
-			STOSlope:      0,
-			CFOIntercept:  0,
+			Amplitude:      amplitude,
+			ResidualPhase:  unwrapped,
+			DetrendedPhase: unwrapped,
+			RawPhase:       unwrapped,
+			STOSlope:       0,
+			CFOIntercept:   0,
 		}, nil
 	}
 
@@ -137,11 +139,12 @@ func PhaseSanitize(payload []int8, rssiDBm int8, nSub int) (*ProcessedCSI, error
 	if math.Abs(denom) < 1e-10 {
 		// Degenerate case, skip regression
 		return &ProcessedCSI{
-			Amplitude:     amplitude,
-			ResidualPhase: unwrapped,
-			RawPhase:      unwrapped,
-			STOSlope:      0,
-			CFOIntercept:  0,
+			Amplitude:      amplitude,
+			ResidualPhase:  unwrapped,
+			DetrendedPhase: unwrapped,
+			RawPhase:       unwrapped,
+			STOSlope:       0,
+			CFOIntercept:   0,
 		}, nil
 	}
 
@@ -150,8 +153,14 @@ func PhaseSanitize(payload []int8, rssiDBm int8, nSub int) (*ProcessedCSI, error
 
 	// Step 5: Residual phase (remove STO/CFO)
 	residual := make([]float64, nSub)
+	detrended := make([]float64, nSub)
 	for k := 0; k < nSub; k++ {
 		residual[k] = unwrapped[k] - (a*float64(k) + b)
+		// Detrended phase removes only the STO slope, retaining the CFO
+		// intercept so the common-mode (breathing-bearing) component
+		// survives. OLS residuals (ResidualPhase) sum to zero over the
+		// fitted data subcarriers, which would cancel that component.
+		detrended[k] = unwrapped[k] - a*float64(k)
 	}
 
 	// Check for NaN/Inf
@@ -165,11 +174,12 @@ func PhaseSanitize(payload []int8, rssiDBm int8, nSub int) (*ProcessedCSI, error
 	}
 
 	return &ProcessedCSI{
-		Amplitude:     amplitude,
-		ResidualPhase: residual,
-		RawPhase:      unwrapped,
-		STOSlope:      a,
-		CFOIntercept:  b,
+		Amplitude:      amplitude,
+		ResidualPhase:  residual,
+		DetrendedPhase: detrended,
+		RawPhase:       unwrapped,
+		STOSlope:       a,
+		CFOIntercept:   b,
 	}, nil
 }
 
