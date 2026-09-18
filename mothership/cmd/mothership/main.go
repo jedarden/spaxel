@@ -5032,12 +5032,15 @@ func main() {
 		if mdnsIP != nil {
 			mdnsIPs = []net.IP{mdnsIP}
 		}
+		// The SRV record must carry the port the HTTP server actually listens
+		// on (msPort, derived from cfg.BindAddr above) — advertising anything
+		// else sends discovering nodes to a port with no listener.
 		service, err := mdns.NewMDNSService(
 			cfg.MDNSName,
 			"_spaxel._tcp",
 			"local.",
 			"",
-			8080,
+			msPort,
 			mdnsIPs,
 			[]string{"version=1", "ws=/ws/node", "dashboard=/ws/dashboard"},
 		)
@@ -5048,7 +5051,7 @@ func main() {
 			if err != nil {
 				log.Printf("[ERROR] Failed to start mDNS server: %v", err)
 			} else {
-				log.Printf("[INFO] mDNS advertising %s._spaxel._tcp.local:8080", cfg.MDNSName)
+				log.Printf("[INFO] mDNS advertising %s._spaxel._tcp.local:%d", cfg.MDNSName, msPort)
 			}
 		}
 	}
