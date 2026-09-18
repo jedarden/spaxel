@@ -115,3 +115,4 @@ testdata/*.bin
 .beads/*.temp
 .beads/*.journal
 .br_recovery/
+/data/
