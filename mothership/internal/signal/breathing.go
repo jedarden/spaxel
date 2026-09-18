@@ -488,11 +488,20 @@ func (bd *FFTBreathingDetector) Detect() FFTBreathingResult {
 	n := bd.sampleCount
 	windowed := make([]float64, n)
 
-	// Copy samples in chronological order with Hann window applied
+	// Copy samples in chronological order, removing the mean before the Hann
+	// window is applied. A perfectly constant (DC) deltaRMS floor windowed
+	// as-is leaks spectral power into the detection band through the
+	// window's sidelobes; the in-band peak can then clear the SNR threshold
+	// and read as breathing on a link whose deltaRMS never oscillates.
 	startIdx := (bd.writeIdx - n + bd.bufferSize) % bd.bufferSize
+	var mean float64
+	for i := 0; i < n; i++ {
+		mean += bd.buffer[(startIdx+i)%bd.bufferSize]
+	}
+	mean /= float64(n)
 	for i := 0; i < n; i++ {
 		idx := (startIdx + i) % bd.bufferSize
-		windowed[i] = bd.buffer[idx] * bd.hannWindow[i]
+		windowed[i] = (bd.buffer[idx] - mean) * bd.hannWindow[i]
 	}
 
 	// Compute DFT for the breathing band
