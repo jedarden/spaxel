@@ -345,8 +345,8 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get stored PIN hash
-	var pinHash string
+	// Get stored PIN hash (NULL until first-run setup, like handleSetup)
+	var pinHash sql.NullString
 	err := h.db.QueryRow("SELECT pin_bcrypt FROM auth WHERE id = 1").Scan(&pinHash)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -357,13 +357,13 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if pinHash == "" {
+	if !pinHash.Valid || pinHash.String == "" {
 		http.Error(w, "PIN not configured", http.StatusNotFound)
 		return
 	}
 
 	// Verify PIN
-	if err := bcrypt.CompareHashAndPassword([]byte(pinHash), []byte(req.PIN)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(pinHash.String), []byte(req.PIN)); err != nil {
 		// Invalid PIN
 		http.Error(w, "Invalid PIN", http.StatusUnauthorized)
 		log.Printf("[WARN] Failed login attempt from %s", r.RemoteAddr)
