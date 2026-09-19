@@ -21,6 +21,10 @@ const (
 	ScenarioFall       ScenarioType = "fall"
 	ScenarioOTA        ScenarioType = "ota"
 	ScenarioBagOnCouch ScenarioType = "bag-on-couch"
+	// ScenarioStationary freezes every walker and drives scripted
+	// chest-wall micro-motion instead (--breathing-hz/--breathing-amp-mm,
+	// see breathing.go): the fixture for stationary-person detection.
+	ScenarioStationary ScenarioType = "stationary"
 )
 
 // ScenarioConfig holds scenario-specific configuration

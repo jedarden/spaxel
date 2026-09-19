@@ -33,6 +33,39 @@ spaxel-sim [flags]
 | `--space` | string | `""` | Space dimensions as "WxDxH" (overrides --width/--depth/--height) |
 | `--show-frame-rate` | bool | `true` | Show per-second frame counts to stdout |
 | `--verbose` | bool | `false` | Enable verbose logging |
+| `--scenario` | string | `normal` | Scenario type: `normal`, `fall`, `ota`, `bag-on-couch`, `stationary` |
+| `--breathing-hz` | float | `0.2` | Breathing frequency in Hz for `--scenario stationary` (0.1–0.5) |
+| `--breathing-amp-mm` | float | `4.0` | Chest displacement amplitude in mm for `--scenario stationary` (0–20; 0 disables the oscillation) |
+
+### Stationary-breathing scenario
+
+`--scenario stationary` freezes every walker in place and drives a scripted
+chest-wall micro-motion instead of the walking updates: each walker's
+position rises and falls vertically by `--breathing-amp-mm` millimetres at
+`--breathing-hz` Hz (the physiological breathing band, 0.1–0.5 Hz ≈ 6–30
+BPM). The displacement is a deterministic function of the CSI frame clock
+(no RNG, no wall clock), so a fixed `--seed` reproduces the exact stream,
+and it flows through the same propagation model as walking — the
+millimetre-scale position change becomes a CSI phase shift — so the
+mothership's breathing-based stationary detection
+(`internal/signal` BreathingDetector, passband 0.1–0.5 Hz) is exercised
+unmodified.
+
+```bash
+# One stationary, breathing person (default 0.2 Hz / 4 mm)
+spaxel-sim --mothership ws://localhost:8080/ws/node --scenario stationary --walkers 1 --duration 120s
+
+# Faster, shallower breathing (0.4 Hz ≈ 24 BPM, 2 mm)
+spaxel-sim --scenario stationary --breathing-hz 0.4 --breathing-amp-mm 2
+
+# Empty-room control: no walkers, no breathing
+spaxel-sim --scenario stationary --walkers 0
+```
+
+Coupling note: the chest displacement is vertical. Links whose endpoints sit
+well above or below the walker's standing height (1.7 m — e.g. the default
+nodes at Z = 2.0 m) see the largest phase modulation; a link exactly at the
+walker's height sees almost none.
 
 ### Examples
 

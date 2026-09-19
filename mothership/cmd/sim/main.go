@@ -333,6 +333,19 @@ func main() {
 		},
 	}
 
+	// Stationary-breathing scenario: freeze the created walkers and drive
+	// their chest micro-motion instead of the walking updates (breathing.go).
+	// --walkers 0 with this scenario yields the empty-room control.
+	var breathState *BreathingScenarioState
+	if scenarioConfig.Type == ScenarioStationary {
+		breathState, err = NewBreathingScenarioState(walkers, *flagBreathingHz, *flagBreathingAmpMM)
+		if err != nil {
+			log.Fatalf("[SIM] Invalid breathing scenario parameters: %v", err)
+		}
+		log.Printf("[SIM] Breathing scenario: %.2f Hz, %.1f mm chest displacement on %d walker(s)",
+			breathState.RateHz, breathState.AmpM*1000, len(walkers))
+	}
+
 	// Create context for shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -373,7 +386,7 @@ func main() {
 
 	// Main simulation loop
 	simulationComplete := make(chan struct{})
-	go runSimulation(ctx, nodes, walkers, space, rng, csvWriter, stats, simulationComplete, scenarioConfig)
+	go runSimulation(ctx, nodes, walkers, space, rng, csvWriter, stats, simulationComplete, scenarioConfig, breathState)
 
 	// Wait for completion or interrupt
 	var durationTimer <-chan time.Time
@@ -1040,7 +1053,7 @@ func (n *VirtualNode) readLoop(ctx context.Context, conn *websocket.Conn, lost c
 }
 
 // runSimulation runs the main CSI generation loop
-func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker, space *Space, rng *rand.Rand, csvWriter *CSVWriter, stats *Stats, done chan<- struct{}, scenario *ScenarioConfig) {
+func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker, space *Space, rng *rand.Rand, csvWriter *CSVWriter, stats *Stats, done chan<- struct{}, scenario *ScenarioConfig, breathState *BreathingScenarioState) {
 	defer close(done)
 
 	ticker := time.NewTicker(time.Duration(1000/(*flagRate)) * time.Millisecond)
@@ -1085,6 +1098,8 @@ func runSimulation(ctx context.Context, nodes []*VirtualNode, walkers []*Walker,
 			if fallState != nil {
 				dt := 1.0 / float64(*flagRate)
 				fallState.UpdateForFallScenario(dt, scenario.FallParams, space, rng)
+			} else if breathState != nil {
+				breathState.Update(1.0 / float64(*flagRate))
 			} else {
 				updateWalkers(walkers, space, rng)
 			}
