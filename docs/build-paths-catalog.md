@@ -1,6 +1,12 @@
 # Spaxel Build Paths Catalog
 
-**Purpose:** This document identifies all file paths in the spaxel repository that contain substantive code requiring rebuilds and deployments. Changes to these paths should trigger the appropriate build pipeline and deployment processes.
+> **SUPERSEDED by docs/build-path-filter-spec.md (spaxel-b4b8b3db) — do not implement from this document.**
+>
+> This file is a point-in-time snapshot (2026-08-27) retained for history only.
+> The consolidated path filter specification is the single authoritative list;
+> where the two disagree, the spec wins.
+
+**Purpose:** This document identifies all file paths in the spaxel repository that contain substantive code requiring rebuilds and deployments. Changes to these paths should trigger the appropriate build pipeline and deployment processes. *(Snapshot as of 2026-08-27 — see the superseded banner above.)*
 
 **Last updated:** 2026-08-27
 

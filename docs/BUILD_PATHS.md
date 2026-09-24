@@ -1,6 +1,12 @@
 # Build Paths for Spaxel
 
-This document identifies which file paths contain substantive code that should trigger spaxel rebuilds and deployments. Changes to these paths require rebuilding and/or redeploying the application.
+> **SUPERSEDED by docs/build-path-filter-spec.md (spaxel-b4b8b3db) — do not implement from this document.**
+>
+> This file is a point-in-time snapshot (2026-08-27) retained for history only.
+> The consolidated path filter specification is the single authoritative list;
+> where the two disagree, the spec wins.
+
+This document identifies which file paths contain substantive code that should trigger spaxel rebuilds and deployments. Changes to these paths require rebuilding and/or redeploying the application. *(Snapshot as of 2026-08-27 — see the superseded banner above.)*
 
 ## Core Application Code
 
