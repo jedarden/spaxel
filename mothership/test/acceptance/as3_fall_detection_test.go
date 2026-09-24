@@ -17,14 +17,18 @@ package acceptance
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -623,4 +627,337 @@ func AS3_Integration(t *testing.T) {
 	}
 
 	t.Log("AS-3 Integration test PASSED")
+}
+
+// ========================================
+// AS-3-ext: Z-axis accuracy with mixed-height nodes (README L17)
+// ========================================
+
+// AS-3-ext fixture constants. The live fall run mirrors AS-8's deterministic
+// setup, plus the fall choreography: --scenario fall triggers a scripted
+// descent at --fall-delay (FallScenarioParams; cmd/sim drives walker 0 from
+// Z = walker.Height = 1.7 m down to EndZ = 0.3 m and holds still). Ground
+// truth Z per phase comes from the sim's --output-csv, never from the system
+// under test (map §6.4).
+//
+// --node-heights mixed is REQUIRED here: README L17's Z claim is conditioned
+// on mixed-height node placement (map §4 C4 "Required sim change"), which the
+// engine models (internal/simulator MixedNodeZ parity bands) and the CLI
+// surfaces via the flag.
+const (
+	as3zSeed       = 42
+	as3zNodes      = 4
+	as3zSpace      = "6x5x2.5"
+	as3zDurationS  = 70
+	as3zRateHz     = 20
+	as3zFallDelay  = 35 * time.Second
+	as3zFallDur    = 800 * time.Millisecond
+	as3zStillness  = 15 * time.Second
+	as3zWalkerZM   = 1.7 // scripted walker Height: the standing ground truth
+	as3zFloorZMaxM = 0.5 // fixture precondition: EndZ stays near the floor
+	as3zWarmup     = 25 * time.Second
+	as3zPollTail   = 10 * time.Second
+	as3zPhaseGuard = 4 * time.Second // slack around the fall for window edges
+	as3zZGateM     = 2.0             // README L17 "±1–2 m" upper bound — the gate
+	as3zZTargetM   = 1.0             // L17's inner band end — non-gating target
+	as3zMinSamples = 3               // per-phase sample floor for a valid measurement
+)
+
+// AS3_ZAccuracyMixedHeightsIntegration runs the live mixed-height fall fixture
+// and asserts the Z-accuracy gate at both ground-truth heights, plus the N2
+// negative-surface assertion (posture-class payload, no skeletal structure).
+//
+// Gate (map §4 C4): |blob.z − walker ground-truth z| ≤ 2.0 m at standing
+// (pre-fall) and at the post-fall floor, gated on the per-phase median with
+// the per-sample max logged. The 1.0 m end of the L17 band is a non-gating
+// target. A measured FAIL is a valid outcome — do not loosen the gate.
+func AS3_ZAccuracyMixedHeightsIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	mothershipURL := getMothershipURL()
+	cmd := startMothership(t, getTempDBPath())
+	defer stopMothership(cmd)
+
+	if !waitForMothership(ctx, mothershipURL) {
+		t.Fatal("Mothership did not become ready")
+	}
+	setPIN(t, mothershipURL, "1234")
+
+	dir := t.TempDir()
+	gtCSV := filepath.Join(dir, "as3z-ground-truth.csv")
+
+	simStart := time.Now()
+	simCtx, cancelSim := context.WithTimeout(ctx, 3*time.Minute)
+	simCmd := startSimulator(t, simCtx, []string{
+		"--mothership", wsURL(mothershipURL),
+		"--nodes", fmt.Sprintf("%d", as3zNodes),
+		"--walkers", "1",
+		"--seed", fmt.Sprintf("%d", as3zSeed),
+		"--space", as3zSpace,
+		"--rate", fmt.Sprintf("%d", as3zRateHz),
+		"--duration", fmt.Sprintf("%d", as3zDurationS),
+		"--scenario", "fall",
+		"--fall-delay", as3zFallDelay.String(),
+		"--fall-duration", as3zFallDur.String(),
+		"--stillness", as3zStillness.String(),
+		"--node-heights", "mixed",
+		"--output-csv", gtCSV,
+	})
+	defer cancelSim()
+	defer stopSimulator(simCmd)
+
+	// Phase windows relative to the sim's start (scenario.StartedAt leads the
+	// WebSocket connect by well under the guard): standing is the steady walk
+	// between warmup and the fall trigger; floor is after the descent plus the
+	// guard, through the end of polling.
+	standingStart := as3zWarmup
+	standingEnd := as3zFallDelay - 2*time.Second
+	floorStart := as3zFallDelay + as3zFallDur + as3zPhaseGuard
+
+	// Poll /api/blobs 1 Hz (as8's shape; bare array + capitalized keys via the
+	// as8 helpers). Collect per-phase blob Z samples, every payload key seen
+	// (for the N2 surface pin), and the track payload mid-run.
+	var standingZ, floorZ []float64
+	blobKeys := map[string]bool{}
+	var trackPayload []map[string]interface{}
+	pollDeadline := simStart.Add(as3zDurationS*time.Second + as3zPollTail)
+	for time.Now().Before(pollDeadline) {
+		if ctx.Err() != nil {
+			break
+		}
+		elapsed := time.Since(simStart)
+		if elapsed < as3zWarmup {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		blobs := as8GetBlobs(t, mothershipURL)
+		for _, blob := range blobs {
+			for k := range blob {
+				blobKeys[k] = true
+			}
+			z, ok := as8BlobCoord(blob, "Z", "z")
+			if !ok {
+				continue
+			}
+			switch {
+			case elapsed >= standingStart && elapsed < standingEnd:
+				standingZ = append(standingZ, z)
+			case elapsed >= floorStart:
+				floorZ = append(floorZ, z)
+			}
+		}
+		if trackPayload == nil && elapsed >= floorStart && len(blobs) > 0 {
+			trackPayload = as3zGetTracks(t, mothershipURL)
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	// Ground truth by construction: per-phase median walker Z from the CSV.
+	gt, err := as3zParseGroundTruthZ(gtCSV)
+	if err != nil {
+		t.Fatalf("Failed to parse ground-truth CSV: %v", err)
+	}
+	if len(gt) == 0 {
+		t.Fatal("Ground-truth CSV contains no walker positions — sim wrote no ground truth")
+	}
+	gtStanding, ok := as3zMedianZInWindow(gt, standingStart, standingEnd)
+	if !ok {
+		t.Fatalf("No ground-truth rows in the standing window [%v, %v) — fixture mis-timed",
+			standingStart, standingEnd)
+	}
+	gtFloor, ok := as3zMedianZInWindow(gt, floorStart, as3zDurationS*time.Second+as3zPollTail)
+	if !ok {
+		t.Fatalf("No ground-truth rows in the floor window (from %v) — fixture mis-timed", floorStart)
+	}
+	t.Logf("Fixture ground truth: standing z=%.2f m (walker height %.2f), post-fall floor z=%.2f m",
+		gtStanding.z, as3zWalkerZM, gtFloor.z)
+
+	// Fixture preconditions: the choreography must actually have stood at
+	// walker height and ended near the floor, or the measurement below is
+	// meaningless (a broken fixture, not an honest SUT FAIL).
+	if math.Abs(gtStanding.z-as3zWalkerZM) > 0.2 {
+		t.Fatalf("Fixture precondition failed: standing ground truth %.2f m is not the scripted walker height %.2f m",
+			gtStanding.z, as3zWalkerZM)
+	}
+	if gtFloor.z > as3zFloorZMaxM {
+		t.Fatalf("Fixture precondition failed: post-fall ground truth %.2f m is not near the floor (< %.2f m)",
+			gtFloor.z, as3zFloorZMaxM)
+	}
+
+	// The Z-accuracy gates.
+	as3zAssertPhaseZ(t, "standing", standingZ, gtStanding.z)
+	as3zAssertPhaseZ(t, "post-fall floor", floorZ, gtFloor.z)
+
+	// N2 (map §5): the advertised surface is posture-class, not pose. Pin the
+	// exact key set of /api/blobs and /api/tracks — any joint/skeletal payload
+	// added later must fail here and be a deliberate map revision.
+	as3zAssertSurfaceKeys(t, "/api/blobs", blobKeys, as3zBlobKeyAllowlist)
+	if len(trackPayload) == 0 {
+		t.Log("N2: no /api/tracks payload observed mid-run — track key pin skipped " +
+			"(blob surface still pinned above)")
+	} else {
+		trackKeys := map[string]bool{}
+		for _, track := range trackPayload {
+			for k := range track {
+				trackKeys[k] = true
+			}
+		}
+		as3zAssertSurfaceKeys(t, "/api/tracks", trackKeys, as3zTrackKeyAllowlist)
+	}
+}
+
+// as3zBlobKeyAllowlist is the complete key set the live /api/blobs surface may
+// carry (signal.TrackedBlob: Go-default capitalized core fields plus the
+// tagged identity/posture fields). N2 pins this set.
+var as3zBlobKeyAllowlist = map[string]bool{
+	"ID": true, "X": true, "Y": true, "Z": true,
+	"VX": true, "VY": true, "VZ": true, "Weight": true,
+	"person_id": true, "person_label": true, "person_color": true,
+	"identity_confidence": true, "identity_source": true, "posture": true,
+	"personName": true, "assignedColor": true, "identityResolved": true,
+}
+
+// as3zTrackKeyAllowlist is the same surface for /api/tracks (api.Track, whose
+// fields carry lowercase json tags).
+var as3zTrackKeyAllowlist = map[string]bool{
+	"id": true, "x": true, "y": true, "z": true,
+	"vx": true, "vy": true, "vz": true, "weight": true,
+	"person_id": true, "person_label": true, "person_color": true,
+	"identity_confidence": true, "identity_source": true, "posture": true,
+	"personName": true, "assignedColor": true, "identityResolved": true,
+}
+
+// as3zAssertPhaseZ gates one phase's blob Z samples against its ground truth:
+// median |Δz| ≤ 2.0 m (L17 upper bound), max logged, 1.0 m reported as the
+// non-gating target.
+func as3zAssertPhaseZ(t *testing.T, phase string, zs []float64, gtZ float64) {
+	t.Helper()
+
+	if len(zs) < as3zMinSamples {
+		t.Fatalf("%s phase: only %d blob Z samples (need ≥ %d) — pipeline localized "+
+			"nothing measurable in this phase", phase, len(zs), as3zMinSamples)
+	}
+	errs := make([]float64, len(zs))
+	for i, z := range zs {
+		errs[i] = math.Abs(z - gtZ)
+	}
+	sort.Float64s(errs)
+	median := errs[len(errs)/2]
+	p90 := errs[(len(errs)-1)*9/10]
+	max := errs[len(errs)-1]
+	t.Logf("AS-3-ext %s: %d blob Z samples vs ground truth %.2f m — median |Δz| %.3f m "+
+		"(gate ≤ %.1f m, non-gating target %.1f m), p90 %.3f m, max %.3f m",
+		phase, len(zs), gtZ, median, as3zZGateM, as3zZTargetM, p90, max)
+	if median > as3zZGateM {
+		t.Errorf("%s phase: median |blob.z − ground truth| %.3f m exceeds the README L17 "+
+			"upper bound of %.1f m (p90 %.3f m, max %.3f m over %d samples)",
+			phase, median, as3zZGateM, p90, max, len(zs))
+	}
+}
+
+// as3zAssertSurfaceKeys fails if any observed payload key is outside the
+// posture-class allowlist, naming the offender (N2's pin).
+func as3zAssertSurfaceKeys(t *testing.T, surface string, seen, allow map[string]bool) {
+	t.Helper()
+
+	if len(seen) == 0 {
+		t.Fatalf("N2: no keys observed on %s — cannot pin the surface", surface)
+	}
+	for k := range seen {
+		if !allow[k] {
+			t.Errorf("N2 violated: %s exposes key %q which is not part of the "+
+				"posture-class surface (position/velocity/confidence/identity/posture) — "+
+				"skeletal or pose structure must not appear on the advertised surface",
+				surface, k)
+		}
+	}
+	t.Logf("N2: %s surface pinned — %d distinct keys, all posture-class", surface, len(seen))
+}
+
+// as3zGetTracks fetches the current /api/tracks payload (a bare JSON array of
+// lowercase-tagged track objects).
+func as3zGetTracks(t testingT, baseURL string) []map[string]interface{} {
+	t.Helper()
+
+	resp, err := http.Get(baseURL + "/api/tracks")
+	if err != nil {
+		t.Logf("Failed to get tracks: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var tracks []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&tracks); err != nil {
+		t.Logf("Failed to decode tracks: %v", err)
+		return nil
+	}
+	return tracks
+}
+
+// as3zGTSample is one ground-truth walker position row from --output-csv.
+type as3zGTSample struct {
+	elapsedMS int64
+	z         float64
+}
+
+// as3zParseGroundTruthZ reads walker Z over time from a spaxel-sim
+// --output-csv file (position rows only; per-link deltaRMS rows carry a
+// link_id and are skipped). Schema: timestamp_ms, walker_id, x, y, z, vx, vy,
+// vz, link_id, delta_rms.
+func as3zParseGroundTruthZ(path string) ([]as3zGTSample, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	rows, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) < 1 {
+		return nil, fmt.Errorf("CSV has no header row")
+	}
+	const wantCols = 10
+
+	gt := make([]as3zGTSample, 0, len(rows))
+	for _, row := range rows[1:] {
+		if len(row) != wantCols {
+			return nil, fmt.Errorf("CSV row has %d columns, want %d", len(row), wantCols)
+		}
+		if row[8] != "" { // link row, not a position row
+			continue
+		}
+		var s as3zGTSample
+		if _, err := fmt.Sscanf(row[0], "%d", &s.elapsedMS); err != nil {
+			return nil, fmt.Errorf("CSV timestamp column %q: %w", row[0], err)
+		}
+		if _, err := fmt.Sscanf(row[4], "%f", &s.z); err != nil {
+			return nil, fmt.Errorf("CSV z column %q: %w", row[4], err)
+		}
+		gt = append(gt, s)
+	}
+	return gt, nil
+}
+
+// as3zMedianZInWindow returns the median ground-truth Z of position rows whose
+// timestamp falls in [start, end) relative to sim start.
+func as3zMedianZInWindow(gt []as3zGTSample, start, end time.Duration) (as3zGTSample, bool) {
+	var zs []float64
+	for _, s := range gt {
+		el := time.Duration(s.elapsedMS) * time.Millisecond
+		if el >= start && el < end {
+			zs = append(zs, s.z)
+		}
+	}
+	if len(zs) == 0 {
+		return as3zGTSample{}, false
+	}
+	sort.Float64s(zs)
+	return as3zGTSample{z: zs[len(zs)/2]}, true
 }

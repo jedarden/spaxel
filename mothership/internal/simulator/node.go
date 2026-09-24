@@ -308,18 +308,12 @@ func DefaultNodePositions(s *Space, count int) []Point {
 	gridSize := int(math.Ceil(math.Sqrt(float64(count))))
 	denom := float64(gridSize - 1) // >= 1 since gridSize >= 2 here
 
-	lowZ := minZ + (maxZ-minZ)*0.25
-	highZ := minZ + (maxZ-minZ)*0.75
-
 	positions := make([]Point, 0, count)
 	for i := 0; i < count; i++ {
 		col := i % gridSize
 		row := i / gridSize
 		// Alternate Z by cell parity for mixed-height diversity.
-		z := lowZ
-		if (row+col)%2 != 0 {
-			z = highZ
-		}
+		z := MixedNodeZ(minZ, maxZ, row+col)
 		positions = append(positions, Point{
 			X: minX + float64(col)*(maxX-minX)/denom,
 			Y: minY + float64(row)*(maxY-minY)/denom,
@@ -328,6 +322,23 @@ func DefaultNodePositions(s *Space, count int) []Point {
 	}
 
 	return positions
+}
+
+// MixedNodeZ returns the engine's mixed-height node placement Z for a room
+// whose vertical span is [minZ, maxZ]: even parity takes the low band at 25%
+// of the span, odd parity the high band at 75%. DefaultNodePositions applies
+// it by grid-cell (row+col) parity; cmd/sim surfaces the same scheme to the
+// CLI via --node-heights mixed, applied by perimeter-slot parity. Mixed
+// heights are what make blob Z observable at all — uniform-height nodes put
+// every Fresnel ellipsoid in one horizontal plane (the README's "±1-2 m
+// rough Z-axis" claim is scoped to mixed-height placement).
+func MixedNodeZ(minZ, maxZ float64, parity int) float64 {
+	low := minZ + (maxZ-minZ)*0.25
+	high := minZ + (maxZ-minZ)*0.75
+	if parity%2 != 0 {
+		return high
+	}
+	return low
 }
 
 // GenerateAllLinks creates all possible links between nodes in the set.

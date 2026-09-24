@@ -64,11 +64,13 @@ var acceptanceScenarios = []struct {
 	{"AS1_FirstTimeSetup", AS1_FirstTimeSetupIntegration},
 	{"AS2_WalkingDetection", AS2_WalkingDetectionIntegration},
 	{"AS3_FallDetection", AS3_FallDetectionIntegration},
+	{"AS3_ZAccuracyMixedHeights", AS3_ZAccuracyMixedHeightsIntegration},
 	{"AS4_BLEIdentity", AS4_BLEIdentityIntegration},
 	{"AS5_OTAUpdate", AS5_OTAUpdateIntegration},
 	{"AS6_Replay", AS6_ReplayIntegration},
 	{"AS7_AuthReject", AS7_AuthRejectIntegration},
 	{"AS8_2DPositionAccuracy", AS8_2DPositionAccuracyIntegration},
+	{"AS9_PersonCount", AS9_PersonCountIntegration},
 }
 
 // TestAcceptanceScenarios runs every acceptance scenario in sequence when

@@ -57,21 +57,22 @@ const (
 
 var (
 	// CLI flags
-	flagMothership = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
-	flagToken      = flag.String("token", "", "Provisioning token (auto-generated if empty)")
-	flagNodes      = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
-	flagWalkers    = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
-	flagRate       = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
-	flagDuration   = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
-	flagSeed       = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
-	flagSpace      = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
-	flagBLE        = flag.Bool("ble", false, "Include synthetic BLE advertisements")
-	flagVerify     = flag.Bool("verify", false, "Verify blob detection after duration")
-	flagNoiseSigma = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
-	flagOutputCSV  = flag.String("output-csv", "", "Write ground truth to CSV file")
-	flagChannel    = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
-	flagWalkerType = flag.String("walker-type", "random", "Walker type: random, path, node-to-node")
-	flagPathFile   = flag.String("path-file", "", "JSON file containing walker paths")
+	flagMothership  = flag.String("mothership", defaultMothership, "URL of the mothership WebSocket endpoint")
+	flagToken       = flag.String("token", "", "Provisioning token (auto-generated if empty)")
+	flagNodes       = flag.Int("nodes", defaultNodes, "Number of virtual nodes")
+	flagWalkers     = flag.Int("walkers", defaultWalkers, "Number of synthetic walkers")
+	flagRate        = flag.Int("rate", defaultRate, "CSI transmission rate in Hz per node pair")
+	flagDuration    = flag.Int("duration", defaultDuration, "Total run time in seconds (0 = run until Ctrl+C)")
+	flagSeed        = flag.Int64("seed", defaultSeed, "Random seed for reproducible walker paths")
+	flagSpace       = flag.String("space", defaultSpace, "Room dimensions in WxDxH format (meters)")
+	flagBLE         = flag.Bool("ble", false, "Include synthetic BLE advertisements")
+	flagVerify      = flag.Bool("verify", false, "Verify blob detection after duration")
+	flagNoiseSigma  = flag.Float64("noise-sigma", defaultNoiseSigma, "Gaussian noise standard deviation for I/Q")
+	flagOutputCSV   = flag.String("output-csv", "", "Write ground truth to CSV file")
+	flagChannel     = flag.Int("channel", defaultChannel, "WiFi channel (1-14 for 2.4 GHz)")
+	flagWalkerType  = flag.String("walker-type", "random", "Walker type: random, path, node-to-node")
+	flagPathFile    = flag.String("path-file", "", "JSON file containing walker paths")
+	flagNodeHeights = flag.String("node-heights", "", "Node Z placement: \"mixed\" alternates perimeter nodes between 0.25 and 0.75 of room height (the engine's DefaultNodePositions parity scheme — mixed heights are required for usable Z estimation); empty keeps the uniform 2.0 m placement")
 
 	// GDOP and shopping list flags
 	flagGDOPOverlay  = flag.Bool("gdop-overlay", false, "Output GDOP overlay data as JSON to stdout")
@@ -267,8 +268,14 @@ func main() {
 		log.Fatalf("[SIM] Invalid channel: %d (must be 1-14)", *flagChannel)
 	}
 
+	// Parse node height placement (flag absent = uniform 2.0 m)
+	heightMode, err := parseNodeHeights(*flagNodeHeights)
+	if err != nil {
+		log.Fatalf("[SIM] Invalid node heights: %v", err)
+	}
+
 	// Create virtual nodes
-	nodes := createVirtualNodes(*flagNodes, space, rng)
+	nodes := createVirtualNodes(*flagNodes, space, rng, heightMode)
 
 	// Create walkers (may be nil for node-to-node mode)
 	walkers := createWalkers(*flagWalkers, space, rng)
@@ -287,6 +294,11 @@ func main() {
 	log.Printf("[SIM]   Duration: %d s", *flagDuration)
 	log.Printf("[SIM]   Space: %.1fx%.1fx%.1f m", space.Width, space.Depth, space.Height)
 	log.Printf("[SIM]   Walls: %d", len(walls))
+	if heightMode == mixedHeightMode {
+		log.Printf("[SIM]   Node heights: mixed (0.25/0.75 of %.2f m room height)", space.Height)
+	} else {
+		log.Printf("[SIM]   Node heights: uniform 2.0 m")
+	}
 	log.Printf("[SIM]   BLE: %v", *flagBLE)
 
 	// Output GDOP overlay if requested
@@ -450,8 +462,42 @@ func parseSpace(s string) (*Space, error) {
 	return &Space{Width: width, Depth: depth, Height: height}, nil
 }
 
-// createVirtualNodes creates virtual nodes positioned in the space
-func createVirtualNodes(count int, space *Space, rng *rand.Rand) []*VirtualNode {
+// nodeHeightMode selects how createVirtualNodes assigns node Z positions.
+type nodeHeightMode int
+
+const (
+	// uniformHeightMode is the historical default: every perimeter node at
+	// Z = 2.0 m.
+	uniformHeightMode nodeHeightMode = iota
+	// mixedHeightMode alternates perimeter nodes between 0.25 and 0.75 of
+	// room height via simulator.MixedNodeZ — the engine DefaultNodePositions
+	// parity scheme. Uniform-height nodes leave blob Z effectively
+	// unobservable, so Z-accuracy runs need this mode.
+	mixedHeightMode
+)
+
+// parseNodeHeights validates --node-heights. An empty spec (flag absent)
+// keeps the uniform 2.0 m placement; "mixed" selects the engine's
+// parity-alternating placement (simulator.MixedNodeZ). Anything else is an
+// error rather than a silent fallback to uniform.
+func parseNodeHeights(spec string) (nodeHeightMode, error) {
+	switch strings.TrimSpace(strings.ToLower(spec)) {
+	case "":
+		return uniformHeightMode, nil
+	case "mixed":
+		return mixedHeightMode, nil
+	default:
+		return uniformHeightMode, fmt.Errorf("unsupported --node-heights %q (supported: empty = uniform 2.0 m, \"mixed\")", spec)
+	}
+}
+
+// createVirtualNodes creates virtual nodes positioned in the space. mode
+// selects node heights: uniformHeightMode keeps the historical uniform
+// Z = 2.0 m perimeter layout; mixedHeightMode alternates each perimeter node
+// between the engine's low/high bands (0.25/0.75 of room height) by node
+// index — index parity, so the assignment is deterministic and unaffected by
+// the RNG seed.
+func createVirtualNodes(count int, space *Space, rng *rand.Rand, mode nodeHeightMode) []*VirtualNode {
 	nodes := make([]*VirtualNode, count)
 
 	for i := 0; i < count; i++ {
@@ -461,22 +507,29 @@ func createVirtualNodes(count int, space *Space, rng *rand.Rand) []*VirtualNode 
 			Role: "tx_rx",
 		}
 
+		// Node height: uniform 2.0 m unless --node-heights mixed selects
+		// the engine parity bands. The sim room spans Z from 0 to Height.
+		nodeZ := 2.0
+		if mode == mixedHeightMode {
+			nodeZ = simulator.MixedNodeZ(0, space.Height, i)
+		}
+
 		// Distribute nodes around perimeter
 		perimeter := 2 * (space.Width + space.Depth)
 		pos := float64(i) / float64(count) * perimeter
 
 		if pos < space.Width {
 			// Bottom edge
-			node.Position = Point{X: pos, Y: 0, Z: 2.0}
+			node.Position = Point{X: pos, Y: 0, Z: nodeZ}
 		} else if pos < space.Width+space.Depth {
 			// Right edge
-			node.Position = Point{X: space.Width, Y: pos - space.Width, Z: 2.0}
+			node.Position = Point{X: space.Width, Y: pos - space.Width, Z: nodeZ}
 		} else if pos < 2*space.Width+space.Depth {
 			// Top edge
-			node.Position = Point{X: space.Width - (pos - space.Width - space.Depth), Y: space.Depth, Z: 2.0}
+			node.Position = Point{X: space.Width - (pos - space.Width - space.Depth), Y: space.Depth, Z: nodeZ}
 		} else {
 			// Left edge
-			node.Position = Point{X: 0, Y: space.Depth - (pos - 2*space.Width - space.Depth), Z: 2.0}
+			node.Position = Point{X: 0, Y: space.Depth - (pos - 2*space.Width - space.Depth), Z: nodeZ}
 		}
 
 		nodes[i] = node

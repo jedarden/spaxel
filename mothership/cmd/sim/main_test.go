@@ -1229,7 +1229,7 @@ func TestManageNodeReconnectsAfterServerClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	nodes := createVirtualNodes(1, &Space{Width: 5, Depth: 5, Height: 2.5}, rand.New(rand.NewSource(1)))
+	nodes := createVirtualNodes(1, &Space{Width: 5, Depth: 5, Height: 2.5}, rand.New(rand.NewSource(1)), uniformHeightMode)
 	if err := connectNodes(ctx, nodes); err != nil {
 		t.Fatalf("initial connectNodes failed: %v", err)
 	}
