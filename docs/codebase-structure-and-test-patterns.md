@@ -39,7 +39,8 @@ Directory-level detail with per-file annotations lives in
   - Integration tests
 
 - **`mothership/test/acceptance/`** — Mothership acceptance tests
-  - Acceptance scenarios AS-1…AS-7 (`as*_test.go` pattern) plus a WiFi restart race scenario
+  - Acceptance scenarios AS-1…AS-9 (`as*_test.go` pattern; the AS-5 number is double-used by `as5_ota_test.go` and the WiFi restart race scenario)
+  - AS-10 (stationary/breathing) is assigned but has no acceptance test file yet — the simulator fixture has landed (`cmd/sim/breathing.go`, `--scenario stationary`); the [acceptance map](notes/localization-capability-acceptance-map.md) is the scenario-numbering and threshold authority for the whole suite
   - IO-style installation/upgrade tests (`io_install_upgrade_test.go`, `integration_test.go`)
 
 - **`mothership/tests/e2e/`** — Mothership end-to-end tests (Go)

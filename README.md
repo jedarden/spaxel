@@ -31,7 +31,7 @@ Spaxel is a [Go workspace](go.work) of one module (`mothership/`), plus ESP32 fi
 |------|-------------|
 | [`mothership/`](mothership/) | Go backend — ingestion, signal pipeline, localizer, fleet manager, REST/WebSocket API, dashboard server (`github.com/spaxel/mothership`) |
 | [`mothership/cmd/sim/`](mothership/cmd/sim/) | `spaxel-sim` — CSI/node simulator CLI for hardware-free development and integration tests |
-| [`mothership/test/acceptance/`](mothership/test/acceptance/) | Acceptance suite (AS-1 … AS-7, IO-1 … IO-11), driven by the simulator |
+| [`mothership/test/acceptance/`](mothership/test/acceptance/) | Acceptance suite (AS-1 … AS-9 implemented, AS-10 assigned — see the [acceptance map](docs/notes/localization-capability-acceptance-map.md); IO-1 … IO-11), driven by the simulator |
 | [`mothership/tests/e2e/`](mothership/tests/e2e/) | Go e2e package (plus the opt-in `-tags io6_gate` release hard gate) |
 | [`firmware/`](firmware/) | ESP-IDF (C) firmware for the ESP32-S3 node fleet |
 | [`dashboard/`](dashboard/) | Vanilla JS + Three.js single-page UI (see [`dashboard/README.md`](dashboard/README.md)) |
@@ -114,6 +114,7 @@ Firmware is built with ESP-IDF 5.2.x — see the *Firmware Build System* section
 
 - [`docs/plan/plan.md`](docs/plan/plan.md) — the complete design: architecture, components, schema, deployment, phases
 - [`docs/notes/`](docs/notes/) — implementation notes (recovery mechanisms, mDNS override, simulation testing, UX)
+- [`docs/notes/localization-capability-acceptance-map.md`](docs/notes/localization-capability-acceptance-map.md) — maps every capability claim above to its acceptance scenario; the scenario-numbering and threshold authority for the acceptance suite
 - [`docs/research/`](docs/research/) — CSI fundamentals, physics, algorithms, accuracy limits, prior-art papers
 - [`docs/ci-accessibility-integration.md`](docs/ci-accessibility-integration.md) — CI accessibility testing quality gate (WCAG 2.1 AA)
 - [`docs/ci-benchmark-integration.md`](docs/ci-benchmark-integration.md) — CI timing benchmark quality gate (fusion loop)
