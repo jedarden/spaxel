@@ -89,16 +89,33 @@ func TestDiurnalBaseline_Update(t *testing.T) {
 	}
 }
 
-func TestDiurnalBaseline_Update_WrongSize(t *testing.T) {
+func TestDiurnalBaseline_Update_SizeContract(t *testing.T) {
 	db := NewDiurnalBaseline("test", 64)
 
-	// Wrong size amplitude should be ignored
-	amplitude := make([]float64, 32)
-	db.Update(amplitude)
+	// Shorter than the configured map must be learned from: real HT20
+	// firmware reports 52 subcarriers against the 64-carrier map, and the
+	// exact-length guard used to silently discard every real frame.
+	short := make([]float64, 32)
+	db.Update(short)
 
 	slot := db.GetCurrentSlot()
-	if slot.SampleCount != 0 {
-		t.Errorf("SampleCount = %d, want 0 (wrong size should be ignored)", slot.SampleCount)
+	if slot.SampleCount != 1 {
+		t.Errorf("SampleCount = %d, want 1 (short frame must be learned from)", slot.SampleCount)
+	}
+
+	// Longer than the configured map is a different wifi mode (e.g. HT40);
+	// blending its foreign carriers into the slot would poison the map.
+	long := make([]float64, 96)
+	db.Update(long)
+
+	if slot.SampleCount != 1 {
+		t.Errorf("SampleCount = %d, want 1 (oversized frame must be ignored)", slot.SampleCount)
+	}
+
+	// Empty amplitude carries nothing to learn.
+	db.Update(nil)
+	if slot.SampleCount != 1 {
+		t.Errorf("SampleCount = %d, want 1 (empty frame must be ignored)", slot.SampleCount)
 	}
 }
 

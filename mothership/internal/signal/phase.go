@@ -183,28 +183,44 @@ func PhaseSanitize(payload []int8, rssiDBm int8, nSub int) (*ProcessedCSI, error
 	}, nil
 }
 
-// MeanPhase computes the mean of residual phase over specified subcarrier indices
+// MeanPhase computes the mean of residual phase over specified subcarrier
+// indices. Indices outside the phase slice are skipped: subcarrier selection
+// is sized from the configured HT20 map while a frame's arrays are sized from
+// the subcarriers the hardware actually reported (real HT20 sends 52, not
+// 64), so the caller's selection may legitimately exceed this frame's length.
 func MeanPhase(phase []float64, indices []int) float64 {
-	if len(indices) == 0 {
+	var sum float64
+	count := 0
+	for _, k := range indices {
+		if k < 0 || k >= len(phase) {
+			continue
+		}
+		sum += phase[k]
+		count++
+	}
+	if count == 0 {
 		return 0
 	}
-	var sum float64
-	for _, k := range indices {
-		sum += phase[k]
-	}
-	return sum / float64(len(indices))
+	return sum / float64(count)
 }
 
-// PhaseVariance computes variance of phase over specified subcarrier indices
+// PhaseVariance computes variance of phase over specified subcarrier indices,
+// skipping indices outside the phase slice (see MeanPhase). The denominator
+// counts only the indices actually used.
 func PhaseVariance(phase []float64, indices []int) float64 {
-	if len(indices) < 2 {
-		return 0
-	}
 	mean := MeanPhase(phase, indices)
 	var sumSq float64
+	count := 0
 	for _, k := range indices {
+		if k < 0 || k >= len(phase) {
+			continue
+		}
 		diff := phase[k] - mean
 		sumSq += diff * diff
+		count++
 	}
-	return sumSq / float64(len(indices))
+	if count < 2 {
+		return 0
+	}
+	return sumSq / float64(count)
 }

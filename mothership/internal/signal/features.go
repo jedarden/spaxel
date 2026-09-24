@@ -19,6 +19,7 @@ const (
 // Uses Welford's online algorithm for numerical stability
 type NBVITracker struct {
 	count    int
+	observed [64]int     // Per-index sample count (short frames update only their prefix)
 	mean     [64]float64
 	m2       [64]float64 // Sum of squared deviations for Welford's algorithm
 	selected [64]bool    // Selected subcarrier mask
@@ -33,22 +34,33 @@ func NewNBVITracker(nSub int) *NBVITracker {
 }
 
 // Update adds a new amplitude sample and updates statistics
-// Uses Welford's online algorithm for numerical stability
+// Uses Welford's online algorithm for numerical stability.
+//
+// A frame may carry fewer usable subcarriers than the configured map — real
+// HT20 L-LTF captures report 52 I/Q pairs against a 64-subcarrier map — so
+// per-index counts, not a global count, decide when an index has enough
+// history. Frames longer than the tracker capacity are consumed up to it.
 func (n *NBVITracker) Update(amplitude []float64) {
-	if len(amplitude) < n.nSub {
+	if len(amplitude) == 0 {
 		return
 	}
 
+	limit := len(amplitude)
+	if limit > len(n.mean) {
+		limit = len(n.mean)
+	}
+
 	n.count++
-	for k := 0; k < n.nSub; k++ {
+	for k := 0; k < limit; k++ {
 		// Skip non-data subcarriers
 		if !IsDataSubcarrier(k) {
 			continue
 		}
 
+		n.observed[k]++
 		x := amplitude[k]
 		delta := x - n.mean[k]
-		n.mean[k] += delta / float64(n.count)
+		n.mean[k] += delta / float64(n.observed[k])
 		delta2 := x - n.mean[k]
 		n.m2[k] += delta * delta2
 	}
@@ -73,13 +85,13 @@ func (n *NBVITracker) recalculateSelection() {
 	}
 
 	var scores []nbviScore
-	for k := 0; k < n.nSub; k++ {
-		if !IsDataSubcarrier(k) {
-			continue
+	for k := 0; k < len(n.mean); k++ {
+		if !IsDataSubcarrier(k) || n.observed[k] < 2 {
+			continue // Unobserved (or single-sample) indices have no variance estimate
 		}
 
 		// Variance from Welford's algorithm
-		variance := n.m2[k] / float64(n.count-1)
+		variance := n.m2[k] / float64(n.observed[k]-1)
 		meanSq := n.mean[k] * n.mean[k]
 
 		if meanSq < 1e-10 {
@@ -97,10 +109,11 @@ func (n *NBVITracker) recalculateSelection() {
 		n.selected[k] = false
 	}
 
-	// If not enough subcarriers pass threshold, use all data subcarriers
+	// If not enough subcarriers pass threshold, use all data subcarriers the
+	// tracker has actually observed
 	if len(scores) < 8 {
-		for k := 0; k < n.nSub; k++ {
-			if IsDataSubcarrier(k) {
+		for k := 0; k < len(n.selected); k++ {
+			if IsDataSubcarrier(k) && n.observed[k] > 0 {
 				n.selected[k] = true
 			}
 		}
@@ -129,7 +142,7 @@ func (n *NBVITracker) GetSelectedIndices() []int {
 	}
 
 	var indices []int
-	for k := 0; k < n.nSub; k++ {
+	for k := 0; k < len(n.selected); k++ {
 		if n.selected[k] {
 			indices = append(indices, k)
 		}
@@ -191,20 +204,32 @@ func (md *MotionDetector) Process(processed *ProcessedCSI, baseline []float64) *
 	// Update NBVI tracker with amplitude
 	md.nbviTracker.Update(processed.Amplitude)
 
-	// Get selected subcarrier indices
-	selected := md.nbviTracker.GetSelectedIndices()
+	// Get selected subcarrier indices, clamped to what this frame actually
+	// carries: the selection is sized from the configured map (64), while a
+	// real HT20 frame's arrays hold only its reported subcarriers (52).
+	frameLen := len(processed.Amplitude)
+	selected := make([]int, 0, NBVITopCount)
+	for _, k := range md.nbviTracker.GetSelectedIndices() {
+		if k >= 0 && k < frameLen {
+			selected = append(selected, k)
+		}
+	}
 
 	// Compute deltaRMS over selected subcarriers
 	var deltaRMS float64
 	if len(selected) > 0 && len(baseline) >= md.nSub {
 		var sumSqDiff float64
+		diffs := 0
 		for _, k := range selected {
-			if k < len(processed.Amplitude) && k < len(baseline) {
+			if k < len(baseline) {
 				diff := processed.Amplitude[k] - baseline[k]
 				sumSqDiff += diff * diff
+				diffs++
 			}
 		}
-		deltaRMS = math.Sqrt(sumSqDiff / float64(len(selected)))
+		if diffs > 0 {
+			deltaRMS = math.Sqrt(sumSqDiff / float64(diffs))
+		}
 	}
 
 	// Apply exponential smoothing

@@ -87,7 +87,12 @@ func (db *DiurnalBaseline) Update(amplitude []float64) {
 	hour := time.Now().Hour()
 	slot := db.slots[hour]
 
-	if len(amplitude) != db.nSub {
+	// Accept frames carrying up to the configured number of subcarriers:
+	// real HT20 frames report 52 against the 64-subcarrier map, and both
+	// update loops below are bounded by the shorter of the two lengths.
+	// Frames longer than the map come from a different wifi mode (e.g.
+	// HT40) and must not blend foreign carriers into the slot.
+	if len(amplitude) == 0 || len(amplitude) > db.nSub {
 		return
 	}
 
