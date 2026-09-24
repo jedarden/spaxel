@@ -114,8 +114,11 @@ workflow-level effect is mitigated today because the parallel go-test leg
 carries both `TestTimingBudgetProduction` and the contract test, so every
 scenario above still turns the workflow red — but the timing node's own phase
 can lie, and someone reading only that node would see `Succeeded`. Fixing the
-step itself (add `set -o pipefail`, fail on empty parse) is a
-declarative-config change, not a spaxel one.
+step itself (add `set -o pipefail`, fail on empty parse, and enforce the
+exactly-one-Median/one-P99 invariant at the parse site) is a
+declarative-config change, not a spaxel one; it is owned by bead
+`spaxel-d8268220` (filed 2026-09-24 after a queue sweep confirmed neither this
+workspace nor declarative-config's own queue carried it).
 
 ## Running locally
 
