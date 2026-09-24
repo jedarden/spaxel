@@ -48,6 +48,27 @@ internet-facing). In-process:
   (`/ws/node`, HMAC token on hello). `GET /metrics` is deliberately
   unauthenticated for scraping.
 
+### Versioning policy
+
+Deliberately **no versioned path prefix** (no `/v1`): the mothership is a
+single-deployer, tailnet-internal service — every client (dashboard, sim,
+firmware) ships in lockstep with the server container, so a versioned prefix
+would only preserve compatibility nobody needs. Compatibility is maintained
+by convention instead:
+
+- **Additive-only evolution.** New endpoints, new optional JSON fields, and
+  new WebSocket message types may appear at any time; consumers must
+  tolerate them.
+- **Unknown message types are ignored silently** by both WebSocket paths —
+  the dashboard command loop (`/ws/dashboard`) and the node message loop
+  (`/ws/node`) drop any JSON frame whose `type` they do not implement. This
+  is the protocol's forward-compat mechanism, not an accident.
+- **New node capabilities** are advertised in the hello `capabilities` array
+  (§8); the mothership records it but does not gate behaviour on it today.
+- **Removals and renames are breaking** and must land as doc update +
+  contract-test change + code change in the same commit — this document and
+  `mothership/tests/contract/` are the executable form of the contract.
+
 ## 2. Status & health
 
 ### `GET /healthz` → 200 | 503
@@ -250,14 +271,116 @@ load-bearing part, upload is out of scope for the contract tests.
 
 ## 8. WebSocket endpoints
 
-### `/ws/node` — node ingestion (inbound CSI)
+### `/ws/node` — node ingestion (inbound CSI + node control)
 
-Upgrade: standard `websocket` handshake (origin check disabled). Node
-protocol: binary length-prefixed frames of CSI samples; first message may be a
-JSON `hello` carrying `mac` + `token`, validated with constant-time compare
-against the HMAC install secret (120 s tokenless grace for freshly
-provisioned nodes). Server→node messages are sparse (config pushes). This is
-the **only** high-rate ingress; see `mothership/internal/ingest/`.
+Upgrade: standard `websocket` handshake (origin check disabled). After the
+upgrade, message frames are either JSON text (control) or binary (CSI
+samples). This is the **only** high-rate ingress; implemented in
+`mothership/internal/ingestion/`, pinned by
+`tests/contract/node_ws_test.go`. spaxel-sim's `connectNode`
+(`mothership/cmd/sim/main.go`) is the reference client.
+
+**Shutdown:** once graceful shutdown has begun, new upgrade requests get
+plain HTTP `503` (no upgrade) with JSON body
+`{"error":"mothership shutting down","code":"shutting_down"}`.
+
+**Lifecycle (order is contractual):**
+
+1. Client → server: **`hello`** JSON as the *first* frame. Any other first
+   frame (garbage, non-hello JSON, or binary) earns a `reject` frame and a
+   closed connection.
+2. Server validates the token (below). Invalid/missing → `reject` frame,
+   then close — unless a migration grace window is open, in which case the
+   connection is accepted but flagged `unpaired`.
+3. Server → client: a **`role`** assignment then a **`config`** push (via
+   the fleet manager when wired; the bare-server default is `role:"rx"` plus
+   `rate_hz:2` / `variance_threshold:1`), followed by a `config` carrying
+   `ntp_server` whenever an NTP server is configured. These are the frames
+   spaxel-sim waits on after hello.
+4. Steady state: the client streams binary CSI frames plus sparse JSON
+   `health` / `ble` / `motion_hint` / `ota_status`; the server pings every
+   30 s, and a connection idle past the 60 s read deadline is dropped.
+5. On graceful shutdown, connected nodes receive
+   `{"type":"shutdown","reconnect_in_ms":30000}` and are disconnected.
+
+**Authentication.** The node token is the HMAC pairing minted by
+`/api/provision` (§5): `hex(HMAC-SHA256(installSecret, mac))` — valid only
+for the exact MAC it was minted for. Two channels exist:
+
+- `X-Spaxel-Token` HTTP header on the upgrade request — the documented
+  channel (spaxel-sim and plan.md-conformant firmware);
+- `token` field in the hello JSON body (older/alternate clients).
+
+The **body token wins** when both are present; the header fills in for
+clients that omit the body field. With a validator configured, a
+missing/invalid token is rejected with a `reject` frame unless the migration
+grace window is open (deadline zero = strict mode; the 120-second
+tokenless grace in §5 is the provisioning-side story for the same window).
+Today the only rejection reasons emitted are the free-text
+`"invalid hello format"` / `"expected hello first"` (first-frame violations)
+and `"invalid_token"` — also used for a syntactically valid token on an
+unknown MAC. (`unknown_node` and `rate_limited` exist in the
+`RejectMessage` schema but no code path emits them yet.)
+
+**Upstream JSON catalog** (node → mothership, `{"type":...}` text frames;
+full schemas in `internal/ingestion/message.go`):
+
+| type | when | notable fields |
+|---|---|---|
+| `hello` | first frame, mandatory | `mac`, `firmware_version`, `capabilities`, `chip`, `flash_mb`, `uptime_ms`, `ap_bssid`, `ap_channel`, `token`, `safe_mode_active`, `boot_count`, `pos_x`/`pos_y`/`pos_z` (pointer semantics: absent = not announced — a real ESP32 omits them and keeps its user-placed position; spaxel-sim announces its computed geometry) |
+| `health` | every ~10 s | `mac`, `timestamp_ms`, `free_heap_bytes` (the only field persisted via the fleet registry), `wifi_rssi_dbm`, `uptime_ms`, `temperature_c`, `csi_rate_hz`, `wifi_channel`, `ip`, `ntp_synced`, `safe_mode_active`, `boot_count` |
+| `ble` | every ~5 s | `devices[]` of `{addr, addr_type, rssi_dbm, name, mfr_id, mfr_data_hex}` |
+| `motion_hint` | on-device variance event | `variance` |
+| `ota_status` | during OTA | `state`: `downloading\|verifying\|writing\|rebooting\|failed`, `progress_pct`, `error` |
+
+Unknown `type` values are **ignored silently** (§1 versioning policy).
+
+**Downstream JSON catalog** (mothership → node):
+
+| type | fields | notes |
+|---|---|---|
+| `role` | `role`: `tx\|rx\|tx_rx\|passive\|idle`, `passive_bssid` (passive role only) | sent after hello and on role change |
+| `config` | optional `rate_hz`, `tx_slot_us`, `variance_threshold`, `ntp_server` | pointer fields — absent means "unchanged"; sent after hello and on settings changes |
+| `ota` | `url`, `sha256`, `version` | triggers a firmware update |
+| `reboot` | `delay_ms` | |
+| `identify` | `duration_ms` | LED blink |
+| `shutdown` | `reconnect_in_ms` (30000) | graceful shutdown |
+| `baseline_request` | — | schema defined, but no sender today (reserved) |
+| `reject` | `reason` | followed by close |
+
+**Binary CSI frames** (client → server, WebSocket binary messages). Layout
+is the shared encoder contract of the firmware and `cmd/sim/generator.go`;
+parser: `ingestion.ParseFrame`:
+
+```
+Header (24 bytes fixed):
+  [0:6]   node_mac     — source (measuring) node MAC
+  [6:12]  peer_mac     — peer MAC on the link
+  [12:20] timestamp_us — uint64 LE, microseconds since node boot
+  [20]    rssi         — int8, dBm (0 = invalid/missing: frame still
+                         accepted, but AGC normalization is skipped)
+  [21]    noise_floor  — int8, dBm
+  [22]    channel      — uint8, 2.4 GHz WiFi channel (1–14)
+  [23]    n_sub        — uint8, subcarrier count (≤ 128)
+Payload (n_sub × 2 bytes): interleaved int8 I, int8 Q per subcarrier
+```
+
+Validation, in the order `ParseFrame` applies it; any failure **drops the
+frame silently** (nothing is ever written back for a malformed frame):
+
+1. total length ≥ 24;
+2. total length == 24 + n_sub×2 (n_sub read from byte 23);
+3. n_sub ≤ 128;
+4. channel ∈ 1–14.
+
+The header MAC pair forms a link with id `"<NODE_MAC>:<PEER_MAC>"`
+(uppercase colon-hex, 17+1+17 chars) — the key every link-level surface
+(`link_active`, motion state, recordings) uses. The header MACs are trusted
+as sent: `node_mac` is not cross-checked against the hello-authenticated
+MAC. Malformed frames are counted per connection in a sliding 60-second
+window: WARN past 100, and past 1000 the server sends a WebSocket close
+(1008 policy violation, "Excessive malformed frames — possible firmware
+bug") and disconnects the node.
 
 ### `/ws/dashboard` — dashboard event stream
 
@@ -328,11 +451,14 @@ dashboard path (the node protocol reuses the same handler shape).
 settings store, real `ProcessorManager`, real provisioning/OTA/dashboard
 servers — the same wiring as `main.go`) and pins this document:
 
-- `contract_test.go` — status/health, auth, blobs, provisioning, network
-  settings, firmware download/download-auth (table-driven).
+- `rest_contract_test.go` — status/health, auth, blobs, provisioning,
+  network settings, firmware download/download-auth (table-driven).
 - `dashboard_ws_test.go` — snapshot-first frame ordering, `loc_update`
   broadcast shape, `request_explain` command round-trip, unknown-command
   tolerance.
+- `node_ws_test.go` — hello auth matrix (body/header token, migration
+  grace), post-hello `role`/`config` shapes, binary CSI frame validation
+  rules and malformed-frame tolerance, JSON control messages, shutdown 503.
 
 Run: `cd mothership && go test ./tests/contract/ ./internal/...`.
 

@@ -27,6 +27,7 @@ import (
 	"github.com/spaxel/mothership/internal/auth"
 	"github.com/spaxel/mothership/internal/dashboard"
 	"github.com/spaxel/mothership/internal/health"
+	"github.com/spaxel/mothership/internal/ingestion"
 	"github.com/spaxel/mothership/internal/ota"
 	"github.com/spaxel/mothership/internal/provisioning"
 	sigproc "github.com/spaxel/mothership/internal/signal"
@@ -43,15 +44,16 @@ const (
 
 // rig is a fully wired mothership HTTP surface on a throwaway data dir.
 type rig struct {
-	t        *testing.T
-	router   chi.Router
-	srv      *httptest.Server // /ws tests dial this; REST tests go through router directly
-	pm       *sigproc.ProcessorManager
-	hub      *dashboard.Hub
-	prov     *provisioning.Server
-	settings *api.SettingsHandler
-	ota      *ota.Server
-	fwDir    string
+	t         *testing.T
+	router    chi.Router
+	srv       *httptest.Server // /ws tests dial this; REST tests go through router directly
+	pm        *sigproc.ProcessorManager
+	hub       *dashboard.Hub
+	prov      *provisioning.Server
+	settings  *api.SettingsHandler
+	ota       *ota.Server
+	ingestion *ingestion.Server
+	fwDir     string
 }
 
 // newRig wires the contract-relevant handlers the way main.go does.
@@ -133,6 +135,20 @@ func newRig(t *testing.T, demoMode bool) *rig {
 	// Dashboard WebSocket (hub not running; WS tests start it).
 	rg.hub = dashboard.NewHub(0)
 	rg.router.Get("/ws/dashboard", dashboard.NewServer(rg.hub).HandleDashboardWS)
+
+	// Node WebSocket ingestion (/ws/node) — same validator wiring as the OTA
+	// server above (the production pairing is HMAC(installSecret, mac); the
+	// rig pins the same accept/reject surface with a fixed pairing). The
+	// migration deadline stays zero (strict mode); tests that exercise the
+	// tokenless grace window call SetMigrationDeadline on the exposed server
+	// before dialing. No fleet manager is wired, so a successful hello gets
+	// the bare-server role/config defaults (rx, idle rate) — that shape is
+	// itself part of the pinned contract.
+	rg.ingestion = ingestion.NewServer()
+	rg.ingestion.SetTokenValidator(func(mac, token string) bool {
+		return mac == testMAC && token == testNodeToken
+	})
+	rg.router.Get("/ws/node", rg.ingestion.HandleNodeWS)
 
 	rg.srv = httptest.NewServer(rg.router)
 	t.Cleanup(rg.srv.Close)
