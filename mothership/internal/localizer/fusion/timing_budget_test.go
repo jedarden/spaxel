@@ -10,10 +10,24 @@
 //   - Median fusion iteration < 15 ms over 600 iterations (60 seconds at 10 Hz)
 //   - P99 < 40 ms (hard limit)
 //
-// CI integration:
+// CI integration (as-built — the "timing-benchmark" step of the spaxel-build
+// WorkflowTemplate on iad-ci, see docs/ci-benchmark-integration.md):
 //
-//	Add to Argo Workflows CI step after go test ./...:
-//	  go test -bench=BenchmarkFusionLoop -benchtime=60s -count=1 ./internal/localizer/fusion/
+//	go test -bench=BenchmarkFusionLoop -benchtime=10s -count=1 ./internal/localizer/fusion/
+//
+//	The gate greps a single "Median: <n>ms" / "P99: <n>ms" pair out of the
+//	output and fails the step when median > 30ms or P99 > 40ms. Two in-file
+//	properties keep that grep unambiguous, and both are regression-checked by
+//	ci_gate_contract_test.go:
+//	  - BenchmarkFusionLoop is a fixed 600-iteration window (b.N is ignored),
+//	    so it returns immediately on any round after the first; otherwise the
+//	    testing framework re-runs the window until its benchtime estimate
+//	    converges — which never happens for a fixed workload — and every
+//	    extra round printed another "Median:" pair that turned the gate's
+//	    parsed value into multi-line garbage (threshold check silently passed).
+//	  - TestTimingBudgetProduction's failure dump must not contain the tokens
+//	    the gate greps (a failing test's logs are printed even without -v,
+//	    which would inject a second "Median:" line into the gate output).
 //
 //	Acceptance: Workflow fails if median latency exceeds 30 ms on CI runner
 //	            (2x allowance for slower hardware; 15 ms production target)
@@ -92,6 +106,19 @@ func (d durationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 //
 // CI Threshold: 30ms median (2x allowance for slower CI hardware)
 func BenchmarkFusionLoop(b *testing.B) {
+	// The unit of measurement here is one fixed 600-iteration fusion window;
+	// b.N plays no part in it. Without this guard the testing framework
+	// re-runs the whole window whenever the last round's wall time is below
+	// -benchtime, estimating the next b.N from ns/op — an estimate that can
+	// never converge for a fixed workload, so e.g. -benchtime=10s ran ~30
+	// identical rounds. Each round printed its own "Median:"/"P99:" summary,
+	// and the CI gate's grep+sed parse (which expects exactly one of each)
+	// then produced multi-line values that bc rejected, making the threshold
+	// check a silent no-op. Round 1 is the measurement; later rounds are no-ops.
+	if b.N > 1 {
+		return
+	}
+
 	// Setup: create virtual nodes and walkers
 	nodes := createVirtualNodes(4) // 4 nodes at corners of a 10x10m space
 	walkers := createWalkers(2)    // 2 walkers
@@ -225,9 +252,12 @@ func BenchmarkFusionLoop(b *testing.B) {
 	}
 	p99 := timings[p99Index]
 
-	// Report metrics
-	b.ReportMetric(float64(median.Microseconds()), "ms/iter")
-	b.ReportMetric(float64(p99.Microseconds()), "ms/p99")
+	// No b.ReportMetric here. The result line's ns/op is meaningless for a
+	// fixed workload (b.N is the framework's round cap, not a workload size),
+	// and custom metrics reported in the b.N=1 calibration round are dropped
+	// before the final round prints — with the early return above, the final
+	// round reports nothing. The "Median:"/"P99:" log lines below are the
+	// canonical numbers, for the CI gate and for humans alike.
 
 	// Assert timing constraints
 	// Note: benchmarks don't fail on assertion, so we log failures
@@ -628,12 +658,16 @@ func TestTimingBudgetProduction(t *testing.T) {
 	}
 	p99 := timings[p99Index]
 
-	// Log statistics
-	t.Logf("Timing Results (n=%d):", len(timings))
-	t.Logf("  Min: %v", timings[0])
-	t.Logf("  Median: %v (target: %v, CI threshold: %v)", median, productionTarget, ciThreshold)
-	t.Logf("  P99: %v (hard limit: %v)", p99, hardLimit)
-	t.Logf("  Max: %v", timings[len(timings)-1])
+	// Log statistics. Deliberately NOT the gate's "Median:"/"P99:" tokens:
+	// a failing test's logs are printed even without -v, and this test runs
+	// in the same `go test -bench=BenchmarkFusionLoop` output the spaxel-build
+	// gate greps — a load-induced failure here would otherwise inject a second
+	// "Median:"/"P99:" pair and silently disarm the threshold check.
+	t.Logf("timing-test results (n=%d):", len(timings))
+	t.Logf("  min: %v", timings[0])
+	t.Logf("  median=%v (target: %v, CI threshold: %v)", median, productionTarget, ciThreshold)
+	t.Logf("  p99=%v (hard limit: %v)", p99, hardLimit)
+	t.Logf("  max: %v", timings[len(timings)-1])
 
 	// Assert timing constraints
 	if median > productionTarget {
