@@ -86,10 +86,42 @@ image build and a production rollout.
 | `firmware/scripts/**` | `generate-signing-key.sh`, `sign-firmware.sh`, `verify-console-config.sh` — signing and console verification around the build |
 
 Not build inputs: `firmware/sdkconfig` and `firmware/sdkconfig.old` are
-generated (gitignored); `firmware/build/` (199 MB) and
-`firmware/managed_components/` are gitignored; `firmware/docs/` is prose;
-`firmware/BUILD.md`, `firmware/README.md`, `firmware/CONTRIBUTING.md` are
-markdown and already dropped by the `*.md` rule.
+generated (gitignored); `firmware/build/` (199 MB) is gitignored;
+`firmware/docs/` is prose; `firmware/BUILD.md`, `firmware/README.md`,
+`firmware/CONTRIBUTING.md` are markdown and already dropped by the `*.md`
+rule. `firmware/managed_components/` is also gitignored — but it is **not**
+inert in the way the others are; see §1.2.
+
+### 1.2 Managed components — production-relevant, carrier-tracked
+
+`docs/SYSTEM_CATALOG.md` (§Build Impact Classification) lists
+`firmware/managed_components/` as a firmware build trigger, and it is right
+about relevance: the vendored `espressif__esp_websocket_client` and
+`espressif__mdns` trees are compiled into `spaxel.bin`, so their content ships
+in every published image. Earlier drafts of this spec recorded only
+"gitignored", which reads as inert — that was the wrong emphasis, and this
+section is the reconciliation (spaxel-1b0e96aa).
+
+Gitignored means a push can never carry a direct change under
+`firmware/managed_components/`; it does **not** mean the components are
+irrelevant to the build. A managed-component change reaches the repository —
+and therefore CI — only through its two tracked carrier files, both Tier A:
+
+| Carrier | Role |
+|---|---|
+| `firmware/main/idf_component.yml` | Component-manager manifest: declares `espressif/mdns >= 1.3.0` and `espressif/esp_websocket_client >= 1.0.0`. Already Tier A via `firmware/main/**` |
+| `firmware/dependencies.lock` | Resolves and pins those components (version + `component_hash`) — the firmware analogue of `go.sum`. Already in the §1.1 table |
+
+Both sit outside the live ignore list, so the exclusion-based sensor already
+builds on either: the live behaviour was correct before this reconciliation —
+only the spec's classification was misleading.
+
+Regression gate: `mothership/internal/buildpaths/buildpaths_test.go` pins the
+contract — carrier paths and (hypothetically vendored)
+`firmware/managed_components/**` paths classify as build-triggering, the skip
+rule stays conjunctive across the push (a pin bump cannot hide behind bead
+churn in the same push), and the two carrier files must never be gitignored
+(that would let component pins change silently, with no push and no build).
 
 ---
 
@@ -281,7 +313,7 @@ corrected form is:
 
 ```bash
 # Firmware build trigger
-git diff --name-only HEAD~1 HEAD | grep -qE '^firmware/(main/|CMakeLists\.txt|sdkconfig\.(defaults|usbjtag|uart-console)|partitions\.csv|dependencies\.lock|scripts/)'
+git diff --name-only HEAD~1 HEAD | grep -qE '^firmware/(main/|managed_components/|CMakeLists\.txt|sdkconfig\.(defaults|usbjtag|uart-console)|partitions\.csv|dependencies\.lock|scripts/)'
 
 # Mothership + build-config trigger
 git diff --name-only HEAD~1 HEAD | grep -qE '^(mothership/|dashboard/|Dockerfile$|\.dockerignore$|docker-compose\.yml$|VERSION$|go\.work$|go\.work\.sum$|\.golangci\.yml$)'
@@ -294,6 +326,13 @@ matches `VERSION`, `Dockerfile` or `go.work`, because the trailing `/` requires
 them to be directories. Its doc-only skip pattern `'^(\.md|docs/|notes/|README)'`
 likewise anchors `.md` at the start of the path, so it matches no tracked file;
 the correct form is `\.md$`.
+
+`managed_components/` is named in the firmware trigger defensively (§1.2): the
+directory is gitignored today, so no push can carry a path under it, but the
+catalog classifies it as a build trigger because its trees compile into the
+shipped firmware. If the directory is ever vendored (the ignore rule dropped),
+this explicit form must not silently drop those paths — the exclusion-based
+live filter needs no change, since anything not ignored triggers.
 
 ### 5.3 Follow-up that would simplify this spec
 

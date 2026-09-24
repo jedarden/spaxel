@@ -357,10 +357,18 @@ This catalog serves as the foundation for classifying which paths trigger builds
 
 ### Firmware Build Triggers
 - `firmware/main/*.c`, `firmware/main/*.h`
+- `firmware/main/idf_component.yml` — managed-component manifest (declares `espressif/mdns`, `espressif/esp_websocket_client`)
+- `firmware/dependencies.lock` — pins resolved managed-component versions and hashes (the firmware analogue of `go.sum`)
+- `firmware/managed_components/**` — compiled into the shipped firmware (production-relevant) but gitignored, so a change can only reach a push through the two carrier files above; if ever vendored, these paths are direct build triggers
 - `firmware/CMakeLists.txt`, `firmware/partitions.csv`, `firmware/sdkconfig.defaults`
 - `firmware/test/*.c`, `firmware/test/*.h`, `firmware/scripts/*.sh`
-- `firmware/managed_components/`
 - `VERSION` — a bump is build-relevant here too (the firmware bakes a version header)
+
+Managed-component changes (component add, removal, or version-pin bump) always
+trigger a firmware build and, because the firmware artifact is baked into the
+Docker image, an image build. Full reconciliation with the consolidated
+trigger set: `docs/build-path-filter-spec.md` §1.2; regression gate:
+`mothership/internal/buildpaths/buildpaths_test.go`.
 
 ### Mothership Build Triggers
 - `mothership/cmd/**/*.go`, `mothership/internal/**/*.go`
