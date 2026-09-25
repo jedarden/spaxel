@@ -366,6 +366,21 @@ func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, filename string) 
 	http.ServeFile(w, r, path)
 }
 
+// embeddedDashboardFileServer returns the catch-all handler serving the
+// embedded dashboard tree, constructed exactly as main registers it for the
+// /* route. Like registerDashboardStatic (the filesystem-serving counterpart),
+// main and the embed smoke test (dashboard_embed_test.go, -tags=embed) share
+// this one construction so the test cannot drift from what production serves.
+// The error is non-nil only if the embedded sub-filesystem cannot be created,
+// which main logs as a WARN.
+func embeddedDashboardFileServer() (http.HandlerFunc, error) {
+	dashboardHTTP, err := fs.Sub(dashboardFS, "dashboard")
+	if err != nil {
+		return nil, err
+	}
+	return http.StripPrefix("/", http.FileServer(http.FS(dashboardHTTP))).ServeHTTP, nil
+}
+
 // dashboardStaticHandler returns an http.Handler that serves the dashboard's
 // static files (CSS, JS, index.html, ...) from staticDir via http.ServeFile, so
 // the browser receives the correct Content-Type per extension. Extension-less
@@ -4972,9 +4987,9 @@ func main() {
 
 	// Serve dashboard static files from embedded filesystem (go:embed) or fallback to filesystem
 	if dashboardEmbedded {
-		dashboardHTTP, err := fs.Sub(dashboardFS, "dashboard")
-		if err != nil {
-			log.Printf("[WARN] Failed to create dashboard sub filesystem: %v", err)
+		fileServer, fileServerErr := embeddedDashboardFileServer()
+		if fileServerErr != nil {
+			log.Printf("[WARN] Failed to create dashboard sub filesystem: %v", fileServerErr)
 		} else {
 			log.Printf("[INFO] Serving dashboard from embedded filesystem")
 			// GET and HEAD both route to the file server (bf-1cgqe): the route was
@@ -4982,7 +4997,6 @@ func main() {
 			// instead of the asset's Content-Type. http.FileServer already serves
 			// headers-only with an empty body for HEAD, so the same handler serves
 			// both methods correctly.
-			fileServer := http.StripPrefix("/", http.FileServer(http.FS(dashboardHTTP))).ServeHTTP
 			r.Get("/*", fileServer)
 			r.Head("/*", fileServer)
 		}

@@ -17,6 +17,27 @@ import (
 // tree, not just any directory that happens to be named "dashboard".
 var dashboardAssetsMarker = filepath.Join("css", "tokens.css")
 
+// findDashboardTreeNear walks upward from start (at most 12 levels) looking
+// for a dashboard/ directory that actually contains marker. Returns "" if
+// none is found. Split out of resolveDashboardDirForTest so the embed smoke
+// test (dashboard_embed_test.go, -tags=embed) can locate the canonical
+// dashboard/ sources from TestMain, before any *testing.T exists.
+func findDashboardTreeNear(start, marker string) string {
+	dir := start
+	for i := 0; i < 12; i++ {
+		cand := filepath.Join(dir, "dashboard")
+		if _, err := os.Stat(filepath.Join(cand, marker)); err == nil {
+			return cand
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "" // reached filesystem root
+		}
+		dir = parent
+	}
+	return ""
+}
+
 // resolveDashboardDirForTest locates the repo's real dashboard/ assets for the
 // test. go test runs with the working directory set to the package source dir
 // (mothership/cmd/mothership/), so the runtime findDashboardDir() candidates
@@ -29,23 +50,8 @@ var dashboardAssetsMarker = filepath.Join("css", "tokens.css")
 // `go test ./...`.
 func resolveDashboardDirForTest(t *testing.T) string {
 	t.Helper()
-	search := func(start string) string {
-		dir := start
-		for i := 0; i < 12; i++ {
-			cand := filepath.Join(dir, "dashboard")
-			if _, err := os.Stat(filepath.Join(cand, dashboardAssetsMarker)); err == nil {
-				return cand
-			}
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				return "" // reached filesystem root
-			}
-			dir = parent
-		}
-		return ""
-	}
 	if cwd, err := os.Getwd(); err == nil {
-		if d := search(cwd); d != "" {
+		if d := findDashboardTreeNear(cwd, dashboardAssetsMarker); d != "" {
 			return d
 		}
 	}
@@ -53,7 +59,7 @@ func resolveDashboardDirForTest(t *testing.T) string {
 		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 			exe = resolved
 		}
-		if d := search(filepath.Dir(exe)); d != "" {
+		if d := findDashboardTreeNear(filepath.Dir(exe), dashboardAssetsMarker); d != "" {
 			return d
 		}
 	}
