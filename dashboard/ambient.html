@@ -11,6 +11,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#18191b">
+    <!-- Agentation visual-feedback toolbar (spaxel-ba77654a): the import map
+         must precede the module script; the mount is verified via
+         #agentation-root. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react/jsx-runtime": "/static/vendor/react-jsx-runtime.js"
+        }
+    }
+    </script>
+    <script type="module" src="/agentation.js"></script>
 </head>
 <body class="ambient-mode">
     <div class="app-shell app-shell--full">

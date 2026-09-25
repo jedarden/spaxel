@@ -5,6 +5,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+    <!-- Agentation visual-feedback toolbar (spaxel-ba77654a): the import map
+         must precede the module script; the mount is verified via
+         #agentation-root. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react/jsx-runtime": "/static/vendor/react-jsx-runtime.js"
+        }
+    }
+    </script>
+    <script type="module" src="/agentation.js"></script>
 </head>
 <body>
     <h1>TransformControls Verification Test</h1>

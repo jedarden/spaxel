@@ -3529,10 +3529,17 @@
     {
         "imports": {
             "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
-            "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+            "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/",
+            "react/jsx-runtime": "/static/vendor/react-jsx-runtime.js"
         }
     }
     </script>
+
+    <!-- Agentation visual-feedback toolbar (spaxel-ba77654a): react entries
+         are merged into the single import map above (a document allows only
+         one) and this module script follows it, so bare-specifier resolution
+         sees the map. Mount verified via #agentation-root. -->
+    <script type="module" src="/agentation.js"></script>
 
     <!-- Blob identity matching (data-only): BLE registry → blob name/color (bf-iner) -->
     <script src="js/blob-identity.js"></script>

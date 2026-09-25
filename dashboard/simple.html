@@ -9,6 +9,17 @@
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/simple.css">
+    <!-- Agentation visual-feedback toolbar (spaxel-ba77654a): the import map
+         must precede the module script; the mount is verified via
+         #agentation-root. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react/jsx-runtime": "/static/vendor/react-jsx-runtime.js"
+        }
+    }
+    </script>
+    <script type="module" src="/agentation.js"></script>
 </head>
 <body class="simple-mode">
 

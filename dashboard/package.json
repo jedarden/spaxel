@@ -2,6 +2,7 @@
   "name": "spaxel-dashboard",
   "private": true,
   "scripts": {
+    "build:agentation": "node build-agentation.js",
     "test": "jest --verbose",
     "test:a11y": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -9,9 +10,13 @@
   "devDependencies": {
     "@axe-core/playwright": "4.10.1",
     "@playwright/test": "^1.52.0",
+    "agentation": "^3.1.2",
+    "esbuild": "^0.27.7",
     "http-server": "^14.1.1",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^6.0.3"
   }
 }

@@ -26,6 +26,17 @@
             font-size: var(--text-sm);
         }
     </style>
+    <!-- Agentation visual-feedback toolbar (spaxel-ba77654a): the import map
+         must precede the module script; the mount is verified via
+         #agentation-root. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react/jsx-runtime": "/static/vendor/react-jsx-runtime.js"
+        }
+    }
+    </script>
+    <script type="module" src="/agentation.js"></script>
 </head>
 <body class="has-mobile-nav">
     <div class="app-shell app-shell--live">
