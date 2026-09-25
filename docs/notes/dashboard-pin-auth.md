@@ -1,10 +1,13 @@
 # Dashboard PIN authentication — specification and verification map
 
-Status: current as of 2026-09-17 (spaxel-d223bfdd). Implementation:
+Status: current as of 2026-09-24 (spaxel-d223bfdd, persistence added by
+spaxel-2db7e4c9). Implementation:
 `mothership/internal/auth/handler.go`. Regression tests:
 `mothership/internal/auth/handler_test.go` (endpoint and install-secret
-contracts) and `mothership/internal/auth/middleware_session_test.go` (session
-lifecycle and route-protection matrix). The original promise is plan.md's
+contracts), `mothership/internal/auth/middleware_session_test.go` (session
+lifecycle and route-protection matrix), and
+`mothership/internal/auth/persistence_restart_test.go` (restart-persistence
+contract). The original promise is plan.md's
 Authentication section ("Dashboard access is protected by a PIN…").
 
 This is the durable copy of what the PIN layer promises, what it actually
@@ -230,7 +233,40 @@ regression-tested but is NOT installed in the live router.**
   layer (Traefik today; the middleware if enabled). Client-side gating is a
   UX affordance, never the enforcement point.
 
-## 12. Verification matrix
+## 12. Persistence across mothership restart
+
+Every piece of authentication state lives in SQLite — the `auth` singleton
+(PIN hash + install secret) and the `sessions` table. Nothing auth-related is
+held only in process memory, so a restart preserves the configuration by
+construction. Pinned by `TestPINAuth_PersistedAcrossRestart`
+(persistence_restart_test.go), which closes the database and builds a fresh
+Handler over a new connection on the same file:
+
+- `pin_configured` stays true and `/api/auth/setup` keeps returning `409` —
+  a restart never reopens the onboarding window (only §7's destructive
+  recovery does).
+- The pre-restart PIN is still the PIN: correct PIN → `200` + session cookie,
+  wrong PIN → `401`.
+- **Sessions survive restart.** `ValidateSession` consults only the
+  `sessions` table; the handler's in-memory `secretKey` is never involved
+  (session cookies are opaque random IDs, not signed tokens). A fresh process
+  therefore honors cookies minted by the previous one for their full 7-day
+  TTL.
+- `install_secret` is unchanged, so node tokens derived before the restart
+  (`HMAC-SHA256(install_secret, mac)`) keep validating — nodes reconnect
+  without re-provisioning (`TestInstallSecret_PersistedAcrossRestarts` pins
+  the secret; the new test pins it across a genuine close-and-reopen).
+
+The inverse holds too (`TestPINAuth_RestartBeforeSetupStaysOnboarding`): a
+restart before any setup must not conjure a PIN — `pin_configured` stays
+false, login returns `404`, and the onboarding window passes traffic exactly
+as before, which is what makes a crashed first run recoverable.
+
+The heavyweight process-level equivalent — a real mothership binary restarted
+on the same data volume, with fleet and zone state checked alongside the PIN —
+is IO-1 step 9 / IO-2 in `mothership/test/acceptance/io_install_upgrade_test.go`.
+
+## 13. Verification matrix
 
 | plan.md promise | Contract | Pinned by |
 |---|---|---|
@@ -245,3 +281,4 @@ regression-tested but is NOT installed in the live router.**
 | reset behavior | §7 | `TestHandler_ChangePIN_*` (success / wrong old / unauthenticated / invalid new); session-survival documented at handler.go:496 |
 | protected REST routes | §8 | `TestMiddleware_ProtectedRoutes`, `TestPublicPaths`, RequireAuth tests |
 | node ingestion stays token-gated | §2 | `TestInstallSecret_NodeTokenDerivation`, `TestValidateSession` untouched by it |
+| authentication configuration survives restart | §12 | `TestPINAuth_PersistedAcrossRestart`, `TestPINAuth_RestartBeforeSetupStaysOnboarding`; process-level: IO-2 (`io_install_upgrade_test.go`) |
