@@ -424,3 +424,167 @@ func TestMockSerialDeviceContract(t *testing.T) {
 		t.Errorf("stored wifi_ssid=%v, want the accepted payload's", got)
 	}
 }
+
+// retryWorkflowMAC is distinct from the other MACs in this file so a leaked
+// node from one scenario can never satisfy another's assertions.
+const retryWorkflowMAC = "AA:BB:CC:00:00:74"
+
+// TestWebSerialProvisionRetryAfterFailure covers the failure half of the
+// quickstart promise (bead spaxel-667b2bb2): the Add Node wizard cannot
+// assume the steps were done in order. A user can plug the node in before
+// Settings → Network, and the documented consequence is a refusal — with no
+// fleet WiFi stored, /api/provision defaults wifi_ssid to empty (ADR-005)
+// and provision.c maps an empty SSID to nvs_write_failed. The happy path
+// above always configures the fleet network first, and
+// TestMockSerialDeviceContract pins the refusal line itself, but no test let
+// a browser recover from one against a live mothership. This is that
+// recovery: surface the refusal, close the Settings gap, resend on the same
+// serial session, and land the node in the identical discovered-and-
+// streaming state the happy path ends in — no manual IP anywhere.
+func TestWebSerialProvisionRetryAfterFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping web-serial provisioning retry test in short mode")
+	}
+
+	bin := buildDemoBinary(t)
+	name := mdnsTestName()
+	srv := startMDNSServer(t, bin, t.TempDir(),
+		"SPAXEL_MDNS_ENABLED=true",
+		"SPAXEL_MDNS_NAME="+name,
+	)
+	defer func() { _ = srv.stop() }()
+
+	bindURL, err := url.Parse(srv.baseURL)
+	if err != nil {
+		t.Fatalf("parse baseURL: %v", err)
+	}
+	bindPort, err := strconv.Atoi(bindURL.Port())
+	if err != nil {
+		t.Fatalf("parse bind port: %v", err)
+	}
+	bindHost := bindURL.Hostname()
+
+	// First-run PIN session as in the happy path — but deliberately no
+	// Settings → Network yet. The out-of-order start is the failure path's
+	// premise, and the mock would nvs_write_failed on any payload until it
+	// is closed (ADR-005 note on the happy path's leg 2).
+	client := loginAsAdmin(t, srv.baseURL)
+
+	dev, browserConn := startMockSerialDevice(t, retryWorkflowMAC)
+	browser := newSerialBrowser(browserConn)
+
+	bannerMAC := browser.readBannerMAC(t)
+	if bannerMAC != retryWorkflowMAC {
+		t.Fatalf("banner advertised %q, want the mock device's MAC %q", bannerMAC, retryWorkflowMAC)
+	}
+
+	// The wizard derives a fresh payload per attempt — the retry resends a
+	// newly built payload against current settings, never the refused one.
+	provisionPayload := func() (map[string]interface{}, provisionedNode) {
+		t.Helper()
+		resp, err := http.Post(srv.baseURL+"/api/provision", "application/json",
+			strings.NewReader(fmt.Sprintf(`{"mac":%q}`, bannerMAC)))
+		if err != nil {
+			t.Fatalf("POST /api/provision: %v", err)
+		}
+		defer resp.Body.Close() //nolint:errcheck
+		raw, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST /api/provision: status %d (body: %s)", resp.StatusCode, raw)
+		}
+		var payloadMap map[string]interface{}
+		if err := json.Unmarshal(raw, &payloadMap); err != nil {
+			t.Fatalf("provision payload is not JSON: %v (body: %s)", err, raw)
+		}
+		var provisioned provisionedNode
+		if err := json.Unmarshal(raw, &provisioned); err != nil {
+			t.Fatalf("provision payload does not match the documented shape: %v", err)
+		}
+		return payloadMap, provisioned
+	}
+	sendProvisionLine := func(payloadMap map[string]interface{}) {
+		t.Helper()
+		wrapped, err := json.Marshal(map[string]interface{}{"provision": payloadMap})
+		if err != nil {
+			t.Fatalf("wrap payload for serial: %v", err)
+		}
+		if _, err := browserConn.Write(append(wrapped, '\n')); err != nil {
+			t.Fatalf("write provisioning payload over serial: %v", err)
+		}
+	}
+
+	// Attempt 1: no fleet WiFi configured, so the payload's wifi_ssid
+	// defaults to empty and the device refuses it.
+	payloadMap, _ := provisionPayload()
+	if ssid, _ := payloadMap["wifi_ssid"].(string); ssid != "" {
+		t.Fatalf("precondition: payload wifi_ssid=%q with no fleet network configured, want empty", ssid)
+	}
+	sendProvisionLine(payloadMap)
+
+	// readAck hard-fails on ok:false (that is the happy path's contract), so
+	// the refusal is read raw and asserted as the wizard's failure surface.
+	line := browser.readLine(t, "refused provisioning ack")
+	var refused serialAck
+	if err := json.Unmarshal([]byte(line), &refused); err != nil {
+		t.Fatalf("device answer is not a JSON ack: %v (line: %s)", err, line)
+	}
+	if refused.OK || refused.Error != "nvs_write_failed" {
+		t.Fatalf("device answered ok=%v error=%q, want the documented refusal ok=false error=nvs_write_failed", refused.OK, refused.Error)
+	}
+
+	// A refusal must not latch the device — the whole retry path depends on
+	// the same serial session still being provisionable.
+	if dev.provisioned || len(dev.stored) != 0 {
+		t.Fatalf("refused payload latched the device (provisioned=%v stored=%v) — a retry could never succeed", dev.provisioned, dev.stored)
+	}
+
+	// The user closes the gap the wizard surfaced: Settings → Network.
+	putFleetNetworkSettings(t, client, srv.baseURL, "e2e-fleet-webserial-retry", "e2e-fleet-passphrase")
+
+	// Attempt 2: a fresh payload on the SAME serial session — a real
+	// wizard retry does not ask the user to replug the node.
+	payloadMap, provisioned := provisionPayload()
+	if ssid, _ := payloadMap["wifi_ssid"].(string); ssid != "e2e-fleet-webserial-retry" {
+		t.Fatalf("retry payload wifi_ssid=%v, want the fleet network just configured", payloadMap["wifi_ssid"])
+	}
+	sendProvisionLine(payloadMap)
+
+	ack := browser.readAck(t)
+	if ack.MAC != bannerMAC {
+		t.Fatalf("retry ack mac=%q, want the banner-advertised %q", ack.MAC, bannerMAC)
+	}
+
+	// Device-side record of what the retry accepted.
+	if got := dev.stored["wifi_ssid"]; got != "e2e-fleet-webserial-retry" {
+		t.Errorf("device stored wifi_ssid=%v, want the retried payload's", got)
+	}
+	if token, _ := dev.stored["node_token"].(string); token == "" {
+		t.Errorf("retry payload carries no node_token — the provisioned node could not authenticate")
+	}
+
+	// The retried node proves itself exactly as the happy path's does:
+	// discovered over mDNS, dialed with nothing but what crossed the wire,
+	// streaming CSI on the link. Skips honestly without multicast.
+	_, stopControl := requireMulticastEnvironment(t)
+	defer stopControl()
+
+	var entry *mdns.ServiceEntry
+	for attempt := 0; attempt < 3 && entry == nil; attempt++ {
+		entry = mdnsBrowse(t, 3*time.Second)[mdnsAdvertisedFQDN(name)]
+		if entry == nil {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	if entry == nil {
+		t.Fatalf("retried instance %q never discovered — a real node could not have proceeded past discovery", name)
+	}
+	if entry.Port != bindPort {
+		t.Fatalf("discovered SRV port %d, want the HTTP listener port %d", entry.Port, bindPort)
+	}
+	assertTXT(t, entry, "ws=/ws/node")
+
+	// Same A-record substitution contract as the happy path: this fixture
+	// binds loopback only, so dial the bind host on the discovered port.
+	nodeWSURL := fmt.Sprintf("ws://%s:%d/ws/node", bindHost, entry.Port)
+	runProvisionedNodeCSIWorkflow(t, client, srv.baseURL, nodeWSURL, bannerMAC, provisioned.NodeToken)
+}
