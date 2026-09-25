@@ -115,6 +115,7 @@ Firmware is built with ESP-IDF 5.2.x — see the *Firmware Build System* section
 - [`docs/plan/plan.md`](docs/plan/plan.md) — the complete design: architecture, components, schema, deployment, phases
 - [`docs/notes/`](docs/notes/) — implementation notes (recovery mechanisms, mDNS override, simulation testing, UX)
 - [`docs/notes/localization-capability-acceptance-map.md`](docs/notes/localization-capability-acceptance-map.md) — maps every capability claim above to its acceptance scenario; the scenario-numbering and threshold authority for the acceptance suite
+- [`docs/notes/dashboard-pin-auth.md`](docs/notes/dashboard-pin-auth.md) — the dashboard PIN specification: setup, session, failed-login, and reset behavior, where enforcement actually happens per deployment, and the test map for dashboard, REST, and WebSocket access
 - [`docs/research/`](docs/research/) — CSI fundamentals, physics, algorithms, accuracy limits, prior-art papers
 - [`docs/ci-accessibility-integration.md`](docs/ci-accessibility-integration.md) — CI accessibility testing quality gate (WCAG 2.1 AA)
 - [`docs/ci-benchmark-integration.md`](docs/ci-benchmark-integration.md) — CI timing benchmark quality gate (fusion loop)
