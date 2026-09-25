@@ -124,7 +124,7 @@ func TestGrid3D_Peaks_BorderVoxels(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewGrid3D(3, 3, 3, 1.0, 0, 0, 0)
 			tt.paint(g)
-			peaks := g.Peaks(5, 0.5)
+			peaks := g.Peaks(5, 0.5, 0)
 			if len(peaks) != tt.wantPeaks {
 				t.Fatalf("Peaks returned %d peaks, want %d: %v", len(peaks), tt.wantPeaks, peaks)
 			}

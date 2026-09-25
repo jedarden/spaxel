@@ -69,6 +69,7 @@ type Engine struct {
 	minDelta   float64 // minimum deltaRMS to use a link
 	maxBlobs   int
 	blobThresh float64 // normalised activation threshold for peak detection
+	minPeakSep float64 // minimum metres between served blobs
 	lastResult *Result
 }
 
@@ -86,6 +87,11 @@ type Config struct {
 	MaxBlobs int
 	// BlobThreshold is the normalised activation floor for peak detection (default 0.3).
 	BlobThreshold float64
+	// MinPeakSeparation is the minimum distance in metres between two served
+	// blobs (default 0.5). Peaks closer than this to a stronger peak are
+	// suppressed as fragments of the same activation ridge rather than
+	// reported as separate people.
+	MinPeakSeparation float64
 }
 
 // NewEngine creates a 3D fusion engine.
@@ -112,6 +118,10 @@ func NewEngine(cfg *Config) *Engine {
 	if blobThresh <= 0 {
 		blobThresh = 0.3
 	}
+	minPeakSep := cfg.MinPeakSeparation
+	if minPeakSep <= 0 {
+		minPeakSep = defaultMinPeakSeparation
+	}
 	g := NewGrid3D(cfg.Width, cfg.Height, cfg.Depth, cellSize,
 		cfg.OriginX, cfg.OriginY, cfg.OriginZ)
 	return &Engine{
@@ -120,6 +130,7 @@ func NewEngine(cfg *Config) *Engine {
 		minDelta:   minDelta,
 		maxBlobs:   maxBlobs,
 		blobThresh: blobThresh,
+		minPeakSep: minPeakSep,
 	}
 }
 
@@ -244,33 +255,47 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 
 	e.grid.Normalize()
 
-	rawPeaks := e.grid.Peaks(e.maxBlobs, e.blobThresh)
-	blobs := make([]Blob, len(rawPeaks))
+	rawPeaks := e.grid.Peaks(e.maxBlobs, e.blobThresh, e.minPeakSep)
 
-	// Track per-blob contributions
-	perBlobContributions := make([][]string, len(rawPeaks))
-	allContributions := make([]LinkContribution, 0, len(activeLinkData))
-
-	// Compute total activation for normalization
-	totalActivation := 0.0
-	for _, ld := range activeLinkData {
-		totalActivation += ld.deltaRMS * ld.weight
+	// Support analysis: which active links back each peak. A link supports a
+	// peak when the peak lies within the link's first 3 Fresnel zones —
+	// i.e. the link's own activation field plausibly places a person there.
+	// Support is counted per PHYSICAL link: the pipeline feeds each link
+	// once per direction (A→B and B→A arrive as separate LinkMotion
+	// entries), and both directions back the same peak, so direction-unique
+	// linkIDs would make every peak look multi-supported.
+	type peakSupport struct {
+		blob        Blob
+		contribs    []string
+		singleLink  string // undirected link key when supported by exactly one physical link, else ""
+		accumulated []LinkContribution
 	}
-
-	for i, p := range rawPeaks {
-		blobs[i] = Blob{X: p[0], Y: p[1], Z: p[2], Confidence: p[3]}
-
-		// Determine which links contributed to this blob
-		// A link contributes if the blob position is within its first 3 Fresnel zones
-		blobContributors := make([]string, 0)
+	undirectedKey := func(ld struct {
+		linkID   string
+		nodeMAC  string
+		peerMAC  string
+		deltaRMS float64
+		weight   float64
+		posA     NodePosition
+		posB     NodePosition
+	}) string {
+		if ld.nodeMAC <= ld.peerMAC {
+			return ld.nodeMAC + "|" + ld.peerMAC
+		}
+		return ld.peerMAC + "|" + ld.nodeMAC
+	}
+	supported := make([]peakSupport, 0, len(rawPeaks))
+	for _, p := range rawPeaks {
+		contribs := make([]string, 0)
+		contributions := make([]LinkContribution, 0, len(activeLinkData))
+		seenPhysical := make(map[string]bool)
 		for _, ld := range activeLinkData {
 			zoneNum := fresnelZoneAtPosition(ld.posA, ld.posB, p[0], p[1], p[2])
 			if zoneNum <= 3 {
-				blobContributors = append(blobContributors, ld.linkID)
+				contribs = append(contribs, ld.linkID)
+				seenPhysical[undirectedKey(ld)] = true
 			}
-
-			// Add to all contributions with zone info
-			allContributions = append(allContributions, LinkContribution{
+			contributions = append(contributions, LinkContribution{
 				LinkID:       ld.linkID,
 				NodeMAC:      ld.nodeMAC,
 				PeerMAC:      ld.peerMAC,
@@ -280,7 +305,48 @@ func (e *Engine) Fuse(links []LinkMotion) *Result {
 				Contributing: zoneNum <= 3,
 			})
 		}
-		perBlobContributions[i] = blobContributors
+		single := ""
+		if len(seenPhysical) == 1 {
+			for k := range seenPhysical {
+				single = k
+			}
+		}
+		supported = append(supported, peakSupport{
+			blob:        Blob{X: p[0], Y: p[1], Z: p[2], Confidence: p[3]},
+			contribs:    contribs,
+			singleLink:  single,
+			accumulated: contributions,
+		})
+	}
+
+	// Same-link fragment merge (spaxel-508fa3ac): a peak backed by exactly
+	// one active link is a point on that link's activation ridge. The ridge
+	// is one physical hypothesis — a single walker can raise it — so a
+	// second peak backed by the SAME link alone is a fragment of the same
+	// hypothesis, not a second person, and is suppressed. Peaks backed by
+	// two or more links sit where independent links' evidence agrees (a
+	// crossing) and are always kept; rawPeaks arrives strongest-first, so
+	// the surviving fragment is the strongest one.
+	blobs := make([]Blob, 0, len(supported))
+	perBlobContributions := make([][]string, 0, len(supported))
+	allContributions := make([]LinkContribution, 0, len(supported)*len(activeLinkData))
+	singletonsSeen := make(map[string]bool)
+	for _, s := range supported {
+		if s.singleLink != "" {
+			if singletonsSeen[s.singleLink] {
+				continue
+			}
+			singletonsSeen[s.singleLink] = true
+		}
+		blobs = append(blobs, s.blob)
+		perBlobContributions = append(perBlobContributions, s.contribs)
+		allContributions = append(allContributions, s.accumulated...)
+	}
+
+	// Compute total activation for normalization
+	totalActivation := 0.0
+	for _, ld := range activeLinkData {
+		totalActivation += ld.deltaRMS * ld.weight
 	}
 
 	result.Blobs = blobs

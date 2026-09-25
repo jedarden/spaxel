@@ -8,6 +8,12 @@ import (
 
 const defaultCellSize = 0.2 // metres
 
+// defaultMinPeakSeparation is the default minimum distance between served
+// blobs: comfortably above a ridge fragment's spread (a few 0.2 m cells) and
+// well under the AS-9 corridor spacing (≥ 1.2 m) that keeps two walkers
+// distinct.
+const defaultMinPeakSeparation = 0.5 // metres
+
 // Grid3D is a 3D voxel grid for accumulating link activation weights.
 // Axes: X (width), Y (height), Z (depth).
 type Grid3D struct {
@@ -145,13 +151,29 @@ func (g *Grid3D) Normalize() bool {
 	return true
 }
 
-// Peaks returns the top-N local maxima as (x, y, z, weight) tuples.
-// A voxel is a local maximum if it exceeds threshold and is strictly greater
-// than all in-bounds 26-connected neighbours. Border voxels participate:
-// out-of-bounds neighbours are ignored, so an activation ridge that hugs the
-// grid boundary — the normal case for ceiling-mounted nodes whose links paint
-// the ridge near the top of the grid — can still be promoted to a blob.
-func (g *Grid3D) Peaks(n int, threshold float64) [][4]float64 {
+// Peaks returns the top-N local maxima as (x, y, z, weight) tuples, after
+// non-maximum suppression. A voxel is a local maximum if it exceeds threshold
+// and is strictly greater than all in-bounds 26-connected neighbours. Border
+// voxels participate: out-of-bounds neighbours are ignored, so an activation
+// ridge that hugs the grid boundary — the normal case for ceiling-mounted
+// nodes whose links paint the ridge near the top of the grid — can still be
+// promoted to a blob.
+//
+// Suppression: a candidate is kept only if it lies at least minSeparation
+// metres (Euclidean, 3D) from every already-kept, stronger candidate.
+// Candidates are visited strongest-first, and equal-weight ties resolve to
+// the first-scanned voxel, so suppression is deterministic. minSeparation <= 0
+// disables suppression.
+//
+// Why suppression exists (spaxel-508fa3ac): one walking person must serve as
+// ONE blob. A single active link paints a long activation ridge whose plateau
+// — and the two voxel rows symmetric about the link line — promotes several
+// strict local maxima a few cells apart, and the tracker serves every peak,
+// so one walker fragmented into 2-6 blobs (the old median equalled MaxBlobs).
+// Fragments of the same ridge sit well under 0.5 m apart, while distinct
+// people are ≥ 1.2 m apart in the AS-9 corridors, so a 0.5 m separation
+// collapses each ridge to one blob without merging two walkers.
+func (g *Grid3D) Peaks(n int, threshold, minSeparation float64) [][4]float64 {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -195,18 +217,38 @@ func (g *Grid3D) Peaks(n int, threshold float64) [][4]float64 {
 	}
 
 	// Sort descending by weight (insertion sort — candidate count is small).
+	// The strict comparison keeps it stable: equal-weight candidates stay in
+	// scan order, so the strongest of a plateau is always the first-scanned
+	// voxel and suppression is reproducible run to run.
 	for i := 1; i < len(candidates); i++ {
 		for j := i; j > 0 && candidates[j].w > candidates[j-1].w; j-- {
 			candidates[j], candidates[j-1] = candidates[j-1], candidates[j]
 		}
 	}
 
-	if n > len(candidates) {
-		n = len(candidates)
+	// Non-maximum suppression: keep a candidate only if it is at least
+	// minSeparation from every kept (stronger) candidate.
+	kept := make([]peak, 0, len(candidates))
+	for _, c := range candidates {
+		suppressed := false
+		for _, k := range kept {
+			dx, dy, dz := c.x-k.x, c.y-k.y, c.z-k.z
+			if dx*dx+dy*dy+dz*dz < minSeparation*minSeparation {
+				suppressed = true
+				break
+			}
+		}
+		if !suppressed {
+			kept = append(kept, c)
+		}
+	}
+
+	if n > len(kept) {
+		n = len(kept)
 	}
 	out := make([][4]float64, n)
 	for i := 0; i < n; i++ {
-		c := candidates[i]
+		c := kept[i]
 		out[i] = [4]float64{c.x, c.y, c.z, c.w}
 	}
 	return out
