@@ -7,10 +7,17 @@ const { corePages, dashboardPages } = require('./accessibility/pages');
  * Entry-point coverage guard for the a11y gate.
  *
  * The structure docs enumerate the dashboard's HTML entry points
- * (docs/codebase-structure-and-test-patterns.md — "9 HTML entry points";
+ * (docs/codebase-structure-and-test-patterns.md — "8 HTML entry points";
  * docs/repo-structure.md section 8). This test fails the gate whenever an
  * entry point exists on disk without WCAG 2.1 AA coverage in one of the page
  * specs, so the enumeration cannot silently drift out of date.
+ *
+ * Only top-level dashboard/*.html counts as an entry point. Dev-only
+ * harnesses live under dashboard/_dev/ — go:embed excludes `_`-prefixed
+ * path segments, so they never ship in the production image and stay
+ * outside this gate (see dashboard/_dev/README.md). Moving a harness back
+ * to the top level therefore fails here, forcing the deliberate choice of
+ * either gating it or re-homing it under _dev/.
  *
  * The specs run against the static file server rooted at dashboard/, so the
  * on-disk set and the served set are the same set.

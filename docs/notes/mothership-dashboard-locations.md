@@ -21,7 +21,11 @@ This directory contains all frontend code for the Mothership dashboard:
 - **`setup.html`** - Space definition and node placement
 - **`integrations.html`** - External service integrations (Home Assistant, MQTT)
 - **`simulator.html`** - Pre-deployment simulator tool
-- **`test-transformcontrols.html`** - Testing page for transform controls
+
+Dev-only verification harnesses (not entry points) live in **`_dev/`** — e.g.
+**`_dev/test-transformcontrols.html`**, a Three.js transform-controls test page.
+go:embed excludes `_`-prefixed path segments, so `_dev/` never ships in the
+production image (see `dashboard/_dev/README.md`).
 
 #### JavaScript Modules (`/dashboard/js/`)
 

@@ -25,7 +25,9 @@ Directory-level detail with per-file annotations lives in
   - Managed components: `managed_components/espressif__*/`
 
 - **`dashboard/`** — Web frontend
-  - Static assets: 9 HTML entry points, flat `js/`, flat `css/`
+  - Static assets: 8 HTML entry points, flat `js/`, flat `css/`, plus `_dev/`
+    (dev-only harnesses — go:embed excludes `_`-prefixed segments, so they are
+    never compiled into the production image)
   - Embedded into Go binary via go:embed (`-tags=embed`)
 
 - **`scripts/`** — Automation and provisioning scripts

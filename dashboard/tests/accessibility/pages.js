@@ -1,11 +1,15 @@
 /**
  * Canonical enumeration of the dashboard's HTML entry points for the a11y gate.
  *
- * The set must match the nine entry points documented in
- * docs/codebase-structure-and-test-patterns.md ("9 HTML entry points") and
+ * The set must match the eight production entry points documented in
+ * docs/codebase-structure-and-test-patterns.md ("8 HTML entry points") and
  * docs/repo-structure.md §8; docs/ci-accessibility-integration.md maps each
  * one to the spec that scans it. tests/a11y-entrypoint-coverage.spec.js
  * fails the gate if a file in dashboard/*.html is missing from this module.
+ *
+ * Dev-only harnesses live under dashboard/_dev/ (go:embed excludes `_`-prefixed
+ * segments, so they never ship in the production image) and are outside this
+ * gate by construction — the coverage guard enumerates top-level *.html only.
  *
  * This is a plain module (no test() calls) so that spec files and the guard
  * can require it — requiring one spec file from another would re-register
@@ -27,7 +31,6 @@ const dashboardPages = [
   { name: 'live', path: '/live.html' },
   { name: 'simple', path: '/simple.html' },
   { name: 'simulator', path: '/simulator.html' },
-  { name: 'test-transformcontrols', path: '/test-transformcontrols.html' },
 ];
 
 module.exports = { corePages, dashboardPages };

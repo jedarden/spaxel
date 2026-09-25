@@ -241,6 +241,8 @@ Vanilla JS + Three.js single-page app with multiple HTML entry points
 (`index.html`, `setup.html`, `live.html`, `fleet.html`, `integrations.html`,
 `ambient.html`, `simulator.html`, `simple.html`), plus `js/` (including
 `esptool-bundle.js` for browser-side Web-Serial flashing of nodes), `css/`, `static/`,
+`_dev/` (dev-only harnesses such as `test-transformcontrols.html` — go:embed's
+`_`-prefix rule keeps them out of the production image; see `dashboard/_dev/README.md`),
 `tests/`, Jest + Playwright/axe config, `manifest.json` and `sw.js`.
 
 Build-time detail worth knowing: the dashboard is **not** served from this directory in

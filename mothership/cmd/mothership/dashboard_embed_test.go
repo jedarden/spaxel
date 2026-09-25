@@ -11,8 +11,10 @@ package main
 // fallback (registerDashboardStatic) — until now nothing verified the
 // embedded serving path itself. This file only compiles under -tags=embed,
 // i.e. as part of the same tagged build that produces the artifact, and
-// verifies that all nine HTML entry points and every JS/CSS/asset they
-// reference are served with correct content and MIME types.
+// verifies that all eight production HTML entry points and every JS/CSS/
+// asset they reference are served with correct content and MIME types.
+// Dev-only harnesses under dashboard/_dev/ are excluded from the embed by
+// go:embed's `_`-prefix rule and must never reappear in this list.
 //
 // The staging directory is gitignored (.gitignore: /mothership/cmd/mothership/
 // dashboard/) exactly like the Docker build's staging. TestMain refreshes it
@@ -47,11 +49,15 @@ import (
 	"testing"
 )
 
-// documentedHTMLEntryPoints is the nine HTML entry points of the dashboard,
-// enumerated in docs/notes/dashboard-mothership-integration.md ("HTML entry
-// points"). Exact set equality with the embedded tree is the same tripwire
-// pattern as the AS-enumeration guard: adding or removing a page must update
-// this test deliberately rather than silently changing what ships.
+// documentedHTMLEntryPoints is the eight production HTML entry points of the
+// dashboard, enumerated in docs/notes/dashboard-mothership-integration.md
+// ("HTML entry points"). Exact set equality with the embedded tree is the
+// same tripwire pattern as the AS-enumeration guard: adding or removing a
+// page must update this test deliberately rather than silently changing what
+// ships. Dev-only harnesses live under dashboard/_dev/ (go:embed excludes
+// `_`-prefixed segments — see dashboard/_dev/README.md) and are deliberately
+// absent here: test-transformcontrols.html used to ship in the production
+// image as a ninth entry point until spaxel-c4c5a46d moved it there.
 var documentedHTMLEntryPoints = []string{
 	"ambient.html",
 	"fleet.html",
@@ -61,7 +67,6 @@ var documentedHTMLEntryPoints = []string{
 	"setup.html",
 	"simple.html",
 	"simulator.html",
-	"test-transformcontrols.html",
 }
 
 // htmlEntryRoutes maps each entry point to the route that serves it. Five are
@@ -76,7 +81,6 @@ var htmlEntryRoutes = map[string]string{
 	"simple.html":                 "/simple",
 	"integrations.html":           "/integrations.html",
 	"simulator.html":              "/simulator.html",
-	"test-transformcontrols.html": "/test-transformcontrols.html",
 }
 
 // namedPageRoutes marks the five routes registered through serveEmbeddedFile;
@@ -233,7 +237,7 @@ func TestDashboardEmbedEntryPointsComplete(t *testing.T) {
 	sort.Strings(want)
 
 	if !slices.Equal(got, want) {
-		t.Fatalf("embedded HTML entry points = %v, want the documented nine %v (docs/notes/dashboard-mothership-integration.md)", got, want)
+		t.Fatalf("embedded HTML entry points = %v, want the documented eight %v (docs/notes/dashboard-mothership-integration.md)", got, want)
 	}
 	for _, name := range want {
 		if _, ok := htmlEntryRoutes[name]; !ok {
@@ -412,7 +416,7 @@ var assetMIME = map[string][]string{
 // localAssetPathForEmbedTest resolves an href/src value from a root-level
 // entry point to the absolute path the catch-all file server serves it at,
 // reporting false for anything not served from the embedded dashboard
-// (external URLs, data: URIs, in-page fragments, query-only links). All nine
+// (external URLs, data: URIs, in-page fragments, query-only links). All eight
 // entry points are served at root level, so a relative reference resolves to
 // "/<ref>".
 func localAssetPathForEmbedTest(ref string) (string, bool) {
@@ -443,7 +447,7 @@ func canonicalizeIndexForEmbedTest(path string) string {
 }
 
 // TestDashboardEmbedAssetsServed walks every JS/CSS/icon/manifest reference in
-// the nine entry points and verifies the embedded artifact serves each one
+// the eight entry points and verifies the embedded artifact serves each one
 // with the correct MIME type and byte-identical content — the packaged
 // equivalent of what the a11y specs check against the standalone dashboard
 // tree. A referenced asset missing from the embedded tree is a 404 in
@@ -477,7 +481,7 @@ func TestDashboardEmbedAssetsServed(t *testing.T) {
 			}
 		}
 	}
-	// Guard against the reference parser silently matching nothing: the nine
+	// Guard against the reference parser silently matching nothing: the eight
 	// pages reference ~80 distinct local assets today.
 	if len(refs) < 50 {
 		t.Fatalf("parsed only %d local asset references across the %d entry points; the href/src parser is matching nothing", len(refs), len(documentedHTMLEntryPoints))

@@ -10,8 +10,8 @@ Accessibility tests enforce WCAG 2.1 AA compliance as a CI quality gate for the 
 
 **Test runner:** Playwright + @axe-core/playwright
 
-**What it tests:** WCAG 2.1 AA compliance across **all nine** dashboard HTML
-entry points (the set enumerated in `docs/codebase-structure-and-test-patterns.md`
+**What it tests:** WCAG 2.1 AA compliance across **all eight** production dashboard
+HTML entry points (the set enumerated in `docs/codebase-structure-and-test-patterns.md`
 and `docs/repo-structure.md` §8):
 
 | # | Entry point | Covered by |
@@ -24,12 +24,14 @@ and `docs/repo-structure.md` §8):
 | 6 | `ambient.html` | `tests/a11y-dashboard.spec.js` |
 | 7 | `simple.html` | `tests/a11y-dashboard.spec.js` |
 | 8 | `simulator.html` | `tests/a11y-dashboard.spec.js` |
-| 9 | `test-transformcontrols.html` | `tests/a11y-dashboard.spec.js` |
 
 Plus the onboarding flow (wizard steps, `tests/a11y-onboarding.spec.js`) and a
 coverage guard (`tests/a11y-entrypoint-coverage.spec.js`) that fails the gate
-whenever an `.html` entry point exists in `dashboard/` without a page in one of
-the two page specs.
+whenever a top-level `.html` entry point exists in `dashboard/` without a page in
+one of the two page specs. Dev-only harnesses live under `dashboard/_dev/`
+(go:embed excludes `_`-prefixed path segments, so they never ship in the
+production image — see `dashboard/_dev/README.md`) and are outside the gate by
+construction; the guard only enumerates top-level `dashboard/*.html`.
 
 **Accessibility standard:** WCAG 2.1 AA (via axe-core tags: `wcag2a`, `wcag2aa`)
 
@@ -73,9 +75,9 @@ The accessibility tests run as a quality gate in the `spaxel-build` Argo Workflo
 | File | Purpose |
 |------|---------|
 | `tests/a11y.spec.js` | Core dashboard pages (index, live, fleet, setup, integrations) |
-| `tests/a11y-dashboard.spec.js` | Remaining entry points (ambient, live, simple, simulator, test-transformcontrols) |
+| `tests/a11y-dashboard.spec.js` | Remaining entry points (ambient, live, simple, simulator) |
 | `tests/a11y-onboarding.spec.js` | New user onboarding flow |
-| `tests/a11y-entrypoint-coverage.spec.js` | Guard: every `dashboard/*.html` must appear in one of the two page specs |
+| `tests/a11y-entrypoint-coverage.spec.js` | Guard: every top-level `dashboard/*.html` must appear in one of the two page specs (`dashboard/_dev/` harnesses are excluded) |
 | `tests/accessibility/helper.js` | Shared axe-core scanning and assertion helpers |
 
 ## Common Violations

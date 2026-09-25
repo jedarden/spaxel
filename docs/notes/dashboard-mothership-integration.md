@@ -47,9 +47,12 @@ canonical tree. `Dockerfile:44-46` performs the copy and `Dockerfile:52` passes
 dashboard assets are present/resolvable, so an embed regression fails the Go build
 rather than surfacing as a blank page in the browser.
 
-**HTML entry points** (all in `dashboard/`): `index.html`, `live.html`, `fleet.html`,
-`ambient.html`, `simple.html`, `setup.html`, `integrations.html`, `simulator.html`,
-plus `test-transformcontrols.html` (dev-only, not routed server-side).
+**HTML entry points** (all in `dashboard/`, all eight embedded): `index.html`,
+`live.html`, `fleet.html`, `ambient.html`, `simple.html`, `setup.html`,
+`integrations.html`, `simulator.html`. Dev-only verification harnesses live under
+`dashboard/_dev/` (e.g. `test-transformcontrols.html`) — go:embed excludes
+`_`-prefixed path segments, so they are not compiled into the production image
+(see `dashboard/_dev/README.md`).
 
 ---
 
