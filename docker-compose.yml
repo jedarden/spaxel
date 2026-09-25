@@ -16,8 +16,10 @@ services:
       dockerfile: Dockerfile
       args:
         VERSION: ${VERSION:-dev}
-    # Alternative: use pre-built image
-    # image: ghcr.io/spaxel/spaxel:latest
+    # A prebuilt image is pushed to ronaldraygun/spaxel on Docker Hub, but that
+    # repository is PRIVATE (owner-only): an unauthenticated pull returns 404 —
+    # an auth wall, not a missing repository (`docker manifest inspect`
+    # distinguishes the two). Build from source (the default, below) instead.
 
     # Host networking required for mDNS discovery by ESP32 nodes
     network_mode: host

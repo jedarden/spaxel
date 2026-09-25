@@ -43,8 +43,10 @@ curl -s localhost:8080/healthz
 ```
 
 `docker-compose.yml` defaults to **building the image from the local tree** (`build.context: .`,
-`build.args.VERSION: ${VERSION:-dev}`); the commented-out `image:` line is the alternative for a
-pre-built `ghcr.io/spaxel/spaxel` pull. Because the compose service builds locally, a fresh
+`build.args.VERSION: ${VERSION:-dev}`); the image comment documents the published
+`ronaldraygun/spaxel` Docker Hub repository as private (owner-only — an unauthenticated pull
+404s on the auth wall; `docker manifest inspect` distinguishes the two), so building locally
+is the only reader-facing path. Because the compose service builds locally, a fresh
 checkout needs **network access to GitHub Releases at build time** — Dockerfile stage 1 fetches
 the ESP32 firmware artifact `spaxel-firmware-${VERSION}-merged.bin` from
 `github.com/jedarden/spaxel/releases/download/v${VERSION}/` (it is *not* compiled in the image

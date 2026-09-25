@@ -41,15 +41,15 @@ Spaxel is a [Go workspace](go.work) of one module (`mothership/`), plus ESP32 fi
 
 ## Quickstart
 
-The mothership ships as a single container, published as `ronaldraygun/spaxel`. The bundled [`docker-compose.yml`](docker-compose.yml) builds from source by default and exposes one port (8080).
+The mothership ships as a single container, built from this repository. The bundled [`docker-compose.yml`](docker-compose.yml) builds it from source and exposes one port (8080) — no Docker Hub account or authentication is needed.
 
 ```bash
 git clone https://github.com/jedarden/spaxel.git
 cd spaxel
 docker compose up -d        # builds the mothership image, host networking
-# …or skip the build and use the published image:
-#   docker pull ronaldraygun/spaxel
 ```
+
+> **About the published image:** CI also pushes the image to `ronaldraygun/spaxel` on Docker Hub, but that repository is **private** — it serves the maintainer's own deployments and is not a distribution channel. An unauthenticated `docker pull ronaldraygun/spaxel` returns a 404: an auth wall, not a missing repository (`docker manifest inspect` distinguishes the two). Building from source, as above, is the only supported install path.
 
 Then open `http://<server-ip>:8080`, set a dashboard PIN, and use **Add Node** (Chrome/Edge Web Serial) to provision an ESP32-S3 over USB. The node discovers the mothership via mDNS and begins streaming CSI — zero manual IP configuration.
 

@@ -183,7 +183,13 @@ curl -X PUT http://localhost:8080/api/settings/network \
 ```yaml
 services:
   spaxel:
-    image: ronaldraygun/spaxel:latest
+    # Build from source — there is no publicly pullable image. The published
+    # ronaldraygun/spaxel Docker Hub repository is private (owner-only).
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
     network_mode: host  # Required for mDNS
     volumes:
       - spaxel-data:/data

@@ -103,7 +103,13 @@ changing the environment on a later restart does not overwrite stored values.
 # docker-compose.yml
 services:
   spaxel:
-    image: ronaldraygun/spaxel:latest
+    # Build from source — there is no publicly pullable image. The published
+    # ronaldraygun/spaxel Docker Hub repository is private (owner-only).
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
     network_mode: host  # Required for mDNS
     volumes:
       - spaxel-data:/data
@@ -215,6 +221,12 @@ data:
 
 **Step 2: Deploy Spaxel**
 
+> The published image lives in a **private, owner-only** Docker Hub repository
+> (`ronaldraygun/spaxel`) — an unauthenticated pull returns a 404 (auth wall, not
+> missing). Outside deployments: build the image from source (`docker build .`)
+> and push it to a registry you control, then substitute your registry in the
+> manifest below.
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -233,6 +245,7 @@ spec:
     spec:
       containers:
       - name: spaxel
+        # Private owner-only Docker Hub repo — substitute a registry you can pull from
         image: ronaldraygun/spaxel:latest
         ports:
         - containerPort: 8080

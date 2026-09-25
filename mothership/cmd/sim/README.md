@@ -144,8 +144,10 @@ Payload (n_sub × 2 bytes):
 The simulator is designed for integration testing:
 
 ```bash
-# Start mothership
-docker run -d -p 8080:8080 --name spaxel-test ghcr.io/spaxel/spaxel:latest
+# Start mothership — builds from source (no publicly pullable image exists;
+# the published ronaldraygun/spaxel Docker Hub repository is private/owner-only)
+docker build -t spaxel-test .
+docker run -d -p 8080:8080 --name spaxel-test spaxel-test
 
 # Run simulator for 30 seconds
 spaxel-sim --mothership ws://localhost:8080/ws/node --nodes 4 --walkers 1 --duration 30s
