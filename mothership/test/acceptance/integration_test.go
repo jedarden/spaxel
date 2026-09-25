@@ -63,6 +63,7 @@ var acceptanceScenarios = []struct {
 	{"IO11_FirmwareVersionSkew", IO11_FirmwareVersionSkew},
 	{"AS1_FirstTimeSetup", AS1_FirstTimeSetupIntegration},
 	{"AS2_WalkingDetection", AS2_WalkingDetectionIntegration},
+	{"AS2_TrajectoryBound", AS2_TrajectoryBoundIntegration},
 	{"AS3_FallDetection", AS3_FallDetectionIntegration},
 	{"AS3_ZAccuracyMixedHeights", AS3_ZAccuracyMixedHeightsIntegration},
 	{"AS4_BLEIdentity", AS4_BLEIdentityIntegration},
