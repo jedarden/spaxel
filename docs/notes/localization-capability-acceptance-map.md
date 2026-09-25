@@ -1,6 +1,6 @@
 # Localization Capability → Simulator Acceptance Map
 
-**Status:** design (child 1 of 5 of the auto-split of `spaxel-23902254`)
+**Status:** design + recorded results — AS-8, AS-9 and AS-3-ext are implemented and measured (see §8); AS-10 is assigned with its simulator fixture landed, acceptance test pending. Child 1 of 5 of the auto-split of `spaxel-23902254`
 **Created:** 2026-09-18
 **Scope:** maps every localization capability advertised in `README.md` (lines 13–20) to a
 concrete deterministic scenario design for the simulator-driven acceptance suite at
@@ -49,7 +49,8 @@ Plus shared `test_helpers.go` (`getBlobsResponse`, `getNodesResponse`, `getEvent
 registered by name in `integration_test.go`'s scenario table — a new file is not runnable
 until its entries are added there.
 
-**Next free AS numbers: 8, 9, 10.** This map assigns:
+**Next free AS numbers: 8, 9, 10.** This map assigns (as of 2026-09-25, AS-8 and
+AS-9 are implemented and AS-10's fixture has landed — see §8 for recorded status):
 
 - `as8_2d_position_accuracy_test.go` (new — C1, N1)
 - `as9_person_count_test.go` (new — C3, N3)
@@ -236,3 +237,26 @@ capability is a property of the pipeline and its resolution, which the sim repro
   gated on the extensions above.
 - The pre-existing AS-5 double-use (`as5_ota_test.go` / `as5_wifi_restart_race_test.go`) is
   noted for a future renumber; this map does not touch it and does not reuse the number 5.
+
+---
+
+## 8. Recorded acceptance status (as of 2026-09-25)
+
+Measured outcomes of the scenarios above at the current tip of `main`. This
+section is what `README.md`'s capability bullets cite for their present-tense
+status; update it whenever a scenario re-measures. Gates are never loosened to
+pass — a measured FAIL is the recorded outcome until the owning defect closes
+(the AS-8 header precedent). Measurements live on their owning beads; the bead
+IDs are given so the numbers stay traceable.
+
+| Capability | Scenario | Status at HEAD | Recorded measurement |
+|---|---|---|---|
+| C0 presence | AS-2 | **working** — detection demonstrated; AS-2's own live leg is red on a shared test-helper defect (decodes a lowercase `/api/blobs` envelope; the live endpoint returns a bare array with Go-default capitalized keys), not on detection | deterministic runs record a scripted walker detected for 100 % of the post-warmup window (AS-8/AS-9 logs, seed 42) |
+| C1 2D position | AS-8 | **measured above gate** | median XY error 1.140 m / 1.273 m vs the 1.0 m gate (two runs, seed 42); p90 1.474 m; RecallAt1m ≈ 25 %, RecallAt2m 100 %; N1 grid-cell guard PASS at 0.200 m (spaxel-28131727) |
+| C2 trajectory | AS-2-ext | extension not yet implemented | no dedicated bound asserted yet; inherits C1's above-gate figure for its borrowed ±1.0 m |
+| C3 person count | AS-9 | **partially met** — "2+" half passing, "1" half measured failing | 1 walker → median 6 blobs against the == 1 gate (blob fragmentation in the tracker, unowned); 2 walkers → ≥ 2 blobs for ≥ 50 % PASS; 3- and 5-walker stability PASS (spaxel-501751c2) |
+| C4 Z-axis / fall | AS-3 + AS-3-ext | **working** — measured PASS | fall chain fires with the bag-on-couch false-positive control; Z gate \|Δz\| ≤ 2.0 m: median 0.40 m standing, 1.00 m post-fall floor, 2/2 runs; N2 posture-class surface pin PASS (spaxel-501751c2) |
+| C5 stationary/breathing | AS-10 | **not validated** — fixture landed (`cmd/sim/breathing.go`, `--scenario stationary`), acceptance test not yet written | STATIONARY_DETECTED is unreachable end to end while two open P1 detector defects stand: spaxel-a27b6dba (breathing RMS no-op — the mean OLS residual over the data subcarriers is identically zero) and spaxel-d1790d51 (DwellTracker feeds its 2 Hz-designed FFT at the 20 Hz frame rate) |
+| N1 sub-10 cm | AS-8 guard | **pinned** | grid_cell_m = 0.200 m ≥ the 0.10 m floor; no assertion pins error below the floor |
+| N2 skeletal pose | AS-3-ext guard | **pinned** | posture-class key allowlist on `/api/blobs` + `/api/tracks` — any new key fails the test |
+| N3 5+ tracking | AS-9 guard | **pinned** | 5-walker run is stability-only: bounded blob count, no crash, 5 distinct blobs never asserted (measured median 4.0 = logged undercount) |

@@ -8,16 +8,18 @@ Everything runs locally on hardware you own. There is no cloud relay, no account
 
 ## What it can realistically do
 
-Based on physics and the research in [`docs/research/`](docs/research/) (see [`docs/research/06-accuracy-and-limits.md`](docs/research/06-accuracy-and-limits.md)):
+Based on physics and the research in [`docs/research/`](docs/research/) (see [`docs/research/06-accuracy-and-limits.md`](docs/research/06-accuracy-and-limits.md)). Each capability maps to a deterministic simulator acceptance scenario; the [acceptance map](docs/notes/localization-capability-acceptance-map.md) is the authority for scenario numbering, thresholds, and recorded results, and the status notes below summarize its latest recorded runs (§8 there).
 
-- **Presence detection** — reliably, with 2+ nodes on opposite sides of a space
-- **Approximate 2D position** — ±0.5–1.0 m with 4+ nodes
-- **Motion / trajectory tracking** — follows moving people
-- **Rough person count** — distinguishes 1 vs. 2+ (degrades at 3+)
-- **Rough Z-axis** — ±1–2 m with mixed-height node placement (enables fall detection)
-- **Stationary-person detection** — via breathing micro-motion (0.1–0.5 Hz)
+- **Presence detection** — reliably, with 2+ nodes on opposite sides of a space. *Measured working* (AS-2; the deterministic runs record a scripted walker detected for 100 % of the post-warmup window)
+- **Approximate 2D position** — ±0.5–1.0 m with 4+ nodes. *Measured above gate* (AS-8: median horizontal error 1.14–1.27 m against the 1.0 m gate; blobs stay within 2 m of ground truth)
+- **Motion / trajectory tracking** — follows moving people. *Detection while moving measured working; accuracy as per 2D position above* (the map's dedicated trajectory-bound assertion, AS-2-ext, is not yet implemented)
+- **Rough person count** — distinguishes 1 vs. 2+ (degrades at 3+). *Partially met* (AS-9: 2+ people detected passes; a single person currently presents as several blobs — median 6 — so the "distinguishes 1" half does not yet hold)
+- **Rough Z-axis** — ±1–2 m with mixed-height node placement (enables fall detection). *Measured working* (AS-3 fall chain including the bag-on-couch false-positive control; AS-3-ext: Z error within the 2 m gate — median 0.40 m standing, 1.00 m on the floor)
+- **Stationary-person detection** — via breathing micro-motion (0.1–0.5 Hz). *Not yet validated* (AS-10: scenario assigned and its simulator fixture landed, acceptance test pending; two open breathing-detector defects mean the stationary state is not reachable end to end today)
 
-**Not achievable** with 2.4 GHz CSI: sub-10 cm accuracy, skeletal pose, reliable 5+ person tracking.
+**Not achievable** with 2.4 GHz CSI: sub-10 cm accuracy, skeletal pose, reliable 5+ person tracking — pinned by suite guards rather than assumed (AS-8's resolution floor, AS-3-ext's posture-only surface, AS-9's stability-only 5-walker run).
+
+The status figures are snapshots of recorded simulator runs at a fixed seed, not guarantees for arbitrary rooms; the acceptance map carries the current numbers and updates whenever a scenario re-measures.
 
 ### Privacy by design
 
