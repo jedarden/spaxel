@@ -50,6 +50,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ciGateContractChildEnv marks a nested `go test` process so this test does
@@ -158,21 +159,20 @@ func moduleRoot(t *testing.T) string {
 	return filepath.Dir(filepath.Dir(filepath.Dir(pkg)))
 }
 
+// repoRoot is the spaxel checkout containing this module — one Dir above
+// moduleRoot. Used by the doc tripwires, which read docs/ from the repo.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	return filepath.Dir(moduleRoot(t))
+}
+
 // TestBenchmarkGuideDocumentsGate is the tripwire for the documentation half
 // of the reconciliation (spaxel-fef904c5): the guide must keep describing
 // the gate as-built. If the doc moves or stops naming the benchmark and the
 // gate step, this fails before the guide can drift back into "add this
 // step" / "already wired" self-contradiction.
 func TestBenchmarkGuideDocumentsGate(t *testing.T) {
-	// thisFile: <repo>/mothership/internal/localizer/fusion/<file> — Dir once
-	// gets the package dir, four more gets the repo root.
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot determine source path")
-	}
-	pkg := filepath.Dir(thisFile)
-	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(pkg))))
-	guide := filepath.Join(repoRoot, "docs", "ci-benchmark-integration.md")
+	guide := filepath.Join(repoRoot(t), "docs", "ci-benchmark-integration.md")
 
 	body, err := os.ReadFile(guide)
 	if err != nil {
@@ -181,6 +181,72 @@ func TestBenchmarkGuideDocumentsGate(t *testing.T) {
 	for _, token := range []string{"BenchmarkFusionLoop", "timing-benchmark"} {
 		if !strings.Contains(string(body), token) {
 			t.Errorf("docs/ci-benchmark-integration.md no longer mentions %q — the guide and the gate have drifted apart", token)
+		}
+	}
+}
+
+// thresholdMarkerRe matches the doc's canonical single-sourcing marker —
+// the one machine-readable record both sides of the threshold convention
+// reconcile against (see TestThresholdsSingleSourced and
+// scripts/check-fusion-timing-thresholds.sh, which parse the same shape).
+var thresholdMarkerRe = regexp.MustCompile(
+	`spaxel-fusion-timing-thresholds:\s+production_ms=(\d+)\s+ci_ms=(\d+)\s+hard_ms=(\d+)`)
+
+// TestThresholdsSingleSourced is the repo-side half of the threshold
+// reconciliation (spaxel-37fa27a9): the doc's canonical marker must equal
+// the constants the tests actually enforce, and the doc's embedded copy of
+// the gate script must carry the same ci_threshold=/hard_limit= values.
+// Without it, a one-sided change — new constant, stale marker, or an
+// updated script quote — drifted silently until "a review" noticed.
+// Deliberately not skipped in -short mode: it is file parsing, not timing.
+// The template-vs-repo half (live ci_threshold/hard_limit vs marker) is
+// scripts/check-fusion-timing-thresholds.sh — the template lives in
+// declarative-config, outside this repo's reach at test time.
+func TestThresholdsSingleSourced(t *testing.T) {
+	guide := filepath.Join(repoRoot(t), "docs", "ci-benchmark-integration.md")
+	body, err := os.ReadFile(guide)
+	if err != nil {
+		t.Fatalf("reading docs/ci-benchmark-integration.md: %v", err)
+	}
+
+	matches := thresholdMarkerRe.FindAllStringSubmatch(string(body), -1)
+	if len(matches) != 1 {
+		t.Fatalf("expected exactly one canonical threshold marker line ('spaxel-fusion-timing-thresholds: production_ms=<n> ci_ms=<n> hard_ms=<n>') in docs/ci-benchmark-integration.md, found %d — the single-sourcing convention itself is broken", len(matches))
+	}
+	m := matches[0]
+
+	for _, c := range []struct {
+		name string
+		want time.Duration
+		got  string
+	}{
+		{"production_ms", productionTarget, m[1]},
+		{"ci_ms", ciThreshold, m[2]},
+		{"hard_ms", hardLimit, m[3]},
+	} {
+		n, parseErr := strconv.Atoi(c.got)
+		if parseErr != nil {
+			t.Fatalf("marker field %s=%q does not parse as an integer: %v", c.name, c.got, parseErr)
+		}
+		got := time.Duration(n) * time.Millisecond
+		if got != c.want {
+			t.Errorf("threshold marker %s=%d (%v) disagrees with timing_budget_test.go's enforced constant %v — update the marker AND the constants together, then run scripts/check-fusion-timing-thresholds.sh against the live template",
+				c.name, n, got, c.want)
+		}
+	}
+
+	// The doc's embedded copy of the gate script is this repo's record of the
+	// template side; it must quote the same values the marker carries.
+	for _, c := range []struct {
+		token string
+		ms    string
+	}{
+		{"ci_threshold", m[2]},
+		{"hard_limit", m[3]},
+	} {
+		want := c.token + "=" + c.ms
+		if !strings.Contains(string(body), want) {
+			t.Errorf("docs/ci-benchmark-integration.md's embedded gate script no longer quotes %q — the quoted script and the marker have drifted apart in the same doc; update the quote to match", want)
 		}
 	}
 }

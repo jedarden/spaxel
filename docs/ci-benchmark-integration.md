@@ -26,8 +26,13 @@ over a fixed 600-iteration window (60 s at 10 Hz, 4 nodes, 2 walkers).
 | Hard limit | P99 < 40 ms | both, same split |
 
 The thresholds are asserted twice, in two different CI legs: as a regular test
-(`go test ./...`) and as the benchmark gate. Both must agree; if they drift,
-the contract test's doc tripwire or a review catches it.
+(`go test ./...`) and as the benchmark gate. Both must agree, and the
+agreement is *enforced*, not reviewed — see "Single-sourcing the thresholds"
+below. The canonical machine-readable record both checks reconcile against is
+this marker (exactly one occurrence; both checks fail if it is missing,
+duplicated, or disagrees with its side):
+
+<!-- spaxel-fusion-timing-thresholds: production_ms=15 ci_ms=30 hard_ms=40 -->
 
 ## How CI runs it
 
@@ -149,6 +154,45 @@ The thresholds (median < 30, P99 < 40), `retryStrategy` OnError limit 1, and
 the in-repo tripwire: the gate can now fail loudly on its own, and the
 contract test keeps this repo's half of the output contract gate-compatible.
 
+## Single-sourcing the thresholds
+
+The 15/30/40 ms numbers exist in two places that can drift: this repo's
+constants (`timing_budget_test.go`'s `productionTarget`/`ciThreshold`/
+`hardLimit`) and the gate's `ci_threshold=`/`hard_limit=` assignments. The
+template lives in a different repository and neither side can read the other
+at test time, so agreement is reconciled through the canonical marker (see
+"What is enforced") plus one check per direction:
+
+- **Repo side (automatic, go-test leg):** `TestThresholdsSingleSourced` in
+  `ci_gate_contract_test.go` fails `go test ./...` unless the marker matches
+  the constants the tests actually enforce *and* this doc's embedded copy of
+  the gate script (above) carries the same `ci_threshold=`/`hard_limit=`
+  values. A one-sided repo change — constants, marker, or quoted script —
+  fails the leg on its own; no review step involved.
+- **Template side (`scripts/check-fusion-timing-thresholds.sh`):** extracts
+  the `ci_threshold=`/`hard_limit=` assignments from the live
+  `timing-benchmark` step (read-only `kubectl get workflowtemplate` against
+  iad-ci, structurally scoped to that step's body) and exits 1 if either
+  differs from the marker. A declarative-config checkout file works too:
+  `scripts/check-fusion-timing-thresholds.sh path/to/
+  spaxel-build-workflowtemplate.yml`. Run it after touching a threshold on
+  either side — it is the loud failure that replaces the review this doc used
+  to concede to. Exit codes: 0 agree, 1 drift (or the marker convention
+  broken), 2 could-not-check (missing kubectl/cluster/file) so a caller can
+  tell "checked and red" from "unchecked".
+
+The template side of the convention is the assignments themselves: the step
+already carries them as machine-readable `ci_threshold=`/`hard_limit=` lines,
+exactly one of each, so the script works against the template as it stands —
+no declarative-config change is required to make the reconciliation runnable.
+
+The stronger variant — the gate deriving its constants from the repo marker
+at runtime, so the template stops carrying a second copy at all — is feasible
+(the step clones this repo before running the benchmark) and remains open as
+a declarative-config change. Until it lands, the script above is the
+reconciliation of last resort; verified 2026-09-25 against the live template
+(30/40 == 30/40).
+
 ## Running locally
 
 ```bash
@@ -192,11 +236,16 @@ production target, with ~4× median headroom to the 30 ms CI threshold.
 
 ## Changing any of this
 
-- Benchmark, thresholds, output format: this repo — keep
-  `ci_gate_contract_test.go` and this doc in sync (the tripwire enforces the
-  doc's half).
+- Benchmark, thresholds, output format: this repo — update the constants in
+  `timing_budget_test.go` *and* the canonical marker in this doc together
+  (`TestThresholdsSingleSourced` fails the go-test leg if they disagree),
+  then run `scripts/check-fusion-timing-thresholds.sh`: if the gate's copy
+  must move too, land the declarative-config change below in the same push
+  window so the two sides never disagree on origin.
 - The step itself, its thresholds, or its parse: `jedarden/declarative-config`
-  → commit → push → ArgoCD sync. Never kubectl. After changing it, re-verify
+  → commit → push → ArgoCD sync. Never kubectl. After the sync,
+  `scripts/check-fusion-timing-thresholds.sh` must PASS (marker == live
+  assignments) — a FAIL means the change was one-sided. Then re-verify
   this doc against the live template
   (`kubectl --server=http://traefik-iad-ci:8001 get workflowtemplate
   spaxel-build -n argo-workflows -o json`) and update the "verified" date at

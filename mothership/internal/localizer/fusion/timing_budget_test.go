@@ -50,10 +50,17 @@ const (
 	// WiFi physical constants (matching spaxel-sim)
 	wavelength       = 0.123 // meters (2.4 GHz)
 	halfWavelength   = wavelength / 2.0
-	nSub             = 64                    // number of subcarriers for HT20
-	headerSize       = 24                    // CSI frame header size
-	fusionRate       = 10                    // Hz (fusion loop rate)
-	fusionIterations = 600                   // Number of iterations for timing (60s at 10Hz)
+	nSub             = 64  // number of subcarriers for HT20
+	headerSize       = 24  // CSI frame header size
+	fusionRate       = 10  // Hz (fusion loop rate)
+	fusionIterations = 600 // Number of iterations for timing (60s at 10Hz)
+
+	// The three timing bounds below are single-sourced with the spaxel-build
+	// gate through the canonical marker in docs/ci-benchmark-integration.md:
+	// TestThresholdsSingleSourced fails the go-test leg if this block and the
+	// marker drift apart, and scripts/check-fusion-timing-thresholds.sh
+	// reconciles the marker against the live template's ci_threshold=/
+	// hard_limit= assignments. Change them together, never one side alone.
 	productionTarget = 15 * time.Millisecond // Production target (per iteration)
 	ciThreshold      = 30 * time.Millisecond // CI threshold (2x allowance)
 	hardLimit        = 40 * time.Millisecond // P99 hard limit
