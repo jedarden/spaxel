@@ -37,7 +37,8 @@ Current `mothership/test/acceptance/` files (AS numbers taken):
 | `as2_walking_detection_test.go` | AS-2 walking detection (presence + motion appear/disappear) |
 | `as3_fall_detection_test.go` | AS-3 fall detection (trigger, confirmation, webhook, bag-on-couch false positive) |
 | `as4_ble_identity_test.go` | AS-4 BLE identity |
-| `as5_ota_test.go` **and** `as5_wifi_restart_race_test.go` | AS-5 (number already double-used — pre-existing collision, do not add to it) |
+| `as5_ota_test.go` | AS-5 OTA update (sole claimant of the number since the 2026-09-25 rehome — see the numbering rules below) |
+| `wifi_restart_race_test.go` | *not an AS scenario* — bf-9gfph firmware-fix verification, rehomed out of the AS-5 number on 2026-09-25 (spaxel-1cd1155f) |
 | `as6_replay_test.go` | AS-6 replay |
 | `as7_auth_reject_test.go` | AS-7 auth rejection |
 
@@ -49,6 +50,27 @@ Plus shared `test_helpers.go` (`getBlobsResponse`, `getNodesResponse`, `getEvent
 registered by name in `integration_test.go`'s scenario table — a new file is not runnable
 until its entries are added there.
 
+**Numbering rules (this map is the scenario-numbering authority):**
+
+1. **One number, one scenario.** A number assigned here (or in `docs/plan/plan.md`'s
+   Acceptance Scenarios section) is never given to a second scenario, and an
+   `asN_<name>_test.go` name may only be taken by a scenario this map assigns. The AS-5
+   number was once silently double-used (`as5_ota_test.go` + the WiFi restart race
+   verification, rehomed 2026-09-25, spaxel-1cd1155f) — that is the failure mode these
+   rules exist to prevent.
+2. **Non-scenario tests stay out of the namespace.** Firmware-defect verifications and
+   other regression tests are not acceptance scenarios: they take no `asN_` name, are not
+   registered in `integration_test.go`'s scenario table, and live under a plain
+   descriptive file name (`wifi_restart_race_test.go` is the precedent).
+3. **Duplicates are mechanically rejected.** The doc-enumeration tripwire
+   (`doc_enumeration_tripwire_test.go`) fails on two files claiming the same N, so a
+   double-assignment cannot land silently again.
+4. **Numbers stay contiguous.** The tripwire's "AS-1 … AS-N" enumeration contract in
+   `README.md` / `docs/codebase-structure-and-test-patterns.md` requires every number up
+   to the highest implemented scenario to have a test file, so new scenarios take the
+   next number in sequence — a high number cannot be reserved while lower ones are
+   unimplemented.
+
 **Next free AS numbers: 8, 9, 10.** This map assigns (as of 2026-09-25, AS-8 and
 AS-9 are implemented and AS-10's fixture has landed — see §8 for recorded status):
 
@@ -58,7 +80,8 @@ AS-9 are implemented and AS-10's fixture has landed — see §8 for recorded sta
 - extend-in-place `as2_walking_detection_test.go` (C0, C2)
 - extend-in-place `as3_fall_detection_test.go` (C4, N2)
 
-No identifier collides with as1–as7 or the existing as5 pair.
+No identifier collides with as1–as7, and since the 2026-09-25 rehome the number 5 has
+exactly one scenario.
 
 ---
 
@@ -235,8 +258,14 @@ capability is a property of the pipeline and its resolution, which the sim repro
 - Ordering: AS-8 and AS-9 are implementable against HEAD's sim today (scripted paths,
   ground-truth CSV, disjoint walker sets all exist). AS-3-ext's Z assertion and AS-10 are
   gated on the extensions above.
-- The pre-existing AS-5 double-use (`as5_ota_test.go` / `as5_wifi_restart_race_test.go`) is
-  noted for a future renumber; this map does not touch it and does not reuse the number 5.
+- The pre-existing AS-5 double-use (`as5_ota_test.go` / `as5_wifi_restart_race_test.go`)
+  was resolved on 2026-09-25 (spaxel-1cd1155f) by rehoming, not renumbering: the WiFi
+  restart race verification is a bf-9gfph firmware-fix check, not an acceptance scenario,
+  so it moved to `wifi_restart_race_test.go` (functions `WiFiRestartRace_*`) outside the
+  `asN_` namespace. Renumbering was not available — AS-10 is already assigned, and the
+  contiguity rule in §2 rules out a second scenario at 11+ while AS-10 has no test file.
+  The number 5 now has exactly one scenario (`as5_ota_test.go`); see the numbering rules
+  in §2.
 
 ---
 

@@ -39,7 +39,7 @@ Directory-level detail with per-file annotations lives in
   - Integration tests
 
 - **`mothership/test/acceptance/`** — Mothership acceptance tests
-  - Acceptance scenarios AS-1…AS-9 (`as*_test.go` pattern; the AS-5 number is double-used by `as5_ota_test.go` and the WiFi restart race scenario)
+  - Acceptance scenarios AS-1…AS-9 (`as*_test.go` pattern; one number maps to exactly one scenario per the acceptance map's numbering rules — the WiFi restart race verification, formerly double-assigned to AS-5, was rehomed to `wifi_restart_race_test.go` outside the `asN_` namespace)
   - AS-10 (stationary/breathing) is assigned but has no acceptance test file yet — the simulator fixture has landed (`cmd/sim/breathing.go`, `--scenario stationary`); the [acceptance map](notes/localization-capability-acceptance-map.md) is the scenario-numbering and threshold authority for the whole suite
   - IO-style installation/upgrade tests (`io_install_upgrade_test.go`, `integration_test.go`)
 
@@ -211,8 +211,8 @@ mothership/test/             # Mothership-specific tests
 └── [integration tests]
 
 mothership/test/acceptance/  # Acceptance scenarios + IO install/upgrade
-├── as1_first_time_setup_test.go … as7_auth_reject_test.go
-├── as5_wifi_restart_race_test.go
+├── as1_first_time_setup_test.go … as9_person_count_test.go
+├── wifi_restart_race_test.go   # firmware-fix verification — not an AS scenario
 ├── integration_test.go
 ├── io_install_upgrade_test.go
 └── test_helpers.go

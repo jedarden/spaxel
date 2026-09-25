@@ -260,7 +260,10 @@ I (9878) [OTA] Calling esp_restart() NOW
 
 ### Automated Tests (Go)
 
-File: `mothership/test/acceptance/as5_wifi_restart_race_test.go`
+File: `mothership/test/acceptance/wifi_restart_race_test.go` (originally filed as
+`as5_wifi_restart_race_test.go`, silently double-using the OTA scenario's AS-5 number;
+rehomed outside the `asN_` scenario numbering on 2026-09-25, spaxel-1cd1155f — the
+implemented functions are `WiFiRestartRace_*`, not the `AS5_` names sketched below)
 
 ```go
 package acceptance

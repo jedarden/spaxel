@@ -56,14 +56,18 @@ func TestAcceptanceDocsEnumerateImplementedScenarios(t *testing.T) {
 	pkgDir := filepath.Dir(thisFile)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(pkgDir)))
 
-	// Implemented set: every as<N>_*_test.go file in this directory. The
-	// pre-existing AS-5 double-use (as5_ota_test.go and
-	// as5_wifi_restart_race_test.go) collapses naturally under set semantics.
+	// Implemented set: every as<N>_*_test.go file in this directory. Scenario
+	// numbers are unique — one number, one scenario (acceptance map §2) — and
+	// the check below enforces it: the AS-5 number was silently double-used by
+	// as5_ota_test.go and the WiFi restart race verification until that file
+	// was rehomed to wifi_restart_race_test.go (spaxel-1cd1155f). Under the
+	// old set semantics a duplicate collapsed invisibly; it must now fail.
 	files, err := filepath.Glob(filepath.Join(pkgDir, "as*_test.go"))
 	if err != nil {
 		t.Fatalf("globbing as*_test.go: %v", err)
 	}
 	implemented := map[int]bool{}
+	byNumber := map[int][]string{}
 	for _, f := range files {
 		base := filepath.Base(f)
 		m := asNumberRe.FindStringSubmatch(base)
@@ -75,9 +79,15 @@ func TestAcceptanceDocsEnumerateImplementedScenarios(t *testing.T) {
 			t.Fatalf("parsing scenario number from %s: %v", base, err)
 		}
 		implemented[n] = true
+		byNumber[n] = append(byNumber[n], base)
 	}
 	if len(implemented) == 0 {
 		t.Fatal("no as*_test.go files found — the acceptance suite is missing from this checkout")
+	}
+	for n, claimants := range byNumber {
+		if len(claimants) > 1 {
+			t.Errorf("scenario number AS-%d is double-used by %v — one number maps to exactly one scenario (numbering rules in docs/notes/%s §2); assign a fresh number from the map or rehome the file out of the as<N>_ namespace, as the WiFi restart race verification was (spaxel-1cd1155f)", n, claimants, mapRef)
+		}
 	}
 
 	for _, doc := range []struct{ rel string }{

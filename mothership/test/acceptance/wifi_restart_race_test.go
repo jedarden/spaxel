@@ -1,5 +1,13 @@
 // Package acceptance provides integration tests for Spaxel acceptance scenarios.
-// AS-5 WiFi Restart Race: Test fix for wifi_start_connect() vs esp_restart() race condition
+// WiFi Restart Race: verification of the wifi_start_connect() vs esp_restart() race fix
+//
+// Not an acceptance scenario. This is a firmware-defect-fix verification
+// (bead bf-9gfph, design in docs/notes/wifi-restart-race-test-plan.md) and
+// lives outside the as<N>_ scenario-numbering namespace. It was originally
+// filed as as5_wifi_restart_race_test.go, silently double-using the AS-5
+// number of the OTA scenario; rehomed 2026-09-25 (spaxel-1cd1155f) so AS-5
+// again has exactly one scenario (as5_ota_test.go). Numbering rules: §2 of
+// docs/notes/localization-capability-acceptance-map.md.
 //
 // Tests verify that:
 // - Reboot command during WiFi reconnection doesn't cause ESP_ERROR_CHECK abort
@@ -19,9 +27,9 @@ import (
 	"time"
 )
 
-// AS5_WiFiRestartRace_RebootDuringWiFiReconnect tests that a reboot message
+// WiFiRestartRace_RebootDuringWiFiReconnect tests that a reboot message
 // during WiFi reconnection doesn't cause ESP_ERROR_CHECK abort.
-func AS5_WiFiRestartRace_RebootDuringWiFiReconnect(t *testing.T) {
+func WiFiRestartRace_RebootDuringWiFiReconnect(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping acceptance test in short mode")
 	}
@@ -89,12 +97,12 @@ func AS5_WiFiRestartRace_RebootDuringWiFiReconnect(t *testing.T) {
 		}
 	})
 
-	t.Log("AS-5 WiFi Restart Race: Reboot during WiFi reconnect - PASSED")
+	t.Log("WiFi Restart Race: Reboot during WiFi reconnect - PASSED")
 }
 
-// AS5_WiFiRestartRace_OTADuringWiFiLost tests that OTA during WiFi disconnection
+// WiFiRestartRace_OTADuringWiFiLost tests that OTA during WiFi disconnection
 // doesn't cause ESP_ERROR_CHECK abort.
-func AS5_WiFiRestartRace_OTADuringWiFiLost(t *testing.T) {
+func WiFiRestartRace_OTADuringWiFiLost(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping acceptance test in short mode")
 	}
@@ -170,12 +178,12 @@ func AS5_WiFiRestartRace_OTADuringWiFiLost(t *testing.T) {
 		}
 	})
 
-	t.Log("AS-5 WiFi Restart Race: OTA during WiFi lost - PASSED")
+	t.Log("WiFi Restart Race: OTA during WiFi lost - PASSED")
 }
 
-// AS5_WiFiRestartRace_AllThreeRestartPoints tests all three esp_restart() trigger points
+// WiFiRestartRace_AllThreeRestartPoints tests all three esp_restart() trigger points
 // to ensure the restarting flag is set correctly each time.
-func AS5_WiFiRestartRace_AllThreeRestartPoints(t *testing.T) {
+func WiFiRestartRace_AllThreeRestartPoints(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping acceptance test in short mode")
 	}
@@ -208,12 +216,12 @@ func AS5_WiFiRestartRace_AllThreeRestartPoints(t *testing.T) {
 		t.Log("All should be followed by: 'Restart imminent, skipping WiFi connection attempt'")
 	})
 
-	t.Log("AS-5 WiFi Restart Race: All three restart points - LOGGED FOR MANUAL VERIFICATION")
+	t.Log("WiFi Restart Race: All three restart points - LOGGED FOR MANUAL VERIFICATION")
 }
 
-// AS5_WiFiRestartRace_NormalReconnectionStillWorks verifies that normal
+// WiFiRestartRace_NormalReconnectionStillWorks verifies that normal
 // WiFi reconnection (without restart) still functions correctly.
-func AS5_WiFiRestartRace_NormalReconnectionStillWorks(t *testing.T) {
+func WiFiRestartRace_NormalReconnectionStillWorks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping acceptance test in short mode")
 	}
@@ -263,6 +271,6 @@ func AS5_WiFiRestartRace_NormalReconnectionStillWorks(t *testing.T) {
 		t.Error("Node went offline during normal operation")
 	})
 
-	t.Log("AS-5 WiFi Restart Race: Normal reconnection still works - PASSED")
+	t.Log("WiFi Restart Race: Normal reconnection still works - PASSED")
 }
 

@@ -195,7 +195,7 @@ These require a running mothership:
 ```bash
 # Run hardware-based acceptance tests
 cd mothership
-SPAXEL_HARDWARE_TEST=1 go test ./test/acceptance/ -v -run AS5_WiFiRestartRace
+SPAXEL_HARDWARE_TEST=1 go test ./test/acceptance/ -v -run WiFiRestartRace
 ```
 
 **Expected output:** Tests pass with real node (if `SPAXEL_HARDWARE_TEST=1`)
@@ -267,7 +267,9 @@ These tests are integrated into CI:
 - Firmware implementation: `firmware/main/wifi.c` lines 162-170
 - Restart trigger points: `firmware/main/websocket.c` lines 127, 833, 1043
 - Test implementations: `firmware/test/test_ota_during_wifi_reconnect.c`, `firmware/test/test_all_restart_trigger_points.c`
-- Mothership acceptance: `mothership/test/acceptance/as5_wifi_restart_race_test.go`
+- Mothership acceptance: `mothership/test/acceptance/wifi_restart_race_test.go`
+  (originally `as5_wifi_restart_race_test.go`; rehomed outside the `asN_` scenario
+  numbering on 2026-09-25, spaxel-1cd1155f — test functions are `WiFiRestartRace_*`)
 
 ## Test Sign-Off
 
