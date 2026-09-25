@@ -4,10 +4,8 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,6 +13,7 @@ import (
 	"time"
 
 	"github.com/spaxel/mothership/internal/volume"
+	"github.com/spaxel/mothership/internal/webhook"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -825,35 +824,22 @@ func (h *VolumeTriggersHandler) executeAction(action volume.Action, event volume
 
 // doWebhookPost sends an HTTP POST and returns status code, latency, error.
 // This is the low-level webhook call shared by normal firing and test.
+//
+// The dial itself lives in webhook.PostJSON so this package stays free of
+// outbound call sites (enforced by internal/privacy). The URL comes from
+// user-configured trigger actions, so the egress remains operator-directed.
 func (h *VolumeTriggersHandler) doWebhookPost(url string, data []byte, params map[string]interface{}) (statusCode int, latencyMs int64, err error) {
-	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
-	if err != nil {
-		return 0, 0, fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
+	headers := make(map[string]string, len(params))
 	// Add custom headers from action params
 	for k, v := range params {
 		if k != "url" {
 			if headerStr, ok := v.(string); ok {
-				req.Header.Set(k, headerStr)
+				headers[k] = headerStr
 			}
 		}
 	}
 
-	start := time.Now()
-	resp, err := h.httpClient.Do(req)
-	latencyMs = time.Since(start).Milliseconds()
-
-	if err != nil {
-		return 0, latencyMs, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	// Drain body to allow connection reuse
-	_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck // best-effort drain
-
-	return resp.StatusCode, latencyMs, nil
+	return webhook.PostJSON(h.httpClient, url, headers, data)
 }
 
 // executeWebhook sends an HTTP POST to a webhook URL with fault tolerance.
