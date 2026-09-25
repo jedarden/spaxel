@@ -1,7 +1,8 @@
 # CI Benchmark Integration — as-built
 
 How the fusion loop timing budget is enforced in CI, verified against the live
-`spaxel-build` WorkflowTemplate on iad-ci (2026-09-24). This replaces an
+`spaxel-build` WorkflowTemplate on iad-ci (2026-09-25, after the template-side
+parse guards landed — see "Template-side guards" below). This replaces an
 earlier draft that said "add this step" in one section and "already wired" in
 another; both described the same gate, neither described it accurately.
 
@@ -35,25 +36,37 @@ parallel, not after it (sequential step groups; a red leg starves everything
 after it). The step's script:
 
 ```bash
+# bash -c with `set -euo pipefail`: a go-test failure fails the node instead
+# of vanishing behind tee's exit status
 cd repo/mothership
 go test -bench=BenchmarkFusionLoop -benchtime=10s -count=1 \
   ./internal/localizer/fusion/ 2>&1 | tee /tmp/bench.txt
 
-# Parse and check thresholds
+# Invariant guards BEFORE any threshold comparison: exactly one summary
+# line per token, each parsing to a bare positive decimal
+median_lines=$(grep -c "Median:" /tmp/bench.txt || true)
+[ "$median_lines" -eq 1 ] || { echo "FAIL: expected exactly one 'Median:' line, found '${median_lines}'"; exit 1; }
+p99_lines=$(grep -c "P99:" /tmp/bench.txt || true)
+[ "$p99_lines" -eq 1 ] || { echo "FAIL: expected exactly one 'P99:' line, found '${p99_lines}'"; exit 1; }
+
 median_ms=$(grep "Median:" /tmp/bench.txt | sed 's/.*Median: \([0-9.]*\)ms.*/\1/')
 p99_ms=$(grep "P99:" /tmp/bench.txt | sed 's/.*P99: \([0-9.]*\)ms.*/\1/')
+
+printf '%s' "$median_ms" | grep -Eq '^[0-9]+([.][0-9]+)?$' \
+  || { echo "FAIL: parsed Median value '${median_ms}' is not a bare positive decimal"; exit 1; }
+printf '%s' "$p99_ms" | grep -Eq '^[0-9]+([.][0-9]+)?$' \
+  || { echo "FAIL: parsed P99 value '${p99_ms}' is not a bare positive decimal"; exit 1; }
 
 ci_threshold=30   # ms
 hard_limit=40     # ms
 
-if (( $(echo "$median_ms > $ci_threshold" | bc -l) )); then
-  echo "FAIL: Median ${median_ms}ms exceeds CI threshold ${ci_threshold}ms"
-  exit 1
-fi
-if (( $(echo "$p99_ms > $hard_limit" | bc -l) )); then
-  echo "FAIL: P99 ${p99_ms}ms exceeds hard limit ${hard_limit}ms"
-  exit 1
-fi
+# awk, not bc: bc is absent from the image, and a missing comparison tool
+# would re-open the silent pass this guard exists to close
+median_over=$(awk -v m="$median_ms" -v t="$ci_threshold" 'BEGIN { print (m > t) ? 1 : 0 }')
+[ "$median_over" = "1" ] && { echo "FAIL: Median ${median_ms}ms exceeds CI threshold ${ci_threshold}ms"; exit 1; }
+p99_over=$(awk -v p="$p99_ms" -v t="$hard_limit" 'BEGIN { print (p > t) ? 1 : 0 }')
+[ "$p99_over" = "1" ] && { echo "FAIL: P99 ${p99_ms}ms exceeds hard limit ${hard_limit}ms"; exit 1; }
+
 echo "PASS: Timing constraints satisfied (Median: ${median_ms}ms, P99: ${p99_ms}ms)"
 ```
 
@@ -104,21 +117,37 @@ Both skip in `-short` mode. Neither asserts timing values — the budget itself
 is asserted by the benchmark and `TestTimingBudgetProduction`; a wall-clock
 assertion in `go test ./...` would just be a third host-load detector.
 
-## Known template-side holes (declarative-config)
+## Template-side guards (declarative-config)
 
-The step pipes `go test | tee` without `pipefail`, and has no empty-parse
-guard: if the benchmark crashes or fails to build, the parse comes up empty,
-`bc` errors, `(( ))` is false, and the **timing step itself reports green**.
-These belong to declarative-config and are not fixable from this repo. The
-workflow-level effect is mitigated today because the parallel go-test leg
-carries both `TestTimingBudgetProduction` and the contract test, so every
-scenario above still turns the workflow red — but the timing node's own phase
-can lie, and someone reading only that node would see `Succeeded`. Fixing the
-step itself (add `set -o pipefail`, fail on empty parse, and enforce the
-exactly-one-Median/one-P99 invariant at the parse site) is a
-declarative-config change, not a spaxel one; it is owned by bead
-`spaxel-d8268220` (filed 2026-09-24 after a queue sweep confirmed neither this
-workspace nor declarative-config's own queue carried it).
+The historical template-side holes are **closed** as of 2026-09-25:
+declarative-config commits `5d7987b9` (guards) + `3a81f924` (mechanism-note
+correction), bead `spaxel-d8268220`, live on iad-ci via ArgoCD sync the same
+day and re-verified against the live template with read-only kubectl:
+
+- **pipefail:** the step now runs `bash -c` with `set -euo pipefail`. A
+  go-test failure (build error, benchmark crash) fails the timing node
+  instead of vanishing behind `tee`'s exit status. Bash is required because
+  POSIX sh (dash on the Debian golang image) has no `pipefail`.
+- **exactly-one-pair invariant:** the step counts `Median:`/`P99:` lines and
+  exits 1 with a diagnostic naming the count unless each count is exactly
+  one.
+- **numeric parse guard:** each parsed value must match
+  `^[0-9]+([.][0-9]+)?$` or the node fails before any threshold comparison.
+  Every violation prints a diagnostic naming the broken invariant — a silent
+  PASS on empty or garbled output is no longer reachable.
+- **the comparison itself:** awk, not bc (bc is absent from the image; a
+  missing comparison tool would re-open the silent pass). Also not `(( ))`:
+  the old `if (( ... | bc -l ))` was bash-only arithmetic that POSIX sh
+  parses as *nested subshells* — comparison output discarded, `if` keyed on
+  the pipeline's exit status (bc absent → 127 → false → skip) — so the
+  threshold check never compared either way. That mechanism is recorded in
+  the template comment and declarative-config `3a81f924`.
+
+The thresholds (median < 30, P99 < 40), `retryStrategy` OnError limit 1, and
+`activeDeadlineSeconds: 900` are unchanged. This repo's contract test
+(`TestCIGateOutputContract`) mirrors the invocation and parse shape and stays
+the in-repo tripwire: the gate can now fail loudly on its own, and the
+contract test keeps this repo's half of the output contract gate-compatible.
 
 ## Running locally
 
@@ -151,7 +180,9 @@ The gate does its job when:
 - ✅ Median > 30 ms or P99 > 40 ms fails the CI run (benchmark gate *and*
   `TestTimingBudgetProduction`, in separate legs)
 - ✅ A missing, renamed, crashing, or output-malformed benchmark fails the
-  go-test leg instead of passing silently
+  go-test leg (contract test) **and** the timing-benchmark node itself
+  (pipefail + parse guards) instead of passing silently; the node's PASS/FAIL
+  line always carries the actual parsed values
 
 ## Performance baselines
 

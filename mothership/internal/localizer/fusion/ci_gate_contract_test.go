@@ -23,14 +23,14 @@ package fusion
 // guard in BenchmarkFusionLoop and the de-collided log tokens in
 // TestTimingBudgetProduction are the fix; these tests are the tripwire.
 //
-// Known residual holes on the template side (declarative-config, documented
-// in docs/ci-benchmark-integration.md, not fixable from this repo): the step
-// pipes `go test | tee` without pipefail (swallowing the benchmark's own
-// failure exit code) and does not guard against an empty parse when the
-// benchmark fails to build. Until those are fixed there, the in-repo
-// protection is this file: a broken or absent benchmark fails the go-test
-// step, which turns the workflow red even though the (currently
-// toothless-on-error) timing step runs in parallel.
+// The template side was hardened 2026-09-25 (declarative-config 5d7987b9,
+// bead spaxel-d8268220, documented in docs/ci-benchmark-integration.md): the
+// step now runs bash with pipefail and enforces the exactly-one-Median/one-P99
+// invariant plus a numeric parse guard before any threshold comparison, so a
+// broken or absent benchmark fails the timing node itself. This file remains
+// the in-repo half of the contract: it keeps the benchmark's output shape
+// gate-compatible and fails the go-test leg on drift, independent of what
+// the template does.
 //
 // Timing VALUES are deliberately not asserted here — the benchmark asserts
 // its own thresholds, and a wall-clock assertion in `go test ./...` would be
@@ -96,8 +96,9 @@ func TestCIGateOutputContract(t *testing.T) {
 // parseGateValue mirrors the gate's `grep <token>: | sed 's/.*<token>: \([0-9.]*\)ms.*/\1/'`
 // extraction and asserts it yields exactly one well-formed value. A count
 // other than one, an empty capture, or a non-numeric capture are all the
-// "gate ineffective" shapes: each makes the step's bc comparison a silent
-// no-op instead of a threshold failure.
+// "gate ineffective" shapes: each made the step's old comparison a silent
+// no-op instead of a threshold failure (the template now guards all three,
+// but this test keeps the output shape contract enforced from this side too).
 func parseGateValue(t *testing.T, output, token string) string {
 	t.Helper()
 
