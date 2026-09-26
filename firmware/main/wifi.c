@@ -211,7 +211,6 @@ esp_err_t wifi_start_connect(void) {
     // TESTED SCENARIOS (see firmware/test/):
     // - OTA during WiFi reconnect: test_ota_during_wifi_reconnect.c
     // - All esp_restart() trigger points: test_all_restart_trigger_points.c
-    // - Restart flag propagation across FreeRTOS tasks: test_restart_flag_propagation.c
     //
     // For design rationale, see docs/notes/ota-wifi-reconnection-race-summary.md
     // For test procedures, see docs/tests/manual-ota-during-wifi-reconnect-test.md

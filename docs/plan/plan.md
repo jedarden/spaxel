@@ -3828,64 +3828,41 @@ All environment variables are optional unless marked (required on production). U
 
 ### Dockerfile
 
-Three-stage build: an ESP-IDF firmware stage compiles the ESP32-S3 binary (once, on amd64), a Go stage builds the mothership (and `spaxel-sim`) binary per-platform, and a distroless stage is the runtime. SQLite is accessed via the pure-Go `modernc.org/sqlite` driver (no CGO, no `gcc` needed in the final image). Per ADR-001, the firmware artifact is built once (amd64-only) and copied into all platform images, enabling multi-arch `linux/amd64` and `linux/arm64` builds without requiring ESP-IDF cross-compilation.
+Three-stage build (post-ADR-001): a `firmware-fetcher` stage downloads the ESP32-S3 firmware **prebuilt by CI** from GitHub Releases, a Go stage builds the mothership (and `spaxel-sim`) binary per-platform, and a distroless stage is the runtime. No stage compiles firmware or runs tests. SQLite is accessed via the pure-Go `modernc.org/sqlite` driver (no CGO, no `gcc` needed in the final image). Per ADR-001, the firmware artifact is built once (amd64-only) by the CI `firmware-build` step and fetched into all platform images, enabling multi-arch `linux/amd64` and `linux/arm64` builds without requiring ESP-IDF cross-compilation.
 
 ```dockerfile
-# Stage 1: Build ESP32-S3 firmware (amd64 only — ESP-IDF is x86_64-only)
-FROM espressif/idf:v5.2 AS firmware-builder
-WORKDIR /project
-COPY firmware/ ./
-# Build + merge bootloader, partition table, and app into a single flashable .bin
-SHELL ["/bin/bash", "-c"]
-RUN . $IDF_PATH/export.sh && idf.py set-target esp32s3 && idf.py build && \
-    python -m esptool --chip esp32s3 merge_bin --flash_size 4MB \
-      --output build/spaxel-firmware-merged.bin \
-      0x0     build/bootloader/bootloader.bin \
-      0x8000  build/partition_table/partition-table.bin \
-      0x10000 build/spaxel-firmware.bin
-
-# Stage 2: Build the Go binary from the mothership module
-FROM golang:1.25-bookworm AS builder
-WORKDIR /app
-COPY mothership/go.mod mothership/go.sum ./
-RUN go mod download
-COPY mothership/ ./
-# Dashboard is embedded via go:embed (the directive lives in cmd/mothership)
-COPY dashboard/ ./cmd/mothership/dashboard/
-# GOOS/GOARCH pinned to linux/amd64: the ESP-IDF firmware stage is x86_64-only,
-# so CI produces a single-arch amd64 image by design. CGO_ENABLED=0 (pure-Go SQLite).
-ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w -X main.version=${VERSION}" -tags=embed \
-    -o spaxel ./cmd/mothership
-# CSI simulator (separate cmd/sim module) is baked into the same image
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o spaxel-sim ./cmd/sim
-
-# Stage 3: Minimal runtime image (dashboard is embedded in the binary via go:embed)
-FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=builder /app/spaxel /spaxel
-COPY --from=builder /app/spaxel-sim /spaxel-sim
-COPY --from=firmware-builder /project/build/spaxel-firmware-merged.bin /firmware/spaxel-firmware.bin
-
-EXPOSE 8080
-VOLUME ["/data"]
-ENTRYPOINT ["/spaxel"]
+# Stage 1: firmware-fetcher (alpine) — NO firmware compilation happens in the
+# image build. Downloads the CI-built spaxel-firmware.bin and
+# spaxel-firmware-<VERSION>-merged.bin artifacts from the v<VERSION> GitHub
+# Release (draft-aware authenticated API path via a BuildKit `gh_token`
+# secret; anonymous direct-URL fallback once a release is published).
+# Stage 2: builder (golang:1.25-bookworm, --platform=$BUILDPLATFORM) — builds
+# the mothership (-tags=embed, dashboard copied into cmd/mothership/) and
+# spaxel-sim binaries for the target arch (GOARCH from $TARGETARCH,
+# CGO_ENABLED=0, pure-Go SQLite).
+# Stage 3: runtime (distroless static-debian12:nonroot) — copies in the two
+# binaries, seeds /firmware/spaxel-firmware-${VERSION}.bin (OTA store seed)
+# and /firmware/serial/spaxel-firmware-${VERSION}-merged.bin (first-flash
+# serial provisioning; deliberately excluded from the OTA store).
 ```
+
+*Condensed — the authoritative listing is the `Dockerfile` at the repository root.*
 
 **Image build & publish (CI — multi-arch):**
 The image is published as `ronaldraygun/spaxel` by the `spaxel-build` Argo WorkflowTemplate (declared in `jedarden/declarative-config`, run on iad-ci). Per ADR-001, CI builds both `linux/amd64` and `linux/arm64` platforms and publishes a manifest list. The ESP32 firmware is built once (amd64-only) and reused across platforms:
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t ronaldraygun/spaxel:$(cat VERSION) \
-  -t ronaldraygun/spaxel:latest \
   --push .
 ```
+
+CI pins the semver tag from `VERSION`; no `:latest` tag is published (repo policy).
 
 **Key design decisions:**
 - `distroless/static-debian12:nonroot` — no shell, no package manager, runs as non-root (UID 65532). Minimal attack surface.
 - `modernc.org/sqlite` — pure Go SQLite; avoids CGO complexities for multi-arch cross-compilation. Performance is ~20% slower than cgo/mattn but fully adequate for this workload.
 - `/dashboard` — the entire dashboard (HTML, JS, Three.js, CSS) is embedded in the binary via `//go:embed` (the dashboard sources are copied into `cmd/mothership/dashboard/` at build time so the embed directive can see them). No volume mount needed for the UI. Updating the UI requires a new Docker image.
-- `/firmware/spaxel-firmware.bin` — the ESP32 firmware is built in the firmware-builder stage (from `firmware/`) and baked into the image. At startup the mothership copies `/firmware/*.bin` → `/data/firmware/` if not already present, so a freshly pulled image can seed the fleet for OTA / Web Serial onboarding. Users can override with a `/firmware` volume mount.
+- `/firmware/spaxel-firmware-<VERSION>.bin` — the ESP32 firmware is **not** built in the image: the `firmware-fetcher` stage downloads the artifact that the CI `firmware-build` step (ESP-IDF, amd64-only) published to the GitHub Release. At startup the mothership copies `/firmware/*.bin` → `/data/firmware/` if not already present, so a freshly pulled image can seed the fleet for OTA / Web Serial onboarding. Users can override with a `/firmware` volume mount. The merged offset-0 image is kept separate under `/firmware/serial/` and never enters the OTA store.
 
 **Note on SQLite driver:** `modernc.org/sqlite` maps to the `sqlite3` database/sql driver name. All `sql.Open()` calls use `"sqlite"` (not `"sqlite3"`). Replace with `mattn/go-sqlite3` if CGO performance becomes necessary (requires build-stage `apt-get install gcc`).
 
@@ -4082,7 +4059,7 @@ esptool.py --port /dev/ttyUSB0 --baud 921600 write_flash \
 cp firmware/build/spaxel.bin spaxel-$(cat firmware/VERSION).bin
 ```
 
-**CI/CD:** GitHub Actions workflow builds `spaxel.bin` and attaches it to a GitHub Release. The mothership Docker image includes a `COPY firmware/spaxel-*.bin /firmware/` step so the latest firmware is bundled in the container image (users can override with their own `/firmware/` volume mount).
+**CI/CD:** the `spaxel-build` Argo WorkflowTemplate (declared in `jedarden/declarative-config`, run on iad-ci — GitHub Actions are disabled org-wide) builds and publishes the firmware. Its `firmware-build` step runs `idf.py set-target esp32s3 && idf.py build` under `espressif/idf:v5.2`, enforces the partition-size check as an explicit gate, merges bootloader + partition table + `ota_data_initial` + app into `spaxel-firmware-<VERSION>-merged.bin`, and uploads it — together with the unversioned `spaxel-firmware.bin` — to the `v<VERSION>` GitHub Release. The mothership image does not compile firmware: its `firmware-fetcher` stage downloads those release assets at image-build time (users can override with their own `/firmware/` volume mount). A dedicated earlier `firmware-test` step runs the host suite (`make -C firmware/test test`), and because the template's steps are sequential it must pass before `firmware-build` and `docker-build` run — test validation gates the release; production firmware comes only from `firmware-build`; neither runs inside the image build.
 
 ### Node Hardware
 
@@ -4147,7 +4124,7 @@ Located in `mothership/test/acceptance/` (simulator-driven acceptance suite) and
 
 ### Firmware Tests (host-based, gcc harness)
 
-The three firmware modules below are tested **on the host with no hardware**, via a plain
+The firmware logic below is tested **on the host with no hardware**, via a plain
 **gcc harness under `firmware/test/`** — *not* ESP-IDF's `idf.py test --target linux`.
 
 The `idf.py --target linux` / Unity-host path was evaluated and **rejected** (decision
@@ -4172,25 +4149,59 @@ make -C firmware/test test
 
 The Makefile globs every `test_*.c`, compiles them with `test_runner.c` under plain gcc
 (`-std=c11 -Wall -Wextra`), and runs the suite; `make` propagates a non-zero exit on any
-assertion failure. The same recipe runs as a CI gate inside the Docker `firmware-builder`
-stage (`RUN make -C test test`, before the expensive ESP-IDF build — see Dockerfile).
+assertion failure. The same recipe is the standalone `firmware-test` step of the
+`spaxel-build` WorkflowTemplate (`jedarden/declarative-config`, run on iad-ci under a
+plain `gcc` image). The template's steps run sequentially, so a host-test failure stops
+the pipeline before the `firmware-build` (ESP-IDF) and `docker-build` steps: the suite
+**gates** every release but is never compiled into, or run by, the Docker image build —
+the image's firmware comes prebuilt from the `firmware-build` step's GitHub Release
+artifact (see Deployment > Dockerfile).
 
-**Modules covered:**
+**Canonical inventory (re-verified 2026-09-26):** the suite is **9 test units** plus the
+`test_runner.c`/`test_runner.h` harness pair. `test_runner.c` itself matches the
+`test_*.c` wildcard — which is why `ls firmware/test/test_*.c` lists 10 files — and the
+Makefile filters it out of the test set explicitly
+(`TEST_SRCS := $(filter-out $(RUNNER_SRC), $(wildcard test_*.c))`) before linking it back
+exactly once as the runner. The "ten files" and "nine `test_*.c`" counts in older
+documents are both real observations of the same tree; the canonical statement is
+**9 test units + 1 runner (glob matches 10)**. The directory additionally carries the
+`host_compat/` (6 headers) and `stubs/` (5 headers) stub trees used by the two
+production-TU tests — 26 tracked files in all, after removal of a stray committed
+`test_runner` ELF binary (superseded by the `BUILD_DIR=build` output policy).
 
-- `nvs` — NVS schema migration: fresh-install init to v1, no-downgrade guard, forward
-  migration loop dispatch (v→v+1 at index v−1), and the concrete v1→v2 step
-  (rename `ms_ip`→`mothership_ip`, default `ntp_server`). Driven against a simulated
-  in-memory NVS store.
-- `csi` — Binary frame serialization: 24-byte header field round-trip, explicit
+**Modules covered** (one bullet per test unit):
+
+- `test_nvs_migration.c` — NVS schema migration: fresh-install init to v1, no-downgrade
+  guard, forward migration loop dispatch (v→v+1 at index v−1), and the concrete v1→v2
+  step (rename `ms_ip`→`mothership_ip`, default `ntp_server`). Links the **real**
+  `firmware/main/nvs_migration.c`, compiled four times (`COMPILED_NVS_VERSION` 1/2/3/4,
+  entry point renamed per variant) against the `host_compat/` stub headers — the
+  production decision table, not a mirror copy of it.
+- `test_csi_frame.c` — Binary frame serialization: 24-byte header field round-trip, explicit
   little-endian timestamp byte order, signed-RSSI `(uint8_t)` reinterpretation, I/Q
   payload copy, n_sub=0 header-only probe, and the ingestion-side validation rules
   (too-short / payload-mismatch / n_sub>128 / bad channel) tied to the firmware encoder
   contract.
-- `serial_prov` — Provisioning JSON parser, including a **fuzz pass**: the parser is a
+- `test_serial_prov.c` — Provisioning JSON parser, including a **fuzz pass**: the parser is a
   bounded recursive-descent JSON decoder (fixed node pool, fixed string arena, depth cap)
   that is the fuzz target, and the protocol must always answer with a single well-formed
   `{"ok":...}` line on any input — verified across random byte streams, a tricky-input
   corpus, and deep-nesting stress.
+- `test_console_config.c` — the console-selection contract of the committed sdkconfig
+  defaults (spaxel-5049d982).
+- `test_sanity.c` — harness self-check: `TEST()` self-registration via GCC constructor,
+  runner drive, `ASSERT_EQ` reporting.
+- `test_watchdog.c` — watchdog subscription contract: the **real**
+  `firmware/main/watchdog.c` compiled against the recording `stubs/` headers (task-WDT
+  subscribe/reset behavior), not a logic mirror.
+- `test_wifi_restart_race.c` — `wifi_start_connect()` vs `esp_restart()` race: the
+  `restarting` and `ota_in_progress` guards prevent WiFi operations during imminent
+  restart.
+- `test_ota_during_wifi_reconnect.c` — OTA during active WiFi reconnection: the
+  restart-safe guard prevents the `ESP_ERROR_CHECK` abort.
+- `test_all_restart_trigger_points.c` — the three `esp_restart()` trigger points (OTA
+  timeout, reboot command, OTA completion — all in `websocket.c`), guard placement before
+  each restart, and race-condition prevention.
 
 ### Property-Based / Fuzz Tests
 
@@ -4213,7 +4224,7 @@ Fuzz targets are in `*_fuzz_test.go` files and must be run with `go test -fuzz` 
 1. `go test ./...` — all unit tests pass
 2. `go vet ./...` — no vet warnings
 3. `golangci-lint run` — no lint errors (at least: `errcheck`, `staticcheck`, `gosimple`)
-4. `docker buildx build --platform linux/amd64,linux/arm64 .` — multi-arch build succeeds. Both `linux/amd64` and `linux/arm64` images are built and pushed as a manifest list. Per ADR-001, the ESP32 firmware is built once (amd64-only) and reused across all platforms via the firmware-builder stage's artifact copy mechanism, avoiding the need for ESP-IDF cross-compilation. This gate also runs the firmware **host-test** suite (`make -C test test`, the gcc harness — see Firmware Tests above) inside the `firmware-builder` stage before the ESP-IDF build, so a logic/format-contract regression fails the image build.
+4. `docker buildx build --platform linux/amd64,linux/arm64 .` — multi-arch build succeeds. Both `linux/amd64` and `linux/arm64` images are built and pushed as a manifest list. Per ADR-001, the ESP32 firmware is built once (amd64-only) — by the CI `firmware-build` step, not by the Dockerfile — and reused across all platforms via the release-artifact fetch, avoiding ESP-IDF cross-compilation in the image build. The firmware **host-test** suite (`make -C firmware/test test`, the gcc harness — see Firmware Tests above) runs as its own earlier CI step (`firmware-test`): the `spaxel-build` template's steps are sequential, so a logic/format-contract regression stops the pipeline before `firmware-build` and `docker-build` run. The image build itself never compiles firmware and never runs tests.
 5. Integration test suite: `spaxel-sim --nodes 4 --walkers 1 --duration 30s` with blob count >0
 6. Integration test: OTA rollback test (invalid firmware → node reverts)
 7. Integration test: auth rejection test (node without token → HTTP 401)

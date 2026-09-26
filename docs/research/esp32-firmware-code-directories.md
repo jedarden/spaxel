@@ -2,6 +2,8 @@
 
 **Date:** 2026-09-03
 **Bead:** spaxel-62c8ab42
+**Re-verified 2026-09-26** (spaxel-4bf0e0a7): counts refreshed after `test_watchdog.c`
+landed (57b216ab, spaxel-61d41649) and the stray tracked `test_runner` ELF was removed.
 **Method:** extension scan (`.c .cpp .h .hpp .cc .cxx .ino .S`) over the tracked tree and the
 untracked working tree, plus build-system marker search (`platformio.ini`, `sdkconfig*`,
 `partitions*.csv`, `CMakeLists.txt`, `idf_component.yml`, `dependencies.lock`, `Kconfig*`).
@@ -14,9 +16,16 @@ ESP32-S3. No Arduino/PlatformIO project exists anywhere in the repository, and n
 assembly source is tracked outside `firmware/`. Everything else is mothership Go, dashboard
 JS, or tooling.
 
-All 34 git-tracked C/H files in the repository live in `firmware/main/` (24) and
-`firmware/test/` (10). `git ls-files '*.c' '*.h' '*.cpp' '*.cc' '*.cxx' '*.S'` returns
-nothing else.
+At the 2026-09-03 survey date, all 34 git-tracked C/H files in the repository lived in
+`firmware/main/` (24) and `firmware/test/` (10). Re-verified 2026-09-26: `firmware/main/`
+is still 24; `firmware/test/` is now **22** C/H files (9 test units + `test_runner.c/.h`
+at top level = 11, plus 6 `host_compat/` and 5 `stubs/` stub headers) — 46 in all.
+`git ls-files '*.c' '*.h' '*.cpp' '*.cc' '*.cxx' '*.S'` returns nothing else.
+
+Note on the recurring "ten vs nine" discrepancy: `test_runner.c` matches the
+`firmware/test/test_*.c` wildcard, so the glob lists 10 files while the suite is
+9 test units — the Makefile filters the runner out explicitly
+(`TEST_SRCS := $(filter-out $(RUNNER_SRC), $(wildcard test_*.c))`).
 
 ## Firmware directories
 
@@ -24,7 +33,7 @@ nothing else.
 |---|---|---|---|---|
 | `firmware/` | ESP-IDF project root | — | yes (13 root files) | `CMakeLists.txt` (`project(spaxel-firmware)`), `partitions.csv`, `sdkconfig.defaults` + two board variants (`sdkconfig.uart-console`, `sdkconfig.usbjtag`), `dependencies.lock` |
 | `firmware/main/` | First-party application source — **the firmware** | 12 `.c` + 12 `.h` = 5,154 lines | yes | `idf_component_register(SRCS ...)` lists all 12 translation units; `REQUIRES esp_wifi esp_netif nvs_flash esp_http_client esp_timer bt driver log esp_http_server mbedtls app_update json freertos esp_system`; `-Werror` |
-| `firmware/test/` | Host-based gcc test harness (no ESP-IDF) | 8 `test_*.c` + `test_runner.c/.h` | yes | `Makefile` (`make -C firmware/test test`); rationale in `docs/notes/firmware-host-test-approach.md` |
+| `firmware/test/` | Host-based gcc test harness (no ESP-IDF) | 9 test units (`test_*.c`; the glob matches 10 incl. `test_runner.c`) + `test_runner.h`, 6 `host_compat/` + 5 `stubs/` headers | yes | `Makefile` (`make -C firmware/test test`); rationale in `docs/notes/firmware-host-test-approach.md` |
 | `firmware/managed_components/` | Vendored ESP-IDF components (third-party) | 34 `.c` + 23 `.h` | **no** (gitignored, fetched by component manager) | `dependencies.lock`: `espressif/esp_websocket_client` 1.8.0, `espressif/mdns` |
 | `firmware/build/` | CMake build output — artifacts, not source | 8 `.c` + 3 `.h` (generated) | **no** (gitignored) | 199 MB; `spaxel-firmware.bin/.elf`, `bootloader/`, `partition_table/`, `esp-idf/` prebuilt libs |
 | `firmware/scripts/` | Firmware signing + console verification shell scripts | 0 | yes | `generate-signing-key.sh`, `sign-firmware.sh`, `verify-console-config.sh` |
@@ -100,9 +109,12 @@ or `sdkconfig`. Anti-rollback is set; secure boot and flash encryption are not.
 
 ## Hygiene notes
 
-- `firmware/test/test_runner` is a **tracked ELF binary** (mode 100755,
+- ~~`firmware/test/test_runner` is a **tracked ELF binary** (mode 100755,
   blob `ee3f74e0`) — compiled host-test output committed to git. Candidate for
-  `firmware/test/.gitignore`.
+  `firmware/test/.gitignore`.~~ **Resolved 2026-09-26** (spaxel-4bf0e0a7): the binary
+  was `git rm`'d — it predated the `BUILD_DIR=build` output policy — and
+  `firmware/test/.gitignore` now also ignores `/test_runner` so the accident cannot
+  recur.
 - `firmware/build/` is 199 MB on disk (gitignored). Any extension scan that does not
   exclude it will over-count generated sources; `firmware/test/build/` is likewise
   gitignored via `firmware/test/.gitignore`.

@@ -264,7 +264,7 @@ ignoring `**_test.go`, `firmware/test/**`, `test/**` and `tests/**` wholesale.)
 | Paths | Gate that would be skipped |
 |---|---|
 | `.golangci.yml` | `golangci-lint` — fails the workflow before `firmware-build`/`docker-build` |
-| `firmware/test/**` (13: `Makefile`, 8 `test_*.c`, `test_runner.c/.h`, results `.md`) | `firmware-test` — host gcc harness, `make -C firmware/test test` |
+| `firmware/test/**` (26: `Makefile`, 9 `test_*.c` units + `test_runner.c/.h`, `host_compat/` 6 + `stubs/` 5 stub headers, results `.md` ×2, `.gitignore`; the `test_*.c` glob matches 10 because `test_runner.c` is filtered out by the Makefile) | `firmware-test` — host gcc harness, `make -C firmware/test test`; a sequential `spaxel-build` step that runs before `firmware-build`/`docker-build`, so gating ≠ image content |
 | `dashboard/tests/**`, `dashboard/playwright.config.js`, `dashboard/package.json`, `dashboard/package-lock.json` | `a11y-test` — Playwright + axe-core |
 | `dashboard/jest.config.js`, `dashboard/js/*.test.js` | Dashboard unit tests (jest) — not a `spaxel-build` step, but gates local verification |
 | `mothership/test/**` (23), `mothership/tests/e2e/**` (5) | `acceptance-test` / `go-test` legs |

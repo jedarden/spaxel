@@ -167,16 +167,21 @@ firmware/
 │   ├── spaxel-firmware.elf    # ELF binary
 │   └── [build artifacts]
 ├── managed_components/  # ESP-IDF component manager
-├── test/                # Host-based gcc tests (no hardware)
-│   ├── test_runner.c    # Test harness
-│   ├── test_nvs_migration.c      # NVS schema migration tests
+├── test/                # Host-based gcc tests (no hardware); 9 test units
+│   │                    #   (the test_*.c glob lists 10 — test_runner.c
+│   │                    #   matches it and the Makefile filters it out)
+│   ├── test_runner.c    # Test harness (holds main(); not a test unit)
+│   ├── test_nvs_migration.c      # NVS schema migration tests (real TU via host_compat/)
 │   ├── test_csi_frame.c          # Binary frame serialization tests
 │   ├── test_serial_prov.c        # Provisioning parser + fuzz tests
 │   ├── test_console_config.c     # Console routing config
 │   ├── test_sanity.c             # Sanity checks
 │   ├── test_wifi_restart_race.c  # WiFi restart race
+│   ├── test_watchdog.c           # Watchdog subscription contract (real TU via stubs/)
 │   ├── test_ota_during_wifi_reconnect.c
-│   └── test_all_restart_trigger_points.c
+│   ├── test_all_restart_trigger_points.c
+│   ├── host_compat/     # esp_*/nvs/FreeRTOS stub headers (nvs_migration TU)
+│   └── stubs/           # esp_task_wdt recording stubs (watchdog TU)
 ├── docs/                # Firmware-specific documentation
 ├── scripts/             # Build/utility scripts
 ├── CMakeLists.txt       # Top-level project configuration
@@ -303,7 +308,9 @@ mothership/test/acceptance/   # Acceptance scenarios AS-1…AS-7 (+ WiFi restart
 mothership/tests/e2e/         # End-to-end Go tests: e2e_test.go, assertions_test.go,
                               #   io6_gate_test.go (+ _conclusion)
 testdata/                     # CSI-recording utilities (//go:build ignore, in no module)
-firmware/test/                # Host-based firmware tests (gcc harness, 9 test_*.c)
+firmware/test/                # Host-based firmware tests (gcc harness, 9 test units;
+                              #   the test_*.c glob lists 10 — test_runner.c matches it
+                              #   and the Makefile filters it out)
 dashboard/tests/              # Playwright accessibility specs
 dashboard/js/*.test.js        # Co-located jest unit tests
 ```

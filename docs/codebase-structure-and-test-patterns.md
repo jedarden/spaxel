@@ -52,8 +52,10 @@ Directory-level detail with per-file annotations lives in
   - Recording generators/verifiers
 
 - **`firmware/test/`** — C-based firmware tests
-  - Host-based gcc harness (not ESP-IDF host test); 9 `test_*.c` files + Makefile
-  - Unit tests for NVS, CSI, provisioning, console config, restart races
+  - Host-based gcc harness (not ESP-IDF host test); 9 test units + `test_runner.c`/`.h`
+    + Makefile (the `test_*.c` glob lists 10 — `test_runner.c` matches it and the
+    Makefile filters it out of the test set)
+  - Unit tests for NVS, CSI, provisioning, console config, restart races, watchdog
 
 - **`dashboard/tests/`** — Dashboard accessibility tests
   - Playwright + axe-core integration
@@ -187,7 +189,7 @@ table-driven tests alongside implementation, and a single wiring point
 ### By Language
 
 - **Go:** 378 total files, 173 test files (46% test coverage by file count)
-- **C (firmware):** host-based tests in `firmware/test/` (9 files)
+- **C (firmware):** host-based tests in `firmware/test/` (9 test units)
 - **JavaScript/TypeScript:** Multiple `*.test.js` and `*.spec.js` files
 
 ### By Component
@@ -198,7 +200,7 @@ table-driven tests alongside implementation, and a single wiring point
 - Internal test files: 142 (43% test coverage in internal packages)
 
 **Firmware:**
-- Host-based unit tests in `firmware/test/` (9 files)
+- Host-based unit tests in `firmware/test/` (9 test units)
 - Covers NVS, CSI, provisioning logic independently
 
 **Dashboard:**
@@ -228,7 +230,7 @@ mothership/tests/e2e/        # End-to-end Go tests
 testdata/                    # CSI-recording utilities (//go:build ignore)
 
 firmware/test/               # C-based firmware tests
-├── test_*.c                 # 9 test files
+├── test_*.c                 # 9 test units (+ test_runner.c, matched by the glob)
 └── Makefile                 # Test build/run
 
 dashboard/tests/             # Playwright accessibility specs
@@ -247,6 +249,10 @@ cd mothership && go vet ./...         # Run Go vet
 ```bash
 make -C firmware/test test           # Run C-based host tests
 ```
+In CI this is the standalone `firmware-test` step of the `spaxel-build`
+WorkflowTemplate: it runs before `firmware-build` (ESP-IDF) and `docker-build`, so a
+firmware-test failure gates the release but the image build itself neither compiles
+firmware nor runs tests.
 
 ### Acceptance/E2E Tests
 ```bash

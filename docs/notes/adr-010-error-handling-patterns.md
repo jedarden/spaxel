@@ -246,7 +246,9 @@ case NODE_STATE_WIFI_LOST:
 
 - **`firmware/test/test_ota_during_wifi_reconnect.c`**
 - **`firmware/test/test_all_restart_trigger_points.c`**
-- **`firmware/test/test_restart_flag_propagation.c`**
+
+(The `test_restart_flag_propagation.c` entry that older revisions listed was never
+committed; its coverage lives in `test_all_restart_trigger_points.c`.)
 
 ## Follow-up
 

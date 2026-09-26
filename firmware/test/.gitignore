@@ -1,3 +1,7 @@
 # Build output of `make -C firmware/test test` (BUILD_DIR = build).
 # The runner binary and object artifacts land here; never tracked.
 /build/
+
+# A stray top-level runner binary from a manual gcc invocation was committed
+# once (blob ee3f74e0, removed 2026-09-26); keep it untracked if it reappears.
+/test_runner

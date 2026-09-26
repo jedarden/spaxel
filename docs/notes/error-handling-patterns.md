@@ -236,12 +236,12 @@ The following test files validate the restart-safe guard pattern:
    - Validates that ESP_ERROR_CHECK abort is prevented
 
 2. **`firmware/test/test_all_restart_trigger_points.c`**
-   - Tests all 6 `esp_restart()` trigger points
+   - Tests the three `esp_restart()` trigger points (OTA timeout, reboot command,
+     OTA completion — all in `websocket.c`)
    - Validates restart flag propagation across tasks
 
-3. **`firmware/test/test_restart_flag_propagation.c`**
-   - Tests restart flag visibility across FreeRTOS tasks
-   - Validates memory ordering and synchronization
+(An older revision of this list also named `firmware/test/test_restart_flag_propagation.c`;
+no file by that name was ever committed — its coverage is the second bullet of item 2.)
 
 ## Related Documentation
 

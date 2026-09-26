@@ -131,7 +131,6 @@ All new operations must include test coverage for:
 See existing tests:
 - `test/test_ota_during_wifi_reconnect.c`
 - `test/test_all_restart_trigger_points.c`
-- `test/test_restart_flag_propagation.c`
 
 ### Running Tests
 

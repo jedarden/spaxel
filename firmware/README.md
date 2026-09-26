@@ -123,7 +123,6 @@ For detailed error handling patterns and race condition prevention, see:
 - **[Manual OTA Test Procedure](../docs/tests/manual-ota-during-wifi-reconnect-test.md)** - Hardware testing guide
 - **`firmware/test/test_ota_during_wifi_reconnect.c`** - Automated test for OTA guard
 - **`firmware/test/test_all_restart_trigger_points.c`** - Test all restart trigger points
-- **`firmware/test/test_restart_flag_propagation.c`** - Test flag visibility across tasks
 
 ## Key Components
 

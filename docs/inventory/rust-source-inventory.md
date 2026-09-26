@@ -38,7 +38,8 @@ Located in:
 - `firmware/main/` - ESP32-S3 firmware source
   - `main.c`, `wifi.c`, `csi.c`, `websocket.c`, `transport.c`, `ble.c`, `led.c`,
     `ntp.c`, `nvs_migration.c`, `provision.c`, `safe_mode.c`, `watchdog.c`
-- `firmware/test/` - Host-based gcc test harness (`test_*.c`, 9 files)
+- `firmware/test/` - Host-based gcc test harness (9 test units; the `test_*.c` glob
+  also matches `test_runner.c`, which the Makefile filters out of the test set)
 
 ### JavaScript/HTML Files
 Located in:
