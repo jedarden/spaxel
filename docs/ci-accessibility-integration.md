@@ -6,7 +6,7 @@ This document describes the accessibility (a11y) testing integration with Argo W
 
 Accessibility tests enforce WCAG 2.1 AA compliance as a CI quality gate for the Spaxel dashboard. These tests run automated checks using axe-core and Playwright, ensuring the dashboard remains accessible to users with disabilities.
 
-**Test location:** `dashboard/tests/a11y*.spec.js`
+**Test location:** `dashboard/tests/a11y*.spec.js` + `dashboard/tests/agentation-mount.spec.js`
 
 **Test runner:** Playwright + @axe-core/playwright
 
@@ -28,7 +28,19 @@ and `docs/repo-structure.md` §8):
 Plus the onboarding flow (wizard steps, `tests/a11y-onboarding.spec.js`) and a
 coverage guard (`tests/a11y-entrypoint-coverage.spec.js`) that fails the gate
 whenever a top-level `.html` entry point exists in `dashboard/` without a page in
-one of the two page specs. Dev-only harnesses live under `dashboard/_dev/`
+one of the two page specs.
+
+Independently of axe, `tests/agentation-mount.spec.js` asserts on every entry
+point that the Agentation feedback toolbar actually mounts (workspace rule:
+every UI page mounts Agentation) — the import map resolves `react/jsx-runtime`
+to the self-hosted vendor chunk, `/agentation.js` and the chunk serve with a
+JavaScript Content-Type, `#agentation-root` attaches, and the toolbar renders
+inside `agentation-toolbar`'s shadowRoot (`[data-agentation-root]` — light-DOM
+querySelector cannot cross the shadow boundary). It carries its own coverage
+guard that fails when a new top-level `dashboard/*.html` entry point ships
+without Agentation wiring. A `<script>` tag alone is not evidence: without the
+import map the module dies on unresolvable bare specifiers while the page keeps
+rendering. Dev-only harnesses live under `dashboard/_dev/`
 (go:embed excludes `_`-prefixed path segments, so they never ship in the
 production image — see `dashboard/_dev/README.md`) and are outside the gate by
 construction; the guard only enumerates top-level `dashboard/*.html`.
@@ -78,6 +90,7 @@ The accessibility tests run as a quality gate in the `spaxel-build` Argo Workflo
 | `tests/a11y-dashboard.spec.js` | Remaining entry points (ambient, live, simple, simulator) |
 | `tests/a11y-onboarding.spec.js` | New user onboarding flow |
 | `tests/a11y-entrypoint-coverage.spec.js` | Guard: every top-level `dashboard/*.html` must appear in one of the two page specs (`dashboard/_dev/` harnesses are excluded) |
+| `tests/agentation-mount.spec.js` | Agentation toolbar mounts on every entry point (import map, JS Content-Type, `#agentation-root`, shadow-root render) + guard against unwired new entry points |
 | `tests/accessibility/helper.js` | Shared axe-core scanning and assertion helpers |
 
 ## Common Violations
