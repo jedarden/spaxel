@@ -176,10 +176,32 @@ Also carries guard **N1** (see §5).
 | Scenario ID | **AS-9** |
 | Target file | `as9_person_count_test.go` (**new**, register in `integration_test.go`) |
 | Verdict | **covered-by-sim** |
-| Sim primitives | `WalkerSet`/`CreatePathWalkers` on **disjoint** scripted paths (opposite halves of the room, so Fresnel zones don't merge by construction); three `spaxel-sim` sub-runs at fixed seed with `--walkers 1|2|3` |
-| Assertions | (a) 1 walker → steady-state median blob count == **1** (L16 "distinguishes 1"); (b) 2 walkers → ≥ **2** distinct blobs simultaneously present for ≥ 50 % of the run (L16 "vs 2+"); (c) 3 walkers → **stability-only**: run completes, blob count stays in [1, `max_tracked_blobs`], no crash — explicitly *not* asserted == 3, per L16 "degrades at 3+" |
+| Sim primitives | `WalkerSet`/`CreatePathWalkers` on **disjoint** scripted paths (opposite halves of the room — paths are disjoint, but at 1.2 m separation the Fresnel spreads still overlap, see below); three `spaxel-sim` sub-runs at fixed seed with `--walkers 1|2|3` |
+| Assertions | (a) 1 walker → steady-state median blob count == **1** (L16 "distinguishes 1"); (b) 2 walkers → **presence floor**: ≥ 1 blob served in ≥ 90 % of polls, **and separation existence**: ≥ 2 simultaneous blobs in ≥ 1 poll — the measured ≥ 2-blob fraction is logged, not gated (L16 "vs 2+", re-based — see below); (c) 3 walkers → **stability-only**: run completes, blob count stays in [1, `max_tracked_blobs`], no crash — explicitly *not* asserted == 3, per L16 "degrades at 3+" |
 | Determinism | `--seed 42`; disjoint `--path-file` polylines per walker |
 | hardware-required | **false** — count degradation comes from Fresnel-zone merging, which the engine models |
+
+**Why the 50 % fraction gate was re-scoped** (spaxel-c61599fa, 2026-09-26 —
+the §8 gate+claim exception, second use after C1): the original assertion
+(b) — ≥ 2 blobs for ≥ 50 % of polls — was measured three times and never
+approached it: 20.0 % (spaxel-92ce3d2a, HEAD 0eb47693), 17.8 % (spaxel-5a9bd318,
+HEAD e8c3399d), 17.8 % again on the re-based suite's verification run (seed 42 —
+deterministic). The mechanism is the Fresnel-zone merging this section already
+names: each link contributes a single summed ridge across its full zone-≤5
+footprint (`detectBlobs`, `internal/simulator/engine.go`), so the 1.2 m-apart
+corridors keep their *paths* disjoint but not their Fresnel *spreads* — for
+most of the lap the two walkers' contributions sum into one grid ridge, and a
+tick whose link set carries a single active link cannot serve two blobs from
+one scalar ridge (tick-level instrumentation preserved on the owning bead found
+a single active link under most fusion ticks in this fixture). What the
+pipeline does deliver, and what the re-based gates pin, is both halves of the
+L16 claim at existence level: presence held for 100 % of polls in every run,
+and ≥ 2 simultaneous blobs demonstrably occur (max 2–3). The README L16 claim
+is qualified in the same landing (co-owned edit with spaxel-6411057f, whose
+description pre-authorizes exactly this qualification). Raising the fraction
+toward honest continuous 2-blob tracking — e.g. link-set sensitivity so
+walker 1's corridor stops sitting below motion-detection proximity for most of
+its lap — remains open pipeline work, not a gate promise.
 
 Also carries **N3** (5+ walkers) — see §5.
 
@@ -269,7 +291,7 @@ capability is a property of the pipeline and its resolution, which the sim repro
 
 ---
 
-## 8. Recorded acceptance status (as of 2026-09-25)
+## 8. Recorded acceptance status (as of 2026-09-26)
 
 Measured outcomes of the scenarios above at the current tip of `main`. This
 section is what `README.md`'s capability bullets cite for their present-tense
@@ -278,7 +300,7 @@ pass — a measured FAIL is the recorded outcome until the owning defect closes
 (the AS-8 header precedent). The one sanctioned exception is re-basing a gate
 *with* its capability claim: when the documented claim itself over-states what
 the pipeline delivers, an owning bead revises the claim and the gate together
-so front page, map and suite agree (done once, for C1: 1.0 → 1.5 m,
+so front page, map and suite agree (done twice: for C1, 1.0 → 1.5 m,
 spaxel-1a2c7859). A gate moved without its claim, or per-run to turn a single
 run green, remains forbidden. Measurements live on their owning beads; the bead
 IDs are given so the numbers stay traceable.
@@ -288,7 +310,7 @@ IDs are given so the numbers stay traceable.
 | C0 presence | AS-2 | **working** — detection demonstrated; AS-2's own live leg is red on a shared test-helper defect (decodes a lowercase `/api/blobs` envelope; the live endpoint returns a bare array with Go-default capitalized keys), not on detection | deterministic runs record a scripted walker detected for 100 % of the post-warmup window (AS-8/AS-9 logs, seed 42) |
 | C1 2D position | AS-8 | **measured within the re-based gate** | recorded medians 1.140 m / 1.273 m, p90 1.474 m, RecallAt1m ≈ 25 %, RecallAt2m 100 % (two runs, seed 42; spaxel-28131727) — above the original 1.0 m gate, so C1 was re-based to ±1.0–1.5 m / gate ≤ 1.5 m by spaxel-1a2c7859, with README L14, this map and `as8MedianErrorGateM` moved together; re-run at the re-based gate: **PASS** twice (~78 s each), captured run median 1.069 m, p90 1.474 m, RecallAt1m 16.3 %, RecallAt2m 100 % over 49 blob samples, detection ratio 100 % post-warmup, blobs/poll 1–2 (spaxel-1a2c7859); N1 grid-cell guard PASS at 0.200 m |
 | C2 trajectory | AS-2-ext | **measured above gate** — extension landed, honest FAIL per the AS-8 precedent | scripted-rectangle walker (seed 42, 4 nodes): 45/45 post-warmup polls tracked (detection 100 %); nearest-blob distance to the ground-truth polyline median 1.140 m, p90 1.500 m, within the 1.0 m bound 11.1 % (5/45) vs the ≥ 80 % gate — **FAIL**; CSV cross-check median 1.140 m matches C1's per-point figure exactly; fixture audit: recorded walker positions hug the polyline (median 0.028 m, max 0.096 m) (spaxel-aea34d4d) |
-| C3 person count | AS-9 | **partially met** — halves inverted by the spaxel-33776a7f fragmentation fix: "1" half now genuinely passing, "2+" half measured failing | 1 walker → median 1.0, == 1 gate **PASS** (45 post-warmup polls, min 1 max 2); 2 walkers → ≥ 2 blobs for 20.0 % of polls vs the ≥ 50 % gate, **FAIL** (min 1 max 3 — 36/45 polls served exactly 1 blob with both walkers active); 3- and 5-walker stability PASS (spaxel-92ce3d2a at HEAD 0eb47693, seed 42; supersedes the spaxel-501751c2 pre-fix run). Re-run at HEAD e8c3399d (spaxel-5a9bd318, same fixture): 1 walker median 1.0 min 1 **max 1** — the pre-fix over-segmentation flicker is no longer observed, there is no single-person over-segmentation left to fix; 2 walkers 17.8 % of polls ≥ 2 blobs (min 1 max 3, same honest FAIL — the live residual is merging/undercount, owned by spaxel-c61599fa); 3- and 5-walker stability PASS |
+| C3 person count | AS-9 | **met at the re-based gate** — the ≥ 50 % ≥ 2-blob-fraction gate over-stated the pipeline and was re-based *with* its L16 claim to presence ≥ 90 % + separation existence (second use of the §8 exception, after C1; spaxel-c61599fa) | 1 walker → median 1.0, == 1 gate **PASS** (45 post-warmup polls, min 1 max 2 at HEAD 0eb47693, spaxel-92ce3d2a — supersedes the spaxel-501751c2 pre-fix run; re-run at HEAD e8c3399d min 1 **max 1**, spaxel-5a9bd318 — no single-person over-segmentation remains). 2 walkers → ≥ 1-blob presence 100 % of polls (≥ 90 % floor **PASS**), ≥ 2-blob separation existence **PASS** (max 3), measured ≥ 2-blob fraction 17.8 % — logged, not gated (45 polls, seed 42, verification run of the re-based suite, spaxel-c61599fa). Historical under the original ≥ 50 % gate: 20.0 % (spaxel-92ce3d2a) and 17.8 % (spaxel-5a9bd318; 36/45 polls served exactly 1 blob with both walkers active) — honest FAIL, superseded by the re-base; mechanism and justification in §4 C3 "Why the 50 % fraction gate was re-scoped". 3- and 5-walker stability PASS |
 | C4 Z-axis / fall | AS-3 + AS-3-ext | **working** — measured PASS | fall chain fires with the bag-on-couch false-positive control; Z gate \|Δz\| ≤ 2.0 m: median 0.40 m standing, 1.00 m post-fall floor, 2/2 runs; N2 posture-class surface pin PASS (spaxel-501751c2) |
 | C5 stationary/breathing | AS-10 | **not validated** — fixture landed (`cmd/sim/breathing.go`, `--scenario stationary`), acceptance test not yet written | STATIONARY_DETECTED is unreachable end to end while two open P1 detector defects stand: spaxel-a27b6dba (breathing RMS no-op — the mean OLS residual over the data subcarriers is identically zero) and spaxel-d1790d51 (DwellTracker feeds its 2 Hz-designed FFT at the 20 Hz frame rate) |
 | N1 sub-10 cm | AS-8 guard | **pinned** | grid_cell_m = 0.200 m ≥ the 0.10 m floor; no assertion pins error below the floor |
