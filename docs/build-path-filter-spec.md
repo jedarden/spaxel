@@ -266,7 +266,7 @@ ignoring `**_test.go`, `firmware/test/**`, `test/**` and `tests/**` wholesale.)
 | `.golangci.yml` | `golangci-lint` — fails the workflow before `firmware-build`/`docker-build` |
 | `firmware/test/**` (26: `Makefile`, 9 `test_*.c` units + `test_runner.c/.h`, `host_compat/` 6 + `stubs/` 5 stub headers, results `.md` ×2, `.gitignore`; the `test_*.c` glob matches 10 because `test_runner.c` is filtered out by the Makefile) | `firmware-test` — host gcc harness, `make -C firmware/test test`; a sequential `spaxel-build` step that runs before `firmware-build`/`docker-build`, so gating ≠ image content |
 | `dashboard/tests/**`, `dashboard/playwright.config.js`, `dashboard/package.json`, `dashboard/package-lock.json` | `a11y-test` — Playwright + axe-core |
-| `dashboard/jest.config.js`, `dashboard/js/*.test.js` | Dashboard unit tests (jest) — not a `spaxel-build` step, but gates local verification |
+| `dashboard/jest.config.js`, `dashboard/js/*.test.js` (23) | Dashboard unit tests (jest) — run inside the `a11y-test` step of `spaxel-build` (`npm ci` → `npm test`, jest `--verbose`), so a unit-test regression fails the workflow before the Playwright chromium download and axe gate; also gates local verification |
 | `mothership/test/**` (23), `mothership/tests/e2e/**` (5) | `acceptance-test` / `go-test` legs |
 | `scripts/**` (11) | Exercised by the acceptance/e2e paths; not an image build input, but not inert either |
 | `docker-compose.yml` | Tier C local redeploy — rare and cheap; modelling "deploy-only" in the filter buys nothing and risks a stale local path |
