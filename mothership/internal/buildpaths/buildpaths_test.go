@@ -1,6 +1,8 @@
 // Package buildpaths is a test-only regression gate for the spaxel
 // build-path trigger contract — specifically, that managed ESP-IDF component
-// changes trigger firmware/image builds.
+// changes trigger firmware/image builds, and that the core tree classes
+// (mothership source, dashboard runtime assets, root build configuration)
+// keep triggering while the ignore list stays doc/bookkeeping-only.
 //
 // Background (spaxel-1b0e96aa): docs/SYSTEM_CATALOG.md (§Build Impact
 // Classification) lists firmware/managed_components/ as a firmware build
@@ -181,6 +183,66 @@ func TestMixedPushWithManagedComponentChangeTriggersBuild(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := pushTriggersBuild(tt.paths...); got != tt.want {
 				t.Errorf("pushTriggersBuild(%v) = %v, want %v", tt.paths, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCoreTreePathClassesTriggerBuild pins the positive side of the trigger
+// contract for the tree classes the filter chiefly exists to protect:
+// mothership application code, dashboard runtime assets, and root build
+// configuration. The exclusion-based predicate makes these trigger by
+// construction — until someone adds their prefix to ignoredByLiveFilter,
+// which is exactly the drift these rows catch. No row asserts want=false for
+// gating test directories (mothership/test/**, dashboard/tests/**): spec
+// Tier B forbids ignoring them, so a test-directory path belongs on the
+// trigger side too.
+func TestCoreTreePathClassesTriggerBuild(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{
+			name: "mothership application source",
+			path: "mothership/internal/signal/ambient.go",
+			want: true,
+		},
+		{
+			name: "mothership acceptance test source",
+			path: "mothership/test/acceptance/as9_person_count_test.go",
+			want: true,
+		},
+		{
+			name: "dashboard service worker",
+			path: "dashboard/sw.js",
+			want: true,
+		},
+		{
+			name: "dashboard PWA manifest",
+			path: "dashboard/manifest.json",
+			want: true,
+		},
+		{
+			name: "root version pin",
+			path: "VERSION",
+			want: true,
+		},
+		{
+			name: "image build recipe",
+			path: "Dockerfile",
+			want: true,
+		},
+		{
+			name: "workspace module file",
+			path: "go.work",
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := triggersBuild(tt.path); got != tt.want {
+				t.Errorf("triggersBuild(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
 	}
