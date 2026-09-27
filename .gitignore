@@ -34,6 +34,19 @@ dashboard/test-results/
 dashboard/playwright-report/
 dashboard/.auth/
 
+# Jest leak/profiling report output (rewritten on every dashboard jest run —
+# `npm test`, the CI a11y chain's jest leg, or run-leak-profiling.js). Throwaway
+# profiler artifacts, not fixtures: no test reads committed content (all reads
+# are same-run outputs at the same path, existsSync-guarded). Untracked
+# (spaxel-3197a8ae) so the documented test workflow can't dirty the shared
+# checkout. Named individually — never a dashboard/*.json glob, which would
+# also ignore the runtime assets manifest.json, help_articles.json and sw.js
+# (docs/build-path-filter-spec.md §4.3).
+dashboard/leak-detection-report.json
+dashboard/leak-isolation-results.json
+dashboard/leak-test-full-lifecycle.json
+dashboard/test-profiling-results.json
+
 # Temporary files
 tmp/
 temp/
