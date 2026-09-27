@@ -224,6 +224,220 @@ func AS8_2DPositionAccuracyIntegration(t *testing.T) {
 	}
 }
 
+// AS-8-ext constants — joint 3D (x,y,z) position accuracy. The gate is
+// derived from the already-measured per-axis bands, not an aspiration (map
+// §4): composing the worst recorded medians — AS-8's XY 1.273 m with
+// AS-3-ext's Z 1.00 m — gives sqrt(1.273² + 1.00²) ≈ 1.62 m, and the best
+// recorded pair (1.069 m, 0.40 m) composes to ≈ 1.14 m. The gate sits at the
+// 2.0 m ceiling of the README L17 Z band — the same measured-capability
+// headroom pattern as AS-8's 1.5 m gate over its 1.27 m measured median.
+const (
+	as8dMedianErrorGateM = 2.0
+
+	// Non-gating target: the best recorded band pair composed. Logged for the
+	// map's §8 record; never asserted (and comfortably above the 0.10 m N1
+	// floor).
+	as8dMedianErrorTargetM = 1.14
+)
+
+// AS8_3DPositionAccuracyIntegration runs the deterministic AS-8-ext scenario:
+// joint 3D (x,y,z) position accuracy of tracked blobs against the CSV ground
+// truth, pinning the current capability behind README L5's "estimate 2D/3D
+// position" claim the way AS-8 pins the 2D claim.
+//
+// Numbering: AS-8-ext, extend-in-place — map §2 keeps scenario numbers
+// contiguous and AS-10 is assigned-but-unimplemented, so no fresh AS-11 can be
+// reserved; the extension follows the AS-2-ext/AS-3-ext precedent.
+//
+// Fixture: the AS-8 fixture plus --node-heights mixed (required: mixed-height
+// perimeter nodes are what gives the fusion stack its vertical geometry — the
+// same condition README L17 places on the Z claim), one path walker on the
+// same scripted loop, seed 42. One walker deliberately: joint-3D accuracy must
+// not be confounded with AS-9's documented Fresnel-merging separation weakness
+// (two simultaneous walkers present as one ridge in the large majority of
+// polls) — that is a counting/separation defect (map C3), not an accuracy one.
+//
+// Z ground truth: the sim engine's path walker moves in XY only —
+// updatePathFollow keeps Position.Z at the first waypoint's Z, and its 3D
+// arrival check (< 0.1 m) would wedge a walker on z-varying waypoints — so the
+// walker stands at the loop's 1.7 m for the whole run and vertical error is
+// exercised as the localized blob Z against that standing height. Horizontal
+// and vertical error are exercised by the same walker in the same run.
+//
+// A measured FAIL of the 2.0 m gate is a valid outcome (the documented AS-9
+// separation weakness and the AS-2-ext trajectory bound both predict pressure
+// on the joint figure): the deliverable is the deterministic fixture plus the
+// honest measurement, recorded in map §8. Gate changes go through the map —
+// never per-run to turn a run green.
+func AS8_3DPositionAccuracyIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	mothershipURL := getMothershipURL()
+	cmd := startMothership(t, getTempDBPath())
+	defer stopMothership(cmd)
+
+	if !waitForMothership(ctx, mothershipURL) {
+		t.Fatal("Mothership did not become ready")
+	}
+	setPIN(t, mothershipURL, "1234")
+
+	// N1 guard, same premise as AS-8: no sub-10 cm resolution may be assumed.
+	as8AssertGridCellFloor(t, mothershipURL)
+
+	dir := t.TempDir()
+	pathFile := filepath.Join(dir, "as8d-scripted-loop.json")
+	gtCSV := filepath.Join(dir, "as8d-ground-truth.csv")
+	if err := os.WriteFile(pathFile, []byte(as8ScriptedLoopJSON), 0o644); err != nil {
+		t.Fatalf("Failed to write scripted path file: %v", err)
+	}
+
+	simStart := time.Now()
+	simCtx, cancelSim := context.WithTimeout(ctx, 2*time.Minute)
+	simCmd := startSimulator(t, simCtx, []string{
+		"--mothership", wsURL(mothershipURL),
+		"--nodes", fmt.Sprintf("%d", as8Nodes),
+		"--node-heights", "mixed",
+		"--walkers", "1",
+		"--walker-type", "path",
+		"--path-file", pathFile,
+		"--seed", fmt.Sprintf("%d", as8Seed),
+		"--space", as8Space,
+		"--rate", fmt.Sprintf("%d", as8RateHz),
+		"--duration", fmt.Sprintf("%d", as8DurationS),
+		"--output-csv", gtCSV,
+	})
+	defer cancelSim()
+	defer stopSimulator(simCmd)
+
+	// Same polling discipline as AS-8: 1 Hz across the run window, post-warmup
+	// samples only, and every sample must carry all three axes — a blob
+	// without Z cannot form a joint-3D error and is counted, not silently
+	// averaged in as z=0.
+	pollDeadline := simStart.Add(as8DurationS*time.Second + 10*time.Second)
+	var samples []as8BlobSample
+	noZ := 0
+	polls := 0
+	for time.Now().Before(pollDeadline) {
+		if ctx.Err() != nil {
+			break
+		}
+		elapsed := time.Since(simStart)
+		if elapsed < as8Warmup {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		polls++
+		for _, blob := range as8GetBlobs(t, mothershipURL) {
+			bx, ok := as8BlobCoord(blob, "X", "x")
+			if !ok {
+				continue
+			}
+			by, ok := as8BlobCoord(blob, "Y", "y")
+			if !ok {
+				continue
+			}
+			bz, ok := as8BlobCoord(blob, "Z", "z")
+			if !ok {
+				noZ++
+				continue
+			}
+			samples = append(samples, as8BlobSample{elapsed: elapsed, x: bx, y: by, z: bz})
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	gt, err := as8ParseGroundTruthCSV(gtCSV)
+	if err != nil {
+		t.Fatalf("Failed to parse ground-truth CSV: %v", err)
+	}
+	if len(gt) == 0 {
+		t.Fatal("Ground-truth CSV contains no walker positions — sim wrote no ground truth")
+	}
+
+	zs := make([]float64, 0, len(gt))
+	for _, g := range gt {
+		zs = append(zs, g.z)
+	}
+	sort.Float64s(zs)
+	t.Logf("Ground truth: %d walker positions, GT z range %.2f–%.2f m (path walker holds z constant), %d mixed-height nodes",
+		len(gt), zs[0], zs[len(zs)-1], as8Nodes)
+	if noZ > 0 {
+		t.Logf("Skipped %d blob samples lacking a Z coordinate", noZ)
+	}
+
+	if len(samples) == 0 {
+		t.Fatalf("No tracked-blob samples with all three axes after %.0f s warmup across %d polls — "+
+			"the pipeline localized nothing measurable in 3D from the scripted walker",
+			as8Warmup.Seconds(), polls)
+	}
+
+	// Gate metric: per blob sample, the full 3D Euclidean distance to the
+	// nearest ground-truth position (time-free, as AS-8 — the loop repeats
+	// every 14 s so the post-warmup window covers it ~3×). Computed generically
+	// in all three axes: today the GT z is constant, but the metric must not
+	// silently degrade to 2D if a z-varying fixture ever lands.
+	errors3d := make([]float64, 0, len(samples))
+	xyAtNearest := make([]float64, 0, len(samples))
+	dzAtNearest := make([]float64, 0, len(samples))
+	for _, s := range samples {
+		d, g := as8Nearest3D(s.x, s.y, s.z, gt)
+		errors3d = append(errors3d, d)
+		xyAtNearest = append(xyAtNearest, math.Hypot(s.x-g.x, s.y-g.y))
+		dzAtNearest = append(dzAtNearest, math.Abs(s.z-g.z))
+	}
+
+	sort.Float64s(errors3d)
+	sort.Float64s(xyAtNearest)
+	sort.Float64s(dzAtNearest)
+	median3d := as8Percentile(errors3d, 0.5)
+	p90_3d := as8Percentile(errors3d, 0.90)
+	recall15m, recall20m := 0.0, 0.0
+	for _, e := range errors3d {
+		if e <= 1.5 {
+			recall15m++
+		}
+		if e <= 2.0 {
+			recall20m++
+		}
+	}
+	recall15m /= float64(len(errors3d))
+	recall20m /= float64(len(errors3d))
+
+	t.Logf("AS-8-ext measurement: %d blob samples — median 3D error %.3f m (gate ≤ %.1f m, "+
+		"measured-band target %.2f m), p90 %.3f m, joint recall ≤1.5 m %.1f%%, ≤2.0 m %.1f%%",
+		len(errors3d), median3d, as8dMedianErrorGateM, as8dMedianErrorTargetM, p90_3d,
+		100*recall15m, 100*recall20m)
+	t.Logf("AS-8-ext decomposition at each sample's 3D-nearest ground truth: median XY %.3f m, median |Δz| %.3f m",
+		as8Percentile(xyAtNearest, 0.5), as8Percentile(dzAtNearest, 0.5))
+
+	if median3d > as8dMedianErrorGateM {
+		t.Errorf("Median 3D error %.3f m exceeds the %.1f m gate derived from the measured bands "+
+			"(p90 %.3f m, joint recall ≤1.5 m %.1f%%, ≤2.0 m %.1f%% over %d blob samples) — "+
+			"a FAIL is a recorded outcome (map §8), not a gate to be loosened",
+			median3d, as8dMedianErrorGateM, p90_3d, 100*recall15m, 100*recall20m, len(errors3d))
+	}
+}
+
+// as8Nearest3D returns the 3D Euclidean distance from (x, y, z) to the nearest
+// ground-truth position, together with that position (for per-axis
+// decomposition).
+func as8Nearest3D(x, y, z float64, gt []as8GTPosition) (float64, as8GTPosition) {
+	best := math.Inf(1)
+	var nearest as8GTPosition
+	for _, g := range gt {
+		dx, dy, dz := x-g.x, y-g.y, z-g.z
+		if d := math.Sqrt(dx*dx + dy*dy + dz*dz); d < best {
+			best, nearest = d, g
+		}
+	}
+	return best, nearest
+}
+
 // as8ScriptedLoopJSON is the scripted rectangular loop the path walker follows:
 // (1,1) → (5,1) → (5,4) → (1,4) inside the 6x5 m room, all at Z 1.7 m.
 // --path-file schema: [{"waypoints": [{x,y,z}, ...]}] (cmd/sim PathDefinition).
@@ -236,15 +450,19 @@ const as8ScriptedLoopJSON = `[
   ]}
 ]`
 
-// as8BlobSample is one tracked-blob observation from /api/blobs.
+// as8BlobSample is one tracked-blob observation from /api/blobs. z is
+// populated only by the AS-8-ext joint-3D scenario (AS-8's horizontal metric
+// ignores it and its samples carry the zero value).
 type as8BlobSample struct {
 	elapsed time.Duration
-	x, y    float64
+	x, y, z float64
 }
 
 // as8GTPosition is one ground-truth walker position from the sim's CSV output.
+// z is the CSV height column; the path walker holds it constant at the first
+// waypoint's height (engine quirk, see AS8_3DPositionAccuracyIntegration).
 type as8GTPosition struct {
-	x, y float64
+	x, y, z float64
 }
 
 // as8GetBlobs fetches the current tracked blobs. The live /api/blobs endpoint
@@ -348,6 +566,9 @@ func as8ParseGroundTruthCSV(path string) ([]as8GTPosition, error) {
 		}
 		if _, err := fmt.Sscanf(row[3], "%f", &p.y); err != nil {
 			return nil, fmt.Errorf("CSV y column %q: %w", row[3], err)
+		}
+		if _, err := fmt.Sscanf(row[4], "%f", &p.z); err != nil {
+			return nil, fmt.Errorf("CSV z column %q: %w", row[4], err)
 		}
 		gt = append(gt, p)
 	}

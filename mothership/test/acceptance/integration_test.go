@@ -71,6 +71,7 @@ var acceptanceScenarios = []struct {
 	{"AS6_Replay", AS6_ReplayIntegration},
 	{"AS7_AuthReject", AS7_AuthRejectIntegration},
 	{"AS8_2DPositionAccuracy", AS8_2DPositionAccuracyIntegration},
+	{"AS8_3DPositionAccuracy", AS8_3DPositionAccuracyIntegration},
 	{"AS9_PersonCount", AS9_PersonCountIntegration},
 }
 

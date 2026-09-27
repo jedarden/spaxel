@@ -1,6 +1,6 @@
 # Localization Capability → Simulator Acceptance Map
 
-**Status:** design + recorded results — AS-8, AS-9 and AS-3-ext are implemented and measured (see §8); AS-10 is assigned with its simulator fixture landed, acceptance test pending. Child 1 of 5 of the auto-split of `spaxel-23902254`
+**Status:** design + recorded results — AS-8, AS-8-ext, AS-9 and AS-3-ext are implemented and measured (see §8); AS-10 is assigned with its simulator fixture landed, acceptance test pending. Child 1 of 5 of the auto-split of `spaxel-23902254`
 **Created:** 2026-09-18
 **Scope:** maps every localization capability advertised in `README.md` (lines 13–20) to a
 concrete deterministic scenario design for the simulator-driven acceptance suite at
@@ -74,7 +74,7 @@ until its entries are added there.
 **Next free AS numbers: 8, 9, 10.** This map assigns (as of 2026-09-25, AS-8 and
 AS-9 are implemented and AS-10's fixture has landed — see §8 for recorded status):
 
-- `as8_2d_position_accuracy_test.go` (new — C1, N1)
+- `as8_2d_position_accuracy_test.go` (new — C1, N1; extended in place 2026-09-27 with **AS-8-ext**, the joint 3D accuracy scenario — no new number: AS-10 is assigned-but-unimplemented so rule 4 blocks reserving AS-11, and extend-in-place follows the AS-2-ext/AS-3-ext precedent)
 - `as9_person_count_test.go` (new — C3, N3)
 - `as10_stationary_breathing_test.go` (new — C5)
 - extend-in-place `as2_walking_detection_test.go` (C0, C2)
@@ -218,6 +218,28 @@ Also carries **N3** (5+ walkers) — see §5.
 | Determinism | `--seed 42`; fall choreography is already parameterized and scripted (`--fall-delay/--fall-duration/--stillness`, `FallScenarioParams`) |
 | hardware-required | **false** — Z geometry is 3-D end to end (node heights, walker height, grid Z resolution 0.10 m); no RF property is missing |
 
+### C1 + C4 — Joint 3D (x, y, z) position (README L5 "estimate 2D/3D position")
+
+| Field | Value |
+|---|---|
+| Scenario ID | **AS-8-ext** (no new number — §2 rule 4: numbers stay contiguous and AS-10 is assigned-but-unimplemented, so a fresh AS-11 cannot be reserved; extend-in-place per the AS-2-ext/AS-3-ext precedent) |
+| Target file | `as8_2d_position_accuracy_test.go` (**extend-in-place**), registered as `AS8_3DPositionAccuracy` in `integration_test.go` |
+| Verdict | **covered-by-sim** |
+| Claim pinned | README L5 advertises "estimate 2D/3D position"; C1 (AS-8) pins only the 2D half and C4 (AS-3-ext) only the Z half, each against its own fixture. No acceptance scenario validated the **joint** 3D figure — this one does, pinning the current capability behind the advertised claim rather than an aspiration |
+| Sim primitives | the AS-8 fixture plus `--node-heights mixed` (the C4 vertical geometry — the same condition README L17 places on the Z claim); one path walker on the same scripted loop; `--output-csv` ground truth; `as8GetBlobs` |
+| Assertion | per blob sample, the **full 3D Euclidean distance** from the blob to the nearest ground-truth CSV position; median ≤ **2.0 m**. The gate is composed from the already-measured bands, not aspirational: the worst recorded per-axis medians — AS-8's XY 1.273 m with AS-3-ext's Z 1.00 m — compose to sqrt(1.273² + 1.00²) ≈ 1.62 m, and the best pair (1.069 m, 0.40 m) to ≈ 1.14 m, which is the logged non-gating target. The gate sits at the 2.0 m ceiling of the L17 Z band — the same measured-capability headroom pattern as AS-8's 1.5 m gate over its 1.27 m median. Per-axis decomposition (median XY and median \|Δz\| at each sample's 3D-nearest ground truth) and joint recall ≤ 1.5 m / ≤ 2.0 m are logged as diagnostics; the N1 floor is respected (2.0 m ≫ 0.10 m) |
+| Z ground truth | the engine's path walker moves in XY only — `updatePathFollow` keeps `Position.Z` at the first waypoint's Z, and its 3D arrival check (< 0.1 m) would wedge a walker on z-varying waypoints — so the walker stands at the loop's 1.7 m for the whole run and vertical error is the localized blob Z against that standing height. Horizontal and vertical error are exercised by the same walker in the same run |
+| Single walker | deliberate: joint 3D accuracy must not be confounded with C3's documented Fresnel-merging separation weakness (two simultaneous walkers present as one ridge) — that is a counting/separation defect (§4 C3), not an accuracy one |
+| Determinism | `--seed 42` + scripted `--path-file` polyline; fixed default `--noise-sigma` (§6 policy unchanged) |
+| hardware-required | **false** — same rationale as C1 and C4 |
+
+A measured FAIL of the 2.0 m gate is a valid outcome (§8 rules): the documented
+AS-9 separation weakness and the AS-2-ext trajectory bound both predict
+pressure on a joint figure. The deliverable is the deterministic fixture plus
+the honest measurement.
+
+
+
 ### C5 — Stationary-person detection via breathing 0.1–0.5 Hz (README L18)
 
 | Field | Value |
@@ -291,7 +313,7 @@ capability is a property of the pipeline and its resolution, which the sim repro
 
 ---
 
-## 8. Recorded acceptance status (as of 2026-09-26)
+## 8. Recorded acceptance status (as of 2026-09-27)
 
 Measured outcomes of the scenarios above at the current tip of `main`. This
 section is what `README.md`'s capability bullets cite for their present-tense
@@ -312,6 +334,7 @@ IDs are given so the numbers stay traceable.
 | C2 trajectory | AS-2-ext | **measured above gate** — extension landed, honest FAIL per the AS-8 precedent | scripted-rectangle walker (seed 42, 4 nodes): 45/45 post-warmup polls tracked (detection 100 %); nearest-blob distance to the ground-truth polyline median 1.140 m, p90 1.500 m, within the 1.0 m bound 11.1 % (5/45) vs the ≥ 80 % gate — **FAIL**; CSV cross-check median 1.140 m matches C1's per-point figure exactly; fixture audit: recorded walker positions hug the polyline (median 0.028 m, max 0.096 m) (spaxel-aea34d4d) |
 | C3 person count | AS-9 | **met at the re-based gate** — the ≥ 50 % ≥ 2-blob-fraction gate over-stated the pipeline and was re-based *with* its L16 claim to presence ≥ 90 % + separation existence (second use of the §8 exception, after C1; spaxel-c61599fa) | 1 walker → median 1.0, == 1 gate **PASS** (45 post-warmup polls, min 1 max 2 at HEAD 0eb47693, spaxel-92ce3d2a — supersedes the spaxel-501751c2 pre-fix run; re-run at HEAD e8c3399d min 1 **max 1**, spaxel-5a9bd318 — no single-person over-segmentation remains). 2 walkers → ≥ 1-blob presence 100 % of polls (≥ 90 % floor **PASS**), ≥ 2-blob separation existence **PASS** (max 3), measured ≥ 2-blob fraction 17.8 % — logged, not gated (45 polls, seed 42, verification run of the re-based suite, spaxel-c61599fa). Historical under the original ≥ 50 % gate: 20.0 % (spaxel-92ce3d2a) and 17.8 % (spaxel-5a9bd318; 36/45 polls served exactly 1 blob with both walkers active) — honest FAIL, superseded by the re-base; mechanism and justification in §4 C3 "Why the 50 % fraction gate was re-scoped". 3- and 5-walker stability PASS |
 | C4 Z-axis / fall | AS-3 + AS-3-ext | **working** — measured PASS | fall chain fires with the bag-on-couch false-positive control; Z gate \|Δz\| ≤ 2.0 m: median 0.40 m standing, 1.00 m post-fall floor, 2/2 runs; N2 posture-class surface pin PASS (spaxel-501751c2) |
+| C1+C4 joint 3D position | AS-8-ext | **measured within gate** — extension landed, first joint-3D record | seeded-42 run at HEAD fda872dd (2026-09-27): 1199 ground-truth positions (walker z constant 1.70 m — the path-walker Z quirk §4 documents), 28 three-axis blob samples post-warmup over 4 mixed-height nodes — median 3D error **1.100 m** vs the 2.0 m measured-band gate, **PASS**; p90 1.487 m, joint recall ≤ 1.5 m 100 %, ≤ 2.0 m 100 %; decomposition at the 3D-nearest ground truth: median XY 1.055 m (consistent with C1's 1.07–1.27 m recorded band), median \|Δz\| 0.200 m (inside C4's recorded standing range); N1 grid-cell guard PASS at 0.200 m; a same-day repeat run also passed (its log lines predate capture, so only exit status is on record) (spaxel-238adebf) |
 | C5 stationary/breathing | AS-10 | **not validated** — fixture landed (`cmd/sim/breathing.go`, `--scenario stationary`), acceptance test not yet written | STATIONARY_DETECTED is unreachable end to end while two open P1 detector defects stand: spaxel-a27b6dba (breathing RMS no-op — the mean OLS residual over the data subcarriers is identically zero) and spaxel-d1790d51 (DwellTracker feeds its 2 Hz-designed FFT at the 20 Hz frame rate) |
 | N1 sub-10 cm | AS-8 guard | **pinned** | grid_cell_m = 0.200 m ≥ the 0.10 m floor; no assertion pins error below the floor |
 | N2 skeletal pose | AS-3-ext guard | **pinned** | posture-class key allowlist on `/api/blobs` + `/api/tracks` — any new key fails the test |
