@@ -63,6 +63,58 @@ npx playwright test a11y.spec.js
 npx playwright test a11y.spec.js --headed
 ```
 
+> On NixOS hosts the `npx playwright install chromium` step does not work — see
+> [Running locally on NixOS](#running-locally-on-nixos) for the working recipe.
+
+### Running locally on NixOS
+
+`npx playwright install chromium` cannot work on NixOS, and the failure is not a
+corrupt cache. Playwright's downloaded browsers (headless shell and full
+chromium alike, under `~/.cache/ms-playwright/`) are built for glibc/FHS
+distributions and dynamically linked against system libraries they expect at
+`/usr/lib` / `/lib64`. NixOS has neither path, so every Playwright-managed
+browser dies at launch with exit code 127
+(`libglib-2.0.so.0: cannot open shared object file`). `npx playwright
+install-deps` is equally a dead end — it needs root on an FHS system. Deleting
+and re-downloading the browser changes nothing; the mismatch is between the
+browser build and the OS layout.
+
+The one browser that launches is the **Nix-wrapped chromium** in `/nix/store/`:
+its Nix RPATH carries the entire library closure. The store hash changes on
+every chromium upgrade, so resolve the path fresh and never copy an old one:
+
+```bash
+ls -d /nix/store/*chromium-*/bin/chromium
+```
+
+The checked-in [`dashboard/playwright.nix.config.js`](../dashboard/playwright.nix.config.js)
+wraps the default config and points `use.launchOptions.executablePath` at that
+browser — the nesting matters, because Playwright silently ignores a top-level
+`use.executablePath`. The path is resolved at config load (override with the
+`SPAXEL_CHROMIUM` env var if several builds coexist in the store), and the
+config throws a clear error on hosts where no Nix chromium exists, so it is
+safe to leave checked in next to the default config — the default
+`playwright.config.js` is still what CI and non-NixOS runs pick up.
+
+```bash
+cd dashboard
+npm ci
+npx playwright test --config=playwright.nix.config.js   # full a11y/agentation suite
+npx playwright test agentation-mount.spec.js --config=playwright.nix.config.js
+```
+
+Test artifacts land in `/tmp/pw-nix-results/` rather than the checkout.
+
+If you need a one-off variant of this config, write it under `/tmp/` — never
+inside the repo. The checkout is shared between concurrent workers: an
+untracked config file dirties the tree for everyone, risks being swept into
+another worker's commit, and the CI build gate expects a clean tree. The
+checked-in config exists precisely so the recipe stops being re-derived per
+dispatch; with it there is normally nothing to create at all.
+
+Verification baseline: with nix chromium 151.0.7922.173 the agentation-mount
+spec runs 9 passed / 0 failed.
+
 ## CI Integration
 
 The accessibility tests run as a quality gate in the `spaxel-build` Argo WorkflowTemplate. The `a11y-test` step:
@@ -125,7 +177,7 @@ The CI gate passes when:
 When accessibility tests fail:
 
 1. **Check the CI logs** — axe-core provides detailed violation reports
-2. **Run locally** — reproduce with `npm run test:a11y --headed`
+2. **Run locally** — reproduce with `npm run test:a11y --headed` (on NixOS: `npx playwright test --config=playwright.nix.config.js`, see [Running locally on NixOS](#running-locally-on-nixos))
 3. **Fix the issue** — update HTML/ARIA attributes in dashboard files
 4. **Verify** — re-run tests locally
 5. **Commit** — push the fix and re-trigger CI
