@@ -1,8 +1,8 @@
 /*
  * Host stand-in for ESP-IDF's nvs.h — declarations only.
  *
- * Signatures mirror the ESP-IDF API subset firmware/main/nvs_migration.c uses,
- * so that file compiles unmodified. The in-memory implementation backing them
+ * Signatures mirror the ESP-IDF API subset firmware/main/nvs_migration.c and
+ * firmware/main/safe_mode.c use, so those files compile unmodified. The in-memory implementation backing them
  * lives in the test that needs it (firmware/test/test_nvs_migration.c), which
  * is what links against the production object; the stub headers stay free of
  * behavior so this file remains a faithful API mirror.
@@ -27,6 +27,9 @@ void nvs_close(nvs_handle_t handle);
 
 esp_err_t nvs_get_u8(nvs_handle_t handle, const char *key, uint8_t *out_value);
 esp_err_t nvs_set_u8(nvs_handle_t handle, const char *key, uint8_t value);
+
+esp_err_t nvs_get_u32(nvs_handle_t handle, const char *key, uint32_t *out_value);
+esp_err_t nvs_set_u32(nvs_handle_t handle, const char *key, uint32_t value);
 
 esp_err_t nvs_get_str(nvs_handle_t handle, const char *key, char *out_value,
                       size_t *length);

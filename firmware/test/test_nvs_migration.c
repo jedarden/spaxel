@@ -37,7 +37,7 @@
  *  migration_idx = (size_t)(0 - 1), and lands in the out-of-range guard,
  *  returning ESP_ERR_NOT_FOUND. Both are asserted.
  *
- *  In-memory NVS: rows are typed (u8/str) and a key's type is fixed by its
+ *  In-memory NVS: rows are typed (u8/u32/str) and a key's type is fixed by its
  *  first write, so a type-confused access on an existing key surfaces as
  *  ESP_ERR_NVS_TYPE_MISMATCH rather than silently reading as a zero — matching
  *  a real NVS partition. Writes become visible immediately and nvs_commit()
@@ -52,6 +52,7 @@
 
 #include "esp_err.h"
 #include "nvs.h"
+#include "nvs_fake.h"
 #include "nvs_migration.h"
 #include "spaxel.h"
 
@@ -78,12 +79,14 @@ typedef enum {
     NVS_T_NONE = 0,   /* fresh row: type is fixed by its first write */
     NVS_T_U8 = 1,
     NVS_T_STR = 2,
+    NVS_T_U32 = 3,
 } nvs_t_type_t;
 
 typedef struct {
     char key[NVS_T_KEY_LEN];
     nvs_t_type_t type;
     uint8_t u8;
+    uint32_t u32;
     char str[NVS_T_VAL_LEN];
 } nvs_t_row_t;
 
@@ -98,20 +101,33 @@ static struct {
     esp_err_t fail_commit;
 } g_nvs;
 
-static void nvs_t_reset(void)
+/* nvs_t_reset and the seed helpers are declared in nvs_fake.h: this TU owns
+ * the single definition (the harness links one binary), and tests that include
+ * a real production TU over this fake — test_safe_mode.c — call them to set up
+ * and clear their starting state. */
+void nvs_t_reset(void)
 {
     memset(&g_nvs, 0, sizeof(g_nvs));
 }
 
 /* Seed helpers: write straight into the store, bypassing the API's commit
  * accounting, so a test's starting state is not mistaken for migration work. */
-static void nvs_t_seed_u8(const char *key, uint8_t value)
+void nvs_t_seed_u8(const char *key, uint8_t value)
 {
     nvs_t_row_t *r = &g_nvs.rows[g_nvs.count++];
     memset(r, 0, sizeof(*r));
     strncpy(r->key, key, sizeof(r->key) - 1);
     r->type = NVS_T_U8;
     r->u8 = value;
+}
+
+void nvs_t_seed_u32(const char *key, uint32_t value)
+{
+    nvs_t_row_t *r = &g_nvs.rows[g_nvs.count++];
+    memset(r, 0, sizeof(*r));
+    strncpy(r->key, key, sizeof(r->key) - 1);
+    r->type = NVS_T_U32;
+    r->u32 = value;
 }
 
 static void nvs_t_seed_str(const char *key, const char *value)
@@ -214,6 +230,41 @@ esp_err_t nvs_set_u8(nvs_handle_t handle, const char *key, uint8_t value)
         return ESP_ERR_NVS_TYPE_MISMATCH;
     }
     r->u8 = value;
+    return ESP_OK;
+}
+
+esp_err_t nvs_get_u32(nvs_handle_t handle, const char *key, uint32_t *out_value)
+{
+    (void)handle;
+    nvs_t_row_t *r = nvs_t_find(key);
+    if (r == NULL) {
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+    if (r->type != NVS_T_U32) {
+        return ESP_ERR_NVS_TYPE_MISMATCH;
+    }
+    if (out_value != NULL) {
+        *out_value = r->u32;
+    }
+    return ESP_OK;
+}
+
+esp_err_t nvs_set_u32(nvs_handle_t handle, const char *key, uint32_t value)
+{
+    (void)handle;
+    if (g_nvs.fail_set != ESP_OK) {
+        return nvs_t_fail(&g_nvs.fail_set);
+    }
+    nvs_t_row_t *r = nvs_t_slot(key);
+    if (r == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    if (r->type == NVS_T_NONE) {
+        r->type = NVS_T_U32;   /* first write fixes the type, like real NVS */
+    } else if (r->type != NVS_T_U32) {
+        return ESP_ERR_NVS_TYPE_MISMATCH;
+    }
+    r->u32 = value;
     return ESP_OK;
 }
 

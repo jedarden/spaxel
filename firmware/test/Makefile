@@ -132,6 +132,12 @@ WATCHDOG_TEST_INC := -Istubs -I../main
 
 $(BUILD_DIR)/test_watchdog.o: NVS_MIG_INC = $(WATCHDOG_TEST_INC)
 
+# test_safe_mode.c includes ../main/safe_mode.c directly, whose timer
+# callbacks take the esp_timer arg without using it — fine under the ESP-IDF
+# build (no -Wextra), an artifact of the host's stricter flags here (same
+# reasoning as NVS_MIG_CFLAGS above). Scoped to this one object.
+$(BUILD_DIR)/test_safe_mode.o: CFLAGS += -Wno-unused-parameter
+
 # ============================================================================
 #  Build rules
 # ============================================================================
@@ -142,6 +148,8 @@ ALL_OBJS  := $(TEST_OBJS) $(NVS_MIG_OBJS)
 # Object files (not archives) are linked directly, so every test_*.c's TEST()
 # constructor is retained and runs at load — no --whole-archive needed. Only
 # unused *archive* members get dropped by the linker, never direct .o files.
+# nvs_fake.h is the shared handle onto test_nvs_migration.c's in-memory NVS
+# fake (included by the tests that seed/read the store).
 .PHONY: test build run clean
 
 # Default goal: the documented single command. `build` produces the binary,
@@ -150,7 +158,7 @@ test: build run
 
 build: $(BIN)
 
-$(BUILD_DIR)/%.o: %.c test_runner.h $(HOST_COMPAT)
+$(BUILD_DIR)/%.o: %.c test_runner.h nvs_fake.h $(HOST_COMPAT)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(NVS_MIG_INC) -c $< -o $@
 
