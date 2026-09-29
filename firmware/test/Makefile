@@ -139,6 +139,39 @@ $(BUILD_DIR)/test_watchdog.o: NVS_MIG_INC = $(WATCHDOG_TEST_INC)
 $(BUILD_DIR)/test_safe_mode.o: CFLAGS += -Wno-unused-parameter
 
 # ============================================================================
+#  Production TUs: transport.c, ntp.c, led.c, ble.c, websocket.c
+#  (spaxel-db7aab09, retiring parked spaxel-5c56d980)
+# ============================================================================
+#
+#  Five more firmware/main units are included directly by their test files,
+#  same as watchdog.c above. Their IDF include surface (driver/uart.h,
+#  driver/usb_serial_jtag.h, esp_sntp.h, driver/gpio.h, soc/gpio_num.h,
+#  esp_rom_sys.h, the NimBLE host headers, esp_websocket_client.h, cJSON.h,
+#  esp_system/esp_netif/esp_flash/esp_ota_ops/esp_http_client/esp_crt_bundle,
+#  mbedtls/sha256.h, freertos event_groups/semphr) lives in stubs/ as
+#  recording fakes, so the same single-rooted -Istubs -I../main override
+#  applies: host_compat/ must never expand in the same TU as stubs/ (the two
+#  guard namespaces differ — see the watchdog block above).
+#
+#  stubs/cJSON.h is a static (header-only) shim with a real parser/serializer,
+#  so each TU that includes it gets its own private copy and nothing new is
+#  added to the link. Suite-wide symbols keep single definitions exactly as
+#  before: esp_err_to_name in test_watchdog.o, g_state/esp_restart and the
+#  esp_timer trio in test_safe_mode.o — the new TUs shadow those with static
+#  fakes for their own production code and resolve the shared ones across the
+#  link (websocket.c's calls into the real ntp.c/led.c/safe_mode.c land in
+#  whatever object compiled them).
+# ============================================================================
+
+STUBS_INC := -Istubs -I../main
+
+$(BUILD_DIR)/test_transport.o: NVS_MIG_INC = $(STUBS_INC)
+$(BUILD_DIR)/test_ntp.o:       NVS_MIG_INC = $(STUBS_INC)
+$(BUILD_DIR)/test_led.o:       NVS_MIG_INC = $(STUBS_INC)
+$(BUILD_DIR)/test_ble.o:       NVS_MIG_INC = $(STUBS_INC)
+$(BUILD_DIR)/test_websocket.o: NVS_MIG_INC = $(STUBS_INC)
+
+# ============================================================================
 #  Build rules
 # ============================================================================
 
