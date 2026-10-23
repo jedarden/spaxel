@@ -66,3 +66,11 @@ prompt:
       \nBead ID: {bead_id}\n"
 bead_cli:
   backend: bead-rs
+
+gates:
+  - type: command
+    run_in: clean
+    commands:
+      - cd mothership && go test ./cmd/... ./internal/... ./test/... ./tests/contract/...
+      - cd mothership && go vet ./...
+      - make -C firmware/test test
