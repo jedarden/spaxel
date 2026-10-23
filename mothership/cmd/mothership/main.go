@@ -1371,10 +1371,17 @@ func main() {
 			selfImprovingLocalizer.SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ)
 			// Seed the 3D fusion engine's node registry (bf-3f6q). Without
 			// positioned nodes, Fuse skips every link and emits no blobs.
-			fusionEngine.SetNodePosition(node.MAC, node.PosX, node.PosY, node.PosZ)
+			// Node positions are fleet-frame (X=width, Y=depth, Z=height —
+			// what nodes report and the simulator's ground truth records);
+			// the engine works Y-up, so convert per fusion.NodeFromFleet.
+			// Serving them unconverted reconstructs a mirrored room (node
+			// heights read as depths) and systematically offsets every blob
+			// (spaxel-608a37be).
+			ex, ey, ez := fusion.NodeFromFleet(node.PosX, node.PosY, node.PosZ)
+			fusionEngine.SetNodePosition(node.MAC, ex, ey, ez)
 			// Log verification that SetNodePosition was called for this node
-			log.Printf("[STARTUP] Loaded node %s into fusion engine at position (%.2f, %.2f, %.2f)",
-				node.MAC, node.PosX, node.PosY, node.PosZ)
+			log.Printf("[STARTUP] Loaded node %s into fusion engine at fleet position (%.2f, %.2f, %.2f) -> engine (%.2f, %.2f, %.2f)",
+				node.MAC, node.PosX, node.PosY, node.PosZ, ex, ey, ez)
 		}
 	}
 
@@ -1382,7 +1389,8 @@ func main() {
 	// fusion.go:140-159 docstring notes this startup-assertion use). After the
 	// seeding loop above, the engine must hold populated, distinct positions —
 	// NOT every node collapsed to the nodes-table schema default (pos_x=0,
-	// pos_y=0, pos_z=1 → NodePosition{X:0,Y:0,Z:1}). A fleet where every seeded
+	// pos_y=0, pos_z=1 in the fleet frame, which NodeFromFleet seeds as
+	// NodePosition{X:0,Y:1,Z:0} in the engine frame). A fleet where every seeded
 	// node still sits at that default was never positioned: all nodes are
 	// co-located, so Fuse emits only degenerate peaks and cannot localize.
 	// This logs the assertion result but does NOT block startup, because an
@@ -1395,7 +1403,7 @@ func main() {
 		atDefault := 0
 		seen := make(map[posKey]struct{}, len(positions))
 		for _, p := range positions {
-			if p.X == 0 && p.Y == 0 && p.Z == 1 {
+			if p.X == 0 && p.Y == 1 && p.Z == 0 {
 				atDefault++
 			}
 			seen[posKey{p.X, p.Y, p.Z}] = struct{}{}
@@ -1404,9 +1412,9 @@ func main() {
 		case n == 0:
 			log.Printf("[INFO] 3D fusion engine node-position assertion: no nodes positioned yet")
 		case atDefault == n:
-			log.Printf("[WARN] 3D fusion engine node-position assertion FAILED: all %d seeded nodes collapsed to (0,0,1) — position nodes in the dashboard before fusion can localize", n)
+			log.Printf("[WARN] 3D fusion engine node-position assertion FAILED: all %d seeded nodes collapsed to the (0,0,1) fleet default — position nodes in the dashboard before fusion can localize", n)
 		default:
-			log.Printf("[INFO] 3D fusion engine node-position assertion OK: %d nodes seeded, %d distinct positions, %d at (0,0,1) default",
+			log.Printf("[INFO] 3D fusion engine node-position assertion OK: %d nodes seeded, %d distinct positions, %d at fleet default",
 				n, len(seen), atDefault)
 		}
 	}
@@ -1735,8 +1743,11 @@ func main() {
 	// paths on one accessor — the write-side mirror of the read-side
 	// SetNodePositionAccessor used by diagnostics and weather.go. fusionEngine
 	// is constructed above (Phase 6, bf-3f6q) and captured by this closure.
+	// Positions arrive fleet-frame and are converted per fusion.NodeFromFleet,
+	// same as the startup seeding loop above.
 	fleetMgr.SetNodePositionSink(func(mac string, x, y, z float64) {
-		fusionEngine.SetNodePosition(mac, x, y, z)
+		ex, ey, ez := fusion.NodeFromFleet(x, y, z)
+		fusionEngine.SetNodePosition(mac, ex, ey, ez)
 	})
 
 	// Phase 5: Multi-notifier broadcasts node events to legacy manager, healer, and self-heal manager
@@ -2805,6 +2816,21 @@ func main() {
 		var zoneID string
 		if zonesMgr != nil {
 			zoneID = zonesMgr.GetBlobZone(event.BlobID)
+		}
+
+		// Record the confirmed fall in the activity timeline so it surfaces via
+		// GET /api/events?type=fall_alert — the user-facing feed the dashboard
+		// simple-mode filter already whitelists. Without this the detected fall
+		// only reached the notify/MQTT/automation sinks and the events API
+		// never carried it (AS-3 e2e, spaxel-a2ddc01f).
+		if eventsHandler != nil {
+			fallDetail, _ := json.Marshal(map[string]float64{
+				"start_z":       event.StartZ,
+				"end_z":         event.EndZ,
+				"peak_velocity": event.PeakVelocity,
+				"confidence":    event.Confidence,
+			})
+			_ = eventsHandler.LogEvent("fall_alert", time.Now(), zoneID, personName, event.BlobID, string(fallDetail), "critical")
 		}
 
 		// Send notification
@@ -4631,10 +4657,13 @@ func main() {
 		log.Printf("[INFO] Morning briefing API registered at /api/briefing/*")
 	}
 
-	// Phase 6: Tracked blobs REST API (for testing and external integrations)
+	// Phase 6: Tracked blobs REST API (for testing and external integrations).
+	// Served fleet-frame (X=width, Y=depth, Z=height — the frame /api/nodes
+	// positions use and the simulator's ground truth records) per the
+	// trackedBlobsToFleet contract; the engine's internal frame is Y-up and
+	// never leaves the process.
 	r.Get("/api/blobs", func(w http.ResponseWriter, r *http.Request) {
-		blobs := pm.GetTrackedBlobs()
-		writeJSON(w, blobs)
+		writeJSON(w, trackedBlobsToFleet(pm.GetTrackedBlobs()))
 	})
 	log.Printf("[INFO] Tracked blobs API registered at /api/blobs")
 
@@ -6060,6 +6089,25 @@ func (bt *blobTracker) track(result *fusion.Result) []sigproc.TrackedBlob {
 		next[id] = b
 	}
 	bt.prev = next
+	return out
+}
+
+// trackedBlobsToFleet converts tracked blobs from the fusion engine's
+// internal frame (Y up) to the fleet frame served by /api/blobs (Z up:
+// X=width, Y=depth, Z=height — the frame node positions in /api/nodes use,
+// the simulator's ground truth records, and external integrators correlate
+// against; see fusion.NodeFromFleet for the authority on the contract).
+// Velocities are swapped with their axes. It returns a fresh slice:
+// pm's cached slice is shared with the fusion loop and its in-process
+// consumers (fall detection, zones, the dashboard hub) — which all stay
+// engine-frame — and the engine's last result must never be mutated in place.
+func trackedBlobsToFleet(blobs []sigproc.TrackedBlob) []sigproc.TrackedBlob {
+	out := make([]sigproc.TrackedBlob, len(blobs))
+	for i, b := range blobs {
+		out[i] = b
+		out[i].Y, out[i].Z = b.Z, b.Y
+		out[i].VY, out[i].VZ = b.VZ, b.VY
+	}
 	return out
 }
 

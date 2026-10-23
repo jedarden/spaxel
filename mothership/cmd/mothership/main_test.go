@@ -11,6 +11,7 @@ import (
 	"github.com/spaxel/mothership/internal/api"
 	appconfig "github.com/spaxel/mothership/internal/config"
 	"github.com/spaxel/mothership/internal/provisioning"
+	sigproc "github.com/spaxel/mothership/internal/signal"
 	_ "modernc.org/sqlite"
 )
 
@@ -189,4 +190,65 @@ func TestWiFiCredentialsFromEnvironmentReachProvisioning(t *testing.T) {
 
 func stringPtr(value string) *string {
 	return &value
+}
+
+// TestTrackedBlobsToFleet locks the /api/blobs serve-frame contract: blobs
+// leave the process fleet-frame (X=width, Y=depth, Z=height) while the fusion
+// engine and its in-process consumers work Y-up. Velocities swap with their
+// axes; ID, weight and identity fields pass through; the input slice — shared
+// with the fusion loop — must be left untouched. See fusion.NodeFromFleet for
+// the authority on the frame contract (spaxel-608a37be).
+func TestTrackedBlobsToFleet(t *testing.T) {
+	cases := []struct {
+		name  string
+		in    []sigproc.TrackedBlob
+		wantX []float64 // expected per-blob (X, Y, Z)
+		wantY []float64
+		wantZ []float64
+	}{
+		{
+			name:  "walker at height 1.7 m, depth 2.0 m",
+			in:    []sigproc.TrackedBlob{{ID: 1, X: 2.5, Y: 1.7, Z: 2.0, Weight: 0.9, VX: 0.1, VY: 0.2, VZ: 0.3}},
+			wantX: []float64{2.5},
+			wantY: []float64{2.0}, // served Y is depth (engine Z)
+			wantZ: []float64{1.7}, // served Z is height (engine Y)
+		},
+		{
+			name:  "floor-level peak",
+			in:    []sigproc.TrackedBlob{{ID: 2, X: 0, Y: 0, Z: 0}},
+			wantX: []float64{0},
+			wantY: []float64{0},
+			wantZ: []float64{0},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := trackedBlobsToFleet(tc.in)
+			if len(got) != len(tc.in) {
+				t.Fatalf("len = %d, want %d", len(got), len(tc.in))
+			}
+			for i := range got {
+				if got[i].X != tc.wantX[i] || got[i].Y != tc.wantY[i] || got[i].Z != tc.wantZ[i] {
+					t.Errorf("blob %d pos = (%v, %v, %v), want (%v, %v, %v)",
+						i, got[i].X, got[i].Y, got[i].Z, tc.wantX[i], tc.wantY[i], tc.wantZ[i])
+				}
+				if got[i].VX != tc.in[i].VX || got[i].VY != tc.in[i].VZ || got[i].VZ != tc.in[i].VY {
+					t.Errorf("blob %d vel = (%v, %v, %v), want (%v, %v, %v)",
+						i, got[i].VX, got[i].VY, got[i].VZ, tc.in[i].VX, tc.in[i].VZ, tc.in[i].VY)
+				}
+				if got[i].ID != tc.in[i].ID || got[i].Weight != tc.in[i].Weight {
+					t.Errorf("blob %d ID/weight = (%d, %v), want (%d, %v)",
+						i, got[i].ID, got[i].Weight, tc.in[i].ID, tc.in[i].Weight)
+				}
+			}
+		})
+	}
+
+	t.Run("input slice not mutated", func(t *testing.T) {
+		in := []sigproc.TrackedBlob{{ID: 7, X: 1, Y: 2, Z: 3, VY: 4, VZ: 5}}
+		_ = trackedBlobsToFleet(in)
+		if in[0].Y != 2 || in[0].Z != 3 || in[0].VY != 4 || in[0].VZ != 5 {
+			t.Errorf("trackedBlobsToFleet mutated its input: %+v", in[0])
+		}
+	})
 }

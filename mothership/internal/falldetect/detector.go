@@ -428,9 +428,15 @@ func (d *Detector) checkForFallConfirmation(blob struct {
 		return
 	}
 
-	// Check if fall window expired (took too long to become still)
+	// Check if fall window expired (took too long to become still).
+	// The window bounds how long the fall takes to COMPLETE, i.e. to reach the
+	// floor and go still — once stillness has begun (stillnessStart set) the
+	// fall completed in time and the StillnessTimeRequired clock (default 30s,
+	// longer than this window) continues past it. Without the stillnessStarted
+	// guard the window reset always fires first and a default-config
+	// confirmation is unreachable (StillnessTimeRequired 30s > window 10s).
 	fallDuration := now.Sub(state.descentStartTime).Seconds()
-	if fallDuration > 10.0 { // 10 second max for fall to complete
+	if fallDuration > 10.0 && state.stillnessStart.IsZero() { // 10 second max for fall to complete
 		log.Printf("[DEBUG] Fall detection: blob %d fall window expired", blob.ID)
 		d.resetTrackState(state)
 		return

@@ -154,3 +154,77 @@ func TestDetector_FallEventNilSafeWithoutIdentityFunc(t *testing.T) {
 		t.Fatal("onFall never fired: fall not confirmed within timeout")
 	}
 }
+
+// TestDetector_DefaultConfigStillnessOutlivesFallWindow pins the fall-window /
+// stillness interaction at DEFAULT config, which the runtime (cmd/mothership
+// falldetect.NewDetector) uses: StillnessTimeRequired (30s) is longer than the
+// 10s fall-completion window, so the window must only expire a confirmation
+// whose stillness never began. Before the stillnessStarted guard, the window
+// reset always fired first and a default-config fall alert was unreachable on
+// every path (unit and composed); the only passing confirmation tests overrode
+// StillnessTimeRequired to sub-second values.
+func TestDetector_DefaultConfigStillnessOutlivesFallWindow(t *testing.T) {
+	t.Parallel()
+
+	t.Run("StillnessBegunContinuesPastWindow", func(t *testing.T) {
+		d := NewDetector() // runtime defaults: stillness 30s vs window 10s
+		got := make(chan FallEvent, 1)
+		d.SetOnFall(func(e FallEvent) { got <- e })
+
+		// Same synthetic shape as driveFall but at default config: descent at
+		// base+1.1s, floor stillness from base+1.2s, confirmation expected at
+		// base+31.2s (descent + 30s stillness). Ticks at 10Hz like the runtime.
+		base := time.Now()
+		blob := fallBlobInput{ID: 9, X: 3, Y: 2, Posture: "standing"}
+		for _, off := range []time.Duration{0, 500 * time.Millisecond, 1 * time.Second} {
+			blob.Z = 1.7
+			d.Update(fallBlobsToUpdate([]fallBlobInput{blob}), base.Add(off))
+		}
+		blob.Z, blob.VZ = 0.3, -2.0
+		d.Update(fallBlobsToUpdate([]fallBlobInput{blob}), base.Add(1100*time.Millisecond))
+		blob.VZ = 0
+		for off := 1200; off <= 32000; off += 100 {
+			d.Update(fallBlobsToUpdate([]fallBlobInput{blob}), base.Add(time.Duration(off)*time.Millisecond))
+			select {
+			case e := <-got:
+				if e.BlobID != 9 {
+					t.Fatalf("FallEvent.BlobID=%d, want 9", e.BlobID)
+				}
+				if e.StillnessTime < 30.0 {
+					t.Fatalf("FallEvent.StillnessTime=%.1fs, want >= 30s (confirmed too early)", e.StillnessTime)
+				}
+				return
+			default:
+			}
+		}
+		t.Fatal("onFall never fired: default-config stillness (30s) did not outlive the 10s fall window")
+	})
+
+	t.Run("NeverStillStillExpiresWindow", func(t *testing.T) {
+		d := NewDetector()
+		got := make(chan FallEvent, 1)
+		d.SetOnFall(func(e FallEvent) { got <- e })
+		d.SetDeltaRMSFunc(func(int) float64 { return 0.5 }) // never still
+
+		// Descent into floor level followed by continued motion: the window
+		// must still reset the state (the guard's false-positive purpose) —
+		// no alert at any point afterwards.
+		base := time.Now()
+		blob := fallBlobInput{ID: 9, X: 3, Y: 2, Posture: "standing"}
+		for _, off := range []time.Duration{0, 500 * time.Millisecond, 1 * time.Second} {
+			blob.Z = 1.7
+			d.Update(fallBlobsToUpdate([]fallBlobInput{blob}), base.Add(off))
+		}
+		blob.Z, blob.VZ = 0.3, -2.0
+		d.Update(fallBlobsToUpdate([]fallBlobInput{blob}), base.Add(1100*time.Millisecond))
+		blob.VZ = 0
+		for off := 1200; off <= 40000; off += 100 {
+			d.Update(fallBlobsToUpdate([]fallBlobInput{blob}), base.Add(time.Duration(off)*time.Millisecond))
+			select {
+			case <-got:
+				t.Fatal("onFall fired for a never-still descent: window expiry lost")
+			default:
+			}
+		}
+	})
+}
