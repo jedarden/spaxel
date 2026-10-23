@@ -54,13 +54,18 @@
  * harness dependency-free (no malloc/realloc, no failure modes to reason
  * about), which matches the deliberately small scope of this host runner.
  *
- * MAX_TESTS = 128 is far more than the handful of pure-logic extractions and
- * binary-format contracts this harness is meant for (it deliberately does not
- * cover the unhostable esp_wifi/uart/nvs call sites — see test_runner.h's
- * header comment). A test count approaching the cap would signal that firmware
- * logic has been over-factored into host tests, not that the cap is too low.
+ * MAX_TESTS started at 128 ("far more than the handful of pure-logic
+ * extractions this harness is meant for") and was doubled to 256 on
+ * 2026-09-28, when the five-module dispatch (spaxel-db7aab09: transport,
+ * ntp, led, ble, websocket) legitimately pushed the suite past 128 — the
+ * original premise described the harness before whole-module suites landed,
+ * not a policy that the suite must stay small. What has not changed is the
+ * failure mode this capacity guard exists for: registration is skipped
+ * with a stderr note while the suite keeps passing, so an overflow silently
+ * REDUCES coverage. If tests are ever dropped to fit under the cap, that is
+ * the signal to split the runner — not to delete tests.
  */
-#define MAX_TESTS 128
+#define MAX_TESTS 256
 /*
  * Written by test_register() (below) from the GCC constructors emitted by each
  * TEST() macro, so the array is fully populated before main() runs. They were
