@@ -12,7 +12,7 @@ export async function scanAccessibility(page: Page, context?: string) {
   const builder = new AxeBuilder({ page });
 
   // Configure with WCAG 2.1 AA tags
-  builder.withTags(['wcag2a', 'wcag2aa']);
+  builder.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
 
   // Limit scan scope if context is provided
   if (context) {

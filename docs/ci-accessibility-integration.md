@@ -4,13 +4,13 @@ This document describes the accessibility (a11y) testing integration with Argo W
 
 ## Overview
 
-Accessibility tests enforce WCAG 2.1 AA compliance as a CI quality gate for the Spaxel dashboard. These tests run automated checks using axe-core and Playwright, ensuring the dashboard remains accessible to users with disabilities.
+Accessibility tests gate the Spaxel dashboard on enabled axe-core rules tagged for WCAG 2.0/2.1 A and AA. Playwright runs these checks across the dashboard; manual testing is still needed for success criteria that axe-core cannot assess automatically.
 
 **Test location:** `dashboard/tests/a11y*.spec.js` + `dashboard/tests/agentation-mount.spec.js`
 
 **Test runner:** Playwright + @axe-core/playwright
 
-**What it tests:** WCAG 2.1 AA compliance across **all eight** production dashboard
+**What it tests:** enabled axe-core rules tagged for WCAG 2.0/2.1 A and AA across **all eight** production dashboard
 HTML entry points (the set enumerated in `docs/codebase-structure-and-test-patterns.md`
 and `docs/repo-structure.md` §8):
 
@@ -45,7 +45,7 @@ rendering. Dev-only harnesses live under `dashboard/_dev/`
 production image — see `dashboard/_dev/README.md`) and are outside the gate by
 construction; the guard only enumerates top-level `dashboard/*.html`.
 
-**Accessibility standard:** WCAG 2.1 AA (via axe-core tags: `wcag2a`, `wcag2aa`)
+**Accessibility standard:** WCAG 2.1 AA. The shared scanner used by all three a11y specs selects axe-core tags `wcag2a`, `wcag2aa`, `wcag21a`, and `wcag21aa` (2.0 A/AA plus 2.1 A/AA). The installed axe-core version runs its enabled 2.1 rules for input purpose and text spacing; its rules for orientation lock and label/name mismatch are experimental and disabled by default. Other 2.1 criteria require manual assessment. This gate does not by itself certify full WCAG 2.1 AA conformance.
 
 ## Running Locally
 
@@ -167,7 +167,7 @@ GitHub Actions are disabled across all repos — all CI runs on Argo Workflows (
 
 The CI gate passes when:
 - ✅ All accessibility tests pass (zero violations)
-- ✅ No WCAG 2.1 AA violations on any tested page
+- ✅ No violations from the selected WCAG 2.0/2.1 A/AA axe-core rules on any tested page
 - ✅ No regressions in previously accessible components
 
 **Failed gate:** Any accessibility violation blocks the release and must be fixed before deployment.

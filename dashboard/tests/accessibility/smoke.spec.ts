@@ -12,6 +12,19 @@ test.describe('Accessibility Helper Smoke Test', () => {
     expect(results).toHaveProperty('passes');
     expect(Array.isArray(results.violations)).toBe(true);
     expect(Array.isArray(results.passes)).toBe(true);
+
+    const scannedRules = [
+      ...results.passes,
+      ...results.violations,
+      ...results.incomplete,
+      ...results.inapplicable,
+    ].map((result) => result.id);
+    expect(scannedRules).toEqual(
+      expect.arrayContaining([
+        'autocomplete-valid',
+        'avoid-inline-spacing',
+      ])
+    );
   });
 
   test('index page has no WCAG AA violations (using helper)', async ({ page }) => {
